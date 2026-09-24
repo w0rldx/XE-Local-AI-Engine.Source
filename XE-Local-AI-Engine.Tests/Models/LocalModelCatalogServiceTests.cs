@@ -169,7 +169,10 @@ public sealed class LocalModelCatalogServiceTests
 
         public void WithOllamaModels(params string[] modelNames) =>
             ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-                        .Returns(modelNames.Select(static name => new OllamaModelSummary { Name = name }).AsEnumerable());
+                        .Returns(modelNames.Select(static name => new OllamaModelSummary
+                        {
+                            Name = name
+                        }).AsEnumerable());
 
         public void WithInstalledGguf(string modelName) =>
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())

@@ -15,8 +15,7 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
     private readonly ModelNameValidator _modelNameValidator;
     private readonly ILogger<LocalModelAdministrationService> _logger;
 
-    public LocalModelAdministrationService(
-        ILocalModelDeletionCoordinator deletionCoordinator,
+    public LocalModelAdministrationService(ILocalModelDeletionCoordinator deletionCoordinator,
         ILocalModelProviderResolver providerResolver,
         INodeSettingsStore nodeSettingsStore,
         DefaultModelSelectionPolicy defaultModelSelectionPolicy,
@@ -57,7 +56,12 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
             }
             catch (KeyNotFoundException)
             {
-                return new LocalModelDeletionResult { Succeeded = true, ModelName = canonicalName, Deleted = false };
+                return new LocalModelDeletionResult
+                {
+                    Succeeded = true,
+                    ModelName = canonicalName,
+                    Deleted = false
+                };
             }
 
             try
@@ -71,7 +75,12 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
                     canonicalName);
             }
 
-            return new LocalModelDeletionResult { Succeeded = true, ModelName = canonicalName, Deleted = true };
+            return new LocalModelDeletionResult
+            {
+                Succeeded = true,
+                ModelName = canonicalName,
+                Deleted = true
+            };
         }
 
         try
@@ -86,7 +95,12 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
         }
 
         _providerResolver.InvalidateModelProviderMap();
-        return new LocalModelDeletionResult { Succeeded = true, ModelName = canonicalName, Deleted = true };
+        return new LocalModelDeletionResult
+        {
+            Succeeded = true,
+            ModelName = canonicalName,
+            Deleted = true
+        };
     }
 
     public async Task<LocalModelSelectionResult> SelectDefaultAsync(string? modelName,
@@ -121,9 +135,14 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
         }, cancellationToken);
 
         await _defaultModelSelectionPolicy
-              .InvalidateCacheForTransitionAsync(previousModelName, selectedModelName, cancellationToken);
+            .InvalidateCacheForTransitionAsync(previousModelName, selectedModelName, cancellationToken);
 
-        return new LocalModelSelectionResult { Succeeded = true, SelectedModelName = selectedModelName, PreviousModelName = previousModelName };
+        return new LocalModelSelectionResult
+        {
+            Succeeded = true,
+            SelectedModelName = selectedModelName,
+            PreviousModelName = previousModelName
+        };
     }
 
     private string? Validate(string? modelName)

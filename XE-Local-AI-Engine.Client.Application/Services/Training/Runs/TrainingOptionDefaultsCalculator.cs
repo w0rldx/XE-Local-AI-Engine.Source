@@ -50,8 +50,7 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ITrainingBaseArtifactStore _store;
 
-    public TrainingOptionDefaultsCalculator(
-        ITrainingBaseArtifactStore store,
+    public TrainingOptionDefaultsCalculator(ITrainingBaseArtifactStore store,
         INodeDataDirectory dataDirectory,
         IRuntimeDeviceAudit deviceAudit)
     {
@@ -84,7 +83,15 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
                 var estimate = TrainingFootprintEstimator.Estimate(parameterCount, config, candidate);
                 if (estimate.GpuBytes <= budget)
                 {
-                    return new TrainingRunDefaults { Options = candidate, Estimate = estimate, AvailableVramBytes = budget, VramKnown = profile.VramKnown, Fits = true, RejectionReason = null };
+                    return new TrainingRunDefaults
+                    {
+                        Options = candidate,
+                        Estimate = estimate,
+                        AvailableVramBytes = budget,
+                        VramKnown = profile.VramKnown,
+                        Fits = true,
+                        RejectionReason = null
+                    };
                 }
             }
         }
@@ -130,7 +137,15 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
                 $"The selected options need about {estimate.GpuBytes / (1024 * 1024)} MB of VRAM and only {budget / (1024 * 1024)} MB is available. Lower the sequence length or the batch size.");
         }
 
-        return new TrainingRunDefaults { Options = requested, Estimate = estimate, AvailableVramBytes = budget, VramKnown = profile.VramKnown, Fits = true, RejectionReason = null };
+        return new TrainingRunDefaults
+        {
+            Options = requested,
+            Estimate = estimate,
+            AvailableVramBytes = budget,
+            VramKnown = profile.VramKnown,
+            Fits = true,
+            RejectionReason = null
+        };
     }
 
     public async Task<TrainingFootprintEstimate> EstimateAsync(Guid baseArtifactId,

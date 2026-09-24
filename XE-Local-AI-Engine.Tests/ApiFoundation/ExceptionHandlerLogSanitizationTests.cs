@@ -106,8 +106,8 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var context = CreateContext();
 
         var handled = await handler.TryHandleAsync(context,
-                                       new WorkSessionInvalidTransitionException("A work session cannot be deleted mid-step."),
-                                       CancellationToken.None);
+            new WorkSessionInvalidTransitionException("A work session cannot be deleted mid-step."),
+            CancellationToken.None);
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);

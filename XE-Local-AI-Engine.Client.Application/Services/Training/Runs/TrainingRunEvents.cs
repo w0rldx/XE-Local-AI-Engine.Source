@@ -146,7 +146,13 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(runId);
-            runEvent = new TrainingRunEvent { RunId = runId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
+            runEvent = new TrainingRunEvent
+            {
+                RunId = runId,
+                Sequence = ++state.LatestSequence,
+                Kind = kind,
+                Payload = payload
+            };
             state.Events.AddLast(runEvent);
             while (state.Events.Count > _maxEventCount)
             {
@@ -165,7 +171,12 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
         {
             if (!_runs.TryGetValue(runId, out var state))
             {
-                return new TrainingRunReplay { Events = [], ResetRequired = false, LatestSequence = 0 };
+                return new TrainingRunReplay
+                {
+                    Events = [],
+                    ResetRequired = false,
+                    LatestSequence = 0
+                };
             }
 
             var firstRetained = state.Events.First?.Value.Sequence;
@@ -173,7 +184,12 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
                         || (firstRetained is { } first && afterSequence < first - 1)
                         || (firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence);
             return reset
-                ? new TrainingRunReplay { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence }
+                ? new TrainingRunReplay
+                {
+                    Events = [],
+                    ResetRequired = true,
+                    LatestSequence = state.LatestSequence
+                }
                 : new TrainingRunReplay
                 {
                     Events = state.Events.Where(item => item.Sequence > afterSequence).ToArray(),

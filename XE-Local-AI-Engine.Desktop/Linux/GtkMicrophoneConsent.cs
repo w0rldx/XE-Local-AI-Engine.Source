@@ -43,6 +43,7 @@ internal sealed class GtkMicrophoneConsent
         var pending = _pending;
         _pending = null;
         if (pending is null) { return; }
+
         try
         {
 #pragma warning disable MA0045 // The native callback must deny synchronously before navigation can grant another request.
@@ -58,6 +59,7 @@ internal sealed class GtkMicrophoneConsent
         _closed = true;
         try { CancelOnGlib(); }
         finally { _api.Disconnect(_view, _signal); }
+
         GC.KeepAlive(_callback);
     }
 
@@ -68,8 +70,7 @@ internal sealed class GtkMicrophoneConsent
             var userMediaType = _api.WebKit<GtkNativeApi.GetTypeId>("webkit_user_media_permission_request_get_type")();
             var media = _api.Object<GtkNativeApi.IsType>("g_type_check_instance_is_a")(request, userMediaType) != 0;
             var generation = _gate.Generation;
-            var audioOnly = media && GtkDocumentPolicy.AudioOnly(
-                _api.WebKit<GtkNativeApi.Predicate>("webkit_user_media_permission_is_for_audio_device")(request) != 0,
+            var audioOnly = media && GtkDocumentPolicy.AudioOnly(_api.WebKit<GtkNativeApi.Predicate>("webkit_user_media_permission_is_for_audio_device")(request) != 0,
                 _api.WebKit<GtkNativeApi.Predicate>("webkit_user_media_permission_is_for_video_device")(request) != 0,
                 _api.WebKit<GtkNativeApi.Predicate>("webkit_user_media_permission_is_for_display_device")(request) != 0);
             if (_closed || view != _view || _pending is not null || !audioOnly || !_gate.IsCurrent(generation) || !_api.VerifyDocument(view, _origin))
@@ -86,7 +87,12 @@ internal sealed class GtkMicrophoneConsent
 #pragma warning disable CA2000 // PendingConsent transfers ownership to PromptAsync's finally; failed transfer disposes below.
                 cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 #pragma warning restore CA2000
-                var pending = new PendingConsent { Request = retainedRequest, Generation = generation, Cancellation = cancellation };
+                var pending = new PendingConsent
+                {
+                    Request = retainedRequest,
+                    Generation = generation,
+                    Cancellation = cancellation
+                };
                 _pending = pending;
                 Dispatcher.UIThread.Post(() => _ = PromptAsync(pending));
                 transferred = true;
@@ -108,7 +114,10 @@ internal sealed class GtkMicrophoneConsent
                 if (_pending?.Request == request) { CancelOnGlib(); }
                 else { _api.WebKit<GtkNativeApi.Command>("webkit_permission_request_deny")(request); }
             }
-            catch (Exception) { /* Never unwind a native callback. */ }
+            catch (Exception)
+            {
+                /* Never unwind a native callback. */
+            }
         }
 
         return 1;
@@ -122,6 +131,7 @@ internal sealed class GtkMicrophoneConsent
         {
             pending.Cancellation.Token.ThrowIfCancellationRequested();
             if (!await _verifyFrames() || !_gate.IsCurrent(pending.Generation)) { return; }
+
             dialog = CreateDialog();
             await using var cancellation = pending.Cancellation.Token.Register(() => Dispatcher.UIThread.Post(() => dialog.Close(false)));
             pending.Cancellation.Token.ThrowIfCancellationRequested();
@@ -137,12 +147,13 @@ internal sealed class GtkMicrophoneConsent
                 await GtkInteropHelper.RunOnGlibThread(() =>
                 {
                     if (!ReferenceEquals(_pending, pending)) { return false; }
+
                     _pending = null;
                     try
                     {
                         var permitted = !_closed && allow && !pending.Cancellation.IsCancellationRequested
-                            && _api.VerifyDocument(_view, _origin)
-                            && _gate.ExecuteIfCurrent(pending.Generation, () => _api.WebKit<GtkNativeApi.Command>("webkit_permission_request_allow")(pending.Request));
+                                        && _api.VerifyDocument(_view, _origin)
+                                        && _gate.ExecuteIfCurrent(pending.Generation, () => _api.WebKit<GtkNativeApi.Command>("webkit_permission_request_allow")(pending.Request));
                         if (!permitted) { _api.WebKit<GtkNativeApi.Command>("webkit_permission_request_deny")(pending.Request); }
                     }
                     catch (Exception)
@@ -150,6 +161,7 @@ internal sealed class GtkMicrophoneConsent
                         _api.WebKit<GtkNativeApi.Command>("webkit_permission_request_deny")(pending.Request);
                     }
                     finally { _api.Unref(pending.Request); }
+
                     return true;
                 });
             }
@@ -160,13 +172,35 @@ internal sealed class GtkMicrophoneConsent
     private static Window CreateDialog()
     {
         var german = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "de";
-        var dialog = new Window { Title = german ? "Mikrofonzugriff" : "Microphone access", Width = 460, SizeToContent = SizeToContent.Height,
-            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        var panel = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
-        panel.Children.Add(new TextBlock { Text = german ? "XE den Zugriff auf das Mikrofon erlauben?" : "Allow XE to use the microphone?", TextWrapping = TextWrapping.Wrap });
-        var deny = new Button { Content = german ? "Ablehnen" : "Deny", IsDefault = true, IsCancel = true };
+        var dialog = new Window
+        {
+            Title = german ? "Mikrofonzugriff" : "Microphone access",
+            Width = 460,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 12
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = german ? "XE den Zugriff auf das Mikrofon erlauben?" : "Allow XE to use the microphone?",
+            TextWrapping = TextWrapping.Wrap
+        });
+        var deny = new Button
+        {
+            Content = german ? "Ablehnen" : "Deny",
+            IsDefault = true,
+            IsCancel = true
+        };
         deny.Click += (_, _) => dialog.Close(false);
-        var accept = new Button { Content = german ? "Erlauben" : "Allow" };
+        var accept = new Button
+        {
+            Content = german ? "Erlauben" : "Allow"
+        };
         accept.Click += (_, _) => dialog.Close(true);
         panel.Children.Add(deny);
         panel.Children.Add(accept);

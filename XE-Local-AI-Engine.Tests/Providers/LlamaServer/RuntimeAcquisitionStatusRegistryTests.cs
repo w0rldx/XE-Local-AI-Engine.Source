@@ -35,9 +35,24 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out _);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 100, TotalBytes = 900 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 200, TotalBytes = 900 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 300, TotalBytes = 900 });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 100,
+            TotalBytes = 900
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 200,
+            TotalBytes = 900
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 300,
+            TotalBytes = 900
+        });
 
         // Only the phase transition out of Idle was pushed; the two byte repeats were suppressed.
         AssertEx.Equal(expected: 1, publisher.Pushed.Count);
@@ -53,10 +68,22 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out var time);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 100 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 200 });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 100
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 200
+        });
         time.Advance(RuntimeAcquisitionStatusRegistry.ProgressPushInterval + TimeSpan.FromMilliseconds(1));
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 300 });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 300
+        });
 
         AssertEx.Equal(expected: 2, publisher.Pushed.Count);
         AssertEx.Equal(expected: 300L, publisher.Pushed[^1].CompletedBytes);
@@ -70,9 +97,20 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out _);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 100 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 200 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Verifying });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 100
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 200
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Verifying
+        });
 
         AssertEx.Equal(expected: 2, publisher.Pushed.Count);
         AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Verifying), publisher.Pushed[^1].Phase);
@@ -86,9 +124,27 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out _);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 100, StepIndex = 1, StepCount = 2 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 200, StepIndex = 1, StepCount = 2 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 10, StepIndex = 2, StepCount = 2 });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 100,
+            StepIndex = 1,
+            StepCount = 2
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 200,
+            StepIndex = 1,
+            StepCount = 2
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 10,
+            StepIndex = 2,
+            StepCount = 2
+        });
 
         AssertEx.Equal(expected: 2, publisher.Pushed.Count);
         AssertEx.Equal(expected: 2, publisher.Pushed[^1].StepIndex);
@@ -101,9 +157,20 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out _);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 100 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 200 });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Completed });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 100
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 200
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Completed
+        });
 
         AssertEx.Equal(expected: 2, publisher.Pushed.Count);
         AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Completed), publisher.Pushed[^1].Phase);
@@ -116,8 +183,16 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var publisher = new RecordingPublisher();
         var registry = Build(publisher, out _);
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Failed, SanitizedError = "first" });
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Failed, SanitizedError = "second" });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Failed,
+            SanitizedError = "first"
+        });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Failed,
+            SanitizedError = "second"
+        });
 
         AssertEx.Equal(expected: 2, publisher.Pushed.Count);
         AssertEx.Equal("second", publisher.Pushed[^1].SanitizedError);
@@ -134,11 +209,18 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         var sequences = new List<long>();
         for (var completed = 1; completed <= 20; completed++)
         {
-            registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = completed });
+            registry.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Downloading,
+                CompletedBytes = completed
+            });
             sequences.Add(registry.Current.Sequence);
         }
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Completed });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Completed
+        });
         sequences.Add(registry.Current.Sequence);
 
         AssertEx.True(sequences.Zip(sequences.Skip(1)).All(pair => pair.Second > pair.First),
@@ -157,7 +239,11 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
             NullLogger<RuntimeAcquisitionStatusRegistry>.Instance,
             new StubTimeProvider());
 
-        registry.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Downloading, CompletedBytes = 42 });
+        registry.Report(new RuntimeAcquisitionUpdate
+        {
+            Phase = RuntimeAcquisitionPhase.Downloading,
+            CompletedBytes = 42
+        });
 
         AssertEx.Equal(expected: 42L, registry.Current.CompletedBytes);
         AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Downloading), registry.Current.Phase);

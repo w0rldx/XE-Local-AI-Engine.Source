@@ -37,8 +37,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
     private readonly IScheduledJobTemplateRegistry _templateRegistry;
     private readonly TimeProvider _timeProvider;
 
-    public SchedulerDispatchExecutor(
-        IScheduledJobDefinitionStore definitionStore,
+    public SchedulerDispatchExecutor(IScheduledJobDefinitionStore definitionStore,
         IScheduledJobTemplateRegistry templateRegistry,
         IScheduledJobRunStore runStore,
         IScheduledJobRunEventStore runEventStore,
@@ -115,15 +114,15 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         // Idempotent open: a refire / recovery callback with the same fire-instance id returns the existing row instead
         // of inserting a duplicate. If that row is already terminal the work has run before — skip re-execution.
         var run = await _runStore.UpsertByFireInstanceAsync(new ScheduledJobRunInput
-        {
-            ScheduledJobId = definition.Id,
-            TemplateId = definition.TemplateId,
-            QuartzFireInstanceId = fireInstanceId,
-            TriggeredBy = triggeredBy,
-            Status = ScheduledRunStatus.Running,
-            ScheduledFireTimeUtc = scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
-            ActualFireTimeUtc = actualFireMs
-        },
+            {
+                ScheduledJobId = definition.Id,
+                TemplateId = definition.TemplateId,
+                QuartzFireInstanceId = fireInstanceId,
+                TriggeredBy = triggeredBy,
+                Status = ScheduledRunStatus.Running,
+                ScheduledFireTimeUtc = scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
+                ActualFireTimeUtc = actualFireMs
+            },
             cancellationToken);
 
         if (IsTerminal(run.Status))
@@ -352,7 +351,14 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
             // Persist the progress event with CancellationToken.None, the policy the terminal writes use: a handler reporting
             // progress out of a cancelled run forwards an already-cancelled token, whose second throw would mask the real cancellation.
-            _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput { RunId = runId, Sequence = nextSequence, Level = ScheduledRunEventLevel.Progress, Message = message, DataJson = dataJson },
+            _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput
+                {
+                    RunId = runId,
+                    Sequence = nextSequence,
+                    Level = ScheduledRunEventLevel.Progress,
+                    Message = message,
+                    DataJson = dataJson
+                },
                 CancellationToken.None);
 
             await SafePublishProgressAsync(runId, scheduledJobId, message, percent);
@@ -394,7 +400,15 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent { EventType = SchedulerHubEvents.RunProgress, RunId = runId, ScheduledJobId = scheduledJobId, Message = message, Percent = percent, OccurredAtUtc = occurredAt },
+            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent
+                {
+                    EventType = SchedulerHubEvents.RunProgress,
+                    RunId = runId,
+                    ScheduledJobId = scheduledJobId,
+                    Message = message,
+                    Percent = percent,
+                    OccurredAtUtc = occurredAt
+                },
                 CancellationToken.None);
         }
         catch (Exception exception)

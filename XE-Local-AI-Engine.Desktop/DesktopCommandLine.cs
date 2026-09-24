@@ -7,7 +7,8 @@ internal static class DesktopCommandLine
 
     internal const string McpOnlyModeValue = "mcp-only";
 
-    internal static bool RunsEngine(string[] args) => RunsEngine(args, Environment.GetEnvironmentVariable(LaunchModeVariable));
+    internal static bool RunsEngine(string[] args) =>
+        RunsEngine(args, Environment.GetEnvironmentVariable(LaunchModeVariable));
 
     /// <summary>True when the process must run the engine without a window: an explicit browser, headless, operator or
     ///     owned-engine argument, or an unattended <c>XE_LAUNCH_MODE=mcp-only</c> that no explicit mode argument overrides.</summary>
@@ -15,14 +16,15 @@ internal static class DesktopCommandLine
     {
         ArgumentNullException.ThrowIfNull(args);
         return args.Any(argument => Is(argument, "--browser") || Is(argument, "--headless") || Is(argument, "--mcp-only")
-            || Is(argument, "--help") || Is(argument, "--status") || Is(argument, "--setup") || Is(argument, "--mcp-key")
-            || argument.StartsWith("--mcp-key=", StringComparison.OrdinalIgnoreCase)
-            || Is(argument, "--reset-admin-password") || Is(argument, "--knowledge-downgrade-preflight") || Is(argument, "--knowledge-downgrade-export"))
-            || args.Any(argument => Is(argument, "--no-browser"))
-            || (IsMcpOnly(launchMode) && !args.Any(argument => Is(argument, "--desktop")));
+                                    || Is(argument, "--help") || Is(argument, "--status") || Is(argument, "--setup") || Is(argument, "--mcp-key")
+                                    || argument.StartsWith("--mcp-key=", StringComparison.OrdinalIgnoreCase)
+                                    || Is(argument, "--reset-admin-password") || Is(argument, "--knowledge-downgrade-preflight") || Is(argument, "--knowledge-downgrade-export"))
+               || args.Any(argument => Is(argument, "--no-browser"))
+               || (IsMcpOnly(launchMode) && !args.Any(argument => Is(argument, "--desktop")));
     }
 
-    internal static string[] EngineArguments(string[] args) => EngineArguments(args, Environment.GetEnvironmentVariable(LaunchModeVariable));
+    internal static string[] EngineArguments(string[] args) =>
+        EngineArguments(args, Environment.GetEnvironmentVariable(LaunchModeVariable));
 
     internal static string[] EngineArguments(string[] args, string? launchMode)
     {
@@ -45,7 +47,9 @@ internal static class DesktopCommandLine
         return [.. forwarded];
     }
 
-    private static bool IsMcpOnly(string? launchMode) => Is(launchMode ?? string.Empty, McpOnlyModeValue);
+    private static bool IsMcpOnly(string? launchMode) =>
+        Is(launchMode ?? string.Empty, McpOnlyModeValue);
 
-    private static bool Is(string value, string expected) => string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
+    private static bool Is(string value, string expected) =>
+        string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
 }

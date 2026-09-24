@@ -101,9 +101,9 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await using var fixture = CreateFixture(databasePath);
         var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         await SeedTerminalCountersAsync(databasePath,
-                seed.Run!.RequestId,
-                activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "boundary"),
-                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
+            seed.Run!.RequestId,
+            activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "boundary"),
+            tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
 
         var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary"));
 
@@ -120,9 +120,9 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         await using var fixture = CreateFixture(databasePath);
         var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         await SeedTerminalCountersAsync(databasePath,
-                seed.Run!.RequestId,
-                activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "over-boundary") + 1,
-                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
+            seed.Run!.RequestId,
+            activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "over-boundary") + 1,
+            tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
 
         var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary"));
 

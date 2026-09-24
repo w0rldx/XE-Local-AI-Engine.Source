@@ -377,14 +377,26 @@ public sealed class WhisperServerTranscriberTests
         public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct)
         {
             EnsureCallCount++;
-            return Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = EnsureCallCount, BaseAddress = new Uri("http://127.0.0.1:18300/") });
+            return Task.FromResult(new WhisperServerEndpoint
+            {
+                ModelId = modelId,
+                Generation = EnsureCallCount,
+                BaseAddress = new Uri("http://127.0.0.1:18300/")
+            });
         }
 
         public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
             Task.FromResult(new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
             });
 
         public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation)
@@ -410,7 +422,15 @@ public sealed class WhisperServerTranscriberTests
         }
 
         public WhisperRuntimeStatusSnapshot GetStatus() =>
-            new() { State = WhisperRuntimeState.Ready, LoadedModelId = "base", Backend = WhisperBackend.Cpu, BinaryVersion = "b5130", BinarySource = WhisperBinarySource.Pinned, SupportsTranscode = false };
+            new()
+            {
+                State = WhisperRuntimeState.Ready,
+                LoadedModelId = "base",
+                Backend = WhisperBackend.Cpu,
+                BinaryVersion = "b5130",
+                BinarySource = WhisperBinarySource.Pinned,
+                SupportsTranscode = false
+            };
 
         private sealed class CountingLease : IWhisperTranscriptionLease
         {

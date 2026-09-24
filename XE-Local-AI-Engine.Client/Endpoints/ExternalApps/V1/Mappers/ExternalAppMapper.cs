@@ -47,7 +47,13 @@ internal static class ExternalAppMapper
             EndpointSource = daemon.EndpointSource.ToString(),
             ObservedDaemon = daemon.DaemonId is null
                 ? null
-                : new ExternalAppDaemonView { DaemonId = daemon.DaemonId, ServerVersion = daemon.ServerVersion, Endpoint = daemon.Endpoint, ConfirmedAtUtc = null },
+                : new ExternalAppDaemonView
+                {
+                    DaemonId = daemon.DaemonId,
+                    ServerVersion = daemon.ServerVersion,
+                    Endpoint = daemon.Endpoint,
+                    ConfirmedAtUtc = null
+                },
             PinnedDaemon = daemon.PinnedDaemonId is null
                 ? null
                 : new ExternalAppDaemonView
@@ -137,19 +143,33 @@ internal static class ExternalAppMapper
             var ports = new List<ExternalAppPortView>(service.Ports.Count);
             foreach (var port in service.Ports)
             {
-                ports.Add(new ExternalAppPortView { ContainerPort = port.ContainerPort, Role = port.Role, PreferredHostPort = port.PreferredHostPort, OpenPath = port.OpenPath });
+                ports.Add(new ExternalAppPortView
+                {
+                    ContainerPort = port.ContainerPort,
+                    Role = port.Role,
+                    PreferredHostPort = port.PreferredHostPort,
+                    OpenPath = port.OpenPath
+                });
             }
 
             var storage = new List<ExternalAppStorageView>(service.Storage.Count);
             foreach (var entry in service.Storage)
             {
-                storage.Add(new ExternalAppStorageView { Name = entry.Name, ContainerPath = entry.ContainerPath });
+                storage.Add(new ExternalAppStorageView
+                {
+                    Name = entry.Name,
+                    ContainerPath = entry.ContainerPath
+                });
             }
 
             var dependsOn = new List<ExternalAppDependencyView>(service.DependsOn.Count);
             foreach (var dependency in service.DependsOn)
             {
-                dependsOn.Add(new ExternalAppDependencyView { Service = dependency.Service, Condition = dependency.Condition });
+                dependsOn.Add(new ExternalAppDependencyView
+                {
+                    Service = dependency.Service,
+                    Condition = dependency.Condition
+                });
             }
 
             services.Add(new ExternalAppServiceView
@@ -310,7 +330,13 @@ internal static class ExternalAppMapper
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return new ExternalAppInstanceEventView { Sequence = snapshot.Sequence, AtUtc = snapshot.OccurredAtUtc, Kind = snapshot.Kind.ToString(), DetailJson = snapshot.DetailJson };
+        return new ExternalAppInstanceEventView
+        {
+            Sequence = snapshot.Sequence,
+            AtUtc = snapshot.OccurredAtUtc,
+            Kind = snapshot.Kind.ToString(),
+            DetailJson = snapshot.DetailJson
+        };
     }
 
     /// <summary>
@@ -397,12 +423,24 @@ internal static class ExternalAppMapper
 
     private static ExternalAppPermissionsView ToPermissionsView(ApplicationPermissions permissions)
     {
-        return new ExternalAppPermissionsView { Internet = permissions.Internet, LocalNetwork = permissions.LocalNetwork, HostFiles = permissions.HostFiles, Gpu = permissions.Gpu };
+        return new ExternalAppPermissionsView
+        {
+            Internet = permissions.Internet,
+            LocalNetwork = permissions.LocalNetwork,
+            HostFiles = permissions.HostFiles,
+            Gpu = permissions.Gpu
+        };
     }
 
     private static ExternalAppResourcesView ToResourcesView(ApplicationResources resources)
     {
-        return new ExternalAppResourcesView { MinimumMemoryMb = resources.MinimumMemoryMb, RecommendedMemoryMb = resources.RecommendedMemoryMb, CpuHint = resources.CpuHint, PidsLimit = resources.PidsLimit };
+        return new ExternalAppResourcesView
+        {
+            MinimumMemoryMb = resources.MinimumMemoryMb,
+            RecommendedMemoryMb = resources.RecommendedMemoryMb,
+            CpuHint = resources.CpuHint,
+            PidsLimit = resources.PidsLimit
+        };
     }
 
     private static IReadOnlyList<ExternalAppVariableView> ToVariableViews(IReadOnlyList<ApplicationVariable> variables)

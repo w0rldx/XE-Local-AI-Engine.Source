@@ -150,32 +150,31 @@ public static class AgentServiceCollectionExtensions
             // Provider client: first .Use is outermost, OpenTelemetry INNERMOST so each provider round emits its own gen_ai
             // span; source name and EnableSensitiveData are pinned (docs/wiki/04-agent-mode.md, decorator pipeline).
             var providerClient = inner.AsBuilder()
-                        .Use(chatClient => new ToolRelevanceChatClient(chatClient,
-                            toolRelevanceSelector,
-                            toolRelevanceOptions,
-                            serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
-                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
-                            serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
-                            serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
-                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
-                            sourceName: "Microsoft.Extensions.AI",
-                            configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
-                        .Build();
+                                      .Use(chatClient => new ToolRelevanceChatClient(chatClient,
+                                          toolRelevanceSelector,
+                                          toolRelevanceOptions,
+                                          serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
+                                      .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
+                                          serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
+                                          serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
+                                      .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
+                                          sourceName: "Microsoft.Extensions.AI",
+                                          configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
+                                      .Build();
             var functionInvokingClient = providerClient.AsBuilder()
-                        .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
-                            functionInvokingChatClient =>
-                            {
-                                functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest;
-                                // Keep these shared recovery/privacy/concurrency policies fixed rather than operator-tunable, and pin them against upgrade drift.
-                                functionInvokingChatClient.MaximumConsecutiveErrorsPerRequest = 3;
-                                functionInvokingChatClient.IncludeDetailedErrors = false;
-                                functionInvokingChatClient.AllowConcurrentInvocation = false;
-                                functionInvokingChatClient.TerminateOnUnknownCalls = false;
-                            })
-                        .Build();
+                                                       .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
+                                                           functionInvokingChatClient =>
+                                                           {
+                                                               functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest;
+                                                               // Keep these shared recovery/privacy/concurrency policies fixed rather than operator-tunable, and pin them against upgrade drift.
+                                                               functionInvokingChatClient.MaximumConsecutiveErrorsPerRequest = 3;
+                                                               functionInvokingChatClient.IncludeDetailedErrors = false;
+                                                               functionInvokingChatClient.AllowConcurrentInvocation = false;
+                                                               functionInvokingChatClient.TerminateOnUnknownCalls = false;
+                                                           })
+                                                       .Build();
 
-            return new ToolInvocationObservabilityChatClient(
-                new EmptyToolOfferChatClient(functionInvokingClient, providerClient),
+            return new ToolInvocationObservabilityChatClient(new EmptyToolOfferChatClient(functionInvokingClient, providerClient),
                 serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>());
         });
 

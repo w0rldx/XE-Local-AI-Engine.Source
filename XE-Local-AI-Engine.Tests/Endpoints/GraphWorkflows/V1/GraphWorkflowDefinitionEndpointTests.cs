@@ -420,9 +420,9 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         await using var factory = EnabledFactory(store);
 
         using var response = await SendAsync(factory,
-                "PUT",
-                Definition,
-                $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""");
+            "PUT",
+            Definition,
+            $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -638,7 +638,19 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         };
 
     private static GraphWorkflowDefinitionSummary Summary() =>
-        new() { Id = DefinitionId, Name = "Triage", Description = "The one that triages.", GraphHash = "graph-hash", NodeCount = 3, SchemaVersion = 1, Kind = GraphWorkflowDefinitionKind.Standard, Version = 4, CreatedAtUtc = 1, UpdatedAtUtc = 2 };
+        new()
+        {
+            Id = DefinitionId,
+            Name = "Triage",
+            Description = "The one that triages.",
+            GraphHash = "graph-hash",
+            NodeCount = 3,
+            SchemaVersion = 1,
+            Kind = GraphWorkflowDefinitionKind.Standard,
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

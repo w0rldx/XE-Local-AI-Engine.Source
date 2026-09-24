@@ -89,7 +89,13 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             if (!_targets.TryGetValue(modelName, out var target)
                 || target.BaseAddress != llamaServerBaseAddress)
             {
-                target = new CalibrationTarget { BaseAddress = llamaServerBaseAddress, Generation = ++_generation, NextDueUtc = DateTimeOffset.MinValue, InFlight = false };
+                target = new CalibrationTarget
+                {
+                    BaseAddress = llamaServerBaseAddress,
+                    Generation = ++_generation,
+                    NextDueUtc = DateTimeOffset.MinValue,
+                    InFlight = false
+                };
                 _targets[modelName] = target;
             }
 

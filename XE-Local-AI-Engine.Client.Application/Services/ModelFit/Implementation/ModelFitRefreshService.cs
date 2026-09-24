@@ -131,15 +131,15 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         // Open the Running snapshot row (sentinel image/provider — the approved-image concept is gone).
         var startedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput
-        {
-            ApprovedImageId = AdvisorSnapshotSource,
-            Operation = request.Operation,
-            UseCase = request.UseCase,
-            ProviderName = AdvisorProviderName,
-            ModelName = null,
-            Status = ModelFitRunStatus.Running,
-            StartedAtUtc = startedAtUtc
-        },
+            {
+                ApprovedImageId = AdvisorSnapshotSource,
+                Operation = request.Operation,
+                UseCase = request.UseCase,
+                ProviderName = AdvisorProviderName,
+                ModelName = null,
+                Status = ModelFitRunStatus.Running,
+                StartedAtUtc = startedAtUtc
+            },
             cancellationToken);
 
         var snapshotId = snapshot.Id;
@@ -196,7 +196,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 inserted,
                 profile is { GpuAccelAvailable: true, VramKnown: true } ? "GPU" : "CPU");
 
-            return new ModelFitRefreshResult { SnapshotId = snapshotId, Status = ModelFitRunStatus.Succeeded, RecommendationCount = inserted, SanitizedError = null };
+            return new ModelFitRefreshResult
+            {
+                SnapshotId = snapshotId,
+                Status = ModelFitRunStatus.Succeeded,
+                RecommendationCount = inserted,
+                SanitizedError = null
+            };
         }
         catch (OperationCanceledException)
         {
@@ -300,7 +306,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         try
         {
             var result = await _catalogRecommendationService
-                               .BuildRecommendationsAsync(request.UseCase, quant, ctxTarget, profile, installedKeys, cancellationToken);
+                .BuildRecommendationsAsync(request.UseCase, quant, ctxTarget, profile, installedKeys, cancellationToken);
 
             var recommended = result.Recommended.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "recommended"));
             var canRun = result.CanRun.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "canRun"));
@@ -745,7 +751,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError)
     {
-        return new ModelFitRefreshResult { SnapshotId = snapshotId, Status = ModelFitRunStatus.Failed, RecommendationCount = 0, SanitizedError = sanitizedError };
+        return new ModelFitRefreshResult
+        {
+            SnapshotId = snapshotId,
+            Status = ModelFitRunStatus.Failed,
+            RecommendationCount = 0,
+            SanitizedError = sanitizedError
+        };
     }
 
     /// <summary>

@@ -102,11 +102,25 @@ internal sealed partial class SlashCommandService : ISlashCommandService
             throw new SlashCommandValidationException("Description must be at most 1,024 UTF-8 bytes.");
         }
 
-        return new SlashCommandInput { Name = name, Description = description, ActionType = input.ActionType, Prompt = prompt };
+        return new SlashCommandInput
+        {
+            Name = name,
+            Description = description,
+            ActionType = input.ActionType,
+            Prompt = prompt
+        };
     }
 
     private static SlashCommandCatalogItem ToCatalogItem(SlashCommandRecord record) =>
-        new() { Id = record.Id, Name = record.Name, Description = record.Description, Source = "custom", ActionType = record.ActionType, Prompt = record.Prompt };
+        new()
+        {
+            Id = record.Id,
+            Name = record.Name,
+            Description = record.Description,
+            Source = "custom",
+            ActionType = record.ActionType,
+            Prompt = record.Prompt
+        };
 
     private static bool IsUniqueNameViolation(DbUpdateException exception) =>
         exception.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 };

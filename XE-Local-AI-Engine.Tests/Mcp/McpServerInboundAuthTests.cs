@@ -555,7 +555,11 @@ public sealed class McpServerInboundAuthTests
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(call => storedKey is not null && string.Equals(call.Arg<string?>(), storedKey, StringComparison.Ordinal)
-                         ? new McpServerApiKeyValidation { Scope = scope, Prefix = "xemcp_valid" }
+                         ? new McpServerApiKeyValidation
+                         {
+                             Scope = scope,
+                             Prefix = "xemcp_valid"
+                         }
                          : null);
         apiKeyService.GenerateAsync(Arg.Any<McpServerApiKeyScope>(), Arg.Any<CancellationToken>())
                      .Returns(call =>
@@ -564,7 +568,13 @@ public sealed class McpServerInboundAuthTests
                          return new GeneratedMcpServerApiKey
                          {
                              Key = ValidKey,
-                             View = new McpServerApiKeyView { Prefix = "xemcp_valid", Scope = requestedScope, CreatedAt = DateTimeOffset.UnixEpoch, LastUsedAt = null }
+                             View = new McpServerApiKeyView
+                             {
+                                 Prefix = "xemcp_valid",
+                                 Scope = requestedScope,
+                                 CreatedAt = DateTimeOffset.UnixEpoch,
+                                 LastUsedAt = null
+                             }
                          };
                      });
         // The view deliberately has no key field — the node keeps only a digest — so the fake supplies metadata only.

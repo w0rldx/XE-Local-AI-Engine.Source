@@ -62,7 +62,12 @@ public sealed class SendGraphWorkflowChatMessageEndpoint : Endpoint<SendGraphWor
                 User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value,
                 ct);
             var action = result.Action == GraphWorkflowChatSendAction.Started ? "started" : "answered";
-            await Send.ResultAsync(Results.Accepted(value: new SendGraphWorkflowChatMessageResponse { RunId = result.RunId, MessageId = result.MessageId, Action = action }));
+            await Send.ResultAsync(Results.Accepted(value: new SendGraphWorkflowChatMessageResponse
+            {
+                RunId = result.RunId,
+                MessageId = result.MessageId,
+                Action = action
+            }));
         }
         catch (GraphWorkflowValidationException exception)
         {

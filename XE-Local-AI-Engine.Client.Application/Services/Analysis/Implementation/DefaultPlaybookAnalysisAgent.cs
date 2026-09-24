@@ -25,8 +25,7 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public DefaultPlaybookAnalysisAgent(
-        ILocalModelProviderResolver providerResolver,
+    public DefaultPlaybookAnalysisAgent(ILocalModelProviderResolver providerResolver,
         IOptions<PlaybookAnalysisOptions> options,
         ILogger<DefaultPlaybookAnalysisAgent> logger)
     {
@@ -65,7 +64,7 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
         };
 
         var response = await chatClient
-                             .GetResponseAsync<AnalysisEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
+            .GetResponseAsync<AnalysisEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var envelope) || envelope?.Proposals is null)
         {

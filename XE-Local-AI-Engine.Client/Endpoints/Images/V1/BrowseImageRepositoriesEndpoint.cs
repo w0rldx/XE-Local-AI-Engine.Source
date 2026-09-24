@@ -26,8 +26,7 @@ public sealed class BrowseImageRepositoriesEndpoint : Endpoint<BrowseImageReposi
     private readonly IImageModelDiscovery _discovery;
     private readonly ILogger<BrowseImageRepositoriesEndpoint> _logger;
 
-    public BrowseImageRepositoriesEndpoint(
-        IImageModelDiscovery discovery,
+    public BrowseImageRepositoriesEndpoint(IImageModelDiscovery discovery,
         ILogger<BrowseImageRepositoriesEndpoint> logger)
     {
         ArgumentNullException.ThrowIfNull(discovery);

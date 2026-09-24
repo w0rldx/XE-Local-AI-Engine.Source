@@ -18,7 +18,8 @@ internal static class PlaybookMonitorMapper
 
         return new AgentPlaybookMonitorResponse
         {
-            Items = [
+            Items =
+            [
                 .. views.Select(static view => new PlaybookActionMonitorItemResponse
                 {
                     ActionId = view.ActionId,
@@ -31,7 +32,13 @@ internal static class PlaybookMonitorMapper
                     FacetToolName = view.FacetToolName
                 })
             ],
-            Retrieval = new PlaybookRetrievalResponse { Threshold = retrievalOptions.RetrievalThreshold, TopK = retrievalOptions.TopK, Ranker = ranker, EmbeddingModel = embeddingModel }
+            Retrieval = new PlaybookRetrievalResponse
+            {
+                Threshold = retrievalOptions.RetrievalThreshold,
+                TopK = retrievalOptions.TopK,
+                Ranker = ranker,
+                EmbeddingModel = embeddingModel
+            }
         };
     }
 }

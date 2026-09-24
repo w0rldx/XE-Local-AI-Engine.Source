@@ -111,7 +111,12 @@ internal sealed class ManagedEncryptedBlobStore
                 return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken);
             }
 
-            return new ManagedBlobWriteResult { OpaqueReference = OpaqueReference(scopeId, blobId), ContentHash = contentHash, ByteCount = content.Length };
+            return new ManagedBlobWriteResult
+            {
+                OpaqueReference = OpaqueReference(scopeId, blobId),
+                ContentHash = contentHash,
+                ByteCount = content.Length
+            };
         }
         catch
         {
@@ -151,7 +156,11 @@ internal sealed class ManagedEncryptedBlobStore
 
         var actualHash = Convert.ToHexString(SHA256.HashData(plaintext));
         return string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase)
-            ? new ManagedBlobReadResult { Status = ManagedBlobReadStatus.Found, Content = plaintext }
+            ? new ManagedBlobReadResult
+            {
+                Status = ManagedBlobReadStatus.Found,
+                Content = plaintext
+            }
             : Failure(ManagedBlobReadStatus.HashMismatch);
     }
 
@@ -259,7 +268,12 @@ internal sealed class ManagedEncryptedBlobStore
             throw new IOException($"The immutable {_subject} '{blobId}' already exists with different content.");
         }
 
-        return new ManagedBlobWriteResult { OpaqueReference = OpaqueReference(scopeId, blobId), ContentHash = contentHash, ByteCount = content.Length };
+        return new ManagedBlobWriteResult
+        {
+            OpaqueReference = OpaqueReference(scopeId, blobId),
+            ContentHash = contentHash,
+            ByteCount = content.Length
+        };
     }
 
     private byte[] Encrypt(Guid scopeId, Guid blobId, ReadOnlySpan<byte> plaintext)
@@ -326,7 +340,11 @@ internal sealed class ManagedEncryptedBlobStore
         string.Concat(scopeId.ToString("N"), "/", blobId.ToString("N"));
 
     private static ManagedBlobReadResult Failure(ManagedBlobReadStatus status) =>
-        new() { Status = status, Content = ReadOnlyMemory<byte>.Empty };
+        new()
+        {
+            Status = status,
+            Content = ReadOnlyMemory<byte>.Empty
+        };
 
     private static void DeleteIfPresent(string path)
     {

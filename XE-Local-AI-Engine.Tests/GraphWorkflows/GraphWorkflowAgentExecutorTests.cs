@@ -73,13 +73,16 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string prompt = "llm-explicit-package";
         const string model = "pinned-chat.gguf";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(prompt, new GraphWorkflowScriptedTurn { Text = """{"answer":"yes"}""" });
+        harness.Invocations.Script(prompt, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"answer":"yes"}"""
+        });
         var runId = await StartToTheAgentAsync(harness,
-                LlmGraph($$"""
-                           { "prompt": "{{prompt}}", "systemPrompt": "Answer tersely.", "model": "{{model}}",
-                             "reasoningEffort": "high", "samplingOptions": { "temperature": 0.2, "seed": "7", "numCtx": 2048 },
-                             "responseJsonSchema": { "type": "object", "properties": { "answer": { "type": "string" } }, "required": ["answer"] } }
-                           """));
+            LlmGraph($$"""
+                       { "prompt": "{{prompt}}", "systemPrompt": "Answer tersely.", "model": "{{model}}",
+                         "reasoningEffort": "high", "samplingOptions": { "temperature": 0.2, "seed": "7", "numCtx": 2048 },
+                         "responseJsonSchema": { "type": "object", "properties": { "answer": { "type": "string" } }, "required": ["answer"] } }
+                       """));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -99,8 +102,8 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string model = "missing-binding-chat.gguf";
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness,
-                LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}", "inputBindings": { "customer": "run.input.customer" } }"""),
-                """{}""");
+            LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}", "inputBindings": { "customer": "run.input.customer" } }"""),
+            """{}""");
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -209,10 +212,10 @@ public sealed class GraphWorkflowAgentExecutorTests
         // persona's own catalog offer, which is the node's tool state rather than anything a test scripts.
         var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-unattended");
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions,
-                    $$"""
-                      , "agentDefinitionId": "{{agentDefinitionId}}"
-                      """));
+            Graph(instructions,
+                $$"""
+                  , "agentDefinitionId": "{{agentDefinitionId}}"
+                  """));
 
         _ = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -352,11 +355,14 @@ public sealed class GraphWorkflowAgentExecutorTests
         // default is every sibling's name too.
         const string model = "graph-local-completed";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Text = "the analysis" });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Text = "the analysis"
+        });
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions, $$"""
-                                      , "model": "{{model}}"
-                                      """));
+            Graph(instructions, $$"""
+                                  , "model": "{{model}}"
+                                  """));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -376,7 +382,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "schema-parses";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Text = """{"requiresReview":true}""" });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"requiresReview":true}"""
+        });
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, Schema));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
@@ -395,7 +404,11 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "schema-refuses-a-truncated-answer";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Text = """{"requiresReview":tr""", FinishReason = "length" });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"requiresReview":tr""",
+            FinishReason = "length"
+        });
 
         // Two attempts, because retryability is the assertion. The failing write's own class never stands still long
         // enough to read — the retry stage runs in the SAME tick that settles it — so the node.retried event, which
@@ -421,7 +434,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "provider-failed";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Fails });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Fails
+        });
         const string model = "graph-local-provider-failed";
 
         // One attempt, so one turn and one reservation. An Agent node left to itself declares THREE — the parser's
@@ -448,7 +464,11 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "watchdog-timed-the-turn-out";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Fails, FailureCategory = FailureCategory.Timeout });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Fails,
+            FailureCategory = FailureCategory.Timeout
+        });
 
         // Two attempts, because the class is the assertion. The failing write's own class never stands still long
         // enough to read — the retry stage runs in the SAME tick that settles it — so the node.retried event, which
@@ -479,11 +499,14 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "cancelled-by-a-force-eject";
         const string model = "graph-local-force-ejected";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Cancels });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Cancels
+        });
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions, $$"""
-                                      , "model": "{{model}}"
-                                      """));
+            Graph(instructions, $$"""
+                                  , "model": "{{model}}"
+                                  """));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
@@ -514,11 +537,11 @@ public sealed class GraphWorkflowAgentExecutorTests
         // Two attempts, for the same reason the timeout test takes two: a refusal is NodeFailed, and the retryable
         // class only stands still on the node.retried event.
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions,
-                    $$"""
-                      , "model": "{{model}}"
-                      """,
-                    """, "maxAttempts": 2"""));
+            Graph(instructions,
+                $$"""
+                  , "model": "{{model}}"
+                  """,
+                """, "maxAttempts": 2"""));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -544,11 +567,11 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "agent-was-deleted";
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions,
-                    $$"""
-                      , "agentDefinitionId": "{{Guid.NewGuid()}}"
-                      """,
-                    SingleAttempt));
+            Graph(instructions,
+                $$"""
+                  , "agentDefinitionId": "{{Guid.NewGuid()}}"
+                  """,
+                SingleAttempt));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -596,9 +619,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         await using var harness = new GraphWorkflowHarness(Host);
         var agentDefinitionId = await SeedAgentAsync(harness, pin);
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions, $$"""
-                                      , "agentDefinitionId": "{{agentDefinitionId}}"
-                                      """));
+            Graph(instructions, $$"""
+                                  , "agentDefinitionId": "{{agentDefinitionId}}"
+                                  """));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -615,7 +638,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "silent-turn";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Silent });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Silent
+        });
         var runId = await StartToTheAgentAsync(harness, Graph(instructions));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
@@ -634,7 +660,10 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "unforeseen-throw";
         const string model = "graph-local-unforeseen";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Throws });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Throws
+        });
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
                                                                               """, SingleAttempt));
@@ -657,10 +686,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions, $$"""
-                                      , "includeUpstreamOutputs": {{include}}
-                                      """),
-                """{"topic":"the overnight logs"}""");
+            Graph(instructions, $$"""
+                                  , "includeUpstreamOutputs": {{include}}
+                                  """),
+            """{"topic":"the overnight logs"}""");
 
         _ = await AdvanceUntilTerminalAsync(harness, runId);
 
@@ -810,11 +839,14 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         // A private host: a parked turn holds the node-wide invocation slot, which on a shared host is every sibling's.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var runId = await StartToTheAgentAsync(harness,
-                Graph(instructions, $$"""
-                                      , "model": "{{model}}"
-                                      """));
+            Graph(instructions, $$"""
+                                  , "model": "{{model}}"
+                                  """));
 
         var queued = await harness.ReadNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Queued, queued.Status, "the dispatch tick never writes Running: the turn holds no node-wide slot yet.");
@@ -851,7 +883,10 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string holder = "holds-the-only-slot";
         const string waiter = "parked-on-the-lease";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(holder, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(holder, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
 
         var holding = await StartToTheAgentAsync(harness, Graph(holder));
         await harness.Invocations.WhenRunningAsync(holder).WaitAsync(TestBudgets.Contended);
@@ -881,7 +916,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "superseded-entry";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var runId = await StartToTheAgentAsync(harness, Graph(instructions));
         await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended);
 
@@ -916,7 +954,10 @@ public sealed class GraphWorkflowAgentExecutorTests
                      "Right."
                  })
         {
-            harness.Invocations.Script(branch, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+            harness.Invocations.Script(branch, new GraphWorkflowScriptedTurn
+            {
+                Outcome = GraphWorkflowTurnOutcome.Parks
+            });
         }
 
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentFanOut);
@@ -973,7 +1014,21 @@ public sealed class GraphWorkflowAgentExecutorTests
         JsonSerializer.Serialize(new
         {
             message,
-            attachments = new[] { new { fileId = Guid.NewGuid(), name = "a.pdf", kind = "text" }, new { fileId = Guid.NewGuid(), name = "b.png", kind = "image" } },
+            attachments = new[]
+            {
+                new
+                {
+                    fileId = Guid.NewGuid(),
+                    name = "a.pdf",
+                    kind = "text"
+                },
+                new
+                {
+                    fileId = Guid.NewGuid(),
+                    name = "b.png",
+                    kind = "image"
+                }
+            },
             conversationId = Guid.NewGuid(),
             messageId = Guid.NewGuid()
         });

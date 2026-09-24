@@ -164,12 +164,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         // ONE detailed list for every row: the state word and the exit code arrive with the ids, so a container that
         // is stopped but still listed is distinguishable from one that is gone without a second round trip per row.
         var owned = await runtime
-                          .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
-                              {
-                                  [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
-                                  [ExternalAppLabels.Install] = _service.InstallId
-                              },
-                              cancellationToken);
+            .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
+                    [ExternalAppLabels.Install] = _service.InstallId
+                },
+                cancellationToken);
 
         var byInstance = GroupByInstance(owned);
         var changed = 0;
@@ -211,7 +211,15 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         var orphans = await RemoveOrphansAsync(store, runtime, byInstance, [.. rows.Select(static row => row.Id)], cancellationToken);
         var foreign = await CountForeignAsync(runtime, cancellationToken);
 
-        return new ExternalAppReconcileSummary { RowsInspected = rows.Count, RowsChanged = changed, OrphansRemoved = orphans, ForeignInstallContainers = foreign, RowsSkippedBusy = skippedBusy, RowsFailed = failed };
+        return new ExternalAppReconcileSummary
+        {
+            RowsInspected = rows.Count,
+            RowsChanged = changed,
+            OrphansRemoved = orphans,
+            ForeignInstallContainers = foreign,
+            RowsSkippedBusy = skippedBusy,
+            RowsFailed = failed
+        };
     }
 
     /// <summary>
@@ -345,12 +353,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         _ = await _service.RemoveInstanceContainersAsync(runtime, row.Id, cancellationToken);
 
         return await WriteAsync(store,
-                row,
-                ExternalAppInstanceStatus.Failed,
-                ExternalAppInstanceEventKind.Failed,
-                ExternalAppFailureCategory.Unknown,
-                $"The engine restarted while this application was {InterruptedVerb(row.Status)}.",
-                cancellationToken);
+            row,
+            ExternalAppInstanceStatus.Failed,
+            ExternalAppInstanceEventKind.Failed,
+            ExternalAppFailureCategory.Unknown,
+            $"The engine restarted while this application was {InterruptedVerb(row.Status)}.",
+            cancellationToken);
     }
 
     private static string InterruptedVerb(ExternalAppInstanceStatus status)
@@ -391,23 +399,23 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             if (!byService.TryGetValue(serviceName, out var container))
             {
                 return await WriteAsync(store,
-                        row,
-                        ExternalAppInstanceStatus.StoppedUnexpectedly,
-                        ExternalAppInstanceEventKind.StoppedUnexpectedly,
-                        ExternalAppFailureCategory.StoppedUnexpectedly,
-                        $"The container for service '{serviceName}' is no longer on the container runtime.",
-                        cancellationToken);
+                    row,
+                    ExternalAppInstanceStatus.StoppedUnexpectedly,
+                    ExternalAppInstanceEventKind.StoppedUnexpectedly,
+                    ExternalAppFailureCategory.StoppedUnexpectedly,
+                    $"The container for service '{serviceName}' is no longer on the container runtime.",
+                    cancellationToken);
             }
 
             if (!IsRunning(container))
             {
                 return await WriteAsync(store,
-                        row,
-                        ExternalAppInstanceStatus.StoppedUnexpectedly,
-                        ExternalAppInstanceEventKind.StoppedUnexpectedly,
-                        ExternalAppFailureCategory.StoppedUnexpectedly,
-                        $"Service '{serviceName}' is {container.State}{ExitCodeSuffix(container)}.",
-                        cancellationToken);
+                    row,
+                    ExternalAppInstanceStatus.StoppedUnexpectedly,
+                    ExternalAppInstanceEventKind.StoppedUnexpectedly,
+                    ExternalAppFailureCategory.StoppedUnexpectedly,
+                    $"Service '{serviceName}' is {container.State}{ExitCodeSuffix(container)}.",
+                    cancellationToken);
             }
         }
 
@@ -438,12 +446,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             // Anything else is neither a policy violation (nothing was observed to violate anything) nor "stopped
             // unexpectedly" (the containers are up): it is undescribable, and a Start's rebuild is the recovery.
             return await WriteAsync(store,
-                    row,
-                    ExternalAppInstanceStatus.Failed,
-                    ExternalAppInstanceEventKind.Failed,
-                    bridgeUnavailable ? ExternalAppFailureCategory.ConfigurationMissing : ExternalAppFailureCategory.Unknown,
-                    bridgeUnavailable ? ExternalAppService.BridgeUnavailableDetail : UnverifiablePlanSummary,
-                    cancellationToken);
+                row,
+                ExternalAppInstanceStatus.Failed,
+                ExternalAppInstanceEventKind.Failed,
+                bridgeUnavailable ? ExternalAppFailureCategory.ConfigurationMissing : ExternalAppFailureCategory.Unknown,
+                bridgeUnavailable ? ExternalAppService.BridgeUnavailableDetail : UnverifiablePlanSummary,
+                cancellationToken);
         }
 
         foreach (var service in plan.Services)
@@ -454,9 +462,9 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             if (!ExternalAppService.ImageMatches(inspection.Image, service.Specification.Image))
             {
                 return await RefuseAsync(store,
-                        row,
-                        $"Service '{service.ServiceName}' is running an image this instance did not install.",
-                        cancellationToken);
+                    row,
+                    $"Service '{service.ServiceName}' is running an image this instance did not install.",
+                    cancellationToken);
             }
 
             var violations = ApplicationContainerPolicy.FindViolations(service.Specification,
@@ -474,9 +482,9 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
                     string.Join("; ", violations));
 
                 return await RefuseAsync(store,
-                        row,
-                        ExternalAppFailureTranslator.ForViolations(service.ServiceName, violations).Summary,
-                        cancellationToken);
+                    row,
+                    ExternalAppFailureTranslator.ForViolations(service.ServiceName, violations).Summary,
+                    cancellationToken);
             }
 
             // Unhealthy rather than "not yet healthy": failing a healthcheck still inside its start period would turn
@@ -488,12 +496,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         }
 
         return await WriteAsync(store,
-                row,
-                ExternalAppInstanceStatus.Running,
-                ExternalAppInstanceEventKind.RestoredOnBoot,
-                failureCategory: null,
-                failureSummary: null,
-                cancellationToken);
+            row,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceEventKind.RestoredOnBoot,
+            failureCategory: null,
+            failureSummary: null,
+            cancellationToken);
     }
 
     private Task<bool> RefuseAsync(IExternalAppInstanceStore store, ExternalAppInstanceSnapshot row, string summary, CancellationToken cancellationToken)
@@ -531,12 +539,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         }
 
         return await WriteAsync(store,
-                row,
-                ExternalAppInstanceStatus.Stopped,
-                ExternalAppInstanceEventKind.Stopped,
-                failureCategory: null,
-                failureSummary: null,
-                cancellationToken);
+            row,
+            ExternalAppInstanceStatus.Stopped,
+            ExternalAppInstanceEventKind.Stopped,
+            failureCategory: null,
+            failureSummary: null,
+            cancellationToken);
     }
 
     /// <summary>Branch C. Removes only what carries THIS install id and an instance label no row claims.</summary>
@@ -607,11 +615,11 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     private async Task<int> CountForeignAsync(IContainerRuntime runtime, CancellationToken cancellationToken)
     {
         var owned = await runtime
-                          .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
-                              {
-                                  [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue
-                              },
-                              cancellationToken);
+            .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue
+                },
+                cancellationToken);
 
         var foreign = owned
                       .Where(container => !container.Labels.TryGetValue(ExternalAppLabels.Install, out var install)
@@ -698,25 +706,25 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         CancellationToken cancellationToken)
     {
         var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
-        {
-            InstanceId = row.Id,
-            ExpectedVersion = row.Version,
-            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            row.Status
-                                        },
-            NewStatus = newStatus,
-            EventKind = kind,
-            EventDetailJson = null,
-            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            StoppedAtUtc = newStatus == ExternalAppInstanceStatus.Stopped
-                                            ? _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-                                            : null,
-            FailureCategory = failureCategory,
-            FailureSummary = failureSummary,
-            ClearFailure = failureCategory is null
-        },
-                                    cancellationToken);
+            {
+                InstanceId = row.Id,
+                ExpectedVersion = row.Version,
+                ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
+                {
+                    row.Status
+                },
+                NewStatus = newStatus,
+                EventKind = kind,
+                EventDetailJson = null,
+                OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                StoppedAtUtc = newStatus == ExternalAppInstanceStatus.Stopped
+                    ? _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+                    : null,
+                FailureCategory = failureCategory,
+                FailureSummary = failureSummary,
+                ClearFailure = failureCategory is null
+            },
+            cancellationToken);
 
         if (!result.Applied)
         {

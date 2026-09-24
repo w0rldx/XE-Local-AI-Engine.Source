@@ -50,7 +50,11 @@ public sealed class SteerGraphWorkflowNodeRunEndpoint : Endpoint<SteerGraphWorkf
         {
             var detail = await _chat.SteerAsync(req.RunId,
                 req.NodeKey,
-                new GraphWorkflowChatSteerRequest { OperationId = req.OperationId, Message = req.Message },
+                new GraphWorkflowChatSteerRequest
+                {
+                    OperationId = req.OperationId,
+                    Message = req.Message
+                },
                 User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value,
                 ct);
             await Send.ResultAsync(Results.Accepted(value: detail.ToResponse()));

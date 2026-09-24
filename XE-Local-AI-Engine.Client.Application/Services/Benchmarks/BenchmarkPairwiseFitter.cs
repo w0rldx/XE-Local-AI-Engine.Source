@@ -72,7 +72,14 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
 
         var refusal = Refuse(cohort, succeeded);
         var fit = refusal is null
-            ? BenchmarkBradleyTerry.Fit([.. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict { RunAId = comparison.RunAId, RunBId = comparison.RunBId, Verdict = comparison.Verdict! })])
+            ? BenchmarkBradleyTerry.Fit([
+                .. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict
+                {
+                    RunAId = comparison.RunAId,
+                    RunBId = comparison.RunBId,
+                    Verdict = comparison.Verdict!
+                })
+            ])
             : null;
         var scores = ToScoreEntries(cohort, fit, refusal ?? fit?.Refusal);
         var command = new BenchmarkPairwiseFitCommand

@@ -61,14 +61,28 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         {
             var osOnly = new[]
             {
-                new LlamaCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = false, Detail = "In-app source builds are available on Linux only." }
+                new LlamaCppSourceBuildPrerequisiteItem
+                {
+                    Key = "os-is-linux",
+                    Satisfied = false,
+                    Detail = "In-app source builds are available on Linux only."
+                }
             };
-            return new LlamaCppSourceBuildPrerequisiteReport { CanBuild = false, Items = osOnly };
+            return new LlamaCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = false,
+                Items = osOnly
+            };
         }
 
         var items = new List<LlamaCppSourceBuildPrerequisiteItem>
         {
-            new() { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
+            new()
+            {
+                Key = "os-is-linux",
+                Satisfied = true,
+                Detail = "Linux host detected."
+            },
             await ProbeToolAsync("cmake", ["--version"], "CMake", ct).ConfigureAwait(false),
             await ProbeToolAsync("gcc", ["--version"], "C compiler (gcc)", ct).ConfigureAwait(false),
             await ProbeToolAsync("g++", ["--version"], "C++ compiler (g++)", ct).ConfigureAwait(false),
@@ -97,7 +111,11 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         }
 
         var canBuild = items.TrueForAll(static item => item.Satisfied);
-        return new LlamaCppSourceBuildPrerequisiteReport { CanBuild = canBuild, Items = items };
+        return new LlamaCppSourceBuildPrerequisiteReport
+        {
+            CanBuild = canBuild,
+            Items = items
+        };
     }
 
     private async Task<bool> DetectNvidiaAsync(CancellationToken ct)
@@ -124,16 +142,31 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         var make = await TryProbeAsync("make", ["--version"], ct).ConfigureAwait(false);
         if (make is { Length: > 0 })
         {
-            return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = true, Detail = "make detected." };
+            return new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = "make-or-ninja",
+                Satisfied = true,
+                Detail = "make detected."
+            };
         }
 
         var ninja = await TryProbeAsync("ninja", ["--version"], ct).ConfigureAwait(false);
         if (ninja is { Length: > 0 })
         {
-            return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = true, Detail = "ninja detected." };
+            return new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = "make-or-ninja",
+                Satisfied = true,
+                Detail = "ninja detected."
+            };
         }
 
-        return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = false, Detail = "Neither make nor ninja was found." };
+        return new LlamaCppSourceBuildPrerequisiteItem
+        {
+            Key = "make-or-ninja",
+            Satisfied = false,
+            Detail = "Neither make nor ninja was found."
+        };
     }
 
     // `executablePath`, when given, is the absolute program to spawn instead of resolving `fileName` on PATH — the
@@ -146,8 +179,18 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
     {
         var banner = await TryProbeAsync(executablePath ?? fileName, args, ct).ConfigureAwait(false);
         return banner is { Length: > 0 }
-            ? new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = true, Detail = $"{displayName} detected: {banner}" }
-            : new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = false, Detail = $"{displayName} was not found on PATH." };
+            ? new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = fileName,
+                Satisfied = true,
+                Detail = $"{displayName} detected: {banner}"
+            }
+            : new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = fileName,
+                Satisfied = false,
+                Detail = $"{displayName} was not found on PATH."
+            };
     }
 
     // Spawns `<fileName> <args>` (no shell, argv only), bounded + tree-killed, and returns the trimmed first stdout/stderr
@@ -235,7 +278,12 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         catch (Exception)
         {
             // A disk query failure must not throw out of the probe; report it as unsatisfied so the build stays gated.
-            return new LlamaCppSourceBuildPrerequisiteItem { Key = "free-disk", Satisfied = false, Detail = "Free disk space could not be determined." };
+            return new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = "free-disk",
+                Satisfied = false,
+                Detail = "Free disk space could not be determined."
+            };
         }
     }
 

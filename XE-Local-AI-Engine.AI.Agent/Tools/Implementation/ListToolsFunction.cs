@@ -82,7 +82,11 @@ internal sealed class ListToolsFunction : AIFunction
         }
 
         var listing = decision.HiddenNames
-                              .Select(name => new HiddenTool { Name = name, Description = DescribeTool(name) })
+                              .Select(name => new HiddenTool
+                              {
+                                  Name = name,
+                                  Description = DescribeTool(name)
+                              })
                               .ToList();
 
         // Reveal AFTER the listing is materialised, on the decision this instance was bound to and on no other.

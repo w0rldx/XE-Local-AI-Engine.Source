@@ -88,7 +88,13 @@ public sealed class PlaybookMonitorStore : IPlaybookMonitorStore
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
-            return new CohortComparison { BeforeTotal = 0, BeforeDown = 0, AfterTotal = 0, AfterDown = 0 };
+            return new CohortComparison
+            {
+                BeforeTotal = 0,
+                BeforeDown = 0,
+                AfterTotal = 0,
+                AfterDown = 0
+            };
         }
 
         // SUM over no rows yields SQL NULL; the aggregate-row read coalesces each column to 0.

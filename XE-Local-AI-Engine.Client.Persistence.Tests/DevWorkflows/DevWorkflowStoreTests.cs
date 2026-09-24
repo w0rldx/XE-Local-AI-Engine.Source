@@ -73,12 +73,27 @@ public sealed class DevWorkflowStoreTests
         var store = DevWorkflowTestFixture.StoreFor(context);
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
 
-        var moved = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = seed.RunVersion, TargetStatus = DevWorkflowRunStatus.Running });
+        var moved = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = seed.RunVersion,
+            TargetStatus = DevWorkflowRunStatus.Running
+        });
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = seed.RunVersion, TargetStatus = DevWorkflowRunStatus.Paused }),
-                              "A writer holding the pre-transition version must lose.");
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = seed.RunVersion,
+                TargetStatus = DevWorkflowRunStatus.Paused
+            }),
+            "A writer holding the pre-transition version must lose.");
 
-        var withSentinel = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Paused });
+        var withSentinel = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowRunStatus.Paused
+        });
         AssertEx.Equal(DevWorkflowRunStatus.Paused, withSentinel.Status);
         AssertEx.True(withSentinel.Version > moved.Version, "The sentinel write must still bump the version it did not check.");
     }
@@ -146,7 +161,13 @@ public sealed class DevWorkflowStoreTests
         var firstStore = DevWorkflowTestFixture.StoreFor(firstContext);
         var secondStore = DevWorkflowTestFixture.StoreFor(secondContext);
 
-        var command = new AppendDevWorkflowEventCommand { RunId = runId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.PolicyResolved, OperationId = operationId };
+        var command = new AppendDevWorkflowEventCommand
+        {
+            RunId = runId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            EventType = DevWorkflowEventTypes.PolicyResolved,
+            OperationId = operationId
+        };
         var results = await Task.WhenAll(Task.Run(() => firstStore.AppendEventAsync(command)), Task.Run(() => secondStore.AppendEventAsync(command)));
 
         AssertEx.Equal(results[0].Sequence, results[1].Sequence, "Both writers must be told about the one event that landed.");
@@ -167,12 +188,25 @@ public sealed class DevWorkflowStoreTests
         var definition = await store.GetDefinitionAsync(seed.DefinitionId);
 
         StartDevWorkflowRunCommand Second() =>
-            new() { RunId = Guid.NewGuid(), WorkItemId = seed.WorkItemId, DefinitionId = definition.Id, DefinitionVersion = definition.Version, DefinitionGraphHash = definition.GraphHash, GraphJson = DevWorkflowTestFixture.SampleGraph };
+            new()
+            {
+                RunId = Guid.NewGuid(),
+                WorkItemId = seed.WorkItemId,
+                DefinitionId = definition.Id,
+                DefinitionVersion = definition.Version,
+                DefinitionGraphHash = definition.GraphHash,
+                GraphJson = DevWorkflowTestFixture.SampleGraph
+            };
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.StartRunAsync(Second()),
-                              "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.");
+            "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.");
 
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Completed });
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowRunStatus.Completed
+        });
 
         var next = await store.StartRunAsync(Second());
         AssertEx.Equal(DevWorkflowRunStatus.Pending, next.Status, "Once the first run is terminal, the work item may start another.");
@@ -268,15 +302,35 @@ public sealed class DevWorkflowStoreTests
         var store = DevWorkflowTestFixture.StoreFor(context);
 
         static CreateDevWorkflowDefinitionCommand Seeded() =>
-            new() { DefinitionId = Guid.NewGuid(), Name = "Research to approval", GraphJson = DevWorkflowTestFixture.SampleGraph, NodeCount = 3, Source = DevWorkflowDefinitionSource.Seeded, SeedSlug = "research-plan-approval" };
+            new()
+            {
+                DefinitionId = Guid.NewGuid(),
+                Name = "Research to approval",
+                GraphJson = DevWorkflowTestFixture.SampleGraph,
+                NodeCount = 3,
+                Source = DevWorkflowDefinitionSource.Seeded,
+                SeedSlug = "research-plan-approval"
+            };
 
         _ = await store.CreateDefinitionAsync(Seeded());
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.CreateDefinitionAsync(Seeded()),
-                              "A re-seed must never duplicate a seeded template.");
+            "A re-seed must never duplicate a seeded template.");
 
         // Manual rows leave the slug null, so any number of them coexist — that is what the filter on the index is for.
-        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Manual one", GraphJson = DevWorkflowTestFixture.SampleGraph, NodeCount = 1 });
-        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Manual two", GraphJson = DevWorkflowTestFixture.SampleGraph, NodeCount = 1 });
+        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Manual one",
+            GraphJson = DevWorkflowTestFixture.SampleGraph,
+            NodeCount = 1
+        });
+        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Manual two",
+            GraphJson = DevWorkflowTestFixture.SampleGraph,
+            NodeCount = 1
+        });
         AssertEx.Equal(expected: 3, (await store.ListDefinitionsAsync()).Count);
     }
 
@@ -312,7 +366,12 @@ public sealed class DevWorkflowStoreTests
         _ = await loserContext.DevWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId);
 
         _ = await DevWorkflowTestFixture.StoreFor(winnerContext)
-                                        .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = 1, Name = "Winner" });
+                                        .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+                                        {
+                                            DefinitionId = definitionId,
+                                            ExpectedVersion = 1,
+                                            Name = "Winner"
+                                        });
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => DevWorkflowTestFixture.StoreFor(loserContext)
                                                                                                     .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
@@ -321,7 +380,7 @@ public sealed class DevWorkflowStoreTests
                                                                                                         ExpectedVersion = 1,
                                                                                                         Name = "Loser"
                                                                                                     }),
-                              "The version check cannot see a write that landed after this writer read it, so the token has to.");
+            "The version check cannot see a write that landed after this writer read it, so the token has to.");
 
         await using var readContext = fixture.CreateContext();
         var settled = await DevWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId);
@@ -343,7 +402,12 @@ public sealed class DevWorkflowStoreTests
         await using (var context = await fixture.CreateSchemaAsync())
         {
             var created = await DevWorkflowTestFixture.StoreFor(context)
-                                                      .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Original title", Request = "Original request" });
+                                                      .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand
+                                                      {
+                                                          WorkItemId = Guid.NewGuid(),
+                                                          Title = "Original title",
+                                                          Request = "Original request"
+                                                      });
             workItemId = created.Id;
         }
 
@@ -354,7 +418,12 @@ public sealed class DevWorkflowStoreTests
 
         await using var editContext = fixture.CreateContext(interceptor);
         var updated = await DevWorkflowTestFixture.StoreFor(editContext)
-                                                  .UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand { WorkItemId = workItemId, ExpectedVersion = DevWorkflowVersions.Any, Title = "Renamed" });
+                                                  .UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand
+                                                  {
+                                                      WorkItemId = workItemId,
+                                                      ExpectedVersion = DevWorkflowVersions.Any,
+                                                      Title = "Renamed"
+                                                  });
 
         AssertEx.Equal("Renamed", updated.Title, "The edit has to land: it raced a write whose fields it does not touch.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Active,
@@ -388,20 +457,20 @@ public sealed class DevWorkflowStoreTests
             FailureClass = "ProviderError",
             TerminalReason = "The provider refused the round.",
             Telemetry = new DevWorkflowNodeTelemetry
-                                    {
-                                        InputTokens = 1_200,
-                                        OutputTokens = 340,
-                                        ReasoningTokens = 90,
-                                        EstimatedInputTokens = 1_500,
-                                        ProviderCalls = 4,
-                                        ToolCalls = 3,
-                                        ToolSchemaTokens = 800,
-                                        ToolNamesJson = """["read_document","search_web"]""",
-                                        AgentTurnMs = 9_100,
-                                        ServedModelName = "qwen3-27b",
-                                        RouteJson = """{"satisfied":[],"dead":["review"],"gateAnswer":null,"truncated":false}""",
-                                        WorkSessionSteps = 6
-                                    }
+            {
+                InputTokens = 1_200,
+                OutputTokens = 340,
+                ReasoningTokens = 90,
+                EstimatedInputTokens = 1_500,
+                ProviderCalls = 4,
+                ToolCalls = 3,
+                ToolSchemaTokens = 800,
+                ToolNamesJson = """["read_document","search_web"]""",
+                AgentTurnMs = 9_100,
+                ServedModelName = "qwen3-27b",
+                RouteJson = """{"satisfied":[],"dead":["review"],"gateAnswer":null,"truncated":false}""",
+                WorkSessionSteps = 6
+            }
         });
 
         var settled = await store.GetNodeRunAsync(nodeRunId);
@@ -481,7 +550,11 @@ public sealed class DevWorkflowStoreTests
                 NodeRunId = nodeRunId,
                 ExpectedVersion = expectedVersion,
                 TargetStatus = DevWorkflowNodeRunStatus.Failed,
-                Telemetry = new DevWorkflowNodeTelemetry { VramFreeAtLoadBytes = freeBytes, VramAdmittedBytes = admittedBytes }
+                Telemetry = new DevWorkflowNodeTelemetry
+                {
+                    VramFreeAtLoadBytes = freeBytes,
+                    VramAdmittedBytes = admittedBytes
+                }
             });
             return result.Version;
         }
@@ -510,7 +583,10 @@ public sealed class DevWorkflowStoreTests
             NodeRunId = nodeRunId,
             ExpectedVersion = version,
             TargetStatus = DevWorkflowNodeRunStatus.Failed,
-            Telemetry = new DevWorkflowNodeTelemetry { AgentTurnMs = 1_200 }
+            Telemetry = new DevWorkflowNodeTelemetry
+            {
+                AgentTurnMs = 1_200
+            }
         });
 
         var blank = await store.GetNodeRunAsync(nodeRunId);
@@ -523,7 +599,11 @@ public sealed class DevWorkflowStoreTests
             NodeRunId = nodeRunId,
             ExpectedVersion = afterBlank.Version,
             TargetStatus = DevWorkflowNodeRunStatus.Failed,
-            Telemetry = new DevWorkflowNodeTelemetry { VramFreeAtLoadBytes = 7_340_032_000L, VramAdmittedBytes = 5_368_709_120L }
+            Telemetry = new DevWorkflowNodeTelemetry
+            {
+                VramFreeAtLoadBytes = 7_340_032_000L,
+                VramAdmittedBytes = 5_368_709_120L
+            }
         });
         AssertEx.True(settled.Version > afterBlank.Version, "The second settle has to have landed for the assertion below to mean anything.");
 
@@ -566,10 +646,18 @@ public sealed class DevWorkflowStoreTests
         });
 
         TransitionDevWorkflowNodeRunCommand ReAttempt(int? budget) =>
-            new() { RunId = seed.RunId, NodeRunId = automaticId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowNodeRunStatus.Pending, IncrementAttempt = true, MaxTotalAttempts = budget };
+            new()
+            {
+                RunId = seed.RunId,
+                NodeRunId = automaticId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                IncrementAttempt = true,
+                MaxTotalAttempts = budget
+            };
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowRetryBudgetExceededException>(() => store.TransitionNodeRunAsync(ReAttempt(budget: 1)),
-                                        "The recorded Retry has promised the run's only re-attempt, so the automatic one has nothing left to spend.");
+            "The recorded Retry has promised the run's only re-attempt, so the automatic one has nothing left to spend.");
         AssertEx.True(refusal.Message.Contains("as many re-attempts as this run allows", StringComparison.Ordinal),
             "The refusal reads the same whichever path ran into it.");
         AssertEx.Equal(expected: 1, (await store.GetNodeRunAsync(automaticId)).Attempt, "A refused re-attempt writes nothing at all.");
@@ -600,16 +688,38 @@ public sealed class DevWorkflowStoreTests
         RouteDevWorkflowRetryCommand Route(int? budget) =>
             new()
             {
-                Route = new AppendDevWorkflowEventCommand { RunId = seed.RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeRetryRouted, NodeRunId = implementId, OperationId = Guid.NewGuid() },
-                Resets = [
-                    new TransitionDevWorkflowNodeRunCommand { RunId = seed.RunId, NodeRunId = validateId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowNodeRunStatus.Pending, IncrementAttempt = true },
-                    new TransitionDevWorkflowNodeRunCommand { RunId = seed.RunId, NodeRunId = implementId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowNodeRunStatus.Pending, IncrementAttempt = true }
+                Route = new AppendDevWorkflowEventCommand
+                {
+                    RunId = seed.RunId,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                    NodeRunId = implementId,
+                    OperationId = Guid.NewGuid()
+                },
+                Resets =
+                [
+                    new TransitionDevWorkflowNodeRunCommand
+                    {
+                        RunId = seed.RunId,
+                        NodeRunId = validateId,
+                        ExpectedVersion = DevWorkflowVersions.Any,
+                        TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                        IncrementAttempt = true
+                    },
+                    new TransitionDevWorkflowNodeRunCommand
+                    {
+                        RunId = seed.RunId,
+                        NodeRunId = implementId,
+                        ExpectedVersion = DevWorkflowVersions.Any,
+                        TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                        IncrementAttempt = true
+                    }
                 ],
                 MaxTotalAttempts = budget
             };
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRetryBudgetExceededException>(() => store.RouteRetryAsync(Route(budget: 1)),
-                              "One free slot cannot pay for a two-row cascade, however affordable either row looks alone.");
+            "One free slot cannot pay for a two-row cascade, however affordable either row looks alone.");
         AssertEx.Equal(expected: 1, (await store.GetNodeRunAsync(validateId)).Attempt, "A refused route writes none of its resets.");
 
         _ = await store.RouteRetryAsync(Route(budget: 2));

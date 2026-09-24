@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using TUnit.Core.Exceptions;
 
 /// <summary>
 ///     The named-pipe preflight a stopped Docker Desktop on Windows goes through: the pipe name an endpoint yields,
@@ -20,7 +20,11 @@ public sealed class DockerNamedPipePreflightTests
     [Arguments("tcp://127.0.0.1:2375", null)]
     public async Task NamedPipeName_IsSetOnlyForALocalPipe(string endpoint, string? expected)
     {
-        var name = new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = DockerDaemonEndpointSource.Configuration }.NamedPipeName;
+        var name = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(endpoint),
+            Source = DockerDaemonEndpointSource.Configuration
+        }.NamedPipeName;
 
         AssertEx.True(string.Equals(expected, name, StringComparison.Ordinal), $"expected [{expected}], got [{name}]");
         await Task.CompletedTask;
@@ -74,7 +78,11 @@ public sealed class DockerNamedPipePreflightTests
     private static DockerDotNetRuntimeClient ClientFor(string endpoint)
     {
         // DockerClientBuilder opens nothing at construction; only ProbeAsync touches the transport.
-        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = DockerDaemonEndpointSource.Configuration },
+        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint
+            {
+                Uri = new Uri(endpoint),
+                Source = DockerDaemonEndpointSource.Configuration
+            },
             TimeSpan.FromSeconds(1),
             TimeProvider.System);
     }

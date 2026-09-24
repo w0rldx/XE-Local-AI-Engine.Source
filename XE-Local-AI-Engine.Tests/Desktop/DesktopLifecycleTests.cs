@@ -37,7 +37,19 @@ public sealed class DesktopLifecycleTests
         AssertEx.False(DesktopCommandLine.RunsEngine([]));
         AssertEx.False(DesktopCommandLine.RunsEngine(["--DESKTOP", "--PORT=41234"]));
         AssertEx.True(DesktopCommandLine.RunsEngine(["--desktop", "--no-browser"]));
-        foreach (var argument in new[] { "--browser", "--HEADLESS", "--no-browser", "--mcp-only", "--help", "--status", "--setup", "--mcp-key=read", "--reset-admin-password", "--knowledge-downgrade-export" })
+        foreach (var argument in new[]
+                 {
+                     "--browser",
+                     "--HEADLESS",
+                     "--no-browser",
+                     "--mcp-only",
+                     "--help",
+                     "--status",
+                     "--setup",
+                     "--mcp-key=read",
+                     "--reset-admin-password",
+                     "--knowledge-downgrade-export"
+                 })
         {
             AssertEx.True(DesktopCommandLine.RunsEngine([argument]), argument);
         }
@@ -67,7 +79,11 @@ public sealed class DesktopLifecycleTests
     [Test]
     public void CommandLine_RestartsPreserveStandaloneAndOwnedUiModes()
     {
-        var arguments = new[] { "--desktop", "--no-browser" };
+        var arguments = new[]
+        {
+            "--desktop",
+            "--no-browser"
+        };
         var standalone = DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: null);
         var owned = DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: null, shellOwned: true);
         AssertEx.True(DesktopCommandLine.RunsEngine([.. standalone]));
@@ -78,12 +94,27 @@ public sealed class DesktopLifecycleTests
     public void StartupOptions_RejectUnsafeDataAndUnknownOrInvalidArguments()
     {
         using var directory = new TempDirectory();
-        foreach (var invalid in new[] { "relative", directory.Path + "\n" })
+        foreach (var invalid in new[]
+                 {
+                     "relative",
+                     directory.Path + "\n"
+                 })
         {
             _ = AssertEx.Throws<ArgumentException>(() => DesktopStartupOptions.Parse([], invalid, directory.Path));
         }
 
-        foreach (var args in new[] { new[] { "--port", "0" }, ["--port", "65536"], ["--port"], ["--port", "12", "--port", "13"], ["--unknown"] })
+        foreach (var args in new[]
+                 {
+                     new[]
+                     {
+                         "--port",
+                         "0"
+                     },
+                     ["--port", "65536"],
+                     ["--port"],
+                     ["--port", "12", "--port", "13"],
+                     ["--unknown"]
+                 })
         {
             _ = AssertEx.Throws<ArgumentException>(() => DesktopStartupOptions.Parse(args, null, directory.Path));
         }
@@ -103,7 +134,12 @@ public sealed class DesktopLifecycleTests
     {
         using var directory = new TempDirectory();
         AssertEx.Equal(DesktopCloseAction.Ask, await DesktopPreferences.ReadAsync(directory.Path, CancellationToken.None));
-        foreach (var action in new[] { DesktopCloseAction.Tray, DesktopCloseAction.Quit, DesktopCloseAction.Ask })
+        foreach (var action in new[]
+                 {
+                     DesktopCloseAction.Tray,
+                     DesktopCloseAction.Quit,
+                     DesktopCloseAction.Ask
+                 })
         {
             await DesktopPreferences.WriteAsync(directory.Path, action, CancellationToken.None);
             AssertEx.Equal(action, await DesktopPreferences.ReadAsync(directory.Path, CancellationToken.None));
@@ -171,7 +207,10 @@ public sealed class DesktopLifecycleTests
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await peer.ConnectAsync(deadline.Token);
-            await peer.WriteAsync(new byte[] { 2 }, deadline.Token);
+            await peer.WriteAsync(new byte[]
+            {
+                2
+            }, deadline.Token);
             await peer.FlushAsync(deadline.Token);
         }
 
@@ -192,7 +231,15 @@ public sealed class DesktopLifecycleTests
     public void Status_RequiresRunningLoopbackAndMatchingDataRoot()
     {
         using var directory = new TempDirectory();
-        static string Status(bool running, string url, string data) => JsonSerializer.Serialize(new { running, url, dataDir = data });
+
+        static string Status(bool running, string url, string data) =>
+            JsonSerializer.Serialize(new
+            {
+                running,
+                url,
+                dataDir = data
+            });
+
         AssertEx.Null(DesktopEngineSession.ParseStatus(Status(false, "http://127.0.0.1:35207", directory.Path), directory.Path));
         AssertEx.Equal("http://127.0.0.1:35207/", DesktopEngineSession.ParseStatus(Status(true, "http://127.0.0.1:35207", directory.Path), directory.Path)!.AbsoluteUri);
         _ = AssertEx.Throws<ArgumentException>(() => DesktopEngineSession.ParseStatus(Status(true, "https://example.com", directory.Path), directory.Path));
@@ -212,7 +259,12 @@ public sealed class DesktopLifecycleTests
     public async Task ExplicitAttach_HasNoOwnedProcessOrShutdownAuthority()
     {
         using var directory = new TempDirectory();
-        var options = new DesktopStartupOptions { DataDirectory = directory.Path, ProfileDirectory = directory.Path, Origin = new Uri("http://127.0.0.1:35207") };
+        var options = new DesktopStartupOptions
+        {
+            DataDirectory = directory.Path,
+            ProfileDirectory = directory.Path,
+            Origin = new Uri("http://127.0.0.1:35207")
+        };
         await using var session = await DesktopEngineSession.StartAsync(options, CancellationToken.None);
         AssertEx.False(session.OwnsEngine);
         AssertEx.Null(session.WaitForEngineExitAsync());

@@ -160,20 +160,20 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 ? DevelopmentTaskStatus.AwaitingApply
                 : DevelopmentTaskStatus.ChangesRequested;
             _ = await _store.FinalizeReviewAsync(new DevelopmentFinalizeReviewCommand
-            {
-                Artifact = prepared.Attachment,
-                OperationId = Guid.NewGuid(),
-                ExpectedTaskVersion = snapshot.TaskVersion,
-                ExpectedAttemptVersion = snapshot.AttemptVersion,
-                TargetStatus = target,
-                ApprovedSubjectHash = target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
-                SanitizedReason = submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
-                                        ? ChangeRequestReason(submission)
-                                        : null,
-                InputTokens = model.InputTokens,
-                OutputTokens = model.OutputTokens
-            },
-                                CancellationToken.None);
+                {
+                    Artifact = prepared.Attachment,
+                    OperationId = Guid.NewGuid(),
+                    ExpectedTaskVersion = snapshot.TaskVersion,
+                    ExpectedAttemptVersion = snapshot.AttemptVersion,
+                    TargetStatus = target,
+                    ApprovedSubjectHash = target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
+                    SanitizedReason = submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
+                        ? ChangeRequestReason(submission)
+                        : null,
+                    InputTokens = model.InputTokens,
+                    OutputTokens = model.OutputTokens
+                },
+                CancellationToken.None);
             return new DevelopmentReviewerAttemptResult
             {
                 AttemptId = snapshot.AttemptId,
@@ -188,16 +188,16 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             try
             {
                 _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
-                {
-                    AttemptId = snapshot.AttemptId,
-                    OperationId = Guid.NewGuid(),
-                    Status = exception is OperationCanceledException
-                                            ? DevelopmentAttemptStatus.Cancelled
-                                            : DevelopmentAttemptStatus.Failed,
-                    ExpectedAttemptVersion = snapshot.AttemptVersion,
-                    TerminalReason = SanitizedReason(exception)
-                },
-                                    CancellationToken.None);
+                    {
+                        AttemptId = snapshot.AttemptId,
+                        OperationId = Guid.NewGuid(),
+                        Status = exception is OperationCanceledException
+                            ? DevelopmentAttemptStatus.Cancelled
+                            : DevelopmentAttemptStatus.Failed,
+                        ExpectedAttemptVersion = snapshot.AttemptVersion,
+                        TerminalReason = SanitizedReason(exception)
+                    },
+                    CancellationToken.None);
             }
             catch (DevelopmentInvalidTransitionException)
             {
@@ -305,9 +305,21 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
         return await _cloudContext.CreateAsync(snapshot,
             [
-                new DevelopmentCloudContextExcerpt { RelativePath = "workspace.patch", Content = Encoding.UTF8.GetString(evidence.Patch.Span) },
-                new DevelopmentCloudContextExcerpt { RelativePath = "changed-files.json", Content = Encoding.UTF8.GetString(evidence.Manifest.Span) },
-                new DevelopmentCloudContextExcerpt { RelativePath = "validation-report.json", Content = JsonSerializer.Serialize(validationReport, JsonOptions) }
+                new DevelopmentCloudContextExcerpt
+                {
+                    RelativePath = "workspace.patch",
+                    Content = Encoding.UTF8.GetString(evidence.Patch.Span)
+                },
+                new DevelopmentCloudContextExcerpt
+                {
+                    RelativePath = "changed-files.json",
+                    Content = Encoding.UTF8.GetString(evidence.Manifest.Span)
+                },
+                new DevelopmentCloudContextExcerpt
+                {
+                    RelativePath = "validation-report.json",
+                    Content = JsonSerializer.Serialize(validationReport, JsonOptions)
+                }
             ],
             [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifact.Id],
             cancellationToken);

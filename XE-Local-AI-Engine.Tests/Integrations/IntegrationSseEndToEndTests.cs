@@ -67,7 +67,13 @@ public sealed class IntegrationCoordinatorHostFixture : IAsyncInitializer, IAsyn
 
         var capacity = Substitute.For<ICapacityService>();
         _ = capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                    .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = null });
+                    .Returns(new CapacityDecision
+                    {
+                        Verdict = CapacityVerdict.Allow,
+                        Reason = "Capacity available.",
+                        OllamaEvictionWarning = false,
+                        Reservation = null
+                    });
 
         services.RemoveAll<IWorkerEventDispatcher>();
         services.AddSingleton(dispatcher);
@@ -196,7 +202,11 @@ public sealed class IntegrationSseEndToEndTests
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, prefix, agentId);
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-key");
-        return new Seeded { TriggerName = trigger.Name, Key = key.Key };
+        return new Seeded
+        {
+            TriggerName = trigger.Name,
+            Key = key.Key
+        };
     }
 
     private static async Task<(Guid ExecutionId, IReadOnlyList<Frame> Frames)> StreamAsync(HttpClient client, Seeded seeded, int frameLimit)
@@ -260,7 +270,12 @@ public sealed class IntegrationSseEndToEndTests
             }
             else if (line.StartsWith("id: ", StringComparison.Ordinal) && type is not null)
             {
-                frames.Add(new Frame { Type = type, Sequence = long.Parse(line[4..], CultureInfo.InvariantCulture), ExecutionId = executionId });
+                frames.Add(new Frame
+                {
+                    Type = type,
+                    Sequence = long.Parse(line[4..], CultureInfo.InvariantCulture),
+                    ExecutionId = executionId
+                });
                 type = null;
             }
         }

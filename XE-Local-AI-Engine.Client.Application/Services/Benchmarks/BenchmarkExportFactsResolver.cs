@@ -12,11 +12,11 @@ public sealed class BenchmarkFidelityDisplayFacts
         new()
         {
             ExpectedKldDigest = project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
-            ? BenchmarkKldCacheKey.Create(fingerprint,
-                                      BenchmarkFidelityCorpus.Require().Sha256,
-                                      BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks))
-                                  .Digest
-            : null
+                ? BenchmarkKldCacheKey.Create(fingerprint,
+                                          BenchmarkFidelityCorpus.Require().Sha256,
+                                          BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks))
+                                      .Digest
+                : null
         };
 }
 
@@ -32,8 +32,7 @@ internal sealed class BenchmarkExportFactsResolver : IBenchmarkExportFactsResolv
     private readonly ILogger<BenchmarkExportFactsResolver> _logger;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
 
-    public BenchmarkExportFactsResolver(
-        IBenchmarkRuntimeSnapshotFactory snapshots,
+    public BenchmarkExportFactsResolver(IBenchmarkRuntimeSnapshotFactory snapshots,
         ILogger<BenchmarkExportFactsResolver> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -88,6 +87,13 @@ internal sealed class BenchmarkExportFactsResolver : IBenchmarkExportFactsResolv
             }
         }
 
-        return new BenchmarkExportRunFacts { BuildCommit = buildCommit, GpuInfo = gpuInfo, ModelFilename = modelFilename, ModelSizeBytes = modelSize, GpuLayers = gpuLayers };
+        return new BenchmarkExportRunFacts
+        {
+            BuildCommit = buildCommit,
+            GpuInfo = gpuInfo,
+            ModelFilename = modelFilename,
+            ModelSizeBytes = modelSize,
+            GpuLayers = gpuLayers
+        };
     }
 }

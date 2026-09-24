@@ -301,18 +301,58 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
 
     private static IReadOnlyList<SandboxMountBinding> Mapped() =>
     [
-        new() { HostPath = HostWorkspace, SandboxPath = "/workspace", ReadOnly = false },
-        new() { HostPath = HostRuntime + "/home", SandboxPath = "/xe-runtime/home", ReadOnly = false },
-        new() { HostPath = HostRuntime + "/tmp", SandboxPath = "/xe-runtime/tmp", ReadOnly = false },
-        new() { HostPath = HostRuntime + "/nuget", SandboxPath = "/xe-runtime/nuget", ReadOnly = false },
-        new() { HostPath = HostRuntime + "/dotnet", SandboxPath = "/xe-runtime/dotnet", ReadOnly = false }
+        new()
+        {
+            HostPath = HostWorkspace,
+            SandboxPath = "/workspace",
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/home",
+            SandboxPath = "/xe-runtime/home",
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/tmp",
+            SandboxPath = "/xe-runtime/tmp",
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/nuget",
+            SandboxPath = "/xe-runtime/nuget",
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/dotnet",
+            SandboxPath = "/xe-runtime/dotnet",
+            ReadOnly = false
+        }
     ];
 
     private static IReadOnlyList<SandboxMountBinding> Identity() =>
     [
-        new() { HostPath = HostWorkspace, SandboxPath = HostWorkspace, ReadOnly = false },
-        new() { HostPath = HostRuntime + "/home", SandboxPath = HostRuntime + "/home", ReadOnly = false },
-        new() { HostPath = HostRuntime + "/nuget", SandboxPath = HostRuntime + "/nuget", ReadOnly = false }
+        new()
+        {
+            HostPath = HostWorkspace,
+            SandboxPath = HostWorkspace,
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/home",
+            SandboxPath = HostRuntime + "/home",
+            ReadOnly = false
+        },
+        new()
+        {
+            HostPath = HostRuntime + "/nuget",
+            SandboxPath = HostRuntime + "/nuget",
+            ReadOnly = false
+        }
     ];
 
     private static DevelopmentWorkspaceSession Session(IReadOnlyList<SandboxMountBinding> mounts) =>

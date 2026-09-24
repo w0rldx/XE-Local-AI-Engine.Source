@@ -227,7 +227,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         var killer = new FakeKiller();
         killer.Alive.Add(4321);
         // Old enough that only the marker can save it: the grace window is not what is being tested here.
-        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus { UnitName = launchingUnit, ActiveFor = TimeSpan.FromHours(1) }]);
+        var scopeKiller = new FakeScopeKiller([
+            new SandboxScopeUnitStatus
+            {
+                UnitName = launchingUnit,
+                ActiveFor = TimeSpan.FromHours(1)
+            }
+        ]);
         var store = new FakeMarkerStore(PendingMarker(ownerProcessId: 4321, launchingUnit));
 
         await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
@@ -280,7 +286,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         // RuntimeMaxSec — so a young unreferenced scope is left alone.
         var youngUnit = SandboxScopeUnit.Create("compute");
         var killer = new FakeKiller();
-        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus { UnitName = youngUnit, ActiveFor = TimeSpan.FromSeconds(5) }]);
+        var scopeKiller = new FakeScopeKiller([
+            new SandboxScopeUnitStatus
+            {
+                UnitName = youngUnit,
+                ActiveFor = TimeSpan.FromSeconds(5)
+            }
+        ]);
 
         await new SandboxOrphanReaper(new FakeMarkerStore(), killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
             .StartAsync(CancellationToken.None);
@@ -295,7 +307,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         // unmeasured unit would make a parsing failure lethal, so the sweep fails towards leaving processes running.
         var unmeasuredUnit = SandboxScopeUnit.Create("compute");
         var killer = new FakeKiller();
-        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus { UnitName = unmeasuredUnit, ActiveFor = null }]);
+        var scopeKiller = new FakeScopeKiller([
+            new SandboxScopeUnitStatus
+            {
+                UnitName = unmeasuredUnit,
+                ActiveFor = null
+            }
+        ]);
 
         await new SandboxOrphanReaper(new FakeMarkerStore(), killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
             .StartAsync(CancellationToken.None);
@@ -392,7 +410,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         // The default age is well past the sweep's grace, so a test that says nothing about age is asking about
         // ownership; the tests that are about the grace state their own.
         public FakeScopeKiller(IReadOnlyList<string> loaded)
-            : this([.. loaded.Select(unit => new SandboxScopeUnitStatus { UnitName = unit, ActiveFor = TimeSpan.FromHours(1) })])
+            : this([
+                .. loaded.Select(unit => new SandboxScopeUnitStatus
+                {
+                    UnitName = unit,
+                    ActiveFor = TimeSpan.FromHours(1)
+                })
+            ])
         {
         }
 

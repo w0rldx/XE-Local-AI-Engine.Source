@@ -59,7 +59,10 @@ public sealed class AgentHomeRunActionEndpointTests
     [Test]
     public async Task Delete_WhenTheServiceRemovedTheRun_Answers204AndPassesTheIdThrough()
     {
-        var deletes = new StubDeleteService { Outcome = AgentHomeRunDeleteOutcome.Deleted };
+        var deletes = new StubDeleteService
+        {
+            Outcome = AgentHomeRunDeleteOutcome.Deleted
+        };
 
         using var response = await SendAsync(HttpMethod.Delete, DeleteRoute, deletes: deletes);
 
@@ -71,7 +74,10 @@ public sealed class AgentHomeRunActionEndpointTests
     public async Task Delete_ForAnUnknownRun_Answers404WithoutNamingAPath()
     {
         using var response = await SendAsync(HttpMethod.Delete, DeleteRoute,
-            deletes: new StubDeleteService { Outcome = AgentHomeRunDeleteOutcome.NotFound });
+            deletes: new StubDeleteService
+            {
+                Outcome = AgentHomeRunDeleteOutcome.NotFound
+            });
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.False((await response.Content.ReadAsStringAsync()).Contains("agent-home", StringComparison.OrdinalIgnoreCase),
@@ -82,7 +88,10 @@ public sealed class AgentHomeRunActionEndpointTests
     public async Task Delete_WhileARunIsInFlight_Answers409WithSomethingTheOperatorCanRead()
     {
         using var response = await SendAsync(HttpMethod.Delete, DeleteRoute,
-            deletes: new StubDeleteService { Outcome = AgentHomeRunDeleteOutcome.Conflict });
+            deletes: new StubDeleteService
+            {
+                Outcome = AgentHomeRunDeleteOutcome.Conflict
+            });
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.NotNullOrEmpty(await response.Content.ReadAsStringAsync(),
@@ -108,7 +117,14 @@ public sealed class AgentHomeRunActionEndpointTests
     [Test]
     public async Task Log_Answers200WithTheTextAndTheTruncationFlag()
     {
-        var runs = new StubRunListService { Log = new AgentHomeRunText { Text = "{\"eventName\":\"started\"}", Truncated = true } };
+        var runs = new StubRunListService
+        {
+            Log = new AgentHomeRunText
+            {
+                Text = "{\"eventName\":\"started\"}",
+                Truncated = true
+            }
+        };
 
         using var document = await ReadJsonAsync(LogRoute, runs);
 
@@ -120,7 +136,10 @@ public sealed class AgentHomeRunActionEndpointTests
     [Test]
     public async Task Log_ForARunTheNodeWillNotServe_Answers404()
     {
-        using var response = await SendAsync(HttpMethod.Get, LogRoute, runs: new StubRunListService { Log = null });
+        using var response = await SendAsync(HttpMethod.Get, LogRoute, runs: new StubRunListService
+        {
+            Log = null
+        });
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -128,7 +147,14 @@ public sealed class AgentHomeRunActionEndpointTests
     [Test]
     public async Task Log_ForARunWithNoLog_Answers200WithEmptyText()
     {
-        var runs = new StubRunListService { Log = new AgentHomeRunText { Text = string.Empty, Truncated = false } };
+        var runs = new StubRunListService
+        {
+            Log = new AgentHomeRunText
+            {
+                Text = string.Empty,
+                Truncated = false
+            }
+        };
 
         using var document = await ReadJsonAsync(LogRoute, runs);
 
@@ -142,7 +168,14 @@ public sealed class AgentHomeRunActionEndpointTests
         // Control and bidi characters are model-authored and must survive the wire unchanged: the viewer flags them,
         // the contract does not rewrite them into a document the run never produced.
         const string Diff = "diff --git a/x b/x\n+‮evil\u0007\n";
-        var runs = new StubRunListService { Patch = new AgentHomeRunText { Text = Diff, Truncated = false } };
+        var runs = new StubRunListService
+        {
+            Patch = new AgentHomeRunText
+            {
+                Text = Diff,
+                Truncated = false
+            }
+        };
 
         using var document = await ReadJsonAsync(PatchRoute, runs);
 
@@ -154,7 +187,10 @@ public sealed class AgentHomeRunActionEndpointTests
     [Test]
     public async Task Patch_ForARunTheNodeWillNotServe_Answers404()
     {
-        using var response = await SendAsync(HttpMethod.Get, PatchRoute, runs: new StubRunListService { Patch = null });
+        using var response = await SendAsync(HttpMethod.Get, PatchRoute, runs: new StubRunListService
+        {
+            Patch = null
+        });
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -219,7 +255,11 @@ public sealed class AgentHomeRunActionEndpointTests
         public string? LastPatchRunId { get; private set; }
 
         public Task<AgentHomeRunPage> ListAsync(int limit, int offset, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeRunPage { Items = [], TotalCount = 0 });
+            Task.FromResult(new AgentHomeRunPage
+            {
+                Items = [],
+                TotalCount = 0
+            });
 
         public Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
         {

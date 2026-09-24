@@ -137,7 +137,11 @@ public sealed class WhisperBackendSelectorTests
         signal.Set("The CUDA whisper-server exited unexpectedly");
         var selector = new WhisperBackendSelector(Profiler(GpuVendor.Nvidia),
             isWindows: true,
-            new WhisperServerRuntimeOverrideOptions { ServerPath = @"C:\whisper\whisper-server.exe", Backend = WhisperBackend.Cuda },
+            new WhisperServerRuntimeOverrideOptions
+            {
+                ServerPath = @"C:\whisper\whisper-server.exe",
+                Backend = WhisperBackend.Cuda
+            },
             cudaFailureSignal: signal);
 
         AssertEx.Equal(WhisperBackend.Cuda, await selector.SelectBackendAsync(CancellationToken.None));

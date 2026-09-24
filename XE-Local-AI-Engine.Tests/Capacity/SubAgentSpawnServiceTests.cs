@@ -536,7 +536,8 @@ public sealed class SubAgentSpawnServiceTests
             Instructions = "agentic instructions",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 4,
-            AllowedTools = [
+            AllowedTools =
+            [
                 McpTool("read_file") with
                 {
                     Category = ToolCategory.WriteExecute,
@@ -554,7 +555,11 @@ public sealed class SubAgentSpawnServiceTests
         var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
         {
             AgentKey = "General",
-            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
+            InboundContext = new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = "xemcp_abc123"
+            },
             ExecutionRequestId = requestId
         }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -590,7 +595,8 @@ public sealed class SubAgentSpawnServiceTests
             Instructions = "agentic custom tool instructions",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 4,
-            AllowedTools = [
+            AllowedTools =
+            [
                 McpTool("custom__weather") with
                 {
                     Category = ToolCategory.WriteExecute,
@@ -606,7 +612,11 @@ public sealed class SubAgentSpawnServiceTests
         var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
         {
             AgentKey = "General",
-            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
+            InboundContext = new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = "xemcp_abc123"
+            },
             ExecutionRequestId = requestId
         }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
         var executable = (AIFunction)harness.ChatClient.LastTools.Single(static tool => tool.Name == "custom__weather");
@@ -640,7 +650,8 @@ public sealed class SubAgentSpawnServiceTests
                 Instructions = "agentic custom tool instructions",
                 AgentDefinitionId = Guid.NewGuid(),
                 AgentDefinitionVersion = 1,
-                AllowedTools = [
+                AllowedTools =
+                [
                     McpTool(name) with
                     {
                         RequiresApproval = true
@@ -654,7 +665,11 @@ public sealed class SubAgentSpawnServiceTests
             var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
             {
                 AgentKey = "General",
-                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
+                InboundContext = new McpInboundExecutionContext
+                {
+                    Scope = McpServerApiKeyScope.Agentic,
+                    KeyPrefix = "xemcp_abc123"
+                },
                 ExecutionRequestId = Guid.NewGuid()
             }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -703,7 +718,11 @@ public sealed class SubAgentSpawnServiceTests
             var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
             {
                 AgentKey = "General",
-                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
+                InboundContext = new McpInboundExecutionContext
+                {
+                    Scope = McpServerApiKeyScope.Agentic,
+                    KeyPrefix = "xemcp_abc123"
+                },
                 ExecutionRequestId = Guid.NewGuid()
             }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -728,7 +747,8 @@ public sealed class SubAgentSpawnServiceTests
             Instructions = "coder instructions",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 2,
-            AllowedTools = [
+            AllowedTools =
+            [
                 McpTool("list_files"),
                 McpTool("read_file"),
                 McpTool("search_text")
@@ -788,7 +808,8 @@ public sealed class SubAgentSpawnServiceTests
             Instructions = "coder instructions",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 2,
-            AllowedTools = [
+            AllowedTools =
+            [
                 McpTool("list_files"),
                 McpTool("read_file"),
                 McpTool("search_text")
@@ -821,7 +842,8 @@ public sealed class SubAgentSpawnServiceTests
             Instructions = "coder instructions",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 2,
-            AllowedTools = [
+            AllowedTools =
+            [
                 McpTool("list_files"),
                 McpTool("list_files"),
                 McpTool("read_file"),
@@ -887,7 +909,12 @@ public sealed class SubAgentSpawnServiceTests
         await decisionEntered.Task;
 
         AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
-        decision.SetResult(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "Insufficient capacity.", OllamaEvictionWarning = false });
+        decision.SetResult(new CapacityDecision
+        {
+            Verdict = CapacityVerdict.RejectInsufficient,
+            Reason = "Insufficient capacity.",
+            OllamaEvictionWarning = false
+        });
         _ = await pending;
     }
 
@@ -1687,26 +1714,47 @@ public sealed class SubAgentSpawnServiceTests
             var reservation = new TrackingDisposable(() => _reservationDisposed = true);
 #pragma warning restore CA2000
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = reservation });
+                     .Returns(_ => new CapacityDecision
+                     {
+                         Verdict = CapacityVerdict.Allow,
+                         Reason = "Capacity available.",
+                         OllamaEvictionWarning = false,
+                         Reservation = reservation
+                     });
         }
 
         public void AllowCloud()
         {
             // Cloud Allow carries a null reservation (no local cost).
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Cloud provider selected; no local capacity required.", OllamaEvictionWarning = false });
+                     .Returns(_ => new CapacityDecision
+                     {
+                         Verdict = CapacityVerdict.Allow,
+                         Reason = "Cloud provider selected; no local capacity required.",
+                         OllamaEvictionWarning = false
+                     });
         }
 
         public void QueueSameModel()
         {
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.QueueSameModel, Reason = "Model already running; the spawn will share that process.", OllamaEvictionWarning = false });
+                     .Returns(_ => new CapacityDecision
+                     {
+                         Verdict = CapacityVerdict.QueueSameModel,
+                         Reason = "Model already running; the spawn will share that process.",
+                         OllamaEvictionWarning = false
+                     });
         }
 
         public void RejectInsufficient()
         {
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning = false });
+                     .Returns(_ => new CapacityDecision
+                     {
+                         Verdict = CapacityVerdict.RejectInsufficient,
+                         Reason = "Insufficient capacity: not enough free memory for another model.",
+                         OllamaEvictionWarning = false
+                     });
         }
 
         public void DelayCapacity(TaskCompletionSource entered, TaskCompletionSource<CapacityDecision> decision)

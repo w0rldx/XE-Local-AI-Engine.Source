@@ -34,7 +34,12 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
         CancellationToken cancellationToken = default)
     {
         var written = await _blobs.WriteAsync(projectId, artifactId, content, cancellationToken);
-        return new DevelopmentArtifactBlobWriteResult { OpaqueReference = written.OpaqueReference, ContentHash = written.ContentHash, ByteCount = written.ByteCount };
+        return new DevelopmentArtifactBlobWriteResult
+        {
+            OpaqueReference = written.OpaqueReference,
+            ContentHash = written.ContentHash,
+            ByteCount = written.ByteCount
+        };
     }
 
     public async Task<DevelopmentArtifactBlobReadResult> ReadAsync(Guid projectId,
@@ -44,7 +49,11 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
         CancellationToken cancellationToken = default)
     {
         var read = await _blobs.ReadAsync(projectId, artifactId, expectedHash, expectedByteCount, cancellationToken);
-        return new DevelopmentArtifactBlobReadResult { Status = Map(read.Status), Content = read.Content };
+        return new DevelopmentArtifactBlobReadResult
+        {
+            Status = Map(read.Status),
+            Content = read.Content
+        };
     }
 
     private static DevelopmentArtifactReadStatus Map(ManagedBlobReadStatus status) =>

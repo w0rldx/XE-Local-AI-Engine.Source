@@ -22,8 +22,7 @@ public sealed class ListRunningModelsEndpoint : EndpointWithoutRequest<ListRunni
     private readonly ILogger<ListRunningModelsEndpoint> _logger;
     private readonly LlamaCppRuntimeOrchestrationService _runtime;
 
-    public ListRunningModelsEndpoint(
-        LlamaCppRuntimeOrchestrationService runtime,
+    public ListRunningModelsEndpoint(LlamaCppRuntimeOrchestrationService runtime,
         ILogger<ListRunningModelsEndpoint> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);

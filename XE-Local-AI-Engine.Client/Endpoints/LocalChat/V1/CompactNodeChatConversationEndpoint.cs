@@ -19,8 +19,7 @@ public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeCh
     private readonly IConversationCompactionService _compactionService;
     private readonly INodeChatMutationGuard _mutationGuard;
 
-    public CompactNodeChatConversationEndpoint(
-        IConversationCompactionService compactionService,
+    public CompactNodeChatConversationEndpoint(IConversationCompactionService compactionService,
         INodeChatMutationGuard mutationGuard)
     {
         ArgumentNullException.ThrowIfNull(compactionService);

@@ -163,8 +163,16 @@ public sealed class BenchmarkExceptionHandlerTests
 
     private static readonly FallthroughCase[] FallthroughCases =
     [
-        new() { Name = "contextual KeyNotFoundException", Exception = new KeyNotFoundException("contextual") },
-        new() { Name = "unrelated InvalidOperationException", Exception = new InvalidOperationException("unrelated") }
+        new()
+        {
+            Name = "contextual KeyNotFoundException",
+            Exception = new KeyNotFoundException("contextual")
+        },
+        new()
+        {
+            Name = "unrelated InvalidOperationException",
+            Exception = new InvalidOperationException("unrelated")
+        }
     ];
 
     private sealed record BenchmarkHandlerCase

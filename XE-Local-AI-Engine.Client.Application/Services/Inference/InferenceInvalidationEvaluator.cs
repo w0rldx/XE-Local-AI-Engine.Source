@@ -106,7 +106,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                 profile.KvTypeV,
                 profile.FlashAttn);
             var allocation = await _allocationResolver
-                                   .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct);
+                .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct);
             if (allocation?.Placement != ProcessPlacementMode.ExpertOffload)
             {
                 return false;

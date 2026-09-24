@@ -55,8 +55,7 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<DevelopmentReviewerModel> _logger;
 
-    public DevelopmentReviewerModel(
-        IChatClient chatClient,
+    public DevelopmentReviewerModel(IChatClient chatClient,
         IActiveCloudChatClientFactory cloudFactory,
         ILocalModelProviderResolver localProviderResolver,
         IModelTrustResolver modelTrustResolver,
@@ -210,9 +209,9 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
         return new DevelopmentReviewerModelResult
         {
             Submission = gateway.Submission
-                                                  ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
-                                                      "The Development reviewer stopped without calling submit_review, so the round produced no disposition. "
-                                                      + "Re-run the review, or use a model that reliably closes with a tool call."),
+                         ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
+                             "The Development reviewer stopped without calling submit_review, so the round produced no disposition. "
+                             + "Re-run the review, or use a model that reliably closes with a tool call."),
             InputTokens = inputTokens,
             OutputTokens = outputTokens
         };
@@ -249,8 +248,7 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
         private readonly DevelopmentAttemptLiveProgress? _liveProgress;
         private int _toolCalls;
 
-        public ToolGateway(
-            IDevelopmentWorkspaceTools tools,
+        public ToolGateway(IDevelopmentWorkspaceTools tools,
             int maxToolCalls,
             DevelopmentAttemptLiveProgress? liveProgress)
         {
@@ -328,7 +326,12 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
                 throw new InvalidOperationException("A changes-requested review requires at least one bounded finding.");
             }
 
-            Submission = new DevelopmentReviewerSubmission { Disposition = parsed, Summary = summary, Findings = boundedFindings };
+            Submission = new DevelopmentReviewerSubmission
+            {
+                Disposition = parsed,
+                Summary = summary,
+                Findings = boundedFindings
+            };
             _liveProgress?.ToolCompleted("submit_review");
             return "typed review submission accepted";
         }

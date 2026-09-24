@@ -282,7 +282,15 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             GraphHash = definition.GraphHash,
             GraphJson = pinnedGraphJson,
             InputJson = inputJson,
-            NodeRuns = [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = seed.NodeKey, Kind = seed.Kind })]
+            NodeRuns =
+            [
+                .. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed
+                {
+                    NodeRunId = Guid.NewGuid(),
+                    NodeKey = seed.NodeKey,
+                    Kind = seed.Kind
+                })
+            ]
         });
         return run.Id;
     }

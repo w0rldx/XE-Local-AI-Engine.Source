@@ -25,8 +25,7 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
     private readonly IGgufModelRegistry _modelRegistry;
     private readonly ILogger<LocalModelDeletionCoordinator> _logger;
 
-    public LocalModelDeletionCoordinator(
-        IInstalledModelSnapshotCoordinator snapshotCoordinator,
+    public LocalModelDeletionCoordinator(IInstalledModelSnapshotCoordinator snapshotCoordinator,
         IInstalledGgufDeletionStore deletionStore,
         ICoordinatedModelProviderMapStore providerMapStore,
         ILocalModelProviderResolver providerResolver,
@@ -47,7 +46,11 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
     public async Task<CommittedModelDeletion> CommitDeleteAsync(string modelName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest { ModelName = modelName, Kind = InstalledModelMutationKind.Delete }, cancellationToken);
+        await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest
+        {
+            ModelName = modelName,
+            Kind = InstalledModelMutationKind.Delete
+        }, cancellationToken);
         var snapshot = lease.Snapshot ?? throw new KeyNotFoundException("The installed model was not found.");
         await EnsureNoDependentAdaptersAsync(snapshot, cancellationToken);
         var stagePlan = GgufDeletionStageReceipt.Create(ToProviderSnapshot(snapshot), Guid.NewGuid());
@@ -155,7 +158,11 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         {
             var aliasNames = journal.StageReceipt.RemovalAliases.Select(static alias => alias.ModelName).ToArray();
             var intendedMembers = journal.Snapshot.Members.Select(static member =>
-                new IntendedInstalledModelMember { RelativePath = member.RelativePath, Role = member.Role }).ToArray();
+                new IntendedInstalledModelMember
+                {
+                    RelativePath = member.RelativePath,
+                    Role = member.Role
+                }).ToArray();
             await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest
             {
                 ModelName = journal.RequestedModelName,

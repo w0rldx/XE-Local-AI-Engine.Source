@@ -122,17 +122,17 @@ public sealed class IntegrationEntityConfigurationTests
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT detail_json FROM integration_execution_events WHERE id = $id;",
-                                                       command => command.Parameters.AddWithValue("$id", victimEventId))) as byte[];
+            command => command.Parameters.AddWithValue("$id", victimEventId))) as byte[];
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(payload) >= 0, "The payload must not survive as plaintext in the file.");
 
         // Re-parent the ciphertext onto another execution's event row: the AAD binds the owning execution, so the copy
         // must fail its tag check rather than read back as that execution's output.
         await fixture.RawExecuteAsync("UPDATE integration_execution_events SET detail_json = $payload WHERE id = $id;",
-                         command =>
-                         {
-                             command.Parameters.AddWithValue("$payload", stored!);
-                             command.Parameters.AddWithValue("$id", attackerEventId);
-                         });
+            command =>
+            {
+                command.Parameters.AddWithValue("$payload", stored!);
+                command.Parameters.AddWithValue("$id", attackerEventId);
+            });
 
         await using (var attackContext = fixture.CreateContext())
         {
@@ -166,16 +166,16 @@ public sealed class IntegrationEntityConfigurationTests
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT key_hash FROM integration_api_keys WHERE id = $id;",
-                                                       command => command.Parameters.AddWithValue("$id", victimKeyId))) as byte[];
+            command => command.Parameters.AddWithValue("$id", victimKeyId))) as byte[];
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(digest.AsSpan()) >= 0,
             "The digest is sealed at rest: a database-file WRITER must not be able to read it out and substitute a preimage they know.");
 
         await fixture.RawExecuteAsync("UPDATE integration_api_keys SET key_hash = $payload WHERE id = $id;",
-                         command =>
-                         {
-                             command.Parameters.AddWithValue("$payload", stored!);
-                             command.Parameters.AddWithValue("$id", attackerKeyId);
-                         });
+            command =>
+            {
+                command.Parameters.AddWithValue("$payload", stored!);
+                command.Parameters.AddWithValue("$id", attackerKeyId);
+            });
 
         await using (var attackContext = fixture.CreateContext())
         {

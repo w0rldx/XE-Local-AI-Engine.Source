@@ -39,9 +39,9 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         var probeId = Guid.NewGuid();
 
         var probe = await store.CreateTaskItemAsync(project.Id,
-                                   project.Version,
-                                   Probe(probeId),
-                                   [Case(probeId, "case-a"), Case(probeId, "case-b"), Case(probeId, "case-c")]);
+            project.Version,
+            Probe(probeId),
+            [Case(probeId, "case-a"), Case(probeId, "case-b"), Case(probeId, "case-c")]);
 
         var items = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(expected: 5, items.Count, "One authored prompt, one generator, three cases.");
@@ -193,16 +193,16 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         {
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
             var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
-            {
-                RunId = claimed.RunId,
-                ExpectedWorkVersion = claimed.Run.Version,
-                OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""),
-                LastStreamSequence = 1,
-                EffectiveContextTokens = 4096,
-                DurationMs = 10,
-                TotalTokens = 12,
-                TokensPerSecond = 120
-            } with
+                {
+                    RunId = claimed.RunId,
+                    ExpectedWorkVersion = claimed.Run.Version,
+                    OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""),
+                    LastStreamSequence = 1,
+                    EffectiveContextTokens = 4096,
+                    DurationMs = 10,
+                    TotalTokens = 12,
+                    TokensPerSecond = 120
+                } with
                 {
                     PrimaryStopReason = "stop"
                 });
@@ -229,7 +229,10 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         };
 
     private static BenchmarkTaskItemInput Item(string prompt) =>
-        new() { PromptJson = Encoding.UTF8.GetBytes(prompt) };
+        new()
+        {
+            PromptJson = Encoding.UTF8.GetBytes(prompt)
+        };
 
     private static BenchmarkTaskItemInput Probe(Guid id, string prompt = "a long-context probe") =>
         new()
@@ -252,7 +255,14 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         };
 
     private static BenchmarkProjectInput NewProject() =>
-        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Benchmark",
+            CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        };
 
     private async Task<(NodeChatDbContext Context, BenchmarkStore Store)> CreateStoreAsync(string fileName)
     {

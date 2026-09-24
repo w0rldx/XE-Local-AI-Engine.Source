@@ -16,8 +16,7 @@ public sealed class CreateNodeChatMessageRevisionEndpoint : Endpoint<ListNodeCha
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public CreateNodeChatMessageRevisionEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public CreateNodeChatMessageRevisionEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -42,13 +41,13 @@ public sealed class CreateNodeChatMessageRevisionEndpoint : Endpoint<ListNodeCha
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var variant = await _chatPersistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
-        {
-            ConversationId = req.ConversationId,
-            OriginalMessageId = req.MessageId,
-            NewMessageId = Guid.NewGuid(),
-            RequestId = Guid.NewGuid(),
-            CreatedAtUtc = createdAtUtc
-        },
+            {
+                ConversationId = req.ConversationId,
+                OriginalMessageId = req.MessageId,
+                NewMessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                CreatedAtUtc = createdAtUtc
+            },
             ct);
 
         if (variant is null)

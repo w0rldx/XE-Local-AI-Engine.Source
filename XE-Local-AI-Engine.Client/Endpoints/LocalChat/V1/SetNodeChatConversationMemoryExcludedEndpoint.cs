@@ -19,8 +19,7 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<Set
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public SetNodeChatConversationMemoryExcludedEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public SetNodeChatConversationMemoryExcludedEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -44,7 +43,12 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<Set
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest { ConversationId = req.ConversationId, MemoryExcluded = req.MemoryExcluded, UpdatedAtUtc = updatedAtUtc }, ct);
+        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest
+        {
+            ConversationId = req.ConversationId,
+            MemoryExcluded = req.MemoryExcluded,
+            UpdatedAtUtc = updatedAtUtc
+        }, ct);
 
         if (updated is null)
         {

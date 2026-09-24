@@ -111,7 +111,12 @@ public sealed class IntegrationSessionService
 
         if (session.Status != IntegrationSessionStatus.Active)
         {
-            return new IntegrationSessionGateResult { Outcome = IntegrationAcceptOutcome.SessionClosed, Existing = null, Message = SessionClosedMessage };
+            return new IntegrationSessionGateResult
+            {
+                Outcome = IntegrationAcceptOutcome.SessionClosed,
+                Existing = null,
+                Message = SessionClosedMessage
+            };
         }
 
         // Inside the caller's gate, so no second accept can read this count and then write a second seed into the same
@@ -119,7 +124,12 @@ public sealed class IntegrationSessionService
         var active = await _executions.CountActiveBySessionAsync(id, cancellationToken);
         return active == 0
             ? Accepted(session)
-            : new IntegrationSessionGateResult { Outcome = IntegrationAcceptOutcome.SessionBusy, Existing = null, Message = SessionBusyMessage };
+            : new IntegrationSessionGateResult
+            {
+                Outcome = IntegrationAcceptOutcome.SessionBusy,
+                Existing = null,
+                Message = SessionBusyMessage
+            };
     }
 
     /// <summary>One session for the operator, unscoped: an operator is not acting as an integrator.</summary>
@@ -233,10 +243,21 @@ public sealed class IntegrationSessionService
     public static string BusyMessage => BusyDeleteMessage;
 
     private static IntegrationSessionGateResult Accepted(IntegrationSessionSnapshot? existing) =>
-        new() { Outcome = IntegrationAcceptOutcome.Accepted, Existing = existing, Message = "Accepted." };
+        new()
+        {
+            Outcome = IntegrationAcceptOutcome.Accepted,
+            Existing = existing,
+            Message = "Accepted."
+        };
 
     /// <summary>Unknown, foreign-principal, allowlist-excluded and another trigger's session are ONE answer.</summary>
-    private static IntegrationSessionGateResult Masked => new() { Outcome = IntegrationAcceptOutcome.SessionNotFound, Existing = null, Message = SessionNotFoundMessage };
+    private static IntegrationSessionGateResult Masked =>
+        new()
+        {
+            Outcome = IntegrationAcceptOutcome.SessionNotFound,
+            Existing = null,
+            Message = SessionNotFoundMessage
+        };
 
     /// <summary>
     ///     The masked answer, plus the removal of a gate entry the accept path minted for an id with NO row behind it.
@@ -287,12 +308,12 @@ public sealed class IntegrationSessionService
         try
         {
             _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
-            {
-                ConversationId = conversationId,
-                DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                PurgeImmediately = true
-            },
-                                      CancellationToken.None);
+                {
+                    ConversationId = conversationId,
+                    DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                    PurgeImmediately = true
+                },
+                CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {

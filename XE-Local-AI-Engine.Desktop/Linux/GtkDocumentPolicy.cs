@@ -9,13 +9,14 @@ internal static class GtkDocumentPolicy
     internal static bool IsTrusted(Uri origin, string? current, string? resource, uint status, string? mime,
         IReadOnlyList<string> contentSecurityPolicies, IReadOnlyList<string> permissionsPolicies) =>
         SameOrigin(origin, current) && SameOrigin(origin, resource)
-        && status is >= 200 and < 300 && string.Equals(mime, "text/html", StringComparison.OrdinalIgnoreCase)
-        && contentSecurityPolicies.Count == 1 && contentSecurityPolicies[0] == ContentSecurityPolicy
-        && permissionsPolicies.Count == 1 && permissionsPolicies[0] == PermissionsPolicy;
+                                    && status is >= 200 and < 300 && string.Equals(mime, "text/html", StringComparison.OrdinalIgnoreCase)
+                                    && contentSecurityPolicies.Count == 1 && contentSecurityPolicies[0] == ContentSecurityPolicy
+                                    && permissionsPolicies.Count == 1 && permissionsPolicies[0] == PermissionsPolicy;
 
     internal static bool SameOrigin(Uri origin, string? candidate) =>
         Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
         && DesktopLaunchOptions.ClassifyNavigation(origin, uri) == NavigationDisposition.SameOrigin;
 
-    internal static bool AudioOnly(bool audio, bool video, bool display) => audio && !video && !display;
+    internal static bool AudioOnly(bool audio, bool video, bool display) =>
+        audio && !video && !display;
 }

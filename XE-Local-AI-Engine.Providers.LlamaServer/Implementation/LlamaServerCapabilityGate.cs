@@ -198,6 +198,13 @@ internal static class LlamaServerCapabilityGate
         bool canTrySafeFallback = false,
         IReadOnlyList<string>? omitted = null)
     {
-        return new LlamaServerCapabilityDecision { Spec = spec, IsCompatible = false, CanTrySafeFallback = canTrySafeFallback, SanitizedError = sanitizedError, OmittedOptions = omitted ?? [] };
+        return new LlamaServerCapabilityDecision
+        {
+            Spec = spec,
+            IsCompatible = false,
+            CanTrySafeFallback = canTrySafeFallback,
+            SanitizedError = sanitizedError,
+            OmittedOptions = omitted ?? []
+        };
     }
 }

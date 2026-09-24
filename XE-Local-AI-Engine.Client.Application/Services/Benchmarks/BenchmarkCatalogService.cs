@@ -23,8 +23,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly ILogger<BenchmarkCatalogService> _logger;
 
-    public BenchmarkCatalogService(
-        IAgentDefinitionStore agentDefinitions,
+    public BenchmarkCatalogService(IAgentDefinitionStore agentDefinitions,
         IAgentDefinitionResolver agentResolver,
         IModelCapabilityResolver modelCapabilities,
         IBenchmarkEligibilityPolicy eligibilityPolicy,
@@ -64,12 +63,12 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         foreach (var definition in definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single))
         {
             var runtime = await _agentResolver.ResolveAsync(definition.Id,
-                                                  modelName,
-                                                  retrievalQuery: string.Empty,
-                                                  supportsTools,
-                                                  honorModelProfile: false,
-                                                  activeModelIsCloud: false,
-                                                  cancellationToken);
+                modelName,
+                retrievalQuery: string.Empty,
+                supportsTools,
+                honorModelProfile: false,
+                activeModelIsCloud: false,
+                cancellationToken);
             if (runtime is null)
             {
                 continue;
@@ -78,7 +77,12 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
             try
             {
                 _ = _eligibilityPolicy.Apply(runtime);
-                eligible.Add(new BenchmarkEligibleAgent { Id = definition.Id, Name = definition.Name, Version = definition.Version });
+                eligible.Add(new BenchmarkEligibleAgent
+                {
+                    Id = definition.Id,
+                    Name = definition.Name,
+                    Version = definition.Version
+                });
             }
             catch (BenchmarkEligibilityException)
             {

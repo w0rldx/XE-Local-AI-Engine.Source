@@ -50,7 +50,7 @@ public sealed partial class BenchmarkStore
         if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                    && entity.Kind == BenchmarkWorkKind.Fidelity
                                                                    && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
-                                cancellationToken))
+                cancellationToken))
         {
             throw new BenchmarkConflictException("FidelityAlreadyQueued");
         }

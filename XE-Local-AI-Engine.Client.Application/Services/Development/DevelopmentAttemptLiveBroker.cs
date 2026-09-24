@@ -79,7 +79,13 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
     {
         if (!_attempts.TryGetValue(attemptId, out var state))
         {
-            snapshot = new DevelopmentAttemptLiveSnapshot { AttemptId = attemptId, Watermark = 0, DroppedOrCoalescedUpdateCount = 0, Latest = null };
+            snapshot = new DevelopmentAttemptLiveSnapshot
+            {
+                AttemptId = attemptId,
+                Watermark = 0,
+                DroppedOrCoalescedUpdateCount = 0,
+                Latest = null
+            };
             return false;
         }
 

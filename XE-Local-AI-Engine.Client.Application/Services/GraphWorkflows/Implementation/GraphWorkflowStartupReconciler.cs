@@ -78,7 +78,11 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
         {
             var verdicts = ComposeVerdicts(remaining);
             var unjudged = pass == RecoveryPasses
-                ? new GraphWorkflowUnjudgedNodeRunSettlement { FailureClass = GraphWorkflowFailureClass.Interrupted, SanitizedReason = UnjudgedReason }
+                ? new GraphWorkflowUnjudgedNodeRunSettlement
+                {
+                    FailureClass = GraphWorkflowFailureClass.Interrupted,
+                    SanitizedReason = UnjudgedReason
+                }
                 : null;
             var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken);
             recovered += reconciled.Count;
@@ -118,7 +122,10 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
         var verdicts = new List<GraphWorkflowNodeRunVerdict>(interrupted.Count);
         foreach (var nodeRun in interrupted)
         {
-            var failed = nodeRun is { Status: GraphWorkflowNodeRunStatus.Running, Kind: GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel };
+            var failed = nodeRun is
+            {
+                Status: GraphWorkflowNodeRunStatus.Running, Kind: GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel
+            };
             _logger.LogDebug("Graph workflow node run {NodeRunId} ({NodeKey}, {Kind}) was left {Status} on run {RunId} and is judged {Verdict}.",
                 nodeRun.NodeRunId,
                 nodeRun.NodeKey,

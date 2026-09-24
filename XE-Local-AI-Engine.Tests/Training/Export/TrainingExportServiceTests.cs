@@ -435,7 +435,13 @@ public sealed class TrainingExportServiceTests : IDisposable
 
             var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
             _ = binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                             .Returns(new LlamaBinary { ServerExecutablePath = serverPath, Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true });
+                             .Returns(new LlamaBinary
+                             {
+                                 ServerExecutablePath = serverPath,
+                                 Version = "b10201",
+                                 Variant = GpuVariant.Cuda,
+                                 IsPinnedFallback = true
+                             });
             var variantSelector = Substitute.For<IGpuVariantSelector>();
             _ = variantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cuda);
 
@@ -448,7 +454,11 @@ public sealed class TrainingExportServiceTests : IDisposable
                          .Returns(_ =>
                          {
                              harnessBox[0].SmokeRan = true;
-                             return Task.FromResult(new TrainedModelSmokeResult { State = TrainingArtifactSmokeState.Passed, Reason = null });
+                             return Task.FromResult(new TrainedModelSmokeResult
+                             {
+                                 State = TrainingArtifactSmokeState.Passed,
+                                 Reason = null
+                             });
                          });
 
             var models = Substitute.For<IGgufModelStore>();
@@ -488,7 +498,11 @@ public sealed class TrainingExportServiceTests : IDisposable
         }
 
         public Task<TrainingExportStart> StartAsync(TrainingArtifactKind kind, string? quantType = null) =>
-            _service.StartExportAsync(RunId, new TrainingExportRequest { Kind = kind, QuantType = quantType });
+            _service.StartExportAsync(RunId, new TrainingExportRequest
+            {
+                Kind = kind,
+                QuantType = quantType
+            });
 
         public Task DeleteArtifactAsync(Guid artifactId, long expectedVersion) =>
             _service.DeleteArtifactAsync(artifactId, expectedVersion);

@@ -20,12 +20,12 @@ internal sealed class DevelopmentE2ECoderModel : IDevelopmentCoderModel
         return new DevelopmentCoderModelResult
         {
             Submission = new DevelopmentCoderSubmission
-        {
-            Summary = "Implemented the deterministic E2E feature file.",
-            ChangedFiles = ["feature.txt"],
-            CommandIds = [],
-            Notes = null
-        },
+            {
+                Summary = "Implemented the deterministic E2E feature file.",
+                ChangedFiles = ["feature.txt"],
+                CommandIds = [],
+                Notes = null
+            },
             InputTokens = 10,
             OutputTokens = 10
         };
@@ -46,11 +46,11 @@ internal sealed class DevelopmentE2EReviewerModel : IDevelopmentReviewerModel
         return Task.FromResult(new DevelopmentReviewerModelResult
         {
             Submission = new DevelopmentReviewerSubmission
-        {
-            Disposition = DevelopmentReviewDisposition.Approved,
-            Summary = "The validated E2E subject satisfies the acceptance criterion.",
-            Findings = []
-        },
+            {
+                Disposition = DevelopmentReviewDisposition.Approved,
+                Summary = "The validated E2E subject satisfies the acceptance criterion.",
+                Findings = []
+            },
             InputTokens = 10,
             OutputTokens = 10
         });

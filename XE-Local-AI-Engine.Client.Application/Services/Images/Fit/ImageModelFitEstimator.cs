@@ -81,7 +81,14 @@ public static class ImageModelFitEstimator
 
         if (profile is null)
         {
-            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = true };
+            return new ImageModelFitEstimate
+            {
+                Verdict = ImageModelFitVerdict.Unknown,
+                ResidentBytes = diffusionBytes,
+                TotalBytes = totalBytes,
+                BudgetBytes = 0,
+                FitsOnDisk = true
+            };
         }
 
         var fitsOnDisk = profile.FreeDiskBytes <= 0 || profile.FreeDiskBytes >= totalBytes;
@@ -90,19 +97,40 @@ public static class ImageModelFitEstimator
         // CPU budget is the wrong one — the box would run on the GPU. Say so instead of guessing in either direction.
         if (profile.GpuVendor is not GpuVendor.None && !profile.VramKnown)
         {
-            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = fitsOnDisk };
+            return new ImageModelFitEstimate
+            {
+                Verdict = ImageModelFitVerdict.Unknown,
+                ResidentBytes = diffusionBytes,
+                TotalBytes = totalBytes,
+                BudgetBytes = 0,
+                FitsOnDisk = fitsOnDisk
+            };
         }
 
         var budgetBytes = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
         if (budgetBytes <= 0)
         {
-            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = fitsOnDisk };
+            return new ImageModelFitEstimate
+            {
+                Verdict = ImageModelFitVerdict.Unknown,
+                ResidentBytes = diffusionBytes,
+                TotalBytes = totalBytes,
+                BudgetBytes = 0,
+                FitsOnDisk = fitsOnDisk
+            };
         }
 
         // GPU mode charges only the diffusion transformer (encoders + VAE are pinned to CPU); CPU mode charges the set.
         var residentBytes = profile.GpuAccelAvailable ? diffusionBytes : totalBytes;
 
-        return new ImageModelFitEstimate { Verdict = ResolveVerdict(residentBytes, budgetBytes), ResidentBytes = residentBytes, TotalBytes = totalBytes, BudgetBytes = budgetBytes, FitsOnDisk = fitsOnDisk };
+        return new ImageModelFitEstimate
+        {
+            Verdict = ResolveVerdict(residentBytes, budgetBytes),
+            ResidentBytes = residentBytes,
+            TotalBytes = totalBytes,
+            BudgetBytes = budgetBytes,
+            FitsOnDisk = fitsOnDisk
+        };
     }
 
     private static ImageModelFitVerdict ResolveVerdict(long residentBytes, long budgetBytes)

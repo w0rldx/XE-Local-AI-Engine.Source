@@ -46,16 +46,16 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint : Endpoint<GetKldDiskEst
         var estimated = BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize);
         var free = _cache.AvailableFreeBytes();
         await Send.OkAsync(new GetKldDiskEstimateResponse
-                  {
-                      EstimatedBytes = estimated,
-                      FreeDiskBytes = free,
-                      CachedBytes = _cache.TotalBytes(),
-                      Chunks = chunks,
-                      ContextTokens = BenchmarkFidelityPolicy.ContextTokens,
-                      VocabSize = BenchmarkFidelityPolicy.DefaultVocabSize,
-                      Formula = string.Create(CultureInfo.InvariantCulture,
-                          $"chunks x contextTokens x vocabSize x {BenchmarkFidelityPolicy.KldBytesPerLogit} bytes per logit, plus a small header"),
-                      FitsOnDisk = free - estimated >= BenchmarkFidelityPolicy.KldFreeSpaceHeadroomBytes
-                  }, ct);
+        {
+            EstimatedBytes = estimated,
+            FreeDiskBytes = free,
+            CachedBytes = _cache.TotalBytes(),
+            Chunks = chunks,
+            ContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+            VocabSize = BenchmarkFidelityPolicy.DefaultVocabSize,
+            Formula = string.Create(CultureInfo.InvariantCulture,
+                $"chunks x contextTokens x vocabSize x {BenchmarkFidelityPolicy.KldBytesPerLogit} bytes per logit, plus a small header"),
+            FitsOnDisk = free - estimated >= BenchmarkFidelityPolicy.KldFreeSpaceHeadroomBytes
+        }, ct);
     }
 }

@@ -135,7 +135,7 @@ public sealed partial class DevelopmentStore
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
-                                               cancellationToken)
+                               cancellationToken)
                            ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.Validation)
@@ -148,7 +148,7 @@ public sealed partial class DevelopmentStore
                 var attemptId = command.Artifact.AttemptId
                                 ?? throw new DevelopmentInvalidTransitionException("A validation artifact must identify its coder attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
-                                                  cancellationToken)
+                                  cancellationToken)
                               ?? throw new DevelopmentInvalidTransitionException("The validation artifact coder attempt was not found on the task.");
                 if (attempt.Role != DevelopmentAttemptRole.Coder || attempt.Status != DevelopmentAttemptStatus.Succeeded)
                 {
@@ -235,7 +235,7 @@ public sealed partial class DevelopmentStore
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
-                                               cancellationToken)
+                               cancellationToken)
                            ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.InReview)
@@ -246,7 +246,7 @@ public sealed partial class DevelopmentStore
                 var attemptId = command.Artifact.AttemptId
                                 ?? throw new DevelopmentInvalidTransitionException("A review artifact must identify its reviewer attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
-                                                  cancellationToken)
+                                  cancellationToken)
                               ?? throw new DevelopmentInvalidTransitionException("The review artifact reviewer attempt was not found on the task.");
                 EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
                 if (attempt.Role != DevelopmentAttemptRole.Reviewer || attempt.Status != DevelopmentAttemptStatus.Running)

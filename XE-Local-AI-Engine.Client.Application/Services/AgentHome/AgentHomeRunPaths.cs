@@ -64,7 +64,7 @@ internal static class AgentHomeRunPaths
         var unixMilliseconds = rest[..separator];
         var counter = rest[(separator + 1)..];
         if (!IsAsciiDigits(unixMilliseconds) || !IsAsciiDigits(counter)
-            || !long.TryParse(unixMilliseconds, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                                             || !long.TryParse(unixMilliseconds, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
         {
             return null;
         }

@@ -19,8 +19,7 @@ public sealed class CloudModelResolver : ICloudModelResolver
     private readonly ILogger<CloudModelResolver> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
 
-    public CloudModelResolver(
-        ICloudCredentialStore cloudCredentialStore,
+    public CloudModelResolver(ICloudCredentialStore cloudCredentialStore,
         IModelTrustResolver modelTrustResolver,
         ILogger<CloudModelResolver> logger)
     {

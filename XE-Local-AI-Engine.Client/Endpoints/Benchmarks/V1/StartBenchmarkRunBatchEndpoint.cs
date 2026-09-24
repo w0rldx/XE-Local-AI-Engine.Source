@@ -43,26 +43,33 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
         {
             ProjectId = req.ProjectId,
             ExpectedProjectVersion = req.ExpectedProjectVersion,
-            Items = [.. req.Items.Select(static item => new BenchmarkRunBatchItem { ModelName = item.ModelName, KvCacheType = item.KvCacheType })],
+            Items =
+            [
+                .. req.Items.Select(static item => new BenchmarkRunBatchItem
+                {
+                    ModelName = item.ModelName,
+                    KvCacheType = item.KvCacheType
+                })
+            ],
             RepeatCount = req.RepeatCount,
             Warmup = req.Warmup,
             RepeatMode = req.RepeatMode,
             AnswerVarianceTemperature = req.AnswerVarianceTemperature
         }, ct);
         await Send.OkAsync(new StartBenchmarkRunBatchResponse
-                  {
-                      ProjectVersion = result.ProjectVersion,
-                      Started =
-                      [
-                          .. result.Started.Select(static item => new StartedBenchmarkRunBatchItemResponse
-                          {
-                              ModelName = item.ModelName,
-                              KvCacheType = item.KvCacheType,
-                              RunIds = item.RunIds
-                          })
-                      ],
-                      Rejected = [.. result.Rejected.Select(ToResponse)]
-                  }, ct);
+        {
+            ProjectVersion = result.ProjectVersion,
+            Started =
+            [
+                .. result.Started.Select(static item => new StartedBenchmarkRunBatchItemResponse
+                {
+                    ModelName = item.ModelName,
+                    KvCacheType = item.KvCacheType,
+                    RunIds = item.RunIds
+                })
+            ],
+            Rejected = [.. result.Rejected.Select(ToResponse)]
+        }, ct);
     }
 
     private static RejectedBenchmarkRunBatchItemResponse ToResponse(BenchmarkRunBatchRejectedItem item)

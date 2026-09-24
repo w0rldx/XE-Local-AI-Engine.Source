@@ -40,11 +40,19 @@ internal static class ExecStartEndpoint
         context.Response.Headers.Upgrade = "tcp";
 
         await FakeDockerEndpointMapper.WriteFramedAsync(context,
-                                          [
-                                              new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardOutput, Text = outcome.StandardOutput },
-                                              new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardError, Text = outcome.StandardError }
-                                          ],
-                                          hijacked: true);
+            [
+                new FakeDockerLogFrame
+                {
+                    Stream = FakeDockerStreamKind.StandardOutput,
+                    Text = outcome.StandardOutput
+                },
+                new FakeDockerLogFrame
+                {
+                    Stream = FakeDockerStreamKind.StandardError,
+                    Text = outcome.StandardError
+                }
+            ],
+            hijacked: true);
     }
 
     /// <summary>

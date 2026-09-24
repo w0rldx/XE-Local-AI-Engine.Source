@@ -27,8 +27,7 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
 
     private readonly IAgentDefinitionStore _store;
 
-    public AgentDefinitionService(
-        IAgentDefinitionStore store,
+    public AgentDefinitionService(IAgentDefinitionStore store,
         ILocalToolOfferProvider localToolOfferProvider,
         ILogger<AgentDefinitionService> logger)
     {

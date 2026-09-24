@@ -80,8 +80,27 @@ public sealed class NodeAgentMcpToolsTests
             Descriptor("alpha-chat", 10),
             Descriptor("unavailable", 30, isAvailable: false)
         ]);
-        harness.NodeSettingsAdministration.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(
-            new NodeSettingsAgenticView { DefaultModelName = "zeta-embed", EnableTools = null, ToolCapableModels = null, HuggingFaceDefaultQuant = null, LlamaMaxLoadedProcesses = null, LlamaIdleTimeToLiveSeconds = null, KeepModelWarmEnabled = null, KeepModelWarmModelName = null, KeepModelWarmIntervalSeconds = null, MaxMessageRequestTimeoutSeconds = 600, ChatCacheReuse = null, SpeculativeMode = null, SpeculativeDraftModelName = null, SpeculativeDraftMaxTokens = null, SpeculativeDraftGpuLayers = null, KvCacheType = null, RerankerModelName = null, AutoEffortFastModelName = null });
+        harness.NodeSettingsAdministration.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(new NodeSettingsAgenticView
+        {
+            DefaultModelName = "zeta-embed",
+            EnableTools = null,
+            ToolCapableModels = null,
+            HuggingFaceDefaultQuant = null,
+            LlamaMaxLoadedProcesses = null,
+            LlamaIdleTimeToLiveSeconds = null,
+            KeepModelWarmEnabled = null,
+            KeepModelWarmModelName = null,
+            KeepModelWarmIntervalSeconds = null,
+            MaxMessageRequestTimeoutSeconds = 600,
+            ChatCacheReuse = null,
+            SpeculativeMode = null,
+            SpeculativeDraftModelName = null,
+            SpeculativeDraftMaxTokens = null,
+            SpeculativeDraftGpuLayers = null,
+            KvCacheType = null,
+            RerankerModelName = null,
+            AutoEffortFastModelName = null
+        });
 
         var models = await harness.Tools.ListModelsAsync(CancellationToken.None);
 
@@ -139,7 +158,14 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         var workspaceId = Guid.NewGuid().ToString("D");
-        harness.WorkspaceResolver.References = [new SelectedFolderReference { Id = workspaceId, Alias = "engine" }];
+        harness.WorkspaceResolver.References =
+        [
+            new SelectedFolderReference
+            {
+                Id = workspaceId,
+                Alias = "engine"
+            }
+        ];
 
         var response = await harness.Tools.ListWorkspacesAsync(CancellationToken.None);
         var json = JsonSerializer.Serialize(response);
@@ -158,9 +184,21 @@ public sealed class NodeAgentMcpToolsTests
         var harness = new Harness(maxListLimit: 2);
         harness.WorkspaceResolver.References =
         [
-            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "one" },
-            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "two" },
-            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "three" }
+            new SelectedFolderReference
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                Alias = "one"
+            },
+            new SelectedFolderReference
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                Alias = "two"
+            },
+            new SelectedFolderReference
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                Alias = "three"
+            }
         ];
 
         var response = await harness.Tools.ListWorkspacesAsync(CancellationToken.None);
@@ -960,7 +998,12 @@ public sealed class NodeAgentMcpToolsTests
         public int CancelCallCount { get; private set; }
 
         public McpAgentRunCancelResult CancelResult { get; set; } =
-            new() { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
+            new()
+            {
+                Kind = McpAgentRunCancelKind.NotFound,
+                Run = null,
+                DisplayMessage = "Run not found."
+            };
 
         public int GetCallCount { get; private set; }
 
@@ -981,7 +1024,13 @@ public sealed class NodeAgentMcpToolsTests
         public int StartCallCount { get; private set; }
 
         public McpAgentRunStartResult StartResult { get; set; } =
-            new() { Kind = McpAgentRunStartKind.Accepted, Run = CreateRunView(McpAgentRunStatus.Queued), FailureCode = null, DisplayMessage = "Accepted." };
+            new()
+            {
+                Kind = McpAgentRunStartKind.Accepted,
+                Run = CreateRunView(McpAgentRunStatus.Queued),
+                FailureCode = null,
+                DisplayMessage = "Accepted."
+            };
 
         public Task<McpAgentRunCancelResult> CancelAsync(Guid requestId, CancellationToken cancellationToken)
         {

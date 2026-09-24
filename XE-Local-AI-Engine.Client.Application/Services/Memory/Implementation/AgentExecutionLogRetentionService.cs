@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Memory;
 
 /// <summary>
 ///     Retention sweeper for the metadata-only <c>agent_execution_logs</c> table, which is append-only and so grows

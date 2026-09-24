@@ -20,8 +20,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly ILogger<BenchmarkQueueHostedService> _logger;
 
-    public BenchmarkQueueHostedService(
-        IServiceScopeFactory scopeFactory,
+    public BenchmarkQueueHostedService(IServiceScopeFactory scopeFactory,
         IBenchmarkQueueSignal signal,
         IBenchmarkEventBuffer events,
         IGpuWorkGate gpuWorkGate,

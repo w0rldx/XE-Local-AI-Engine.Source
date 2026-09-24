@@ -17,6 +17,7 @@ public sealed class LinuxDesktopPolicyTests
             uint status = 200, string? mime = "text/html", string[]? csp = null, string[]? permissions = null) =>
             GtkDocumentPolicy.IsTrusted(Origin, current, resource, status, mime,
                 csp ?? [GtkDocumentPolicy.ContentSecurityPolicy], permissions ?? [GtkDocumentPolicy.PermissionsPolicy]);
+
         AssertEx.True(Trusted());
         AssertEx.False(Trusted(current: "http://127.0.0.1:35208/settings"));
         AssertEx.False(Trusted(current: "http://user@127.0.0.1:35207/settings"));
@@ -39,6 +40,7 @@ public sealed class LinuxDesktopPolicyTests
         for (var bits = 0; bits < 8; bits++)
         {
             if (bits == 1) { continue; }
+
             AssertEx.False(GtkDocumentPolicy.AudioOnly((bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0));
         }
     }
@@ -52,6 +54,7 @@ public sealed class LinuxDesktopPolicyTests
         var verified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var continueConsent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var grants = 0;
+
         async Task<bool> ConsentAsync()
         {
             verified.SetResult();
@@ -79,15 +82,38 @@ public sealed class LinuxDesktopPolicyTests
     {
         const string nonce = "nonce";
         const string url = "blob:http://127.0.0.1:35207/11111111-1111-4111-8111-111111111111";
+
         static string Message(string location = url, string filename = "export.json", long size = 12, string requestNonce = nonce, string? hash = null) =>
-            JsonSerializer.Serialize(new { kind = "xe-save", nonce = requestNonce, id = "22222222-2222-4222-8222-222222222222", url = location,
-                filename, size, sha256 = hash ?? new string('a', 64) });
+            JsonSerializer.Serialize(new
+            {
+                kind = "xe-save",
+                nonce = requestNonce,
+                id = "22222222-2222-4222-8222-222222222222",
+                url = location,
+                filename,
+                size,
+                sha256 = hash ?? new string('a', 64)
+            });
+
         AssertEx.NotNull(GtkSaveIntent.Parse(Message(), Origin, nonce));
-        foreach (var invalid in new[] { "{}", "[]", "not json", new string('x', 4097), Message(requestNonce: "old"),
-                     Message(filename: "../export.json"), Message(filename: "a/b"), Message(filename: ".."), Message(filename: "export\n.json"),
-                     Message(size: -1), Message(size: GtkSaveIntent.MaximumBytes + 1), Message(hash: "invalid"),
-                     Message(location: "https://example.com/file"), Message(location: url.Replace("35207", "35208", StringComparison.Ordinal)),
-                     Message(location: "blob:http://user@127.0.0.1:35207/11111111-1111-4111-8111-111111111111") })
+        foreach (var invalid in new[]
+                 {
+                     "{}",
+                     "[]",
+                     "not json",
+                     new string('x', 4097),
+                     Message(requestNonce: "old"),
+                     Message(filename: "../export.json"),
+                     Message(filename: "a/b"),
+                     Message(filename: ".."),
+                     Message(filename: "export\n.json"),
+                     Message(size: -1),
+                     Message(size: GtkSaveIntent.MaximumBytes + 1),
+                     Message(hash: "invalid"),
+                     Message(location: "https://example.com/file"),
+                     Message(location: url.Replace("35207", "35208", StringComparison.Ordinal)),
+                     Message(location: "blob:http://user@127.0.0.1:35207/11111111-1111-4111-8111-111111111111")
+                 })
         {
             AssertEx.Null(GtkSaveIntent.Parse(invalid, Origin, nonce));
         }
@@ -105,6 +131,7 @@ public sealed class LinuxDesktopPolicyTests
         AssertEx.True(gate.Arm(generation));
         using var cancellation = new CancellationTokenSource();
         var verification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         async Task<bool> CommitAsync()
         {
             await verification.Task;
@@ -154,7 +181,13 @@ public sealed class LinuxDesktopPolicyTests
     {
         var script = ExportBridgeScript();
         AssertEx.Contains(script, "__XE_NONCE__"); // GtkDesktopBridge.ArmAsync substitutes the armed nonce here.
-        foreach (var kind in new[] { "xe-save", "xe-save-cancel", "xe-save-unavailable", "xe-frame-blocked" })
+        foreach (var kind in new[]
+                 {
+                     "xe-save",
+                     "xe-save-cancel",
+                     "xe-save-unavailable",
+                     "xe-frame-blocked"
+                 })
         {
             AssertEx.Contains(script, $"kind: '{kind}'");
         }
@@ -178,7 +211,7 @@ public sealed class LinuxDesktopPolicyTests
         var end = script.IndexOf(';', start);
         AssertEx.True(end > start, $"The {name} declaration in DesktopDownloadBridge.js is unterminated.");
         return script[(start + declaration.Length)..end]
-            .Split('*')
-            .Aggregate(1L, (product, factor) => product * long.Parse(factor.Trim(), CultureInfo.InvariantCulture));
+               .Split('*')
+               .Aggregate(1L, (product, factor) => product * long.Parse(factor.Trim(), CultureInfo.InvariantCulture));
     }
 }

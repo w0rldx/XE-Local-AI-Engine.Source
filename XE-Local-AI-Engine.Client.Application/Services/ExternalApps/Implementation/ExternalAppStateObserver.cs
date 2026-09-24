@@ -135,12 +135,12 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         // ONE call for the whole tick. The state word arrives with the ids, which is the entire reason this can tell
         // a stopped container from a removed one.
         var listed = await runtime
-                           .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
-                               {
-                                   [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
-                                   [ExternalAppLabels.Install] = _service.InstallId
-                               },
-                               cancellationToken);
+            .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
+                    [ExternalAppLabels.Install] = _service.InstallId
+                },
+                cancellationToken);
 
         foreach (var row in candidates)
         {
@@ -236,22 +236,22 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     {
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
-        {
-            InstanceId = row.Id,
-            ExpectedVersion = row.Version,
-            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            row.Status
-                                        },
-            NewStatus = ExternalAppInstanceStatus.StoppedUnexpectedly,
-            EventKind = ExternalAppInstanceEventKind.StoppedUnexpectedly,
-            EventDetailJson = null,
-            OccurredAtUtc = now,
-            StoppedAtUtc = now,
-            FailureCategory = ExternalAppFailureCategory.StoppedUnexpectedly,
-            FailureSummary = summary
-        },
-                                    cancellationToken);
+            {
+                InstanceId = row.Id,
+                ExpectedVersion = row.Version,
+                ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
+                {
+                    row.Status
+                },
+                NewStatus = ExternalAppInstanceStatus.StoppedUnexpectedly,
+                EventKind = ExternalAppInstanceEventKind.StoppedUnexpectedly,
+                EventDetailJson = null,
+                OccurredAtUtc = now,
+                StoppedAtUtc = now,
+                FailureCategory = ExternalAppFailureCategory.StoppedUnexpectedly,
+                FailureSummary = summary
+            },
+            cancellationToken);
 
         if (!result.Applied)
         {
@@ -265,7 +265,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         try
         {
             await _publisher.PublishAsync(row.Id, result.Sequence, ExternalAppInstanceEventKind.StoppedUnexpectedly, ExternalAppInstanceStatus.StoppedUnexpectedly,
-                                CancellationToken.None);
+                CancellationToken.None);
         }
 #pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the observation it describes.
         catch (Exception exception)

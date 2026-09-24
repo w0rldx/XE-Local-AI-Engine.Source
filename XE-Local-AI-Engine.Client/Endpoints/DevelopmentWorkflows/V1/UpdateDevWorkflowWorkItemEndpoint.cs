@@ -37,7 +37,13 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint : Endpoint<UpdateDevWorkfl
 
         // An omitted member is forwarded as null, which the store reads as "leave it alone" — a PATCH that only renames must not blank the request it never mentioned.
         // There is no expected version: the only other writer to a work item is the runtime writing its STATUS, which this cannot collide with.
-        var updated = await _authoring.UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand { WorkItemId = req.WorkItemId, ExpectedVersion = DevWorkflowVersions.Any, Title = req.Title, Request = req.Request }, ct);
+        var updated = await _authoring.UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand
+        {
+            WorkItemId = req.WorkItemId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            Title = req.Title,
+            Request = req.Request
+        }, ct);
         var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct);
         await Send.OkAsync(updated.ToResponse(runs), ct);
     }

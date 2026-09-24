@@ -23,7 +23,11 @@ public sealed class ListKnowledgeDocumentsEndpointTests
     public async Task List_WhenResolutionIsConfident_ReportsTheResolvedModelAsAvailable()
     {
         // A custom name no name-based classifier would call an embedding model; the resolver matched it, so it works.
-        var body = await GetListAsync(new EmbeddingModelResolution { Name = "house-vectors:Q4_K_M", IsConfident = true });
+        var body = await GetListAsync(new EmbeddingModelResolution
+        {
+            Name = "house-vectors:Q4_K_M",
+            IsConfident = true
+        });
 
         AssertEx.Equal("house-vectors:Q4_K_M", body.GetProperty("embeddingModel").GetString());
         AssertEx.True(body.GetProperty("embeddingModelAvailable").GetBoolean(),
@@ -33,7 +37,11 @@ public sealed class ListKnowledgeDocumentsEndpointTests
     [Test]
     public async Task List_WhenResolutionIsNotConfident_ReportsTheConfiguredModelAsUnavailable()
     {
-        var body = await GetListAsync(new EmbeddingModelResolution { Name = "nomic-embed-text", IsConfident = false });
+        var body = await GetListAsync(new EmbeddingModelResolution
+        {
+            Name = "nomic-embed-text",
+            IsConfident = false
+        });
 
         AssertEx.Equal("nomic-embed-text", body.GetProperty("embeddingModel").GetString());
         AssertEx.False(body.GetProperty("embeddingModelAvailable").GetBoolean(),

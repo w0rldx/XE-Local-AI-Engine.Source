@@ -39,8 +39,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
     private readonly IRuntimeDeviceAudit _runtimeAudit;
 
-    public ProcessContextAllocationResolver(
-        IGgufModelStore modelStore,
+    public ProcessContextAllocationResolver(IGgufModelStore modelStore,
         IRuntimeDeviceAudit runtimeAudit,
         IProcessVramBudgetProbe processVramBudgetProbe,
         MemoryFitEstimator estimator,
@@ -454,7 +453,16 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             placement = ProcessPlacementMode.Hybrid;
         }
 
-        return new ProcessContextAllocation { ProcessContextTokens = contextTokens, ModelTrainContextTokens = trainCeiling, Source = source, Placement = placement, Footprint = footprint, ContentIdentity = contentIdentity, CacheKey = key };
+        return new ProcessContextAllocation
+        {
+            ProcessContextTokens = contextTokens,
+            ModelTrainContextTokens = trainCeiling,
+            Source = source,
+            Placement = placement,
+            Footprint = footprint,
+            ContentIdentity = contentIdentity,
+            CacheKey = key
+        };
     }
 
     /// <summary>
@@ -500,7 +508,12 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             profile,
             kvCacheQuantized: false,
             kvCacheQuant: kvCacheQuant,
-            moeFacts: new MoeFacts { ActiveParamCount = null, ExpertCount = facts.ExpertCount, ExpertUsedCount = facts.ExpertUsedCount },
+            moeFacts: new MoeFacts
+            {
+                ActiveParamCount = null,
+                ExpertCount = facts.ExpertCount,
+                ExpertUsedCount = facts.ExpertUsedCount
+            },
             attention: new GgufAttentionShape
             {
                 KeyLength = facts.AttentionKeyLength,

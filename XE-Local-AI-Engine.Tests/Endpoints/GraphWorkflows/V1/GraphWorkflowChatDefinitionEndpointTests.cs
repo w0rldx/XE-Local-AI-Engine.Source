@@ -39,8 +39,8 @@ public sealed class GraphWorkflowChatDefinitionEndpointTests
 
         var version = detail.RootElement.GetProperty("version").GetInt32();
         using var updated = await SendAsync("PUT",
-                $"{Root}/definitions/{id}",
-                $$"""{"version":{{version}},"graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""");
+            $"{Root}/definitions/{id}",
+            $$"""{"version":{{version}},"graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""");
         var updatedBody = await updated.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, updated.StatusCode, updatedBody);
         using var standard = JsonDocument.Parse(updatedBody);
@@ -67,13 +67,19 @@ public sealed class GraphWorkflowChatDefinitionEndpointTests
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ChatInputAnswer);
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        using var empty = await SendAsync("POST", Decide(runId), DecisionBody(Guid.NewGuid(), "Answer", new { text = "" }));
+        using var empty = await SendAsync("POST", Decide(runId), DecisionBody(Guid.NewGuid(), "Answer", new
+        {
+            text = ""
+        }));
         AssertEx.Equal(HttpStatusCode.BadRequest, empty.StatusCode, "an empty answer is the request's fault.");
 
         using var approve = await SendAsync("POST", Decide(runId), DecisionBody(Guid.NewGuid(), "Approve", payload: null));
         AssertEx.Equal(HttpStatusCode.Conflict, approve.StatusCode, "a chat input is not a gate.");
 
-        using var answered = await SendAsync("POST", Decide(runId), DecisionBody(Guid.NewGuid(), "Answer", new { text = "postgres" }));
+        using var answered = await SendAsync("POST", Decide(runId), DecisionBody(Guid.NewGuid(), "Answer", new
+        {
+            text = "postgres"
+        }));
         var body = await answered.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, answered.StatusCode, body);
         using var result = JsonDocument.Parse(body);
@@ -92,7 +98,12 @@ public sealed class GraphWorkflowChatDefinitionEndpointTests
         $"{Root}/runs/{runId}/nodes/ask/decide";
 
     private static string DecisionBody(Guid operationId, string decision, object? payload) =>
-        JsonSerializer.Serialize(new { operationId, decision, payload });
+        JsonSerializer.Serialize(new
+        {
+            operationId,
+            decision,
+            payload
+        });
 
     private async Task<JsonDocument> ReadJsonAsync(string route)
     {

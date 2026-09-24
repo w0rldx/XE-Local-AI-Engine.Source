@@ -81,31 +81,76 @@ public static class LlamaCppReleasePins
                     CudartSha256 = "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
                 },
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
-                new() { AssetName = "llama-b10201-bin-win-vulkan-x64.zip", Sha256 = "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42", ServerRelativePath = WindowsServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-win-vulkan-x64.zip",
+                    Sha256 = "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42",
+                    ServerRelativePath = WindowsServerPath
+                },
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-win-cpu-x64.zip", Sha256 = "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833", ServerRelativePath = WindowsServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-win-cpu-x64.zip",
+                    Sha256 = "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833",
+                    ServerRelativePath = WindowsServerPath
+                },
 
             // Windows arm64 (CPU floor only)
             [new PinKey(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-win-cpu-arm64.zip", Sha256 = "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8", ServerRelativePath = WindowsServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-win-cpu-arm64.zip",
+                    Sha256 = "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8",
+                    ServerRelativePath = WindowsServerPath
+                },
 
             // Linux x64 (no prebuilt CUDA exists upstream)
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
-                new() { AssetName = "llama-b10201-bin-ubuntu-vulkan-x64.tar.gz", Sha256 = "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57", ServerRelativePath = UnixServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-ubuntu-vulkan-x64.tar.gz",
+                    Sha256 = "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57",
+                    ServerRelativePath = UnixServerPath
+                },
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-ubuntu-x64.tar.gz", Sha256 = "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797", ServerRelativePath = UnixServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-ubuntu-x64.tar.gz",
+                    Sha256 = "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797",
+                    ServerRelativePath = UnixServerPath
+                },
 
             // Linux arm64
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
-                new() { AssetName = "llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz", Sha256 = "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533", ServerRelativePath = UnixServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz",
+                    Sha256 = "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533",
+                    ServerRelativePath = UnixServerPath
+                },
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-ubuntu-arm64.tar.gz", Sha256 = "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7", ServerRelativePath = UnixServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-ubuntu-arm64.tar.gz",
+                    Sha256 = "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7",
+                    ServerRelativePath = UnixServerPath
+                },
 
             // macOS (CPU floor; llama.cpp uses Metal at runtime within the universal build)
             [new PinKey(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-macos-arm64.tar.gz", Sha256 = "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e", ServerRelativePath = UnixServerPath },
+                new()
+                {
+                    AssetName = "llama-b10201-bin-macos-arm64.tar.gz",
+                    Sha256 = "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e",
+                    ServerRelativePath = UnixServerPath
+                },
             [new PinKey(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
-                new() { AssetName = "llama-b10201-bin-macos-x64.tar.gz", Sha256 = "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf", ServerRelativePath = UnixServerPath }
+                new()
+                {
+                    AssetName = "llama-b10201-bin-macos-x64.tar.gz",
+                    Sha256 = "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf",
+                    ServerRelativePath = UnixServerPath
+                }
         };
 
     /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>
@@ -200,10 +245,10 @@ public static class LlamaCppReleasePins
     public static string MissingPrebuiltMessage(OSPlatform os, Architecture arch, GpuVariant variant)
     {
         var alternatives = Pins.Keys
-            .Where(key => key.Os == os && key.Arch == arch && key.Variant != variant)
-            .Select(key => VariantDisplayName(key.Variant))
-            .Order(StringComparer.Ordinal)
-            .ToList();
+                               .Where(key => key.Os == os && key.Arch == arch && key.Variant != variant)
+                               .Select(key => VariantDisplayName(key.Variant))
+                               .Order(StringComparer.Ordinal)
+                               .ToList();
         if (alternatives.Count == 0)
         {
             return "No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.";

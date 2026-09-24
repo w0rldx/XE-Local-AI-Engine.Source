@@ -275,7 +275,14 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             Task.FromResult(Recorded);
 
         private DevelopmentTemplateSnapshot Snapshot() =>
-            new() { Id = _templateId, Alias = _templateAlias, HostPath = _hostPath, CreatedAtUtc = 0, Version = 1 };
+            new()
+            {
+                Id = _templateId,
+                Alias = _templateAlias,
+                HostPath = _hostPath,
+                CreatedAtUtc = 0,
+                Version = 1
+            };
     }
 
     private class RecordingRepositoryBindings : IDevelopmentRepositoryBindingService
@@ -287,7 +294,12 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             RegisteredHostPath = hostPath;
-            return Task.FromResult(new DevelopmentRepositoryReference { Id = Guid.NewGuid().ToString(), Alias = displayAlias, Availability = "Available" });
+            return Task.FromResult(new DevelopmentRepositoryReference
+            {
+                Id = Guid.NewGuid().ToString(),
+                Alias = displayAlias,
+                Availability = "Available"
+            });
         }
 
         public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListAsync(CancellationToken cancellationToken = default) =>

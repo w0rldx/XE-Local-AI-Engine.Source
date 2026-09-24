@@ -54,8 +54,8 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
         var queries = RetrievalEvalCorpus.ScoreFusionQueries;
 
         var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
-        var aware = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
+        var aware = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K,
+            CancellationToken.None);
 
         Report("scorefusion-hard-rrf", rrf);
         Report("scorefusion-hard-aware", aware);
@@ -82,8 +82,8 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
         var queries = RetrievalEvalFixture.Queries;
 
         var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
-        var aware = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
+        var aware = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K,
+            CancellationToken.None);
 
         Report("baseline-rrf", rrf);
         Report("baseline-aware", aware);

@@ -45,7 +45,10 @@ internal sealed class ExternalAppBridgeTokenVerifier : IContainerBridgeTokenVeri
             // Whole token, not just the secret half: comparing the full string binds the id to the secret, so a token
             // whose id was rewritten to name another instance cannot match that instance's row either.
             return CryptographicOperations.FixedTimeEquals(expected, candidate)
-                ? new ContainerBridgeCaller { InstanceId = instanceId }
+                ? new ContainerBridgeCaller
+                {
+                    InstanceId = instanceId
+                }
                 : null;
         }
         finally

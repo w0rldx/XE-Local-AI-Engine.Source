@@ -124,7 +124,12 @@ internal sealed class NodeChatVariantBranchService
                 }
 
                 await transaction.CommitAsync(token);
-                return new NodeChatBranchResultDto { SourceConversationId = request.ConversationId, BranchedConversationId = branchedConversationId, CopiedMessageCount = copies.Count };
+                return new NodeChatBranchResultDto
+                {
+                    SourceConversationId = request.ConversationId,
+                    BranchedConversationId = branchedConversationId,
+                    CopiedMessageCount = copies.Count
+                };
             },
             cancellationToken);
     }
@@ -281,7 +286,12 @@ internal sealed class NodeChatVariantBranchService
                             ReasoningEffort = request.ReasoningEffort
                         };
 
-                        return new NodeChatMessageVariantDto { VariantGroupId = variantGroupId, OriginalMessageId = request.OriginalMessageId, Variant = variant };
+                        return new NodeChatMessageVariantDto
+                        {
+                            VariantGroupId = variantGroupId,
+                            OriginalMessageId = request.OriginalMessageId,
+                            Variant = variant
+                        };
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {

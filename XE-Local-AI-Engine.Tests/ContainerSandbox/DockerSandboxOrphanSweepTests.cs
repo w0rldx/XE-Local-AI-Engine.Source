@@ -145,7 +145,11 @@ public sealed class DockerSandboxOrphanSweepTests
     {
         var sandboxId = Guid.NewGuid().ToString("N")[..32];
         var specification = DockerSandboxHardening.BuildSpecification(DockerSandboxHardeningTests.Options(),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-" + sandboxId,
             sandboxId,
             installId,
@@ -157,7 +161,11 @@ public sealed class DockerSandboxOrphanSweepTests
     private static async Task<string> SeedContainerAsync(FakeDockerRuntimeClient client, IReadOnlyDictionary<string, string> labels)
     {
         var specification = DockerSandboxHardening.BuildSpecification(DockerSandboxHardeningTests.Options(),
-                new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+                new ResolvedContainerIdentity
+                {
+                    UserId = 1000,
+                    GroupId = 1000
+                },
                 "someone-elses-container",
                 "sandbox-x",
                 "install-x",

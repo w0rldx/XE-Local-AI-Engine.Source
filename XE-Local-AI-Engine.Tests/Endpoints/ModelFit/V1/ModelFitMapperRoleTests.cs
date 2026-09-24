@@ -30,7 +30,14 @@ public sealed class ModelFitMapperRoleTests
     [Arguments(false, true, "exited")]
     public void RunningModelToResponse_CarriesAStableDetailCodeTheSpaTranslates(bool responsive, bool exited, string expected)
     {
-        var health = new LlamaServerProcessHealth { ModelName = "m", Role = ModelRole.Chat, IsResponsive = responsive, Detail = "free text", HasExited = exited };
+        var health = new LlamaServerProcessHealth
+        {
+            ModelName = "m",
+            Role = ModelRole.Chat,
+            IsResponsive = responsive,
+            Detail = "free text",
+            HasExited = exited
+        };
 
         var response = health.ToResponse();
 

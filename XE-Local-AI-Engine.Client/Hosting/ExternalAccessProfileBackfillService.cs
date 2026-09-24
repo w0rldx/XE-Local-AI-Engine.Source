@@ -20,8 +20,7 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
     private readonly ILogger<ExternalAccessProfileBackfillService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public ExternalAccessProfileBackfillService(
-        IServiceScopeFactory scopeFactory,
+    public ExternalAccessProfileBackfillService(IServiceScopeFactory scopeFactory,
         ILogger<ExternalAccessProfileBackfillService> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);

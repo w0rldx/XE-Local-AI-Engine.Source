@@ -53,7 +53,8 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
     }
 
-    internal Task? WaitForEngineExitAsync() => _process?.WaitForExitAsync(CancellationToken.None);
+    internal Task? WaitForEngineExitAsync() =>
+        _process?.WaitForExitAsync(CancellationToken.None);
 
     internal static async Task<DesktopEngineSession> StartAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
@@ -77,15 +78,17 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
         existing = await DiscoverAsync(options.DataDirectory, cancellationToken);
         if (existing is null) { throw new InvalidOperationException(DescribeStartupFailure(errorTail)); }
+
         ValidateRequestedPort(existing, options.Port);
         return new DesktopEngineSession(existing);
     }
 
     /// <summary>Carries the engine's own last words (a missing shared runtime, a port conflict) into the failure the
     ///     operator sees and the startup breadcrumb, instead of discarding them with the child process.</summary>
-    internal static string DescribeStartupFailure(string? errorTail) => string.IsNullOrWhiteSpace(errorTail)
-        ? "The engine exited before readiness."
-        : "The engine exited before readiness. It reported: " + errorTail.Trim();
+    internal static string DescribeStartupFailure(string? errorTail) =>
+        string.IsNullOrWhiteSpace(errorTail)
+            ? "The engine exited before readiness."
+            : "The engine exited before readiness. It reported: " + errorTail.Trim();
 
     private static async Task<(DesktopEngineSession? Session, string? ErrorTail)> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
@@ -102,7 +105,10 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
 
         start.Environment[LifetimePipeVariable] = pipeName;
-        var process = new Process { StartInfo = start };
+        var process = new Process
+        {
+            StartInfo = start
+        };
         DesktopEngineSession? session = null;
         try
         {
@@ -235,6 +241,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         {
             await _lifetime.DisposeAsync();
         }
+
         if (_process is null)
         {
             _stopped = true;
@@ -311,7 +318,10 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         var start = CreateStartInfo(directory);
         start.ArgumentList.Add("--status");
         start.ArgumentList.Add("--json");
-        using var process = new Process { StartInfo = start };
+        using var process = new Process
+        {
+            StartInfo = start
+        };
         if (!process.Start())
         {
             throw new InvalidOperationException("Engine discovery failed.");

@@ -135,13 +135,23 @@ public sealed class ExploreResult
     public static ExploreResult Ok(InferenceProfileView profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return new ExploreResult { Success = true, FailureReason = null, Profile = profile };
+        return new ExploreResult
+        {
+            Success = true,
+            FailureReason = null,
+            Profile = profile
+        };
     }
 
     /// <summary>A rejected explore carrying only the sanitized <paramref name="reason" />.</summary>
     public static ExploreResult Fail(string reason)
     {
-        return new ExploreResult { Success = false, FailureReason = reason, Profile = null };
+        return new ExploreResult
+        {
+            Success = false,
+            FailureReason = reason,
+            Profile = null
+        };
     }
 
     /// <summary>
@@ -150,7 +160,13 @@ public sealed class ExploreResult
     /// </summary>
     public static ExploreResult SkippedInUse(string reason)
     {
-        return new ExploreResult { Success = false, FailureReason = reason, Profile = null, Skipped = true };
+        return new ExploreResult
+        {
+            Success = false,
+            FailureReason = reason,
+            Profile = null,
+            Skipped = true
+        };
     }
 }
 
@@ -176,7 +192,14 @@ public sealed class BenchmarkResult
     /// <summary>A failed benchmark carrying a sanitized reason and (when one was created) the snapshot id.</summary>
     public static BenchmarkResult Fail(string reason, Guid? snapshotId = null)
     {
-        return new BenchmarkResult { Success = false, FailureReason = reason, SnapshotId = snapshotId, Metrics = null, Profile = null };
+        return new BenchmarkResult
+        {
+            Success = false,
+            FailureReason = reason,
+            SnapshotId = snapshotId,
+            Metrics = null,
+            Profile = null
+        };
     }
 
     /// <summary>
@@ -185,7 +208,15 @@ public sealed class BenchmarkResult
     /// </summary>
     public static BenchmarkResult SkippedInUse(string reason, Guid? snapshotId = null)
     {
-        return new BenchmarkResult { Success = false, FailureReason = reason, SnapshotId = snapshotId, Metrics = null, Profile = null, Skipped = true };
+        return new BenchmarkResult
+        {
+            Success = false,
+            FailureReason = reason,
+            SnapshotId = snapshotId,
+            Metrics = null,
+            Profile = null,
+            Skipped = true
+        };
     }
 }
 
@@ -202,12 +233,22 @@ public sealed class ProfileActionResult
     public static ProfileActionResult Ok(InferenceProfileView profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return new ProfileActionResult { Success = true, FailureReason = null, Profile = profile };
+        return new ProfileActionResult
+        {
+            Success = true,
+            FailureReason = null,
+            Profile = profile
+        };
     }
 
     /// <summary>A rejected transition carrying only the sanitized <paramref name="reason" />.</summary>
     public static ProfileActionResult Fail(string reason)
     {
-        return new ProfileActionResult { Success = false, FailureReason = reason, Profile = null };
+        return new ProfileActionResult
+        {
+            Success = false,
+            FailureReason = reason,
+            Profile = null
+        };
     }
 }

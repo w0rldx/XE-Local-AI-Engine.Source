@@ -57,7 +57,11 @@ internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
 
         // Non-blocking enqueue: never block or throw into the chat pump. A full queue drops this job (the run simply
         // does not contribute a memory) with a content-free warning so the backlog stays bounded.
-        if (!_queue.Writer.TryWrite(new MemoryExtractionJob { Telemetry = telemetry, Run = run }))
+        if (!_queue.Writer.TryWrite(new MemoryExtractionJob
+            {
+                Telemetry = telemetry,
+                Run = run
+            }))
         {
             _logger.LogWarning("Adaptive memory extraction queue is full; dropped a job for agent {AgentId}. The chat run is unaffected.",
                 telemetry.AgentDefinitionId);

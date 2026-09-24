@@ -77,7 +77,12 @@ internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
             throw;
         }
 
-        return new WhisperSourceCommandResult { ExitCode = process.ExitCode, StandardOutput = stdout.ToString(), StandardError = stderr.ToString() };
+        return new WhisperSourceCommandResult
+        {
+            ExitCode = process.ExitCode,
+            StandardOutput = stdout.ToString(),
+            StandardError = stderr.ToString()
+        };
     }
 
     // The hardened environment's HOME and TMPDIR must sit inside the build's own work root, so the marker the build writes there is what identifies it. Falling back to the working directory keeps a

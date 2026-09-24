@@ -25,7 +25,16 @@ public sealed class BenchmarkFreezeDependencyServiceTests
         skills.ListResourcesAsync(skillId, Arg.Any<CancellationToken>()).Returns(_ =>
             new[]
             {
-                new AgentSkillResourceRecord { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), SkillId = skillId, Name = "notes.md", Description = "notes", MediaType = "text/markdown", Content = resourceContent, SizeBytes = resourceContent.Length }
+                new AgentSkillResourceRecord
+                {
+                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    SkillId = skillId,
+                    Name = "notes.md",
+                    Description = "notes",
+                    MediaType = "text/markdown",
+                    Content = resourceContent,
+                    SizeBytes = resourceContent.Length
+                }
             });
         var customTools = Substitute.For<ICustomToolStore>();
         customTools.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
@@ -62,5 +71,15 @@ public sealed class BenchmarkFreezeDependencyServiceTests
         };
 
     private static AgentSkillRecord Skill(Guid id) =>
-        new() { Id = id, Name = "skill", Description = "description", Body = "body", Enabled = true, Version = 2, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
+        new()
+        {
+            Id = id,
+            Name = "skill",
+            Description = "description",
+            Body = "body",
+            Enabled = true,
+            Version = 2,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 }

@@ -24,8 +24,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 
     private int _disposed;
 
-    public LinuxTrainingProcessHandle(
-        Process process,
+    public LinuxTrainingProcessHandle(Process process,
         TrainingLaunchReceipt receipt,
         Channel<string> output)
     {

@@ -24,8 +24,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ConversationCompactionService> _logger;
 
-    public ConversationCompactionService(
-        INodeChatPersistenceService persistence,
+    public ConversationCompactionService(INodeChatPersistenceService persistence,
         IConversationSummarizer summarizer,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
         IModelCapabilityResolver modelCapabilityResolver,
@@ -74,7 +73,10 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             _logger.LogInformation("Compaction timed out for conversation {ConversationId}; the previous synopsis is retained.", conversationId);
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.TimedOut };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.TimedOut
+            };
         }
 
         if (result.Outcome == ConversationCompactionOutcome.Compacted)
@@ -105,7 +107,10 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.ConversationNotFound };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.ConversationNotFound
+            };
         }
 
         // Variant siblings collapse to the SELECTED path FIRST, exactly as the send path does, so compaction folds
@@ -129,7 +134,10 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         var keep = Math.Max(2, recentMessagesToKeepVerbatim ?? _options.RecentMessagesToKeepVerbatim);
         if (completed.Count <= keep)
         {
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.NothingToCompact
+            };
         }
 
         // Everything before the recent-keep window is foldable; the newest kept message is the first one we DON'T fold.
@@ -137,7 +145,11 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         var priorCover = conversation.CompactionSummaryCoversToSequence;
         var toFold = completed
                      .Where(message => anchorSequence(message) <= cutoffSequence && (priorCover is null || anchorSequence(message) > priorCover.Value))
-                     .Select(static message => new ConversationSummarizerMessage { Role = message.Role, Content = message.Content })
+                     .Select(static message => new ConversationSummarizerMessage
+                     {
+                         Role = message.Role,
+                         Content = message.Content
+                     })
                      .ToList();
 
         if (toFold.Count == 0)
@@ -160,7 +172,10 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         if (string.IsNullOrWhiteSpace(model))
         {
             _logger.LogInformation("Compaction skipped for conversation {ConversationId}: no installed local chat model to summarize with.", conversationId);
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NoLocalModel };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.NoLocalModel
+            };
         }
 
         // The user explicitly selected a model but it was NOT honored — it was a cloud/unknown selection, so summarization
@@ -179,20 +194,23 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             : await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(warmProvider, model, conversationId, cancellationToken);
 
         var summary = await _summarizer
-                            .SummarizeAsync(new ConversationSummarizerInput
-                                {
-                                    PriorSummary = conversation.CompactionSummary,
-                                    Messages = toFold,
-                                    ModelName = model,
-                                    SupportsThinking = capabilities.SupportsThinking,
-                                    EffectiveContextTokens = effectiveContextTokens
-                                },
-                                cancellationToken);
+            .SummarizeAsync(new ConversationSummarizerInput
+                {
+                    PriorSummary = conversation.CompactionSummary,
+                    Messages = toFold,
+                    ModelName = model,
+                    SupportsThinking = capabilities.SupportsThinking,
+                    EffectiveContextTokens = effectiveContextTokens
+                },
+                cancellationToken);
         // A provider may finish concurrently with cancellation; never advance coverage after the deadline.
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(summary))
         {
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.SummarizerReturnedNothing };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.SummarizerReturnedNothing
+            };
         }
 
         // Guard against a runaway synopsis larger than the span it replaces. Shares the summarizer's rune-safe cut so this
@@ -200,6 +218,15 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         summary = ConversationSummarizer.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = summary, CoversToSequence = cutoffSequence, MessagesFolded = toFold.Count, UpdatedAtUtc = now, ModelUsed = model, UsedFallbackModel = usedFallbackModel };
+        return new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.Compacted,
+            Summary = summary,
+            CoversToSequence = cutoffSequence,
+            MessagesFolded = toFold.Count,
+            UpdatedAtUtc = now,
+            ModelUsed = model,
+            UsedFallbackModel = usedFallbackModel
+        };
     }
 }

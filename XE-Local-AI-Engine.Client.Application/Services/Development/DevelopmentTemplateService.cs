@@ -43,8 +43,7 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
     private readonly IDevelopmentTemplateStore _templateStore;
     private readonly TimeProvider _timeProvider;
 
-    public DevelopmentTemplateService(
-        IDevelopmentTemplateStore templateStore,
+    public DevelopmentTemplateService(IDevelopmentTemplateStore templateStore,
         IDevelopmentRepositoryBindingService repositoryBindings,
         INodeDataDirectory dataDirectory,
         IOptions<DevelopmentOptions> options,
@@ -70,7 +69,12 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             // A template lives on the host and can be moved or deleted behind the registry's back, so availability is
             // probed rather than assumed — the same treatment registered repositories get.
             var availability = await ProbeAvailabilityAsync(template.HostPath, cancellationToken);
-            references.Add(new DevelopmentTemplateReference { Id = template.Id.ToString(), Alias = template.Alias, Availability = availability });
+            references.Add(new DevelopmentTemplateReference
+            {
+                Id = template.Id.ToString(),
+                Alias = template.Alias,
+                Availability = availability
+            });
         }
 
         return references;
@@ -84,7 +88,12 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(hostPath);
         await EnsureGitTopLevelAsync(canonical, cancellationToken);
         var template = await _templateStore.AddAsync(templateAlias.Trim(), canonical, cancellationToken);
-        return new DevelopmentTemplateReference { Id = template.Id.ToString(), Alias = template.Alias, Availability = "Available" };
+        return new DevelopmentTemplateReference
+        {
+            Id = template.Id.ToString(),
+            Alias = template.Alias,
+            Availability = "Available"
+        };
     }
 
     public Task<bool> RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default) =>
@@ -117,16 +126,21 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             // repository passes, so a materialization that is not a canonical root fails here, not at the attempt.
             var repository = await _repositoryBindings.RegisterAsync(repositoryAlias, destination, cancellationToken);
             await _templateStore.RecordMaterializationAsync(new DevelopmentTemplateMaterializationSnapshot
-            {
-                SelectedFolderId = Guid.Parse(repository.Id),
-                TemplateId = template.Id,
-                TemplateAlias = template.Alias,
-                TemplatePath = templateRoot,
-                TemplateCommit = templateCommit,
-                CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-            },
+                {
+                    SelectedFolderId = Guid.Parse(repository.Id),
+                    TemplateId = template.Id,
+                    TemplateAlias = template.Alias,
+                    TemplatePath = templateRoot,
+                    TemplateCommit = templateCommit,
+                    CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+                },
                 cancellationToken);
-            return new DevelopmentTemplateMaterializationResult { Repository = repository, TemplateAlias = template.Alias, TemplateCommit = templateCommit };
+            return new DevelopmentTemplateMaterializationResult
+            {
+                Repository = repository,
+                TemplateAlias = template.Alias,
+                TemplateCommit = templateCommit
+            };
         }
         catch
         {

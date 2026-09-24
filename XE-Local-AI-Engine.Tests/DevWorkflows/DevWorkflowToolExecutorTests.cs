@@ -242,7 +242,14 @@ public sealed class DevWorkflowToolExecutorTests
             Attempt = 1
         };
         var project = Project(DevelopmentProjectId);
-        var binding = new DevelopmentRepositoryBinding { ProjectId = DevelopmentProjectId, SelectedFolderId = project.SelectedFolderId!.Value, Alias = "repo", RepositoryRoot = "/tmp/repo", RepositoryIdentityHash = project.RepositoryIdentityHash };
+        var binding = new DevelopmentRepositoryBinding
+        {
+            ProjectId = DevelopmentProjectId,
+            SelectedFolderId = project.SelectedFolderId!.Value,
+            Alias = "repo",
+            RepositoryRoot = "/tmp/repo",
+            RepositoryIdentityHash = project.RepositoryIdentityHash
+        };
         var node = DevWorkflowGraph.Parse(DevWorkflowGraphs.SingleTool).Nodes["validate"];
 
         var attemptOne = DevWorkflowToolCommands.Synthesize(project, node, run, first, binding);
@@ -276,12 +283,12 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Equal("validate, validate", string.Join(", ", harness.Tools.Ran));
 
         var refused = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                        nodeRun.Id,
-                                        Guid.NewGuid(),
-                                        DevWorkflowDecisionKind.Retry,
-                                        comment: null,
-                                        payloadJson: null,
-                                        "operator")));
+            nodeRun.Id,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.Retry,
+            comment: null,
+            payloadJson: null,
+            "operator")));
         AssertEx.Contains(refused.Message, "as many re-attempts as this run", message: "the automatic retry already spent what the operator is asking for.");
     }
 

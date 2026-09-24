@@ -186,7 +186,11 @@ public sealed class DockerDaemonEndpointResolverTests
     {
         // Every operator-facing daemon message renders through Display, and Development Mode's messages are held
         // verbatim. Redaction must therefore be invisible to an endpoint that carries nothing to redact.
-        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.Configuration };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(raw),
+            Source = DockerDaemonEndpointSource.Configuration
+        };
 
         AssertEx.Equal(endpoint.Uri.ToString(), endpoint.Display);
     }
@@ -220,7 +224,11 @@ public sealed class DockerDaemonEndpointResolverTests
         // daemon, are equally operator-supplied, and are equally somewhere a token fits — and unlike user information
         // they survive on a LOCAL socket, which no transport check refuses.
         var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
-        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(raw),
+            Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+        };
 
         AssertEx.False(endpoint.Display.Contains(Sentinel, StringComparison.Ordinal),
             $"The endpoint rendered as '{endpoint.Display}', which still carries the value.");
@@ -237,7 +245,11 @@ public sealed class DockerDaemonEndpointResolverTests
         // The word both refusals use. Naming the component is the whole point: an operator who is told only "the
         // endpoint is refused" goes looking for a syntax error, and one who is shown the value has been disclosed to.
         var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
-        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(raw),
+            Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+        };
 
         AssertEx.Equal(expected, endpoint.DisclosingComponent);
     }
@@ -250,7 +262,11 @@ public sealed class DockerDaemonEndpointResolverTests
     {
         // The negative control for the refusals: every endpoint this node resolves on its own has to pass, or the
         // check would refuse the conventional socket.
-        AssertEx.Null(new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.DefaultUnixSocket }.DisclosingComponent);
+        AssertEx.Null(new DockerDaemonEndpoint
+        {
+            Uri = new Uri(raw),
+            Source = DockerDaemonEndpointSource.DefaultUnixSocket
+        }.DisclosingComponent);
     }
 
     [Test]

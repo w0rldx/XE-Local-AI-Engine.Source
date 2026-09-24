@@ -109,7 +109,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                 .Returns(_ =>
                 {
                     CapacityDecidedOrdinal = Next();
-                    return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = _reservation };
+                    return new CapacityDecision
+                    {
+                        Verdict = CapacityVerdict.Allow,
+                        Reason = "Capacity available.",
+                        OllamaEvictionWarning = false,
+                        Reservation = _reservation
+                    };
                 });
         Dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo => _leaseRequest = AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
@@ -555,19 +561,19 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // CURRENT version, which bumps it and leaves the coordinator's terminal CAS holding a stale one.
         var row = Executions.Rows.Single(candidate => candidate.Id == target);
         _ = Executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
-        {
-            ExecutionId = target,
-            ExpectedVersion = row.Version,
-            ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                      {
+                          ExecutionId = target,
+                          ExpectedVersion = row.Version,
+                          ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                           {
                               row.Status
                           },
-            NewStatus = row.Status,
-            StartedAtUtc = null,
-            EndedAtUtc = null,
-            InvocationId = null,
-            StopRequestedAtUtc = 4_242
-        })
+                          NewStatus = row.Status,
+                          StartedAtUtc = null,
+                          EndedAtUtc = null,
+                          InvocationId = null,
+                          StopRequestedAtUtc = 4_242
+                      })
                       .GetAwaiter()
                       .GetResult();
     }
@@ -754,6 +760,9 @@ internal sealed class RecordingCompactionService : IConversationCompactionServic
         CancellationToken cancellationToken = default)
     {
         Calls.Add((conversationId, recentMessagesToKeepVerbatim));
-        return Task.FromResult(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact });
+        return Task.FromResult(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.NothingToCompact
+        });
     }
 }

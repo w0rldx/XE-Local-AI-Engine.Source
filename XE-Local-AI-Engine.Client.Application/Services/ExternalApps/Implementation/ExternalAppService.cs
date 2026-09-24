@@ -246,7 +246,7 @@ internal sealed partial class ExternalAppService
 
         await using var runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
         var containers = await runtime
-                               .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken);
+            .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken);
         if (containers.Count == 0)
         {
             return new ContainerLogSnapshot
@@ -258,12 +258,12 @@ internal sealed partial class ExternalAppService
         }
 
         var snapshot = await runtime.ReadLogsAsync(containers[0],
-                                        new ContainerLogRequest
-                                        {
-                                            TailLines = tail,
-                                            MaxBytes = ContainerLogRequest.MaximumBytes
-                                        },
-                                        cancellationToken);
+            new ContainerLogRequest
+            {
+                TailLines = tail,
+                MaxBytes = ContainerLogRequest.MaximumBytes
+            },
+            cancellationToken);
 
         // Logs cross UNMASKED by design: the text is the application's own container output rather than an
         // engine-owned value, and an application printing its own secrets is something its operator needs to see.

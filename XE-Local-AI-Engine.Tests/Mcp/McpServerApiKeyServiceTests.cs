@@ -289,7 +289,15 @@ public sealed class McpServerApiKeyServiceTests
             int scope,
             CancellationToken cancellationToken = default)
         {
-            _record = new McpServerApiKeyRecord { Prefix = prefix, KeyHash = keyHash, Scope = scope, GenerationId = Guid.NewGuid(), CreatedAtUtc = 1, LastUsedAtUtc = null };
+            _record = new McpServerApiKeyRecord
+            {
+                Prefix = prefix,
+                KeyHash = keyHash,
+                Scope = scope,
+                GenerationId = Guid.NewGuid(),
+                CreatedAtUtc = 1,
+                LastUsedAtUtc = null
+            };
             return Task.FromResult(_record);
         }
 

@@ -127,33 +127,33 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         if (bytes is null)
         {
             _ = await SetStatusAsync(documentId,
-                    revision.ContentHash,
-                    KnowledgeDocumentStatus.Failed,
-                    ContentMissingReason,
-                    cancellationToken);
+                revision.ContentHash,
+                KnowledgeDocumentStatus.Failed,
+                ContentMissingReason,
+                cancellationToken);
             return;
         }
 
         using var stream = new MemoryStream(bytes, writable: false);
         var extraction = await _extractor.ExtractStructuredAsync(stream,
-                                             revision.SourcePath ?? documentId.ToString("D"),
-                                             revision.Extension,
-                                             cancellationToken);
+            revision.SourcePath ?? documentId.ToString("D"),
+            revision.Extension,
+            cancellationToken);
         switch (extraction.Status)
         {
             case DocumentExtractionStatus.Unsupported:
                 _ = await SetStatusAsync(documentId,
-                        revision.ContentHash,
-                        KnowledgeDocumentStatus.Failed,
-                        UnsupportedReason,
-                        cancellationToken);
+                    revision.ContentHash,
+                    KnowledgeDocumentStatus.Failed,
+                    UnsupportedReason,
+                    cancellationToken);
                 return;
             case DocumentExtractionStatus.Failed:
                 _ = await SetStatusAsync(documentId,
-                        revision.ContentHash,
-                        KnowledgeDocumentStatus.Failed,
-                        ExtractionFailedReason,
-                        cancellationToken);
+                    revision.ContentHash,
+                    KnowledgeDocumentStatus.Failed,
+                    ExtractionFailedReason,
+                    cancellationToken);
                 return;
             case DocumentExtractionStatus.Extracted:
             default:
@@ -177,10 +177,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         if (chunking.Chunks.Count == 0)
         {
             _ = await SetStatusAsync(documentId,
-                    revision.ContentHash,
-                    KnowledgeDocumentStatus.Failed,
-                    EmptyDocumentReason,
-                    cancellationToken);
+                revision.ContentHash,
+                KnowledgeDocumentStatus.Failed,
+                EmptyDocumentReason,
+                cancellationToken);
             return;
         }
 
@@ -205,10 +205,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         if (embeddingResult.Vectors.Count != chunking.Chunks.Count)
         {
             _ = await SetStatusAsync(documentId,
-                    revision.ContentHash,
-                    KnowledgeDocumentStatus.Failed,
-                    UnexpectedReason,
-                    cancellationToken);
+                revision.ContentHash,
+                KnowledgeDocumentStatus.Failed,
+                UnexpectedReason,
+                cancellationToken);
             return;
         }
 
@@ -265,21 +265,27 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
 
         var vectors = await _embeddingCache.GetOrCreateManyAsync(keys,
-                                               async (missing, token) =>
-                                               {
-                                                   var texts = missing.Select(key => textByKey[key]).ToList();
-                                                   var generated = await _embedder.EmbedAsync(texts, token);
-                                                   if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
-                                                       || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
-                                                       || generated.Dimension != descriptor.Dimension)
-                                                   {
-                                                       throw new KnowledgeIngestionException("The embedding model changed while the document was being indexed. Retry the document.");
-                                                   }
+            async (missing, token) =>
+            {
+                var texts = missing.Select(key => textByKey[key]).ToList();
+                var generated = await _embedder.EmbedAsync(texts, token);
+                if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
+                    || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
+                    || generated.Dimension != descriptor.Dimension)
+                {
+                    throw new KnowledgeIngestionException("The embedding model changed while the document was being indexed. Retry the document.");
+                }
 
-                                                   return generated.Vectors;
-                                               },
-                                               cancellationToken);
-        return new KnowledgeEmbeddingResult { Vectors = vectors, ResolvedModel = descriptor.ResolvedModel, VectorIdentity = descriptor.VectorIdentity, Dimension = descriptor.Dimension };
+                return generated.Vectors;
+            },
+            cancellationToken);
+        return new KnowledgeEmbeddingResult
+        {
+            Vectors = vectors,
+            ResolvedModel = descriptor.ResolvedModel,
+            VectorIdentity = descriptor.VectorIdentity,
+            Dimension = descriptor.Dimension
+        };
     }
 
     private static List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings, int dimension)
@@ -463,10 +469,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         try
         {
             _ = await SetStatusAsync(documentId,
-                    contentHash,
-                    KnowledgeDocumentStatus.Failed,
-                    reason,
-                    CancellationToken.None);
+                contentHash,
+                KnowledgeDocumentStatus.Failed,
+                reason,
+                CancellationToken.None);
         }
         catch (DbException exception)
         {

@@ -98,7 +98,12 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         var recommended = ordered.Where(IsRecommended).ToList();
         var canRun = ordered.Where(candidate => !IsRecommended(candidate)).ToList();
 
-        return new CatalogRecommendationResult { Recommended = recommended, CanRun = canRun, CatalogSnapshot = snapshot };
+        return new CatalogRecommendationResult
+        {
+            Recommended = recommended,
+            CanRun = canRun,
+            CatalogSnapshot = snapshot
+        };
     }
 
     /// <summary>
@@ -277,7 +282,12 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
 
         var activeParamCount = entry.ActiveParamsB is { } activeB ? (long?)(activeB * 1_000_000_000d) : null;
         var expertCount = file.ExpertCount is > 0 ? file.ExpertCount : 1;
-        return new MoeFacts { ActiveParamCount = activeParamCount, ExpertCount = expertCount, ExpertUsedCount = file.ExpertUsedCount };
+        return new MoeFacts
+        {
+            ActiveParamCount = activeParamCount,
+            ExpertCount = expertCount,
+            ExpertUsedCount = file.ExpertUsedCount
+        };
     }
 
     // Explicit attention geometry from the file header for the estimator: per-head key/value lengths (preferred over the

@@ -12,8 +12,7 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
     private readonly ILocalModelAdministrationService _administrationService;
     private readonly IModelTrustResolver _modelTrustResolver;
 
-    public SelectLocalModelEndpoint(
-        ILocalModelAdministrationService administrationService,
+    public SelectLocalModelEndpoint(ILocalModelAdministrationService administrationService,
         IModelTrustResolver modelTrustResolver)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
@@ -36,7 +35,7 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
         }
 
         var result = await _administrationService
-                           .SelectDefaultAsync(req.ModelName, LocalModelSelectionPolicy.ConfiguredModel, ct);
+            .SelectDefaultAsync(req.ModelName, LocalModelSelectionPolicy.ConfiguredModel, ct);
 
         await Send.OkAsync(new SelectLocalModelResponse
         {

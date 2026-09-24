@@ -68,10 +68,10 @@ public sealed class AddIntegrationFoundationMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("integration_executions", "ix_integration_executions_trigger", unique: false, "trigger_id"));
         AssertEx.True(await probe.IndexExistsAsync("integration_executions", "ix_integration_executions_status_received", unique: false, "status", "received_at_utc"));
         AssertEx.True(await probe.IndexExistsAsync("integration_execution_events",
-                                     "ux_integration_execution_events_execution_sequence",
-                                     unique: true,
-                                     "execution_id",
-                                     "sequence"));
+            "ux_integration_execution_events_execution_sequence",
+            unique: true,
+            "execution_id",
+            "sequence"));
         AssertEx.True(await probe.ForeignKeyExistsAsync("integration_execution_events", "execution_id", "integration_executions"),
             "Declared for parity with dev_workflow_run_events, and enforced at runtime: the node connection sets Foreign Keys=True and PRAGMA foreign_keys=ON.");
     }
@@ -82,10 +82,10 @@ public sealed class AddIntegrationFoundationMigrationTests
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("integration-request-uniqueness.sqlite");
 
         AssertEx.True(await probe.IndexExistsAsync("integration_executions",
-                                     "ux_integration_executions_principal_request",
-                                     unique: true,
-                                     "principal_id",
-                                     "request_id"),
+                "ux_integration_executions_principal_request",
+                unique: true,
+                "principal_id",
+                "request_id"),
             "principal_id must lead: the same index is the access path for the accept transaction's per-principal active count.");
 
         // A test that only checked for the new index would pass with BOTH present, and a surviving global unique index

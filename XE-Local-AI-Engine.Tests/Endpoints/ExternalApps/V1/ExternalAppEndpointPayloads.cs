@@ -404,7 +404,21 @@ internal static class ExternalAppEndpointPayloads
                 [SecretVariableName] = ExternalAppVariableMask.Value,
                 [PlainVariableName] = "http://127.0.0.1:11434"
             },
-            PublishedPorts = [new ExternalAppPublishedPort { Service = "web", ContainerPort = 8080, HostPort = 18080 }, new ExternalAppPublishedPort { Service = "worker", ContainerPort = 9090, HostPort = 19090 }],
+            PublishedPorts =
+            [
+                new ExternalAppPublishedPort
+                {
+                    Service = "web",
+                    ContainerPort = 8080,
+                    HostPort = 18080
+                },
+                new ExternalAppPublishedPort
+                {
+                    Service = "worker",
+                    ContainerPort = 9090,
+                    HostPort = 19090
+                }
+            ],
             RuntimeProvider = "docker",
             RuntimeOverride = null,
             StoragePath = "/var/lib/xe/external-apps/odysseus",

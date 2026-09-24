@@ -45,7 +45,12 @@ public sealed class ComparisonReportServiceTests
                        .Returns(callInfo => Report(callInfo.Arg<TrainingComparisonInput>()));
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
-        var report = await service.CreateAsync(new CreateComparisonCommand { Name = "base vs tuned", BaseEvaluationRunId = baseEvaluation.Id, TunedEvaluationRunId = tunedEvaluation.Id });
+        var report = await service.CreateAsync(new CreateComparisonCommand
+        {
+            Name = "base vs tuned",
+            BaseEvaluationRunId = baseEvaluation.Id,
+            TunedEvaluationRunId = tunedEvaluation.Id
+        });
 
         AssertEx.Equal(baseEvaluation.Id, report.BaseEvaluationRunId);
         AssertEx.Equal(tunedEvaluation.Id, report.TunedEvaluationRunId);
@@ -230,7 +235,13 @@ public sealed class ComparisonReportServiceTests
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), benchmarks);
 
-        _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand { Name = "paired", BaseEvaluationRunId = baseEvaluation.Id, TunedEvaluationRunId = tunedEvaluation.Id, BaseBenchmarkRunId = Guid.NewGuid() }),
+        _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand
+            {
+                Name = "paired",
+                BaseEvaluationRunId = baseEvaluation.Id,
+                TunedEvaluationRunId = tunedEvaluation.Id,
+                BaseBenchmarkRunId = Guid.NewGuid()
+            }),
             "A pairing is validated to exist before it is bound.");
         _ = await evaluations.DidNotReceiveWithAnyArgs().CreateComparisonAsync(default!, default);
     }
@@ -352,7 +363,13 @@ public sealed class ComparisonReportServiceTests
             Evaluation("tuned-model", tunedMembership, CompleteVerdicts(tunedMembership)));
 
     private static IReadOnlyList<TrainingEvaluationResultEntry> CompleteVerdicts(TrainingEvaluationMembershipV1 membership) =>
-        membership.HoldoutSampleIds.Select(sampleId => new TrainingEvaluationResultEntry { SampleId = sampleId, Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }).ToArray();
+        membership.HoldoutSampleIds.Select(sampleId => new TrainingEvaluationResultEntry
+        {
+            SampleId = sampleId,
+            Kind = "tool-call",
+            Passed = true,
+            ScoredBy = "deterministic"
+        }).ToArray();
 
     /// <summary>A refused comparison must also persist nothing — a stored report is what later reads are trusted from.</summary>
     private static async Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationRecord baseEvaluation,
@@ -363,7 +380,12 @@ public sealed class ComparisonReportServiceTests
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
-        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand { Name = "mismatched", BaseEvaluationRunId = baseEvaluation.Id, TunedEvaluationRunId = tunedEvaluation.Id }),
+        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand
+            {
+                Name = "mismatched",
+                BaseEvaluationRunId = baseEvaluation.Id,
+                TunedEvaluationRunId = tunedEvaluation.Id
+            }),
             "Two sides that did not score the same hold-out set must be refused, not silently subtracted.");
         _ = await evaluations.DidNotReceiveWithAnyArgs().CreateComparisonAsync(default!, default);
         return rejection;
@@ -383,7 +405,13 @@ public sealed class ComparisonReportServiceTests
         };
 
     private static TrainingEvaluationResultEntry Verdict(int index, string kind, bool passed) =>
-        new() { SampleId = SampleId(index), Kind = kind, Passed = passed, ScoredBy = "deterministic" };
+        new()
+        {
+            SampleId = SampleId(index),
+            Kind = kind,
+            Passed = passed,
+            ScoredBy = "deterministic"
+        };
 
     private static TrainingEvaluationRecord Evaluation(string modelName,
         TrainingEvaluationMembershipV1 membership,

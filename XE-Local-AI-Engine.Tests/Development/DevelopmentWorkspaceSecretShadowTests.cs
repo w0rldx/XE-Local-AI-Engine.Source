@@ -53,9 +53,9 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsKill);
 
         var (session, _) = await PrepareAsync(sandbox,
-                ".env",
-                "certs/server.pem",
-                "deploy/.npmrc");
+            ".env",
+            "certs/server.pem",
+            "deploy/.npmrc");
 
         var shadows = sandbox.Created[0].Mounts!
                              .Where(static mount => mount.TargetIsWorkspaceRelative)
@@ -233,7 +233,14 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             TimeProvider.System,
             sink);
         var session = await provider.PrepareAsync(snapshot,
-                                        new DevelopmentRepositoryBinding { ProjectId = snapshot.ProjectId, SelectedFolderId = snapshot.SelectedFolderId!.Value, Alias = "repository", RepositoryRoot = repository, RepositoryIdentityHash = identity });
+            new DevelopmentRepositoryBinding
+            {
+                ProjectId = snapshot.ProjectId,
+                SelectedFolderId = snapshot.SelectedFolderId!.Value,
+                Alias = "repository",
+                RepositoryRoot = repository,
+                RepositoryIdentityHash = identity
+            });
         return (session, sink);
     }
 
@@ -335,7 +342,15 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = [.. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding { HostPath = mount.HostPath, SandboxPath = mount.SandboxPath, ReadOnly = mount.ReadOnly })]
+                Mounts =
+                [
+                    .. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding
+                    {
+                        HostPath = mount.HostPath,
+                        SandboxPath = mount.SandboxPath,
+                        ReadOnly = mount.ReadOnly
+                    })
+                ]
             });
         }
 

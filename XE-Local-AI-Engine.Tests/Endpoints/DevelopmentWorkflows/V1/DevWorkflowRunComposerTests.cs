@@ -50,11 +50,13 @@ public sealed class DevWorkflowRunComposerTests
         agents.ListAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<AgentDefinitionRecord>>([Agent()]);
         var composer = Composer(store, agents);
 
-        var response = await composer.ComposeAsync(Detail(
-        [
+        var response = await composer.ComposeAsync(Detail([
             NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Running) with
             {
-                AgentDefinitionId = AgentId, InputTokens = 30, OutputTokens = 12, ToolCalls = 2
+                AgentDefinitionId = AgentId,
+                InputTokens = 30,
+                OutputTokens = 12,
+                ToolCalls = 2
             },
             NodeRun(GateNodeRunId, "approval", DevWorkflowNodeType.HumanGate, DevWorkflowNodeRunStatus.Pending) with
             {
@@ -90,8 +92,7 @@ public sealed class DevWorkflowRunComposerTests
         store.ListConsumedArtifactIdsAsync(ResearchNodeRunId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         var composer = Composer(store);
 
-        var response = await composer.ComposeAsync(Detail(
-        [
+        var response = await composer.ComposeAsync(Detail([
             NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Succeeded),
             NodeRun(GateNodeRunId, "approval", DevWorkflowNodeType.HumanGate, DevWorkflowNodeRunStatus.Pending)
         ]), CancellationToken.None);
@@ -113,7 +114,8 @@ public sealed class DevWorkflowRunComposerTests
         store.GetNodeRunAsync(ResearchNodeRunId, Arg.Any<CancellationToken>())
              .Returns(NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Succeeded) with
              {
-                 WorkSessionId = SessionId, WorkSessionAvailable = true
+                 WorkSessionId = SessionId,
+                 WorkSessionAvailable = true
              });
         store.ListArtifactsAsync(RunId, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns<IReadOnlyList<DevWorkflowArtifactSnapshot>>([Artifact(ArtifactId, isStale: false)]);
@@ -142,7 +144,10 @@ public sealed class DevWorkflowRunComposerTests
     {
         var otherRunId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var store = Substitute.For<IDevWorkflowStore>();
-        store.GetRunAsync(otherRunId, Arg.Any<CancellationToken>()).Returns(Run() with { Id = otherRunId });
+        store.GetRunAsync(otherRunId, Arg.Any<CancellationToken>()).Returns(Run() with
+        {
+            Id = otherRunId
+        });
         store.GetNodeRunAsync(ResearchNodeRunId, Arg.Any<CancellationToken>())
              .Returns(NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Succeeded));
         var composer = Composer(store);
@@ -159,7 +164,13 @@ public sealed class DevWorkflowRunComposerTests
             sessions ?? Substitute.For<IWorkSessionService>());
 
     private static DevWorkflowRunDetail Detail(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns) =>
-        new() { Run = Run(), NodeRuns = nodeRuns, PendingDecisionCount = 0, BlockingGateNodeRunId = null };
+        new()
+        {
+            Run = Run(),
+            NodeRuns = nodeRuns,
+            PendingDecisionCount = 0,
+            BlockingGateNodeRunId = null
+        };
 
     private static DevWorkflowRunSnapshot Run() =>
         new()

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
+using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -584,7 +585,7 @@ public sealed class WhisperServerSupervisorTests
         AssertEx.Equal(expected: 1, warnings.Count);
         AssertEx.Contains(warnings[0].Message, "-1073740791", StringComparison.Ordinal);
         AssertEx.Contains(warnings[0].Message, "no CUDA-capable device", StringComparison.Ordinal);
-        AssertEx.Contains(warnings[0].Message, handle.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        AssertEx.Contains(warnings[0].Message, handle.ProcessId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
 

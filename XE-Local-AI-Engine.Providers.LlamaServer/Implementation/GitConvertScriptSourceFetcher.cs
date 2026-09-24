@@ -27,10 +27,26 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         var environment = BuildScrubbedGitEnvironment(destinationDirectory);
         IReadOnlyList<GitStep> steps =
         [
-            new() { Args = ["-C", destinationDirectory, "init", "--quiet"], Timeout = ShortCommandTimeout },
-            new() { Args = ["-C", destinationDirectory, "remote", "add", "origin", Repository], Timeout = ShortCommandTimeout },
-            new() { Args = ["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], Timeout = FetchTimeout },
-            new() { Args = ["-C", destinationDirectory, "checkout", "--detach", commitSha], Timeout = ShortCommandTimeout }
+            new()
+            {
+                Args = ["-C", destinationDirectory, "init", "--quiet"],
+                Timeout = ShortCommandTimeout
+            },
+            new()
+            {
+                Args = ["-C", destinationDirectory, "remote", "add", "origin", Repository],
+                Timeout = ShortCommandTimeout
+            },
+            new()
+            {
+                Args = ["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha],
+                Timeout = FetchTimeout
+            },
+            new()
+            {
+                Args = ["-C", destinationDirectory, "checkout", "--detach", commitSha],
+                Timeout = ShortCommandTimeout
+            }
         ];
 
         foreach (var step in steps)

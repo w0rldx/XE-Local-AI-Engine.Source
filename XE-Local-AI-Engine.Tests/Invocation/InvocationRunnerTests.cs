@@ -106,8 +106,7 @@ public sealed class InvocationRunnerTests
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
 
         await RunAsync(runner, package);
@@ -291,8 +290,7 @@ public sealed class InvocationRunnerTests
         // contains every earlier one and summing showed 10,722 for a context that never held more than ~3,000. The
         // turn's COST is the sum, and it rides the terminal-telemetry report onto the run-envelope row instead.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             agentUpdates: CreateUpdatesWithUsage((Text: "round one", Usage: new UsageDetails
                 {
                     InputTokenCount = 1_000,
@@ -455,8 +453,7 @@ public sealed class InvocationRunnerTests
         // oversized round does, rather than wrap negative and report a turn that consumed less than nothing. Asserted on
         // the turn totals, because they are the only place the rounds are added together at all.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             agentUpdates: CreateUpdatesWithUsage((Text: "first", Usage: new UsageDetails
                 {
                     InputTokenCount = int.MaxValue - 10,
@@ -633,7 +630,10 @@ public sealed class InvocationRunnerTests
         async IAsyncEnumerable<AgentResponseUpdate> ObserveScope()
         {
             modelDuringStream = NodeManagedLlamaRoutingScope.CurrentModel;
-            yield return new AgentResponseUpdate { Contents = [new TextContent("ok")] };
+            yield return new AgentResponseUpdate
+            {
+                Contents = [new TextContent("ok")]
+            };
             await Task.CompletedTask;
         }
     }
@@ -1110,7 +1110,11 @@ public sealed class InvocationRunnerTests
             return requestId is not null;
         }, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = requestId!,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
@@ -1146,7 +1150,11 @@ public sealed class InvocationRunnerTests
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "an approval-required ClientLocal tool must still drive the fold-and-resume segment");
@@ -1169,12 +1177,20 @@ public sealed class InvocationRunnerTests
             RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = $"unmatched-{Guid.NewGuid():N}", Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = $"unmatched-{Guid.NewGuid():N}",
+            Approved = true
+        });
 
         AssertEx.False(runTask.IsCompleted, "an unmatched approval response must not resume the held invocation");
         AssertEx.Equal(expected: 1, segment, "an unmatched approval response must not start the resume segment");
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the matching approval response must resume the invocation");
@@ -1203,8 +1219,16 @@ public sealed class InvocationRunnerTests
             RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
         await AssertEx.EventuallyAsync(() => requestId is not null, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = false });
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = requestId!,
+            Approved = false
+        });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = requestId!,
+            Approved = true
+        });
         await runTask;
 
         var response = AssertEx.NotNull(resumeMessages)
@@ -1225,7 +1249,11 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         // A SECOND turn in the SAME conversation, on the same skill at the same version: the memo answers it.
@@ -1252,12 +1280,20 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "script execution is outside the memo allow-list and must be approved every single time");
@@ -1300,7 +1336,11 @@ public sealed class InvocationRunnerTests
 
         var turn = RunAsync(runner, package.Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await turn;
 
         return published.Single().SessionScopeEligible;
@@ -1392,7 +1432,15 @@ public sealed class InvocationRunnerTests
         runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
         {
             RequestId = surfaced.RequestId,
-            Answers = [new UserQuestionAnswer { Question = "Which auth method?", Selected = ["OAuth device flow"], Other = null }]
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Which auth method?",
+                    Selected = ["OAuth device flow"],
+                    Other = null
+                }
+            ]
         });
         await runTask;
 
@@ -1455,7 +1503,19 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Q?",
+                    Selected = ["A"],
+                    Other = null
+                }
+            ]
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1479,12 +1539,36 @@ public sealed class InvocationRunnerTests
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
 
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = $"unmatched-{Guid.NewGuid():N}", Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = $"unmatched-{Guid.NewGuid():N}",
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Q?",
+                    Selected = ["A"],
+                    Other = null
+                }
+            ]
+        });
 
         AssertEx.False(runTask.IsCompleted, "a stale or unknown answer must be a no-op, never a resume");
         AssertEx.Equal(expected: 1, segment);
 
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Q?",
+                    Selected = ["A"],
+                    Other = null
+                }
+            ]
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the matching answer must resume the invocation");
@@ -1517,7 +1601,19 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the turn must still be parked after the (unextended) invocation deadline would have fired");
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Q?",
+                    Selected = ["A"],
+                    Other = null
+                }
+            ]
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1546,7 +1642,11 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an operator weighing an approval must not be pre-empted by the model's own turn budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1578,7 +1678,11 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an attached operator weighing an approval must keep the full park budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1640,7 +1744,11 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the re-attached park must get the full budget back from the moment of re-attach");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1687,9 +1795,17 @@ public sealed class InvocationRunnerTests
 
         // The transport presents approvals one at a time, so answer each as it arrives (present-each-in-turn).
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[0].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[0].RequestId,
+            Approved = true
+        });
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must resume only after BOTH approvals resolve");
@@ -1721,7 +1837,11 @@ public sealed class InvocationRunnerTests
         // The whole segment (both chunks) drains before approvals are presented, so a bypassed dedup would already have
         // enqueued two; wait for the single presentation, resolve it, and confirm no second one follows.
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[0].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[0].RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 1, approvals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
@@ -1811,7 +1931,11 @@ public sealed class InvocationRunnerTests
             return requestId is not null;
         }, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = requestId!,
+            Approved = true
+        });
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
@@ -1901,8 +2025,7 @@ public sealed class InvocationRunnerTests
         // A capacity this tiny cannot be satisfied by ANY history (even a single protected turn), so the budgeter's
         // two-pass truncation cannot bring the estimate under budget: ExceedsBudget stays true and the runner must
         // hard-stop BEFORE ever touching the agent factory (no agentUpdates are ever consumed).
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
                 DefaultContextTokens = 1,
@@ -1930,8 +2053,7 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
         });
-        var runner = CreateRunner(
-            factory,
+        var runner = CreateRunner(factory,
             eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -1943,7 +2065,11 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 1, segment, "the resume segment must never start once the round is rejected as over budget");
@@ -1964,8 +2090,7 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
         });
-        var runner = CreateRunner(
-            factory,
+        var runner = CreateRunner(factory,
             eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -1978,7 +2103,11 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the approved resume must run instead of the turn failing");
@@ -2000,8 +2129,7 @@ public sealed class InvocationRunnerTests
         // A default of 1 token cannot admit even a single protected turn, so this run can only survive if the effective
         // window replaced it.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -2023,8 +2151,7 @@ public sealed class InvocationRunnerTests
         // The down-tier direction the original Math.Min was right about: a model launched below the configured default
         // must be budgeted at the smaller REAL window, so an over-large default cannot push an over-budget send.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 1),
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -2045,8 +2172,7 @@ public sealed class InvocationRunnerTests
     {
         // The explicit per-send bound is the user's ask: a roomy launched window must not silently widen it back.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -2073,8 +2199,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(
-            CreateGenerationSpyFactory(() => generationCalls++),
+        var runner = CreateRunner(CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null));
         var package = RuntimePackageBuilder.Valid()
@@ -2107,8 +2232,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(
-            CreateGenerationSpyFactory(() => generationCalls++),
+        var runner = CreateRunner(CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 4096));
         var package = RuntimePackageBuilder.Valid()
@@ -2136,8 +2260,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(
-            CreateGenerationSpyFactory(() => generationCalls++),
+        var runner = CreateRunner(CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
         var package = RuntimePackageBuilder.Valid()
@@ -2171,8 +2294,7 @@ public sealed class InvocationRunnerTests
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
         var warmFailure = new HttpRequestException("provider leaked /private/model/path", inner: null, HttpStatusCode.InternalServerError);
-        var runner = CreateRunner(
-            CreateGenerationSpyFactory(() => generationCalls++),
+        var runner = CreateRunner(CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null, warmFailure));
         var package = RuntimePackageBuilder.Valid()
@@ -2198,8 +2320,7 @@ public sealed class InvocationRunnerTests
         const string hostileReason = "../../private/model.gguf\r\nsecret-token";
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
-        var runner = CreateRunner(
-            CreateGenerationSpyFactory(() => generationCalls++),
+        var runner = CreateRunner(CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
         var package = RuntimePackageBuilder.Valid().Build();
@@ -2235,7 +2356,10 @@ public sealed class InvocationRunnerTests
 
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(effectiveContextTokens is { } effective
-                    ? new LocalModelRuntimeInfo { EffectiveContextTokens = effective }
+                    ? new LocalModelRuntimeInfo
+                    {
+                        EffectiveContextTokens = effective
+                    }
                     : null));
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
@@ -2257,7 +2381,10 @@ public sealed class InvocationRunnerTests
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo => Task.FromResult(windowsByModel.TryGetValue(callInfo.Arg<string>(), out var window)
-                    ? new LocalModelRuntimeInfo { EffectiveContextTokens = window }
+                    ? new LocalModelRuntimeInfo
+                    {
+                        EffectiveContextTokens = window
+                    }
                     : null));
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
@@ -2286,8 +2413,7 @@ public sealed class InvocationRunnerTests
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(true);
 
-        var runner = CreateRunner(
-            providerResolver: resolver,
+        var runner = CreateRunner(providerResolver: resolver,
             activeCloudFactory: cloudFactory,
             agentUpdates: CreateUpdates("ok"));
         var package = RuntimePackageBuilder.Valid().Build();
@@ -2341,8 +2467,7 @@ public sealed class InvocationRunnerTests
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+        var runner = CreateRunner(invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("The dispatcher must never be resolved on a non-auto turn."));
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
@@ -2371,8 +2496,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal, "qwen3.5:0.8b", "medium", ReasoningDispatchReasons.Balanced));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+        var runner = CreateRunner(invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: _ => stub);
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
@@ -2390,8 +2514,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+        var runner = CreateRunner(invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: _ => stub);
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
@@ -2452,8 +2575,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -2474,8 +2596,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -2517,8 +2638,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -2576,8 +2696,7 @@ public sealed class InvocationRunnerTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerResolver: resolver,
             providerStreamResilience: NoRetryResilience(),
@@ -2601,8 +2720,7 @@ public sealed class InvocationRunnerTests
         // mid-stream failure does.
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
 
@@ -2634,8 +2752,7 @@ public sealed class InvocationRunnerTests
                       return factory.CreateAsync(callInfo.Arg<InvocationAgentDefinition>(), callInfo.Arg<CancellationToken>());
                   });
 
-        var runner = CreateRunner(
-            invocationAgentFactory: spyFactory,
+        var runner = CreateRunner(invocationAgentFactory: spyFactory,
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
 
@@ -2660,8 +2777,7 @@ public sealed class InvocationRunnerTests
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b",
+        var runner = CreateRunner(invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b",
                 registry,
                 recorder,
                 observed,
@@ -2686,8 +2802,7 @@ public sealed class InvocationRunnerTests
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, observed),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub,
             externalProviderRegistry: registry);
@@ -2731,8 +2846,7 @@ public sealed class InvocationRunnerTests
             ExternalProviderTestData.ModelId,
             "medium",
             ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, [], pinsAtSend: pinsAtSend),
+        var runner = CreateRunner(invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, [], pinsAtSend: pinsAtSend),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub,
             externalProviderRegistry: registry);
@@ -2779,8 +2893,7 @@ public sealed class InvocationRunnerTests
         // The behaviour change this plan exists for: the decision now comes from the node setting, read per turn.
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
         coreSet.GetCoreToolNames().Returns(new HashSet<string>(StringComparer.Ordinal));
-        var runner = CreateRunner(
-            toolRelevanceRead: static _ => Task.FromResult(true),
+        var runner = CreateRunner(toolRelevanceRead: static _ => Task.FromResult(true),
             toolRelevanceCoreSet: coreSet);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
@@ -2794,8 +2907,7 @@ public sealed class InvocationRunnerTests
         // Guards the operand ORDER of `enabled && !package.DisableToolRelevanceFilter` against a later edit: the
         // per-agent opt-out must still win over the global switch.
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
-        var runner = CreateRunner(
-            toolRelevanceRead: static _ => Task.FromResult(true),
+        var runner = CreateRunner(toolRelevanceRead: static _ => Task.FromResult(true),
             toolRelevanceCoreSet: coreSet);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with
@@ -2841,8 +2953,7 @@ public sealed class InvocationRunnerTests
                   .Do(_ => reportedChunks++);
         dispatcher.When(static call => call.ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered)))
                   .Do(_ => chunksReportedWhenTheNoticeFired = reportedChunks);
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             agentUpdates: ToolsFilteredUpdates(hidden: 5, total: 12, "Hello"),
             toolRelevanceRead: static _ => Task.FromResult(true));
         var package = RuntimePackageBuilder.Valid().Build();
@@ -2868,8 +2979,7 @@ public sealed class InvocationRunnerTests
             RuntimePackageBuilder.Valid().Build());
 
         var nothingHiddenDispatcher = Substitute.For<IWorkerEventDispatcher>();
-        await RunAsync(CreateRunner(
-                eventDispatcher: nothingHiddenDispatcher,
+        await RunAsync(CreateRunner(eventDispatcher: nothingHiddenDispatcher,
                 agentUpdates: ToolsFilteredUpdates(hidden: 0, total: 12, "Hello"),
                 toolRelevanceRead: static _ => Task.FromResult(true)),
             RuntimePackageBuilder.Valid().Build());
@@ -2898,15 +3008,18 @@ public sealed class InvocationRunnerTests
                 ? ToolsFilteredApprovalRequestUpdates(hidden: 5, total: 12)
                 : ToolsFilteredUpdates(hidden: 3, total: 9, "done");
         });
-        var runner = CreateRunner(
-            factory,
+        var runner = CreateRunner(factory,
             eventDispatcher: dispatcher,
             toolRelevanceRead: static _ => Task.FromResult(true));
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "The resume segment must actually run, or this proves nothing.");
@@ -3524,7 +3637,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Selected model is not installed on this node."), FailureCategory.ModelUnavailable);
+        await dispatcher.Received(1)
+                        .ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Selected model is not installed on this node."), FailureCategory.ModelUnavailable);
     }
 
     [Test]
@@ -3609,7 +3723,9 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."), FailureCategory.ModelCapabilityUnsupported);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."),
+            FailureCategory.ModelCapabilityUnsupported);
     }
 
     [Test]
@@ -3626,7 +3742,9 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."), FailureCategory.ModelCapabilityUnsupported);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."),
+            FailureCategory.ModelCapabilityUnsupported);
     }
 
     [Test]
@@ -3689,7 +3807,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => !message.Contains("ChatClientAgentException", StringComparison.Ordinal)), FailureCategory.AgentRuntime);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => !message.Contains("ChatClientAgentException", StringComparison.Ordinal)),
+            FailureCategory.AgentRuntime);
     }
 
     [Test]
@@ -3738,7 +3857,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be loaded or run on the provider."), FailureCategory.ModelLoadFailed);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be loaded or run on the provider."),
+            FailureCategory.ModelLoadFailed);
     }
 
     [Test]
@@ -3774,7 +3894,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, package);
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Response size exceeded", StringComparison.Ordinal)), Arg.Any<FailureCategory>());
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Response size exceeded", StringComparison.Ordinal)),
+            Arg.Any<FailureCategory>());
     }
 
     [Test]
@@ -3791,7 +3912,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, package);
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Reasoning size exceeded", StringComparison.Ordinal)), Arg.Any<FailureCategory>());
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Reasoning size exceeded", StringComparison.Ordinal)),
+            Arg.Any<FailureCategory>());
     }
 
     [Test]
@@ -3850,7 +3972,8 @@ public sealed class InvocationRunnerTests
         runner.CancelDetached(package.InvocationId);
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Stopped: no client was attached to this run and the disconnect grace period expired."), FailureCategory.Cancelled);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            Arg.Is<string>(message => message == "Stopped: no client was attached to this run and the disconnect grace period expired."), FailureCategory.Cancelled);
     }
 
     [Test]
@@ -3863,8 +3986,7 @@ public sealed class InvocationRunnerTests
         var hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var package = RuntimePackageBuilder.Valid().Build();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(
-            eventDispatcher: dispatcher,
+        var runner = CreateRunner(eventDispatcher: dispatcher,
             toolRelevanceRead: async cancellationToken =>
             {
                 gateReached.TrySetResult();
@@ -3954,7 +4076,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == ProviderContextWindowExceededException.RoundExceedsWindowMessage), FailureCategory.ContextWindowExceeded);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == ProviderContextWindowExceededException.RoundExceedsWindowMessage),
+            FailureCategory.ContextWindowExceeded);
     }
 
     [Test]
@@ -4021,12 +4144,20 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "one approval must cover ONE resource, not every resource the skill carries");
@@ -4041,7 +4172,11 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         // A SECOND turn in the SAME conversation, same Fixed custom tool at the same version: the memo answers it.
@@ -4059,14 +4194,22 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         // A Parameterized custom tool is once-or-deny only: a session approval must NOT be remembered, so the next turn
         // re-prompts even though the operator clicked "approve for session".
         var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
@@ -4081,12 +4224,20 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = false }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = false
+        }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = false });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = false
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a DENY must never be remembered, whatever scope the operator sent");
@@ -4101,13 +4252,21 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 1, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         // The operator edited the custom tool mid-conversation: same name, new version. The memo is bound to the version.
         var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 2, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "an edit that bumps the custom tool version must invalidate the memo and re-prompt");
@@ -4126,12 +4285,20 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "the operator's always-prompt switch must turn session scope off entirely");
@@ -4146,12 +4313,20 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "third-party skill names are attacker-chosen; a durable approval on one must not be available");
@@ -4166,13 +4341,21 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         await firstTurn;
 
         // The operator edited the skill (or an import Replaced it) mid-conversation: same name, new content, new version.
         var secondTurn = RunAsync(runner, SkillPackage(conversationId, version: 2).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals[1].RequestId,
+            Approved = true
+        });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a content change must invalidate the memo — the approval is bound to the version the operator saw");
@@ -4181,14 +4364,12 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
     {
-        var runner = CreateRunner(
-            agentUpdates: CreateUpdates("ok"),
+        var runner = CreateRunner(agentUpdates: CreateUpdates("ok"),
             reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
 
         // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
         await RunAsync(runner, package);
-
     }
 
     // The approval card's opaque request id used to ride the hub send (MockHubMessageSender.SentApprovals); the
@@ -4398,8 +4579,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+        var runner = CreateRunner(invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -4419,8 +4599,7 @@ public sealed class InvocationRunnerTests
         // authorised model would have kept — and would thread 4096 as the num_ctx of a process launched at 32768.
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["qwen3-1.7b"] = 4096,
@@ -4444,8 +4623,7 @@ public sealed class InvocationRunnerTests
         // real dispatcher; the guard makes that dependency explicit rather than load-bearing by coincidence.
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(
-            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+        var runner = CreateRunner(invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
 
@@ -4506,7 +4684,17 @@ public sealed class InvocationRunnerTests
         string reasonCode,
         IDisposable? reservation = null)
     {
-        return new ReasoningDispatchDecision { Tier = tier, Model = model, Effort = effort, MaxOutputTokens = null, SupportsThinking = true, ReasoningBudgetEnforceable = true, ReasonCode = reasonCode, CapacityReservation = reservation };
+        return new ReasoningDispatchDecision
+        {
+            Tier = tier,
+            Model = model,
+            Effort = effort,
+            MaxOutputTokens = null,
+            SupportsThinking = true,
+            ReasoningBudgetEnforceable = true,
+            ReasonCode = reasonCode,
+            CapacityReservation = reservation
+        };
     }
 
     /// <summary>

@@ -101,17 +101,17 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
         var files = await rows.ListAsync(conversationId, cancellationToken);
         return files.Select(static row => new ConversationUploadedFileInfo
-                     {
-                         FileId = row.FileId,
-                         ConversationId = row.ConversationId,
-                         OriginalFileName = row.OriginalFileName,
-                         MimeType = row.MimeType,
-                         Extension = row.Extension,
-                         SizeBytes = row.SizeBytes,
-                         ExtractionStatus = ParseStatus(row.ExtractionStatus),
-                         ExtractedChars = row.ExtractedChars,
-                         CreatedAtUtc = row.CreatedAtUtc
-                     })
+                    {
+                        FileId = row.FileId,
+                        ConversationId = row.ConversationId,
+                        OriginalFileName = row.OriginalFileName,
+                        MimeType = row.MimeType,
+                        Extension = row.Extension,
+                        SizeBytes = row.SizeBytes,
+                        ExtractionStatus = ParseStatus(row.ExtractionStatus),
+                        ExtractedChars = row.ExtractedChars,
+                        CreatedAtUtc = row.CreatedAtUtc
+                    })
                     .ToArray();
     }
 

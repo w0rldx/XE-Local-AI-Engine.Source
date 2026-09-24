@@ -133,7 +133,13 @@ public sealed class IntegrationExecutionCoordinatorTests
     {
         using var harness = new Harness();
         harness.Capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-               .Returns(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "No capacity.", OllamaEvictionWarning = false, Reservation = null });
+               .Returns(new CapacityDecision
+               {
+                   Verdict = CapacityVerdict.RejectInsufficient,
+                   Reason = "No capacity.",
+                   OllamaEvictionWarning = false,
+                   Reservation = null
+               });
         var executionId = harness.SeedAccepted();
 
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);

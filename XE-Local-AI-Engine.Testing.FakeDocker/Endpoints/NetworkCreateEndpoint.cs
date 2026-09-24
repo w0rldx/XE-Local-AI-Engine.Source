@@ -23,7 +23,7 @@ internal static class NetworkCreateEndpoint
         if (state.Networks.ContainsKey(name))
         {
             await FakeDockerEndpointMapper
-                  .WriteErrorAsync(context, StatusCodes.Status409Conflict, $"network with name {name} already exists");
+                .WriteErrorAsync(context, StatusCodes.Status409Conflict, $"network with name {name} already exists");
             return;
         }
 
@@ -46,11 +46,11 @@ internal static class NetworkCreateEndpoint
         state.Networks[name] = network;
 
         await FakeDockerEndpointMapper.WriteJsonAsync(context,
-                                          new JsonObject
-                                          {
-                                              ["Id"] = network.Id,
-                                              ["Warning"] = string.Empty
-                                          },
-                                          StatusCodes.Status201Created);
+            new JsonObject
+            {
+                ["Id"] = network.Id,
+                ["Warning"] = string.Empty
+            },
+            StatusCodes.Status201Created);
     }
 }

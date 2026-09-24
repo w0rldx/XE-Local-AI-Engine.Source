@@ -132,7 +132,7 @@ internal sealed class DefaultPlaybookEvalJudge : IPlaybookEvalJudge
         };
 
         var response = await nodeLocalClient
-                             .GetResponseAsync<JudgeVerdict>(messages, chatOptions, cancellationToken: cancellationToken);
+            .GetResponseAsync<JudgeVerdict>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var verdict) || verdict is null)
         {

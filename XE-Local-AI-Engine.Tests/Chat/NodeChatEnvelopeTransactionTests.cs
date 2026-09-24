@@ -39,7 +39,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("envelope-insert-rollback.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Rollback", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Rollback",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -49,14 +54,18 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await InstallEnvelopeSabotageTriggerAsync(provider);
 
         await AssertEx.ThrowsAsync<SqliteException>(async () =>
-                          _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-                          {
-                              Correlation = correlation,
-                              Status = NodeChatMessageStatusValues.Completed,
-                              UpdatedAtUtc = 3,
-                              Content = "answer",
-                              Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
-                          }));
+            _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+            {
+                Correlation = correlation,
+                Status = NodeChatMessageStatusValues.Completed,
+                UpdatedAtUtc = 3,
+                Content = "answer",
+                Envelope = new AgentRunEnvelopeMetadata
+                {
+                    InvocationId = Guid.NewGuid(),
+                    DurationMs = 5L
+                }
+            }));
 
         // The whole transaction rolled back: the row is still non-terminal (streaming) and no envelope was written.
         AssertEx.Equal(NodeChatMessageStatusValues.Streaming, await ReadStatusAsync(provider, correlation));
@@ -70,21 +79,35 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // runs. Terminalize finds no row and throws — it can never resurrect an orphaned envelope for a purged conversation.
         await using var provider = await BuildProviderAsync("purge-then-terminalize.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "PurgeWins", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "PurgeWins",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
-        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation.ConversationId, DeletedAtUtc = 3, PurgeImmediately = true });
+        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = conversation.ConversationId,
+            DeletedAtUtc = 3,
+            PurgeImmediately = true
+        });
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
-                          _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-                          {
-                              Correlation = correlation,
-                              Status = NodeChatMessageStatusValues.Completed,
-                              UpdatedAtUtc = 4,
-                              Content = "answer",
-                              Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
-                          }));
+            _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+            {
+                Correlation = correlation,
+                Status = NodeChatMessageStatusValues.Completed,
+                UpdatedAtUtc = 4,
+                Content = "answer",
+                Envelope = new AgentRunEnvelopeMetadata
+                {
+                    InvocationId = Guid.NewGuid(),
+                    DurationMs = 5L
+                }
+            }));
 
         AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId));
         AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId));
@@ -98,7 +121,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // purge deletes the conversation footprint — including the envelope — so nothing carrying plaintext ids survives.
         await using var provider = await BuildProviderAsync("terminalize-then-purge.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "TerminalizeWins", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "TerminalizeWins",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -108,11 +136,20 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 3,
             Content = "answer",
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L
+            }
         });
         AssertEx.Equal(expected: 1, await CountEnvelopesAsync(provider));
 
-        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation.ConversationId, DeletedAtUtc = 4, PurgeImmediately = true });
+        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = conversation.ConversationId,
+            DeletedAtUtc = 4,
+            PurgeImmediately = true
+        });
 
         AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId));
         AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId));
@@ -195,7 +232,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // default. The pump resolves this label; here it rides in directly so the write path is proven end to end.
         await using var provider = await BuildProviderAsync("envelope-provider-roundtrip.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Provider", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Provider",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -205,7 +247,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 3,
             Content = "answer",
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L, Provider = AgentUsageProviders.Codex }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                Provider = AgentUsageProviders.Codex
+            }
         });
 
         AssertEx.Equal(AgentUsageProviders.Codex, await ReadEnvelopeProviderAsync(provider, correlation));
@@ -218,7 +265,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // must land on the row (proving the column default + the metadata default agree).
         await using var provider = await BuildProviderAsync("envelope-provider-default.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Default", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Default",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -228,7 +280,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             Status = NodeChatMessageStatusValues.Interrupted,
             UpdatedAtUtc = 3,
             Content = "partial",
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 0L }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 0L
+            }
         });
 
         AssertEx.Equal(AgentUsageProviders.Unknown, await ReadEnvelopeProviderAsync(provider, correlation));
@@ -242,7 +298,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // literal 4, so a later slice's own bump does not break this test.
         await using var provider = await BuildProviderAsync("envelope-schema-version.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Version", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Version",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -252,7 +313,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 3,
             Content = "answer",
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L
+            }
         });
 
         var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
@@ -267,7 +332,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // one test that fails if any link in column -> record -> DTO narrows back to an int.
         await using var provider = await BuildProviderAsync("envelope-tool-schema-tokens.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Tokens", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Tokens",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         const long wideEstimate = (long)int.MaxValue + 1;
@@ -279,12 +349,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             UpdatedAtUtc = 3,
             Content = "answer",
             Envelope = new AgentRunEnvelopeMetadata
-                             {
-                                 InvocationId = Guid.NewGuid(),
-                                 DurationMs = 5L,
-                                 ToolSchemaTokens = wideEstimate,
-                                 MaxToolSchemaTokens = 4_096
-                             }
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                ToolSchemaTokens = wideEstimate,
+                MaxToolSchemaTokens = 4_096
+            }
         });
 
         var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
@@ -297,7 +367,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("envelope-tool-schema-null.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Null", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Null",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -307,7 +382,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             Status = NodeChatMessageStatusValues.Interrupted,
             UpdatedAtUtc = 3,
             Content = "partial",
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 0L }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 0L
+            }
         });
 
         var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
@@ -323,7 +402,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // different, and this is the write that has to prefer the turn totals.
         await using var provider = await BuildProviderAsync("envelope-turn-totals.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Turn", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Turn",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -338,14 +422,14 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             TotalCount = 3_038,
             ReasoningCount = 8,
             Envelope = new AgentRunEnvelopeMetadata
-                             {
-                                 InvocationId = Guid.NewGuid(),
-                                 DurationMs = 5L,
-                                 TurnInputTokens = 6_000,
-                                 TurnOutputTokens = 60,
-                                 TurnTotalTokens = 6_078,
-                                 TurnReasoningTokens = 18
-                             }
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                TurnInputTokens = 6_000,
+                TurnOutputTokens = 60,
+                TurnTotalTokens = 6_078,
+                TurnReasoningTokens = 18
+            }
         });
 
         var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
@@ -362,7 +446,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // exact values they have always carried rather than silently becoming null.
         await using var provider = await BuildProviderAsync("envelope-turn-totals-fallback.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Fallback", UserId = "node", CreatedAtUtc = 1 });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Fallback",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
         var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -376,7 +465,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             OutputCount = 30,
             TotalCount = 3_038,
             ReasoningCount = 8,
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L
+            }
         });
 
         var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
@@ -486,8 +579,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
     private static async Task<NodeChatMessageCorrelation> CreatePlaceholderAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
-        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = correlation.MessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 1
+        });
         return correlation;
     }
 
@@ -495,7 +599,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     // enveloped terminalize race from.
     private static async Task<NodeChatMessageCorrelation> SeedStreamingConversationAsync(NodeChatPersistenceService service, int iteration)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Race", UserId = "node", CreatedAtUtc = iteration });
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Race",
+            UserId = "node",
+            CreatedAtUtc = iteration
+        });
         var correlation = await CreatePlaceholderAsync(service, conversation.ConversationId);
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         return correlation;
@@ -513,7 +622,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                 Status = NodeChatMessageStatusValues.Completed,
                 UpdatedAtUtc = 10,
                 Content = "answer",
-                Envelope = new AgentRunEnvelopeMetadata { InvocationId = Guid.NewGuid(), DurationMs = 5L }
+                Envelope = new AgentRunEnvelopeMetadata
+                {
+                    InvocationId = Guid.NewGuid(),
+                    DurationMs = 5L
+                }
             });
             return true;
         }
@@ -526,7 +639,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
     private static Task PurgeAsync(NodeChatPersistenceService service, Guid conversationId)
     {
-        return service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversationId, DeletedAtUtc = 20, PurgeImmediately = true });
+        return service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = conversationId,
+            DeletedAtUtc = 20,
+            PurgeImmediately = true
+        });
     }
 
     // Forces one lock-arbitration ordering deterministically: the intended winner is awaited to completion before the

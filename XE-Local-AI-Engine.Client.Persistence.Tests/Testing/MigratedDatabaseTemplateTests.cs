@@ -105,8 +105,8 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
         var undeclared = Guid.NewGuid().ToString("N");
 
         var failure = await AssertEx
-                            .ThrowsAsync<InvalidOperationException>(async () =>
-                                await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared));
+            .ThrowsAsync<InvalidOperationException>(async () =>
+                await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared));
 
         AssertEx.True(failure.Message.Contains(undeclared, StringComparison.Ordinal),
             "The message must name the rejected id, or the caller cannot tell which call site is wrong.");

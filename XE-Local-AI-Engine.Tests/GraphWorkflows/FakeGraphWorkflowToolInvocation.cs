@@ -125,7 +125,12 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        _calls.Enqueue(new GraphWorkflowToolCall { ToolName = toolName, ArgumentsJson = argumentsJson, Context = context });
+        _calls.Enqueue(new GraphWorkflowToolCall
+        {
+            ToolName = toolName,
+            ArgumentsJson = argumentsJson,
+            Context = context
+        });
         var script = _scripts.TryGetValue(toolName, out var scripted) ? scripted : new GraphWorkflowScriptedTool();
         _ = Started(toolName).TrySetResult();
 
@@ -142,7 +147,12 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
         // failing, which is what it was written to catch.
         if (script.Blocks && Volatile.Read(ref _open) == 0 && !_unblocked.Wait(BlockCeiling, cancellationToken))
         {
-            return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Faulted, Result = null, Reason = BlockCeilingReached };
+            return new ToolInvocationOutcome
+            {
+                Kind = ToolInvocationOutcomeKind.Faulted,
+                Result = null,
+                Reason = BlockCeilingReached
+            };
         }
 
         if (script.Parks && Volatile.Read(ref _open) == 0)
@@ -158,19 +168,34 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
             {
                 // Answered and RETURNED, never thrown: the real service maps its own cancellation to an outcome, which
                 // is what lets the lane's poll settle a landed call without ever having to rethrow.
-                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Cancelled, Result = null, Reason = $"The invocation of '{toolName}' was cancelled." };
+                return new ToolInvocationOutcome
+                {
+                    Kind = ToolInvocationOutcomeKind.Cancelled,
+                    Result = null,
+                    Reason = $"The invocation of '{toolName}' was cancelled."
+                };
             }
         }
 
         // A refused call carries no result, exactly as the real service leaves one.
-        return new ToolInvocationOutcome { Kind = script.Kind, Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : null, Reason = script.Reason };
+        return new ToolInvocationOutcome
+        {
+            Kind = script.Kind,
+            Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : null,
+            Reason = script.Reason
+        };
     }
 
     /// <summary>The scripted names, which is all a picker on this host could offer.</summary>
     public Task<IReadOnlyList<InvocableToolDescriptor>> ListInvocableToolsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<InvocableToolDescriptor>>([
             .. _scripts.Keys.Order(StringComparer.Ordinal)
-                       .Select(static name => new InvocableToolDescriptor { Name = name, Description = $"The fake {name}.", ParameterSchema = """{"type":"object","properties":{}}""" })
+                       .Select(static name => new InvocableToolDescriptor
+                       {
+                           Name = name,
+                           Description = $"The fake {name}.",
+                           ParameterSchema = """{"type":"object","properties":{}}"""
+                       })
         ]);
 
     private TaskCompletionSource Started(string toolName) =>

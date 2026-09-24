@@ -106,7 +106,11 @@ internal static class DevWorkflowStateMachine
     ///     second spelling of this shape would make those two disagree in exactly the case that matters.
     /// </remarks>
     public static string GateOutputJson(DevWorkflowDecisionKind decision) =>
-        JsonSerializer.Serialize(new GateOutput { Status = DevWorkflowNodeOutputStatuses.Succeeded, Decision = decision.ToString() }, JsonOptions);
+        JsonSerializer.Serialize(new GateOutput
+        {
+            Status = DevWorkflowNodeOutputStatuses.Succeeded,
+            Decision = decision.ToString()
+        }, JsonOptions);
 
     /// <summary>Every answer a human gate SUCCEEDS on — the three that part company in the graph, not on the row.</summary>
     /// <remarks>

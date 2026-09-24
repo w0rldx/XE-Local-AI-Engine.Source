@@ -15,8 +15,7 @@ internal sealed class SchedulerDispatchJob : IJob
     private readonly ISchedulerDispatchExecutor _dispatchExecutor;
     private readonly ILogger<SchedulerDispatchJob> _logger;
 
-    public SchedulerDispatchJob(
-        ISchedulerDispatchExecutor dispatchExecutor,
+    public SchedulerDispatchJob(ISchedulerDispatchExecutor dispatchExecutor,
         ILogger<SchedulerDispatchJob> logger)
     {
         ArgumentNullException.ThrowIfNull(dispatchExecutor);

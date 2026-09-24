@@ -52,7 +52,11 @@ public sealed class InferenceBenchmarkHelperTests
     [Test]
     public void ResourceEvidence_DetectsOnlyMaterialGrowthBeyondLoadedBaseline()
     {
-        var collector = new ResourceEvidenceCollector(preSpawnVram: new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 900, ProcessBudgetBytes = 1000 },
+        var collector = new ResourceEvidenceCollector(preSpawnVram: new LlamaServerProfilingVramSnapshot
+            {
+                GlobalFreeBytes = 900,
+                ProcessBudgetBytes = 1000
+            },
             preSpawnAmbientBaselineBytes: 100,
             preSpawnPressureAbsoluteThresholdBytes: 50,
             preSpawnPressureRatioThreshold: 0.05,
@@ -60,8 +64,16 @@ public sealed class InferenceBenchmarkHelperTests
             incrementalAbsoluteThresholdBytes: 100,
             incrementalRatioThreshold: 0.05);
 
-        collector.Add(new ResourceObservation { Vram = VramObservation.Create(700, 1000), WorkingSetBytes = 10 });
-        collector.Add(new ResourceObservation { Vram = VramObservation.Create(550, 1000), WorkingSetBytes = 20 });
+        collector.Add(new ResourceObservation
+        {
+            Vram = VramObservation.Create(700, 1000),
+            WorkingSetBytes = 10
+        });
+        collector.Add(new ResourceObservation
+        {
+            Vram = VramObservation.Create(550, 1000),
+            WorkingSetBytes = 20
+        });
 
         AssertEx.False(AssertEx.NotNull(collector.PreSpawnVram).ExternalPressureDetected);
         AssertEx.True(collector.ExternalPressureDetected);

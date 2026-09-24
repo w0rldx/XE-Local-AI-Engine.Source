@@ -41,13 +41,13 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         CancellationToken cancellationToken)
     {
         return await SearchCoreAsync(queryVector,
-                embeddingModel,
-                vectorIdentity,
-                vectorDimension,
-                limit,
-                documentId,
-                collectionId: null,
-                cancellationToken);
+            embeddingModel,
+            vectorIdentity,
+            vectorDimension,
+            limit,
+            documentId,
+            collectionId: null,
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
@@ -65,13 +65,13 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         }
 
         return await SearchCoreAsync(queryVector,
-                embeddingModel,
-                vectorIdentity,
-                vectorDimension,
-                limit,
-                documentId,
-                normalizedCollectionId,
-                cancellationToken);
+            embeddingModel,
+            vectorIdentity,
+            vectorDimension,
+            limit,
+            documentId,
+            normalizedCollectionId,
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<VectorSearchHit>> SearchCoreAsync(ReadOnlyMemory<float> queryVector,
@@ -117,14 +117,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         try
         {
             return await ScanAsync(scoringQuery,
-                    useDot,
-                    embeddingModel,
-                    vectorIdentity,
-                    vectorDimension,
-                    limit,
-                    documentId,
-                    collectionId,
-                    cancellationToken);
+                useDot,
+                embeddingModel,
+                vectorIdentity,
+                vectorDimension,
+                limit,
+                documentId,
+                collectionId,
+                cancellationToken);
         }
         finally
         {
@@ -341,7 +341,12 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             var results = new VectorSearchHit[_count];
             for (var i = 0; i < _count; i++)
             {
-                results[i] = new VectorSearchHit { ChunkId = kept[i].ChunkId, DocumentId = kept[i].DocumentId, Score = kept[i].Score };
+                results[i] = new VectorSearchHit
+                {
+                    ChunkId = kept[i].ChunkId,
+                    DocumentId = kept[i].DocumentId,
+                    Score = kept[i].Score
+                };
             }
 
             return results;

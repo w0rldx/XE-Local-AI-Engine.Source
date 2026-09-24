@@ -156,8 +156,7 @@ internal sealed class FakeWhisperBinaryManager : IWhisperCppBinaryManager
     private readonly bool _isPinnedFallback;
     private readonly string _version;
 
-    public FakeWhisperBinaryManager(
-        WhisperBackend resolvedBackend = WhisperBackend.Cpu,
+    public FakeWhisperBinaryManager(WhisperBackend resolvedBackend = WhisperBackend.Cpu,
         bool isPinnedFallback = true,
         string version = "b5130")
     {
@@ -167,7 +166,13 @@ internal sealed class FakeWhisperBinaryManager : IWhisperCppBinaryManager
     }
 
     public Task<WhisperBinary> EnsureBinaryAsync(WhisperBackend backend, CancellationToken ct) =>
-        Task.FromResult(new WhisperBinary { ServerExecutablePath = "/fake/bin/whisper-server", Version = _version, Backend = _resolvedBackend, IsPinnedFallback = _isPinnedFallback });
+        Task.FromResult(new WhisperBinary
+        {
+            ServerExecutablePath = "/fake/bin/whisper-server",
+            Version = _version,
+            Backend = _resolvedBackend,
+            IsPinnedFallback = _isPinnedFallback
+        });
 }
 
 /// <summary>

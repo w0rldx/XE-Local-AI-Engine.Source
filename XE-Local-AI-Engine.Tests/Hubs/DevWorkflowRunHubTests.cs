@@ -173,7 +173,13 @@ public sealed class DevWorkflowRunHubTests
             Version = 6
         };
         runs.GetAsync(RunId, Arg.Any<CancellationToken>())
-            .Returns(new DevWorkflowRunDetail { Run = run, NodeRuns = [NodeRun(GateNodeRunId, DevWorkflowNodeRunStatus.WaitingForApproval), NodeRun(Guid.NewGuid(), DevWorkflowNodeRunStatus.Running)], PendingDecisionCount = 1, BlockingGateNodeRunId = GateNodeRunId });
+            .Returns(new DevWorkflowRunDetail
+            {
+                Run = run,
+                NodeRuns = [NodeRun(GateNodeRunId, DevWorkflowNodeRunStatus.WaitingForApproval), NodeRun(Guid.NewGuid(), DevWorkflowNodeRunStatus.Running)],
+                PendingDecisionCount = 1,
+                BlockingGateNodeRunId = GateNodeRunId
+            });
         return runs;
     }
 
@@ -210,7 +216,18 @@ public sealed class DevWorkflowRunHubTests
         };
 
     private static DevWorkflowRunEventSnapshot Event(long sequence) =>
-        new() { Id = Guid.NewGuid(), RunId = RunId, NodeRunId = null, Sequence = sequence, EventType = "node.started", DetailJson = null, OperationId = null, Outcome = null, OccurredAtUtc = 100 };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeRunId = null,
+            Sequence = sequence,
+            EventType = "node.started",
+            DetailJson = null,
+            OperationId = null,
+            Outcome = null,
+            OccurredAtUtc = 100
+        };
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
@@ -236,7 +253,11 @@ public sealed class DevWorkflowRunHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture { Hub = hub, Groups = groups };
+        return new HubFixture
+        {
+            Hub = hub,
+            Groups = groups
+        };
     }
 
     private sealed record HubFixture : IDisposable

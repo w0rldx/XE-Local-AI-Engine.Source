@@ -21,7 +21,13 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
         _ = await store.CreateProjectAsync(seed);
-        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.Ready, ExpectedTaskVersion = 1 });
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
         {
@@ -51,7 +57,13 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
             var seedStore = seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
             var seed = DevelopmentTestFixture.CreateSeed();
             _ = await seedStore.CreateProjectAsync(seed);
-            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.Ready, ExpectedTaskVersion = 1 });
+            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.Ready,
+                ExpectedTaskVersion = 1
+            });
             _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand
             {
                 TaskId = seed.TaskId,

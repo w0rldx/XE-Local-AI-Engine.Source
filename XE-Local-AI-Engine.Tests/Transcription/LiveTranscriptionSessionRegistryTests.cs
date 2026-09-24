@@ -7,8 +7,8 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
-using XE_Local_AI_Engine.Client.Services.Transcription.Live;
 using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
+using XE_Local_AI_Engine.Client.Services.Transcription.Live;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -389,7 +389,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var statuses = fixture.RecordStatuses();
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess),
-                         CancellationToken.None);
+            CancellationToken.None);
 
         var producer = new SilentProducer();
         var registration = fixture.Registry.AttachProducer(sessionId, producer);
@@ -634,22 +634,22 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var scripted = new ScriptedWhisperTranscriber(OneSegment);
         var calls = 0;
         _ = transcriber.TranscribeAsync(Arg.Any<string>(), Arg.Any<WhisperTranscriptionRequest>(), Arg.Any<CancellationToken>())
-            .Returns(async call =>
-            {
-                var token = call.ArgAt<CancellationToken>(2);
-                if (Interlocked.Increment(ref calls) == 1)
-                {
-                    _ = first.TrySetResult();
-                    await release.Task.WaitAsync(token);
-                }
-                else
-                {
-                    _ = second.TrySetResult();
-                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                }
+                       .Returns(async call =>
+                       {
+                           var token = call.ArgAt<CancellationToken>(2);
+                           if (Interlocked.Increment(ref calls) == 1)
+                           {
+                               _ = first.TrySetResult();
+                               await release.Task.WaitAsync(token);
+                           }
+                           else
+                           {
+                               _ = second.TrySetResult();
+                               await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                           }
 
-                return await scripted.TranscribeAsync(call.ArgAt<string>(0), call.ArgAt<WhisperTranscriptionRequest>(1), token);
-            });
+                           return await scripted.TranscribeAsync(call.ArgAt<string>(0), call.ArgAt<WhisperTranscriptionRequest>(1), token);
+                       });
         await using var fixture = new RegistryFixture(transcriber);
         var id = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
@@ -682,8 +682,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         var transcriber = new GatedWhisperTranscriber(static _ =>
         [
-            new WhisperTranscriptSegment { StartSeconds = 0, EndSeconds = 0.1, Text = "late", Confidence = 0.9 }
-        ]) { IgnoresCancellation = true };
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0,
+                EndSeconds = 0.1,
+                Text = "late",
+                Confidence = 0.9
+            }
+        ])
+        {
+            IgnoresCancellation = true
+        };
         await using var fixture = new RegistryFixture(transcriber);
         var id = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
@@ -738,13 +747,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var completing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = fixture.Service.CompleteLiveAsync(id, TranscriptionSessionStatus.Completed, Arg.Any<long>(),
-                Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(async call =>
-            {
-                _ = call;
-                _ = completing.TrySetResult();
-                await release.Task;
-            });
+                       Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                   .Returns(async call =>
+                   {
+                       _ = call;
+                       _ = completing.TrySetResult();
+                       await release.Task;
+                   });
         await fixture.Registry.StartLiveSessionAsync(id, LiveOptions(), CancellationToken.None);
         var stopping = fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
         await completing.Task.WaitAsync(TestBudgets.Contended);
@@ -767,7 +776,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
     [Test]
     public async Task GracefulFlushThatIgnoresCancellation_TimesOutAndRejectsItsLateCommit()
     {
-        var transcriber = new GatedWhisperTranscriber(OneSegment) { IgnoresCancellation = true };
+        var transcriber = new GatedWhisperTranscriber(OneSegment)
+        {
+            IgnoresCancellation = true
+        };
         await using var fixture = new RegistryFixture(transcriber);
         var id = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
@@ -873,8 +885,20 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // a partial and each has to be refused on its own.
         var transcriber = new GatedWhisperTranscriber(static _ =>
         [
-            new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.8, Text = "committed", Confidence = 0.9 },
-            new WhisperTranscriptSegment { StartSeconds = 0.8, EndSeconds = 1.2, Text = "provisional", Confidence = 0.9 }
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0.0,
+                EndSeconds = 0.8,
+                Text = "committed",
+                Confidence = 0.9
+            },
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0.8,
+                EndSeconds = 1.2,
+                Text = "provisional",
+                Confidence = 0.9
+            }
         ])
         {
             IgnoresCancellation = true
@@ -1286,7 +1310,16 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         // A guard wider than the window holds every returned segment back, so each tick produces the same provisional
         // text and nothing ever commits.
-        var transcriber = new ScriptedWhisperTranscriber(static _ => [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.1, Text = "still talking", Confidence = 0.9 }]);
+        var transcriber = new ScriptedWhisperTranscriber(static _ =>
+        [
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0.0,
+                EndSeconds = 0.1,
+                Text = "still talking",
+                Confidence = 0.9
+            }
+        ]);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
 
@@ -1454,7 +1487,15 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private static readonly TranscriptChannel[] TwoLanes = [TranscriptChannel.You, TranscriptChannel.Others];
 
     private static IReadOnlyList<WhisperTranscriptSegment> OneSegment(SubmittedWindow window) =>
-        [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = window.DurationMs / 1000.0, Text = $"w{window.StartMs}-{window.EndMs}", Confidence = 0.9 }];
+    [
+        new WhisperTranscriptSegment
+        {
+            StartSeconds = 0.0,
+            EndSeconds = window.DurationMs / 1000.0,
+            Text = $"w{window.StartMs}-{window.EndMs}",
+            Confidence = 0.9
+        }
+    ];
 
     /// <summary>A producer that never pushes and records whether it was asked to stop.</summary>
     private sealed class SilentProducer : ILiveAudioProducer

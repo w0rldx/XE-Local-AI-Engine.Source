@@ -44,33 +44,33 @@ public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkCom
         var cohort = await _records.GetPairwiseCohortAsync(req.ProjectId, ct);
         var fit = await _records.GetActivePairwiseFitAsync(req.ProjectId, ct);
         await Send.OkAsync(new ListBenchmarkComparisonsResponse
-                  {
-                      CohortGeneration = cohort.CohortGeneration,
-                      ComparisonSetVersion = cohort.ComparisonSetVersion,
-                      ReferenceExecutionKey = cohort.ReferenceExecutionKey,
-                      Items =
-                      [
-                          .. cohort.Comparisons.Select(static comparison => new BenchmarkComparisonResponse
-                          {
-                              Id = comparison.Id,
-                              RunAId = comparison.RunAId,
-                              RunBId = comparison.RunBId,
-                              Order = comparison.Order,
-                              AttemptSequence = comparison.AttemptSequence,
-                              Sequence = comparison.Sequence,
-                              TaskCaseId = comparison.TaskCaseId,
-                              Status = comparison.Status.ToString(),
-                              Verdict = comparison.Verdict,
-                              AnswerATruncated = comparison.AnswerATruncated,
-                              AnswerBTruncated = comparison.AnswerBTruncated,
-                              JudgeExecutionKey = comparison.JudgeExecutionKey,
-                              ErrorMessage = comparison.ErrorMessage,
-                              EnqueuedAtUtc = comparison.EnqueuedAtUtc,
-                              CompletedAtUtc = comparison.CompletedAtUtc
-                          })
-                      ],
-                      Fit = ToResponse(fit, cohort)
-                  }, ct);
+        {
+            CohortGeneration = cohort.CohortGeneration,
+            ComparisonSetVersion = cohort.ComparisonSetVersion,
+            ReferenceExecutionKey = cohort.ReferenceExecutionKey,
+            Items =
+            [
+                .. cohort.Comparisons.Select(static comparison => new BenchmarkComparisonResponse
+                {
+                    Id = comparison.Id,
+                    RunAId = comparison.RunAId,
+                    RunBId = comparison.RunBId,
+                    Order = comparison.Order,
+                    AttemptSequence = comparison.AttemptSequence,
+                    Sequence = comparison.Sequence,
+                    TaskCaseId = comparison.TaskCaseId,
+                    Status = comparison.Status.ToString(),
+                    Verdict = comparison.Verdict,
+                    AnswerATruncated = comparison.AnswerATruncated,
+                    AnswerBTruncated = comparison.AnswerBTruncated,
+                    JudgeExecutionKey = comparison.JudgeExecutionKey,
+                    ErrorMessage = comparison.ErrorMessage,
+                    EnqueuedAtUtc = comparison.EnqueuedAtUtc,
+                    CompletedAtUtc = comparison.CompletedAtUtc
+                })
+            ],
+            Fit = ToResponse(fit, cohort)
+        }, ct);
     }
 
     private static BenchmarkPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, BenchmarkPairwiseCohortState cohort)

@@ -30,7 +30,10 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         _ = services.AddSingleton(Persistence);
         _ = services.AddSingleton<ITokenEstimator>(Estimator);
         _ = services.AddScoped<IConversationCompactionService>(_ => new RecordingCompactionService(this));
-        _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        _provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
 
         Dispatcher = new ConversationMaintenanceDispatcher(accessor, new CapturingLogger<ConversationMaintenanceDispatcher>());
         Worker = new ConversationMaintenanceWorker(_provider.GetRequiredService<IServiceScopeFactory>(), Dispatcher, accessor, timeProvider ?? TimeProvider.System, Logger);
@@ -112,9 +115,11 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
 
         public string? LastModelName { get; private set; }
 
-        public int EstimateTokens(ChatMessage message) => _projectedTokens;
+        public int EstimateTokens(ChatMessage message) =>
+            _projectedTokens;
 
-        public int EstimateTokens(IReadOnlyList<ChatMessage> messages) => _projectedTokens;
+        public int EstimateTokens(IReadOnlyList<ChatMessage> messages) =>
+            _projectedTokens;
 
         public int EstimateTokens(IReadOnlyList<ChatMessage> messages, string? modelName)
         {
@@ -122,7 +127,8 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
             return _projectedTokens;
         }
 
-        public double ResolveObservedCorrection(string? modelName) => _observedCorrection;
+        public double ResolveObservedCorrection(string? modelName) =>
+            _observedCorrection;
     }
 
     /// <summary>
@@ -149,7 +155,11 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
                 await onCompact(conversationId, cancellationToken);
             }
 
-            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, MessagesFolded = 1 };
+            return new ConversationCompactionResult
+            {
+                Outcome = ConversationCompactionOutcome.Compacted,
+                MessagesFolded = 1
+            };
         }
     }
 }

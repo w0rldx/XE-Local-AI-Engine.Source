@@ -91,8 +91,8 @@ public sealed class DevWorkflowRunServiceTests
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()));
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
-                                  harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
-                              "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.");
+                harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
+            "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.");
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public sealed class DevWorkflowRunServiceTests
                                                                              """);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
+            harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
 
         AssertEx.Contains(refusal.Message, "validate", message: "the refusal names the nodes that need the project, not merely that one is missing.");
         AssertEx.Empty(await harness.ListRunIdsAsync(), "a refused start leaves no run behind.");
@@ -135,7 +135,7 @@ public sealed class DevWorkflowRunServiceTests
         await harness.ArchiveDefinitionAsync(definitionId);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
+            harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
 
         AssertEx.Contains(refusal.Message, "archived");
     }
@@ -194,12 +194,12 @@ public sealed class DevWorkflowRunServiceTests
         var operationId = Guid.NewGuid();
 
         var decided = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                       nodeRunId,
-                                       operationId,
-                                       DevWorkflowDecisionKind.Approve,
-                                       "Looks right.",
-                                       payloadJson: null,
-                                       "operator@localhost.test"));
+            nodeRunId,
+            operationId,
+            DevWorkflowDecisionKind.Approve,
+            "Looks right.",
+            payloadJson: null,
+            "operator@localhost.test"));
 
         AssertEx.Equal(DevWorkflowDecisionKind.Approve, decided.Decision.Decision);
         AssertEx.Equal("operator@localhost.test", decided.Decision.DecidedBySubject, "the audit has to say who approved, not only that someone did.");
@@ -209,12 +209,12 @@ public sealed class DevWorkflowRunServiceTests
         // has got to since.
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var replay = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                      nodeRunId,
-                                      operationId,
-                                      DevWorkflowDecisionKind.Approve,
-                                      "Looks right.",
-                                      payloadJson: null,
-                                      "operator@localhost.test"));
+            nodeRunId,
+            operationId,
+            DevWorkflowDecisionKind.Approve,
+            "Looks right.",
+            payloadJson: null,
+            "operator@localhost.test"));
 
         AssertEx.Equal(decided.Decision.Id, replay.Decision.Id);
         AssertEx.Equal(DevWorkflowRunStatus.Completed, replay.Detail.Run.Status);
@@ -236,21 +236,21 @@ public sealed class DevWorkflowRunServiceTests
         var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
 
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                             nodeRunId,
-                             Guid.NewGuid(),
-                             DevWorkflowDecisionKind.RequestChanges,
-                             comment: null,
-                             payloadJson: null,
-                             "operator@localhost.test"));
+            nodeRunId,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.RequestChanges,
+            comment: null,
+            payloadJson: null,
+            "operator@localhost.test"));
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowGateAlreadyDecidedException>(() =>
-                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                            nodeRunId,
-                                            Guid.NewGuid(),
-                                            DevWorkflowDecisionKind.Approve,
-                                            comment: null,
-                                            payloadJson: null,
-                                            "operator@localhost.test")));
+            harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                nodeRunId,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Approve,
+                comment: null,
+                payloadJson: null,
+                "operator@localhost.test")));
 
         AssertEx.Equal(DevWorkflowDecisionKind.RequestChanges, refusal.StandingDecision);
         AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"));
@@ -266,13 +266,13 @@ public sealed class DevWorkflowRunServiceTests
         var nodeRunId = detail.NodeRuns.Single().Id;
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.DecideAsync(detail.Run.Id,
-                                            nodeRunId,
-                                            Guid.NewGuid(),
-                                            DevWorkflowDecisionKind.Approve,
-                                            comment: null,
-                                            payloadJson: null,
-                                            decidedBySubject: null)));
+            harness.WithRunServiceAsync(service => service.DecideAsync(detail.Run.Id,
+                nodeRunId,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Approve,
+                comment: null,
+                payloadJson: null,
+                decidedBySubject: null)));
 
         AssertEx.Contains(refusal.Message, "nothing to decide");
     }
@@ -292,13 +292,13 @@ public sealed class DevWorkflowRunServiceTests
 
         // A gate has no failed attempt to re-run, so Retry is not one of the answers it can take.
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                              harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                  nodeRunId,
-                                  Guid.NewGuid(),
-                                  DevWorkflowDecisionKind.Retry,
-                                  comment: null,
-                                  payloadJson: null,
-                                  decidedBySubject: null)));
+            harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                nodeRunId,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Retry,
+                comment: null,
+                payloadJson: null,
+                decidedBySubject: null)));
     }
 
     /// <summary>
@@ -317,13 +317,13 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, nodeRun.Status, "the gate has to be open for this to be the case under test.");
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                            nodeRun.Id,
-                                            Guid.NewGuid(),
-                                            DevWorkflowDecisionKind.Skip,
-                                            comment: null,
-                                            payloadJson: null,
-                                            "operator@localhost.test")));
+            harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                nodeRun.Id,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Skip,
+                comment: null,
+                payloadJson: null,
+                "operator@localhost.test")));
 
         AssertEx.Contains(refusal.Message, "cannot be answered Skip");
         AssertEx.Equal(expected: 0,
@@ -352,12 +352,12 @@ public sealed class DevWorkflowRunServiceTests
 
         var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         var detail = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                      nodeRunId,
-                                      Guid.NewGuid(),
-                                      DevWorkflowDecisionKind.Skip,
-                                      comment: null,
-                                      payloadJson: null,
-                                      "operator@localhost.test"));
+            nodeRunId,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.Skip,
+            comment: null,
+            payloadJson: null,
+            "operator@localhost.test"));
 
         AssertEx.Equal(expected: 1, detail.Detail.PendingDecisionCount, "the answer is recorded; the runtime has not acted on it yet.");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
@@ -378,7 +378,7 @@ public sealed class DevWorkflowRunServiceTests
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId));
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(otherWorkItemId, definitionId, inputsJson: null, operationId)));
+            harness.WithRunServiceAsync(service => service.StartAsync(otherWorkItemId, definitionId, inputsJson: null, operationId)));
 
         AssertEx.Contains(refusal.Message, "already started a different run");
     }
@@ -449,12 +449,12 @@ public sealed class DevWorkflowRunServiceTests
         await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
         var blocked = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                             blocked,
-                             Guid.NewGuid(),
-                             DevWorkflowDecisionKind.Retry,
-                             comment: null,
-                             payloadJson: null,
-                             "operator@localhost.test"));
+            blocked,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.Retry,
+            comment: null,
+            payloadJson: null,
+            "operator@localhost.test"));
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(expected: 2,
             (await harness.ReadNodeRunAsync(runId, "approve")).Attempt,
@@ -464,13 +464,13 @@ public sealed class DevWorkflowRunServiceTests
         var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                            nodeRunId,
-                                            Guid.NewGuid(),
-                                            DevWorkflowDecisionKind.Retry,
-                                            comment: null,
-                                            payloadJson: null,
-                                            "operator@localhost.test")));
+            harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                nodeRunId,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Retry,
+                comment: null,
+                payloadJson: null,
+                "operator@localhost.test")));
 
         AssertEx.Contains(refusal.Message,
             "as many re-attempts as this run allows",
@@ -482,12 +482,12 @@ public sealed class DevWorkflowRunServiceTests
         // And the other interventions still work, which is the whole reason the refusal comes before the record.
         // RE-PINNED: skipping the gate settles the run Cancelled — it is this graph's only end.
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                             nodeRunId,
-                             Guid.NewGuid(),
-                             DevWorkflowDecisionKind.Skip,
-                             comment: null,
-                             payloadJson: null,
-                             "operator@localhost.test"));
+            nodeRunId,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.Skip,
+            comment: null,
+            payloadJson: null,
+            "operator@localhost.test"));
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
@@ -567,7 +567,7 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)));
+            harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)));
 
         AssertEx.Contains(refusal.Message, "run.paused", message: "the refusal says what that operation id actually did.");
         AssertEx.Equal(DevWorkflowRunStatus.Paused,
@@ -591,32 +591,32 @@ public sealed class DevWorkflowRunServiceTests
         var operationId = Guid.NewGuid();
 
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                             nodeRunId,
-                             operationId,
-                             DevWorkflowDecisionKind.Approve,
-                             comment: null,
-                             payloadJson: null,
-                             "operator@localhost.test"));
+            nodeRunId,
+            operationId,
+            DevWorkflowDecisionKind.Approve,
+            comment: null,
+            payloadJson: null,
+            "operator@localhost.test"));
 
         var differentAnswer = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                                harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                                    nodeRunId,
-                                                    operationId,
-                                                    DevWorkflowDecisionKind.Reject,
-                                                    comment: null,
-                                                    payloadJson: null,
-                                                    "operator@localhost.test")));
+            harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                nodeRunId,
+                operationId,
+                DevWorkflowDecisionKind.Reject,
+                comment: null,
+                payloadJson: null,
+                "operator@localhost.test")));
         AssertEx.Contains(differentAnswer.Message, "already recorded a different decision");
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                  harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                      nodeRunId,
-                                      operationId,
-                                      DevWorkflowDecisionKind.Approve,
-                                      comment: null,
-                                      payloadJson: null,
-                                      "someone-else@localhost.test")),
-                              "and the same answer attributed to a different person is a different act too.");
+                harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                    nodeRunId,
+                    operationId,
+                    DevWorkflowDecisionKind.Approve,
+                    comment: null,
+                    payloadJson: null,
+                    "someone-else@localhost.test")),
+            "and the same answer attributed to a different person is a different act too.");
 
         AssertEx.Equal(expected: 1,
             (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"),
@@ -711,7 +711,12 @@ public sealed class DevWorkflowRunServiceTests
                  .Returns(_ =>
                  {
                      request.Cancel();
-                     return new DevWorkflowWorkItemDeletion { RemovedRows = 6, RunIds = runIds, WorkSessionIds = sessionIds };
+                     return new DevWorkflowWorkItemDeletion
+                     {
+                         RemovedRows = 6,
+                         RunIds = runIds,
+                         WorkSessionIds = sessionIds
+                     };
                  });
 
         // The middle session is refused as well, because one item's failure must cost only itself.
@@ -829,12 +834,12 @@ public sealed class DevWorkflowRunServiceTests
             NullLogger<DevWorkflowRunService>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => service.DecideAsync(runId,
-                              nodeRunId,
-                              Guid.NewGuid(),
-                              DevWorkflowDecisionKind.Retry,
-                              "Try it again.",
-                              payloadJson: null,
-                              "operator@localhost.test"));
+            nodeRunId,
+            Guid.NewGuid(),
+            DevWorkflowDecisionKind.Retry,
+            "Try it again.",
+            payloadJson: null,
+            "operator@localhost.test"));
 
         var command = AssertEx.NotNull(written);
         AssertEx.Equal(blocked.Attempt, command.ExpectedAttempt, "the answer names the attempt it was judged against, or the store cannot tell a moved row from a fresh one.");

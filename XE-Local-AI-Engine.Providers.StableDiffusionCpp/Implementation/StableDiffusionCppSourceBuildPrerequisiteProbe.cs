@@ -37,15 +37,26 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
             return new StableDiffusionCppSourceBuildPrerequisiteReport
             {
                 CanBuild = false,
-                Items = [
-                new StableDiffusionCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = false, Detail = "In-app source builds are available on Linux only." }
-            ]
+                Items =
+                [
+                    new StableDiffusionCppSourceBuildPrerequisiteItem
+                    {
+                        Key = "os-is-linux",
+                        Satisfied = false,
+                        Detail = "In-app source builds are available on Linux only."
+                    }
+                ]
             };
         }
 
         var items = new List<StableDiffusionCppSourceBuildPrerequisiteItem>
         {
-            new() { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
+            new()
+            {
+                Key = "os-is-linux",
+                Satisfied = true,
+                Detail = "Linux host detected."
+            },
             await ProbeToolAsync("cmake", ["--version"], "CMake", ProbeIsolationRoot, ct).ConfigureAwait(false),
             await ProbeToolAsync("gcc", ["--version"], "C compiler (gcc)", ProbeIsolationRoot, ct).ConfigureAwait(false),
             await ProbeToolAsync("g++", ["--version"], "C++ compiler (g++)", ProbeIsolationRoot, ct).ConfigureAwait(false),
@@ -67,7 +78,11 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
             items.Insert(2, await ProbeToolAsync("vulkaninfo", ["--summary"], "Vulkan runtime probe", ProbeIsolationRoot, ct).ConfigureAwait(false));
         }
 
-        return new StableDiffusionCppSourceBuildPrerequisiteReport { CanBuild = items.TrueForAll(static item => item.Satisfied), Items = items };
+        return new StableDiffusionCppSourceBuildPrerequisiteReport
+        {
+            CanBuild = items.TrueForAll(static item => item.Satisfied),
+            Items = items
+        };
     }
 
     private async Task<StableDiffusionCppSourceBuildPrerequisiteItem> ProbeEitherToolAsync(CancellationToken ct)
@@ -105,7 +120,12 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            return new StableDiffusionCppSourceBuildPrerequisiteItem { Key = "free-disk", Satisfied = false, Detail = "Free disk space could not be verified." };
+            return new StableDiffusionCppSourceBuildPrerequisiteItem
+            {
+                Key = "free-disk",
+                Satisfied = false,
+                Detail = "Free disk space could not be verified."
+            };
         }
     }
 
@@ -156,7 +176,12 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
                                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                 .FirstOrDefault();
                 return process.ExitCode == 0
-                    ? new StableDiffusionCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = true, Detail = firstLine ?? $"{displayName} detected." }
+                    ? new StableDiffusionCppSourceBuildPrerequisiteItem
+                    {
+                        Key = fileName,
+                        Satisfied = true,
+                        Detail = firstLine ?? $"{displayName} detected."
+                    }
                     : Missing(fileName, displayName);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -164,7 +189,12 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
                 TryKill(process);
                 await IgnoreCancellationAsync(outputTask).ConfigureAwait(false);
                 await IgnoreCancellationAsync(errorTask).ConfigureAwait(false);
-                return new StableDiffusionCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = false, Detail = $"{displayName} probe timed out." };
+                return new StableDiffusionCppSourceBuildPrerequisiteItem
+                {
+                    Key = fileName,
+                    Satisfied = false,
+                    Detail = $"{displayName} probe timed out."
+                };
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -197,7 +227,12 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
 
     private static StableDiffusionCppSourceBuildPrerequisiteItem Missing(string key, string displayName)
     {
-        return new StableDiffusionCppSourceBuildPrerequisiteItem { Key = key, Satisfied = false, Detail = $"{displayName} is not available." };
+        return new StableDiffusionCppSourceBuildPrerequisiteItem
+        {
+            Key = key,
+            Satisfied = false,
+            Detail = $"{displayName} is not available."
+        };
     }
 
     private static async Task IgnoreCancellationAsync(Task task)

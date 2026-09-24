@@ -66,18 +66,18 @@ public sealed class DevelopmentCoordinator : IDevelopmentCoordinator
 
         var repositoryRoot = repository.RepositoryRoot;
         var completed = await _store.FindOperationAsync(subject.ProjectId,
-                                        operationId,
-                                        DevelopmentOperationPhases.ApplyCompleted,
-                                        cancellationToken);
+            operationId,
+            DevelopmentOperationPhases.ApplyCompleted,
+            cancellationToken);
         if (completed is not null)
         {
             return completed;
         }
 
         var blocked = await _store.FindOperationAsync(subject.ProjectId,
-                                      operationId,
-                                      DevelopmentOperationPhases.ApplyBlocked,
-                                      cancellationToken);
+            operationId,
+            DevelopmentOperationPhases.ApplyBlocked,
+            cancellationToken);
         if (blocked is not null)
         {
             return blocked;

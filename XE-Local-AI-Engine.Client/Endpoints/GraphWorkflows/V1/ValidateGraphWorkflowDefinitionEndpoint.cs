@@ -49,12 +49,26 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint : Endpoint<ValidateG
         // refused too — which is the case the editor most needs it in, to say how far over the cap the canvas is.
         var nodeCount = req.Graph.Nodes?.Count ?? 0;
         await Send.OkAsync(new ValidateGraphWorkflowDefinitionResponse
-        {
-            Valid = result.IsValid,
-            Errors = [.. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse { Key = error.Key, Message = error.Message })],
-            NodeCount = nodeCount,
-            Warnings = [.. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse { Key = warning.Key, Message = warning.Message })]
-        },
+            {
+                Valid = result.IsValid,
+                Errors =
+                [
+                    .. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse
+                    {
+                        Key = error.Key,
+                        Message = error.Message
+                    })
+                ],
+                NodeCount = nodeCount,
+                Warnings =
+                [
+                    .. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse
+                    {
+                        Key = warning.Key,
+                        Message = warning.Message
+                    })
+                ]
+            },
             ct);
     }
 }

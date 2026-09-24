@@ -38,24 +38,24 @@ public sealed class CreateDevelopmentProjectEndpoint : Endpoint<CreateDevelopmen
         try
         {
             var result = await _service.CreateProjectAsync(new DevelopmentCreateProjectInput
-            {
-                OperationId = req.OperationId,
-                SelectedFolderId = req.SelectedFolderId,
-                Objective = req.Objective,
-                BaseBranch = req.BaseBranch,
-                TaskTitle = req.TaskTitle,
-                Requirements = req.Requirements,
-                AcceptanceCriteriaJson = req.AcceptanceCriteriaJson,
-                EgressPolicy = egressPolicy,
-                CoderModelId = req.CoderModelId,
-                ReviewerModelId = req.ReviewerModelId,
-                TrustedRepositoryAcknowledged = req.TrustedRepositoryAcknowledged,
-                MaxTokens = req.MaxTokens,
-                MaxDurationSeconds = req.MaxDurationSeconds,
-                CommandProfileId = req.CommandProfileId,
-                BuildTarget = req.BuildTarget
-            },
-                                           ct);
+                {
+                    OperationId = req.OperationId,
+                    SelectedFolderId = req.SelectedFolderId,
+                    Objective = req.Objective,
+                    BaseBranch = req.BaseBranch,
+                    TaskTitle = req.TaskTitle,
+                    Requirements = req.Requirements,
+                    AcceptanceCriteriaJson = req.AcceptanceCriteriaJson,
+                    EgressPolicy = egressPolicy,
+                    CoderModelId = req.CoderModelId,
+                    ReviewerModelId = req.ReviewerModelId,
+                    TrustedRepositoryAcknowledged = req.TrustedRepositoryAcknowledged,
+                    MaxTokens = req.MaxTokens,
+                    MaxDurationSeconds = req.MaxDurationSeconds,
+                    CommandProfileId = req.CommandProfileId,
+                    BuildTarget = req.BuildTarget
+                },
+                ct);
             await Send.OkAsync(result.ToResponse(), ct);
         }
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)

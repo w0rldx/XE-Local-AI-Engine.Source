@@ -79,7 +79,8 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
         {
             if (Interlocked.Exchange(ref _cudaFailureWarned, value: 1) == 0)
             {
-                _logger.LogWarning("{Reason}; transcription runs on the CPU backend until the node restarts. To restore GPU transcription, repair or update the NVIDIA driver and restart the node, or supply a bring-your-own whisper-server binary.",
+                _logger.LogWarning(
+                    "{Reason}; transcription runs on the CPU backend until the node restarts. To restore GPU transcription, repair or update the NVIDIA driver and restart the node, or supply a bring-your-own whisper-server binary.",
                     failure);
             }
 

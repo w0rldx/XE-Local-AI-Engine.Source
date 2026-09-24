@@ -46,6 +46,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     ///     max-runtime into a new schedule's form, so the resolver derives a ceiling instead — the rationale is there.
     /// </remarks>
     private const int LegacyRunAgentTemplateDefaultMaxRuntimeSeconds = 600;
+
     private readonly IScheduledJobDefinitionStore _definitionStore;
     private readonly ISchedulerEventPublisher _eventPublisher;
     private readonly ILogger<ScheduledJobManagementService> _logger;
@@ -55,8 +56,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     private readonly IScheduledJobTemplateRegistry _templateRegistry;
     private readonly TimeProvider _timeProvider;
 
-    public ScheduledJobManagementService(
-        IScheduledJobDefinitionStore definitionStore,
+    public ScheduledJobManagementService(IScheduledJobDefinitionStore definitionStore,
         IScheduledJobRunStore runStore,
         IScheduledJobTemplateRegistry templateRegistry,
         ISchedulerFactory schedulerFactory,
@@ -413,7 +413,13 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent { EventType = SchedulerHubEvents.JobDefinitionChanged, ScheduledJobId = scheduledJobId, Action = action, OccurredAtUtc = occurredAt },
+            await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent
+                {
+                    EventType = SchedulerHubEvents.JobDefinitionChanged,
+                    ScheduledJobId = scheduledJobId,
+                    Action = action,
+                    OccurredAtUtc = occurredAt
+                },
                 CancellationToken.None);
         }
         catch (Exception exception)

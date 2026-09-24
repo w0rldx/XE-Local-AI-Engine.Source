@@ -93,18 +93,33 @@ internal sealed partial class CustomToolService : ICustomToolService
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return new HostExecutableProbeResult { Ok = false, Reason = "A path is required.", Path = path };
+            return new HostExecutableProbeResult
+            {
+                Ok = false,
+                Reason = "A path is required.",
+                Path = path
+            };
         }
 
         try
         {
             HostExecutableGuard.Validate(path);
-            return new HostExecutableProbeResult { Ok = true, Reason = null, Path = path };
+            return new HostExecutableProbeResult
+            {
+                Ok = true,
+                Reason = null,
+                Path = path
+            };
         }
         catch (CustomToolExecutionException exception)
         {
             // HostExecutableGuard messages describe the rule and echo no filesystem contents, so they are safe to surface.
-            return new HostExecutableProbeResult { Ok = false, Reason = exception.Message, Path = path };
+            return new HostExecutableProbeResult
+            {
+                Ok = false,
+                Reason = exception.Message,
+                Path = path
+            };
         }
     }
 

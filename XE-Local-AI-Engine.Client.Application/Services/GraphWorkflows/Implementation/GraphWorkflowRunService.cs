@@ -26,8 +26,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     private readonly IGraphWorkflowStore _store;
     private readonly IToolInvocationService _tools;
 
-    public GraphWorkflowRunService(
-        IGraphWorkflowStore store,
+    public GraphWorkflowRunService(IGraphWorkflowStore store,
         IGraphWorkflowDispatcherSignal signal,
         IToolInvocationService tools,
         IOptions<GraphWorkflowOptions> options,
@@ -101,19 +100,27 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         // ONE call. The run row, one Pending node run per graph node and the run.created event commit together, and the
         // definition is re-read inside that same transaction so a delete racing this start cannot leave an orphan run.
         var run = await _store.StartRunAsync(new StartGraphWorkflowRunCommand
-        {
-            RunId = Guid.NewGuid(),
-            RequestId = requestId,
-            DefinitionId = definitionId,
-            DefinitionVersion = definition.Version,
-            GraphHash = definition.GraphHash,
-            GraphJson = definition.GraphJson,
-            InputJson = inputJson,
-            NodeRuns = [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = node.NodeKey, Kind = node.Kind })],
-            ConversationId = binding?.ConversationId,
-            TriggerMessageId = binding?.TriggerMessageId
-        },
-                                  cancellationToken);
+            {
+                RunId = Guid.NewGuid(),
+                RequestId = requestId,
+                DefinitionId = definitionId,
+                DefinitionVersion = definition.Version,
+                GraphHash = definition.GraphHash,
+                GraphJson = definition.GraphJson,
+                InputJson = inputJson,
+                NodeRuns =
+                [
+                    .. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = node.NodeKey,
+                        Kind = node.Kind
+                    })
+                ],
+                ConversationId = binding?.ConversationId,
+                TriggerMessageId = binding?.TriggerMessageId
+            },
+            cancellationToken);
 
         // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the request id with the run that WON — which may
         // be a run of somebody else's definition. Re-checked here, or the loser would receive a run it never asked for by the one route the fast path cannot cover.
@@ -141,8 +148,13 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
         // Against the version it was READ at, so a recomputation that landed in between loses rather than overwriting an operator's intent with a status it decided
         // a moment earlier. Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather than writing over live work.
-        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = run.Version, TargetStatus = GraphWorkflowRunStatus.Cancelling },
-                            cancellationToken);
+        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = runId,
+                ExpectedVersion = run.Version,
+                TargetStatus = GraphWorkflowRunStatus.Cancelling
+            },
+            cancellationToken);
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
@@ -237,16 +249,16 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         try
         {
             written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand
-            {
-                RunId = runId,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                OperationId = operationId,
-                Decision = decision,
-                DecidedBySubject = decidedBySubject,
-                OutputJson = document
-            },
-                                      cancellationToken);
+                {
+                    RunId = runId,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    OperationId = operationId,
+                    Decision = decision,
+                    DecidedBySubject = decidedBySubject,
+                    OutputJson = document
+                },
+                cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
         {
@@ -318,15 +330,15 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
 
         var written = await _store.AppendNodeRunSteeringAsync(new AppendGraphWorkflowSteeringCommand
-        {
-            RunId = runId,
-            NodeRunId = nodeRun.Id,
-            OperationId = operationId,
-            Message = message,
-            SteeredBySubject = steeredBySubject,
-            MaxEntries = _options.MaxSteersPerNode
-        },
-                              cancellationToken);
+            {
+                RunId = runId,
+                NodeRunId = nodeRun.Id,
+                OperationId = operationId,
+                Message = message,
+                SteeredBySubject = steeredBySubject,
+                MaxEntries = _options.MaxSteersPerNode
+            },
+            cancellationToken);
         if (written is null)
         {
             // The append re-checks inside its transaction and declined: answer from what the rows NOW say.
@@ -367,7 +379,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         // One over the cap, so truncation is observed rather than inferred from a full page.
         var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken);
         var page = events.Take(_options.EventReplayLimit).ToList();
-        return new GraphWorkflowRunEventPage { Events = page, LastSeq = page.Count == 0 ? afterSeq : page[^1].Seq, ReplayTruncated = events.Count > _options.EventReplayLimit };
+        return new GraphWorkflowRunEventPage
+        {
+            Events = page,
+            LastSeq = page.Count == 0 ? afterSeq : page[^1].Seq,
+            ReplayTruncated = events.Count > _options.EventReplayLimit
+        };
     }
 
     /// <summary>
@@ -600,7 +617,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
         try
         {
-            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = current.Version, TargetStatus = outcome.Status }, cancellationToken);
+            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = runId,
+                ExpectedVersion = current.Version,
+                TargetStatus = outcome.Status
+            }, cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
         {
@@ -616,7 +638,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     {
         var run = await _store.GetRunAsync(runId, cancellationToken);
         var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
-        return new GraphWorkflowDecisionResult { Decision = decision, RunStatus = run.Status, NodeRunStatus = nodeRun.Status };
+        return new GraphWorkflowDecisionResult
+        {
+            Decision = decision,
+            RunStatus = run.Status,
+            NodeRunStatus = nodeRun.Status
+        };
     }
 
     /// <summary>
@@ -662,5 +689,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     }
 
     private async Task<GraphWorkflowRunDetail> ComposeAsync(GraphWorkflowRunSnapshot run, CancellationToken cancellationToken) =>
-        new() { Run = run, NodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken) };
+        new()
+        {
+            Run = run,
+            NodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken)
+        };
 }

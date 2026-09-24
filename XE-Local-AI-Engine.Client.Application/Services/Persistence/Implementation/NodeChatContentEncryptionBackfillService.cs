@@ -60,8 +60,7 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<NodeChatContentEncryptionBackfillService> _logger;
 
-    public NodeChatContentEncryptionBackfillService(
-        IServiceScopeFactory scopeFactory,
+    public NodeChatContentEncryptionBackfillService(IServiceScopeFactory scopeFactory,
         ILogger<NodeChatContentEncryptionBackfillService> logger)
     {
         _scopeFactory = scopeFactory;

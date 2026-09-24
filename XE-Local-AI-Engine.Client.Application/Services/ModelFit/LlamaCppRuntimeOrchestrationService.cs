@@ -31,8 +31,7 @@ public sealed class LlamaCppRuntimeOrchestrationService
 
     private readonly IGpuVariantSelector _variantSelector;
 
-    public LlamaCppRuntimeOrchestrationService(
-        IGpuVariantSelector variantSelector,
+    public LlamaCppRuntimeOrchestrationService(IGpuVariantSelector variantSelector,
         IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppBinaryManager binaryManager,
         ILlamaCppSourceBuildActivity buildActivity,

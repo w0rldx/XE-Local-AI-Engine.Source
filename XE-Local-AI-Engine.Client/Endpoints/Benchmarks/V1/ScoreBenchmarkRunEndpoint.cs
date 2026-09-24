@@ -37,6 +37,6 @@ public sealed class ScoreBenchmarkRunEndpoint : Endpoint<ScoreBenchmarkRunReques
 
         var run = await _records.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

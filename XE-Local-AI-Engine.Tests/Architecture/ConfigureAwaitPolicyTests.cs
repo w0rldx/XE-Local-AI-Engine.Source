@@ -50,6 +50,7 @@ public sealed class ConfigureAwaitPolicyTests
     ///     its own: a renamed directory reads too few files and fails here rather than passing on an empty scan.
     /// </summary>
     private const int ApplicationFileFloor = 3500;
+
     private const int LibraryFileFloor = 450;
 
     /// <summary>
@@ -389,7 +390,8 @@ public sealed class ConfigureAwaitPolicyTests
         (start == 0 || !IsWordCharacter(text[start - 1]))
         && (start + length >= text.Length || !IsWordCharacter(text[start + length]));
 
-    private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
+    private static bool IsWordCharacter(char character) =>
+        char.IsLetterOrDigit(character) || character == '_';
 
     private static int Count(string text, string token)
     {

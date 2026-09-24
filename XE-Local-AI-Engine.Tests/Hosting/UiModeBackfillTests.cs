@@ -184,7 +184,11 @@ public sealed class UiModeBackfillTests
     {
         var authService = Substitute.For<INodeAuthService>();
         authService.GetStatusAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>())
-                   .Returns(Task.FromResult(new NodeAuthStatus { SetupRequired = setupRequired, Authenticated = false }));
+                   .Returns(Task.FromResult(new NodeAuthStatus
+                   {
+                       SetupRequired = setupRequired,
+                       Authenticated = false
+                   }));
         return authService;
     }
 

@@ -46,7 +46,13 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return null;
         }
 
-        return new TrainingProcessFacts { Pgid = stat.Pgid, StartTicks = stat.StartTicks, ExecutablePath = ResolveExecutablePath(processId), RunToken = ReadRunToken(processId) };
+        return new TrainingProcessFacts
+        {
+            Pgid = stat.Pgid,
+            StartTicks = stat.StartTicks,
+            ExecutablePath = ResolveExecutablePath(processId),
+            RunToken = ReadRunToken(processId)
+        };
     }
 
     public async Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default)

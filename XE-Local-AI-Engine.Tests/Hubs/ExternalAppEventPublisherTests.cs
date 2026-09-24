@@ -119,9 +119,9 @@ public sealed class ExternalAppEventPublisherTests
         var publisher = new ExternalAppEventPublisher(hubContext);
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => publisher.PublishAsync(Guid.NewGuid(),
-                              sequence: 1,
-                              (ExternalAppInstanceEventKind)99,
-                              ExternalAppInstanceStatus.Running));
+            sequence: 1,
+            (ExternalAppInstanceEventKind)99,
+            ExternalAppInstanceStatus.Running));
     }
 
     /// <summary>

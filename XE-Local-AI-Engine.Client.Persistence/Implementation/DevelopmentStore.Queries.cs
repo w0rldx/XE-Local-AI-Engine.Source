@@ -24,35 +24,35 @@ public sealed partial class DevelopmentStore
                                      .OrderBy(entity => entity.Sequence)
                                      .ToListAsync(cancellationToken);
         return events.Select(static entity => new DevelopmentEventSnapshot
-        {
-            Id = entity.Id,
-            ProjectId = entity.ProjectId,
-            TaskId = entity.TaskId,
-            AttemptId = entity.AttemptId,
-            Sequence = entity.Sequence,
-            EventType = entity.EventType,
-            OccurredAtUtc = entity.OccurredAtUtc,
-            OperationId = entity.OperationId,
-            OperationPhase = entity.OperationPhase,
-            Outcome = entity.Outcome,
-            Reason = ReasonOf(entity.DetailJson)
-        })
+                     {
+                         Id = entity.Id,
+                         ProjectId = entity.ProjectId,
+                         TaskId = entity.TaskId,
+                         AttemptId = entity.AttemptId,
+                         Sequence = entity.Sequence,
+                         EventType = entity.EventType,
+                         OccurredAtUtc = entity.OccurredAtUtc,
+                         OperationId = entity.OperationId,
+                         OperationPhase = entity.OperationPhase,
+                         Outcome = entity.Outcome,
+                         Reason = ReasonOf(entity.DetailJson)
+                     })
                      .ToArray();
     }
 
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
     {
         var snapshot = await (from attempt in _dbContext.DevelopmentAttempts.AsNoTracking()
-                                 join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
-                                 join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
-                                 where attempt.Id == attemptId
-                                 select new
-                                 {
-                                     Project = project,
-                                     Task = task,
-                                     Attempt = attempt
-                                 })
-                             .SingleOrDefaultAsync(cancellationToken)
+                               join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
+                               join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
+                               where attempt.Id == attemptId
+                               select new
+                               {
+                                   Project = project,
+                                   Task = task,
+                                   Attempt = attempt
+                               })
+                           .SingleOrDefaultAsync(cancellationToken)
                        ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found.");
 
         return new DevelopmentExecutionSnapshot

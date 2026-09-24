@@ -175,7 +175,11 @@ public sealed class ModelClassificationServiceTests
     private static void StubDetails(IOllamaModelService ollama, string modelName, params string[] capabilities)
     {
         // The service reads only OllamaModelDetails.Capabilities, so every other field can stay unset.
-        var details = new OllamaModelDetails { MaxContextTokens = null, Capabilities = capabilities };
+        var details = new OllamaModelDetails
+        {
+            MaxContextTokens = null,
+            Capabilities = capabilities
+        };
         ollama.ShowModelDetailsAsync(modelName, Arg.Any<CancellationToken>()).Returns(details);
     }
 
@@ -222,7 +226,16 @@ public sealed class ModelClassificationServiceTests
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
             var record = existing is null
-                ? new ModelClassificationRecord { ModelName = modelName, Digest = null, DetectedKind = ModelKind.Unknown, DetectedCapabilitiesJson = null, OverrideKind = overrideKind, DetectedAtUtc = null, UpdatedAtUtc = 1 }
+                ? new ModelClassificationRecord
+                {
+                    ModelName = modelName,
+                    Digest = null,
+                    DetectedKind = ModelKind.Unknown,
+                    DetectedCapabilitiesJson = null,
+                    OverrideKind = overrideKind,
+                    DetectedAtUtc = null,
+                    UpdatedAtUtc = 1
+                }
                 : existing with
                 {
                     OverrideKind = overrideKind,

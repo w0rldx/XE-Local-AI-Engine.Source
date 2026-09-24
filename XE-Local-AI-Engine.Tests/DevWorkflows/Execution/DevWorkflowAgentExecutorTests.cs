@@ -277,14 +277,14 @@ public sealed class DevWorkflowAgentExecutorTests
              .ThrowsAsyncForAnyArgs(new DevWorkflowInvalidTransitionException("The attach lost its race."));
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                  executor.DispatchAsync(store,
-                                      DevWorkflowGraph.Parse(SingleAgent),
-                                      run,
-                                      DevWorkflowGraph.Parse(SingleAgent).Nodes["research"],
-                                      nodeRun,
-                                      [nodeRun],
-                                      CancellationToken.None),
-                              "the attach's failure is what the caller sees; the cleanup is not the story.");
+                executor.DispatchAsync(store,
+                    DevWorkflowGraph.Parse(SingleAgent),
+                    run,
+                    DevWorkflowGraph.Parse(SingleAgent).Nodes["research"],
+                    nodeRun,
+                    [nodeRun],
+                    CancellationToken.None),
+            "the attach's failure is what the caller sees; the cleanup is not the story.");
 
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "a session WAS created — that is the window under test.");
         var created = harness.Agent.Created.Single();
@@ -615,10 +615,10 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         _ = await harness.ApplyAgentTaskAsync(runId,
-                             "research",
-                             "Confirm the reviewer signed the change off",
-                             AgentWorkSessionTaskStatus.Blocked,
-                             "Nothing here can read the review.");
+            "research",
+            "Confirm the reviewer signed the change off",
+            AgentWorkSessionTaskStatus.Blocked,
+            "Nothing here can read the review.");
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
@@ -654,10 +654,10 @@ public sealed class DevWorkflowAgentExecutorTests
         // Astral characters, because a naive slice would persist a lone surrogate. The one-unit padding shifts where
         // the bound falls, so between the two cases it lands inside a pair whichever way the fixed lead sentence runs.
         _ = await harness.ApplyAgentTaskAsync(runId,
-                             "research",
-                             "Confirm the reviewer signed the change off",
-                             AgentWorkSessionTaskStatus.Blocked,
-                             new string('x', padding) + string.Concat(Enumerable.Repeat("\U0001F600", 800)));
+            "research",
+            "Confirm the reviewer signed the change off",
+            AgentWorkSessionTaskStatus.Blocked,
+            new string('x', padding) + string.Concat(Enumerable.Repeat("\U0001F600", 800)));
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -680,8 +680,8 @@ public sealed class DevWorkflowAgentExecutorTests
 
         _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done);
         await harness.RequestAgentCompletionAsync(runId,
-                         "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
+            "research",
+            JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -706,8 +706,8 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.ApplyAgentTaskAsync(runId, "research", "Chase the second pin", AgentWorkSessionTaskStatus.Dropped);
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
         await harness.RequestAgentCompletionAsync(runId,
-                         "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
+            "research",
+            JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -750,13 +750,13 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await harness.RequestAgentCompletionAsync(runId,
-                         "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
+            "research",
+            JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
         _ = await harness.ApplyAgentTaskAsync(runId, "research", "Verify the runtime pin", AgentWorkSessionTaskStatus.Done);
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
         await harness.RequestAgentCompletionAsync(runId,
-                         "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
+            "research",
+            JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
         _ = await harness.SaveAgentArtifactAsync(runId, "research", "notes.md", "Nothing further.");
         await harness.SettleAgentAsync(runId, "research");
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
@@ -1383,17 +1383,17 @@ public sealed class DevWorkflowAgentExecutorTests
         {
             seeded = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
                                 .AddSeededAsync(new AgentDefinitionInput
-                                {
-                                    Name = "Default Assistant",
-                                    Description = null,
-                                    Instructions = "Be helpful.",
-                                    ModelProfile = null,
-                                    ReasoningEffort = null,
-                                    Kind = AgentDefinitionKind.Single,
-                                    AllowedToolNames = [],
-                                    ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
-                                    OrchestrationTopologyJson = null
-                                },
+                                    {
+                                        Name = "Default Assistant",
+                                        Description = null,
+                                        Instructions = "Be helpful.",
+                                        ModelProfile = null,
+                                        ReasoningEffort = null,
+                                        Kind = AgentDefinitionKind.Single,
+                                        AllowedToolNames = [],
+                                        ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                                        OrchestrationTopologyJson = null
+                                    },
                                     AgentDefaults.DefaultAgentSeedSlug);
         }
 
@@ -1611,18 +1611,18 @@ public sealed class DevWorkflowAgentExecutorTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId));
         _ = await store.UpdateAsync(agentDefinitionId,
-                           new AgentDefinitionInput
-                           {
-                               Name = definition.Name,
-                               Description = definition.Description,
-                               Instructions = definition.Instructions,
-                               ModelProfile = definition.ModelProfile,
-                               ReasoningEffort = definition.ReasoningEffort,
-                               Kind = definition.Kind,
-                               AllowedToolNames = toolNames,
-                               ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
-                               OrchestrationTopologyJson = definition.OrchestrationTopologyJson
-                           });
+            new AgentDefinitionInput
+            {
+                Name = definition.Name,
+                Description = definition.Description,
+                Instructions = definition.Instructions,
+                ModelProfile = definition.ModelProfile,
+                ReasoningEffort = definition.ReasoningEffort,
+                Kind = definition.Kind,
+                AllowedToolNames = toolNames,
+                ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson = definition.OrchestrationTopologyJson
+            });
     }
 
     /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>

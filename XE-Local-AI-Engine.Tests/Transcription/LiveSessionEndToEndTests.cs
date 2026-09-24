@@ -192,7 +192,13 @@ public sealed class LiveSessionEndToEndTests
         new(window => window.DurationMs >= WindowMs
             ?
             [
-                new WhisperTranscriptSegment { StartSeconds = 0.5, EndSeconds = 4.0, Text = "hello from the lane", Confidence = 0.87 }
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.5,
+                    EndSeconds = 4.0,
+                    Text = "hello from the lane",
+                    Confidence = 0.87
+                }
             ]
             : []);
 

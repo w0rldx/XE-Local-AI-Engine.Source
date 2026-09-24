@@ -285,9 +285,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             [PlainRow("implement", DevWorkflowNodeType.DevTask, TaskId), PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null)]);
 
         var overlay = await commands.OverlayAsync(Run(UndecomposedGraph),
-                                        PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
-                                        Session(workspace),
-                                        CancellationToken.None);
+            PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
+            Session(workspace),
+            CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         var basedOn = AssertEx.NotNull(overlay.BasedOn);
@@ -314,9 +314,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             ]);
 
         var overlay = await commands.OverlayAsync(Run(IntegrationGraph),
-                                        PlainRow("fullvalidate", DevWorkflowNodeType.Tool, developmentTaskId: null),
-                                        Session(workspace),
-                                        CancellationToken.None);
+            PlainRow("fullvalidate", DevWorkflowNodeType.Tool, developmentTaskId: null),
+            Session(workspace),
+            CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         AssertEx.Null(overlay.BasedOn);
@@ -341,9 +341,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             ]);
 
         var overlay = await commands.OverlayAsync(Run(TwoUpstreamImplementationsGraph),
-                                        PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
-                                        Session(workspace),
-                                        CancellationToken.None);
+            PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
+            Session(workspace),
+            CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         var refusal = AssertEx.NotNull(overlay.Refusal);
@@ -366,9 +366,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             [PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null)]);
 
         var overlay = await commands.OverlayAsync(Run(UndecomposedGraph),
-                                        PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
-                                        Session(workspace),
-                                        CancellationToken.None);
+            PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
+            Session(workspace),
+            CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         AssertEx.Null(overlay.BasedOn);

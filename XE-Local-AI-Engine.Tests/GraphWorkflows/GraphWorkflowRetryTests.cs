@@ -94,10 +94,10 @@ public sealed class GraphWorkflowRetryTests
         await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true);
         await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running);
         await harness.TransitionNodeRunAsync(runId,
-                         "work",
-                         GraphWorkflowNodeRunStatus.Failed,
-                         GraphWorkflowFailureClass.NodeFailed,
-                         "the lane said so again");
+            "work",
+            GraphWorkflowNodeRunStatus.Failed,
+            GraphWorkflowFailureClass.NodeFailed,
+            "the lane said so again");
 
         _ = await harness.AdvanceAsync(runId);
 

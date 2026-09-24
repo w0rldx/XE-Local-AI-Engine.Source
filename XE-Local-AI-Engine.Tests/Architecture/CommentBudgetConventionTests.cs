@@ -152,10 +152,10 @@ public sealed partial class CommentBudgetConventionTests
         }
 
         var offenders = measured
-                            .Where(entry => entry.Value > allowed.GetValueOrDefault(entry.Key))
-                            .Select(entry => $"{entry.Key}|{entry.Value}   (allowed {allowed.GetValueOrDefault(entry.Key)})")
-                            .Order(StringComparer.Ordinal)
-                            .ToList();
+                        .Where(entry => entry.Value > allowed.GetValueOrDefault(entry.Key))
+                        .Select(entry => $"{entry.Key}|{entry.Value}   (allowed {allowed.GetValueOrDefault(entry.Key)})")
+                        .Order(StringComparer.Ordinal)
+                        .ToList();
 
         AssertEx.Empty(offenders,
             "A comment or XML-doc rule from docs/wiki/16-code-conventions.md grew: a summary over "
@@ -282,9 +282,8 @@ public sealed partial class CommentBudgetConventionTests
                 || count <= 0
                 || !entries.TryAdd($"{fields[0]}|{fields[1]}", count))
             {
-                throw new InvalidDataException(
-                    $"Architecture/CommentBudgetAllowlist.txt line {number} is not a unique "
-                    + $"'file|rule|positive count' entry: {line}");
+                throw new InvalidDataException($"Architecture/CommentBudgetAllowlist.txt line {number} is not a unique "
+                                               + $"'file|rule|positive count' entry: {line}");
             }
         }
 
@@ -295,8 +294,7 @@ public sealed partial class CommentBudgetConventionTests
     ///     Rewrites the allowlist as <c>min(allowed, measured)</c> per existing key, dropping the keys that reached
     ///     zero or left the tree. It can only ever shrink: a key the file does not already hold is never added.
     /// </summary>
-    private static void Shrink(
-        Dictionary<string, int> allowed,
+    private static void Shrink(Dictionary<string, int> allowed,
         Dictionary<string, int> measured,
         HashSet<string> scanned)
     {
@@ -527,7 +525,10 @@ public sealed partial class CommentBudgetConventionTests
 
     private static int[] LineStarts(string source)
     {
-        var starts = new List<int> { 0 };
+        var starts = new List<int>
+        {
+            0
+        };
 
         for (var index = source.IndexOf('\n', StringComparison.Ordinal);
              index >= 0;
@@ -572,7 +573,8 @@ public sealed partial class CommentBudgetConventionTests
     private static string Doc(params string[] lines) =>
         string.Join('\n', lines.Select(line => $"/// {line}")) + "\nvoid M() { }";
 
-    private static string Filler(int length) => new('x', length);
+    private static string Filler(int length) =>
+        new('x', length);
 
     [GeneratedRegex("<summary>(.*?)</summary>", RegexOptions.Singleline)]
     private static partial Regex SummaryTag();
@@ -596,28 +598,28 @@ public sealed partial class CommentBudgetConventionTests
     private static partial Regex Whitespace();
 
     private const string AllowlistHeader = """
-        # Comment and XML-doc budget counts — the allowlist for CommentBudgetConventionTests.
-        #
-        # Format: <repository-relative file>|<rule>|<count>, one line per file and rule, sorted. The count is how
-        # many items in that file exceed that budget today. A file with no line for a rule must measure zero.
-        # Blank lines and lines starting with '#' are ignored.
-        #
-        # Rules (docs/wiki/16-code-conventions.md). The first five are length budgets, the last four are shapes
-        # that satisfy a length budget while being wrong:
-        #   summary   a <summary> over 240 characters of tag-stripped text
-        #   tag       a <param>/<returns>/<value> over 160 characters
-        #   remarks   a <remarks> over 5 content lines or 600 characters
-        #   block     a /// block over 15 lines
-        #   run       more than 2 consecutive own-line // lines
-        #   multi     a /// block carrying a second <summary> or <remarks>
-        #   seealso   a <seealso> carrying a prose body, which no budget measures
-        #   nosummary a /// block with <remarks> but no <summary> and no <inheritdoc>
-        #   xml       a /// block that is not well-formed XML; nothing else in the build parses one
-        #
-        # The list is SHRINK-ONLY. Measuring more than the count fails; measuring less fails as stale, so the commit
-        # that cleans a file lowers or deletes its line in the same change and the room cannot be spent twice. To
-        # rewrite the whole file after a cleanup batch, run the test with XE_COMMENT_BUDGET_SHRINK=1: it lowers
-        # counts, drops emptied entries, never adds a key, never raises a count, and always fails afterwards.
+                                           # Comment and XML-doc budget counts — the allowlist for CommentBudgetConventionTests.
+                                           #
+                                           # Format: <repository-relative file>|<rule>|<count>, one line per file and rule, sorted. The count is how
+                                           # many items in that file exceed that budget today. A file with no line for a rule must measure zero.
+                                           # Blank lines and lines starting with '#' are ignored.
+                                           #
+                                           # Rules (docs/wiki/16-code-conventions.md). The first five are length budgets, the last four are shapes
+                                           # that satisfy a length budget while being wrong:
+                                           #   summary   a <summary> over 240 characters of tag-stripped text
+                                           #   tag       a <param>/<returns>/<value> over 160 characters
+                                           #   remarks   a <remarks> over 5 content lines or 600 characters
+                                           #   block     a /// block over 15 lines
+                                           #   run       more than 2 consecutive own-line // lines
+                                           #   multi     a /// block carrying a second <summary> or <remarks>
+                                           #   seealso   a <seealso> carrying a prose body, which no budget measures
+                                           #   nosummary a /// block with <remarks> but no <summary> and no <inheritdoc>
+                                           #   xml       a /// block that is not well-formed XML; nothing else in the build parses one
+                                           #
+                                           # The list is SHRINK-ONLY. Measuring more than the count fails; measuring less fails as stale, so the commit
+                                           # that cleans a file lowers or deletes its line in the same change and the room cannot be spent twice. To
+                                           # rewrite the whole file after a cleanup batch, run the test with XE_COMMENT_BUDGET_SHRINK=1: it lowers
+                                           # counts, drops emptied entries, never adds a key, never raises a count, and always fails afterwards.
 
-        """;
+                                           """;
 }

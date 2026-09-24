@@ -98,7 +98,8 @@ public sealed class LlamaFitParamsProcessRunnerTests
             ModelName = "model",
             Role = ModelRole.Reranker,
             ExecutablePath = Path.Combine(workingDirectory, "llama-server"),
-            Arguments = [
+            Arguments =
+            [
                 "-m", "/models/model.gguf",
                 "--host", "127.0.0.1",
                 "--port", "18080",

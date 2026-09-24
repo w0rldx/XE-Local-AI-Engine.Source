@@ -191,7 +191,12 @@ internal sealed class HfHubClient
                 }
 
                 var size = lfsSize ?? GetInt64(sibling, "size") ?? 0L;
-                files.Add(new HubRepoFile { FileName = fileName, SizeBytes = size, Sha256 = sha256 });
+                files.Add(new HubRepoFile
+                {
+                    FileName = fileName,
+                    SizeBytes = size,
+                    Sha256 = sha256
+                });
             }
         }
 

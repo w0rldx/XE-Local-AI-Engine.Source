@@ -167,8 +167,8 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
                 activeCount,
                 breakdown);
             await ReportAsync(context,
-                    $"Skipped: benchmark project {parameters.ProjectId} still has {activeCount} work item(s) queued or running ({breakdown}), so no cells were enqueued.",
-                    cancellationToken);
+                $"Skipped: benchmark project {parameters.ProjectId} still has {activeCount} work item(s) queued or running ({breakdown}), so no cells were enqueued.",
+                cancellationToken);
             return;
         }
 
@@ -385,7 +385,13 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
             throw new ScheduledJobValidationException($"The scheduled matrix expands to {cells.Length.ToString(CultureInfo.InvariantCulture)} cells, past the {MaxCells}-cell ceiling.");
         }
 
-        return new RunBenchmarkBatchParameters { ProjectId = projectId, Cells = cells, RepeatCount = repeatCount, Warmup = dto.Warmup ?? false };
+        return new RunBenchmarkBatchParameters
+        {
+            ProjectId = projectId,
+            Cells = cells,
+            RepeatCount = repeatCount,
+            Warmup = dto.Warmup ?? false
+        };
     }
 
     /// <summary>Validated, code-facing parameters for one <c>run-benchmark-batch</c> fire, matrix already expanded.</summary>

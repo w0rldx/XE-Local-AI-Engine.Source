@@ -69,7 +69,14 @@ internal static class GraphWorkflowChatTestSupport
     public static async Task<Guid> CreateConversationAsync(IServiceProvider services, string kind = NodeConversationKind.Chat, string origin = NodeChatOriginValues.Local)
     {
         var persistence = services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "workflow chat", UserId = "node", CreatedAtUtc = 1, Kind = kind, Origin = origin });
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "workflow chat",
+            UserId = "node",
+            CreatedAtUtc = 1,
+            Kind = kind,
+            Origin = origin
+        });
         return conversation.ConversationId;
     }
 
@@ -100,7 +107,11 @@ internal static class GraphWorkflowChatTestSupport
     {
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{Root}/runs/{runId}/nodes/{nodeKey}/steer");
-        request.Content = new StringContent(JsonSerializer.Serialize(new { operationId, message }), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            operationId,
+            message
+        }), Encoding.UTF8, "application/json");
         factory.AddNodeBearerToken(request);
         return await client.SendAsync(request);
     }

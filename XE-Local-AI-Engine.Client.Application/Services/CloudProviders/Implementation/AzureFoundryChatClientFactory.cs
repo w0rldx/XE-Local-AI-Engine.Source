@@ -33,6 +33,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     ///     The v1 builders construct the client with a real <c>AuthenticationPolicy</c> instead — docs/wiki/03-local-runtime-and-providers.md, "Azure Foundry: the two wire surfaces".
     /// </remarks>
     private const string PlaceholderApiKey = "unused-entra-id-auth";
+
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
     // The v1 surface path segment appended to the connection endpoint (Locked v1 surface contract: no api-version

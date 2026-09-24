@@ -761,7 +761,15 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
             // The real store writes the caller's payload onto the terminal row; a double that dropped it would hide a
             // stream and a poll answering differently.
-            AddEvent(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = command.ExecutionId, Sequence = command.Sequence, EventType = command.EventType, DetailJson = command.EventDetailJson, OccurredAtUtc = command.EndedAtUtc });
+            AddEvent(new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = command.ExecutionId,
+                Sequence = command.Sequence,
+                EventType = command.EventType,
+                DetailJson = command.EventDetailJson,
+                OccurredAtUtc = command.EndedAtUtc
+            });
             return Task.FromResult(true);
         }
     }

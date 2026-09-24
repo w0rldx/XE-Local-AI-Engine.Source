@@ -22,8 +22,7 @@ internal sealed class WorkSessionCheckpointComposer
     private readonly ILogger<WorkSessionCheckpointComposer> _logger;
     private readonly IAgentWorkSessionStore _store;
 
-    public WorkSessionCheckpointComposer(
-        IAgentWorkSessionStore store,
+    public WorkSessionCheckpointComposer(IAgentWorkSessionStore store,
         IConversationCompactionService compaction,
         ILogger<WorkSessionCheckpointComposer> logger)
     {
@@ -43,7 +42,14 @@ internal sealed class WorkSessionCheckpointComposer
         var previous = await _store.GetLatestCheckpointAsync(sessionId, cancellationToken);
 
         var openTasks = WorkSessionStateBlockComposer.OpenTasks(tasks);
-        var currentTask = WorkSessionStateBlockComposer.ResolveCurrentTask(new WorkSessionState { Session = session, Tasks = tasks, Findings = findings, Artifacts = [], LastCheckpoint = previous });
+        var currentTask = WorkSessionStateBlockComposer.ResolveCurrentTask(new WorkSessionState
+        {
+            Session = session,
+            Tasks = tasks,
+            Findings = findings,
+            Artifacts = [],
+            LastCheckpoint = previous
+        });
         var state = new WorkSessionCheckpointState(currentTask?.Id,
             [.. openTasks.Select(static task => task.Id)],
             KeyFindingIds(findings),
@@ -56,16 +62,16 @@ internal sealed class WorkSessionCheckpointComposer
         // pause) and a step-derived key lets idempotency swallow the second — the one recording where work stopped.
         var checkpointId = Guid.NewGuid();
         return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
-        {
-            SessionId = sessionId,
-            CheckpointId = checkpointId,
-            ExpectedVersion = WorkSessionVersions.Any,
-            OperationId = checkpointId,
-            Step = session.StepCount,
-            Summary = summary,
-            StateJson = JsonSerializer.Serialize(state)
-        },
-                               cancellationToken);
+            {
+                SessionId = sessionId,
+                CheckpointId = checkpointId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                OperationId = checkpointId,
+                Step = session.StepCount,
+                Summary = summary,
+                StateJson = JsonSerializer.Serialize(state)
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -89,9 +95,9 @@ internal sealed class WorkSessionCheckpointComposer
         // A blank requested model keeps compaction on the node default whatever the session runs on. The keep window is
         // the SESSION one, not the configured chat eight — wiki 04-agent-mode.md ("Checkpoints, and what a repoint…").
         var result = await _compaction.CompactAsync(conversationId,
-                                          requestedModel: null,
-                                          ConversationStepContextBound.SessionKeepVerbatim,
-                                          cancellationToken);
+            requestedModel: null,
+            ConversationStepContextBound.SessionKeepVerbatim,
+            cancellationToken);
 
         // Any non-blank synopsis wins, not only a freshly folded one: the step boundary often leaves nothing to fold,
         // and its "already covered" no-op returns the synopsis THAT fold produced. Compacted-only would pin a stale one.

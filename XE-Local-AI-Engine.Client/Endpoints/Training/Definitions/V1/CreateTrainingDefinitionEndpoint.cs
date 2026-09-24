@@ -25,10 +25,14 @@ public sealed class CreateTrainingDefinitionEndpoint : Endpoint<CreateTrainingDe
 
     public override async Task HandleAsync(CreateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _definitions.CreateAsync(new DatasetDefinitionDraft { Name = req.Name, Body = req.Body }, ct);
+        var record = await _definitions.CreateAsync(new DatasetDefinitionDraft
+        {
+            Name = req.Name,
+            Body = req.Body
+        }, ct);
         await Send.CreatedAtAsync<GetTrainingDefinitionEndpoint>(new
-                  {
-                      definitionId = record.Id
-                  }, record.ToResponse(), cancellation: ct);
+        {
+            definitionId = record.Id
+        }, record.ToResponse(), cancellation: ct);
     }
 }

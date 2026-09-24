@@ -23,7 +23,13 @@ public sealed class ModelFitMapperLayerPlacementTests
             InferenceBackend = "cuda",
             GpuExpected = true,
             CpuFallback = false,
-            LayerPlacement = new LlamaLayerPlacement { ModelName = "qwen3-14b", Role = ModelRole.Chat, OffloadedLayers = 38, TotalLayers = 49 }
+            LayerPlacement = new LlamaLayerPlacement
+            {
+                ModelName = "qwen3-14b",
+                Role = ModelRole.Chat,
+                OffloadedLayers = 38,
+                TotalLayers = 49
+            }
         });
 
         AssertEx.Equal(expected: 38, response.GpuOffloadedLayers!.Value);

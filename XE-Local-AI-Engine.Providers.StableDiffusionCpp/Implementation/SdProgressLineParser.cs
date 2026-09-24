@@ -43,19 +43,28 @@ internal static partial class SdProgressLineParser
         // resolved by the consumer's sampling-seen latch, not here.
         if (DecodingPattern().IsMatch(line))
         {
-            observation = new SdProgressObservation { Phase = ImageGenPhase.Decoding };
+            observation = new SdProgressObservation
+            {
+                Phase = ImageGenPhase.Decoding
+            };
             return true;
         }
 
         if (EncodingPattern().IsMatch(line))
         {
-            observation = new SdProgressObservation { Phase = ImageGenPhase.Encoding };
+            observation = new SdProgressObservation
+            {
+                Phase = ImageGenPhase.Encoding
+            };
             return true;
         }
 
         if (LoadingPattern().IsMatch(line) || ByteRateBarPattern().IsMatch(line))
         {
-            observation = new SdProgressObservation { Phase = ImageGenPhase.Loading };
+            observation = new SdProgressObservation
+            {
+                Phase = ImageGenPhase.Loading
+            };
             return true;
         }
 
@@ -83,7 +92,13 @@ internal static partial class SdProgressLineParser
             return null;
         }
 
-        return new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = step, TotalSteps = total, SecondsPerIteration = ToSecondsPerIteration(rate, match.Groups["unit"].Value) };
+        return new SdProgressObservation
+        {
+            Phase = ImageGenPhase.Sampling,
+            Step = step,
+            TotalSteps = total,
+            SecondsPerIteration = ToSecondsPerIteration(rate, match.Groups["unit"].Value)
+        };
     }
 
     /// <summary>

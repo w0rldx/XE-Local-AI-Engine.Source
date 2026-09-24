@@ -197,15 +197,15 @@ public sealed class IntegrationPriorOutputsTests
         // The refused call: over the store's cap, so it writes no row and charges no bytes.
         harness.Executions.OutputCapOverride = 1;
         _ = await harness.Executions.AppendOutputEventAsync(new IntegrationEventAppend
-        {
-            EventId = Guid.NewGuid(),
-            ExecutionId = earlier,
-            Sequence = 99,
-            EventType = IntegrationStreamEventTypes.ExternalOutput,
-            DetailJson = """{"contentType":"application/json","payload":{"abandoned":true}}""",
-            OccurredAtUtc = 5
-        },
-                             maxOutputBytesPerExecution: 1_048_576);
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = earlier,
+                Sequence = 99,
+                EventType = IntegrationStreamEventTypes.ExternalOutput,
+                DetailJson = """{"contentType":"application/json","payload":{"abandoned":true}}""",
+                OccurredAtUtc = 5
+            },
+            maxOutputBytesPerExecution: 1_048_576);
         harness.Executions.OutputCapOverride = null;
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
@@ -226,15 +226,15 @@ public sealed class IntegrationPriorOutputsTests
         var otherSession = Guid.NewGuid();
         var otherExecution = harness.Executions.Seed(Guid.NewGuid(), Guid.NewGuid(), otherSession, IntegrationExecutionStatus.Completed, receivedAtUtc: 1);
         _ = await harness.Executions.AppendOutputEventAsync(new IntegrationEventAppend
-        {
-            EventId = Guid.NewGuid(),
-            ExecutionId = otherExecution.Id,
-            Sequence = 2,
-            EventType = IntegrationStreamEventTypes.ExternalOutput,
-            DetailJson = """{"contentType":"application/json","payload":{"theirs":true}}""",
-            OccurredAtUtc = 2
-        },
-                             maxOutputBytesPerExecution: 1_048_576);
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = otherExecution.Id,
+                Sequence = 2,
+                EventType = IntegrationStreamEventTypes.ExternalOutput,
+                DetailJson = """{"contentType":"application/json","payload":{"theirs":true}}""",
+                OccurredAtUtc = 2
+            },
+            maxOutputBytesPerExecution: 1_048_576);
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
 
@@ -256,15 +256,15 @@ public sealed class IntegrationPriorOutputsTests
         {
             var earlier = harness.SeedAccepted(IntegrationExecutionStatus.Completed, oldest + index);
             AssertEx.True(await harness.Executions.AppendOutputEventAsync(new IntegrationEventAppend
-            {
-                EventId = Guid.NewGuid(),
-                ExecutionId = earlier,
-                Sequence = 2,
-                EventType = IntegrationStreamEventTypes.ExternalOutput,
-                DetailJson = Envelope(index),
-                OccurredAtUtc = oldest + index
-            },
-                                           maxOutputBytesPerExecution: 1_048_576),
+                    {
+                        EventId = Guid.NewGuid(),
+                        ExecutionId = earlier,
+                        Sequence = 2,
+                        EventType = IntegrationStreamEventTypes.ExternalOutput,
+                        DetailJson = Envelope(index),
+                        OccurredAtUtc = oldest + index
+                    },
+                    maxOutputBytesPerExecution: 1_048_576),
                 "Seeding a committed output must succeed.");
         }
 
@@ -288,15 +288,15 @@ public sealed class IntegrationPriorOutputsTests
         foreach (var envelope in envelopes)
         {
             var recorded = await harness.Executions.AppendOutputEventAsync(new IntegrationEventAppend
-            {
-                EventId = Guid.NewGuid(),
-                ExecutionId = earlier,
-                Sequence = sequence++,
-                EventType = IntegrationStreamEventTypes.ExternalOutput,
-                DetailJson = envelope,
-                OccurredAtUtc = sequence
-            },
-                                            maxOutputBytesPerExecution: 1_048_576);
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = earlier,
+                    Sequence = sequence++,
+                    EventType = IntegrationStreamEventTypes.ExternalOutput,
+                    DetailJson = envelope,
+                    OccurredAtUtc = sequence
+                },
+                maxOutputBytesPerExecution: 1_048_576);
             AssertEx.True(recorded, "Seeding a committed output must succeed.");
         }
 

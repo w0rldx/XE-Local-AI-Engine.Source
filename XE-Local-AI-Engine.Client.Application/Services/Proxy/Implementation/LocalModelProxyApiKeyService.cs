@@ -45,7 +45,11 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
         var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedLocalModelProxyApiKey { Key = key, View = ToView(record) };
+        return new GeneratedLocalModelProxyApiKey
+        {
+            Key = key,
+            View = ToView(record)
+        };
     }
 
     public async Task<LocalModelProxyApiKeyView?> GetAsync(CancellationToken cancellationToken = default)

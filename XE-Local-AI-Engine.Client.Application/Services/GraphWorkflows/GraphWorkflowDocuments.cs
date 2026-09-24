@@ -19,7 +19,8 @@ internal sealed class GraphWorkflowUpstreamDocument
 /// </summary>
 internal sealed class GraphWorkflowOutputTooLargeException : InvalidOperationException
 {
-    public GraphWorkflowOutputTooLargeException(string nodeKey, int bytes, int maxBytes) : base($"Node '{nodeKey}' produced a {bytes}-byte output document, more than the {maxBytes} bytes one node run may store.")
+    public GraphWorkflowOutputTooLargeException(string nodeKey, int bytes, int maxBytes) : base(
+        $"Node '{nodeKey}' produced a {bytes}-byte output document, more than the {maxBytes} bytes one node run may store.")
     {
         NodeKey = nodeKey;
     }
@@ -67,9 +68,23 @@ internal static class GraphWorkflowDocuments
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(node);
 
-        var unrouted = Serialize(new OutputDocument { Status = status, Attempt = attempt, Branch = null, Output = output });
+        var unrouted = Serialize(new OutputDocument
+        {
+            Status = status,
+            Attempt = attempt,
+            Branch = null,
+            Output = output
+        });
         var branch = BranchOf(graph, node, unrouted);
-        var document = branch is null ? unrouted : Serialize(new OutputDocument { Status = status, Attempt = attempt, Branch = branch, Output = output });
+        var document = branch is null
+            ? unrouted
+            : Serialize(new OutputDocument
+            {
+                Status = status,
+                Attempt = attempt,
+                Branch = branch,
+                Output = output
+            });
 
         // UTF-8 bytes, because that is what the column stores — a character count would let a document of astral-plane
         // text through at four times the cap it was measured against.
@@ -101,12 +116,23 @@ internal static class GraphWorkflowDocuments
             1 => ValueOf(upstream[0].OutputDocumentJson),
             _ => upstreamElement
         };
-        return Serialize(new InputDocument { Run = new RunInput { Input = ValueOf(runInputJson) }, Upstream = upstreamElement, Input = input });
+        return Serialize(new InputDocument
+        {
+            Run = new RunInput
+            {
+                Input = ValueOf(runInputJson)
+            },
+            Upstream = upstreamElement,
+            Input = input
+        });
     }
 
     /// <summary><c>Start</c>: the run's own input, handed to everything downstream.</summary>
     public static JsonElement StartOutput(string? runInputJson) =>
-        JsonSerializer.SerializeToElement(new StartOutputPayload { Input = ValueOf(runInputJson) }, JsonOptions);
+        JsonSerializer.SerializeToElement(new StartOutputPayload
+        {
+            Input = ValueOf(runInputJson)
+        }, JsonOptions);
 
     /// <summary><c>Condition</c> and <c>Parallel</c>: a verbatim pass-through of the predecessor's <c>output</c>.</summary>
     /// <remarks>
@@ -138,7 +164,12 @@ internal static class GraphWorkflowDocuments
     ///     the operator's, not the router's, and a condition selecting on them would route on free text.
     /// </remarks>
     public static JsonElement PauseOutput(GraphWorkflowDecisionKind decision, string? comment, JsonElement? payload) =>
-        JsonSerializer.SerializeToElement(new PauseOutputPayload { Decision = decision.ToString(), Comment = comment, Payload = payload ?? NullValue }, JsonOptions);
+        JsonSerializer.SerializeToElement(new PauseOutputPayload
+        {
+            Decision = decision.ToString(),
+            Comment = comment,
+            Payload = payload ?? NullValue
+        }, JsonOptions);
 
     /// <summary><c>ChatInput</c>: the user's answer.</summary>
     /// <remarks>
@@ -146,7 +177,11 @@ internal static class GraphWorkflowDocuments
     ///     checks read <c>output.decision</c> structurally, exactly as they do for a pause.
     /// </remarks>
     public static JsonElement ChatInputOutput(string text) =>
-        JsonSerializer.SerializeToElement(new ChatInputOutputPayload { Decision = nameof(GraphWorkflowDecisionKind.Answer), Text = text }, JsonOptions);
+        JsonSerializer.SerializeToElement(new ChatInputOutputPayload
+        {
+            Decision = nameof(GraphWorkflowDecisionKind.Answer),
+            Text = text
+        }, JsonOptions);
 
     /// <summary><c>Tool</c>: the invocation's answer under <c>result</c>.</summary>
     /// <remarks>
@@ -157,11 +192,11 @@ internal static class GraphWorkflowDocuments
     /// </remarks>
     public static JsonElement ToolOutput(string? result) =>
         JsonSerializer.SerializeToElement(new ToolOutputPayload
-        {
-            Result = Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
-                ? structured
-                : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)
-        },
+            {
+                Result = Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
+                    ? structured
+                    : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)
+            },
             JsonOptions);
 
     /// <summary>
@@ -206,7 +241,11 @@ internal static class GraphWorkflowDocuments
         var result = resultPath is null
             ? input ?? NullValue
             : Resolve(input, resultPath) ?? NullValue;
-        return JsonSerializer.SerializeToElement(new EndOutputPayload { Outcome = outcome, Result = result }, JsonOptions);
+        return JsonSerializer.SerializeToElement(new EndOutputPayload
+        {
+            Outcome = outcome,
+            Result = result
+        }, JsonOptions);
     }
 
     /// <summary>

@@ -205,7 +205,12 @@ internal static class SkillArchiveReader
                 continue;
             }
 
-            files.Add(new SkillArchiveFile { Name = relative, MediaType = MediaTypeFor(relative), Content = await ReadTextAsync(entry, budget, options, cancellationToken) });
+            files.Add(new SkillArchiveFile
+            {
+                Name = relative,
+                MediaType = MediaTypeFor(relative),
+                Content = await ReadTextAsync(entry, budget, options, cancellationToken)
+            });
         }
 
         var directoryName = root.Length == 0 ? string.Empty : root.TrimEnd('/').Split('/')[^1];

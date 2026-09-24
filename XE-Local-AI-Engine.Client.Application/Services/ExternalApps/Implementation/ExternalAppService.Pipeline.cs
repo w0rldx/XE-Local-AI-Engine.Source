@@ -85,13 +85,13 @@ internal sealed partial class ExternalAppService
             try
             {
                 return await CreateAndStartAsync(runtime,
-                        daemonIsRootless,
-                        instanceId,
-                        manifest,
-                        plan,
-                        hold,
-                        commitBeforeStart,
-                        cancellationToken);
+                    daemonIsRootless,
+                    instanceId,
+                    manifest,
+                    plan,
+                    hold,
+                    commitBeforeStart,
+                    cancellationToken);
             }
             catch (ExternalAppPipelineException failure)
                 when (attempt == 0 && failure.Failure.Category == ExternalAppFailureCategory.PortUnavailable)
@@ -306,7 +306,12 @@ internal sealed partial class ExternalAppService
             // The post-start read-back IS the binding read-back: what the daemon actually bound is the same evidence
             // the port rule is verified against, and asking twice would let the two answers differ.
             published.AddRange(inspection.PublishedPorts.Select(port =>
-                new ExternalAppPublishedPort { Service = service.ServiceName, ContainerPort = port.ContainerPort, HostPort = port.HostPort }));
+                new ExternalAppPublishedPort
+                {
+                    Service = service.ServiceName,
+                    ContainerPort = port.ContainerPort,
+                    HostPort = port.HostPort
+                }));
 
             await WaitUntilReadyAsync(runtime, service, containerId, plan, cancellationToken);
 
@@ -979,11 +984,11 @@ internal sealed partial class ExternalAppService
         try
         {
             await _publisher.PublishPullProgressAsync(instanceId,
-                                service,
-                                report.LayerCount,
-                                report.CompletedLayers,
-                                report.CurrentBytes,
-                                CancellationToken.None);
+                service,
+                report.LayerCount,
+                report.CompletedLayers,
+                report.CurrentBytes,
+                CancellationToken.None);
         }
 #pragma warning disable CA1031 // Progress is worthless after the fact; a dropped report degrades to a stale bar.
         catch (Exception exception)

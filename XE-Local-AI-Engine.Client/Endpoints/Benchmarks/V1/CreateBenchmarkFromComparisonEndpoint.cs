@@ -38,17 +38,17 @@ public sealed class CreateBenchmarkFromComparisonEndpoint : Endpoint<CreateBench
     public override async Task HandleAsync(CreateBenchmarkFromComparisonRequest req, CancellationToken ct)
     {
         var created = await _handoff.CreateAsync(new CreateBenchmarkFromComparisonCommand
-        {
-            ComparisonId = req.ComparisonId,
-            CoreTask = req.CoreTask,
-            ContextTokens = req.ContextTokens,
-            AgentDefinitionId = req.AgentDefinitionId,
-            Name = req.Name,
-            KvCacheType = req.KvCacheType,
-            RepeatCount = req.RepeatCount,
-            Warmup = req.Warmup
-        },
-                                        ct);
+            {
+                ComparisonId = req.ComparisonId,
+                CoreTask = req.CoreTask,
+                ContextTokens = req.ContextTokens,
+                AgentDefinitionId = req.AgentDefinitionId,
+                Name = req.Name,
+                KvCacheType = req.KvCacheType,
+                RepeatCount = req.RepeatCount,
+                Warmup = req.Warmup
+            },
+            ct);
 
         // 202, like every other run start: the runs are queued, not finished.
         await Send.ResultAsync(Results.Accepted(value: new CreateBenchmarkFromComparisonResponse

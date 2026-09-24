@@ -463,7 +463,16 @@ public sealed partial class InvocationRunner
             return null;
         }
 
-        return [.. resources.Select(static resource => new InvocationSkillResource { Name = resource.Name, Description = resource.Description, MediaType = resource.MediaType, Content = resource.Content })];
+        return
+        [
+            .. resources.Select(static resource => new InvocationSkillResource
+            {
+                Name = resource.Name,
+                Description = resource.Description,
+                MediaType = resource.MediaType,
+                Content = resource.Content
+            })
+        ];
     }
 
     /// <summary>

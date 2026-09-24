@@ -110,7 +110,14 @@ public sealed class InstalledGgufDeletionStoreTests
             Quantization = "Q4_K_M",
             Role = GgufRole.Chat,
             ModelContentFingerprint = GgufModelContentFingerprint.ComputeV1(members.Select(static member =>
-                new GgufModelContentMember { RelativePath = member.RelativePath, Role = member.Role, SizeBytes = member.SizeBytes, Sha256 = member.Sha256, OwningAliases = member.OwningAliases }))
+                new GgufModelContentMember
+                {
+                    RelativePath = member.RelativePath,
+                    Role = member.Role,
+                    SizeBytes = member.SizeBytes,
+                    Sha256 = member.Sha256,
+                    OwningAliases = member.OwningAliases
+                }))
         };
 
         var receipt = GgufDeletionStageReceipt.Create(snapshot, Guid.NewGuid());

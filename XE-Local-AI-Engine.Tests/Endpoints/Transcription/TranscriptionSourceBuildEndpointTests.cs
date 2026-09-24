@@ -113,7 +113,15 @@ public sealed class TranscriptionSourceBuildEndpointTests
                 Prerequisites = new WhisperCppSourceBuildPrerequisiteReport
                 {
                     CanBuild = false,
-                    Items = [new WhisperCppSourceBuildPrerequisiteItem { Key = "nvcc", Satisfied = false, Detail = "NVIDIA CUDA compiler (nvcc) is not available." }]
+                    Items =
+                    [
+                        new WhisperCppSourceBuildPrerequisiteItem
+                        {
+                            Key = "nvcc",
+                            Satisfied = false,
+                            Detail = "NVIDIA CUDA compiler (nvcc) is not available."
+                        }
+                    ]
                 }
             }
         };
@@ -224,10 +232,21 @@ public sealed class TranscriptionSourceBuildEndpointTests
             Report = new WhisperCppSourceBuildPrerequisiteReport
             {
                 CanBuild = false,
-                Items = [
-                new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
-                new WhisperCppSourceBuildPrerequisiteItem { Key = "nvcc", Satisfied = false, Detail = "NVIDIA CUDA compiler (nvcc) is not available." }
-            ]
+                Items =
+                [
+                    new WhisperCppSourceBuildPrerequisiteItem
+                    {
+                        Key = "os-is-linux",
+                        Satisfied = true,
+                        Detail = "Linux host detected."
+                    },
+                    new WhisperCppSourceBuildPrerequisiteItem
+                    {
+                        Key = "nvcc",
+                        Satisfied = false,
+                        Detail = "NVIDIA CUDA compiler (nvcc) is not available."
+                    }
+                ]
             }
         };
         await using var factory = FactoryWith(build, probe);
@@ -300,7 +319,10 @@ public sealed class TranscriptionSourceBuildEndpointTests
         // "No managed runtime" is what the caller asked for, and it is now true either way.
         var build = new StubSourceBuildService
         {
-            RemoveResult = new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled }
+            RemoveResult = new WhisperCppSourceBuildRemoveResult
+            {
+                Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled
+            }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -471,10 +493,16 @@ public sealed class TranscriptionSourceBuildEndpointTests
         public bool CancelCalled { get; private set; }
 
         public WhisperCppSourceBuildStartResult StartResult { get; init; } =
-            new() { Outcome = WhisperCppSourceBuildStartOutcome.Started };
+            new()
+            {
+                Outcome = WhisperCppSourceBuildStartOutcome.Started
+            };
 
         public WhisperCppSourceBuildRemoveResult RemoveResult { get; init; } =
-            new() { Outcome = WhisperCppSourceBuildRemoveOutcome.Removed };
+            new()
+            {
+                Outcome = WhisperCppSourceBuildRemoveOutcome.Removed
+            };
 
         public WhisperCppSourceBuildStatus Status { get; init; } =
             new()
@@ -523,7 +551,19 @@ public sealed class TranscriptionSourceBuildEndpointTests
         public WhisperBackend? RequestedBackend { get; private set; }
 
         public WhisperCppSourceBuildPrerequisiteReport Report { get; init; } =
-            new() { CanBuild = true, Items = [new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." }] };
+            new()
+            {
+                CanBuild = true,
+                Items =
+                [
+                    new WhisperCppSourceBuildPrerequisiteItem
+                    {
+                        Key = "os-is-linux",
+                        Satisfied = true,
+                        Detail = "Linux host detected."
+                    }
+                ]
+            };
 
         public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
         {

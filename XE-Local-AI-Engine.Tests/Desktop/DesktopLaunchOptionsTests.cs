@@ -36,17 +36,14 @@ public sealed class DesktopLaunchOptionsTests
         _ = AssertEx.Throws<ArgumentNullException>(() => DesktopLaunchOptions.Parse(null!));
         _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse([]));
         _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(["--origin"]));
-        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(
-            ["--origin", "http://127.0.0.1:54321", "--origin", "http://127.0.0.1:54321"]));
-        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(
-            ["--origin", "http://127.0.0.1:54321", "--unknown", Path.GetTempPath()]));
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(["--origin", "http://127.0.0.1:54321", "--origin", "http://127.0.0.1:54321"]));
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(["--origin", "http://127.0.0.1:54321", "--unknown", Path.GetTempPath()]));
     }
 
     [Test]
     public void Parse_RejectsRelativeProfileDirectory()
     {
-        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(
-            ["--origin", "http://localhost:54321", "--profile-dir", "relative-profile"]));
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(["--origin", "http://localhost:54321", "--profile-dir", "relative-profile"]));
     }
 
     [Test]
@@ -74,7 +71,6 @@ public sealed class DesktopLaunchOptionsTests
 
     private static void AssertInvalidOrigin(string origin)
     {
-        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(
-            ["--origin", origin, "--profile-dir", Path.GetTempPath()]));
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunchOptions.Parse(["--origin", origin, "--profile-dir", Path.GetTempPath()]));
     }
 }

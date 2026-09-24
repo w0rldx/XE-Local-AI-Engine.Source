@@ -26,8 +26,7 @@ public sealed class TrainingRunStartupReaper : IHostedService
     private readonly TimeProvider _timeProvider;
     private readonly TrainingRunWorkspace _workspace;
 
-    public TrainingRunStartupReaper(
-        IServiceScopeFactory scopeFactory,
+    public TrainingRunStartupReaper(IServiceScopeFactory scopeFactory,
         ITrainingProcessInspector inspector,
         TrainingRunWorkspace workspace,
         TimeProvider timeProvider,

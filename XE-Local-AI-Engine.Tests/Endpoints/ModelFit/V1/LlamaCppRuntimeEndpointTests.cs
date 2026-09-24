@@ -471,7 +471,10 @@ public sealed class LlamaCppRuntimeEndpointTests
         };
         return new FakeNodeSettingsStore(recommendedLlamaCppTag is null
             ? settings
-            : settings with { RecommendedLlamaCppTag = recommendedLlamaCppTag });
+            : settings with
+            {
+                RecommendedLlamaCppTag = recommendedLlamaCppTag
+            });
     }
 
     private static TestServerWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,

@@ -40,7 +40,12 @@ public sealed class InvocationMonitorEndpointTests
             LastUpdatedAt = FrozenNow,
             StreamedChunkCount = 2,
             StreamedThinkingChunkCount = 1,
-            PendingApproval = new InvocationApprovalState { RequestId = "approval-1", Description = "Approve tool call", RequestedAt = FrozenNow }
+            PendingApproval = new InvocationApprovalState
+            {
+                RequestId = "approval-1",
+                Description = "Approve tool call",
+                RequestedAt = FrozenNow
+            }
         });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
@@ -102,16 +107,28 @@ public sealed class InvocationMonitorEndpointTests
                 RequestId = "question-1",
                 CallId = "call-1",
                 ToolName = "ask_user",
-                Questions = [
+                Questions =
+                [
                     new UserQuestionSpec
                     {
                         Header = "Auth",
                         Question = "Which auth method?",
                         MultiSelect = false,
-                        Options = [
-                        new UserQuestionOption { Label = "OAuth device flow", Description = null, Recommended = true },
-                        new UserQuestionOption { Label = "Personal access token", Description = null, Recommended = false }
-                    ]
+                        Options =
+                        [
+                            new UserQuestionOption
+                            {
+                                Label = "OAuth device flow",
+                                Description = null,
+                                Recommended = true
+                            },
+                            new UserQuestionOption
+                            {
+                                Label = "Personal access token",
+                                Description = null,
+                                Recommended = false
+                            }
+                        ]
                     }
                 ],
                 RequestedAt = FrozenNow

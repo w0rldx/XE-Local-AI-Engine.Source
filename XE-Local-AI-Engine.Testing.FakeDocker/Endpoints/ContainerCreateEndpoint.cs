@@ -40,9 +40,9 @@ internal static class ContainerCreateEndpoint
         if (state.Containers.Values.Any(existing => string.Equals(existing.Name, name, StringComparison.Ordinal)))
         {
             await FakeDockerEndpointMapper
-                  .WriteErrorAsync(context,
-                      StatusCodes.Status409Conflict,
-                      $"Conflict. The container name \"/{name}\" is already in use.");
+                .WriteErrorAsync(context,
+                    StatusCodes.Status409Conflict,
+                    $"Conflict. The container name \"/{name}\" is already in use.");
             return;
         }
 
@@ -74,12 +74,12 @@ internal static class ContainerCreateEndpoint
         state.Containers[container.Id] = container;
 
         await FakeDockerEndpointMapper.WriteJsonAsync(context,
-                                          new JsonObject
-                                          {
-                                              ["Id"] = container.Id,
-                                              ["Warnings"] = new JsonArray()
-                                          },
-                                          StatusCodes.Status201Created);
+            new JsonObject
+            {
+                ["Id"] = container.Id,
+                ["Warnings"] = new JsonArray()
+            },
+            StatusCodes.Status201Created);
     }
 
     /// <summary>

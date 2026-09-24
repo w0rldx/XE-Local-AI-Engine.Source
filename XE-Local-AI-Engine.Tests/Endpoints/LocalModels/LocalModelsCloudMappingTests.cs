@@ -47,11 +47,21 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary { Name = "qwen3:8b" }
+            new OllamaModelSummary
+            {
+                Name = "qwen3:8b"
+            }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = ["tools"], IsOverridden = false }
+            ["qwen3:8b"] = new()
+            {
+                ModelName = "qwen3:8b",
+                Kind = ModelKind.Chat,
+                DetectedKind = ModelKind.Chat,
+                Capabilities = ["tools"],
+                IsOverridden = false
+            }
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
@@ -70,11 +80,21 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary { Name = "qwen3:8b" }
+            new OllamaModelSummary
+            {
+                Name = "qwen3:8b"
+            }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = [], IsOverridden = false }
+            ["qwen3:8b"] = new()
+            {
+                ModelName = "qwen3:8b",
+                Kind = ModelKind.Chat,
+                DetectedKind = ModelKind.Chat,
+                Capabilities = [],
+                IsOverridden = false
+            }
         };
 
         var response = LocalModelsMapper.ToListResponse(localModels, "qwen3:8b", "qwen3:8b", classifications);

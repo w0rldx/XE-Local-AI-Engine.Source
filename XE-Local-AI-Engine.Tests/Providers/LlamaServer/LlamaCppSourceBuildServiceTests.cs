@@ -28,7 +28,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
-            service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+            service.StartAsync(new LlamaCppSourceBuildRequest
+                {
+                    Backend = LlamaCppSourceBackend.Cpu,
+                    Source = LlamaCppSourceSelection.Official
+                },
                 CancellationToken.None));
 
         // Arguments were reversed here — AssertEx.Contains takes (actual, expectedSubstring), so this asserted that the
@@ -56,7 +60,11 @@ public sealed class LlamaCppSourceBuildServiceTests
         using var service = new LlamaCppSourceBuildService(probe, new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
-        var request = new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official };
+        var request = new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        };
 
         var winner = service.StartAsync(request, CancellationToken.None);
         await probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -92,7 +100,11 @@ public sealed class LlamaCppSourceBuildServiceTests
         var startup = new CudaBuildStartupService(service, store, signal, NullLogger<CudaBuildStartupService>.Instance);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started,
-            (await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+            (await service.StartAsync(new LlamaCppSourceBuildRequest
+                {
+                    Backend = LlamaCppSourceBackend.Cpu,
+                    Source = LlamaCppSourceSelection.Official
+                },
                 CancellationToken.None)).Outcome);
         await AssertEx.EventuallyAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
         var pid = int.Parse(await File.ReadAllTextAsync(pidFile));
@@ -159,7 +171,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             new BusySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
-        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            },
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.ProcessesRunning, outcome.Outcome);
@@ -176,7 +192,15 @@ public sealed class LlamaCppSourceBuildServiceTests
         var report = new LlamaCppSourceBuildPrerequisiteReport
         {
             CanBuild = false,
-            Items = [new LlamaCppSourceBuildPrerequisiteItem { Key = "free-disk", Satisfied = false, Detail = "insufficient" }]
+            Items =
+            [
+                new LlamaCppSourceBuildPrerequisiteItem
+                {
+                    Key = "free-disk",
+                    Satisfied = false,
+                    Detail = "insufficient"
+                }
+            ]
         };
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -192,7 +216,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        var result = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+        var result = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            },
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.InsufficientDisk, result.Outcome);
@@ -208,7 +236,15 @@ public sealed class LlamaCppSourceBuildServiceTests
         var report = new LlamaCppSourceBuildPrerequisiteReport
         {
             CanBuild = false,
-            Items = [new LlamaCppSourceBuildPrerequisiteItem { Key = "cmake", Satisfied = false, Detail = "missing" }]
+            Items =
+            [
+                new LlamaCppSourceBuildPrerequisiteItem
+                {
+                    Key = "cmake",
+                    Satisfied = false,
+                    Detail = "missing"
+                }
+            ]
         };
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -224,7 +260,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        var result = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+        var result = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            },
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, result.Outcome);
@@ -247,7 +287,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LeaseOnlySupervisor(), activity, new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
-        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official },
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            },
             CancellationToken.None);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.RuntimeBusy, outcome.Outcome);
@@ -352,7 +396,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
-        await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None);
+        await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
@@ -387,7 +435,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None);
+        await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
@@ -431,7 +483,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None);
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None);
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
         AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
@@ -476,7 +532,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        _ = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None);
+        _ = await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
@@ -518,7 +578,11 @@ public sealed class LlamaCppSourceBuildServiceTests
                 TimeProvider.System,
                 temp.Path);
 
-            var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None);
+            var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None);
             AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
             await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
 
@@ -585,7 +649,12 @@ public sealed class LlamaCppSourceBuildServiceTests
             TimeProvider.System,
             temp.Path);
 
-        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official, Commit = commit.ToUpperInvariant() },
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official,
+                Commit = commit.ToUpperInvariant()
+            },
             CancellationToken.None);
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
@@ -612,7 +681,11 @@ public sealed class LlamaCppSourceBuildServiceTests
     private sealed class AlwaysReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
-            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport { CanBuild = true, Items = [] });
+            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = true,
+                Items = []
+            });
     }
 
     private sealed class CountingReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
@@ -623,7 +696,11 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
         {
             Interlocked.Increment(ref _callCount);
-            return Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport { CanBuild = true, Items = [] });
+            return Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = true,
+                Items = []
+            });
         }
     }
 
@@ -652,7 +729,11 @@ public sealed class LlamaCppSourceBuildServiceTests
             Interlocked.Increment(ref _callCount);
             Entered.TrySetResult();
             await Release.Task.WaitAsync(ct);
-            return new LlamaCppSourceBuildPrerequisiteReport { CanBuild = true, Items = [] };
+            return new LlamaCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = true,
+                Items = []
+            };
         }
     }
 

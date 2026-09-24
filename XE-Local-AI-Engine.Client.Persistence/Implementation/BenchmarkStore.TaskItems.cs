@@ -20,7 +20,10 @@ public sealed partial class BenchmarkStore
         var project = await RequireProjectAsync(projectId, cancellationToken);
         var now = Now();
         var item = NewTaskItem(projectId,
-            new BenchmarkTaskItemInput { PromptJson = project.CoreTaskJson },
+            new BenchmarkTaskItemInput
+            {
+                PromptJson = project.CoreTaskJson
+            },
             index: 0,
             now);
 

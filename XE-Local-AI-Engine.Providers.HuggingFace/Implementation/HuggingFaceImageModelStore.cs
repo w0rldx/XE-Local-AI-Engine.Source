@@ -289,7 +289,13 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
 
     private static ImageModelHandle ToHandle(ImageModelRegistryEntry entry)
     {
-        return new ImageModelHandle { ModelName = entry.ModelName, Family = entry.Family, Kind = entry.Kind, Parts = entry.Parts };
+        return new ImageModelHandle
+        {
+            ModelName = entry.ModelName,
+            Family = entry.Family,
+            Kind = entry.Kind,
+            Parts = entry.Parts
+        };
     }
 
     // Untrusted repo input: reject any file name that could escape the models directory before we ever open a handle.

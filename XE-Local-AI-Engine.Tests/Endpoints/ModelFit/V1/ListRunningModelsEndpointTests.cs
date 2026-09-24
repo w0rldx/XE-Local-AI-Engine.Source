@@ -63,7 +63,10 @@ public sealed class ListRunningModelsEndpointTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = modelName });
+        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest
+        {
+            ModelName = modelName
+        });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(body, "A model name is required.");
@@ -75,7 +78,11 @@ public sealed class ListRunningModelsEndpointTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = "model-a", Role = "vision" });
+        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest
+        {
+            ModelName = "model-a",
+            Role = "vision"
+        });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(body, "Role is not supported.");
@@ -93,7 +100,12 @@ public sealed class ListRunningModelsEndpointTests
         supervisor.EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>()).Returns(outcome);
 
         var (status, body) = await EjectAsync(supervisor,
-                                     new EjectRunningModelRequest { ModelName = "  model-a  ", Role = "EMBEDDING", Force = true });
+            new EjectRunningModelRequest
+            {
+                ModelName = "  model-a  ",
+                Role = "EMBEDDING",
+                Force = true
+            });
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var response = AssertEx.NotNull(JsonSerializer.Deserialize<EjectRunningModelResponse>(body, WebJsonOptions));
@@ -111,8 +123,11 @@ public sealed class ListRunningModelsEndpointTests
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
         var (status, _) = await EjectAsync(supervisor,
-                                  new EjectRunningModelRequest { ModelName = "model-a" },
-                                  authenticate: false);
+            new EjectRunningModelRequest
+            {
+                ModelName = "model-a"
+            },
+            authenticate: false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, status);
         await supervisor.DidNotReceiveWithAnyArgs().EjectAsync(default!, default, default, default);
@@ -131,7 +146,10 @@ public sealed class ListRunningModelsEndpointTests
             }
         };
         using var client = factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, EjectRoute) { Content = JsonContent.Create(body) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, EjectRoute)
+        {
+            Content = JsonContent.Create(body)
+        };
         if (authenticate)
         {
             factory.AddNodeBearerToken(request);

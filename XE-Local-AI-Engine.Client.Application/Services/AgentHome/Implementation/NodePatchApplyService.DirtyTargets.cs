@@ -28,12 +28,19 @@ internal sealed partial class NodePatchApplyService
         /// <summary>Whether the question itself failed, which is not the same answer as "no repository".</summary>
         public bool Unavailable { get; private init; }
 
-        public static WorkTreeProbe Unknown => new() { Unavailable = true };
+        public static WorkTreeProbe Unknown =>
+            new()
+            {
+                Unavailable = true
+            };
 
         public static WorkTreeProbe NoWorkTree => new();
 
         public static WorkTreeProbe At(string prefix) =>
-            new() { Prefix = prefix };
+            new()
+            {
+                Prefix = prefix
+            };
     }
 
     private static async Task<(IReadOnlyList<PatchApplyDirtyEntry> Entries, bool Unavailable)> ReadDirtyTargetsAsync(HostGitRunner runner,
@@ -167,7 +174,10 @@ internal sealed partial class NodePatchApplyService
 
             var indexStatus = field[0];
             var state = DirtyState(indexStatus, field[1]);
-            var paths = new List<string> { field[3..] };
+            var paths = new List<string>
+            {
+                field[3..]
+            };
             if (indexStatus is 'R' or 'C' && index < fields.Length)
             {
                 // A staged rename or copy carries its ORIGIN in a second field rather than a record of its own.
@@ -180,7 +190,11 @@ internal sealed partial class NodePatchApplyService
             {
                 if (TryStripPrefix(path, prefix) is { } relative && targets.Contains(relative))
                 {
-                    entries.Add(new PatchApplyDirtyEntry { Path = Describe(alias, relative), State = state });
+                    entries.Add(new PatchApplyDirtyEntry
+                    {
+                        Path = Describe(alias, relative),
+                        State = state
+                    });
                 }
             }
         }

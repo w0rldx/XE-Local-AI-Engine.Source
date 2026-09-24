@@ -74,7 +74,14 @@ internal sealed partial class SkillImportService : ISkillImportService
     {
         // A pasted document has no containing directory, so its frontmatter name is all there is, and it carries no
         // bundled files. Provenance stays the upload kind: a paste is no more trusted than what it was copied from.
-        var folder = new SkillArchiveFolder { DirectoryName = string.Empty, RootPath = string.Empty, SkillMarkdown = skillMarkdown ?? string.Empty, Files = [], RefusedScripts = [] };
+        var folder = new SkillArchiveFolder
+        {
+            DirectoryName = string.Empty,
+            RootPath = string.Empty,
+            SkillMarkdown = skillMarkdown ?? string.Empty,
+            Files = [],
+            RefusedScripts = []
+        };
         return BuildPreviewAsync([folder], UploadSourceUri, cancellationToken);
     }
 
@@ -110,7 +117,10 @@ internal sealed partial class SkillImportService : ISkillImportService
         // Single-use: consumed only once the writes succeeded, so a failed commit can be retried against the same
         // approved payload rather than forcing a re-fetch that could return different content.
         _cache.Remove(CacheKey(request.Token));
-        return new SkillImportResult { Outcomes = outcomes };
+        return new SkillImportResult
+        {
+            Outcomes = outcomes
+        };
     }
 
     /// <summary>Resolves the caller's selection against the approved report, rejecting the whole commit before any write if it does not line up.</summary>
@@ -147,7 +157,12 @@ internal sealed partial class SkillImportService : ISkillImportService
 
         if (existing is not null && resolution == SkillImportConflictResolution.Skip)
         {
-            return new SkillImportOutcome { Name = candidate.Name, Status = SkillImportStatus.Skipped, Reason = "A skill with this name already exists." };
+            return new SkillImportOutcome
+            {
+                Name = candidate.Name,
+                Status = SkillImportStatus.Skipped,
+                Reason = "A skill with this name already exists."
+            };
         }
 
         // Enabled: false and Origin: Imported are not defaults to be overridden — they are the control. The definition
@@ -174,15 +189,30 @@ internal sealed partial class SkillImportService : ISkillImportService
 
         if (stored is null)
         {
-            return new SkillImportOutcome { Name = candidate.Name, Status = SkillImportStatus.Skipped, Reason = "The existing skill was removed while the import was running." };
+            return new SkillImportOutcome
+            {
+                Name = candidate.Name,
+                Status = SkillImportStatus.Skipped,
+                Reason = "The existing skill was removed while the import was running."
+            };
         }
 
         var resources = candidate.Resources
-                                 .Select(static resource => new AgentSkillResourceInput { Name = resource.Name, Description = resource.Description, MediaType = resource.MediaType, Content = resource.Content })
+                                 .Select(static resource => new AgentSkillResourceInput
+                                 {
+                                     Name = resource.Name,
+                                     Description = resource.Description,
+                                     MediaType = resource.MediaType,
+                                     Content = resource.Content
+                                 })
                                  .ToList();
         await _store.ReplaceResourcesAsync(stored.Id, resources, cancellationToken);
 
-        return new SkillImportOutcome { Name = candidate.Name, Status = existing is null ? SkillImportStatus.Imported : SkillImportStatus.Replaced };
+        return new SkillImportOutcome
+        {
+            Name = candidate.Name,
+            Status = existing is null ? SkillImportStatus.Imported : SkillImportStatus.Replaced
+        };
     }
 
     private async Task<SkillImportPreview> BuildPreviewAsync(IReadOnlyList<SkillArchiveFolder> folders, string sourceUri, CancellationToken cancellationToken)
@@ -204,7 +234,13 @@ internal sealed partial class SkillImportService : ISkillImportService
         }
 
         var token = Guid.NewGuid();
-        var preview = new SkillImportPreview { Token = token, SourceUri = sourceUri, Skills = candidates, Warnings = warnings };
+        var preview = new SkillImportPreview
+        {
+            Token = token,
+            SourceUri = sourceUri,
+            Skills = candidates,
+            Warnings = warnings
+        };
         _cache.Set(CacheKey(token), preview, PreviewLifetime);
         return preview;
     }
@@ -315,7 +351,14 @@ internal sealed partial class SkillImportService : ISkillImportService
 
             // The name doubles as the description: it is the lookup key the model is told to use verbatim, and it is
             // the only string here that has already passed the charset guard.
-            resources.Add(new SkillImportResource { Name = file.Name, Description = file.Name, MediaType = file.MediaType, Content = file.Content, SizeBytes = Encoding.UTF8.GetByteCount(file.Content) });
+            resources.Add(new SkillImportResource
+            {
+                Name = file.Name,
+                Description = file.Name,
+                MediaType = file.MediaType,
+                Content = file.Content,
+                SizeBytes = Encoding.UTF8.GetByteCount(file.Content)
+            });
         }
 
         if (rejected > 0)

@@ -58,6 +58,11 @@ public sealed class DecideDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowDecis
         // work, taken out of band on its own clock. Reporting the CURRENT state is the same honesty the 202s encode.
         var nodeRun = result.Detail.NodeRuns.FirstOrDefault(entry => entry.Id == req.NodeRunId)
                       ?? throw new DevWorkflowNotFoundException($"Node run '{req.NodeRunId}' was not found on run '{req.RunId}' after its decision.");
-        await Send.OkAsync(new DevWorkflowDecisionResultResponse { Decision = result.Decision.ToResponse(), RunStatus = result.Detail.Run.Status.ToString(), NodeRunStatus = nodeRun.Status.ToString() }, ct);
+        await Send.OkAsync(new DevWorkflowDecisionResultResponse
+        {
+            Decision = result.Decision.ToResponse(),
+            RunStatus = result.Detail.Run.Status.ToString(),
+            NodeRunStatus = nodeRun.Status.ToString()
+        }, ct);
     }
 }

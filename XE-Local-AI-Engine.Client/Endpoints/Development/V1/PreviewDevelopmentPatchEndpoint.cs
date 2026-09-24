@@ -30,14 +30,14 @@ public sealed class PreviewDevelopmentPatchEndpoint : Endpoint<DevelopmentAction
         {
             var preview = await _service.PreviewAsync(req.ProjectId, req.TaskId, ct);
             await Send.OkAsync(new DevelopmentPatchPreviewResponse
-            {
-                SubjectHash = preview.SubjectHash,
-                PatchHash = preview.PatchHash,
-                ManifestHash = preview.ManifestHash,
-                ExpectedResultHash = preview.ExpectedResultHash,
-                Patch = preview.Patch,
-                ChangedFiles = preview.ChangedFiles
-            },
+                {
+                    SubjectHash = preview.SubjectHash,
+                    PatchHash = preview.PatchHash,
+                    ManifestHash = preview.ManifestHash,
+                    ExpectedResultHash = preview.ExpectedResultHash,
+                    Patch = preview.Patch,
+                    ChangedFiles = preview.ChangedFiles
+                },
                 ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)

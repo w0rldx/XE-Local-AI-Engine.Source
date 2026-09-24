@@ -76,13 +76,23 @@ internal static class SandboxUsrMergeLayout
             {
                 // bwrap's --symlink takes the target first. A RELATIVE target ("usr/bin") is used deliberately: it
                 // resolves inside the jail's own root regardless of what the host's /usr is bound from.
-                entries.Add(new SandboxUsrMergeEntry { Path = root, Action = SandboxUsrMergeAction.Symlink, Target = canonical[1..] });
+                entries.Add(new SandboxUsrMergeEntry
+                {
+                    Path = root,
+                    Action = SandboxUsrMergeAction.Symlink,
+                    Target = canonical[1..]
+                });
                 continue;
             }
 
             if (shape is { IsSymbolicLink: false, IsDirectory: true })
             {
-                entries.Add(new SandboxUsrMergeEntry { Path = root, Action = SandboxUsrMergeAction.ReadOnlyBind, Target = null });
+                entries.Add(new SandboxUsrMergeEntry
+                {
+                    Path = root,
+                    Action = SandboxUsrMergeAction.ReadOnlyBind,
+                    Target = null
+                });
                 continue;
             }
 
@@ -103,14 +113,26 @@ internal static class SandboxUsrMergeLayout
             var isDirectory = Directory.Exists(path);
             if (!isDirectory && !File.Exists(path))
             {
-                return new SandboxPathShape { Exists = false, IsSymbolicLink = false, IsDirectory = false, CanonicalPath = null };
+                return new SandboxPathShape
+                {
+                    Exists = false,
+                    IsSymbolicLink = false,
+                    IsDirectory = false,
+                    CanonicalPath = null
+                };
             }
 
             var finalTarget = File.ResolveLinkTarget(path, returnFinalTarget: true);
             var isSymbolicLink = finalTarget is not null;
             var canonical = finalTarget?.FullName ?? path;
 
-            return new SandboxPathShape { Exists = true, IsSymbolicLink = isSymbolicLink, IsDirectory = isDirectory, CanonicalPath = canonical };
+            return new SandboxPathShape
+            {
+                Exists = true,
+                IsSymbolicLink = isSymbolicLink,
+                IsDirectory = isDirectory,
+                CanonicalPath = canonical
+            };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

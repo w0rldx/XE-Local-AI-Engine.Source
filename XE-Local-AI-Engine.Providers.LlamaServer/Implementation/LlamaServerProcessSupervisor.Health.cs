@@ -51,7 +51,10 @@ public sealed partial class LlamaServerProcessSupervisor
         // A profiling-owned process is excluded: its context comes from explore or replay launch args, not serving policy, so reporting it would size a chat's
         // context budget off a measurement. The operation that pinned it is the exception — withholding it leaves its own benchmark nothing to size against.
         return !running.IsProfilingOwned || ReferenceEquals(running, GetOwnExclusiveProfilingProcess(key, out _))
-            ? new LlamaServerRuntimeInfo { EffectiveContextTokens = effectiveContext }
+            ? new LlamaServerRuntimeInfo
+            {
+                EffectiveContextTokens = effectiveContext
+            }
             : null;
     }
 
@@ -63,7 +66,14 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             if (running.Handle.HasExited)
             {
-                healths.Add(new LlamaServerProcessHealth { ModelName = key.ModelName, Role = key.Role, IsResponsive = false, Detail = "Process has exited.", HasExited = true });
+                healths.Add(new LlamaServerProcessHealth
+                {
+                    ModelName = key.ModelName,
+                    Role = key.Role,
+                    IsResponsive = false,
+                    Detail = "Process has exited.",
+                    HasExited = true
+                });
                 continue;
             }
 

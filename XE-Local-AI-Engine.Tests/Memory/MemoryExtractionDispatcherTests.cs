@@ -498,7 +498,13 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             AgentDefinitionId = agentId,
             ConversationId = conversationId,
             AssistantMessageId = messageId,
-            UserTurns = [new MemoryExtractionTurn { Content = "hello" }],
+            UserTurns =
+            [
+                new MemoryExtractionTurn
+                {
+                    Content = "hello"
+                }
+            ],
             AssistantResponse = "answer",
             Failed = failed,
             Error = failed ? "boom" : null,

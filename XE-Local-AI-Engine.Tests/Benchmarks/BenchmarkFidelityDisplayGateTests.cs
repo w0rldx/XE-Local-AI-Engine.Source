@@ -76,21 +76,21 @@ public sealed class BenchmarkFidelityDisplayGateTests
         AssertEx.Null(Run(fidelity: null).ToFidelity(Digest(chunks: 200)), "No measurement is no block, not a block of nulls.");
 
         var perplexityOnly = AssertEx.NotNull(Run(new BenchmarkRunFidelity
-        {
-            Status = "succeeded",
-            AttemptId = Guid.NewGuid(),
-            PerplexityMean = 6.7983,
-            PerplexityStdErr = 0.07405,
-            PerplexityChunks = 200,
-            PerplexityContextTokens = 512,
-            PerplexityCorpusId = "wikitext2-raw-test@abc",
-            KldMean = null,
-            KldP99 = null,
-            TopTokenAgreement = null,
-            KldBaseFingerprint = null,
-            KldBaseLogitsDigest = null,
-            ErrorMessage = null
-        })
+            {
+                Status = "succeeded",
+                AttemptId = Guid.NewGuid(),
+                PerplexityMean = 6.7983,
+                PerplexityStdErr = 0.07405,
+                PerplexityChunks = 200,
+                PerplexityContextTokens = 512,
+                PerplexityCorpusId = "wikitext2-raw-test@abc",
+                KldMean = null,
+                KldP99 = null,
+                TopTokenAgreement = null,
+                KldBaseFingerprint = null,
+                KldBaseLogitsDigest = null,
+                ErrorMessage = null
+            })
             .ToFidelity(Digest(chunks: 200)));
         AssertEx.Equal(BenchmarkFidelityKldStates.None, perplexityOnly.KldState, "A perplexity-only run measured no divergence — that is not staleness.");
     }

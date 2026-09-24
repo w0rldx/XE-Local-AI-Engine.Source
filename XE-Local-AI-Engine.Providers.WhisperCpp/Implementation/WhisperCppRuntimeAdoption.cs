@@ -25,8 +25,7 @@ internal sealed class WhisperCppRuntimeAdoption
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
-    public WhisperCppRuntimeAdoption(
-        string cacheRoot,
+    public WhisperCppRuntimeAdoption(string cacheRoot,
         IWhisperInstalledRuntimeStore runtimeStore,
         IWhisperManagedSourceBuildSignal managedSignal,
         TimeProvider timeProvider,
@@ -378,7 +377,14 @@ internal sealed class WhisperCppRuntimeAdoption
             }
         }
 
-        return new AdoptionPaths { Destination = destination, Backup = backup, Failed = failed, PreviousInstallRoot = previousInstallRoot, RetiredPrevious = retiredPrevious };
+        return new AdoptionPaths
+        {
+            Destination = destination,
+            Backup = backup,
+            Failed = failed,
+            PreviousInstallRoot = previousInstallRoot,
+            RetiredPrevious = retiredPrevious
+        };
     }
 
     private void CleanupCommitted(AdoptionPaths paths)

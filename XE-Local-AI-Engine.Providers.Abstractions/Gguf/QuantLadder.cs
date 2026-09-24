@@ -25,34 +25,138 @@ public static class QuantLadder
     // Unknown / off-ladder labels rank just below Q4_K_M (see QualityRank); GgufQuantQuality applies its own family rules to them.
     private static readonly QuantRung[] Rungs =
     [
-        new() { Quant = "F32", Tier = GgufQuantTier.NearLossless },
-        new() { Quant = "F16", Tier = GgufQuantTier.NearLossless },
-        new() { Quant = "Q8_0", Tier = GgufQuantTier.NearLossless },
-        new() { Quant = "Q6_K", Tier = GgufQuantTier.NearLossless },
-        new() { Quant = "Q5_K_M", Tier = GgufQuantTier.SweetSpot },
-        new() { Quant = "Q5_K_S", Tier = GgufQuantTier.SweetSpot },
+        new()
+        {
+            Quant = "F32",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "F16",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "Q8_0",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "Q6_K",
+            Tier = GgufQuantTier.NearLossless
+        },
+        new()
+        {
+            Quant = "Q5_K_M",
+            Tier = GgufQuantTier.SweetSpot
+        },
+        new()
+        {
+            Quant = "Q5_K_S",
+            Tier = GgufQuantTier.SweetSpot
+        },
         // NVFP4 leads MXFP4: finer scale granularity (a 16-element block with an FP8 scale vs MXFP4's 32-element block with a power-of-two scale) at the same measured on-disk density.
         // Off the ladder both take UnknownRank — one step past the "recommended" gate, demoting a native-FP4 repo to "Can run" however well it fits. See IsNativeFormat.
-        new() { Quant = "NVFP4", Tier = GgufQuantTier.Balanced },
-        new() { Quant = "MXFP4", Tier = GgufQuantTier.Balanced },
-        new() { Quant = "Q4_K_M", Tier = GgufQuantTier.Balanced },
-        new() { Quant = "IQ4_NL", Tier = GgufQuantTier.Small },
-        new() { Quant = "Q4_K_S", Tier = GgufQuantTier.Balanced },
-        new() { Quant = "IQ4_XS", Tier = GgufQuantTier.Small },
-        new() { Quant = "Q3_K_L", Tier = GgufQuantTier.Small },
-        new() { Quant = "Q3_K_M", Tier = GgufQuantTier.Small },
-        new() { Quant = "IQ3_M", Tier = GgufQuantTier.Small },
-        new() { Quant = "IQ3_S", Tier = GgufQuantTier.Small },
-        new() { Quant = "Q3_K_S", Tier = GgufQuantTier.Small },
-        new() { Quant = "IQ3_XS", Tier = GgufQuantTier.Small },
-        new() { Quant = "IQ3_XXS", Tier = GgufQuantTier.Small },
-        new() { Quant = "Q2_K", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ2_M", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ2_S", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ2_XS", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ2_XXS", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ1_M", Tier = GgufQuantTier.Minimal },
-        new() { Quant = "IQ1_S", Tier = GgufQuantTier.Minimal }
+        new()
+        {
+            Quant = "NVFP4",
+            Tier = GgufQuantTier.Balanced
+        },
+        new()
+        {
+            Quant = "MXFP4",
+            Tier = GgufQuantTier.Balanced
+        },
+        new()
+        {
+            Quant = "Q4_K_M",
+            Tier = GgufQuantTier.Balanced
+        },
+        new()
+        {
+            Quant = "IQ4_NL",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q4_K_S",
+            Tier = GgufQuantTier.Balanced
+        },
+        new()
+        {
+            Quant = "IQ4_XS",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q3_K_L",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q3_K_M",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "IQ3_M",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "IQ3_S",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q3_K_S",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "IQ3_XS",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "IQ3_XXS",
+            Tier = GgufQuantTier.Small
+        },
+        new()
+        {
+            Quant = "Q2_K",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ2_M",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ2_S",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ2_XS",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ2_XXS",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ1_M",
+            Tier = GgufQuantTier.Minimal
+        },
+        new()
+        {
+            Quant = "IQ1_S",
+            Tier = GgufQuantTier.Minimal
+        }
     ];
 
     private static readonly ReadOnlyCollection<string> CanonicalQuantizationValues =

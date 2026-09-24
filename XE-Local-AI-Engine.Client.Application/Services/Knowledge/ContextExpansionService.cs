@@ -50,11 +50,11 @@ public sealed class ContextExpansionService : IContextExpansionService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
         return await ReadRangeAsync(connection,
-                documentId,
-                chunkIndex - safeWindow,
-                chunkIndex + safeWindow,
-                normalizedCollectionId,
-                cancellationToken);
+            documentId,
+            chunkIndex - safeWindow,
+            chunkIndex + safeWindow,
+            normalizedCollectionId,
+            cancellationToken);
     }
 
     /// <summary>

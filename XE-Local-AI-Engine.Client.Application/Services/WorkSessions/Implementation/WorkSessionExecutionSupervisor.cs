@@ -249,13 +249,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             if (state.Session.Status != AgentWorkSessionStatus.Running)
             {
                 var moved = await WithStoreAsync(store => store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
-                {
-                    SessionId = sessionId,
-                    ExpectedVersion = WorkSessionVersions.Any,
-                    TargetStatus = AgentWorkSessionStatus.Running,
-                    CurrentTaskId = WorkSessionStateBlockComposer.ResolveCurrentTask(state)?.Id
-                },
-                        CancellationToken.None));
+                    {
+                        SessionId = sessionId,
+                        ExpectedVersion = WorkSessionVersions.Any,
+                        TargetStatus = AgentWorkSessionStatus.Running,
+                        CurrentTaskId = WorkSessionStateBlockComposer.ResolveCurrentTask(state)?.Id
+                    },
+                    CancellationToken.None));
                 await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
                 state = state with
                 {
@@ -289,8 +289,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
 
         await SettleAsync(sessionId,
-                reason == WorkSessionStopReason.Cancel ? AgentWorkSessionStatus.Cancelled : AgentWorkSessionStatus.Paused,
-                reason == WorkSessionStopReason.Cancel ? "The operator cancelled the work session." : "The operator paused the work session.");
+            reason == WorkSessionStopReason.Cancel ? AgentWorkSessionStatus.Cancelled : AgentWorkSessionStatus.Paused,
+            reason == WorkSessionStopReason.Cancel ? "The operator cancelled the work session." : "The operator paused the work session.");
     }
 
     private async Task<StepOutcome> RunStepAsync(SessionRun run, WorkSessionState state, int stepsThisRun)
@@ -337,14 +337,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // PAUSED, not Failed: Resume accepts only Paused/Interrupted, so Failed would lock out the operator who did
             // exactly what the refusal asked. Checkpoint before status, StepEnded with its own phase — wiki 04-agent-mode.md.
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-            {
-                SessionId = sessionId,
-                ExpectedVersion = WorkSessionVersions.Any,
-                EventType = WorkSessionEventTypes.StepEnded,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate),
-                Outcome = ToolGateOutcome
-            },
-                    CancellationToken.None));
+                {
+                    SessionId = sessionId,
+                    ExpectedVersion = WorkSessionVersions.Any,
+                    EventType = WorkSessionEventTypes.StepEnded,
+                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate),
+                    Outcome = ToolGateOutcome
+                },
+                CancellationToken.None));
             await CheckpointAsync(sessionId);
             await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, refusal);
             return StepOutcome.Settled;
@@ -358,17 +358,22 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // Published BEFORE the send: by the time a step terminalizes the invocation resume registry has dropped its
         // entry, so a client told only then re-attaches to an empty stream and never sees the turn go live.
         var started = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-        {
-            SessionId = sessionId,
-            ExpectedVersion = WorkSessionVersions.Any,
-            EventType = WorkSessionEventTypes.StepStarted,
-            OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
-            Outcome = step.ToString(CultureInfo.InvariantCulture)
-        },
-                CancellationToken.None));
+            {
+                SessionId = sessionId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                EventType = WorkSessionEventTypes.StepStarted,
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
+                Outcome = step.ToString(CultureInfo.InvariantCulture)
+            },
+            CancellationToken.None));
         await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
-        var correlation = new NodeChatMessageCorrelation { ConversationId = state.Session.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = state.Session.ConversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
         using var guard = new StepCancellationGuard(_cancellationRegistry, correlation, _timeProvider);
         run.Correlation = correlation;
         if (_options.StepTimeoutSeconds > 0)
@@ -463,9 +468,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     parked = true;
                     ArmPark(guard, request.RequestId.GetValueOrDefault(), streamEvent.ToolName, streamEvent.OccurredAtUtc);
                     await MoveAsync(sessionId,
-                            streamEvent.Type == ChatStreamEventTypes.ApprovalRequested
-                                ? AgentWorkSessionStatus.WaitingForApproval
-                                : AgentWorkSessionStatus.WaitingForInput);
+                        streamEvent.Type == ChatStreamEventTypes.ApprovalRequested
+                            ? AgentWorkSessionStatus.WaitingForApproval
+                            : AgentWorkSessionStatus.WaitingForInput);
                     break;
 
                 case ChatStreamEventTypes.AssistantDelta:
@@ -572,15 +577,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
             case ChatStreamEventTypes.AssistantFailed:
                 _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-                {
-                    SessionId = sessionId,
-                    ExpectedVersion = WorkSessionVersions.Any,
-                    EventType = WorkSessionEventTypes.StepFailed,
-                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
-                    Outcome = step.ToString(CultureInfo.InvariantCulture),
-                    DetailJson = consumption
-                },
-                        CancellationToken.None));
+                    {
+                        SessionId = sessionId,
+                        ExpectedVersion = WorkSessionVersions.Any,
+                        EventType = WorkSessionEventTypes.StepFailed,
+                        OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
+                        Outcome = step.ToString(CultureInfo.InvariantCulture),
+                        DetailJson = consumption
+                    },
+                    CancellationToken.None));
                 await CheckpointAsync(sessionId);
                 await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "A work session step failed.");
                 return StepOutcome.Settled;
@@ -614,8 +619,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             await CheckpointAsync(sessionId);
             await SettleAsync(sessionId,
-                    AgentWorkSessionStatus.Paused,
-                    string.Create(CultureInfo.InvariantCulture, $"The run reached its step budget of {_options.MaxStepsPerRun} steps."));
+                AgentWorkSessionStatus.Paused,
+                string.Create(CultureInfo.InvariantCulture, $"The run reached its step budget of {_options.MaxStepsPerRun} steps."));
             return StepOutcome.Settled;
         }
 
@@ -637,15 +642,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private async Task AppendStepEndedAsync(Guid sessionId, int step, string outcome, string? detailJson)
     {
         _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-        {
-            SessionId = sessionId,
-            ExpectedVersion = WorkSessionVersions.Any,
-            EventType = WorkSessionEventTypes.StepEnded,
-            OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
-            Outcome = outcome,
-            DetailJson = detailJson
-        },
-                CancellationToken.None));
+            {
+                SessionId = sessionId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                EventType = WorkSessionEventTypes.StepEnded,
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                Outcome = outcome,
+                DetailJson = detailJson
+            },
+            CancellationToken.None));
     }
 
     /// <summary>
@@ -696,28 +701,28 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             reason = "The work session was paused because a prompt went unanswered.";
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-            {
-                SessionId = sessionId,
-                ExpectedVersion = WorkSessionVersions.Any,
-                EventType = WorkSessionEventTypes.ParkTimedOut,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
-                Outcome = guard.ParkedToolName
-            },
-                    CancellationToken.None));
+                {
+                    SessionId = sessionId,
+                    ExpectedVersion = WorkSessionVersions.Any,
+                    EventType = WorkSessionEventTypes.ParkTimedOut,
+                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
+                    Outcome = guard.ParkedToolName
+                },
+                CancellationToken.None));
 
             // A finding, not only an event, so the next step's state block re-asks it: the park is in-memory and
             // survives neither the timeout nor a restart. Written BEFORE the status so a crash cannot lose it.
             var findingId = Guid.NewGuid();
             _ = await WithStoreAsync(store => store.AppendFindingAsync(new AppendWorkSessionFindingCommand
-            {
-                SessionId = sessionId,
-                FindingId = findingId,
-                ExpectedVersion = WorkSessionVersions.Any,
-                OperationId = WorkSessionOperationId.For(sessionId, step, $"park-question:{findingId:N}"),
-                Kind = AgentWorkSessionFindingKind.OpenQuestion,
-                Text = ParkedQuestionText(guard.ParkedToolName)
-            },
-                    CancellationToken.None));
+                {
+                    SessionId = sessionId,
+                    FindingId = findingId,
+                    ExpectedVersion = WorkSessionVersions.Any,
+                    OperationId = WorkSessionOperationId.For(sessionId, step, $"park-question:{findingId:N}"),
+                    Kind = AgentWorkSessionFindingKind.OpenQuestion,
+                    Text = ParkedQuestionText(guard.ParkedToolName)
+                },
+                CancellationToken.None));
         }
         else if (guard.DeadlineExpired)
         {
@@ -791,7 +796,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             var moved = await WithStoreAsync(store =>
-                    store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = WorkSessionVersions.Any, TargetStatus = target }, CancellationToken.None));
+                store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+                {
+                    SessionId = sessionId,
+                    ExpectedVersion = WorkSessionVersions.Any,
+                    TargetStatus = target
+                }, CancellationToken.None));
             await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
         }
         catch (WorkSessionInvalidTransitionException exception)
@@ -804,8 +814,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         try
         {
-            var settled = await WithStoreAsync(store => store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = WorkSessionVersions.Any, TargetStatus = target, CurrentTaskId = null, SanitizedReason = reason },
-                    CancellationToken.None));
+            var settled = await WithStoreAsync(store => store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+                {
+                    SessionId = sessionId,
+                    ExpectedVersion = WorkSessionVersions.Any,
+                    TargetStatus = target,
+                    CurrentTaskId = null,
+                    SanitizedReason = reason
+                },
+                CancellationToken.None));
             await _publisher.PublishAsync(sessionId, settled.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
         }
         catch (WorkSessionInvalidTransitionException exception)
@@ -827,15 +844,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
         _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-        {
-            SessionId = sessionId,
-            ExpectedVersion = WorkSessionVersions.Any,
-            EventType = WorkSessionEventTypes.StepEnded,
-            OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
-            Outcome = WorkSessionEventTypes.WriteGateOutcome,
-            DetailJson = WorkSessionEventTypes.WriteGateDetail(refusal)
-        },
-                CancellationToken.None));
+            {
+                SessionId = sessionId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                EventType = WorkSessionEventTypes.StepEnded,
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
+                Outcome = WorkSessionEventTypes.WriteGateOutcome,
+                DetailJson = WorkSessionEventTypes.WriteGateDetail(refusal)
+            },
+            CancellationToken.None));
         await CheckpointAsync(sessionId);
         await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal);
         return StepOutcome.Settled;
@@ -873,7 +890,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var findings = await store.ListFindingsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
         var artifacts = await store.ListArtifactsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
         var checkpoint = await store.GetLatestCheckpointAsync(sessionId, CancellationToken.None);
-        return new WorkSessionState { Session = session, Tasks = tasks, Findings = findings, Artifacts = artifacts, LastCheckpoint = checkpoint };
+        return new WorkSessionState
+        {
+            Session = session,
+            Tasks = tasks,
+            Findings = findings,
+            Artifacts = artifacts,
+            LastCheckpoint = checkpoint
+        };
     }
 
     private enum StepOutcome

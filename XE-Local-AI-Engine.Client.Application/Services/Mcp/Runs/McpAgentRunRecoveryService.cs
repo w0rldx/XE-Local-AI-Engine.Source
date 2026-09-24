@@ -11,8 +11,7 @@ internal sealed class McpAgentRunRecoveryService : IHostedService
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<McpAgentRunRecoveryService> _logger;
 
-    public McpAgentRunRecoveryService(
-        IServiceScopeFactory scopeFactory,
+    public McpAgentRunRecoveryService(IServiceScopeFactory scopeFactory,
         McpAgentRunMetrics metrics,
         TimeProvider timeProvider,
         ILogger<McpAgentRunRecoveryService> logger)

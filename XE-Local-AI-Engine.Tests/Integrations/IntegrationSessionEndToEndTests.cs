@@ -95,7 +95,13 @@ public sealed class IntegrationSessionHostFixture : IAsyncInitializer, IAsyncDis
 
         var capacity = Substitute.For<ICapacityService>();
         _ = capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                    .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = null });
+                    .Returns(new CapacityDecision
+                    {
+                        Verdict = CapacityVerdict.Allow,
+                        Reason = "Capacity available.",
+                        OllamaEvictionWarning = false,
+                        Reservation = null
+                    });
 
         services.RemoveAll<IWorkerEventDispatcher>();
         services.AddSingleton(dispatcher);
@@ -341,22 +347,22 @@ public sealed class IntegrationSessionEndToEndTests
             var executionId = Guid.NewGuid();
             AssertEx.True(await scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>()
                                      .AcceptAsync(new IntegrationAcceptCommand
-                                     {
-                                         NewSession = null,
-                                         ExecutionId = executionId,
-                                         TriggerId = seeded.TriggerId,
-                                         SessionId = first.SessionId,
-                                         PrincipalId = seeded.PrincipalId,
-                                         RequestId = Guid.NewGuid(),
-                                         RequestFingerprint = new byte[]
+                                         {
+                                             NewSession = null,
+                                             ExecutionId = executionId,
+                                             TriggerId = seeded.TriggerId,
+                                             SessionId = first.SessionId,
+                                             PrincipalId = seeded.PrincipalId,
+                                             RequestId = Guid.NewGuid(),
+                                             RequestFingerprint = new byte[]
                                              {
                                                  9,
                                                  9,
                                                  9
                                              },
-                                         KeyPrefix = seeded.KeyPrefix,
-                                         ReceivedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                                         AcceptedEvent = new IntegrationEventAppend
+                                             KeyPrefix = seeded.KeyPrefix,
+                                             ReceivedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                             AcceptedEvent = new IntegrationEventAppend
                                              {
                                                  EventId = Guid.NewGuid(),
                                                  ExecutionId = executionId,
@@ -365,7 +371,7 @@ public sealed class IntegrationSessionEndToEndTests
                                                  DetailJson = null,
                                                  OccurredAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                                              }
-                                     },
+                                         },
                                          maxActive: 4096,
                                          maxActivePerPrincipal: 4096));
         }
@@ -388,7 +394,14 @@ public sealed class IntegrationSessionEndToEndTests
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, prefix, agentId, sessionPolicy: "CallerManaged");
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-key");
-        return new Seeded { TriggerName = trigger.Name, Key = key.Key, TriggerId = trigger.Id, PrincipalId = key.View.PrincipalId, KeyPrefix = key.View.KeyPrefix };
+        return new Seeded
+        {
+            TriggerName = trigger.Name,
+            Key = key.Key,
+            TriggerId = trigger.Id,
+            PrincipalId = key.View.PrincipalId,
+            KeyPrefix = key.View.KeyPrefix
+        };
     }
 
     private static async Task<Accepted> InvokeAsync(HttpClient client, Seeded seeded, string text, Guid? sessionId)
@@ -397,7 +410,11 @@ public sealed class IntegrationSessionEndToEndTests
         using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, await response.Content.ReadAsStringAsync());
         var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<AcceptedBody>(IntegrationEndpointPayloads.Json));
-        return new Accepted { ExecutionId = body.ExecutionId, SessionId = body.SessionId };
+        return new Accepted
+        {
+            ExecutionId = body.ExecutionId,
+            SessionId = body.SessionId
+        };
     }
 
     private static async Task<(Guid ExecutionId, Guid SessionId, IReadOnlyList<Frame> Frames)> StreamAsync(HttpClient client,
@@ -440,7 +457,12 @@ public sealed class IntegrationSessionEndToEndTests
             }
             else if (line.StartsWith("id: ", StringComparison.Ordinal) && type is not null)
             {
-                frames.Add(new Frame { Type = type, ContentType = contentType, Payload = payload });
+                frames.Add(new Frame
+                {
+                    Type = type,
+                    ContentType = contentType,
+                    Payload = payload
+                });
                 type = null;
             }
         }

@@ -69,8 +69,20 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string graphJson = SampleGraph,
         Guid? developmentProjectId = null)
     {
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = title, Request = request, DevelopmentProjectId = developmentProjectId });
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Seeded definition", GraphJson = graphJson, NodeCount = 1 });
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand
+        {
+            WorkItemId = Guid.NewGuid(),
+            Title = title,
+            Request = request,
+            DevelopmentProjectId = developmentProjectId
+        });
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Seeded definition",
+            GraphJson = graphJson,
+            NodeCount = 1
+        });
         var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
         {
             RunId = Guid.NewGuid(),
@@ -80,7 +92,13 @@ internal sealed class DevWorkflowTestFixture : IDisposable
             DefinitionGraphHash = definition.GraphHash,
             GraphJson = graphJson
         });
-        return new DevWorkflowSeed { WorkItemId = workItem.Id, DefinitionId = definition.Id, RunId = run.Id, RunVersion = run.Version };
+        return new DevWorkflowSeed
+        {
+            WorkItemId = workItem.Id,
+            DefinitionId = definition.Id,
+            RunId = run.Id,
+            RunVersion = run.Version
+        };
     }
 
     /// <summary>A rule set scoped to everything, which is what most tests want one for.</summary>
@@ -89,7 +107,14 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string body = "Always write the test first.",
         string scopeJson = MatchAllScope,
         bool enabled = true) =>
-        store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand { RuleSetId = Guid.NewGuid(), Name = name, Body = body, ScopeJson = scopeJson, Enabled = enabled });
+        store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand
+        {
+            RuleSetId = Guid.NewGuid(),
+            Name = name,
+            Body = body,
+            ScopeJson = scopeJson,
+            Enabled = enabled
+        });
 
     /// <summary>Adds one node run to a seeded run and answers the run's post-commit version.</summary>
     public static async Task<long> AddNodeRunAsync(DevWorkflowStore store,
@@ -107,17 +132,18 @@ internal sealed class DevWorkflowTestFixture : IDisposable
             RunId = runId,
             ExpectedVersion = expectedVersion,
             OperationId = Guid.NewGuid(),
-            NodeRuns = [
-                                        new DevWorkflowNodeRunSeed
-                                        {
-                                            NodeRunId = nodeRunId,
-                                            NodeKey = nodeKey,
-                                            NodeType = nodeType,
-                                            MaxAttempts = maxAttempts,
-                                            DevelopmentProjectId = developmentProjectId,
-                                            InputJson = inputJson
-                                        }
-                                    ]
+            NodeRuns =
+            [
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = nodeRunId,
+                    NodeKey = nodeKey,
+                    NodeType = nodeType,
+                    MaxAttempts = maxAttempts,
+                    DevelopmentProjectId = developmentProjectId,
+                    InputJson = inputJson
+                }
+            ]
         });
         return result.Version;
     }
@@ -151,7 +177,7 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public async Task<long> RawCountAsync(string table, string column, Guid value)
     {
         var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table} WHERE {column} = $value;",
-                command => command.Parameters.AddWithValue("$value", value));
+            command => command.Parameters.AddWithValue("$value", value));
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 

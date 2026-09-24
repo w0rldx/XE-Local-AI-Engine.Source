@@ -15,7 +15,12 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
 
     public ScriptedExportSpawner Then(int exitCode = 0, Action<TrainingSpawnRequest>? effect = null, params string[] lines)
     {
-        _script.Enqueue(new ScriptedSpawn { ExitCode = exitCode, Effect = effect, Lines = lines });
+        _script.Enqueue(new ScriptedSpawn
+        {
+            ExitCode = exitCode,
+            Effect = effect,
+            Lines = lines
+        });
         return this;
     }
 
@@ -51,7 +56,14 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
             _lines = lines;
         }
 
-        public TrainingLaunchReceipt Receipt { get; } = new() { Pid = 1, Pgid = 1, ExecutablePath = "/venv/bin/python", StartTicks = 1, RunToken = "token" };
+        public TrainingLaunchReceipt Receipt { get; } = new()
+        {
+            Pid = 1,
+            Pgid = 1,
+            ExecutablePath = "/venv/bin/python",
+            StartTicks = 1,
+            RunToken = "token"
+        };
 
         public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
             Emit(cancellationToken);

@@ -81,7 +81,13 @@ public sealed class LlamaServerCapabilityGateTests
     }
 
     private static LlamaServerCapabilityManifest Manifest(string help) =>
-        LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary { ServerExecutablePath = "/opt/llama/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = false },
+        LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary
+            {
+                ServerExecutablePath = "/opt/llama/llama-server",
+                Version = "b10201",
+                Variant = GpuVariant.Cuda,
+                IsPinnedFallback = false
+            },
             executableLengthBytes: 1024,
             DateTimeOffset.UnixEpoch,
             new string('a', 64),

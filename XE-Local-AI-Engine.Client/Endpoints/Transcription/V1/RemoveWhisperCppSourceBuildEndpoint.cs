@@ -46,8 +46,8 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<Transcription
             if (result.Outcome == WhisperCppSourceBuildRemoveOutcome.RuntimeBusy)
             {
                 await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
-                              "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime.",
-                              result.Activity ?? _whisperRuntime.GetActivitySnapshot()));
+                    "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime.",
+                    result.Activity ?? _whisperRuntime.GetActivitySnapshot()));
                 return;
             }
 
@@ -65,8 +65,8 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<Transcription
             // A directory that will not delete is the recovery path failing, and the operator needs the reason in the same typed envelope Start uses rather than a 500 from
             // the global handler. The message is contractually sanitized, so it is safe to surface.
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked("source-build-error",
-                          exception.Message,
-                          _whisperRuntime.GetActivitySnapshot()));
+                exception.Message,
+                _whisperRuntime.GetActivitySnapshot()));
         }
     }
 }

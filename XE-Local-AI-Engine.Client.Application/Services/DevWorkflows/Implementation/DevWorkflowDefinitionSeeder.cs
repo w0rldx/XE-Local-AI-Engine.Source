@@ -447,23 +447,30 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
         if (existing is null)
         {
             var seeded = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
-            {
-                DefinitionId = Guid.NewGuid(),
-                Name = name,
-                GraphJson = graphJson,
-                NodeCount = graph.Nodes.Count,
-                Source = DevWorkflowDefinitionSource.Seeded,
-                SeedSlug = seedSlug
-            },
-                                        cancellationToken);
+                {
+                    DefinitionId = Guid.NewGuid(),
+                    Name = name,
+                    GraphJson = graphJson,
+                    NodeCount = graph.Nodes.Count,
+                    Source = DevWorkflowDefinitionSource.Seeded,
+                    SeedSlug = seedSlug
+                },
+                cancellationToken);
             _logger.LogInformation("Seeded the {Name} workflow definition {DefinitionId} (slug {SeedSlug}).", name, seeded.Id, seedSlug);
             return;
         }
 
         // The GRAPH only. A name is the operator's to choose — renaming a seeded template is a name-only PUT that leaves the graph one of ours, so it still qualifies for the catch-up,
         // and passing the shipped name here would revert their label as a side effect of a fix they never asked about.
-        var upgraded = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = existing.Id, ExpectedVersion = existing.Version, Name = null, GraphJson = graphJson, NodeCount = graph.Nodes.Count },
-                                      cancellationToken);
+        var upgraded = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+            {
+                DefinitionId = existing.Id,
+                ExpectedVersion = existing.Version,
+                Name = null,
+                GraphJson = graphJson,
+                NodeCount = graph.Nodes.Count
+            },
+            cancellationToken);
         _logger.LogInformation("Updated the untouched {Name} workflow definition {DefinitionId} (slug {SeedSlug}) to the template this build ships, version {Version}.",
             name,
             upgraded.Id,

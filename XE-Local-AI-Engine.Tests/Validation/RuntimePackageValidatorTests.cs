@@ -61,7 +61,10 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenSystemPromptIsMarkedOmittedButPresent_ReturnsError()
     {
-        var package = RuntimePackageBuilder.Valid().Build() with { OmitSystemPrompt = true };
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            OmitSystemPrompt = true
+        };
 
         var result = _validator.Validate(package);
 
@@ -285,12 +288,12 @@ public sealed class RuntimePackageValidatorTests
                         {
                             MediaType = "image/png",
                             Data = new byte[]
-                        {
-                            0x89,
-                            0x50,
-                            0x4E,
-                            0x47
-                        }
+                            {
+                                0x89,
+                                0x50,
+                                0x4E,
+                                0x47
+                            }
                         }
                     ]
                 }
@@ -318,7 +321,17 @@ public sealed class RuntimePackageValidatorTests
                     Role = MessageRole.Assistant,
                     Content = "   ",
                     SortOrder = 0,
-                    ToolExchanges = [new ConversationToolExchange { CallId = "call-1", Name = "save_artifact", ArgumentsJson = "{}", Result = "saved", IsError = false }]
+                    ToolExchanges =
+                    [
+                        new ConversationToolExchange
+                        {
+                            CallId = "call-1",
+                            Name = "save_artifact",
+                            ArgumentsJson = "{}",
+                            Result = "saved",
+                            IsError = false
+                        }
+                    ]
                 }
             ]
         };

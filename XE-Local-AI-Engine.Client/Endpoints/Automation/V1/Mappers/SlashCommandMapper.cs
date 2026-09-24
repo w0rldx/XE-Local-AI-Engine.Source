@@ -37,6 +37,12 @@ internal static class SlashCommandMapper
             throw new SlashCommandValidationException("Only the sendPrompt action is supported.");
         }
 
-        return new SlashCommandInput { Name = name ?? string.Empty, Description = description, ActionType = SlashCommandActionType.SendPrompt, Prompt = action.Prompt ?? string.Empty };
+        return new SlashCommandInput
+        {
+            Name = name ?? string.Empty,
+            Description = description,
+            ActionType = SlashCommandActionType.SendPrompt,
+            Prompt = action.Prompt ?? string.Empty
+        };
     }
 }

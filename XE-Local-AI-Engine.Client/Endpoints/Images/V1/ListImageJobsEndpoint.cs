@@ -40,8 +40,8 @@ public sealed class ListImageJobsEndpoint : Endpoint<ListImageJobsRequest, ListI
         ArgumentNullException.ThrowIfNull(req);
 
         var page = await _coordinator.ListAsync(Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListImageJobsRequestValidator.MaxLimit),
-                             Math.Max(req.Offset ?? 0, val2: 0),
-                             ct);
+            Math.Max(req.Offset ?? 0, val2: 0),
+            ct);
 
         await Send.OkAsync(new ListImageJobsResponse
             {

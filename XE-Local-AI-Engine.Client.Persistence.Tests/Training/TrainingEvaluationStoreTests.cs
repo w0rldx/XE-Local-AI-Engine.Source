@@ -94,8 +94,21 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
 
         var first = await store.AppendResultsAsync(evaluation.Id,
         [
-            new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[0], Kind = "tool-call", Passed = true, ScoredBy = "deterministic" },
-            new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[1], Kind = "no-tool", Passed = false, ScoredBy = "deterministic", Reason = "The model called a tool." }
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[0],
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            },
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[1],
+                Kind = "no-tool",
+                Passed = false,
+                ScoredBy = "deterministic",
+                Reason = "The model called a tool."
+            }
         ]);
         AssertEx.Equal(expected: 2, first.ScoredCount);
         AssertEx.Equal(expected: 1, first.PassedCount);
@@ -103,8 +116,21 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         // The same verdicts offered again — what a resume that re-walked the prefix would do — must change nothing.
         var replayed = await store.AppendResultsAsync(evaluation.Id,
         [
-            new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[0], Kind = "tool-call", Passed = false, ScoredBy = "deterministic", Reason = "a contradicting re-score" },
-            new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[1], Kind = "no-tool", Passed = true, ScoredBy = "deterministic" }
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[0],
+                Kind = "tool-call",
+                Passed = false,
+                ScoredBy = "deterministic",
+                Reason = "a contradicting re-score"
+            },
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[1],
+                Kind = "no-tool",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }
         ]);
         AssertEx.Equal(expected: 2, replayed.ScoredCount, "A re-append of already-scored samples must be a no-op.");
         AssertEx.Equal(expected: 1, replayed.PassedCount, "The first verdict for a sample is the one that stands.");
@@ -141,7 +167,15 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
             var running = await store.TransitionAsync(evaluationId, evaluation.Version, TrainingEvaluationStatus.Running);
             _ = await BindAsync(store, evaluationId);
             _ = await store.AppendResultsAsync(evaluationId,
-                [new TrainingEvaluationResultEntry { SampleId = sampleIds[0], Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }]);
+            [
+                new TrainingEvaluationResultEntry
+                {
+                    SampleId = sampleIds[0],
+                    Kind = "tool-call",
+                    Passed = true,
+                    ScoredBy = "deterministic"
+                }
+            ]);
             AssertEx.Equal(TrainingEvaluationStatus.Running, running.Status);
         }
 
@@ -188,7 +222,13 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         AssertEx.Equal("EvaluationActive", queued.Code);
 
         _ = await store.AppendResultsAsync(evaluation.Id,
-            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry { SampleId = id, Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }).ToArray());
+            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry
+            {
+                SampleId = id,
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }).ToArray());
         var done = await store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
         AssertEx.Equal(TrainingEvaluationStatus.Succeeded, done.Status);
 
@@ -209,7 +249,15 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
         _ = await BindAsync(store, evaluation.Id);
         _ = await store.AppendResultsAsync(evaluation.Id,
-            [new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[0], Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }]);
+        [
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[0],
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }
+        ]);
 
         _ = await store.BindExecutionProvenanceAsync(evaluation.Id, AttemptProvenance);
         var mismatch = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
@@ -228,7 +276,15 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
 
         var failure = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.AppendResultsAsync(evaluation.Id,
-            [new TrainingEvaluationResultEntry { SampleId = fixture.SampleIds[0], Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }]));
+        [
+            new TrainingEvaluationResultEntry
+            {
+                SampleId = fixture.SampleIds[0],
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }
+        ]));
 
         AssertEx.Equal("EvaluationExecutionProvenanceUnbound", failure.Code);
     }
@@ -299,7 +355,13 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         });
         _ = await BindAsync(evaluations, tunedEvaluation.Id);
         _ = await evaluations.AppendResultsAsync(tunedEvaluation.Id,
-            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry { SampleId = id, Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }).ToArray());
+            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry
+            {
+                SampleId = id,
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }).ToArray());
         tunedEvaluation = await evaluations.CompleteAsync(tunedEvaluation.Id, TrainingWorkStatus.Succeeded, null);
         var comparison = await evaluations.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id));
         var decided = await runs.SetArtifactQualityDecisionAsync(hashed.Id, hashed.Version, comparison.Id,
@@ -390,7 +452,13 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
     }
 
     private static TrainingComparisonInput Report(Guid baseId, Guid tunedId) =>
-        new() { Name = "base vs tuned", BaseEvaluationRunId = baseId, TunedEvaluationRunId = tunedId, DeltasJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") };
+        new()
+        {
+            Name = "base vs tuned",
+            BaseEvaluationRunId = baseId,
+            TunedEvaluationRunId = tunedId,
+            DeltasJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        };
 
     private static async Task<TrainingEvaluationRecord> Scored(TrainingEvaluationStore store, EvaluationFixture fixture, string modelName)
     {
@@ -400,7 +468,13 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         });
         _ = await BindAsync(store, evaluation.Id);
         _ = await store.AppendResultsAsync(evaluation.Id,
-            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry { SampleId = id, Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }).ToArray());
+            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry
+            {
+                SampleId = id,
+                Kind = "tool-call",
+                Passed = true,
+                ScoredBy = "deterministic"
+            }).ToArray());
         return await store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
     }
 
@@ -425,8 +499,18 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
     private static async Task<EvaluationFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await datasetStore.ClaimNextAsync();
 
         var sampleIds = new List<Guid>();

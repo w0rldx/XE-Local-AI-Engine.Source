@@ -299,8 +299,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
     private sealed class Harness
     {
-        public Harness(
-            ILocalModelProviderResolver resolver,
+        public Harness(ILocalModelProviderResolver resolver,
             ILocalModelProvider provider,
             ILlamaServerProcessSupervisor supervisor,
             ILlamaCppSourceBuildActivity sourceBuildActivity,
@@ -375,7 +374,11 @@ public sealed class KeepModelWarmBackgroundServiceTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            Entries.Add(new Entry { Level = logLevel, Message = formatter(state, exception) });
+            Entries.Add(new Entry
+            {
+                Level = logLevel,
+                Message = formatter(state, exception)
+            });
         }
 
         public sealed record Entry

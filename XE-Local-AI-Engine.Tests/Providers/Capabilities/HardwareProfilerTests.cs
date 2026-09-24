@@ -515,10 +515,21 @@ public sealed class HardwareProfilerTests
 
             if (_timeout || (_timeoutAfterFirstCall && NvidiaCallCount > 1))
             {
-                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult { ExitCode = -1, StandardOutput = string.Empty, TimedOut = true });
+                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult
+                {
+                    ExitCode = -1,
+                    StandardOutput = string.Empty,
+                    TimedOut = true
+                });
             }
 
-            return Task.FromResult(_nvidiaCsv is null ? null : new ProcessProbeResult { ExitCode = 0, StandardOutput = _nvidiaCsv });
+            return Task.FromResult(_nvidiaCsv is null
+                ? null
+                : new ProcessProbeResult
+                {
+                    ExitCode = 0,
+                    StandardOutput = _nvidiaCsv
+                });
         }
 
         public FakeProcessProbe WithNvidiaCsv(string csv)
@@ -558,11 +569,22 @@ public sealed class HardwareProfilerTests
 
             if (_timeouts.Any(key => fileName.Contains(key, StringComparison.OrdinalIgnoreCase)))
             {
-                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult { ExitCode = -1, StandardOutput = string.Empty, TimedOut = true });
+                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult
+                {
+                    ExitCode = -1,
+                    StandardOutput = string.Empty,
+                    TimedOut = true
+                });
             }
 
             var match = _outputs.FirstOrDefault(entry => fileName.Contains(entry.Key, StringComparison.OrdinalIgnoreCase));
-            return Task.FromResult(match.Value is null ? null : new ProcessProbeResult { ExitCode = 0, StandardOutput = match.Value });
+            return Task.FromResult(match.Value is null
+                ? null
+                : new ProcessProbeResult
+                {
+                    ExitCode = 0,
+                    StandardOutput = match.Value
+                });
         }
 
         public ScriptedProcessProbe WithOutput(string fileNameFragment, string standardOutput)

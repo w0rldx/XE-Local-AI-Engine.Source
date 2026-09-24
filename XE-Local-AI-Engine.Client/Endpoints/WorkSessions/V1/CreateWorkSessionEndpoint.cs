@@ -31,7 +31,13 @@ public sealed class CreateWorkSessionEndpoint : Endpoint<CreateWorkSessionReques
         // Safe to parse rather than TryParse: the validator has already refused anything that is not General or
         // Research, and it runs before the handler.
         var kind = Enum.Parse<AgentWorkSessionKind>(req.Kind, ignoreCase: true);
-        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel { Title = req.Title, Objective = req.Objective, Kind = kind, AgentDefinitionId = req.AgentDefinitionId }, ct);
+        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel
+        {
+            Title = req.Title,
+            Objective = req.Objective,
+            Kind = kind,
+            AgentDefinitionId = req.AgentDefinitionId
+        }, ct);
         await Send.CreatedAtAsync<GetWorkSessionEndpoint>(new
             {
                 sessionId = created.Id

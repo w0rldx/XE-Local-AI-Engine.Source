@@ -99,7 +99,11 @@ public sealed class DatasetDefinitionServiceTests
     }
 
     private static DatasetDefinitionDraft Draft(DatasetDefinitionBodyV1 body) =>
-        new() { Name = "definition", Body = body };
+        new()
+        {
+            Name = "definition",
+            Body = body
+        };
 
     private static DatasetDefinitionBodyV1 Body() =>
         new()
@@ -147,6 +151,16 @@ public sealed class DatasetDefinitionServiceTests
             JsonSerializer.Deserialize<DatasetDefinitionBodyV1>(AssertEx.NotNull(_captured, "The service should have reached the store.").DefinitionJson.Span, TrainingJson.Options)!;
 
         private static TrainingDefinitionRecord Record(TrainingDefinitionInput input) =>
-            new() { Id = Guid.NewGuid(), Name = input.Name, Kind = input.Kind, DefinitionJson = input.DefinitionJson, DefinitionVersion = 1, Version = 1, CreatedAtUtc = 0, UpdatedAtUtc = 0 };
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = input.Name,
+                Kind = input.Kind,
+                DefinitionJson = input.DefinitionJson,
+                DefinitionVersion = 1,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
     }
 }

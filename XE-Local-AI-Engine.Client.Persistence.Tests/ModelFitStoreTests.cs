@@ -373,7 +373,17 @@ public sealed class ModelFitStoreTests : IDisposable
             var snapshot = await snapshotStore.CreateRunningAsync(CreateBenchmarkInput("qwen"));
             _ = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput { ModelName = "qwen", ProviderName = "ollama", TokensPerSecond = 1.0, TtftMs = 1.0, TotalLatencyMs = 1.0, Runs = 1, RawJson = rawJson, DiagnosticsJson = null }
+                new ModelFitBenchmarkInput
+                {
+                    ModelName = "qwen",
+                    ProviderName = "ollama",
+                    TokensPerSecond = 1.0,
+                    TtftMs = 1.0,
+                    TotalLatencyMs = 1.0,
+                    Runs = 1,
+                    RawJson = rawJson,
+                    DiagnosticsJson = null
+                }
             ]);
         }
 

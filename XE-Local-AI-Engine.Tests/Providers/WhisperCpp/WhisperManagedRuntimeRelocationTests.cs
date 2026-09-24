@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
-using CategoryAttribute = TUnit.Core.CategoryAttribute;
+using CategoryAttribute = CategoryAttribute;
 
 /// <summary>
 ///     Proves on real bytes, at a new location, the property adoption depends on: a built <c>whisper-server</c> whose

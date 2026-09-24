@@ -163,7 +163,13 @@ internal sealed class FakeSdBinaryManager : IStableDiffusionBinaryManager
 
     public Task<SdBinary> EnsureBinaryAsync(SdGpuBackend backend, CancellationToken ct)
     {
-        return Task.FromResult(new SdBinary { ServerExecutablePath = "/fake/bin/sd-server", Version = "master-742-1a13107", Backend = _resolvedBackend, IsPinnedFallback = true });
+        return Task.FromResult(new SdBinary
+        {
+            ServerExecutablePath = "/fake/bin/sd-server",
+            Version = "master-742-1a13107",
+            Backend = _resolvedBackend,
+            IsPinnedFallback = true
+        });
     }
 }
 

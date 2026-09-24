@@ -21,7 +21,10 @@ public sealed class AgentHomeRunPathsTests
     [Test]
     public void ResolveAgentHomeRoot_WithConfiguredRoot_IgnoresTheDataDirectory()
     {
-        var options = new AgentHomeOptions { RootPath = Path.Combine("elsewhere", "state") };
+        var options = new AgentHomeOptions
+        {
+            RootPath = Path.Combine("elsewhere", "state")
+        };
 
         var root = AgentHomeRunPaths.ResolveAgentHomeRoot(options, Path.Combine("data", "node"));
 
@@ -44,7 +47,10 @@ public sealed class AgentHomeRunPathsTests
     [Test]
     public void ResolveRunsRoot_IsTheRunsDirectoryInsideTheAgentHomeRoot()
     {
-        var options = new AgentHomeOptions { RootPath = Path.Combine("elsewhere", "state") };
+        var options = new AgentHomeOptions
+        {
+            RootPath = Path.Combine("elsewhere", "state")
+        };
 
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(options, Path.Combine("data", "node"));
 

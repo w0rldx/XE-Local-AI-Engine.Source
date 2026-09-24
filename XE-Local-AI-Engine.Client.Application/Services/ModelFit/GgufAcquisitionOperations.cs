@@ -124,7 +124,12 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
                 && IsActive(existing.Phase)
                 && _cancellations.TryGetValue(existingId, out var existingCancellation))
             {
-                return new GgufAcquisitionRegistration { Status = existing, AlreadyInFlight = true, CancellationToken = existingCancellation.Token };
+                return new GgufAcquisitionRegistration
+                {
+                    Status = existing,
+                    AlreadyInFlight = true,
+                    CancellationToken = existingCancellation.Token
+                };
             }
 
             var operationId = Guid.NewGuid();
@@ -147,7 +152,12 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
             _cancellations[operationId] = cancellation;
             if (_active.TryAdd(activeKey, operationId))
             {
-                return new GgufAcquisitionRegistration { Status = status, AlreadyInFlight = false, CancellationToken = cancellation.Token };
+                return new GgufAcquisitionRegistration
+                {
+                    Status = status,
+                    AlreadyInFlight = false,
+                    CancellationToken = cancellation.Token
+                };
             }
 
             _statuses.TryRemove(operationId, out _);

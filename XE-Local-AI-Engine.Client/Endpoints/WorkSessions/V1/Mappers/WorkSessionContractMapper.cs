@@ -29,7 +29,16 @@ internal static class WorkSessionContractMapper
         };
 
     public static WorkSessionSummaryResponse ToResponse(this WorkSessionSummary value) =>
-        new() { Id = value.Id, Title = value.Title, Kind = value.Kind.ToString(), Status = value.Status.ToString(), AgentDefinitionId = value.AgentDefinitionId, StepCount = value.StepCount, UpdatedAtUtc = value.UpdatedUtc };
+        new()
+        {
+            Id = value.Id,
+            Title = value.Title,
+            Kind = value.Kind.ToString(),
+            Status = value.Status.ToString(),
+            AgentDefinitionId = value.AgentDefinitionId,
+            StepCount = value.StepCount,
+            UpdatedAtUtc = value.UpdatedUtc
+        };
 
     public static WorkSessionTaskResponse ToResponse(this WorkSessionTaskDto value) =>
         new()
@@ -47,7 +56,17 @@ internal static class WorkSessionContractMapper
         };
 
     public static WorkSessionFindingResponse ToResponse(this WorkSessionFindingDto value) =>
-        new() { Id = value.Id, TaskId = value.TaskId, Sequence = value.Sequence, Kind = value.Kind.ToString(), Text = value.Text, SourceRef = value.SourceRef, CreatedStep = value.CreatedStep, Superseded = value.Superseded };
+        new()
+        {
+            Id = value.Id,
+            TaskId = value.TaskId,
+            Sequence = value.Sequence,
+            Kind = value.Kind.ToString(),
+            Text = value.Text,
+            SourceRef = value.SourceRef,
+            CreatedStep = value.CreatedStep,
+            Superseded = value.Superseded
+        };
 
     public static WorkSessionArtifactResponse ToResponse(this WorkSessionArtifactDto value) =>
         new()
@@ -64,25 +83,64 @@ internal static class WorkSessionContractMapper
         };
 
     public static WorkSessionCheckpointResponse ToResponse(this WorkSessionCheckpointDto value) =>
-        new() { Id = value.Id, Sequence = value.Sequence, Step = value.Step, Summary = value.Summary, StateJson = value.StateJson, CreatedAtUtc = value.CreatedUtc };
+        new()
+        {
+            Id = value.Id,
+            Sequence = value.Sequence,
+            Step = value.Step,
+            Summary = value.Summary,
+            StateJson = value.StateJson,
+            CreatedAtUtc = value.CreatedUtc
+        };
 
     public static WorkSessionEventResponse ToResponse(this WorkSessionEventDto value) =>
-        new() { Id = value.Id, Sequence = value.Sequence, Step = value.Step, EventType = value.EventType, DetailJson = value.DetailJson, Outcome = value.Outcome, OccurredAtUtc = value.OccurredUtc, OperationId = value.OperationId };
+        new()
+        {
+            Id = value.Id,
+            Sequence = value.Sequence,
+            Step = value.Step,
+            EventType = value.EventType,
+            DetailJson = value.DetailJson,
+            Outcome = value.Outcome,
+            OccurredAtUtc = value.OccurredUtc,
+            OperationId = value.OperationId
+        };
 
     public static ListWorkSessionTasksResponse ToResponse(this IReadOnlyList<WorkSessionTaskDto> value) =>
-        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
+        new()
+        {
+            Items = [.. value.Select(ToResponse)],
+            LastSequence = HighestSequence(value.Select(static item => item.Sequence))
+        };
 
     public static ListWorkSessionFindingsResponse ToResponse(this IReadOnlyList<WorkSessionFindingDto> value) =>
-        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
+        new()
+        {
+            Items = [.. value.Select(ToResponse)],
+            LastSequence = HighestSequence(value.Select(static item => item.Sequence))
+        };
 
     public static ListWorkSessionArtifactsResponse ToResponse(this IReadOnlyList<WorkSessionArtifactDto> value) =>
-        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
+        new()
+        {
+            Items = [.. value.Select(ToResponse)],
+            LastSequence = HighestSequence(value.Select(static item => item.Sequence))
+        };
 
     public static ListWorkSessionCheckpointsResponse ToResponse(this IReadOnlyList<WorkSessionCheckpointDto> value) =>
-        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
+        new()
+        {
+            Items = [.. value.Select(ToResponse)],
+            LastSequence = HighestSequence(value.Select(static item => item.Sequence))
+        };
 
     public static ListWorkSessionEventsResponse ToResponse(this IReadOnlyList<WorkSessionEventDto> value, int requestedLimit) =>
-        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)), HasMore = value.Count >= requestedLimit };
+        new()
+        {
+            Items = [.. value.Select(ToResponse)],
+            LastSequence = HighestSequence(value.Select(static item => item.Sequence)),
+            HasMore = value.Count >= requestedLimit
+        };
 
     /// <summary>
     ///     The page's HIGHEST sequence, not its last row's.

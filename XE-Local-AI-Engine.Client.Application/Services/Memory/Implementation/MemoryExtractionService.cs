@@ -23,8 +23,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
     private readonly IPlaybookActionStore _playbookActionStore;
     private readonly IMemorySemanticDeduplicator _semanticDeduplicator;
 
-    public MemoryExtractionService(
-        IMemoryExtractionAgent extractionAgent,
+    public MemoryExtractionService(IMemoryExtractionAgent extractionAgent,
         IPlaybookActionStore playbookActionStore,
         IMemorySemanticDeduplicator semanticDeduplicator,
         IOptions<MemoryExtractionOptions> options,
@@ -70,7 +69,14 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
         if (proposals.Count == 0)
         {
-            return new MemoryExtractionOutcome { MemoryExcluded = false, ModelConfigured = true, CreatedCandidates = [], ProposedCount = 0, DuplicateCount = 0 };
+            return new MemoryExtractionOutcome
+            {
+                MemoryExcluded = false,
+                ModelConfigured = true,
+                CreatedCandidates = [],
+                ProposedCount = 0,
+                DuplicateCount = 0
+            };
         }
 
         // Dedup against the agent's existing live memories so repeat runs don't flood the staging list. The lessons text
@@ -127,13 +133,25 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
                 continue;
             }
 
-            accepted.Add(new AcceptedCandidate { Behavior = behavior, TriggerCondition = triggerCondition, Scope = proposal.Scope, Confidence = proposal.Confidence });
+            accepted.Add(new AcceptedCandidate
+            {
+                Behavior = behavior,
+                TriggerCondition = triggerCondition,
+                Scope = proposal.Scope,
+                Confidence = proposal.Confidence
+            });
         }
 
         // PASS 2 — semantic dedup ON TOP OF lexical, dropping a lexically-distinct paraphrase of a live memory. With
         // no confident embedding model, or any failure, it returns NotApplied and every survivor is kept.
         var semantic = await _semanticDeduplicator.FindSemanticDuplicatesAsync(BuildSemanticExisting(existing),
-            [.. accepted.Select(static candidate => new MemoryDedupCandidate { Scope = candidate.Scope, Behavior = candidate.Behavior })],
+            [
+                .. accepted.Select(static candidate => new MemoryDedupCandidate
+                {
+                    Scope = candidate.Scope,
+                    Behavior = candidate.Behavior
+                })
+            ],
             cancellationToken);
 
         var created = new List<PlaybookActionRecord>();
@@ -150,18 +168,18 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
             var candidate = accepted[index];
             var record = await _playbookActionStore.AddAsync(new PlaybookActionInput
-            {
-                AgentDefinitionId = run.AgentDefinitionId,
-                State = PlaybookActionState.Suggested,
-                Source = PlaybookActionSource.Extracted,
-                TriggerCondition = candidate.TriggerCondition,
-                Behavior = candidate.Behavior,
-                Scope = candidate.Scope.ToString(),
-                Priority = _options.CandidatePriority,
-                SourceFeedbackIds = sourceFeedbackIds,
-                Confidence = candidate.Confidence,
-                MemoryScope = candidate.Scope
-            },
+                {
+                    AgentDefinitionId = run.AgentDefinitionId,
+                    State = PlaybookActionState.Suggested,
+                    Source = PlaybookActionSource.Extracted,
+                    TriggerCondition = candidate.TriggerCondition,
+                    Behavior = candidate.Behavior,
+                    Scope = candidate.Scope.ToString(),
+                    Priority = _options.CandidatePriority,
+                    SourceFeedbackIds = sourceFeedbackIds,
+                    Confidence = candidate.Confidence,
+                    MemoryScope = candidate.Scope
+                },
                 cancellationToken);
 
             created.Add(record);
@@ -170,7 +188,14 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
         _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
-        return new MemoryExtractionOutcome { MemoryExcluded = false, ModelConfigured = true, CreatedCandidates = created, ProposedCount = proposals.Count, DuplicateCount = duplicates };
+        return new MemoryExtractionOutcome
+        {
+            MemoryExcluded = false,
+            ModelConfigured = true,
+            CreatedCandidates = created,
+            ProposedCount = proposals.Count,
+            DuplicateCount = duplicates
+        };
     }
 
     private static IReadOnlyList<MemoryDedupExisting> BuildSemanticExisting(IReadOnlyList<PlaybookActionRecord> existing)

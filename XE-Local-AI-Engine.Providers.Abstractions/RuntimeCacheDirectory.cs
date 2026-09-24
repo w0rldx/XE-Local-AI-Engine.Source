@@ -5,7 +5,8 @@ public static class RuntimeCacheDirectory
 {
     public const string EnvironmentVariable = "XE_RUNTIME_DATA_DIR";
 
-    public static string Resolve() => Resolve(Environment.GetEnvironmentVariable(EnvironmentVariable));
+    public static string Resolve() =>
+        Resolve(Environment.GetEnvironmentVariable(EnvironmentVariable));
 
     public static string Resolve(string? configuredRoot)
     {
@@ -15,7 +16,7 @@ public static class RuntimeCacheDirectory
         }
 
         if (string.IsNullOrWhiteSpace(configuredRoot) || configuredRoot.Any(char.IsControl)
-            || !Path.IsPathFullyQualified(configuredRoot))
+                                                      || !Path.IsPathFullyQualified(configuredRoot))
         {
             throw new InvalidOperationException($"{EnvironmentVariable} must be a non-empty absolute directory path.");
         }

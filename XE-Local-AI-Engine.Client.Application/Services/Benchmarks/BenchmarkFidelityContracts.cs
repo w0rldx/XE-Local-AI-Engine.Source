@@ -171,7 +171,12 @@ public static class BenchmarkFidelityCorpus
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var stream = File.OpenRead(path);
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(stream));
-        return new BenchmarkFidelityCorpusFile { Path = path, Sha256 = sha256, CorpusId = string.Create(CultureInfo.InvariantCulture, $"{CorpusName}@{sha256[..12]}") };
+        return new BenchmarkFidelityCorpusFile
+        {
+            Path = path,
+            Sha256 = sha256,
+            CorpusId = string.Create(CultureInfo.InvariantCulture, $"{CorpusName}@{sha256[..12]}")
+        };
     }
 
     private static BenchmarkFidelityCorpusFile Load()

@@ -821,7 +821,16 @@ public sealed class OrchestrationAgentFactoryTests
             var hasNumCtxKey = properties?.ContainsKey("num_ctx") ?? false;
             var numCtx = hasNumCtxKey ? properties!["num_ctx"] : null;
 
-            _requests.Add(new RecordedRequest { SystemText = systemText, ModelId = options?.ModelId, HasThinkKey = hasThinkKey, Think = think, CodexReasoningEffort = codexEffort, HasNumCtxKey = hasNumCtxKey, NumCtx = numCtx });
+            _requests.Add(new RecordedRequest
+            {
+                SystemText = systemText,
+                ModelId = options?.ModelId,
+                HasThinkKey = hasThinkKey,
+                Think = think,
+                CodexReasoningEffort = codexEffort,
+                HasNumCtxKey = hasNumCtxKey,
+                NumCtx = numCtx
+            });
         }
     }
 

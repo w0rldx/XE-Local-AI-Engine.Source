@@ -53,12 +53,12 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
                 // Mint through the store's read-modify-write: this gate serializes only THIS provider's callers, so UpdateAsync
                 // re-reading under the store's lock is what makes everyone adopt the first key — a second key orphans every frozen profile, which is keyed by machine key.
                 var persisted = await _settingsStore.UpdateAsync(latest => string.IsNullOrWhiteSpace(latest.MachineKey)
-                                                            ? latest with
-                                                            {
-                                                                MachineKey = Guid.NewGuid().ToString("N")
-                                                            }
-                                                            : latest,
-                                                        ct);
+                        ? latest with
+                        {
+                            MachineKey = Guid.NewGuid().ToString("N")
+                        }
+                        : latest,
+                    ct);
                 key = persisted.MachineKey;
                 if (string.IsNullOrWhiteSpace(key))
                 {

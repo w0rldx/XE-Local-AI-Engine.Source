@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 
 /// <summary>
 ///     The parsed, in-memory projection of a definition's or a run's pinned <c>graph_json</c> — the single source of
@@ -41,7 +42,7 @@ internal sealed class GraphWorkflowGraph
     private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
 
     /// <summary>The decision providers a <c>DecisionModel</c> node may name. Closed: a provider this build cannot run is refused at save.</summary>
-    internal static readonly string[] DecisionProviders = [Decisions.LlmDecisionProvider.ProviderName];
+    internal static readonly string[] DecisionProviders = [LlmDecisionProvider.ProviderName];
 
     /// <summary>The label bounds of a <c>DecisionModel</c> node. Flat strings, so the enum grammar stays far below the repetition bound.</summary>
     private const int MinDecisionLabels = 2;
@@ -497,7 +498,11 @@ internal sealed class GraphWorkflowGraph
             throw new GraphWorkflowValidationException($"The 'position' on node '{nodeKey}' must be an object carrying a numeric 'x' and 'y'.");
         }
 
-        return new GraphWorkflowPosition { X = xValue, Y = yValue };
+        return new GraphWorkflowPosition
+        {
+            X = xValue,
+            Y = yValue
+        };
     }
 
     private static GraphWorkflowNodeConfig ParseConfig(JsonElement element,
@@ -563,7 +568,10 @@ internal sealed class GraphWorkflowGraph
             {
                 PublishToChat = ParsePublishToChat(config, nodeKey, graphKind, fallback: graphKind == GraphWorkflowDefinitionKind.Chat)
             },
-            GraphWorkflowNodeKind.ChatInput => new GraphWorkflowChatInputConfig { Prompt = RequiredString(config, "prompt", owner) },
+            GraphWorkflowNodeKind.ChatInput => new GraphWorkflowChatInputConfig
+            {
+                Prompt = RequiredString(config, "prompt", owner)
+            },
             GraphWorkflowNodeKind.DecisionModel => new GraphWorkflowDecisionModelConfig
             {
                 Question = RequiredString(config, "question", owner),
@@ -673,8 +681,8 @@ internal sealed class GraphWorkflowGraph
             : throw new GraphWorkflowValidationException($"The 'responseJsonSchema' on node '{nodeKey}' must be an object schema — its 'type' must be \"object\".");
     }
 
-    private static IReadOnlyDictionary<string, string> ParseArgumentBindings(JsonElement config, string nodeKey)
-        => ParseBindings(config, "argumentBindings", nodeKey);
+    private static IReadOnlyDictionary<string, string> ParseArgumentBindings(JsonElement config, string nodeKey) =>
+        ParseBindings(config, "argumentBindings", nodeKey);
 
     private static IReadOnlyDictionary<string, string> ParseBindings(JsonElement config, string memberName, string nodeKey)
     {
@@ -719,7 +727,8 @@ internal sealed class GraphWorkflowGraph
             throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' must be an object.");
         }
 
-        var allowed = new HashSet<string>(["temperature", "topP", "topK", "minP", "maxOutputTokens", "seed", "repeatPenalty", "repeatLastN", "presencePenalty", "frequencyPenalty", "stop", "numCtx"], StringComparer.Ordinal);
+        var allowed = new HashSet<string>(["temperature", "topP", "topK", "minP", "maxOutputTokens", "seed", "repeatPenalty", "repeatLastN", "presencePenalty", "frequencyPenalty", "stop", "numCtx"],
+            StringComparer.Ordinal);
         var stray = value.EnumerateObject().Select(static member => member.Name).FirstOrDefault(member => !allowed.Contains(member));
         if (stray is not null)
         {

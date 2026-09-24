@@ -166,8 +166,8 @@ public sealed class ExternalAppStateObserverTests
         harness.Time.Advance(TimeSpan.FromSeconds(15));
 
         await AssertEx.EventuallyAsync(() => harness.ReadAsync(harness.InstalledId).GetAwaiter().GetResult() is { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
-                          TestBudgets.Contended,
-                          "One interval elapsed and the observer never noticed the missing container.");
+            TestBudgets.Contended,
+            "One interval elapsed and the observer never noticed the missing container.");
 
         await observer.StopAsync(CancellationToken.None);
     }
@@ -230,11 +230,11 @@ public sealed class ExternalAppStateObserverTests
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;

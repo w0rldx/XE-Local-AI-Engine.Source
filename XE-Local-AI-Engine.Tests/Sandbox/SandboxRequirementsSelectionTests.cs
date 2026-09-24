@@ -388,7 +388,12 @@ public sealed class SandboxRequirementsSelectionTests
                 Func<TState, Exception?, string> formatter)
             {
                 ArgumentNullException.ThrowIfNull(formatter);
-                _owner.Add(new RecordingLogger<SandboxRequirementsSelectionTests>.Entry { Level = logLevel, Message = formatter(state, exception), Exception = exception });
+                _owner.Add(new RecordingLogger<SandboxRequirementsSelectionTests>.Entry
+                {
+                    Level = logLevel,
+                    Message = formatter(state, exception),
+                    Exception = exception
+                });
             }
         }
     }

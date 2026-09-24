@@ -136,7 +136,8 @@ internal static partial class WindowsLauncherApplication
             "--BROWSER" or "--HEADLESS" or "--NO-BROWSER" or "--MCP-ONLY" or "--HELP" or "--STATUS"
             or "--SETUP" or "--MCP-KEY" or "--RESET-ADMIN-PASSWORD"
             or "--KNOWLEDGE-DOWNGRADE-PREFLIGHT" or "--KNOWLEDGE-DOWNGRADE-EXPORT")
-            ? ManagedEntryPoint : DesktopEntryPoint;
+            ? ManagedEntryPoint
+            : DesktopEntryPoint;
 
     /// <summary>True only for the GUI shell launch; every CLI mode keeps the console it prints to.</summary>
     internal static bool ShouldDetachConsole(IEnumerable<string> arguments) =>

@@ -87,7 +87,8 @@ public sealed class LocalChatRuntimePackageBuilderTests
             InvocationId = Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
             ResolvedSystemPrompt = "You are helpful.",
-            ConversationContext = [
+            ConversationContext =
+            [
                 CreateMessage(MessageRole.Assistant, "third", sortOrder: 2),
                 CreateMessage(MessageRole.User, "first", sortOrder: 0),
                 CreateMessage(MessageRole.Assistant, "second", sortOrder: 1)

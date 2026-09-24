@@ -574,9 +574,9 @@ public sealed class DevWorkflowEndpointTests
         await using var factory = EnabledFactory(store);
 
         using var response = await SendAsync(factory,
-                "PUT",
-                Definition,
-                $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""");
+            "PUT",
+            Definition,
+            $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""");
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -1098,7 +1098,15 @@ public sealed class DevWorkflowEndpointTests
             LatestRunId = RunId,
             LatestRunStatus = DevWorkflowRunStatus.WaitingForApproval,
             LatestRunDefinitionName = "Research → Plan → Approval",
-            LatestRunNodes = new DevWorkflowNodeCounters { Queued = 0, Running = 1, Completed = 1, Total = 2, PendingDecisionCount = 1, BlockingGateNodeRunId = RunId },
+            LatestRunNodes = new DevWorkflowNodeCounters
+            {
+                Queued = 0,
+                Running = 1,
+                Completed = 1,
+                Total = 2,
+                PendingDecisionCount = 1,
+                BlockingGateNodeRunId = RunId
+            },
             CreatedAtUtc = 10,
             UpdatedAtUtc = 20,
             Version = 3
@@ -1112,7 +1120,15 @@ public sealed class DevWorkflowEndpointTests
             DefinitionId = DefinitionId,
             DefinitionName = "Research → Plan → Approval",
             Status = DevWorkflowRunStatus.WaitingForApproval,
-            Nodes = new DevWorkflowNodeCounters { Queued = 0, Running = 1, Completed = 1, Total = 2, PendingDecisionCount = 1, BlockingGateNodeRunId = RunId },
+            Nodes = new DevWorkflowNodeCounters
+            {
+                Queued = 0,
+                Running = 1,
+                Completed = 1,
+                Total = 2,
+                PendingDecisionCount = 1,
+                BlockingGateNodeRunId = RunId
+            },
             FailureClass = null,
             StartedAtUtc = 11,
             EndedAtUtc = null,

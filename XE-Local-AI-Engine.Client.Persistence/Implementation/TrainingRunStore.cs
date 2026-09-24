@@ -141,7 +141,11 @@ public sealed class TrainingRunStore : ITrainingRunStore
                             work.TryGetValue(run.Id, out var found) ? found.Status : null,
                             work.TryGetValue(run.Id, out var byId) ? byId.ErrorMessage : null))
                         .ToArray();
-        return new TrainingRunPage { Items = items, TotalCount = total };
+        return new TrainingRunPage
+        {
+            Items = items,
+            TotalCount = total
+        };
     }
 
     public async Task<IReadOnlyList<TrainingRunLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default)
@@ -151,7 +155,14 @@ public sealed class TrainingRunStore : ITrainingRunStore
         var runs = await _dbContext.TrainingRuns.AsNoTracking()
                                    .Where(item => item.LaunchReceiptJson != null)
                                    .ToListAsync(cancellationToken);
-        return [.. runs.Select(static run => new TrainingRunLaunchReceipt { RunId = run.Id, LaunchReceiptJson = run.LaunchReceiptJson! })];
+        return
+        [
+            .. runs.Select(static run => new TrainingRunLaunchReceipt
+            {
+                RunId = run.Id,
+                LaunchReceiptJson = run.LaunchReceiptJson!
+            })
+        ];
     }
 
     public async Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default)
@@ -214,7 +225,14 @@ public sealed class TrainingRunStore : ITrainingRunStore
                 ? await GetAsync(work.TargetId, cancellationToken)
                 : null;
             await transaction.CommitAsync(cancellationToken);
-            return new TrainingWorkClaim { QueueSequence = work.QueueSequence, Kind = work.Kind, TargetId = work.TargetId, Version = work.Version, Run = run };
+            return new TrainingWorkClaim
+            {
+                QueueSequence = work.QueueSequence,
+                Kind = work.Kind,
+                TargetId = work.TargetId,
+                Version = work.Version,
+                Run = run
+            };
         }
     }
 

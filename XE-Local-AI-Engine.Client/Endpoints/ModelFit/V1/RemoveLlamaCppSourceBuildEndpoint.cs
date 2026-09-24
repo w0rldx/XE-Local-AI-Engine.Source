@@ -14,8 +14,7 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<L
     private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator;
 
-    public RemoveLlamaCppSourceBuildEndpoint(
-        LlamaCppRuntimeOrchestrationService runtime,
+    public RemoveLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime,
         INodeRuntimeSettings nodeRuntimeSettings,
         ILocalChatClientCacheInvalidator localChatClientCacheInvalidator)
     {
@@ -36,7 +35,7 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<L
     public override async Task HandleAsync(CancellationToken ct)
     {
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
+                .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
             {

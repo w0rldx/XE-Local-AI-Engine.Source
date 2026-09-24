@@ -141,8 +141,19 @@ internal static class GraphWorkflowContractMapper
             DefinitionId = value.Run.DefinitionId,
             DefinitionName = value.DefinitionName,
             TriggerMessageId = value.Run.TriggerMessageId,
-            PendingInput = value.PendingInput is { } input ? new GraphWorkflowPendingInputResponse { NodeKey = input.NodeKey, Prompt = input.Prompt } : null,
-            Steerable = value.SteerableNodeKey is { } nodeKey ? new GraphWorkflowSteerableNodeResponse { NodeKey = nodeKey } : null
+            PendingInput = value.PendingInput is { } input
+                ? new GraphWorkflowPendingInputResponse
+                {
+                    NodeKey = input.NodeKey,
+                    Prompt = input.Prompt
+                }
+                : null,
+            Steerable = value.SteerableNodeKey is { } nodeKey
+                ? new GraphWorkflowSteerableNodeResponse
+                {
+                    NodeKey = nodeKey
+                }
+                : null
         };
     }
 
@@ -199,21 +210,32 @@ internal static class GraphWorkflowContractMapper
             StartedAtUtc = value.StartedAtUtc,
             CompletedAtUtc = value.CompletedAtUtc,
             UpdatedAtUtc = value.UpdatedAtUtc,
-            Steering = [.. value.Steering.Select(static entry => new GraphWorkflowSteeringEntryResponse
-            {
-                OperationId = entry.OperationId,
-                Message = entry.Message,
-                AtUtc = entry.AtUtc,
-                Attempt = entry.Attempt,
-                Applied = entry.Applied
-            })]
+            Steering =
+            [
+                .. value.Steering.Select(static entry => new GraphWorkflowSteeringEntryResponse
+                {
+                    OperationId = entry.OperationId,
+                    Message = entry.Message,
+                    AtUtc = entry.AtUtc,
+                    Attempt = entry.Attempt,
+                    Applied = entry.Applied
+                })
+            ]
         };
     }
 
     public static GraphWorkflowRunEventResponse ToResponse(this GraphWorkflowRunEventSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowRunEventResponse { Id = value.Id, Seq = value.Seq, EventType = value.EventType, NodeKey = value.NodeKey, Detail = ToDocument(value.DetailJson), CreatedAtUtc = value.CreatedAtUtc };
+        return new GraphWorkflowRunEventResponse
+        {
+            Id = value.Id,
+            Seq = value.Seq,
+            EventType = value.EventType,
+            NodeKey = value.NodeKey,
+            Detail = ToDocument(value.DetailJson),
+            CreatedAtUtc = value.CreatedAtUtc
+        };
     }
 
     /// <summary>

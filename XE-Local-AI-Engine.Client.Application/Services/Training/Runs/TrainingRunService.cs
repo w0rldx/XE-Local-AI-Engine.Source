@@ -53,8 +53,7 @@ public sealed class TrainingRunService : ITrainingRunService
     private readonly ITrainingRunQueueSignal _signal;
     private readonly TrainingRunWorkspace _workspace;
 
-    public TrainingRunService(
-        ITrainingRunStore runStore,
+    public TrainingRunService(ITrainingRunStore runStore,
         ITrainingDatasetStore datasetStore,
         IDatasetExportService exportService,
         ITrainingOptionDefaultsCalculator defaults,
@@ -177,7 +176,12 @@ public sealed class TrainingRunService : ITrainingRunService
             }
         }
 
-        return new TrainingSplit { Train = train, Holdout = holdout, HoldoutSequences = holdoutSequences };
+        return new TrainingSplit
+        {
+            Train = train,
+            Holdout = holdout,
+            HoldoutSequences = holdoutSequences
+        };
     }
 
     private async Task<TrainingRunFreezeV1> MaterializeFreezeAsync(TrainingDatasetRecord dataset, Guid freezeId, CancellationToken cancellationToken)
@@ -244,17 +248,17 @@ public sealed class TrainingRunService : ITrainingRunService
         // creation so a later re-install under the same name cannot swap the base out — the fingerprint travels with the link.
         var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken);
         var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand
-        {
-            DatasetId = command.DatasetId,
-            ExpectedDatasetVersion = command.ExpectedDatasetVersion,
-            BaseArtifactId = command.BaseArtifactId,
-            FreezeJson = JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
-            OptionsJson = JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
-            LicenseConfirmationJson = JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
-            LinkedInstalledModelName = link?.ModelName,
-            LinkedModelContentFingerprint = link?.ContentFingerprint
-        },
-                                     cancellationToken);
+            {
+                DatasetId = command.DatasetId,
+                ExpectedDatasetVersion = command.ExpectedDatasetVersion,
+                BaseArtifactId = command.BaseArtifactId,
+                FreezeJson = JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
+                OptionsJson = JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
+                LicenseConfirmationJson = JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
+                LinkedInstalledModelName = link?.ModelName,
+                LinkedModelContentFingerprint = link?.ContentFingerprint
+            },
+            cancellationToken);
         _signal.Wake();
         return run;
     }

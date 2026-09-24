@@ -65,7 +65,12 @@ public sealed partial class WorkerEventDispatcher
                 state.PendingApproval = null;
             }
 
-            state.LastApprovalResolution = new InvocationApprovalResolutionState { RequestId = evt.RequestId, Approved = evt.Approved, ResolvedAt = _timeProvider.GetUtcNow() };
+            state.LastApprovalResolution = new InvocationApprovalResolutionState
+            {
+                RequestId = evt.RequestId,
+                Approved = evt.Approved,
+                ResolvedAt = _timeProvider.GetUtcNow()
+            };
         });
 
         _logger.LogDebug("Approval resolution processing finished. RequestId={RequestId}", evt.RequestId);

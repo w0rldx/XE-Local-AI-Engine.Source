@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
-using CategoryAttribute = TUnit.Core.CategoryAttribute;
+using CategoryAttribute = CategoryAttribute;
 
 /// <summary>
 ///     The acceptance loop on the REAL <see cref="ProcessSandboxRuntimeProvider" />: copy a selected folder into the
@@ -122,7 +122,8 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             RunId = run.RunId
         });
 
-        AssertEx.True(applied.Applied, $"the exported patch applies to the host. rejections: {string.Join(separator: ';', applied.Rejections.Select(rejection => rejection.Path is null ? rejection.Reason : $"{rejection.Path}: {rejection.Reason}"))}");
+        AssertEx.True(applied.Applied,
+            $"the exported patch applies to the host. rejections: {string.Join(separator: ';', applied.Rejections.Select(rejection => rejection.Path is null ? rejection.Reason : $"{rejection.Path}: {rejection.Reason}"))}");
         var hostReadme = await File.ReadAllTextAsync(Path.Combine(hostFolder, "README.md"));
         AssertEx.Contains(hostReadme, "bravo");
     }
@@ -298,7 +299,11 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = OwnerUserId, NodeId = NodeId });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = OwnerUserId,
+                NodeId = NodeId
+            });
         }
     }
 
@@ -314,7 +319,11 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
             IReadOnlyList<SelectedFolderReference> references =
-                _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
+                _folders.Values.Select(folder => new SelectedFolderReference
+                {
+                    Id = folder.Id.ToString(),
+                    Alias = folder.Alias
+                }).ToList();
             return Task.FromResult(references);
         }
 
@@ -330,7 +339,13 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 
         public void Add(Guid id, string alias, string hostPath)
         {
-            _folders[id] = new ResolvedSelectedFolder { Id = id, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
+            _folders[id] = new ResolvedSelectedFolder
+            {
+                Id = id,
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            };
         }
     }
 

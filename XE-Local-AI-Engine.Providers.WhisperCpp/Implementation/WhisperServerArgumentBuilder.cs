@@ -65,7 +65,14 @@ internal static class WhisperServerArgumentBuilder
         args.Add("-nlp");
 
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;
-        return new WhisperServerLaunchSpec { ModelId = modelId, ExecutablePath = executablePath, Arguments = args, Port = port, WorkingDirectory = workingDirectory };
+        return new WhisperServerLaunchSpec
+        {
+            ModelId = modelId,
+            ExecutablePath = executablePath,
+            Arguments = args,
+            Port = port,
+            WorkingDirectory = workingDirectory
+        };
     }
 
     /// <summary>

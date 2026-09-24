@@ -6,12 +6,20 @@ internal sealed partial class SubAgentSpawnService
     {
         if (workspaceId is not { } id)
         {
-            return new WorkspaceOpenOutcome { Session = null, Failure = null };
+            return new WorkspaceOpenOutcome
+            {
+                Session = null,
+                Failure = null
+            };
         }
 
         var opened = await _mcpWorkspaceSessionFactory.OpenAsync(id, cancellationToken);
         return opened.Session is { } session
-            ? new WorkspaceOpenOutcome { Session = session, Failure = null }
+            ? new WorkspaceOpenOutcome
+            {
+                Session = session,
+                Failure = null
+            }
             : new WorkspaceOpenOutcome
             {
                 Session = null,

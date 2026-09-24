@@ -35,7 +35,11 @@ internal sealed class AgentHomeIdentityProvider : IAgentHomeIdentityProvider
         var accessToken = await _tokenStore.GetAccessTokenAsync();
         var ownerUserId = ResolveOwnerSubject(accessToken) ?? nodeId;
 
-        return new AgentHomeOwnerIdentity { OwnerUserId = ownerUserId, NodeId = nodeId };
+        return new AgentHomeOwnerIdentity
+        {
+            OwnerUserId = ownerUserId,
+            NodeId = nodeId
+        };
     }
 
     private static string? ResolveOwnerSubject(string? accessToken)

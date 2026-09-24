@@ -31,6 +31,6 @@ public sealed class CancelBenchmarkRunEndpoint : Endpoint<CancelBenchmarkRunRequ
     {
         var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

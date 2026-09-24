@@ -55,7 +55,11 @@ internal static class DevelopmentCommandProfileImport
             throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is not valid JSON.");
         }
 
-        return new ImportedProfile { Document = document, Digest = ComputeDigest(bytes) };
+        return new ImportedProfile
+        {
+            Document = document,
+            Digest = ComputeDigest(bytes)
+        };
     }
 
     /// <summary>

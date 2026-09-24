@@ -110,8 +110,8 @@ public sealed class FfmpegAudioTranscoderTests
         var running = transcoder.ToWav16kMonoAsync(Path.Combine(directory.Path, "in.ogg"), destination, cancellation.Token);
 
         await AssertEx.EventuallyAsync(() => ReadPid(pidPath) is not null,
-                          TimeSpan.FromSeconds(30),
-                          "The controlled converter must start and report its process id.");
+            TimeSpan.FromSeconds(30),
+            "The controlled converter must start and report its process id.");
         var pid = ReadPid(pidPath) ?? -1;
         AssertEx.NotEqual(-1, pid, "The child's pid is the only handle this test has on it.");
 

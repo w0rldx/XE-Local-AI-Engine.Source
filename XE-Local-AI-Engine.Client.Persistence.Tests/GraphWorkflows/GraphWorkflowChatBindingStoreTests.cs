@@ -185,7 +185,13 @@ public sealed class GraphWorkflowChatBindingStoreTests
     private static async Task<Guid> SeedConversationAsync(NodeChatDbContext context)
     {
         var conversationId = Guid.NewGuid();
-        context.Conversations.Add(new NodeConversation { ConversationId = conversationId, UserId = "node", CreatedAtUtc = 1, LastSeenUtc = 1 });
+        context.Conversations.Add(new NodeConversation
+        {
+            ConversationId = conversationId,
+            UserId = "node",
+            CreatedAtUtc = 1,
+            LastSeenUtc = 1
+        });
         _ = await context.SaveChangesAsync();
         return conversationId;
     }
@@ -200,7 +206,19 @@ public sealed class GraphWorkflowChatBindingStoreTests
             GraphHash = definition.GraphHash,
             GraphJson = definition.GraphJson,
             InputJson = null,
-            NodeRuns = [.. new[] { "start", "done" }.Select(static key => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = key, Kind = GraphWorkflowNodeKind.Agent })],
+            NodeRuns =
+            [
+                .. new[]
+                {
+                    "start",
+                    "done"
+                }.Select(static key => new GraphWorkflowNodeRunSeed
+                {
+                    NodeRunId = Guid.NewGuid(),
+                    NodeKey = key,
+                    Kind = GraphWorkflowNodeKind.Agent
+                })
+            ],
             ConversationId = conversationId,
             TriggerMessageId = triggerMessageId
         };

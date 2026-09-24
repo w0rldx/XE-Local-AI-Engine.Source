@@ -273,7 +273,11 @@ public sealed class GgufDownloadTransactionTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var destination = Destination(withProjector: false);
         var partPath = dir.FilePath(destination.RelativeGgufPath) + ".part";
 
@@ -307,7 +311,11 @@ public sealed class GgufDownloadTransactionTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
             transaction.PrepareAsync(source, Destination(withProjector: false), progress: null, cts.Token));
@@ -326,7 +334,11 @@ public sealed class GgufDownloadTransactionTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var destination = Destination(withProjector: false);
         var partPath = dir.FilePath(destination.RelativeGgufPath) + ".part";
 
@@ -358,7 +370,11 @@ public sealed class GgufDownloadTransactionTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
 
         var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
         var receipt = await transaction.CommitAsync(prepared, CancellationToken.None);
@@ -413,7 +429,10 @@ public sealed class GgufDownloadTransactionTests
     // A 200 whose body yields the first cutAt bytes, then runs interrupt (which throws) — an attempt stopped mid-copy.
     private static HttpResponseMessage Interrupted(byte[] bytes, int cutAt, Action interrupt)
     {
-        var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new InterruptingStream(bytes, cutAt, interrupt)) };
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new InterruptingStream(bytes, cutAt, interrupt))
+        };
         response.Content.Headers.ContentLength = bytes.Length;
         response.Headers.TryAddWithoutValidation("X-Repo-Commit", Infra.Revision);
         return response;
@@ -422,7 +441,10 @@ public sealed class GgufDownloadTransactionTests
     // A 206 serving [from, end) at the same commit the interrupted attempt recorded.
     private static HttpResponseMessage Resumed(byte[] bytes, int from)
     {
-        var response = new HttpResponseMessage(HttpStatusCode.PartialContent) { Content = new ByteArrayContent(bytes[from..]) };
+        var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+        {
+            Content = new ByteArrayContent(bytes[from..])
+        };
         response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, bytes.Length - 1, bytes.Length);
         response.Headers.TryAddWithoutValidation("X-Repo-Commit", Infra.Revision);
         return response;

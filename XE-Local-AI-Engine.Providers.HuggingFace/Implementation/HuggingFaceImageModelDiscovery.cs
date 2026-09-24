@@ -84,7 +84,13 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new ImageRepoDetail { RepoId = repoId, IsGated = false, License = null, Files = [] };
+            return new ImageRepoDetail
+            {
+                RepoId = repoId,
+                IsGated = false,
+                License = null,
+                Files = []
+            };
         }
 
         var files = new List<ImageRepoFile>();
@@ -106,7 +112,13 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
             });
         }
 
-        return new ImageRepoDetail { RepoId = detail.RepoId, IsGated = detail.IsGated, License = detail.License, Files = files };
+        return new ImageRepoDetail
+        {
+            RepoId = detail.RepoId,
+            IsGated = detail.IsGated,
+            License = detail.License,
+            Files = files
+        };
     }
 
     private static string MapSort(ImageModelSearchSort sort)

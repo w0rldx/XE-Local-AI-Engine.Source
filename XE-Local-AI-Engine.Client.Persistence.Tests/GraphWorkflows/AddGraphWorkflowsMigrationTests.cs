@@ -141,7 +141,7 @@ public sealed class AddGraphWorkflowsMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_run_node", unique: true, "run_id", "node_key"),
             "One row per (run, node key) is the node run's identity, so it is a unique index.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_decision_operation", unique: true, "run_id", "decision_operation_id"),
+                .IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_decision_operation", unique: true, "run_id", "decision_operation_id"),
             "The decide endpoint's idempotency key is unique run-wide, filtered to the rows that carry one.");
         AssertEx.Equal("\"decision_operation_id\" IS NOT NULL",
             await IndexFilterAsync(probe, "ux_graph_workflow_node_runs_decision_operation"),
@@ -218,18 +218,18 @@ public sealed class AddGraphWorkflowsMigrationTests
     private static async Task<string?> ColumnTypeAsync(MigrationSchemaProbe probe, string table, string column)
     {
         var value = await probe.ScalarAsync("SELECT type FROM pragma_table_info($table) WHERE name = $column;",
-                                   command =>
-                                   {
-                                       command.Parameters.AddWithValue("$table", table);
-                                       command.Parameters.AddWithValue("$column", column);
-                                   });
+            command =>
+            {
+                command.Parameters.AddWithValue("$table", table);
+                command.Parameters.AddWithValue("$column", column);
+            });
         return value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
     private static async Task<string?> IndexFilterAsync(MigrationSchemaProbe probe, string indexName)
     {
         var value = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                                   command => command.Parameters.AddWithValue("$name", indexName));
+            command => command.Parameters.AddWithValue("$name", indexName));
         var sql = value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
         var whereIndex = sql?.IndexOf(" WHERE ", StringComparison.Ordinal) ?? -1;
         return whereIndex < 0 ? null : sql![(whereIndex + " WHERE ".Length)..].Trim();

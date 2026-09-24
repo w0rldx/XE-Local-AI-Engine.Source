@@ -29,8 +29,7 @@ internal sealed class ConversationStepContextBound
     private readonly ILogger<ConversationStepContextBound> _logger;
     private readonly INodeChatPersistenceService _persistence;
 
-    public ConversationStepContextBound(
-        INodeChatPersistenceService persistence,
+    public ConversationStepContextBound(INodeChatPersistenceService persistence,
         IConversationCompactionService compaction,
         ITokenEstimator estimator,
         ILogger<ConversationStepContextBound> logger)

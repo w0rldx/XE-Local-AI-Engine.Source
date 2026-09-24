@@ -36,8 +36,7 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
     private readonly IGoldenHarvestSourceStore _sourceStore;
 
-    public GoldenHarvestService(
-        IGoldenHarvestSourceStore sourceStore,
+    public GoldenHarvestService(IGoldenHarvestSourceStore sourceStore,
         IGoldenConversationStore goldenStore,
         IGoldenConversationService conversationService,
         IAgentDefinitionStore agentDefinitionStore,
@@ -62,7 +61,14 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
         var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
         if (agent is null)
         {
-            return new GoldenHarvestOutcome { AgentExists = false, ThumbsUpScanned = 0, CreatedCount = 0, DuplicateCount = 0, SkippedCount = 0 };
+            return new GoldenHarvestOutcome
+            {
+                AgentExists = false,
+                ThumbsUpScanned = 0,
+                CreatedCount = 0,
+                DuplicateCount = 0,
+                SkippedCount = 0
+            };
         }
 
         var sources = await _sourceStore.ListThumbsUpSourcesAsync(agentId, _options.MaxThumbsUpScan, cancellationToken);
@@ -145,7 +151,11 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
     private static string SerializeTurns(IReadOnlyList<HarvestTurn> priorTurns)
     {
-        var payload = priorTurns.Select(static turn => new GoldenTurnPayload { Role = turn.Role, Text = turn.Text }).ToArray();
+        var payload = priorTurns.Select(static turn => new GoldenTurnPayload
+        {
+            Role = turn.Role,
+            Text = turn.Text
+        }).ToArray();
         return JsonSerializer.Serialize(payload, InputTurnsSerializerOptions);
     }
 

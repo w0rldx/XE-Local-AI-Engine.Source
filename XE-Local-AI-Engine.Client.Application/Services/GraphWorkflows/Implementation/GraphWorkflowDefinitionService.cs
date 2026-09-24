@@ -20,8 +20,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     private readonly IOptions<GraphWorkflowOptions> _options;
 
-    public GraphWorkflowDefinitionService(
-        IGraphWorkflowStore store,
+    public GraphWorkflowDefinitionService(IGraphWorkflowStore store,
         IToolInvocationService tools,
         ILocalModelProviderResolver providers,
         IOptions<GraphWorkflowOptions> options)
@@ -59,15 +58,15 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         // Node count and kind are denormalized from the SAME parse, so the list and the picker never decrypt a blob.
         var graph = await ValidateAndParseAsync(graphJson, cancellationToken);
         return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
-        {
-            DefinitionId = Guid.NewGuid(),
-            Name = name,
-            GraphJson = graphJson,
-            NodeCount = graph.Nodes.Count,
-            Kind = graph.Kind,
-            Description = description
-        },
-                               cancellationToken);
+            {
+                DefinitionId = Guid.NewGuid(),
+                Name = name,
+                GraphJson = graphJson,
+                NodeCount = graph.Nodes.Count,
+                Kind = graph.Kind,
+                Description = description
+            },
+            cancellationToken);
     }
 
     public async Task<GraphWorkflowDefinitionSnapshot> UpdateAsync(Guid definitionId,
@@ -81,16 +80,16 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         // graph nobody sent would denormalize a lie the definition list then reports.
         var graph = graphJson is null ? null : await ValidateAndParseAsync(graphJson, cancellationToken);
         return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
-        {
-            DefinitionId = definitionId,
-            ExpectedVersion = expectedVersion,
-            Name = name,
-            Description = description,
-            GraphJson = graphJson,
-            NodeCount = graph?.Nodes.Count,
-            Kind = graph?.Kind
-        },
-                               cancellationToken);
+            {
+                DefinitionId = definitionId,
+                ExpectedVersion = expectedVersion,
+                Name = name,
+                Description = description,
+                GraphJson = graphJson,
+                NodeCount = graph?.Nodes.Count,
+                Kind = graph?.Kind
+            },
+            cancellationToken);
     }
 
     public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListAsync(CancellationToken cancellationToken = default) =>

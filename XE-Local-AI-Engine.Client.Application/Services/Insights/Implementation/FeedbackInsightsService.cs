@@ -50,20 +50,43 @@ internal sealed class FeedbackInsightsService : IFeedbackInsightsService
     private static OverallFeedback BuildOverall(int up, int down)
     {
         var total = up + down;
-        return new OverallFeedback { Total = total, Up = up, Down = down, DownRate = DownRate(down, total), MeetsThreshold = total >= MinOccurrenceThreshold };
+        return new OverallFeedback
+        {
+            Total = total,
+            Up = up,
+            Down = down,
+            DownRate = DownRate(down, total),
+            MeetsThreshold = total >= MinOccurrenceThreshold
+        };
     }
 
     private static ToolFeedbackBreakdown BuildToolBreakdown(ToolFeedbackCount tool)
     {
         var total = tool.UpCount + tool.DownCount;
-        return new ToolFeedbackBreakdown { ToolName = tool.ToolName, Total = total, Up = tool.UpCount, Down = tool.DownCount, DownRate = DownRate(tool.DownCount, total), MeetsThreshold = total >= MinOccurrenceThreshold };
+        return new ToolFeedbackBreakdown
+        {
+            ToolName = tool.ToolName,
+            Total = total,
+            Up = tool.UpCount,
+            Down = tool.DownCount,
+            DownRate = DownRate(tool.DownCount, total),
+            MeetsThreshold = total >= MinOccurrenceThreshold
+        };
     }
 
     private static FeedbackExemplarView BuildExemplar(FeedbackExemplar exemplar)
     {
         var truncated = exemplar.Comment.Length > MaxExemplarCommentLength;
         var comment = truncated ? Truncate(exemplar.Comment) : exemplar.Comment;
-        return new FeedbackExemplarView { Rating = exemplar.Rating, Comment = comment, MessageId = exemplar.MessageId, ConversationId = exemplar.ConversationId, CreatedAtUtc = exemplar.CreatedAtUtc, Truncated = truncated };
+        return new FeedbackExemplarView
+        {
+            Rating = exemplar.Rating,
+            Comment = comment,
+            MessageId = exemplar.MessageId,
+            ConversationId = exemplar.ConversationId,
+            CreatedAtUtc = exemplar.CreatedAtUtc,
+            Truncated = truncated
+        };
     }
 
     private static string Truncate(string comment)

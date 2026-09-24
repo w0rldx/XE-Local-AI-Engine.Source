@@ -23,8 +23,8 @@ public sealed class ChatInvocationStatePumpTests
     {
         // 50 ms between snapshots, comfortably past the 40 ms emit debounce, so every snapshot produces its own frame.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(50),
-                ["Hel", "Hello", "Hello wo", "Hello world"],
-                terminalContent: "Hello world");
+            ["Hel", "Hello", "Hello wo", "Hello world"],
+            terminalContent: "Hello world");
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 4, deltas.Count);
@@ -66,8 +66,8 @@ public sealed class ChatInvocationStatePumpTests
         // that tail before it lands. Without this the client would be relying on the terminal's own content to
         // correct itself on every single turn, rather than only after a real fault.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(10),
-                ["Hello", "Hello world"],
-                terminalContent: "Hello world");
+            ["Hello", "Hello world"],
+            terminalContent: "Hello world");
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 2, deltas.Count);
@@ -115,7 +115,12 @@ public sealed class ChatInvocationStatePumpTests
     {
         var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
 
         var states = new List<InvocationState>
         {
@@ -146,7 +151,12 @@ public sealed class ChatInvocationStatePumpTests
         // A real cold load, stamped server-side well before this stream: the wire value must be that stamp, formatted
         // ISO-8601 invariant, not anything derived from the pump's own clock.
         var changedAt = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
 
         var states = new List<InvocationState>
         {
@@ -167,7 +177,12 @@ public sealed class ChatInvocationStatePumpTests
     {
         // The emit diff is on the PHASE alone. Widening it to include the timestamp would spam the client with phase
         // events, so this pins the guard: two snapshots in the same phase carrying different stamps are one event.
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
         var firstStamp = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
 
         var states = new List<InvocationState>
@@ -190,7 +205,12 @@ public sealed class ChatInvocationStatePumpTests
     {
         // The cloud/Ollama and legacy shape: a phase with no stamp behind it. The field is optional end to end — the
         // event still goes out, and the client falls back to first-observed time.
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
 
         var states = new List<InvocationState>
         {
@@ -212,7 +232,12 @@ public sealed class ChatInvocationStatePumpTests
     {
         var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
 
         var states = contentSnapshots.Select(content => NewState(correlation, content, string.Empty, InvocationStatus.Running)).ToList();
         states.Add(NewState(correlation, terminalContent, string.Empty, InvocationStatus.Completed));
@@ -231,13 +256,13 @@ public sealed class ChatInvocationStatePumpTests
         var pump = new ChatInvocationStatePump(recordingPump, clock);
 
         await pump.PumpAsync(new SteppingStateReader(states, clock, step),
-                      sink,
-                      correlation,
-                      "model-x",
-                      new NodeChatStreamSequence(),
-                      new NodeChatPartAccumulator(),
-                      onTerminal: null,
-                      CancellationToken.None);
+            sink,
+            correlation,
+            "model-x",
+            new NodeChatStreamSequence(),
+            new NodeChatPartAccumulator(),
+            onTerminal: null,
+            CancellationToken.None);
 
         return sink.Events;
     }
@@ -389,7 +414,13 @@ public sealed class ChatInvocationStatePumpTests
 
             if (content.Length <= cursor.Content.Length && reasoning.Length <= cursor.Reasoning.Length)
             {
-                return Task.FromResult(new NodeChatPumpFlushResult { Cursor = cursor, Persisted = null, ContentDelta = null, ReasoningDelta = null });
+                return Task.FromResult(new NodeChatPumpFlushResult
+                {
+                    Cursor = cursor,
+                    Persisted = null,
+                    ContentDelta = null,
+                    ReasoningDelta = null
+                });
             }
 
             Flushes.Add(content);

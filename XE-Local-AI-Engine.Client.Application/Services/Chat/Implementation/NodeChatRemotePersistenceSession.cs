@@ -15,8 +15,7 @@ public sealed class NodeChatRemotePersistenceSession
     private NodeChatPumpCursor _cursor;
     private bool _terminalPersisted;
 
-    public NodeChatRemotePersistenceSession(
-        INodeChatInvocationPump invocationPump,
+    public NodeChatRemotePersistenceSession(INodeChatInvocationPump invocationPump,
         NodeChatMessageCorrelation correlation,
         string? requestedModel)
     {

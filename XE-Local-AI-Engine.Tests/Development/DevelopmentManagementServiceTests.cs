@@ -412,8 +412,8 @@ public sealed class DevelopmentManagementServiceTests
             UpdatedAtUtc = 1,
             Version = 1,
             CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
-                                    .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
-                                    .ToCanonicalUtf8())
+                                                         .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                                         .ToCanonicalUtf8())
         };
 
     private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>
@@ -449,7 +449,12 @@ public sealed class DevelopmentManagementServiceTests
     private sealed class GenericGitDetector : IDevelopmentCommandProfileDetector
     {
         public DevelopmentProfileDetection Detect(string repositoryRoot) =>
-            new() { ProfileId = DevelopmentCommandProfileCatalog.GenericGit, BuildTarget = null, Candidates = [] };
+            new()
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.GenericGit,
+                BuildTarget = null,
+                Candidates = []
+            };
     }
 
     private sealed class UnusedApplyService : IDevelopmentApplyService

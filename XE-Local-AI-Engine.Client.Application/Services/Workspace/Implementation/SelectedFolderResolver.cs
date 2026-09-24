@@ -44,7 +44,11 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
         {
             var record = await _store.AddAsync(alias, registration.HostPath, registration.Mode, cancellationToken);
             _logger.LogInformation("Registered selected folder {FolderId} with alias {Alias}.", record.Id, record.Alias);
-            return new SelectedFolderReference { Id = record.Id.ToString(), Alias = record.Alias };
+            return new SelectedFolderReference
+            {
+                Id = record.Id.ToString(),
+                Alias = record.Alias
+            };
         }
         catch (DbUpdateException exception)
         {
@@ -57,7 +61,11 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
     public async Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
     {
         var records = await _store.ListAsync(cancellationToken);
-        return records.Select(record => new SelectedFolderReference { Id = record.Id.ToString(), Alias = record.Alias }).ToArray();
+        return records.Select(record => new SelectedFolderReference
+        {
+            Id = record.Id.ToString(),
+            Alias = record.Alias
+        }).ToArray();
     }
 
     /// <summary>Resolves one selected folder reference to the folder it names, or reports why it cannot be used.</summary>
@@ -82,14 +90,26 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
 
         if (isFolderId && await _store.GetByIdAsync(folderId, cancellationToken) is { } byId)
         {
-            return new ResolvedSelectedFolder { Id = byId.Id, Alias = byId.Alias, HostPath = byId.HostPath, Mode = byId.Mode };
+            return new ResolvedSelectedFolder
+            {
+                Id = byId.Id,
+                Alias = byId.Alias,
+                HostPath = byId.HostPath,
+                Mode = byId.Mode
+            };
         }
 
         // The unique index on alias (filtered to active rows) is what makes this unambiguous: at most one active
         // folder can carry a given alias, so there is no first-match choice to get wrong.
         if (isAlias && await _store.GetByAliasAsync(id, cancellationToken) is { } byAlias)
         {
-            return new ResolvedSelectedFolder { Id = byAlias.Id, Alias = byAlias.Alias, HostPath = byAlias.HostPath, Mode = byAlias.Mode };
+            return new ResolvedSelectedFolder
+            {
+                Id = byAlias.Id,
+                Alias = byAlias.Alias,
+                HostPath = byAlias.HostPath,
+                Mode = byAlias.Mode
+            };
         }
 
         throw new SelectedFolderNotFoundException($"No selected folder is registered with id or alias '{id}'.");

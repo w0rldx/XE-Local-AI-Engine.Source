@@ -310,7 +310,11 @@ public sealed class LlamaGrammarLiveSmokeTests
         using var content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
         using var response = await http.PostAsync(new Uri("v1/chat/completions", UriKind.Relative), content);
         var body = await response.Content.ReadAsStringAsync();
-        return new LiveResponse { Status = response.StatusCode, Body = body };
+        return new LiveResponse
+        {
+            Status = response.StatusCode,
+            Body = body
+        };
     }
 
     private static JsonElement ExtractTools(string wireBody)

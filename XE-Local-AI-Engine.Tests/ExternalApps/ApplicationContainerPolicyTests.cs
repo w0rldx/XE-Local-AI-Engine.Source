@@ -532,14 +532,30 @@ public sealed class ApplicationContainerPolicyTests
         var resolved = service ?? ExternalAppTestManifests.Service("app", storage: storage, files: files, ports: ports);
         var manifest = ExternalAppTestManifests.Manifest([resolved]);
         var root = Path.Combine(Path.GetTempPath(), "xe-policy", InstanceId.ToString("N"));
-        var paths = new ExternalAppStoragePaths { InstanceRoot = root, VolumesRoot = Path.Combine(root, "volumes"), FilesRoot = Path.Combine(root, "files") };
+        var paths = new ExternalAppStoragePaths
+        {
+            InstanceRoot = root,
+            VolumesRoot = Path.Combine(root, "volumes"),
+            FilesRoot = Path.Combine(root, "files")
+        };
 
         var plan = DeploymentPlanner.Plan(manifest,
             InstanceId,
             InstallId,
             new Dictionary<string, string>(StringComparer.Ordinal),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
-            [.. resolved.Ports.Select(static (port, index) => new ExternalAppHostPort { Service = "app", ContainerPort = port.ContainerPort, HostPort = 40000 + index })],
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
+            [
+                .. resolved.Ports.Select(static (port, index) => new ExternalAppHostPort
+                {
+                    Service = "app",
+                    ContainerPort = port.ContainerPort,
+                    HostPort = 40000 + index
+                })
+            ],
             paths);
 
         return plan.Services.Single().Specification;

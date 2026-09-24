@@ -103,7 +103,8 @@ public sealed class GraphWorkflowSteeringStoreTests
         AssertEx.Equal(1, events.Count(static type => type == GraphWorkflowEventTypes.NodeSteerIgnored));
         var ignoredDetail = (await store.ListEventsAsync(runId)).Single(static entry => entry.EventType == GraphWorkflowEventTypes.NodeSteerIgnored).DetailJson;
         AssertEx.True(ignoredDetail is not null && ignoredDetail.Contains("\"message\":\"ignore me\"", StringComparison.Ordinal)
-                      && ignoredDetail.Contains($"\"operationId\":\"{ignored}\"", StringComparison.Ordinal) && ignoredDetail.Contains("\"attempt\":1", StringComparison.Ordinal),
+                                                && ignoredDetail.Contains($"\"operationId\":\"{ignored}\"", StringComparison.Ordinal) &&
+                                                ignoredDetail.Contains("\"attempt\":1", StringComparison.Ordinal),
             ignoredDetail ?? "no detail");
     }
 
@@ -127,7 +128,15 @@ public sealed class GraphWorkflowSteeringStoreTests
     }
 
     private static AppendGraphWorkflowSteeringCommand Steer(Guid runId, Guid nodeRunId, Guid operationId, string message, int maxEntries = 5) =>
-        new() { RunId = runId, NodeRunId = nodeRunId, OperationId = operationId, Message = message, SteeredBySubject = "operator", MaxEntries = maxEntries };
+        new()
+        {
+            RunId = runId,
+            NodeRunId = nodeRunId,
+            OperationId = operationId,
+            Message = message,
+            SteeredBySubject = "operator",
+            MaxEntries = maxEntries
+        };
 
     private static async Task<(Guid RunId, Guid NodeRunId)> SeedRunningAgentAsync(NodeChatDbContext context,
         Guid invocationId,

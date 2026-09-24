@@ -69,7 +69,7 @@ public sealed class AgentWorkSessionArtifactReplaceTests
         var saved = await store.AppendArtifactAsync(Command(sessionId, artifactId, created.Version, "first.md", "HASH", size: 1));
 
         _ = await AssertEx.ThrowsAsync<WorkSessionConcurrencyException>(() =>
-                              store.AppendArtifactAsync(Command(sessionId, artifactId, saved.Version, "second.md", "HASH", size: 1)));
+            store.AppendArtifactAsync(Command(sessionId, artifactId, saved.Version, "second.md", "HASH", size: 1)));
     }
 
     private static async Task<WorkSessionMutationResult> SaveAsync(AgentWorkSessionStore store,

@@ -26,8 +26,7 @@ public sealed class BrowseGgufRepositoriesEndpoint : Endpoint<BrowseGgufReposito
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly ILogger<BrowseGgufRepositoriesEndpoint> _logger;
 
-    public BrowseGgufRepositoriesEndpoint(
-        IHuggingFaceGgufDiscovery discovery,
+    public BrowseGgufRepositoriesEndpoint(IHuggingFaceGgufDiscovery discovery,
         ILogger<BrowseGgufRepositoriesEndpoint> logger)
     {
         ArgumentNullException.ThrowIfNull(discovery);

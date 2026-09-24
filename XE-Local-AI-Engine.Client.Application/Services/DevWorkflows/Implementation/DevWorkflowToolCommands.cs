@@ -277,12 +277,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             }
 
             var applied = await new HostGitRunner(_developmentOptions.MaxAttemptDurationSeconds)
-                                .RunAsync(session.HostWorktreePath,
-                                    AgentHomeGit.Arguments("apply", "--index", "--whitespace=error-all", "-"),
-                                    cancellationToken,
-                                    patch.Payload,
-                                    _developmentOptions.MaxPatchBytes,
-                                    _developmentOptions.MaxCommandOutputBytes);
+                .RunAsync(session.HostWorktreePath,
+                    AgentHomeGit.Arguments("apply", "--index", "--whitespace=error-all", "-"),
+                    cancellationToken,
+                    patch.Payload,
+                    _developmentOptions.MaxPatchBytes,
+                    _developmentOptions.MaxCommandOutputBytes);
             if (applied.ExitCode != 0)
             {
                 // Deliberately without git's own stderr: it interpolates workspace paths, and this sentence reaches an

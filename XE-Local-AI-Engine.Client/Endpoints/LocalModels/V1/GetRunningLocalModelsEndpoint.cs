@@ -22,8 +22,7 @@ public sealed class GetRunningLocalModelsEndpoint : EndpointWithoutRequest<Runni
     private readonly IConfiguration _configuration;
     private readonly ILogger<GetRunningLocalModelsEndpoint> _logger;
 
-    public GetRunningLocalModelsEndpoint(
-        ILocalModelCatalogService catalogService,
+    public GetRunningLocalModelsEndpoint(ILocalModelCatalogService catalogService,
         IConfiguration configuration,
         ILogger<GetRunningLocalModelsEndpoint> logger)
     {

@@ -35,8 +35,7 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
 
-    public LocalModelCatalogService(
-        IOllamaModelService modelService,
+    public LocalModelCatalogService(IOllamaModelService modelService,
         IModelClassificationService classificationService,
         IGgufModelStore ggufModelStore,
         INodeRuntimeSettings runtimeSettings,
@@ -142,7 +141,7 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
         {
             var models = (await _modelService.ListLocalModelsAsync(cancellationToken)).ToArray();
             var classifications = await _classificationService
-                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.Name, model.Digest)), cancellationToken);
+                .ClassifyAsync(models.Select(static model => new ModelIdentity(model.Name, model.Digest)), cancellationToken);
 
             return new OllamaModelListing(models, classifications);
         }

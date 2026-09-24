@@ -27,17 +27,21 @@ public sealed class DesktopLaunchTests
         AssertEx.True(DesktopLaunch.HasExplicitLocalModeArgument([argument]));
         AssertEx.Equal(suppressBrowser, DesktopLaunch.HasNoBrowserFlag([argument]));
         AssertEx.True(DesktopLaunch.BuildRestartArguments([argument], LaunchMode.Desktop, port: 41234)
-            .SequenceEqual([argument, "--port", "41234"], StringComparer.Ordinal));
+                                   .SequenceEqual([argument, "--port", "41234"], StringComparer.Ordinal));
     }
 
     [Test]
     public void ShellOwnedRestart_DropsOnlyInternalBrowserSuppression()
     {
-        var arguments = new[] { "--desktop", "--no-browser" };
+        var arguments = new[]
+        {
+            "--desktop",
+            "--no-browser"
+        };
         AssertEx.True(DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: 41234, shellOwned: true)
-            .SequenceEqual(["--desktop", "--port", "41234"], StringComparer.Ordinal));
+                                   .SequenceEqual(["--desktop", "--port", "41234"], StringComparer.Ordinal));
         AssertEx.True(DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: null)
-            .SequenceEqual(arguments, StringComparer.Ordinal));
+                                   .SequenceEqual(arguments, StringComparer.Ordinal));
     }
 
     [Test]

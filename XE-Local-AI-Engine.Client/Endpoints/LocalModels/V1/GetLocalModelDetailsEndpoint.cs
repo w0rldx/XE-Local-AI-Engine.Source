@@ -19,8 +19,7 @@ public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetails
 {
     private readonly ILocalModelDetailsResolver _detailsResolver;
 
-    public GetLocalModelDetailsEndpoint(
-        ILocalModelDetailsResolver detailsResolver)
+    public GetLocalModelDetailsEndpoint(ILocalModelDetailsResolver detailsResolver)
     {
         ArgumentNullException.ThrowIfNull(detailsResolver);
         _detailsResolver = detailsResolver;

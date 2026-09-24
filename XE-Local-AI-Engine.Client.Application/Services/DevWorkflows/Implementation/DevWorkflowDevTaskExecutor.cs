@@ -106,13 +106,13 @@ internal sealed class DevWorkflowDevTaskExecutor
             // Development Mode is switched off on this node, so there is no task machine, no workspace and no sandbox.
             // Nothing here can run, and no retry changes that.
             return await BlockAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowFailureClasses.Configuration,
-                    "This node implements a development task, and Development Mode is switched off on this node.",
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowFailureClasses.Configuration,
+                "This node implements a development task, and Development Mode is switched off on this node.",
+                cancellationToken);
         }
 
         if (nodeRun.DevelopmentProjectId is not { } projectId)
@@ -120,13 +120,13 @@ internal sealed class DevWorkflowDevTaskExecutor
             // Run start refuses a graph with implementation nodes on a work item that names no project, so this is a row
             // materialized before such a node existed rather than an ordinary miss.
             return await BlockAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowFailureClasses.Configuration,
-                    $"Node run '{nodeRun.NodeKey}' implements a development task but names no development project to implement it in.",
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowFailureClasses.Configuration,
+                $"Node run '{nodeRun.NodeKey}' implements a development task but names no development project to implement it in.",
+                cancellationToken);
         }
 
         Guid taskId;
@@ -135,13 +135,13 @@ internal sealed class DevWorkflowDevTaskExecutor
             if (await ResolveTaskAsync(graph, run, nodeRun, development, projectId, cancellationToken) is not { } resolved)
             {
                 return await BlockAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowFailureClasses.Configuration,
-                        "The development project this node implements carries no task to implement.",
-                        cancellationToken);
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowFailureClasses.Configuration,
+                    "The development project this node implements carries no task to implement.",
+                    cancellationToken);
             }
 
             taskId = resolved;
@@ -165,30 +165,30 @@ internal sealed class DevWorkflowDevTaskExecutor
         // a row nothing can poll, and this is the only write that could leave one.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Running,
-            DevelopmentTaskId = taskId
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Running,
+                DevelopmentTaskId = taskId
+            },
+            cancellationToken);
 
         return 1 + await AdvanceTaskAsync(store,
-                graph,
-                run,
-                nodeRun with
-                {
-                    Status = DevWorkflowNodeRunStatus.Running,
-                    DevelopmentTaskId = taskId,
-                    StartedAtUtc = startedAt
-                },
-                nodeRuns,
-                development,
-                management,
-                projectId,
-                taskId,
-                cancellationToken);
+            graph,
+            run,
+            nodeRun with
+            {
+                Status = DevWorkflowNodeRunStatus.Running,
+                DevelopmentTaskId = taskId,
+                StartedAtUtc = startedAt
+            },
+            nodeRuns,
+            development,
+            management,
+            projectId,
+            taskId,
+            cancellationToken);
     }
 
     /// <summary>
@@ -232,16 +232,16 @@ internal sealed class DevWorkflowDevTaskExecutor
                            ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
                                nameof(nodeRun));
         var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand
-        {
-            ProjectId = projectId,
-            TaskId = Guid.NewGuid(),
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
-            Title = Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
-            Requirements = requirements,
-            AcceptanceCriteriaJson = Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
-            MaxReviewRounds = tasks[0].MaxReviewRounds
-        },
-                                           cancellationToken);
+            {
+                ProjectId = projectId,
+                TaskId = Guid.NewGuid(),
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+                Title = Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
+                Requirements = requirements,
+                AcceptanceCriteriaJson = Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
+                MaxReviewRounds = tasks[0].MaxReviewRounds
+            },
+            cancellationToken);
         return created.TaskId;
     }
 
@@ -267,15 +267,15 @@ internal sealed class DevWorkflowDevTaskExecutor
             ? string.Empty
             : DevWorkflowPolicyText.Render(applied, MaxPolicyCharacters, occupied: 0, nodeRun.Id, _logger).Trim();
         await WritePolicyAsync(development,
-                run,
-                nodeRun,
-                taskId,
-                policyText,
-                policyText.Length == 0
-                    ? []
-                    : [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
-                "devtask-policy",
-                cancellationToken);
+            run,
+            nodeRun,
+            taskId,
+            policyText,
+            policyText.Length == 0
+                ? []
+                : [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
+            "devtask-policy",
+            cancellationToken);
     }
 
     /// <summary>
@@ -313,10 +313,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         CancellationToken cancellationToken)
     {
         _ = await development.RecordWorkflowPolicyAsync(taskId,
-                                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, phase),
-                                 policyText,
-                                 ruleSets,
-                                 cancellationToken);
+            DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, phase),
+            policyText,
+            ruleSets,
+            cancellationToken);
     }
 
     /// <summary>A brief's field, or nothing — a present-but-blank string is an absent one, not a value to pass on.</summary>
@@ -377,25 +377,25 @@ internal sealed class DevWorkflowDevTaskExecutor
         if (development is null || management is null)
         {
             return await BlockAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowFailureClasses.Configuration,
-                    "This node implements a development task, and Development Mode is switched off on this node.",
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowFailureClasses.Configuration,
+                "This node implements a development task, and Development Mode is switched off on this node.",
+                cancellationToken);
         }
 
         if (nodeRun is not { DevelopmentProjectId: { } projectId, DevelopmentTaskId: { } taskId })
         {
             return await BlockAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowFailureClasses.Internal,
-                    "This node run is running without a development task, so nothing can report what it is doing.",
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowFailureClasses.Internal,
+                "This node run is running without a development task, so nothing can report what it is doing.",
+                cancellationToken);
         }
 
         return await AdvanceTaskAsync(store, graph, run, nodeRun, nodeRuns, development, management, projectId, taskId, cancellationToken);
@@ -438,15 +438,15 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = target,
-            FailureClass = cancel ? DevWorkflowFailureClasses.Cancelled : null,
-            TerminalReason = cancel ? "The run was cancelled while this node run was implementing its development task." : null
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = target,
+                FailureClass = cancel ? DevWorkflowFailureClasses.Cancelled : null,
+                TerminalReason = cancel ? "The run was cancelled while this node run was implementing its development task." : null
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -520,25 +520,25 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // The node's job is DONE at AwaitingApply: an independent reviewer approved the exact subject, and applying it is a later act behind a gate this run records. A task somebody
                 // already applied is the same answer arriving later. A re-attempt with no routed failure behind it succeeds at once — nothing has said this implementation is wrong.
                 return await SettleAsync(store,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowNodeRunStatus.Succeeded,
-                        failureClass: null,
-                        terminalReason: null,
-                        Output(nodeRun, task, taskId, failureClass: null),
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Succeeded,
+                    failureClass: null,
+                    terminalReason: null,
+                    Output(nodeRun, task, taskId, failureClass: null),
+                    cancellationToken);
 
             case DevelopmentTaskStatus.Cancelled:
                 return await SettleAsync(store,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowNodeRunStatus.Cancelled,
-                        DevWorkflowFailureClasses.Cancelled,
-                        "The development task this node run was implementing was cancelled.",
-                        Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Cancelled,
+                    DevWorkflowFailureClasses.Cancelled,
+                    "The development task this node run was implementing was cancelled.",
+                    Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
+                    cancellationToken);
 
             case DevelopmentTaskStatus.Blocked:
 
@@ -552,17 +552,17 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // The chain gave up on its own terms — review rounds ran out, or an operator stood it down. Another node-run attempt would re-drive a task that is not going
                 // anywhere, so this is the class that goes straight to a human.
                 return await SettleFailureAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        new DevWorkflowFailure
-                        {
-                            FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
-                            SanitizedReason = task.BlockedReason ?? "The development task this node run was implementing was blocked.",
-                            OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)
-                        },
-                        cancellationToken);
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure
+                    {
+                        FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
+                        SanitizedReason = task.BlockedReason ?? "The development task this node run was implementing was blocked.",
+                        OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)
+                    },
+                    cancellationToken);
 
             default:
                 break;
@@ -583,21 +583,21 @@ internal sealed class DevWorkflowDevTaskExecutor
             // human — is the retry policy's answer, exactly as it is for a work session that failed.
             return landed.Status == DevelopmentAttemptStatus.Cancelled
                 ? await SettleAsync(store,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowNodeRunStatus.Cancelled,
-                        DevWorkflowFailureClasses.Cancelled,
-                        "The development attempt this node run was driving was cancelled.",
-                        Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
-                        cancellationToken)
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Cancelled,
+                    DevWorkflowFailureClasses.Cancelled,
+                    "The development attempt this node run was driving was cancelled.",
+                    Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
+                    cancellationToken)
                 : await SettleFailureAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        Failure(landed, nodeRun, task, taskId),
-                        cancellationToken);
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    Failure(landed, nodeRun, task, taskId),
+                    cancellationToken);
         }
 
         if (run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling)
@@ -661,20 +661,20 @@ internal sealed class DevWorkflowDevTaskExecutor
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-            {
-                TaskId = task.Id,
-                OperationId = operationId,
-                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
-                ExpectedTaskVersion = task.Version,
-                // A silent Retry writes an operator row with NO reason, which IS the retraction: the round it buys is told nothing. No branch withdraws an instruction, because the
-                // Pending → Running dispatch already records a fresh policy row above every instruction an earlier attempt wrote.
-                Reason = said is null
-                                             ? null
-                                             : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
-                OperatorDirected = true,
-                WidenReviewRounds = atTheRoundCap
-            },
-                                     cancellationToken);
+                {
+                    TaskId = task.Id,
+                    OperationId = operationId,
+                    TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                    ExpectedTaskVersion = task.Version,
+                    // A silent Retry writes an operator row with NO reason, which IS the retraction: the round it buys is told nothing. No branch withdraws an instruction, because the
+                    // Pending → Running dispatch already records a fresh policy row above every instruction an earlier attempt wrote.
+                    Reason = said is null
+                        ? null
+                        : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
+                    OperatorDirected = true,
+                    WidenReviewRounds = atTheRoundCap
+                },
+                cancellationToken);
 
             // The one task status hop nothing else records: DevelopmentManagementService logs the hops IT decides, and this edge is bought by an operator's Retry in the workflow lane,
             // so a live round could otherwise see the cap widen and the task move unlogged. Same literal "task status" phrase, so the one grep that finds every hop still finds this one.
@@ -769,17 +769,17 @@ internal sealed class DevWorkflowDevTaskExecutor
             // The message is NOT surfaced: an unexpected exception's text is the one string on this path nothing has sanitized, and it can carry a host path or a fragment of a prompt.
             _logger.LogError(exception, "Development workflow dev-task node run {NodeRunId} of run {RunId} could not be advanced.", nodeRun.Id, run.Id);
             return await SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure
-                    {
-                        FailureClass = DevWorkflowFailureClasses.Internal,
-                        SanitizedReason = "This node run's development task stopped on an unexpected error. The engine log has the detail.",
-                        OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)
-                    },
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure
+                {
+                    FailureClass = DevWorkflowFailureClasses.Internal,
+                    SanitizedReason = "This node run's development task stopped on an unexpected error. The engine log has the detail.",
+                    OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)
+                },
+                cancellationToken);
         }
     }
 
@@ -810,18 +810,18 @@ internal sealed class DevWorkflowDevTaskExecutor
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
             return await SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure
-                    {
-                        FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
-                        SanitizedReason = string.Create(CultureInfo.InvariantCulture,
-                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its rounds."),
-                        OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)
-                    },
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure
+                {
+                    FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
+                    SanitizedReason = string.Create(CultureInfo.InvariantCulture,
+                        $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its rounds."),
+                    OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)
+                },
+                cancellationToken);
         }
 
         var reason = await DescribePriorFailureAsync(store, run, nodeRun, routed, cancellationToken);
@@ -834,30 +834,30 @@ internal sealed class DevWorkflowDevTaskExecutor
                 nodeRun.Id,
                 failingNodeKey);
             return await SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure
-                    {
-                        FailureClass = DevWorkflowFailureClasses.Configuration,
-                        SanitizedReason = $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
-                        OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)
-                    },
-                    cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure
+                {
+                    FailureClass = DevWorkflowFailureClasses.Configuration,
+                    SanitizedReason = $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
+                    OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)
+                },
+                cancellationToken);
         }
 
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-            {
-                TaskId = task.Id,
-                OperationId = ChangeRequestOperationId(run, nodeRun, routed),
-                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
-                ExpectedTaskVersion = task.Version,
-                Reason = reason.Reason
-            },
-                                     cancellationToken);
+                {
+                    TaskId = task.Id,
+                    OperationId = ChangeRequestOperationId(run, nodeRun, routed),
+                    TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                    ExpectedTaskVersion = task.Version,
+                    Reason = reason.Reason
+                },
+                cancellationToken);
             return 1;
         }
         catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
@@ -888,9 +888,9 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         return await development.FindOperationAsync(projectId,
-                                    ChangeRequestOperationId(run, nodeRun, routed),
-                                    DevelopmentOperationPhases.Completed,
-                                    cancellationToken) is null
+            ChangeRequestOperationId(run, nodeRun, routed),
+            DevelopmentOperationPhases.Completed,
+            cancellationToken) is null
             ? routed
             : null;
     }
@@ -1166,12 +1166,17 @@ internal sealed class DevWorkflowDevTaskExecutor
         string sanitizedReason,
         CancellationToken cancellationToken) =>
         await SettleFailureAsync(store,
-                graph,
-                run,
-                nodeRun,
-                nodeRuns,
-                new DevWorkflowFailure { FailureClass = failureClass, SanitizedReason = sanitizedReason, OutputJson = Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass) },
-                cancellationToken);
+            graph,
+            run,
+            nodeRun,
+            nodeRuns,
+            new DevWorkflowFailure
+            {
+                FailureClass = failureClass,
+                SanitizedReason = sanitizedReason,
+                OutputJson = Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)
+            },
+            cancellationToken);
 
     /// <summary>
     ///     The one door this executor hands a failing node run to the retry policy through, so the policy revocation
@@ -1202,17 +1207,17 @@ internal sealed class DevWorkflowDevTaskExecutor
         await ClearPolicyAsync(run, nodeRun, cancellationToken);
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = target,
-            OutputJson = outputJson,
-            FailureClass = failureClass,
-            TerminalReason = terminalReason,
-            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = target,
+                OutputJson = outputJson,
+                FailureClass = failureClass,
+                TerminalReason = terminalReason,
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -1225,16 +1230,16 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// </remarks>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, DevelopmentTaskSnapshot? task, Guid? taskId, string? failureClass) =>
         JsonSerializer.Serialize(new DevTaskOutput
-        {
-            Status = task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
+            {
+                Status = task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
                     ? DevWorkflowNodeOutputStatuses.Succeeded
                     : DevWorkflowNodeOutputStatuses.Failed,
-            Attempt = nodeRun.Attempt,
-            FailureClass = failureClass,
-            DevelopmentTaskId = taskId,
-            TaskStatus = task?.Status.ToString(),
-            ReviewRound = task?.CurrentReviewRound
-        },
+                Attempt = nodeRun.Attempt,
+                FailureClass = failureClass,
+                DevelopmentTaskId = taskId,
+                TaskStatus = task?.Status.ToString(),
+                ReviewRound = task?.CurrentReviewRound
+            },
             JsonOptions);
 
     /// <summary>

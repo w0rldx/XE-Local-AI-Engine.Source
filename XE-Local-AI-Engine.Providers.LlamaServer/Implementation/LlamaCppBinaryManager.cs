@@ -186,7 +186,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
                 // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub.
                 reporter.Complete();
-                return new LlamaBinary { ServerExecutablePath = cachedServer, Version = resolvedTag, Variant = variant, IsPinnedFallback = isPinnedFallback };
+                return new LlamaBinary
+                {
+                    ServerExecutablePath = cachedServer,
+                    Version = resolvedTag,
+                    Variant = variant,
+                    IsPinnedFallback = isPinnedFallback
+                };
             }
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
@@ -209,7 +215,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // model spawn): bump the stamp so the device audit re-probes instead of serving a memo taken mid-download.
             _managedCudaSignal?.NotifyBinaryChanged();
             reporter.Complete();
-            return new LlamaBinary { ServerExecutablePath = serverPath, Version = resolvedTag, Variant = variant, IsPinnedFallback = isPinnedFallback };
+            return new LlamaBinary
+            {
+                ServerExecutablePath = serverPath,
+                Version = resolvedTag,
+                Variant = variant,
+                IsPinnedFallback = isPinnedFallback
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -280,7 +292,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var cachedServer = ResolveServerPath(variantDir, pin);
         return cachedServer is null
             ? null
-            : new LlamaBinary { ServerExecutablePath = cachedServer, Version = resolvedTag, Variant = variant, IsPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal) };
+            : new LlamaBinary
+            {
+                ServerExecutablePath = cachedServer,
+                Version = resolvedTag,
+                Variant = variant,
+                IsPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
+            };
     }
 
     /// <summary>
@@ -490,7 +508,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // Same reason as EnsureBinaryAsync: the operator-initiated install replaced the binary the audit was memoized against.
             _managedCudaSignal?.NotifyBinaryChanged();
             reporter.Complete();
-            return new LlamaBinary { ServerExecutablePath = serverPath, Version = tag, Variant = variant, IsPinnedFallback = false };
+            return new LlamaBinary
+            {
+                ServerExecutablePath = serverPath,
+                Version = tag,
+                Variant = variant,
+                IsPinnedFallback = false
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

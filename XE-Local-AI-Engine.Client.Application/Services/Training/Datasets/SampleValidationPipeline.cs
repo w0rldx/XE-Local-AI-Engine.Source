@@ -79,7 +79,13 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         // rewrites a json-schema response format (all-required, bounds in the description), so re-validating there accepts too much.
         if (!TryReadRecord(rawCompletion, context.RecordSchema, out var record, out var schemaReason))
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "record-schema", Passed = false, ScoredBy = "schema", Reason = schemaReason });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "record-schema",
+                Passed = false,
+                ScoredBy = "schema",
+                Reason = schemaReason
+            });
             return new SampleValidationOutcome
             {
                 Accepted = false,
@@ -94,7 +100,12 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             };
         }
 
-        layers.Add(new SampleValidationLayerResultV1 { Layer = "record-schema", Passed = true, ScoredBy = "schema" });
+        layers.Add(new SampleValidationLayerResultV1
+        {
+            Layer = "record-schema",
+            Passed = true,
+            ScoredBy = "schema"
+        });
 
         var parts = new List<TrainingSamplePartV1>
         {
@@ -108,7 +119,13 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         }
         else
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "tool-name", Passed = true, ScoredBy = "tool-name", Reason = "The sample demonstrates a no-tool answer." });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "tool-name",
+                Passed = true,
+                ScoredBy = "tool-name",
+                Reason = "The sample demonstrates a no-tool answer."
+            });
         }
 
         if (!string.IsNullOrWhiteSpace(record.AssistantText))
@@ -120,7 +137,13 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         // multi-call record into a visible rejection instead of a sample the scorer grades by its FIRST call, ignoring the rest.
         if (TrainingSampleParts.IsMultiCall(parts))
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "tool-name", Passed = false, ScoredBy = "tool-name", Reason = TrainingSampleParts.MultiCallUnsupportedReason });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "tool-name",
+                Passed = false,
+                ScoredBy = "tool-name",
+                Reason = TrainingSampleParts.MultiCallUnsupportedReason
+            });
             return new SampleValidationOutcome
             {
                 Accepted = false,
@@ -179,17 +202,34 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             return false;
         }
 
-        layers.Add(new SampleValidationLayerResultV1 { Layer = "tool-name", Passed = true, ScoredBy = "tool-name" });
+        layers.Add(new SampleValidationLayerResultV1
+        {
+            Layer = "tool-name",
+            Passed = true,
+            ScoredBy = "tool-name"
+        });
 
         // Layer 3 — argument validation against the snapshotted parameter schema.
         var argumentsValid = TryValidateArguments(record.ToolArgumentsJson, tool.ParameterSchema, out var argumentsReason);
-        layers.Add(new SampleValidationLayerResultV1 { Layer = "arguments", Passed = argumentsValid, ScoredBy = "arguments", Reason = argumentsReason });
+        layers.Add(new SampleValidationLayerResultV1
+        {
+            Layer = "arguments",
+            Passed = argumentsValid,
+            ScoredBy = "arguments",
+            Reason = argumentsReason
+        });
 
         // Layer 4 — execution through the policy-aware headless seam. It runs even when the arguments failed: the
         // outcome (usually a mock miss) is still recorded, so the sample carries the whole picture.
         var outcome = await _executor.ExecuteAsync(toolName, record.ToolArgumentsJson, context.Definition.TeacherModelName, cancellationToken);
         var executed = outcome.Kind is HeadlessToolOutcomeKind.Executed or HeadlessToolOutcomeKind.Mocked;
-        layers.Add(new SampleValidationLayerResultV1 { Layer = "execution", Passed = executed, ScoredBy = ExecutionScoredBy(outcome.Kind), Reason = outcome.Reason });
+        layers.Add(new SampleValidationLayerResultV1
+        {
+            Layer = "execution",
+            Passed = executed,
+            ScoredBy = ExecutionScoredBy(outcome.Kind),
+            Reason = outcome.Reason
+        });
 
         parts.Add(new TrainingSamplePartV1("tool",
             parts.Count,
@@ -214,7 +254,13 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
     {
         if (string.IsNullOrWhiteSpace(record.UserMessage))
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "critic", Passed = false, ScoredBy = "critic:deterministic", Reason = "The sample carries no user turn." });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "critic",
+                Passed = false,
+                ScoredBy = "critic:deterministic",
+                Reason = "The sample carries no user turn."
+            });
             return false;
         }
 
@@ -232,30 +278,47 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
 
         if (!context.Definition.CriticEnabled || context.CriticChatClient is null || string.IsNullOrWhiteSpace(context.Definition.CriticModelName))
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "critic", Passed = true, ScoredBy = "critic:deterministic" });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "critic",
+                Passed = true,
+                ScoredBy = "critic:deterministic"
+            });
             return true;
         }
 
         var result = await _runner.RunAsync(context.CriticChatClient,
-                                      new StructuredAgentRequest
-                                      {
-                                          ModelName = context.Definition.CriticModelName,
-                                          SystemInstructions = CriticPrompt,
-                                          UserPrompt = JsonSerializer.Serialize(record, TrainingJson.Options),
-                                          OutputMode = TeacherOutputMode.ValidateAfter,
-                                          ResponseSchema = CriticSchema,
-                                          Temperature = 0f,
-                                          Seed = null
-                                      },
-                                      cancellationToken);
+            new StructuredAgentRequest
+            {
+                ModelName = context.Definition.CriticModelName,
+                SystemInstructions = CriticPrompt,
+                UserPrompt = JsonSerializer.Serialize(record, TrainingJson.Options),
+                OutputMode = TeacherOutputMode.ValidateAfter,
+                ResponseSchema = CriticSchema,
+                Temperature = 0f,
+                Seed = null
+            },
+            cancellationToken);
         if (!result.Success)
         {
-            layers.Add(new SampleValidationLayerResultV1 { Layer = "critic", Passed = false, ScoredBy = "critic:judge", Reason = result.FailureReason });
+            layers.Add(new SampleValidationLayerResultV1
+            {
+                Layer = "critic",
+                Passed = false,
+                ScoredBy = "critic:judge",
+                Reason = result.FailureReason
+            });
             return false;
         }
 
         var verdict = ReadVerdict(result.Text);
-        layers.Add(new SampleValidationLayerResultV1 { Layer = "critic", Passed = verdict, ScoredBy = "critic:judge", Reason = verdict ? null : "The critic rejected the sample." });
+        layers.Add(new SampleValidationLayerResultV1
+        {
+            Layer = "critic",
+            Passed = verdict,
+            ScoredBy = "critic:judge",
+            Reason = verdict ? null : "The critic rejected the sample."
+        });
         return verdict;
     }
 

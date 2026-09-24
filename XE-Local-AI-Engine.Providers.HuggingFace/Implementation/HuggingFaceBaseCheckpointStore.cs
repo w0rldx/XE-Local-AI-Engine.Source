@@ -41,8 +41,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     private readonly HfHubClient _hubClient;
     private readonly ILogger<HuggingFaceBaseCheckpointStore> _logger;
 
-    public HuggingFaceBaseCheckpointStore(
-        HfHubClient hubClient,
+    public HuggingFaceBaseCheckpointStore(HfHubClient hubClient,
         HfDownloadClient downloadClient,
         ILogger<HuggingFaceBaseCheckpointStore> logger)
     {
@@ -267,8 +266,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
         private readonly int _partIndex;
         private readonly int _partCount;
 
-        public SetProgressAdapter(
-            IProgress<PullProgress> inner,
+        public SetProgressAdapter(IProgress<PullProgress> inner,
             string modelName,
             long completedInPriorFiles,
             long? setTotalBytes,

@@ -233,7 +233,14 @@ public sealed class BenchmarkCompareEndpointTests
                .Returns(new BenchmarkCellPage
                {
                    Cells = cells,
-                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = cells.Length, TotalScored = cells.Length },
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = 2,
+                       ExecutionKey = "cohort-key",
+                       CohortGeneration = 3,
+                       RankedCount = cells.Length,
+                       TotalScored = cells.Length
+                   },
                    ScorableItemCount = indexes.Length - displayOnlyIndexes.Length
                });
         return context;
@@ -270,11 +277,31 @@ public sealed class BenchmarkCompareEndpointTests
     }
 
     private static BenchmarkCellRecord Cell(string key, int? quality, IReadOnlyList<BenchmarkCellItemRecord> items, string? exclusion = null) =>
-        new() { CellKey = key, PrimaryModelName = "model.gguf", ModelContentFingerprint = "v1:fp", KvCacheType = "q8_0", RepeatGroupId = null, RepeatIndex = null, Quality = quality, Rank = quality is null ? null : 1, RankExclusionReason = exclusion, Items = items };
+        new()
+        {
+            CellKey = key,
+            PrimaryModelName = "model.gguf",
+            ModelContentFingerprint = "v1:fp",
+            KvCacheType = "q8_0",
+            RepeatGroupId = null,
+            RepeatIndex = null,
+            Quality = quality,
+            Rank = quality is null ? null : 1,
+            RankExclusionReason = exclusion,
+            Items = items
+        };
 
     /// <summary>One item's answer. A null quality is what the ranking writes for a run it excluded.</summary>
     private static BenchmarkCellItemRecord Item(int index, int? quality, string? exclusion = null) =>
-        new() { RunId = Guid.NewGuid(), TaskItemId = ItemId(index), TaskItemIndex = index, QualityScore = quality, PrimaryStopReason = "stop", RankExclusionReason = exclusion };
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            TaskItemId = ItemId(index),
+            TaskItemIndex = index,
+            QualityScore = quality,
+            PrimaryStopReason = "stop",
+            RankExclusionReason = exclusion
+        };
 
     private static Guid ItemId(int index) =>
         new(index, 0, 0, [0, 0, 0, 0, 0, 0, 0, 1]);

@@ -77,7 +77,11 @@ public sealed class KnowledgeUploadEndpointTests
             {
                 var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
                 blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                         .Returns(Task.FromResult(new KnowledgeDocumentAddResult { DocumentId = documentId, WasInserted = wasInserted }));
+                         .Returns(Task.FromResult(new KnowledgeDocumentAddResult
+                         {
+                             DocumentId = documentId,
+                             WasInserted = wasInserted
+                         }));
 
                 var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
                 catalog.GetStatusAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())

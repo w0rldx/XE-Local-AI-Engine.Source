@@ -34,8 +34,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     private readonly WhisperRuntimeOptions _options;
     private readonly IWhisperServerSupervisor _supervisor;
 
-    public WhisperServerTranscriber(
-        IWhisperServerSupervisor supervisor,
+    public WhisperServerTranscriber(IWhisperServerSupervisor supervisor,
         HttpClient httpClient,
         WhisperRuntimeOptions options,
         ILogger<WhisperServerTranscriber>? logger = null)

@@ -146,7 +146,16 @@ public sealed class StructuredAgentRunnerTests
     }
 
     private static StructuredAgentRequest Request(TeacherOutputMode mode) =>
-        new() { ModelName = "teacher.gguf", SystemInstructions = "system", UserPrompt = "produce one example", OutputMode = mode, ResponseSchema = Schema, Temperature = 0.2f, Seed = null };
+        new()
+        {
+            ModelName = "teacher.gguf",
+            SystemInstructions = "system",
+            UserPrompt = "produce one example",
+            OutputMode = mode,
+            ResponseSchema = Schema,
+            Temperature = 0.2f,
+            Seed = null
+        };
 
     /// <summary>Minimal node-local client stand-in that records the options the runner composed.</summary>
     private sealed class RecordingChatClient : IChatClient

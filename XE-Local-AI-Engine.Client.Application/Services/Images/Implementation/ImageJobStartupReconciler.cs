@@ -25,8 +25,7 @@ public sealed class ImageJobStartupReconciler : IHostedService
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ImageJobStartupReconciler> _logger;
 
-    public ImageJobStartupReconciler(
-        IServiceScopeFactory scopeFactory,
+    public ImageJobStartupReconciler(IServiceScopeFactory scopeFactory,
         IImageJobEventPublisher eventPublisher,
         TimeProvider timeProvider,
         ILogger<ImageJobStartupReconciler> logger)

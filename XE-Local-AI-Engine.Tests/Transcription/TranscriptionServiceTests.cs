@@ -60,9 +60,22 @@ public sealed class TranscriptionServiceTests
         harness.Transcriber.Result = new WhisperTranscriptionResult
         {
             Text = "hello there",
-            Segments = [
-                new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 1.5, Text = "hello", Confidence = 0.8 },
-                new WhisperTranscriptSegment { StartSeconds = 1.5, EndSeconds = 2.25, Text = "there", Confidence = 0.7 }
+            Segments =
+            [
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = 1.5,
+                    Text = "hello",
+                    Confidence = 0.8
+                },
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 1.5,
+                    EndSeconds = 2.25,
+                    Text = "there",
+                    Confidence = 0.7
+                }
             ],
             DetectedLanguageCode = "en",
             DetectedLanguageProbability = 0.99,
@@ -486,7 +499,10 @@ public sealed class TranscriptionServiceTests
         var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
-        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None);
+        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput
+        {
+            SourceKind = "Microphone"
+        }, CancellationToken.None);
 
         var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
 
@@ -502,7 +518,10 @@ public sealed class TranscriptionServiceTests
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         harness.Supervisor.Failure = new WhisperRuntimeException("The transcription runtime did not become ready.");
-        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None);
+        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput
+        {
+            SourceKind = "Microphone"
+        }, CancellationToken.None);
 
         var thrown = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Service.StartLiveAsync(created.Id, CancellationToken.None));
 

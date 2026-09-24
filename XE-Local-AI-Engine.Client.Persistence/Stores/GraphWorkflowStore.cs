@@ -465,7 +465,10 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 {
                     EventType = GraphWorkflowEventTypes.NodePublished,
                     NodeKey = nodeRun.NodeKey,
-                    DetailJson = Utf8(JsonSerializer.Serialize(new PublishedDetailPayload { MessageId = messageId }, JsonOptions))
+                    DetailJson = Utf8(JsonSerializer.Serialize(new PublishedDetailPayload
+                    {
+                        MessageId = messageId
+                    }, JsonOptions))
                 };
             },
             cancellationToken,
@@ -511,7 +514,12 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                     run.CompletedAtUtc = now;
                 }
 
-                return new MutationOutcome { EventType = EventTypeFor(previousStatus, command.TargetStatus), NodeKey = null, DetailJson = ReasonDetail(command.SanitizedReason) };
+                return new MutationOutcome
+                {
+                    EventType = EventTypeFor(previousStatus, command.TargetStatus),
+                    NodeKey = null,
+                    DetailJson = ReasonDetail(command.SanitizedReason)
+                };
             },
             cancellationToken);
     }
@@ -548,19 +556,26 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                     return null;
                 }
 
-                nodeRun.SteeringJson = SteeringBytes([.. entries, new GraphWorkflowSteeringEntry
-                {
-                    OperationId = command.OperationId,
-                    Message = command.Message,
-                    AtUtc = Now(),
-                    Attempt = nodeRun.Attempt,
-                    InvocationId = nodeRun.InvocationId,
-                    SteeredBySubject = command.SteeredBySubject
-                }]);
+                nodeRun.SteeringJson = SteeringBytes([
+                    .. entries, new GraphWorkflowSteeringEntry
+                    {
+                        OperationId = command.OperationId,
+                        Message = command.Message,
+                        AtUtc = Now(),
+                        Attempt = nodeRun.Attempt,
+                        InvocationId = nodeRun.InvocationId,
+                        SteeredBySubject = command.SteeredBySubject
+                    }
+                ]);
                 nodeRun.UpdatedAtUtc = Now();
 
                 // Intent only: the tick that applies it writes node.steered, so the log records what happened rather than what was asked.
-                return new MutationOutcome { EventType = null, NodeKey = nodeRun.NodeKey, DetailJson = null };
+                return new MutationOutcome
+                {
+                    EventType = null,
+                    NodeKey = nodeRun.NodeKey,
+                    DetailJson = null
+                };
             },
             cancellationToken,
             bumpVersion: false);
@@ -582,7 +597,12 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 {
                     EventType = GraphWorkflowEventTypes.NodeSteerIgnored,
                     NodeKey = nodeRun.NodeKey,
-                    DetailJson = Utf8(JsonSerializer.Serialize(new SteerDetailPayload { OperationId = entry.OperationId, Message = entry.Message, Attempt = entry.Attempt }, JsonOptions))
+                    DetailJson = Utf8(JsonSerializer.Serialize(new SteerDetailPayload
+                    {
+                        OperationId = entry.OperationId,
+                        Message = entry.Message,
+                        Attempt = entry.Attempt
+                    }, JsonOptions))
                 };
             },
             cancellationToken,
@@ -622,51 +642,51 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
         try
         {
             return await TryExecuteMutationAsync(command.RunId,
-                    command.ExpectedVersion,
-                    async run =>
+                command.ExpectedVersion,
+                async run =>
+                {
+                    // Re-checked INSIDE the transaction, against the run row this mutation has already taken: a cancel committing between the caller's read and
+                    // this write would land a decision on a run with no tick left to route it. Declined like a lost compare-and-set — same instruction: re-read.
+                    if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
                     {
-                        // Re-checked INSIDE the transaction, against the run row this mutation has already taken: a cancel committing between the caller's read and
-                        // this write would land a decision on a run with no tick left to route it. Declined like a lost compare-and-set — same instruction: re-read.
-                        if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
-                        {
-                            return null;
-                        }
+                        return null;
+                    }
 
-                        // The compare-and-set, expressed as the predicate the row is LOADED by: a row that is no longer
-                        // waiting, or already carries a decision, simply is not found, and the mutation writes nothing.
-                        var nodeRun = await _dbContext.GraphWorkflowNodeRuns
-                                                      .SingleOrDefaultAsync(entity => entity.Id == command.NodeRunId
-                                                                                      && entity.RunId == run.Id
-                                                                                      && entity.Status == GraphWorkflowNodeRunStatus.WaitingForApproval
-                                                                                      && entity.DecisionOperationId == null,
-                                                          cancellationToken);
-                        if (nodeRun is null)
-                        {
-                            return null;
-                        }
+                    // The compare-and-set, expressed as the predicate the row is LOADED by: a row that is no longer
+                    // waiting, or already carries a decision, simply is not found, and the mutation writes nothing.
+                    var nodeRun = await _dbContext.GraphWorkflowNodeRuns
+                                                  .SingleOrDefaultAsync(entity => entity.Id == command.NodeRunId
+                                                                                  && entity.RunId == run.Id
+                                                                                  && entity.Status == GraphWorkflowNodeRunStatus.WaitingForApproval
+                                                                                  && entity.DecisionOperationId == null,
+                                                      cancellationToken);
+                    if (nodeRun is null)
+                    {
+                        return null;
+                    }
 
-                        var now = Now();
+                    var now = Now();
 
-                        // BOTH answers succeed the pause. Which way the run then goes is the edges' business, read off
-                        // the decision inside the output document this write stores.
-                        nodeRun.Status = GraphWorkflowNodeRunStatus.Succeeded;
-                        nodeRun.PendingDecisionKind = null;
-                        nodeRun.DecisionOperationId = command.OperationId;
-                        nodeRun.DecidedBySubject = Utf8OrNull(command.DecidedBySubject);
-                        nodeRun.OutputJson = Utf8(command.OutputJson);
-                        nodeRun.CompletedAtUtc = now;
-                        nodeRun.UpdatedAtUtc = now;
+                    // BOTH answers succeed the pause. Which way the run then goes is the edges' business, read off
+                    // the decision inside the output document this write stores.
+                    nodeRun.Status = GraphWorkflowNodeRunStatus.Succeeded;
+                    nodeRun.PendingDecisionKind = null;
+                    nodeRun.DecisionOperationId = command.OperationId;
+                    nodeRun.DecidedBySubject = Utf8OrNull(command.DecidedBySubject);
+                    nodeRun.OutputJson = Utf8(command.OutputJson);
+                    nodeRun.CompletedAtUtc = now;
+                    nodeRun.UpdatedAtUtc = now;
 
-                        // gate.decided rather than the node.completed the status alone would derive: an answered pause
-                        // is a human act, and a reader following the log has to be able to find it as one.
-                        return new MutationOutcome
-                        {
-                            EventType = GraphWorkflowEventTypes.GateDecided,
-                            NodeKey = nodeRun.NodeKey,
-                            DetailJson = Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions))
-                        };
-                    },
-                    cancellationToken);
+                    // gate.decided rather than the node.completed the status alone would derive: an answered pause
+                    // is a human act, and a reader following the log has to be able to find it as one.
+                    return new MutationOutcome
+                    {
+                        EventType = GraphWorkflowEventTypes.GateDecided,
+                        NodeKey = nodeRun.NodeKey,
+                        DetailJson = Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions))
+                    };
+                },
+                cancellationToken);
         }
         catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
         {
@@ -694,7 +714,12 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
-            _ => new MutationOutcome { EventType = command.EventType, NodeKey = command.NodeKey, DetailJson = Utf8OrNull(command.DetailJson) },
+            _ => new MutationOutcome
+            {
+                EventType = command.EventType,
+                NodeKey = command.NodeKey,
+                DetailJson = Utf8OrNull(command.DetailJson)
+            },
             cancellationToken);
     }
 
@@ -804,7 +829,15 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
                 // The status BEFORE the collapse is the informative one: it says whether the node run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new GraphWorkflowReconciledNodeRun { NodeRunId = nodeRun.Id, RunId = nodeRun.RunId, NodeKey = nodeRun.NodeKey, Kind = nodeRun.Kind, Status = nodeRun.Status, Attempt = nodeRun.Attempt });
+                reconciled.Add(new GraphWorkflowReconciledNodeRun
+                {
+                    NodeRunId = nodeRun.Id,
+                    RunId = nodeRun.RunId,
+                    NodeKey = nodeRun.NodeKey,
+                    Kind = nodeRun.Kind,
+                    Status = nodeRun.Status,
+                    Attempt = nodeRun.Attempt
+                });
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or a reader
                 // takes "the engine restarted" for this attempt's outcome. The reason is on the node.interrupted event.
@@ -890,7 +923,11 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new GraphWorkflowMutationResult { RunId = runId, Sequence = sequence };
+            return new GraphWorkflowMutationResult
+            {
+                RunId = runId,
+                Sequence = sequence
+            };
         }
         catch (DbUpdateConcurrencyException exception)
         {

@@ -33,7 +33,10 @@ public sealed class ListGraphWorkflowConversationRunsEndpoint : Endpoint<ListGra
         try
         {
             var runs = await _chat.ListBoundRunsAsync(req.ConversationId, req.Limit, ct);
-            await Send.OkAsync(new ListGraphWorkflowConversationRunsResponse { Runs = [.. runs.Select(static run => run.ToResponse())] }, ct);
+            await Send.OkAsync(new ListGraphWorkflowConversationRunsResponse
+            {
+                Runs = [.. runs.Select(static run => run.ToResponse())]
+            }, ct);
         }
         catch (GraphWorkflowValidationException exception)
         {

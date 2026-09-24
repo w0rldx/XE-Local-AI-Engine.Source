@@ -238,7 +238,12 @@ public sealed class LlamaServerRerankerClientTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult(new LlamaServerEndpoint { ModelName = ModelName, Role = ModelRole.Reranker, BaseAddress = Endpoint }));
+                  .Returns(Task.FromResult(new LlamaServerEndpoint
+                  {
+                      ModelName = ModelName,
+                      Role = ModelRole.Reranker,
+                      BaseAddress = Endpoint
+                  }));
         return supervisor;
     }
 

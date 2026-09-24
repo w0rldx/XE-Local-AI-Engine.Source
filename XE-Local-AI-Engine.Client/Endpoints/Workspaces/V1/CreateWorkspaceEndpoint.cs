@@ -30,11 +30,11 @@ public sealed class CreateWorkspaceEndpoint : Endpoint<CreateWorkspaceRequest, W
     public override async Task HandleAsync(CreateWorkspaceRequest req, CancellationToken ct)
     {
         var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration
-        {
-            Alias = req.Alias ?? string.Empty,
-            HostPath = req.HostPath ?? string.Empty,
-            Mode = SelectedFolderMode.ReadOnlyMount
-        },
+            {
+                Alias = req.Alias ?? string.Empty,
+                HostPath = req.HostPath ?? string.Empty,
+                Mode = SelectedFolderMode.ReadOnlyMount
+            },
             ct);
 
         await Send.OkAsync(ToResponse(reference), ct);

@@ -237,31 +237,31 @@ public sealed class McpAgentRunStoreTests : IDisposable
         AssertEx.Equal(McpAgentRunClaimKind.Claimed, claimed.Kind);
         AssertEx.Equal(McpAgentRunStopKind.Requested, stopped.Kind);
         AssertEx.False(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
-        {
-            RequestId = requestId,
-            ExpectedVersion = claimed.Run.Version,
-            ClaimToken = claimed.Run.ClaimToken!.Value,
-            Status = McpAgentRunStatus.Succeeded,
-            ExpectedStopReason = McpAgentRunStopReason.None,
-            FailureCode = null,
-            Result = "late success",
-            DisplayMessage = null,
-            CompletedAtUtc = 31
-        }),
+            {
+                RequestId = requestId,
+                ExpectedVersion = claimed.Run.Version,
+                ClaimToken = claimed.Run.ClaimToken!.Value,
+                Status = McpAgentRunStatus.Succeeded,
+                ExpectedStopReason = McpAgentRunStopReason.None,
+                FailureCode = null,
+                Result = "late success",
+                DisplayMessage = null,
+                CompletedAtUtc = 31
+            }),
             "A stale normal completion must lose after the stop marker bumps the version.");
 
         AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
-        {
-            RequestId = requestId,
-            ExpectedVersion = stopped.Run!.Version,
-            ClaimToken = claimed.Run.ClaimToken.Value,
-            Status = McpAgentRunStatus.Failed,
-            ExpectedStopReason = McpAgentRunStopReason.WatchdogExpired,
-            FailureCode = "watchdog_expired",
-            Result = null,
-            DisplayMessage = "Run exceeded its time limit.",
-            CompletedAtUtc = 32
-        }),
+            {
+                RequestId = requestId,
+                ExpectedVersion = stopped.Run!.Version,
+                ClaimToken = claimed.Run.ClaimToken.Value,
+                Status = McpAgentRunStatus.Failed,
+                ExpectedStopReason = McpAgentRunStopReason.WatchdogExpired,
+                FailureCode = "watchdog_expired",
+                Result = null,
+                DisplayMessage = "Run exceeded its time limit.",
+                CompletedAtUtc = 32
+            }),
             "The marker-matched worker finalization should commit exactly once.");
 
         var beforeCompact = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));

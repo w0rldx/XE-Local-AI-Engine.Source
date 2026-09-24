@@ -49,7 +49,11 @@ public sealed record BenchmarkJudgePolicyChangeInput
     public required string? PolicyHash { get; init; }
 
     /// <summary>Turns judging off as part of the project write.</summary>
-    public static BenchmarkJudgePolicyChangeInput Disabled { get; } = new() { PolicyJson = null, PolicyHash = null };
+    public static BenchmarkJudgePolicyChangeInput Disabled { get; } = new()
+    {
+        PolicyJson = null,
+        PolicyHash = null
+    };
 }
 
 public sealed record BenchmarkProjectRecord

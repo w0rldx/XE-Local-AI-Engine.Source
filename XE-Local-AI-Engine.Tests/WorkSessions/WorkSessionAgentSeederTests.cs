@@ -155,7 +155,7 @@ public sealed class WorkSessionAgentSeederTests
         }
 
         await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None);
+            .StartAsync(CancellationToken.None);
 
         var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.Contains(repaired.AllowedToolNames, "GetCurrentTime");
@@ -212,7 +212,7 @@ public sealed class WorkSessionAgentSeederTests
         }
 
         await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None);
+            .StartAsync(CancellationToken.None);
 
         var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.False(repaired.ToolApprovals.ContainsKey("get_current_time"));

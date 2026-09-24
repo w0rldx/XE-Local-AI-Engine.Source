@@ -16,7 +16,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ChatStreamEventSinkTests
 {
-    private static readonly NodeChatMessageCorrelation Correlation = new() { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+    private static readonly NodeChatMessageCorrelation Correlation = new()
+    {
+        ConversationId = Guid.NewGuid(),
+        MessageId = Guid.NewGuid(),
+        RequestId = Guid.NewGuid()
+    };
 
     [Test]
     public async Task TryWrite_PastQueueCapacity_DropsTheEventAndLatchesAReconcile()
@@ -167,7 +172,7 @@ public sealed class ChatStreamEventSinkTests
         });
 
         await AssertEx.StaysIncompleteAsync(drain,
-                          "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.");
+            "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.");
 
         // Complete is the only thing that ends the stream, and it still does after a detach.
         sink.Complete();

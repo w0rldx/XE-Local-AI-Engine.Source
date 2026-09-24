@@ -360,11 +360,29 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             clock.Advance(10);
-            _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentDefinitionId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = index, Success = true });
+            _ = await store.AddAsync(new AgentExecutionLogInput
+            {
+                AgentDefinitionId = agentDefinitionId,
+                ConversationId = null,
+                MessageId = null,
+                ModelName = "llama",
+                ConfigHash = "h",
+                LatencyMs = index,
+                Success = true
+            });
         }
 
         // A row for a different agent must not appear in the page.
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = otherAgentId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 99L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = otherAgentId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 99L,
+            Success = true
+        });
 
         var firstPage = await store.ListByAgentAsync(agentDefinitionId, limit: 2);
         AssertEx.Equal(expected: 2, firstPage.Count);
@@ -392,11 +410,29 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         var store = new AgentExecutionLogStore(context, clock);
 
         // Old row — CreatedAtUtc = 1_000.
-        var oldLog = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentDefinitionId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 1L, Success = true });
+        var oldLog = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 1L,
+            Success = true
+        });
 
         // New row — CreatedAtUtc = 2_000.
         clock.Advance(1_000);
-        var newLog = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentDefinitionId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 2L, Success = true });
+        var newLog = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 2L,
+            Success = true
+        });
 
         // Cut off at 1_500 → old row (1_000) is expired; new row (2_000) survives.
         var deleted = await store.DeleteOlderThanAsync(1_500);
@@ -421,7 +457,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentExecutionLogStore(context, clock);
 
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentDefinitionId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 1L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 1L,
+            Success = true
+        });
 
         var deleted = await store.DeleteOlderThanAsync(1_000);
 
@@ -446,11 +491,29 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         for (var index = 0; index < 4; index++)
         {
             clock.Advance(10);
-            _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentA, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = index, Success = true });
+            _ = await store.AddAsync(new AgentExecutionLogInput
+            {
+                AgentDefinitionId = agentA,
+                ConversationId = null,
+                MessageId = null,
+                ModelName = "llama",
+                ConfigHash = "h",
+                LatencyMs = index,
+                Success = true
+            });
         }
 
         clock.Advance(10);
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentB, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 99L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentB,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 99L,
+            Success = true
+        });
 
         // Cap each agent to its 2 newest rows: agent A loses 2, agent B (only 1 row) loses none.
         var deleted = await store.TrimToMaxPerAgentAsync(2);
@@ -481,7 +544,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         var store = new AgentExecutionLogStore(context, clock);
 
         clock.Advance(10);
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentDefinitionId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 1L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 1L,
+            Success = true
+        });
 
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(0));
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(-5));
@@ -500,7 +572,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentExecutionLogStore(context, TimeProvider.System);
 
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 5L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 5L,
+            Success = true
+        });
         await AddEnvelopeRowAsync(context, conversationId: null, Guid.NewGuid(), "completed", success: true);
 
         // The diagnostics read for the real agent returns only its memory row, never the envelope row.
@@ -531,7 +612,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         var store = new AgentExecutionLogStore(context, clock);
 
         // One memory row and one envelope row, both stamped old (1_000).
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 1L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 1L,
+            Success = true
+        });
         await AddEnvelopeRowAsync(context, conversationId: null, Guid.NewGuid(), "completed", success: true, createdAtUtc: 1_000L);
 
         // Retention operates on the whole table, so the sweep prunes BOTH producers' rows regardless of kind.
@@ -593,7 +683,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         await AddEnvelopeRowAsync(context, conversationA, Guid.NewGuid(), "completed", success: true);
         await AddEnvelopeRowAsync(context, conversationB, Guid.NewGuid(), "failed", success: false);
         // A memory-diagnostics row for conversationA must never appear in the run-envelope read path.
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = Guid.NewGuid(), ConversationId = conversationA, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 3L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = conversationA,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 3L,
+            Success = true
+        });
 
         var conversationAEnvelopes = await store.ListRunEnvelopesAsync(conversationA, limit: 10);
         AssertEx.Equal(expected: 1, conversationAEnvelopes.Count);
@@ -620,7 +719,16 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
 
         // Both producers write plaintext conversation correlations: a run envelope and a memory-diagnostics row.
         await AddEnvelopeRowAsync(context, purgedConversation, Guid.NewGuid(), "completed", success: true);
-        _ = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = Guid.NewGuid(), ConversationId = purgedConversation, MessageId = Guid.NewGuid(), ModelName = "llama", ConfigHash = "h", LatencyMs = 2L, Success = true });
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = purgedConversation,
+            MessageId = Guid.NewGuid(),
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 2L,
+            Success = true
+        });
         // A different conversation's rows must survive the purge.
         await AddEnvelopeRowAsync(context, keptConversation, Guid.NewGuid(), "completed", success: true);
 

@@ -23,9 +23,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class TrainedModelSmokeGateTests
 {
-    private static readonly TrainingArtifactRecordView MergedArtifact = new() { ArtifactPath = "/staged/merged-Q4_K_M.gguf", BaseModelFilePath = null };
+    private static readonly TrainingArtifactRecordView MergedArtifact = new()
+    {
+        ArtifactPath = "/staged/merged-Q4_K_M.gguf",
+        BaseModelFilePath = null
+    };
 
-    private static readonly TrainingArtifactRecordView AdapterArtifact = new() { ArtifactPath = "/staged/adapter-F16.gguf", BaseModelFilePath = "/models/base.gguf" };
+    private static readonly TrainingArtifactRecordView AdapterArtifact = new()
+    {
+        ArtifactPath = "/staged/adapter-F16.gguf",
+        BaseModelFilePath = "/models/base.gguf"
+    };
 
     [Test]
     public async Task Smoke_WhenTheModelEmitsAValidToolCall_Passes()
@@ -192,7 +200,11 @@ public sealed class TrainedModelSmokeGateTests
             _capture(request);
             return _failure is not null
                 ? Task.FromException<T>(_failure)
-                : body(new TransientLlamaServerSession { BaseAddress = new Uri("http://127.0.0.1:18080/v1"), ModelId = Path.GetFileName(request.ModelFilePath) }, ct);
+                : body(new TransientLlamaServerSession
+                {
+                    BaseAddress = new Uri("http://127.0.0.1:18080/v1"),
+                    ModelId = Path.GetFileName(request.ModelFilePath)
+                }, ct);
         }
     }
 

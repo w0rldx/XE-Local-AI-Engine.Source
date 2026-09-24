@@ -493,7 +493,11 @@ public sealed class ContainerRuntimeContractTests
     /// </summary>
     private static IContainerRuntime Create(ContainerRuntimeUnderTest implementation)
     {
-        var endpoint = new DockerDaemonEndpoint { Uri = UnreachableEndpoint, Source = DockerDaemonEndpointSource.Configuration };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = UnreachableEndpoint,
+            Source = DockerDaemonEndpointSource.Configuration
+        };
 
         return implementation switch
         {

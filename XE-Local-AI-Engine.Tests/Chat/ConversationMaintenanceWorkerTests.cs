@@ -83,7 +83,10 @@ public sealed class ConversationMaintenanceWorkerTests
     public async Task StopAsync_WhenTheDrainWindowElapses_CancelsTheRunningJobAndDropsTheRest()
     {
         var clock = new ManualTimeProvider();
-        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions { MaintenanceShutdownDrainTimeoutSeconds = 1 },
+        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions
+            {
+                MaintenanceShutdownDrainTimeoutSeconds = 1
+            },
             timeProvider: clock);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         harness.OnCompact = async (_, token) =>

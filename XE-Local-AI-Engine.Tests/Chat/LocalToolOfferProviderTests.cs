@@ -84,7 +84,13 @@ public sealed class LocalToolOfferProviderTests
         runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
 
         var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
+                new LocalChatToolDescriptor
+                {
+                    Name = "open_url",
+                    Description = "Opens a URL.",
+                    ParameterSchema = "{\"type\":\"object\"}",
+                    RequiresApproval = false
+                }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
@@ -121,7 +127,13 @@ public sealed class LocalToolOfferProviderTests
         runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
 
         var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
+                new LocalChatToolDescriptor
+                {
+                    Name = "open_url",
+                    Description = "Opens a URL.",
+                    ParameterSchema = "{\"type\":\"object\"}",
+                    RequiresApproval = false
+                }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
@@ -595,8 +607,19 @@ public sealed class LocalToolOfferProviderTests
     private static McpRegisteredTool BuildMcpTool(string qualifiedName)
     {
         var executable = AIFunctionFactory.Create((string input) => input, qualifiedName);
-        var descriptor = new LocalChatToolDescriptor { Name = qualifiedName, Description = "Gets the weather forecast.", ParameterSchema = """{"type":"object"}""", RequiresApproval = true };
-        return new McpRegisteredTool { Name = qualifiedName, Executable = executable, Descriptor = descriptor };
+        var descriptor = new LocalChatToolDescriptor
+        {
+            Name = qualifiedName,
+            Description = "Gets the weather forecast.",
+            ParameterSchema = """{"type":"object"}""",
+            RequiresApproval = true
+        };
+        return new McpRegisteredTool
+        {
+            Name = qualifiedName,
+            Executable = executable,
+            Descriptor = descriptor
+        };
     }
 
     [Test]
@@ -675,12 +698,25 @@ public sealed class LocalToolOfferProviderTests
     }
 
     private static readonly LocalChatToolDescriptor CustomWeatherDescriptor =
-        new() { Name = "custom__weather", Description = "Fetches weather.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = true, Category = ToolCategory.Network };
+        new()
+        {
+            Name = "custom__weather",
+            Description = "Fetches weather.",
+            ParameterSchema = "{\"type\":\"object\"}",
+            RequiresApproval = true,
+            Category = ToolCategory.Network
+        };
 
     private static LocalToolOfferProvider CreateProviderWithCustomTools(bool customToolsEnabled, params LocalChatToolDescriptor[] customDescriptors)
     {
         var registry = new FakeAgentToolRegistry([
-            new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
+            new LocalChatToolDescriptor
+            {
+                Name = "open_url",
+                Description = "Opens a URL.",
+                ParameterSchema = "{\"type\":\"object\"}",
+                RequiresApproval = false
+            }
         ]);
 
         var scopeFactory = new ServiceCollection()
@@ -741,7 +777,13 @@ public sealed class LocalToolOfferProviderTests
         // handler, so seeding one would make every assertion below pass against a descriptor production cannot produce.
         // The capability-gated subject these tests use is ask_user, which the provider merges itself.
         var registry = new FakeAgentToolRegistry([
-            new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
+            new LocalChatToolDescriptor
+            {
+                Name = "open_url",
+                Description = "Opens a URL.",
+                ParameterSchema = "{\"type\":\"object\"}",
+                RequiresApproval = false
+            }
         ]);
 
         return new LocalToolOfferProvider(registry,

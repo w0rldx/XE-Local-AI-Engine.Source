@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Scheduler-specific retention sweeper: deletes <c>scheduled_job_runs</c> rows, and their cascaded events, older

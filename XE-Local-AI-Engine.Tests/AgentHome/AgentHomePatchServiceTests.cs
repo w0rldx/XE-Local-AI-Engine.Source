@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Patch-export coverage: the real <see cref="AgentHomePatchService" /> runs the two diff commands against
@@ -44,39 +44,39 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     /// <summary>One patch carrying every block shape the line walk has to tell apart.</summary>
     private const string MixedShapePatch = """
-        diff --git a/repo-01/src/App.cs b/repo-01/src/App.cs
-        index 1111111..2222222 100644
-        --- a/repo-01/src/App.cs
-        +++ b/repo-01/src/App.cs
-        @@ -1,3 +1,4 @@
-         context stays
-        -old line
-        +new line
-        +extra added
-        \ No newline at end of file
-        diff --git a/repo-01/old.txt b/repo-01/new.txt
-        similarity index 100%
-        rename from repo-01/old.txt
-        rename to repo-01/new.txt
-        diff --git a/repo-01/data.bin b/repo-01/data.bin
-        new file mode 100644
-        index 0000000..3333333
-        GIT binary patch
-        literal 4
-        Lc$_OqJOKb%00
+                                           diff --git a/repo-01/src/App.cs b/repo-01/src/App.cs
+                                           index 1111111..2222222 100644
+                                           --- a/repo-01/src/App.cs
+                                           +++ b/repo-01/src/App.cs
+                                           @@ -1,3 +1,4 @@
+                                            context stays
+                                           -old line
+                                           +new line
+                                           +extra added
+                                           \ No newline at end of file
+                                           diff --git a/repo-01/old.txt b/repo-01/new.txt
+                                           similarity index 100%
+                                           rename from repo-01/old.txt
+                                           rename to repo-01/new.txt
+                                           diff --git a/repo-01/data.bin b/repo-01/data.bin
+                                           new file mode 100644
+                                           index 0000000..3333333
+                                           GIT binary patch
+                                           literal 4
+                                           Lc$_OqJOKb%00
 
-        diff --git a/repo-01/empty.txt b/repo-01/empty.txt
-        new file mode 100644
-        index 0000000..e69de29
-        diff --git a/repo-01/gone.txt b/repo-01/gone.txt
-        deleted file mode 100644
-        index 4444444..0000000
-        --- a/repo-01/gone.txt
-        +++ /dev/null
-        @@ -1,2 +0,0 @@
-        -first
-        -second
-        """;
+                                           diff --git a/repo-01/empty.txt b/repo-01/empty.txt
+                                           new file mode 100644
+                                           index 0000000..e69de29
+                                           diff --git a/repo-01/gone.txt b/repo-01/gone.txt
+                                           deleted file mode 100644
+                                           index 4444444..0000000
+                                           --- a/repo-01/gone.txt
+                                           +++ /dev/null
+                                           @@ -1,2 +0,0 @@
+                                           -first
+                                           -second
+                                           """;
 
     private readonly List<string> _tempDirs = [];
 
@@ -482,7 +482,14 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        string[] modifications = [.. QuotablePaths.SelectMany(static entry => new[] { "M", entry.WorkspacePath })];
+        string[] modifications =
+        [
+            .. QuotablePaths.SelectMany(static entry => new[]
+            {
+                "M",
+                entry.WorkspacePath
+            })
+        ];
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"),
             exitCode: 0,
             NameStatusZ([.. modifications, "R100", "repo-01/plain.txt", "repo-01/re\"named\".txt"]));
@@ -679,7 +686,13 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     private static ResolvedSelectedFolder Folder(string alias)
     {
-        return new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = alias, HostPath = "/host/" + alias, Mode = SelectedFolderMode.Copy };
+        return new ResolvedSelectedFolder
+        {
+            Id = Guid.NewGuid(),
+            Alias = alias,
+            HostPath = "/host/" + alias,
+            Mode = SelectedFolderMode.Copy
+        };
     }
 
     private static SandboxCreateRequest CreateRequest()

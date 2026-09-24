@@ -55,8 +55,20 @@ internal sealed class ComputeExecutionOutcome
     public required SandboxCommandResult? Result { get; init; }
 
     public static ComputeExecutionOutcome Refused(string refusalCode, string refusalMessage) =>
-        new() { Ran = false, RefusalCode = refusalCode, RefusalMessage = refusalMessage, Result = null };
+        new()
+        {
+            Ran = false,
+            RefusalCode = refusalCode,
+            RefusalMessage = refusalMessage,
+            Result = null
+        };
 
     public static ComputeExecutionOutcome Executed(SandboxCommandResult result) =>
-        new() { Ran = true, RefusalCode = null, RefusalMessage = null, Result = result };
+        new()
+        {
+            Ran = true,
+            RefusalCode = null,
+            RefusalMessage = null,
+            Result = result
+        };
 }

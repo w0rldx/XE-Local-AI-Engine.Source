@@ -8,15 +8,51 @@ public sealed class RuntimeStatePackagingTests
 {
     private static readonly RuntimeDirectoryProtection[] RuntimeDirectoryProtections =
     [
-        new() { ProjectGlob = "development/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/development/" },
-        new() { ProjectGlob = "generated-images/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/generated-images/" },
-        new() { ProjectGlob = "logs/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/logs/" },
-        new() { ProjectGlob = "backups/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/backups/" },
-        new() { ProjectGlob = "dp-keys/**", GitIgnorePattern = "dp-keys/" },
-        new() { ProjectGlob = "models/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/models/" },
-        new() { ProjectGlob = "uploaded-files/**", GitIgnorePattern = "uploaded-files/" },
-        new() { ProjectGlob = "agent-home-state/**", GitIgnorePattern = "agent-home-state/" },
-        new() { ProjectGlob = "knowledge-base/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/knowledge-base/" }
+        new()
+        {
+            ProjectGlob = "development/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/development/"
+        },
+        new()
+        {
+            ProjectGlob = "generated-images/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/generated-images/"
+        },
+        new()
+        {
+            ProjectGlob = "logs/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/logs/"
+        },
+        new()
+        {
+            ProjectGlob = "backups/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/backups/"
+        },
+        new()
+        {
+            ProjectGlob = "dp-keys/**",
+            GitIgnorePattern = "dp-keys/"
+        },
+        new()
+        {
+            ProjectGlob = "models/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/models/"
+        },
+        new()
+        {
+            ProjectGlob = "uploaded-files/**",
+            GitIgnorePattern = "uploaded-files/"
+        },
+        new()
+        {
+            ProjectGlob = "agent-home-state/**",
+            GitIgnorePattern = "agent-home-state/"
+        },
+        new()
+        {
+            ProjectGlob = "knowledge-base/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/knowledge-base/"
+        }
     ];
 
     private static readonly string[] WebSdkItemTypes =

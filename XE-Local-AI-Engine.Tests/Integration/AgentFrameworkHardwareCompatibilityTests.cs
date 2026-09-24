@@ -98,20 +98,24 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                 "The fixed compatibility prompt must survive the provider/MEAI/MAF/InvocationRunner stack.");
 
             await WriteEvidenceAsync(evidencePath,
-                    new EvidenceInput
+                new EvidenceInput
+                {
+                    Model = new EvidenceFile
                     {
-                        Model = new EvidenceFile { SizeBytes = modelFile.Length, Sha256 = modelSha256 },
-                        ServerSha256 = serverSha256,
-                        Variant = variant,
-                        Response = state.StreamedContent,
-                        Path = new EvidencePath
-                        {
-                            ResolverType = resolver.GetType().FullName,
-                            ProviderType = provider.GetType().FullName,
-                            AgentFactoryType = agentFactory.GetType().FullName,
-                            RunnerType = runner.GetType().FullName
-                        }
-                    });
+                        SizeBytes = modelFile.Length,
+                        Sha256 = modelSha256
+                    },
+                    ServerSha256 = serverSha256,
+                    Variant = variant,
+                    Response = state.StreamedContent,
+                    Path = new EvidencePath
+                    {
+                        ResolverType = resolver.GetType().FullName,
+                        ProviderType = provider.GetType().FullName,
+                        AgentFactoryType = agentFactory.GetType().FullName,
+                        RunnerType = runner.GetType().FullName
+                    }
+                });
         }
         finally
         {
@@ -167,7 +171,7 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
                                   ?? throw new InvalidOperationException("Evidence path has no parent directory."));
         await File.WriteAllTextAsync(fullPath,
-                      JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine);
+            JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine);
     }
 
     private static async Task<string> HashFileAsync(string path)

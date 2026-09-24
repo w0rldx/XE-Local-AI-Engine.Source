@@ -507,7 +507,15 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                 DatasetContentFingerprint = "v1:dataset",
                 MembershipJson = membership,
                 Status = TrainingEvaluationStatus.Succeeded,
-                ResultsJson = TrainingEvaluationResults.Write([new TrainingEvaluationResultEntry { SampleId = Guid.NewGuid(), Kind = "tool", Passed = true, ScoredBy = "deterministic" }]),
+                ResultsJson = TrainingEvaluationResults.Write([
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = Guid.NewGuid(),
+                        Kind = "tool",
+                        Passed = true,
+                        ScoredBy = "deterministic"
+                    }
+                ]),
                 TotalCount = 1,
                 ScoredCount = 1,
                 PassedCount = 1,
@@ -535,13 +543,13 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             new()
             {
                 RegistryEntry = Prepared(Destination ?? new GgufImportDestination
-            {
-                CanonicalModelName = "tuned:Q4_K_M",
-                CanonicalQuant = "Q4_K_M",
-                RelativeGgufPath = "tuned.gguf",
-                RelativeSidecarPath = "tuned.json",
-                Origin = LocalModelOrigin.Trained
-            }).RegistryEntry,
+                {
+                    CanonicalModelName = "tuned:Q4_K_M",
+                    CanonicalQuant = "Q4_K_M",
+                    RelativeGgufPath = "tuned.gguf",
+                    RelativeSidecarPath = "tuned.json",
+                    Origin = LocalModelOrigin.Trained
+                }).RegistryEntry,
                 FinalGgufPath = "/models/tuned.gguf",
                 FinalSidecarPath = "/models/tuned.gguf.xe-model.json",
                 WeightMemberFingerprint = "member",

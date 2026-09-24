@@ -90,7 +90,14 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     {
         var content = streamedContent ?? string.Empty;
         var slice = content.Length > contentOffset ? content[contentOffset..] : null;
-        return slice is null ? null : new IntegrationStreamEventDraft { Type = IntegrationStreamEventTypes.AssistantDelta, ContentType = null, Payload = Text(slice) };
+        return slice is null
+            ? null
+            : new IntegrationStreamEventDraft
+            {
+                Type = IntegrationStreamEventTypes.AssistantDelta,
+                ContentType = null,
+                Payload = Text(slice)
+            };
     }
 
     /// <summary>
@@ -98,7 +105,12 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     ///     never bounded to match — cutting them would drop answer text from the stream that carries it.
     /// </summary>
     public static IntegrationStreamEventDraft Completed(string? streamedContent, int maxOutputBytes) =>
-        new() { Type = IntegrationStreamEventTypes.AssistantCompleted, ContentType = null, Payload = Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes)) };
+        new()
+        {
+            Type = IntegrationStreamEventTypes.AssistantCompleted,
+            ContentType = null,
+            Payload = Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes))
+        };
 
     /// <summary>
     ///     Both phases map; nothing else on the payload crosses to an external caller. The result text itself is never
@@ -352,15 +364,15 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         await foreach (var streamEvent in _persist.Reader.ReadAllAsync(CancellationToken.None))
         {
             await _executions.AppendEventAsync(new IntegrationEventAppend
-            {
-                EventId = Guid.NewGuid(),
-                ExecutionId = streamEvent.ExecutionId,
-                Sequence = streamEvent.Sequence,
-                EventType = streamEvent.Type,
-                DetailJson = streamEvent.Payload?.GetRawText(),
-                OccurredAtUtc = streamEvent.OccurredAtUtc
-            },
-                                 CancellationToken.None);
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = streamEvent.ExecutionId,
+                    Sequence = streamEvent.Sequence,
+                    EventType = streamEvent.Type,
+                    DetailJson = streamEvent.Payload?.GetRawText(),
+                    OccurredAtUtc = streamEvent.OccurredAtUtc
+                },
+                CancellationToken.None);
         }
     }
 }

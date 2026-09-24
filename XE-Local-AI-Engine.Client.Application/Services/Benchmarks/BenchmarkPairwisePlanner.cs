@@ -89,8 +89,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
     private readonly IBenchmarkQueueSignal _queueSignal;
     private readonly ILogger<BenchmarkPairwisePlanner> _logger;
 
-    public BenchmarkPairwisePlanner(
-        IBenchmarkStore store,
+    public BenchmarkPairwisePlanner(IBenchmarkStore store,
         IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
         IBenchmarkPairwiseFitter fitter,
         IBenchmarkQueueSignal queueSignal,
@@ -130,7 +129,13 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
                     var (runA, runB) = members[first].RunId.CompareTo(members[second].RunId) < 0
                         ? (members[first].RunId, members[second].RunId)
                         : (members[second].RunId, members[first].RunId);
-                    slots.Add(new BenchmarkPairwiseSlot { RunAId = runA, RunBId = runB, TaskCaseId = group.Key.TaskCaseId, TaskInputHash = group.Key.TaskInputHash });
+                    slots.Add(new BenchmarkPairwiseSlot
+                    {
+                        RunAId = runA,
+                        RunBId = runB,
+                        TaskCaseId = group.Key.TaskCaseId,
+                        TaskInputHash = group.Key.TaskInputHash
+                    });
                 }
             }
         }
@@ -182,10 +187,10 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         }
 
         var created = await _store.EnsureComparisonsAsync(projectId,
-                                      plan.Slots,
-                                      new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
-                                      resolution.Intent,
-                                      cancellationToken);
+            plan.Slots,
+            new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
+            resolution.Intent,
+            cancellationToken);
         if (created > 0)
         {
             _queueSignal.Wake();

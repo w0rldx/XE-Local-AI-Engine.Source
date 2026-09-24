@@ -70,13 +70,18 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
     };
 
     private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty,
-        [new ConversationSummarizerMessage { Role = "user", Content = "😀" }]), SerializerOptions).Length;
+    [
+        new ConversationSummarizerMessage
+        {
+            Role = "user",
+            Content = "😀"
+        }
+    ]), SerializerOptions).Length;
 
     private readonly ILogger<ConversationSummarizer> _logger;
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public ConversationSummarizer(
-        ILocalModelProviderResolver providerResolver,
+    public ConversationSummarizer(ILocalModelProviderResolver providerResolver,
         ITokenEstimatorCalibrationStore calibrationStore,
         IOptions<ConversationCompactionOptions> options,
         ILogger<ConversationSummarizer> logger)
@@ -123,7 +128,11 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             var remainingContent = message.Content ?? string.Empty;
             do
             {
-                var wholeRemainder = new ConversationSummarizerMessage { Role = message.Role, Content = remainingContent };
+                var wholeRemainder = new ConversationSummarizerMessage
+                {
+                    Role = message.Role,
+                    Content = remainingContent
+                };
                 if (RequestFitsBudget(running, [.. batch, wholeRemainder], budget))
                 {
                     batch.Add(wholeRemainder);
@@ -149,7 +158,11 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                     return null;
                 }
 
-                batch.Add(new ConversationSummarizerMessage { Role = message.Role, Content = remainingContent[..prefixLength] });
+                batch.Add(new ConversationSummarizerMessage
+                {
+                    Role = message.Role,
+                    Content = remainingContent[..prefixLength]
+                });
                 remainingContent = remainingContent[prefixLength..];
 
                 // A fragment was necessary, so flush it before considering the rest. The returned synopsis becomes
@@ -270,7 +283,11 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                 continue;
             }
 
-            var candidate = new ConversationSummarizerMessage { Role = role, Content = content[..candidateLength] };
+            var candidate = new ConversationSummarizerMessage
+            {
+                Role = role,
+                Content = content[..candidateLength]
+            };
             if (RequestFitsBudget(priorSummary, [candidate], budget))
             {
                 best = candidateLength;

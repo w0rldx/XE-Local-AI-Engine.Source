@@ -30,7 +30,11 @@ public sealed class ListNodeChatConversationsEndpoint : Endpoint<ListNodeChatCon
 
     public override async Task HandleAsync(ListNodeChatConversationsRequest req, CancellationToken ct)
     {
-        var summaries = await _chatPersistence.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = req.IncludeArchived, Limit = req.Limit },
+        var summaries = await _chatPersistence.ListConversationsAsync(new NodeChatListConversationsRequest
+            {
+                IncludeArchived = req.IncludeArchived,
+                Limit = req.Limit
+            },
             ct);
 
         await Send.OkAsync(new ListNodeChatConversationsResponse

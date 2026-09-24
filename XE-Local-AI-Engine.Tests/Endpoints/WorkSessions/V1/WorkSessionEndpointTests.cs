@@ -69,7 +69,18 @@ public sealed class WorkSessionEndpointTests
     {
         var service = Substitute.For<IWorkSessionService>();
         service.ListAsync(Arg.Any<CancellationToken>())
-               .Returns([new WorkSessionSummary { Id = SessionId, Title = "title", Kind = AgentWorkSessionKind.Research, Status = AgentWorkSessionStatus.Paused, AgentDefinitionId = AgentId, StepCount = 4, UpdatedUtc = 99 }]);
+               .Returns([
+                   new WorkSessionSummary
+                   {
+                       Id = SessionId,
+                       Title = "title",
+                       Kind = AgentWorkSessionKind.Research,
+                       Status = AgentWorkSessionStatus.Paused,
+                       AgentDefinitionId = AgentId,
+                       StepCount = 4,
+                       UpdatedUtc = 99
+                   }
+               ]);
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "GET", Root);
@@ -183,9 +194,9 @@ public sealed class WorkSessionEndpointTests
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory,
-                "POST",
-                Root,
-                """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
+            "POST",
+            Root,
+            """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(response.Headers.Location);
@@ -221,9 +232,9 @@ public sealed class WorkSessionEndpointTests
         var title = new string('t', 201);
 
         using var response = await SendAsync(factory,
-                "POST",
-                Root,
-                $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
+            "POST",
+            Root,
+            $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -358,9 +369,9 @@ public sealed class WorkSessionEndpointTests
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory,
-                "POST",
-                Root,
-                """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
+            "POST",
+            Root,
+            """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -376,7 +387,12 @@ public sealed class WorkSessionEndpointTests
         service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact()]);
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionArtifactContent { Artifact = Artifact(), Content = "# report", IsBase64 = false });
+               .Returns(new WorkSessionArtifactContent
+               {
+                   Artifact = Artifact(),
+                   Content = "# report",
+                   IsBase64 = false
+               });
         await using var factory = EnabledFactory(service);
 
         using var listResponse = await SendAsync(factory, "GET", $"{Session}/artifacts");
@@ -437,7 +453,12 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType));
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionArtifactContent { Artifact = Artifact(mediaType: mediaType), Content = "payload", IsBase64 = isBase64 });
+               .Returns(new WorkSessionArtifactContent
+               {
+                   Artifact = Artifact(mediaType: mediaType),
+                   Content = "payload",
+                   IsBase64 = isBase64
+               });
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
@@ -640,7 +661,17 @@ public sealed class WorkSessionEndpointTests
         };
 
     private static WorkSessionEventDto Event(long sequence, Guid? operationId = null) =>
-        new() { Id = Guid.NewGuid(), Sequence = sequence, Step = 1, EventType = "step.started", DetailJson = null, Outcome = null, OccurredUtc = 100, OperationId = operationId };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Sequence = sequence,
+            Step = 1,
+            EventType = "step.started",
+            DetailJson = null,
+            Outcome = null,
+            OccurredUtc = 100,
+            OperationId = operationId
+        };
 
     private static WorkSessionArtifactDto Artifact(bool isValid = true, long sizeBytes = 8, string mediaType = "text/markdown") =>
         new()

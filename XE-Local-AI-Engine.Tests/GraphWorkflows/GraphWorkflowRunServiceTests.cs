@@ -165,7 +165,7 @@ public sealed class GraphWorkflowRunServiceTests
         var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()), Options.Create(new SecurityOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
-                              runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
+            runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
 
         _ = store.Received(requiredNumberOfCalls: 1).StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(expected: 0,
@@ -201,8 +201,8 @@ public sealed class GraphWorkflowRunServiceTests
             Options.Create(new SecurityOptions()));
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
+            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Reject, refusal.StandingDecision, "the answer that WON is what the loser is told about.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "review")).Status);
@@ -231,8 +231,8 @@ public sealed class GraphWorkflowRunServiceTests
         var runs = Service(scope, GraphWorkflowDecisionKind.Approve, GraphWorkflowRace.CancelledMidWrite, harness);
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowRunConflictException>(() =>
-                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
+            .ThrowsAsync<GraphWorkflowRunConflictException>(() =>
+                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
 
         AssertEx.Contains(refusal.Message, "Cancelling", StringComparison.Ordinal, "the cancel is the reason, so the cancel is what the refusal names.");
         AssertEx.NotEqual(GraphWorkflowNodeRunStatus.Succeeded,
@@ -371,7 +371,7 @@ public sealed class GraphWorkflowRunServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                              runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null));
+            runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null));
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         AssertEx.Null(await store.FindRunByRequestAsync(requestId), "a refused start leaves nothing behind for the request id to find.");
@@ -402,7 +402,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         var thrown = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                                       runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null));
+            runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null));
         AssertEx.Contains(thrown.Message, "3 nodes", message: "the refusal names what the graph declares against what a run may instantiate.");
     }
 
@@ -574,11 +574,19 @@ public sealed class GraphWorkflowRunServiceTests
     {
         try
         {
-            return new StartOutcome { Detail = await StartAsync(definitionId, requestId), Refusal = null };
+            return new StartOutcome
+            {
+                Detail = await StartAsync(definitionId, requestId),
+                Refusal = null
+            };
         }
         catch (GraphWorkflowInvalidTransitionException refusal)
         {
-            return new StartOutcome { Detail = null, Refusal = refusal };
+            return new StartOutcome
+            {
+                Detail = null,
+                Refusal = refusal
+            };
         }
     }
 
@@ -615,8 +623,7 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 
     private int _runReads;
 
-    public RacingGraphWorkflowStore(
-        IGraphWorkflowStore inner,
+    public RacingGraphWorkflowStore(IGraphWorkflowStore inner,
         GraphWorkflowDecisionKind winningDecision,
         GraphWorkflowRace race,
         Guid callerOperationId = default)
@@ -651,16 +658,16 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     {
         var waiting = await _inner.GetNodeRunAsync(runId, "review", cancellationToken);
         _ = await _inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand
-        {
-            RunId = runId,
-            NodeRunId = waiting.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            OperationId = operationId ?? _callerOperationId,
-            Decision = _winningDecision,
-            DecidedBySubject = "operator",
-            OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
-        },
-                           cancellationToken);
+            {
+                RunId = runId,
+                NodeRunId = waiting.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                OperationId = operationId ?? _callerOperationId,
+                Decision = _winningDecision,
+                DecidedBySubject = "operator",
+                OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -678,7 +685,12 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
         // The answer lands BEFORE the cancel: the store refuses a decision on a run that has stopped, so the other
         // request only wins if it got there first — which is exactly the interleaving this reproduces.
         await CommitIdenticalAnswerAsync(runId, cancellationToken);
-        _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelling }, cancellationToken);
+        _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = runId,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowRunStatus.Cancelling
+        }, cancellationToken);
         return await _inner.GetRunAsync(runId, cancellationToken);
     }
 
@@ -688,20 +700,25 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
         {
             // A cancel committing between this caller's checks and its write. Delegated afterwards, so what refuses the
             // decision is the store's own in-transaction re-read rather than anything this seam decides.
-            _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = command.RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelling },
-                               cancellationToken);
+            _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+                {
+                    RunId = command.RunId,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowRunStatus.Cancelling
+                },
+                cancellationToken);
             return await _inner.DecideNodeRunAsync(command, cancellationToken);
         }
 
         // The winner, committed for real between this caller's checks and its own write — with its own operation id,
         // its own answer and its own output, which is what makes it a second human act rather than a replay.
         _ = await _inner.DecideNodeRunAsync(command with
-                           {
-                               OperationId = Guid.NewGuid(),
-                               Decision = _winningDecision,
-                               OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
-                           },
-                           cancellationToken);
+            {
+                OperationId = Guid.NewGuid(),
+                Decision = _winningDecision,
+                OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
+            },
+            cancellationToken);
 
         return _race == GraphWorkflowRace.ConcurrencyToken
             ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")

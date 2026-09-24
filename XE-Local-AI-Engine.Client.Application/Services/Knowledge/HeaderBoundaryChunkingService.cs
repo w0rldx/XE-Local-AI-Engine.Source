@@ -58,7 +58,13 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         for (var ordinal = 0; ordinal < builds.Count; ordinal++)
         {
             var build = builds[ordinal];
-            sections.Add(new KnowledgeChunkingSection { Ordinal = ordinal, Heading = build.Heading, Level = build.Level, PageNumber = build.PageNumber });
+            sections.Add(new KnowledgeChunkingSection
+            {
+                Ordinal = ordinal,
+                Heading = build.Heading,
+                Level = build.Level,
+                PageNumber = build.PageNumber
+            });
 
             var body = build.Body.ToString().Trim();
             if (body.Length == 0)
@@ -97,7 +103,11 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
             }
         }
 
-        return new KnowledgeChunkingResult { Sections = sections, Chunks = chunks };
+        return new KnowledgeChunkingResult
+        {
+            Sections = sections,
+            Chunks = chunks
+        };
     }
 
     // The per-chunk token budget: configured MaxChunkTokens, tightened to a known resolved embedding window minus the
@@ -139,7 +149,13 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                 headingStack.Add(new HeadingFrame(level, heading));
                 var headingPath = string.Join(" > ", headingStack.Select(frame => frame.Text));
 
-                current = new SectionBuild { Heading = heading, Level = level, HeadingPath = headingPath, PageNumber = header.PageNumber };
+                current = new SectionBuild
+                {
+                    Heading = heading,
+                    Level = level,
+                    HeadingPath = headingPath,
+                    PageNumber = header.PageNumber
+                };
                 headerSections.Add(current);
                 continue;
             }
@@ -152,7 +168,13 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
             if (current is null)
             {
-                implicitSection ??= new SectionBuild { Heading = null, Level = null, HeadingPath = null, PageNumber = element.PageNumber };
+                implicitSection ??= new SectionBuild
+                {
+                    Heading = null,
+                    Level = null,
+                    HeadingPath = null,
+                    PageNumber = element.PageNumber
+                };
                 current = implicitSection;
             }
 

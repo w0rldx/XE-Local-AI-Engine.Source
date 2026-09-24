@@ -64,13 +64,22 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
                 Detail = "The NVIDIA driver was not checked because training is available on Linux only."
             });
 
-        return new TrainingRuntimePrerequisiteReport { CanInstall = items.TrueForAll(static item => item.Satisfied), Items = items };
+        return new TrainingRuntimePrerequisiteReport
+        {
+            CanInstall = items.TrueForAll(static item => item.Satisfied),
+            Items = items
+        };
     }
 
     private static TrainingRuntimePrerequisiteItem ProbePlatform()
     {
         return OperatingSystem.IsLinux()
-            ? new TrainingRuntimePrerequisiteItem { Key = TrainingRuntimePrerequisiteKeys.Platform, Satisfied = true, Detail = "Running on Linux." }
+            ? new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.Platform,
+                Satisfied = true,
+                Detail = "Running on Linux."
+            }
             : new TrainingRuntimePrerequisiteItem
             {
                 Key = TrainingRuntimePrerequisiteKeys.Platform,

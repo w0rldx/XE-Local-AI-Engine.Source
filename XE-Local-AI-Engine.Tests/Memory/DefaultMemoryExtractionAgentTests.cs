@@ -109,7 +109,13 @@ public sealed class DefaultMemoryExtractionAgentTests
             AgentDefinitionId = Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
             AssistantMessageId = Guid.NewGuid(),
-            UserTurns = [new MemoryExtractionTurn { Content = "How do I add a feature?" }],
+            UserTurns =
+            [
+                new MemoryExtractionTurn
+                {
+                    Content = "How do I add a feature?"
+                }
+            ],
             AssistantResponse = "Use the shared helper.",
             Failed = failed,
             Error = failed ? "tool-failed" : null,

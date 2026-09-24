@@ -153,7 +153,12 @@ public static class BenchmarkJudgeExecutionKey
         }
 
         var placement = receipt.Placement;
-        var gpus = hardware.Gpus.Select(static gpu => new BenchmarkJudgeExecutionGpuV1 { Name = gpu.Name, TotalBytes = gpu.TotalBytes, DriverVersion = gpu.DriverVersion })
+        var gpus = hardware.Gpus.Select(static gpu => new BenchmarkJudgeExecutionGpuV1
+                           {
+                               Name = gpu.Name,
+                               TotalBytes = gpu.TotalBytes,
+                               DriverVersion = gpu.DriverVersion
+                           })
                            .OrderBy(static gpu => gpu.Name, StringComparer.Ordinal)
                            .ThenBy(static gpu => gpu.TotalBytes)
                            .ToArray();

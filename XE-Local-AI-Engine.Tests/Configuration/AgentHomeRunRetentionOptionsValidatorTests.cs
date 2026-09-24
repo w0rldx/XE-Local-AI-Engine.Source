@@ -41,7 +41,10 @@ public sealed class AgentHomeRunRetentionOptionsValidatorTests
     [Arguments(3651, "RetentionDays", "an age limit past the upper bound")]
     public void Validate_WhenRetentionDaysIsOutOfRange_NamesTheKeyAndTheValue(int retentionDays, string key, string why)
     {
-        AssertFailureNames(new AgentHomeRunRetentionOptions { RetentionDays = retentionDays },
+        AssertFailureNames(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = retentionDays
+            },
             key,
             retentionDays.ToString(CultureInfo.InvariantCulture),
             why);
@@ -52,7 +55,10 @@ public sealed class AgentHomeRunRetentionOptionsValidatorTests
     [Arguments(100001, "MaxRuns", "a run cap past the upper bound")]
     public void Validate_WhenMaxRunsIsOutOfRange_NamesTheKeyAndTheValue(int maxRuns, string key, string why)
     {
-        AssertFailureNames(new AgentHomeRunRetentionOptions { MaxRuns = maxRuns },
+        AssertFailureNames(new AgentHomeRunRetentionOptions
+            {
+                MaxRuns = maxRuns
+            },
             key,
             maxRuns.ToString(CultureInfo.InvariantCulture),
             why);
@@ -63,7 +69,10 @@ public sealed class AgentHomeRunRetentionOptionsValidatorTests
     [Arguments(1099511627777L, "MaxTotalBytes", "a byte cap past the upper bound")]
     public void Validate_WhenMaxTotalBytesIsOutOfRange_NamesTheKeyAndTheValue(long maxTotalBytes, string key, string why)
     {
-        AssertFailureNames(new AgentHomeRunRetentionOptions { MaxTotalBytes = maxTotalBytes },
+        AssertFailureNames(new AgentHomeRunRetentionOptions
+            {
+                MaxTotalBytes = maxTotalBytes
+            },
             key,
             maxTotalBytes.ToString(CultureInfo.InvariantCulture),
             why);
@@ -72,7 +81,10 @@ public sealed class AgentHomeRunRetentionOptionsValidatorTests
     [Test]
     public void Validate_WhenTheSweepIntervalIsTooShort_NamesTheKeyAndTheValue()
     {
-        AssertFailureNames(new AgentHomeRunRetentionOptions { SweepInterval = TimeSpan.FromSeconds(1) },
+        AssertFailureNames(new AgentHomeRunRetentionOptions
+            {
+                SweepInterval = TimeSpan.FromSeconds(1)
+            },
             "SweepInterval",
             "00:00:01",
             "a cadence that would sweep the disk every second");
@@ -81,7 +93,10 @@ public sealed class AgentHomeRunRetentionOptionsValidatorTests
     [Test]
     public void Validate_WhenTheSweepIntervalIsLongerThanAWeek_ReturnsFailure()
     {
-        var result = _validator.Validate(name: null, new AgentHomeRunRetentionOptions { SweepInterval = TimeSpan.FromDays(8) });
+        var result = _validator.Validate(name: null, new AgentHomeRunRetentionOptions
+        {
+            SweepInterval = TimeSpan.FromDays(8)
+        });
 
         AssertEx.True(result.Failed, "a sweep that runs less than weekly is retention in name only.");
     }

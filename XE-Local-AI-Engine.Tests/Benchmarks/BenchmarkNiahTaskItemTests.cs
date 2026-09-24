@@ -105,7 +105,10 @@ public sealed class BenchmarkNiahTaskItemTests
                  .Returns([Item(probeId, BenchmarkTaskItemKinds.Niah, null), Item(caseId, BenchmarkTaskItemKinds.NiahCase, probeId)]);
         var service = new BenchmarkTaskItemService(store);
 
-        var edit = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, caseId, expectedVersion: 1, new BenchmarkTaskItemDraft { Prompt = "rewritten" }));
+        var edit = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, caseId, expectedVersion: 1, new BenchmarkTaskItemDraft
+        {
+            Prompt = "rewritten"
+        }));
         var delete = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.DeleteAsync(ProjectId, caseId, expectedVersion: 1));
 
         AssertEx.Contains(edit.Message, "generated", StringComparison.OrdinalIgnoreCase);
@@ -121,7 +124,11 @@ public sealed class BenchmarkNiahTaskItemTests
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
-            new BenchmarkTaskItemDraft { Prompt = "a long-context probe", Kind = BenchmarkTaskItemKinds.Niah }));
+            new BenchmarkTaskItemDraft
+            {
+                Prompt = "a long-context probe",
+                Kind = BenchmarkTaskItemKinds.Niah
+            }));
     }
 
     /// <summary>The refusal an operator meets while still looking at the form, rather than an hour into a batch.</summary>
@@ -153,7 +160,11 @@ public sealed class BenchmarkNiahTaskItemTests
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
-            new BenchmarkTaskItemDraft { Prompt = "hand-written case", Kind = BenchmarkTaskItemKinds.NiahCase }));
+            new BenchmarkTaskItemDraft
+            {
+                Prompt = "hand-written case",
+                Kind = BenchmarkTaskItemKinds.NiahCase
+            }));
     }
 
     /// <summary>The override the judge resolves per criterion. It has to parse as an exact criterion's own config.</summary>
@@ -226,7 +237,12 @@ public sealed class BenchmarkNiahTaskItemTests
     private static BenchmarkTaskItemDraft Draft(string generatorConfigJson)
     {
         using var document = JsonDocument.Parse(generatorConfigJson);
-        return new BenchmarkTaskItemDraft { Prompt = "a long-context probe", Kind = BenchmarkTaskItemKinds.Niah, GeneratorConfig = document.RootElement.Clone() };
+        return new BenchmarkTaskItemDraft
+        {
+            Prompt = "a long-context probe",
+            Kind = BenchmarkTaskItemKinds.Niah,
+            GeneratorConfig = document.RootElement.Clone()
+        };
     }
 
     private static IBenchmarkStore StoreWith(int contextTokens, int existingLeaves = 0, BenchmarkJudgeRubricCriterionV1? rubric = null)

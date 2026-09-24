@@ -51,17 +51,29 @@ internal static class DockerDaemonEndpointResolver
 
         if (TryParseEndpoint(configuredEndpoint, out var configured))
         {
-            return new DockerDaemonEndpoint { Uri = configured, Source = DockerDaemonEndpointSource.Configuration };
+            return new DockerDaemonEndpoint
+            {
+                Uri = configured,
+                Source = DockerDaemonEndpointSource.Configuration
+            };
         }
 
         if (TryParseEndpoint(environmentReader(DockerHostVariable), out var fromEnvironment))
         {
-            return new DockerDaemonEndpoint { Uri = fromEnvironment, Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable };
+            return new DockerDaemonEndpoint
+            {
+                Uri = fromEnvironment,
+                Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+            };
         }
 
         if (isWindows)
         {
-            return new DockerDaemonEndpoint { Uri = new Uri(WindowsNamedPipeEndpoint), Source = DockerDaemonEndpointSource.WindowsNamedPipe };
+            return new DockerDaemonEndpoint
+            {
+                Uri = new Uri(WindowsNamedPipeEndpoint),
+                Source = DockerDaemonEndpointSource.WindowsNamedPipe
+            };
         }
 
         // The per-user socket is preferred only when the system-wide one is genuinely absent: preferring it whenever it exists would move
@@ -74,12 +86,20 @@ internal static class DockerDaemonEndpointResolver
                 var userSocket = Path.Combine(runtimeDirectory, "docker.sock");
                 if (fileExists(userSocket))
                 {
-                    return new DockerDaemonEndpoint { Uri = BuildUnixEndpoint(userSocket), Source = DockerDaemonEndpointSource.UserRuntimeUnixSocket };
+                    return new DockerDaemonEndpoint
+                    {
+                        Uri = BuildUnixEndpoint(userSocket),
+                        Source = DockerDaemonEndpointSource.UserRuntimeUnixSocket
+                    };
                 }
             }
         }
 
-        return new DockerDaemonEndpoint { Uri = BuildUnixEndpoint(DefaultUnixSocketPath), Source = DockerDaemonEndpointSource.DefaultUnixSocket };
+        return new DockerDaemonEndpoint
+        {
+            Uri = BuildUnixEndpoint(DefaultUnixSocketPath),
+            Source = DockerDaemonEndpointSource.DefaultUnixSocket
+        };
     }
 
     /// <summary>Production entry point: reads the real environment and filesystem.</summary>

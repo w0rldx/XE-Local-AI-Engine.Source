@@ -120,10 +120,10 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken);
         var (supportsThinking, supportsTools, _) = capabilities;
         var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
-                                                         modelId,
-                                                         supportsTools: supportsTools,
-                                                         honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
-                                                         cancellationToken: cancellationToken);
+            modelId,
+            supportsTools: supportsTools,
+            honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
+            cancellationToken: cancellationToken);
         if (resolved is null || resolved.AgentDefinitionVersion != definition.Version)
         {
             return Reject(McpExecutionFailureCodes.AgentConfigChanged, "Cannot run: the saved agent configuration changed while it was being resolved.");

@@ -24,7 +24,7 @@ public sealed class GgufRegistrySelfHealWriteTests
     [Test]
     public async Task GgufRegistry_SidecarReconcile_PersistsTheRecoveredRow()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         await SeedSidecarBackedModelWithoutManifestRowAsync(dir.Path);
 
         using var registry = Infra.Registry(Infra.Options(dir.Path));
@@ -44,7 +44,7 @@ public sealed class GgufRegistrySelfHealWriteTests
             throw new SkipTestException("SKIPPED — the read-only-directory stand-in for the Windows manifest lock needs Unix file modes.");
         }
 
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         await SeedSidecarBackedModelWithoutManifestRowAsync(dir.Path);
 
         // Windows fails the self-heal write because the reader held index.json open; a read-only directory is the

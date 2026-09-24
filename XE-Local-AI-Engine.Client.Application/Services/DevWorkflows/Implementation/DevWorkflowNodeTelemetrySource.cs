@@ -59,8 +59,7 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
     private readonly IDevelopmentStore? _development;
     private readonly NodeMetricsLlamaServerLoadTelemetry? _localModelLoads;
 
-    public DevWorkflowNodeTelemetrySource(
-        IAgentWorkSessionStore workSessions,
+    public DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore workSessions,
         IAgentExecutionLogStore executionLogs,
         IDevelopmentStore? development = null,
         NodeMetricsLlamaServerLoadTelemetry? localModelLoads = null)
@@ -160,7 +159,11 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             outputTokens = Add(outputTokens, attempt.OutputTokens);
         }
 
-        return new DevWorkflowNodeTelemetry { InputTokens = inputTokens, OutputTokens = outputTokens };
+        return new DevWorkflowNodeTelemetry
+        {
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens
+        };
     }
 
     /// <summary>What the session's steps spent, off the <c>StepEnded</c> / <c>StepFailed</c> rows the supervisor wrote.</summary>
@@ -220,7 +223,7 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         for (var page = 0; page < MaxEnvelopePages; page++)
         {
             var envelopes = await _executionLogs
-                                  .ListRunEnvelopesAsync(conversationId, EnvelopePageSize, page * EnvelopePageSize, cancellationToken);
+                .ListRunEnvelopesAsync(conversationId, EnvelopePageSize, page * EnvelopePageSize, cancellationToken);
             foreach (var envelope in envelopes)
             {
                 inputTokens = Add(inputTokens, envelope.PromptTokens);
@@ -245,7 +248,15 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             }
         }
 
-        return new EnvelopeTotals { InputTokens = inputTokens, OutputTokens = outputTokens, ReasoningTokens = reasoningTokens, AgentTurnMs = agentTurnMs, ModelReadinessMs = modelReadinessMs, ServedModelName = servedModelName };
+        return new EnvelopeTotals
+        {
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens,
+            ReasoningTokens = reasoningTokens,
+            AgentTurnMs = agentTurnMs,
+            ModelReadinessMs = modelReadinessMs,
+            ServedModelName = servedModelName
+        };
     }
 
     /// <summary>A name as the column can hold it, or null when there was none to hold.</summary>

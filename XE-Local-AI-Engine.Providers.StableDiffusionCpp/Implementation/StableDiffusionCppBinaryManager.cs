@@ -128,7 +128,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         {
             // Idempotent: tops up the cudart DLLs on a Windows-CUDA dir that is somehow missing them; a no-op otherwise.
             await EnsureCudartRuntimeAsync(pin, backend, backendDir, cachedServer, ct).ConfigureAwait(false);
-            return new SdBinary { ServerExecutablePath = cachedServer, Version = _activeTag, Backend = backend, IsPinnedFallback = true };
+            return new SdBinary
+            {
+                ServerExecutablePath = cachedServer,
+                Version = _activeTag,
+                Backend = backend,
+                IsPinnedFallback = true
+            };
         }
 
         await DownloadVerifyExtractAsync(StableDiffusionReleasePins.DownloadUri(_activeTag, pin.AssetName), pin.AssetName, pin.Sha256, backendDir, ct).ConfigureAwait(false);
@@ -140,7 +146,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         // archive silently degrades to CPU-only. A cudart failure deletes the half-CUDA backend dir and throws.
         await EnsureCudartRuntimeAsync(pin, backend, backendDir, serverPath, ct).ConfigureAwait(false);
 
-        return new SdBinary { ServerExecutablePath = serverPath, Version = _activeTag, Backend = backend, IsPinnedFallback = true };
+        return new SdBinary
+        {
+            ServerExecutablePath = serverPath,
+            Version = _activeTag,
+            Backend = backend,
+            IsPinnedFallback = true
+        };
     }
 
     private async Task<SdBinary?> TryResolveManagedRuntimeAsync(StableDiffusionInstalledRuntimeState state, CancellationToken ct)
@@ -164,7 +176,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             }
 
             _managedSourceSignal?.SetActive(state.DesiredBackend);
-            return new SdBinary { ServerExecutablePath = serverPath, Version = state.SourceCommit, Backend = state.DesiredBackend, IsPinnedFallback = false };
+            return new SdBinary
+            {
+                ServerExecutablePath = serverPath,
+                Version = state.SourceCommit,
+                Backend = state.DesiredBackend,
+                IsPinnedFallback = false
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -258,7 +276,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             throw new StableDiffusionRuntimeException("The configured bring-your-own stable-diffusion.cpp server path does not point to an existing file.");
         }
 
-        return new SdBinary { ServerExecutablePath = Path.GetFullPath(serverPath), Version = "byo", Backend = overrideOptions.Backend, IsPinnedFallback = false };
+        return new SdBinary
+        {
+            ServerExecutablePath = Path.GetFullPath(serverPath),
+            Version = "byo",
+            Backend = overrideOptions.Backend,
+            IsPinnedFallback = false
+        };
     }
 
     /// <summary>

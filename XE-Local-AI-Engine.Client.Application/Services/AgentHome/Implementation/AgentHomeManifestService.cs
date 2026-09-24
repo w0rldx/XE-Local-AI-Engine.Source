@@ -327,21 +327,81 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
         return
         [
-            new AgentHomeBaselineFile { RelativePath = PolicyFileName, Content = policyJson },
-            new AgentHomeBaselineFile { RelativePath = ReadmeFileName, Content = ReadmeContent },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("skills", "registry.json"), Content = skillsRegistry },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("skills", "README.skills.md"), Content = SkillsReadmeContent },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("tools", "registry.json"), Content = toolsRegistry },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("tools", "policy.json"), Content = toolsPolicy },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("logs", "events.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("logs", "commands.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("logs", "tool-calls.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("logs", "agent-events.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("memory", "proposals", "node-memory.proposals.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("memory", "proposals", "project-memory.proposals.jsonl"), Content = string.Empty },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("agents", "primary", "main", "plan.md"), Content = PlanContent },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("agents", "primary", "main", "scratchpad.md"), Content = ScratchpadContent },
-            new AgentHomeBaselineFile { RelativePath = Path.Combine("agents", "primary", "main", "findings.md"), Content = FindingsContent }
+            new AgentHomeBaselineFile
+            {
+                RelativePath = PolicyFileName,
+                Content = policyJson
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = ReadmeFileName,
+                Content = ReadmeContent
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("skills", "registry.json"),
+                Content = skillsRegistry
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("skills", "README.skills.md"),
+                Content = SkillsReadmeContent
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("tools", "registry.json"),
+                Content = toolsRegistry
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("tools", "policy.json"),
+                Content = toolsPolicy
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("logs", "events.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("logs", "commands.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("logs", "tool-calls.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("logs", "agent-events.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("memory", "proposals", "node-memory.proposals.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("memory", "proposals", "project-memory.proposals.jsonl"),
+                Content = string.Empty
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("agents", "primary", "main", "plan.md"),
+                Content = PlanContent
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("agents", "primary", "main", "scratchpad.md"),
+                Content = ScratchpadContent
+            },
+            new AgentHomeBaselineFile
+            {
+                RelativePath = Path.Combine("agents", "primary", "main", "findings.md"),
+                Content = FindingsContent
+            }
         ];
     }
 

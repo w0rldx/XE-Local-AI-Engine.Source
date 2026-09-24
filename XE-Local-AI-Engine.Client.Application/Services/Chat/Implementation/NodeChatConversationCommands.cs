@@ -26,8 +26,7 @@ internal sealed class NodeChatConversationCommands
     // Told before a delete, so work bound to the conversation winds down first. Empty in a test composition.
     private readonly IReadOnlyList<IConversationDeletionObserver> _deletionObservers;
 
-    public NodeChatConversationCommands(
-        NodeChatPersistenceWriter writer,
+    public NodeChatConversationCommands(NodeChatPersistenceWriter writer,
         IConversationUploadedFileStore? uploadedFileStore,
         IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore,
         IEnumerable<IConversationDeletionObserver>? deletionObservers = null)
@@ -280,7 +279,12 @@ internal sealed class NodeChatConversationCommands
                 }
 
                 await transaction.CommitAsync(token);
-                return new NodeChatDeleteResultDto { ConversationId = request.ConversationId, CancelRequested = cancelCount > 0, Purged = request.PurgeImmediately };
+                return new NodeChatDeleteResultDto
+                {
+                    ConversationId = request.ConversationId,
+                    CancelRequested = cancelCount > 0,
+                    Purged = request.PurgeImmediately
+                };
             },
             cancellationToken);
 

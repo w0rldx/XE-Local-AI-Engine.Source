@@ -406,7 +406,12 @@ public sealed class EndpointConventionTests
             }
         }
 
-        return new RouteScanResult { Violations = violations, VerbCallSites = verbSites, MapCallSites = mapSites };
+        return new RouteScanResult
+        {
+            Violations = violations,
+            VerbCallSites = verbSites,
+            MapCallSites = mapSites
+        };
     }
 
     /// <summary>

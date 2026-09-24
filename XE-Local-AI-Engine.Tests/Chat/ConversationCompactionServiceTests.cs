@@ -519,7 +519,10 @@ public sealed class ConversationCompactionServiceTests
             return (string?)"unreachable summary";
         });
         var settings = CreateNodeSettingsStore();
-        settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { MaxMessageRequestTimeoutSeconds = 5 });
+        settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 5
+        });
         var service = CreateService(persistence, summarizer, resolver, timeProvider: time, nodeSettingsStore: settings);
 
         var pending = service.CompactAsync(ConversationId);
@@ -627,7 +630,10 @@ public sealed class ConversationCompactionServiceTests
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(residentWindowTokens is null ? "ollama" : LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(new LocalModelRuntimeInfo { EffectiveContextTokens = residentWindowTokens ?? 0 });
+                .Returns(new LocalModelRuntimeInfo
+                {
+                    EffectiveContextTokens = residentWindowTokens ?? 0
+                });
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();

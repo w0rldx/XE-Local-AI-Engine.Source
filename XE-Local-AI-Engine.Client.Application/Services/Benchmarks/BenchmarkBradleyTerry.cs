@@ -119,7 +119,19 @@ public static class BenchmarkBradleyTerry
         {
             return new BenchmarkBradleyTerryFit
             {
-                Scores = [.. runs.Select(static run => new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = 0, BootstrapAppearances = 0, Reason = ReasonInsufficient })],
+                Scores =
+                [
+                    .. runs.Select(static run => new BenchmarkPairwiseRunScore
+                    {
+                        RunId = run,
+                        Score = null,
+                        CiLow = null,
+                        CiHigh = null,
+                        Comparisons = 0,
+                        BootstrapAppearances = 0,
+                        Reason = ReasonInsufficient
+                    })
+                ],
                 Iterations = 0,
                 Replicates = 0
             };
@@ -134,7 +146,19 @@ public static class BenchmarkBradleyTerry
         {
             return new BenchmarkBradleyTerryFit
             {
-                Scores = [.. runs.Select(static run => new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = 0, BootstrapAppearances = 0, Reason = RefusalUnfitted })],
+                Scores =
+                [
+                    .. runs.Select(static run => new BenchmarkPairwiseRunScore
+                    {
+                        RunId = run,
+                        Score = null,
+                        CiLow = null,
+                        CiHigh = null,
+                        Comparisons = 0,
+                        BootstrapAppearances = 0,
+                        Reason = RefusalUnfitted
+                    })
+                ],
                 Iterations = maximumIterations,
                 Replicates = 0,
                 Refusal = RefusalUnfitted
@@ -167,16 +191,43 @@ public static class BenchmarkBradleyTerry
     {
         if (!component.Contains(index) || counts[index] < MinimumVerdicts || !scores.TryGetValue(index, out var score))
         {
-            return new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = counts[index], BootstrapAppearances = 0, Reason = ReasonInsufficient };
+            return new BenchmarkPairwiseRunScore
+            {
+                RunId = run,
+                Score = null,
+                CiLow = null,
+                CiHigh = null,
+                Comparisons = counts[index],
+                BootstrapAppearances = 0,
+                Reason = ReasonInsufficient
+            };
         }
 
         if (!intervals.TryGetValue(index, out var sample) || sample.Scores.Count < MinimumBootstrapAppearances)
         {
-            return new BenchmarkPairwiseRunScore { RunId = run, Score = score, CiLow = null, CiHigh = null, Comparisons = counts[index], BootstrapAppearances = sample?.Scores.Count ?? 0, Reason = null };
+            return new BenchmarkPairwiseRunScore
+            {
+                RunId = run,
+                Score = score,
+                CiLow = null,
+                CiHigh = null,
+                Comparisons = counts[index],
+                BootstrapAppearances = sample?.Scores.Count ?? 0,
+                Reason = null
+            };
         }
 
         var ordered = sample.Scores.Order().ToArray();
-        return new BenchmarkPairwiseRunScore { RunId = run, Score = score, CiLow = Percentile(ordered, 0.025), CiHigh = Percentile(ordered, 0.975), Comparisons = counts[index], BootstrapAppearances = ordered.Length, Reason = null };
+        return new BenchmarkPairwiseRunScore
+        {
+            RunId = run,
+            Score = score,
+            CiLow = Percentile(ordered, 0.025),
+            CiHigh = Percentile(ordered, 0.975),
+            Comparisons = counts[index],
+            BootstrapAppearances = ordered.Length,
+            Reason = null
+        };
     }
 
     /// <summary>Collapses the ordered verdicts into one aggregate per unordered pair.</summary>
@@ -204,7 +255,14 @@ public static class BenchmarkBradleyTerry
         return
         [
             .. byPair.OrderBy(static entry => entry.Key.A).ThenBy(static entry => entry.Key.B)
-                     .Select(static entry => new PairAggregate { IndexA = entry.Key.A, IndexB = entry.Key.B, WinsA = entry.Value.WinsA, WinsB = entry.Value.WinsB, Total = entry.Value.Total })
+                     .Select(static entry => new PairAggregate
+                     {
+                         IndexA = entry.Key.A,
+                         IndexB = entry.Key.B,
+                         WinsA = entry.Value.WinsA,
+                         WinsB = entry.Value.WinsB,
+                         Total = entry.Value.Total
+                     })
         ];
     }
 
@@ -268,7 +326,11 @@ public static class BenchmarkBradleyTerry
     {
         if (pairs.Count == 0)
         {
-            return new Solution { LogStrengths = new double[runCount], Iterations = 0 };
+            return new Solution
+            {
+                LogStrengths = new double[runCount],
+                Iterations = 0
+            };
         }
 
         var wins = new double[runCount];
@@ -316,7 +378,11 @@ public static class BenchmarkBradleyTerry
 
             if (delta < ConvergenceTolerance)
             {
-                return new Solution { LogStrengths = [.. strengths.Select(static strength => strength > 0 ? Math.Log(strength) : double.NegativeInfinity)], Iterations = iteration };
+                return new Solution
+                {
+                    LogStrengths = [.. strengths.Select(static strength => strength > 0 ? Math.Log(strength) : double.NegativeInfinity)],
+                    Iterations = iteration
+                };
             }
         }
 
@@ -398,7 +464,10 @@ public static class BenchmarkBradleyTerry
 
                 if (!samples.TryGetValue(index, out var sample))
                 {
-                    sample = new BootstrapSample { Scores = [] };
+                    sample = new BootstrapSample
+                    {
+                        Scores = []
+                    };
                     samples[index] = sample;
                 }
 

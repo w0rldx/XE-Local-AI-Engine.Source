@@ -60,14 +60,22 @@ public sealed class McpAgentRunCoordinatorTests
         {
             Binding = delegateRequest.Binding with
             {
-                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" }
+                InboundContext = new McpInboundExecutionContext
+                {
+                    Scope = McpServerApiKeyScope.Agentic,
+                    KeyPrefix = "xemcp_abc123"
+                }
             }
         };
         var otherAgenticRequest = agenticRequest with
         {
             Binding = agenticRequest.Binding with
             {
-                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_def456" }
+                InboundContext = new McpInboundExecutionContext
+                {
+                    Scope = McpServerApiKeyScope.Agentic,
+                    KeyPrefix = "xemcp_def456"
+                }
             }
         };
 
@@ -206,7 +214,13 @@ public sealed class McpAgentRunCoordinatorTests
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
                .Returns(McpExecutionBindingResolution.Success(binding));
         harness.WorkspaceResolver.ResolveAsync(workspaceId.ToString("D"), Arg.Any<CancellationToken>())
-               .Returns(new ResolvedSelectedFolder { Id = workspaceId, Alias = "repo", HostPath = "/private/not-persisted", Mode = SelectedFolderMode.ReadOnlyMount });
+               .Returns(new ResolvedSelectedFolder
+               {
+                   Id = workspaceId,
+                   Alias = "repo",
+                   HostPath = "/private/not-persisted",
+                   Mode = SelectedFolderMode.ReadOnlyMount
+               });
         McpAgentRunAdmissionRequest? captured = null;
         harness.Store.AdmitAsync(Arg.Any<McpAgentRunAdmissionRequest>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
@@ -269,17 +283,21 @@ public sealed class McpAgentRunCoordinatorTests
                            ClaimedAtUtc = null,
                            PayloadExpiresAtUtc = null
                        };
-                   return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.Accepted, Run = queued };
+                   return new McpAgentRunAdmissionResult
+                   {
+                       Kind = McpAgentRunAdmissionKind.Accepted,
+                       Run = queued
+                   };
                });
         harness.Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
                .Returns(EmptySnapshot());
 
         var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest
-        {
-            RequestId = requestId,
-            Task = "inspect the repository",
-            Binding = bindingRequest
-        },
+            {
+                RequestId = requestId,
+                Task = "inspect the repository",
+                Binding = bindingRequest
+            },
             CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Accepted, result.Kind);
@@ -310,8 +328,16 @@ public sealed class McpAgentRunCoordinatorTests
                    Arg.Any<long>(),
                    Arg.Any<CancellationToken>())
                .Returns(_ => Interlocked.Increment(ref stops) == 1
-                   ? new McpAgentRunStopResult { Kind = McpAgentRunStopKind.Requested, Run = stopped }
-                   : new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyRequested, Run = stopped });
+                   ? new McpAgentRunStopResult
+                   {
+                       Kind = McpAgentRunStopKind.Requested,
+                       Run = stopped
+                   }
+                   : new McpAgentRunStopResult
+                   {
+                       Kind = McpAgentRunStopKind.AlreadyRequested,
+                       Run = stopped
+                   });
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(running.RequestId, claimToken, running.Version, out var executionToken));
 
@@ -341,7 +367,11 @@ public sealed class McpAgentRunCoordinatorTests
                    McpAgentRunStopReason.UserCancellation,
                    Arg.Any<long>(),
                    Arg.Any<CancellationToken>())
-               .Returns(new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyTerminal, Run = completed });
+               .Returns(new McpAgentRunStopResult
+               {
+                   Kind = McpAgentRunStopKind.AlreadyTerminal,
+                   Run = completed
+               });
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(completed.RequestId, claimToken, version: 1, out var executionToken));
 
@@ -422,7 +452,8 @@ public sealed class McpAgentRunCoordinatorTests
             Instructions = "read only",
             AgentDefinitionId = Guid.NewGuid(),
             AgentDefinitionVersion = 1,
-            AllowedTools = [
+            AllowedTools =
+            [
                 Tool("list_files"),
                 Tool("read_file"),
                 Tool("search_text")

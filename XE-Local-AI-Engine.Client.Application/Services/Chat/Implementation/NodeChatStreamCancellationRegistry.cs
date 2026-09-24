@@ -43,8 +43,7 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
         private readonly Action _cancel;
         private bool _disposed;
 
-        public Registration(
-            ConcurrentDictionary<NodeChatMessageCorrelation, Registration> activeStreams,
+        public Registration(ConcurrentDictionary<NodeChatMessageCorrelation, Registration> activeStreams,
             NodeChatMessageCorrelation correlation,
             Action cancel)
         {

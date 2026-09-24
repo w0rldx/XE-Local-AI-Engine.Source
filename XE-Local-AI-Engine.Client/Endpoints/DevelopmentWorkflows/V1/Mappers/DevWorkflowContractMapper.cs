@@ -143,7 +143,17 @@ internal static class DevWorkflowContractMapper
         };
 
     public static DevWorkflowDefinitionSummaryResponse ToResponse(this DevWorkflowDefinitionSummary value) =>
-        new() { Id = value.Id, Name = value.Name, Source = value.Source.ToString(), SeedSlug = value.SeedSlug, Archived = value.Archived, Version = value.Version, NodeCount = value.NodeCount, UpdatedAtUtc = value.UpdatedAtUtc };
+        new()
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Source = value.Source.ToString(),
+            SeedSlug = value.SeedSlug,
+            Archived = value.Archived,
+            Version = value.Version,
+            NodeCount = value.NodeCount,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     public static DevWorkflowRuleSetResponse ToResponse(this DevWorkflowRuleSetSnapshot value) =>
         new()
@@ -194,7 +204,17 @@ internal static class DevWorkflowContractMapper
         DevWorkflowRulePolicyResolver.ReadScope(scopeJson) is { } scope ? new DevWorkflowRuleScope(scope.ProjectIds, scope.NodeTypes) : new DevWorkflowRuleScope([], []);
 
     public static DevWorkflowRunEventResponse ToResponse(this DevWorkflowRunEventSnapshot value) =>
-        new() { Id = value.Id, Sequence = value.Sequence, EventType = value.EventType, NodeRunId = value.NodeRunId, Outcome = value.Outcome, DetailJson = value.DetailJson, OperationId = value.OperationId, OccurredAtUtc = value.OccurredAtUtc };
+        new()
+        {
+            Id = value.Id,
+            Sequence = value.Sequence,
+            EventType = value.EventType,
+            NodeRunId = value.NodeRunId,
+            Outcome = value.Outcome,
+            DetailJson = value.DetailJson,
+            OperationId = value.OperationId,
+            OccurredAtUtc = value.OccurredAtUtc
+        };
 
     public static DevWorkflowArtifactResponse ToResponse(this DevWorkflowArtifactSnapshot value) =>
         new()

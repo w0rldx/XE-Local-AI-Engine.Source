@@ -126,7 +126,12 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         lock (session.Gate)
         {
             session.AttachmentTimer = _timeProvider.CreateTimer(EndOnTimer,
-                new TimerState { Registry = this, Session = session, Reason = LiveEndReason.NeverAttached },
+                new TimerState
+                {
+                    Registry = this,
+                    Session = session,
+                    Reason = LiveEndReason.NeverAttached
+                },
                 ProducerAttachmentTimeout,
                 Timeout.InfiniteTimeSpan);
         }
@@ -225,7 +230,11 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             session.Producer = producer;
         }
 
-        return new LiveProducerRegistration { ProducerToken = session.ProducerCts.Token, Detach = new ProducerDetach(session, producer) };
+        return new LiveProducerRegistration
+        {
+            ProducerToken = session.ProducerCts.Token,
+            Detach = new ProducerDetach(session, producer)
+        };
     }
 
     public void NoteBrowserAttached(Guid sessionId, string connectionId)
@@ -263,13 +272,19 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             }
 
             session.GraceTimer = _timeProvider.CreateTimer(EndOnTimer,
-                new TimerState { Registry = this, Session = session, Reason = LiveEndReason.Abandoned },
+                new TimerState
+                {
+                    Registry = this,
+                    Session = session,
+                    Reason = LiveEndReason.Abandoned
+                },
                 TimeSpan.FromSeconds(_options.AbandonedSessionGraceSeconds),
                 Timeout.InfiniteTimeSpan);
         }
     }
 
-    public bool IsRegistered(Guid sessionId) => _sessions.ContainsKey(sessionId);
+    public bool IsRegistered(Guid sessionId) =>
+        _sessions.ContainsKey(sessionId);
 
     public bool IsLive(Guid sessionId)
     {

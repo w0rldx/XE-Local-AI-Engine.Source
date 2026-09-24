@@ -27,7 +27,10 @@ public sealed class GraphWorkflowDecisionModelTests
     {
         const string question = "decision-routes-on-coding";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn { Text = """{"choice":"coding"}""" });
+        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"choice":"coding"}"""
+        });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.DecisionModelRouting(question), """{"message":"fix my build"}""");
 
         await harness.AdvanceUntilAsync(runId,
@@ -66,7 +69,10 @@ public sealed class GraphWorkflowDecisionModelTests
     {
         const string question = "decision-answers-an-unknown-label";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn { Text = """{"choice":"cooking"}""" });
+        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"choice":"cooking"}"""
+        });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.DecisionModelRouting(question), """{"message":"bake a cake"}""");
 
         await harness.AdvanceUntilAsync(runId,
@@ -88,8 +94,14 @@ public sealed class GraphWorkflowDecisionModelTests
         const string question = "decision-retries-a-wrong-label";
         await using var harness = new GraphWorkflowHarness(Host);
         harness.Invocations.ScriptSequence(question,
-            new GraphWorkflowScriptedTurn { Text = """{"choice":"cooking"}""" },
-            new GraphWorkflowScriptedTurn { Text = """{"choice":"coding"}""" });
+            new GraphWorkflowScriptedTurn
+            {
+                Text = """{"choice":"cooking"}"""
+            },
+            new GraphWorkflowScriptedTurn
+            {
+                Text = """{"choice":"coding"}"""
+            });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.DecisionModelRouting(question, maxAttempts: 2), """{"message":"fix my build"}""");
 
         await harness.AdvanceUntilAsync(runId,
@@ -109,7 +121,10 @@ public sealed class GraphWorkflowDecisionModelTests
     {
         const string question = "decision-answers-prose";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn { Text = "coding, probably" });
+        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn
+        {
+            Text = "coding, probably"
+        });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.DecisionModelRouting(question), """{"message":"?"}""");
 
         await harness.AdvanceUntilAsync(runId,

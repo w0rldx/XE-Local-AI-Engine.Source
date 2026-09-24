@@ -29,15 +29,30 @@ public sealed class TranscriptionModelEndpointTests
         {
             Catalog = new TranscriptionModelCatalogView
             {
-                Models = [
-                new TranscriptionModelView { Entry = Entry("tiny"), Installed = true, Download = null },
-                new TranscriptionModelView
-                {
-                    Entry = Entry("base"),
-                    Installed = false,
-                    Download = new WhisperModelDownloadStatus { ModelId = "base", Phase = WhisperModelDownloadPhase.Running, CompletedBytes = 10, TotalBytes = 100, SanitizedError = null, PartIndex = 2, PartCount = 2 }
-                }
-            ],
+                Models =
+                [
+                    new TranscriptionModelView
+                    {
+                        Entry = Entry("tiny"),
+                        Installed = true,
+                        Download = null
+                    },
+                    new TranscriptionModelView
+                    {
+                        Entry = Entry("base"),
+                        Installed = false,
+                        Download = new WhisperModelDownloadStatus
+                        {
+                            ModelId = "base",
+                            Phase = WhisperModelDownloadPhase.Running,
+                            CompletedBytes = 10,
+                            TotalBytes = 100,
+                            SanitizedError = null,
+                            PartIndex = 2,
+                            PartCount = 2
+                        }
+                    }
+                ],
                 SelectedModelId = "tiny",
                 RecommendedModelId = "large-v3-turbo"
             }
@@ -100,7 +115,14 @@ public sealed class TranscriptionModelEndpointTests
     {
         var coordinator = new StubDownloadCoordinator
         {
-            Status = new WhisperModelDownloadStatus { ModelId = "base", Phase = WhisperModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null }
+            Status = new WhisperModelDownloadStatus
+            {
+                ModelId = "base",
+                Phase = WhisperModelDownloadPhase.Running,
+                CompletedBytes = null,
+                TotalBytes = null,
+                SanitizedError = null
+            }
         };
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
@@ -335,7 +357,11 @@ public sealed class TranscriptionModelEndpointTests
         public WhisperModelDownloadTicket Start(string modelId)
         {
             LastStartedModelId = modelId;
-            return new WhisperModelDownloadTicket { ModelId = modelId, AlreadyInFlight = AlreadyInFlight };
+            return new WhisperModelDownloadTicket
+            {
+                ModelId = modelId,
+                AlreadyInFlight = AlreadyInFlight
+            };
         }
 
         public WhisperModelDownloadStatus? GetStatus(string modelId) =>
@@ -354,7 +380,12 @@ public sealed class TranscriptionModelEndpointTests
     private sealed class StubTranscriptionRuntimeService : ITranscriptionRuntimeService
     {
         public TranscriptionModelCatalogView Catalog { get; init; } =
-            new() { Models = [], SelectedModelId = null, RecommendedModelId = "base" };
+            new()
+            {
+                Models = [],
+                SelectedModelId = null,
+                RecommendedModelId = "base"
+            };
 
         public bool SelectCalled { get; private set; }
 
@@ -364,8 +395,23 @@ public sealed class TranscriptionModelEndpointTests
             Task.FromResult(new TranscriptionRuntimeView
             {
                 Enabled = true,
-                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
+                Runtime = new WhisperRuntimeStatusSnapshot
+                {
+                    State = WhisperRuntimeState.Stopped,
+                    LoadedModelId = null,
+                    Backend = null,
+                    BinaryVersion = null,
+                    BinarySource = null,
+                    SupportsTranscode = true
+                },
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                },
                 ManagedRuntime = null,
                 SelectedModelId = Catalog.SelectedModelId,
                 RecommendedModelId = Catalog.RecommendedModelId,
@@ -378,7 +424,14 @@ public sealed class TranscriptionModelEndpointTests
             Task.FromResult(new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
             });
 
         public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>

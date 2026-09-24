@@ -19,7 +19,12 @@ internal sealed class McpAgentRunCancellationRegistry
             return McpAgentRunRegistrationKind.ShuttingDown;
         }
 
-        var entry = new Entry { ClaimToken = claimToken, Version = version, Source = new CancellationTokenSource() };
+        var entry = new Entry
+        {
+            ClaimToken = claimToken,
+            Version = version,
+            Source = new CancellationTokenSource()
+        };
         if (_entries.TryAdd(requestId, entry))
         {
             token = entry.Source.Token;
@@ -52,11 +57,11 @@ internal sealed class McpAgentRunCancellationRegistry
 
     private IReadOnlyList<McpAgentRunCancellationHandle> Snapshot() =>
         _entries.Select(static pair => new McpAgentRunCancellationHandle
-        {
-            RequestId = pair.Key,
-            ClaimToken = pair.Value.ClaimToken,
-            Version = pair.Value.Version
-        })
+                {
+                    RequestId = pair.Key,
+                    ClaimToken = pair.Value.ClaimToken,
+                    Version = pair.Value.Version
+                })
                 .ToArray();
 
     public void Remove(Guid requestId, Guid claimToken)

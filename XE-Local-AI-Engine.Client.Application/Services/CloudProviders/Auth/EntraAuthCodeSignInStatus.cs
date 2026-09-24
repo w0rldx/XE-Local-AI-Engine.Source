@@ -27,17 +27,33 @@ public sealed class EntraAuthCodeSignInStatus
     public required DateTimeOffset? ExpiresAtUtc { get; init; }
 
     /// <summary>Idle status used before any sign-in has been attempted.</summary>
-    public static EntraAuthCodeSignInStatus None { get; } = new() { State = EntraAuthCodeSignInState.None, ExpiresAtUtc = null };
+    public static EntraAuthCodeSignInStatus None { get; } = new()
+    {
+        State = EntraAuthCodeSignInState.None,
+        ExpiresAtUtc = null
+    };
 
     /// <summary>Terminal status after a sign-in succeeded and persisted a delegated credential.</summary>
-    public static EntraAuthCodeSignInStatus Succeeded { get; } = new() { State = EntraAuthCodeSignInState.Succeeded, ExpiresAtUtc = null };
+    public static EntraAuthCodeSignInStatus Succeeded { get; } = new()
+    {
+        State = EntraAuthCodeSignInState.Succeeded,
+        ExpiresAtUtc = null
+    };
 
     /// <summary>Terminal status after a sign-in failed, timed out, or was superseded.</summary>
-    public static EntraAuthCodeSignInStatus Failed { get; } = new() { State = EntraAuthCodeSignInState.Failed, ExpiresAtUtc = null };
+    public static EntraAuthCodeSignInStatus Failed { get; } = new()
+    {
+        State = EntraAuthCodeSignInState.Failed,
+        ExpiresAtUtc = null
+    };
 
     /// <summary>Builds the in-flight status carrying when the pending attempt gives up waiting for the callback.</summary>
     public static EntraAuthCodeSignInStatus Pending(DateTimeOffset expiresAtUtc)
     {
-        return new EntraAuthCodeSignInStatus { State = EntraAuthCodeSignInState.Pending, ExpiresAtUtc = expiresAtUtc };
+        return new EntraAuthCodeSignInStatus
+        {
+            State = EntraAuthCodeSignInState.Pending,
+            ExpiresAtUtc = expiresAtUtc
+        };
     }
 }

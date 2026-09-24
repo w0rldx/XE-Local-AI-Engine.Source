@@ -106,13 +106,13 @@ public sealed class ExternalAppRealDaemonTests
 
         // Stop keeps the containers and the network: it is not a teardown.
         var stopped = await box.RunAsync(ExternalAppInstanceStatus.Stopped,
-                                   (service, id, version) => service.StopAsync(id, version));
+            (service, id, version) => service.StopAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Stopped, stopped.DesiredState);
         AssertEx.Equal(expected: 2, (await box.ListByServiceAsync()).Count, "Stop removed containers; it must only stop them.");
 
         // Start again: the same host port comes back, because the containers are reused rather than rebuilt.
         var started = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                   (service, id, version) => service.StartAsync(id, version));
+            (service, id, version) => service.StartAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Running, started.DesiredState);
 
         var afterRestart = await box.Service.GetAsync(installed);
@@ -124,7 +124,7 @@ public sealed class ExternalAppRealDaemonTests
         await File.WriteAllTextAsync(marker, "gone after a reset");
 
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                 (service, id, version) => service.ResetAsync(id, version));
+            (service, id, version) => service.ResetAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Running, reset.DesiredState, "Reset restores the desired state it found, and the instance was running.");
         AssertEx.False(File.Exists(marker), "Reset must wipe the instance's writable volume.");
 
@@ -223,7 +223,7 @@ public sealed class ExternalAppRealDaemonTests
 
         // Reset: the wipe goes through the helper, and the rebuilt container recreates the same directory.
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                 (service, id, version) => service.ResetAsync(id, version));
+            (service, id, version) => service.ResetAsync(id, version));
 
         AssertEx.False(File.Exists(marker), "The reset did not wipe the volumes directory the 0700 subtree lives in.");
         await AwaitPrivateDirectoryAsync(privateDirectory);
@@ -532,11 +532,11 @@ public sealed class ExternalAppRealDaemonTests
             while (true)
             {
                 var admitted = await Service.InstallAsync(new InstallCommand(_manifest.Id,
-                                                DisplayName: null,
-                                                _manifest.ManifestVersion,
-                                                _manifest.ManifestSha256,
-                                                new Dictionary<string, string>(StringComparer.Ordinal),
-                                                AcceptPermissions: true));
+                    DisplayName: null,
+                    _manifest.ManifestVersion,
+                    _manifest.ManifestSha256,
+                    new Dictionary<string, string>(StringComparer.Ordinal),
+                    AcceptPermissions: true));
 
                 InstanceId = admitted.Id;
                 var row = await SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running, ExternalAppInstanceStatus.Failed);

@@ -384,7 +384,16 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
-        return new ScheduledJobRunEventRecord { Id = Guid.NewGuid(), RunId = input.RunId, Sequence = input.Sequence, Level = input.Level, Message = input.Message, DataJson = input.DataJson, OccurredAtUtc = 1L };
+        return new ScheduledJobRunEventRecord
+        {
+            Id = Guid.NewGuid(),
+            RunId = input.RunId,
+            Sequence = input.Sequence,
+            Level = input.Level,
+            Message = input.Message,
+            DataJson = input.DataJson,
+            OccurredAtUtc = 1L
+        };
     }
 
     private sealed class ConfigurableHandler : IScheduledJobHandler

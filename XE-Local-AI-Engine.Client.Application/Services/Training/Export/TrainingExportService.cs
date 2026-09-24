@@ -52,8 +52,7 @@ public sealed class TrainingExportService : ITrainingExportService
     private readonly IGpuVariantSelector _variantSelector;
     private readonly TrainingRunWorkspace _workspace;
 
-    public TrainingExportService(
-        IServiceScopeFactory scopeFactory,
+    public TrainingExportService(IServiceScopeFactory scopeFactory,
         ITrainingRunEventBuffer events,
         IGpuWorkGate gpuWorkGate,
         ILlamaServerProcessSupervisor supervisor,
@@ -147,7 +146,11 @@ public sealed class TrainingExportService : ITrainingExportService
         var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export);
         if (activity is null)
         {
-            return new TrainingExportStart { Outcome = TrainingExportStartOutcome.Busy, Reason = "Training or another export is already running." };
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.Busy,
+                Reason = "Training or another export is already running."
+            };
         }
 
         ILlamaServerRuntimeMutationLease? lease = null;
@@ -174,7 +177,10 @@ public sealed class TrainingExportService : ITrainingExportService
         // Detached on purpose: the endpoint answers 202 and the operator follows the export on the run hub. The
         // request's own token is NOT flowed in — it dies with the HTTP response, which would kill the export.
         InFlight = Task.Run(() => RunPipelineAsync(plan!, interpreter, activity, lease), CancellationToken.None);
-        return new TrainingExportStart { Outcome = TrainingExportStartOutcome.Accepted };
+        return new TrainingExportStart
+        {
+            Outcome = TrainingExportStartOutcome.Accepted
+        };
     }
 
     public async Task<IReadOnlyList<TrainingArtifactRecord>> ListArtifactsAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -310,16 +316,16 @@ public sealed class TrainingExportService : ITrainingExportService
             ? TrainingExportPaths.MergedGgufName(quantization)
             : TrainingExportPaths.AdapterGgufName();
         return new PlanOrRefusal(new ExportPlan
-        {
-            RunId = runId,
-            Kind = kind,
-            Quantization = quantization,
-            AdapterDirectory = adapter.Path,
-            BaseCheckpointDirectory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
-            StagedDirectory = staged,
-            OutputPath = Path.Combine(staged, fileName),
-            LinkedInstalledModelName = run.LinkedInstalledModelName
-        },
+            {
+                RunId = runId,
+                Kind = kind,
+                Quantization = quantization,
+                AdapterDirectory = adapter.Path,
+                BaseCheckpointDirectory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
+                StagedDirectory = staged,
+                OutputPath = Path.Combine(staged, fileName),
+                LinkedInstalledModelName = run.LinkedInstalledModelName
+            },
             Refusal: null);
     }
 
@@ -342,7 +348,12 @@ public sealed class TrainingExportService : ITrainingExportService
 
             // Created up front so EVERY outcome — including a merge that never produces a file — is durably visible
             // on the run rather than surviving only as a hub event the operator may not have been watching for.
-            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = plan.RunId, Kind = plan.Kind, Path = plan.OutputPath }, CancellationToken.None);
+            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput
+            {
+                RunId = plan.RunId,
+                Kind = plan.Kind,
+                Path = plan.OutputPath
+            }, CancellationToken.None);
             Publish(plan.RunId, "preparing", null);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(_workspace.WorkDirectory(plan.RunId));
             var scripts = await _convertScripts.EnsureAsync(cancellationToken);
@@ -357,13 +368,17 @@ public sealed class TrainingExportService : ITrainingExportService
             if (await RejectUnsupportedShapeAsync(plan, cancellationToken) is { } rejection)
             {
                 _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, TrainingArtifactSmokeState.Skipped, rejection,
-                                   CancellationToken.None);
+                    CancellationToken.None);
                 Publish(plan.RunId, "skipped", rejection);
                 return;
             }
 
             Publish(plan.RunId, "smoke", null);
-            var view = new TrainingArtifactRecordView { ArtifactPath = plan.OutputPath, BaseModelFilePath = await ResolveBaseModelPathAsync(scope, plan, cancellationToken) };
+            var view = new TrainingArtifactRecordView
+            {
+                ArtifactPath = plan.OutputPath,
+                BaseModelFilePath = await ResolveBaseModelPathAsync(scope, plan, cancellationToken)
+            };
             var result = await _smokeGate.RunAsync(view, cancellationToken);
             _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, CancellationToken.None);
             Publish(plan.RunId, result.State == TrainingArtifactSmokeState.Passed ? "ready" : "smokeFailed", result.Reason);
@@ -380,7 +395,7 @@ public sealed class TrainingExportService : ITrainingExportService
                 if (current is not null)
                 {
                     _ = await store.SetArtifactSmokeStateAsync(current.Id, current.Version, TrainingArtifactSmokeState.Failed, reason,
-                                       CancellationToken.None);
+                        CancellationToken.None);
                 }
             }
             catch (Exception recordFailure)
@@ -459,17 +474,17 @@ public sealed class TrainingExportService : ITrainingExportService
         {
             Publish(plan.RunId, "converting", null);
             await RunSubprocessAsync(plan,
-                    interpreter,
-                    [
-                        scripts.LoraToGgufScriptPath,
-                        "--base", plan.BaseCheckpointDirectory,
-                        "--outtype", "f16",
-                        "--outfile", plan.OutputPath,
-                        plan.AdapterDirectory
-                    ],
-                    scripts.GgufPyDirectory,
-                    "adapter conversion",
-                    cancellationToken);
+                interpreter,
+                [
+                    scripts.LoraToGgufScriptPath,
+                    "--base", plan.BaseCheckpointDirectory,
+                    "--outtype", "f16",
+                    "--outfile", plan.OutputPath,
+                    plan.AdapterDirectory
+                ],
+                scripts.GgufPyDirectory,
+                "adapter conversion",
+                cancellationToken);
             return;
         }
 
@@ -493,11 +508,11 @@ public sealed class TrainingExportService : ITrainingExportService
         Publish(plan.RunId, "converting", null);
         var floatPath = Path.Combine(plan.StagedDirectory, TrainingExportPaths.MergedGgufName(TrainingExportQuantizations.Float16));
         await RunSubprocessAsync(plan,
-                interpreter,
-                [scripts.HfToGgufScriptPath, "--outtype", "f16", "--outfile", floatPath, mergedDirectory],
-                scripts.GgufPyDirectory,
-                "GGUF conversion",
-                cancellationToken);
+            interpreter,
+            [scripts.HfToGgufScriptPath, "--outtype", "f16", "--outfile", floatPath, mergedDirectory],
+            scripts.GgufPyDirectory,
+            "GGUF conversion",
+            cancellationToken);
 
         if (string.Equals(plan.Quantization, TrainingExportQuantizations.Float16, StringComparison.Ordinal))
         {
@@ -538,7 +553,7 @@ public sealed class TrainingExportService : ITrainingExportService
         }
 
         await RunSubprocessAsync(plan, quantizer, [floatPath, plan.OutputPath, plan.Quantization], ggufPyDirectory: null, "quantization",
-                cancellationToken);
+            cancellationToken);
     }
 
     /// <summary>Runs one export subprocess to completion.</summary>
@@ -598,9 +613,12 @@ public sealed class TrainingExportService : ITrainingExportService
     /// </summary>
     private async Task<string?> RejectUnsupportedShapeAsync(ExportPlan plan, CancellationToken cancellationToken)
     {
-        var inspection = await _inspector.InspectAsync(new GgufImportSource { AbsolutePath = plan.OutputPath },
-                                             GgufImportInspectionMode.InProcessTrainedCommit,
-                                             cancellationToken);
+        var inspection = await _inspector.InspectAsync(new GgufImportSource
+            {
+                AbsolutePath = plan.OutputPath
+            },
+            GgufImportInspectionMode.InProcessTrainedCommit,
+            cancellationToken);
         var expected = plan.Kind == TrainingArtifactKind.AdapterGguf ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
         if (inspection.Workload == expected)
         {
@@ -641,7 +659,11 @@ public sealed class TrainingExportService : ITrainingExportService
 
         if (artifact.Kind != TrainingArtifactKind.AdapterGguf)
         {
-            return new TrainingArtifactRecordView { ArtifactPath = artifact.Path, BaseModelFilePath = null };
+            return new TrainingArtifactRecordView
+            {
+                ArtifactPath = artifact.Path,
+                BaseModelFilePath = null
+            };
         }
 
         var run = await store.GetAsync(artifact.RunId, cancellationToken);
@@ -654,7 +676,11 @@ public sealed class TrainingExportService : ITrainingExportService
         var models = scope.ServiceProvider.GetRequiredService<IGgufModelStore>();
         var basePath = await models.ResolveModelFilePathAsync(baseModel, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The installed base model this adapter applies to is no longer available.");
-        return new TrainingArtifactRecordView { ArtifactPath = artifact.Path, BaseModelFilePath = basePath };
+        return new TrainingArtifactRecordView
+        {
+            ArtifactPath = artifact.Path,
+            BaseModelFilePath = basePath
+        };
     }
 
     private async Task<string> WriteExportJobAsync(ExportPlan plan, CancellationToken cancellationToken)
@@ -698,7 +724,11 @@ public sealed class TrainingExportService : ITrainingExportService
     }
 
     private void Publish(Guid runId, string phase, string? message) =>
-        _ = _events.Append(runId, TrainingRunEventKind.Export, new TrainingRunPayload { Phase = phase, Message = message });
+        _ = _events.Append(runId, TrainingRunEventKind.Export, new TrainingRunPayload
+        {
+            Phase = phase,
+            Message = message
+        });
 
     private static string Describe(Exception exception) =>
         exception switch

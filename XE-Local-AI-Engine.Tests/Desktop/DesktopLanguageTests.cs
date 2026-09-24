@@ -25,7 +25,8 @@ public sealed class DesktopLanguageTests
     [Arguments("")]
     [Arguments("  ")]
     [Arguments(null)]
-    public void Normalize_ReturnsNullWhenNothingIsKnown(string? raw) => AssertEx.Null(DesktopText.Normalize(raw));
+    public void Normalize_ReturnsNullWhenNothingIsKnown(string? raw) =>
+        AssertEx.Null(DesktopText.Normalize(raw));
 
     [Test]
     public void Apply_ChangesOnlyOnARealSwitchAndRelabelsTheShell()

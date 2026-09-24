@@ -82,7 +82,14 @@ internal sealed class DevWorkflowApplyCommands
             {
                 // Already applied, by this node before a restart or by an operator in the Dev Mode view. The same answer
                 // arriving earlier, and re-applying it is exactly what the task's own state exists to prevent.
-                applied.Add(new AppliedTask { NodeKey = implementation.NodeKey, TaskId = taskId, Title = title, Outcome = AppliedOutcomes.AlreadyApplied, Detail = null });
+                applied.Add(new AppliedTask
+                {
+                    NodeKey = implementation.NodeKey,
+                    TaskId = taskId,
+                    Title = title,
+                    Outcome = AppliedOutcomes.AlreadyApplied,
+                    Detail = null
+                });
                 continue;
             }
 
@@ -123,11 +130,25 @@ internal sealed class DevWorkflowApplyCommands
             var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
-                return (new AppliedTask { NodeKey = implementation.NodeKey, TaskId = task.Id, Title = title, Outcome = AppliedOutcomes.Applied, Detail = null }, null);
+                return (new AppliedTask
+                {
+                    NodeKey = implementation.NodeKey,
+                    TaskId = task.Id,
+                    Title = title,
+                    Outcome = AppliedOutcomes.Applied,
+                    Detail = null
+                }, null);
             }
 
             var blocked = $"The Development apply gate declined '{title}': the repository is not at the exact base the approved patch was reviewed against.";
-            return (new AppliedTask { NodeKey = implementation.NodeKey, TaskId = task.Id, Title = title, Outcome = AppliedOutcomes.Blocked, Detail = blocked }, DevWorkflowFailureClasses.Policy);
+            return (new AppliedTask
+            {
+                NodeKey = implementation.NodeKey,
+                TaskId = task.Id,
+                Title = title,
+                Outcome = AppliedOutcomes.Blocked,
+                Detail = blocked
+            }, DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {

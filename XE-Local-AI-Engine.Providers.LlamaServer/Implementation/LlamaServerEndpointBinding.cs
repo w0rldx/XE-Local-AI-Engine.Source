@@ -10,7 +10,11 @@ internal sealed class LlamaServerEndpointBinding : ILlamaServerEndpointBinding
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         var prior = _current.Value;
-        var state = new BindingState { Endpoint = endpoint, Prior = prior };
+        var state = new BindingState
+        {
+            Endpoint = endpoint,
+            Prior = prior
+        };
         _current.Value = state;
         return new Scope(this, state);
     }

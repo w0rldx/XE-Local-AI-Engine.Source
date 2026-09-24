@@ -116,7 +116,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgePolicyRevisions.SingleAsync(),
-                              "A policy read under another revision id must fail the AEAD tag check.");
+            "A policy read under another revision id must fail the AEAD tag check.");
     }
 
     [Test]
@@ -137,7 +137,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == SecondAttemptId),
-                              "One attempt's result must not read back as another attempt's.");
+            "One attempt's result must not read back as another attempt's.");
     }
 
     [Test]
@@ -154,7 +154,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == FirstAttemptId),
-                              "A judge result presented as a launch receipt must fail the AEAD tag check.");
+            "A judge result presented as a launch receipt must fail the AEAD tag check.");
     }
 
     private static async Task SeedAsync(string databasePath, INodeSqliteKeyHolder keyHolder)

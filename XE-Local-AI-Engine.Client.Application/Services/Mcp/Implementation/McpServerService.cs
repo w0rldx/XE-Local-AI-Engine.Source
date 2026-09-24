@@ -12,8 +12,7 @@ internal sealed class McpServerService : IMcpServerService
     private readonly IOptions<McpOptions> _mcpOptions;
     private readonly IMcpServerStore _store;
 
-    public McpServerService(
-        IMcpServerStore store,
+    public McpServerService(IMcpServerStore store,
         IMcpServerConnectionManager connectionManager,
         IOptions<McpOptions> mcpOptions,
         ILogger<McpServerService> logger)

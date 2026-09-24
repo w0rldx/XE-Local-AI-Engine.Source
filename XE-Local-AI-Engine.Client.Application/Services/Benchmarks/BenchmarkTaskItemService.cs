@@ -197,8 +197,8 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact` criterion
         // per case — is held to the same rule as one an operator typed.
         await EnsureOverridesFitRubricAsync(projectId,
-                [input, .. children ?? []],
-                cancellationToken);
+            [input, .. children ?? []],
+            cancellationToken);
         return (input, children);
     }
 

@@ -42,13 +42,18 @@ public sealed class GetWorkSessionArtifactContentEndpoint : Endpoint<WorkSession
         if (artifact.SizeBytes > _options.MaxArtifactBytes)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status413PayloadTooLarge,
-                          title: "Artifact too large",
-                          detail: string.Create(CultureInfo.InvariantCulture,
-                              $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")));
+                title: "Artifact too large",
+                detail: string.Create(CultureInfo.InvariantCulture,
+                    $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")));
             return;
         }
 
         var content = await _service.ReadArtifactContentAsync(req.SessionId, req.ArtifactId, ct);
-        await Send.OkAsync(new WorkSessionArtifactContentResponse { Artifact = content.Artifact.ToResponse(), Content = content.Content, IsBase64 = content.IsBase64 }, ct);
+        await Send.OkAsync(new WorkSessionArtifactContentResponse
+        {
+            Artifact = content.Artifact.ToResponse(),
+            Content = content.Content,
+            IsBase64 = content.IsBase64
+        }, ct);
     }
 }

@@ -136,7 +136,11 @@ public sealed class WorkflowBuilderProbeTests
                        .Build();
 
         using var cts = new CancellationTokenSource(RunBudget);
-        await using var run = await InProcessExecution.RunAsync(workflow, new Ticket { Lane = lane, Payload = "payload" }, $"d8-route-{lane}", cts.Token);
+        await using var run = await InProcessExecution.RunAsync(workflow, new Ticket
+            {
+                Lane = lane,
+                Payload = "payload"
+            }, $"d8-route-{lane}", cts.Token);
 
         var events = DrainEvents(run, $"lane-{lane}");
         var visited = trace.Where(id => id != "probe-router").ToList();

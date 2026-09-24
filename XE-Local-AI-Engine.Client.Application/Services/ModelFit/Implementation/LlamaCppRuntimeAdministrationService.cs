@@ -34,8 +34,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     private readonly ILogger<LlamaCppRuntimeAdministrationService> _logger;
     private Task? _ownedAcquisitionTask;
 
-    public LlamaCppRuntimeAdministrationService(
-        ILlamaCppBinaryManager binaryManager,
+    public LlamaCppRuntimeAdministrationService(ILlamaCppBinaryManager binaryManager,
         ILlamaCppReleaseCatalog releaseCatalog,
         IGpuVariantSelector variantSelector,
         IInstalledRuntimeStore installedRuntimeStore,
@@ -277,7 +276,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     {
         if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
-            return new PrebuiltMutationAdmission { Lease = null, RunningProcessCount = _processSupervisor.CountRunningProcesses(), BlockedMessage = KeepModelWarmBlockedMessage };
+            return new PrebuiltMutationAdmission
+            {
+                Lease = null,
+                RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                BlockedMessage = KeepModelWarmBlockedMessage
+            };
         }
 
         var lease = await _processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
@@ -327,7 +331,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             }
 
             transferred = true;
-            return new PrebuiltMutationAdmission { Lease = lease, RunningProcessCount = runningProcessCount, BlockedMessage = null };
+            return new PrebuiltMutationAdmission
+            {
+                Lease = lease,
+                RunningProcessCount = runningProcessCount,
+                BlockedMessage = null
+            };
         }
         finally
         {
@@ -432,7 +441,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     }
 
     private static LlamaCppRuntimeBinaryView ToView(LlamaBinary binary) =>
-        new() { Version = binary.Version, Variant = ToWireString(binary.Variant), IsPinnedFallback = binary.IsPinnedFallback };
+        new()
+        {
+            Version = binary.Version,
+            Variant = ToWireString(binary.Variant),
+            IsPinnedFallback = binary.IsPinnedFallback
+        };
 
     private static LlamaCppInstalledRuntimeView ToView(InstalledRuntimeState installed) =>
         new()

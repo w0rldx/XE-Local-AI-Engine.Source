@@ -26,8 +26,20 @@ public sealed class DevWorkflowNodeRunTests
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion);
 
         var firstSessionId = Guid.NewGuid();
-        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = version, WorkSessionId = firstSessionId });
-        var running = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = attached.Version, TargetStatus = DevWorkflowNodeRunStatus.Running });
+        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = version,
+            WorkSessionId = firstSessionId
+        });
+        var running = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = attached.Version,
+            TargetStatus = DevWorkflowNodeRunStatus.Running
+        });
         var failed = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {
             RunId = seed.RunId,
@@ -47,7 +59,14 @@ public sealed class DevWorkflowNodeRunTests
             IncrementAttempt = true
         });
         var secondSessionId = Guid.NewGuid();
-        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = retried.Version, WorkSessionId = secondSessionId, CountsAsResume = true });
+        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = retried.Version,
+            WorkSessionId = secondSessionId,
+            CountsAsResume = true
+        });
 
         var nodeRuns = await store.ListNodeRunsAsync(seed.RunId);
         var nodeRun = nodeRuns.Single();
@@ -203,7 +222,13 @@ public sealed class DevWorkflowNodeRunTests
 
         var nodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion);
-        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = version, WorkSessionId = Guid.NewGuid() });
+        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = version,
+            WorkSessionId = Guid.NewGuid()
+        });
 
         var events = await store.ListEventsAsync(seed.RunId);
         var detail = AssertEx.NotNull(events.Single(item => item.EventType == DevWorkflowEventTypes.WorkSessionAttached).DetailJson);
@@ -229,7 +254,13 @@ public sealed class DevWorkflowNodeRunTests
 
         var nodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion);
-        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = version, WorkSessionId = Guid.NewGuid() });
+        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = version,
+            WorkSessionId = Guid.NewGuid()
+        });
         var resumed = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
         {
             RunId = seed.RunId,
@@ -281,15 +312,15 @@ public sealed class DevWorkflowNodeRunTests
         });
 
         var alreadyDecided = await AssertEx.ThrowsAsync<DevWorkflowGateAlreadyDecidedException>(() => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
-        {
-            RunId = seed.RunId,
-            DecisionId = Guid.NewGuid(),
-            NodeRunId = nodeRunId,
-            ExpectedVersion = retryDecision.Version,
-            OperationId = Guid.NewGuid(),
-            Decision = DevWorkflowDecisionKind.Approve
-        }),
-                                               "A second decision on the SAME attempt must be rejected.");
+            {
+                RunId = seed.RunId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = retryDecision.Version,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Approve
+            }),
+            "A second decision on the SAME attempt must be rejected.");
         AssertEx.Equal(DevWorkflowDecisionKind.Retry,
             alreadyDecided.StandingDecision,
             "The refusal carries the decision that already stands, so the API can say what happened rather than only that the click failed.");
@@ -355,17 +386,17 @@ public sealed class DevWorkflowNodeRunTests
         });
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
-        {
-            RunId = seed.RunId,
-            DecisionId = Guid.NewGuid(),
-            NodeRunId = nodeRunId,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = Guid.NewGuid(),
-            Decision = DevWorkflowDecisionKind.Retry,
-            ExpectedAttempt = 1,
-            ExpectedStatus = DevWorkflowNodeRunStatus.Blocked
-        }),
-                                        "An answer about attempt 1 must not be written onto attempt 2.");
+            {
+                RunId = seed.RunId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Retry,
+                ExpectedAttempt = 1,
+                ExpectedStatus = DevWorkflowNodeRunStatus.Blocked
+            }),
+            "An answer about attempt 1 must not be written onto attempt 2.");
         AssertEx.True(refusal.Message.Contains("attempt 2", StringComparison.Ordinal), "the refusal says where the row actually stands.");
         AssertEx.Empty(await store.ListDecisionsAsync(seed.RunId), "and nothing is written, so the transaction rolled back whole.");
 
@@ -405,12 +436,21 @@ public sealed class DevWorkflowNodeRunTests
         _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, secondNodeRunId, "validate", version);
 
         RecordDevWorkflowDecisionCommand Retry(Guid nodeRunId, int budget) =>
-            new() { RunId = seed.RunId, DecisionId = Guid.NewGuid(), NodeRunId = nodeRunId, ExpectedVersion = DevWorkflowVersions.Any, OperationId = Guid.NewGuid(), Decision = DevWorkflowDecisionKind.Retry, MaxTotalAttempts = budget };
+            new()
+            {
+                RunId = seed.RunId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Retry,
+                MaxTotalAttempts = budget
+            };
 
         _ = await store.RecordDecisionAsync(Retry(firstNodeRunId, budget: 1));
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 1)),
-                                        "The first Retry has promised the run's only re-attempt, and no attempt has happened yet for a sum over Attempt to see.");
+            "The first Retry has promised the run's only re-attempt, and no attempt has happened yet for a sum over Attempt to see.");
         AssertEx.True(refusal.Message.Contains("as many re-attempts as this run allows", StringComparison.Ordinal),
             "The store's refusal has to read like the endpoint's, since either can reach an operator.");
         AssertEx.Equal(expected: 1, (await store.ListDecisionsAsync(seed.RunId)).Count, "Exactly one of the two Retries may be admitted.");
@@ -427,7 +467,7 @@ public sealed class DevWorkflowNodeRunTests
         });
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 1)),
-                              "The re-attempt has landed, so the budget of one is spent rather than merely promised.");
+            "The re-attempt has landed, so the budget of one is spent rather than merely promised.");
         _ = await store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 2));
         AssertEx.Equal(expected: 2, (await store.ListDecisionsAsync(seed.RunId)).Count, "A settled Retry must not go on reserving what it already spent.");
     }
@@ -457,7 +497,13 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.True(afterQueue.QueuedAtUtc is not null);
         AssertEx.Null(afterQueue.StartedAtUtc, "Queued is not running, and the row must not pretend otherwise.");
 
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = queued.Version, TargetStatus = DevWorkflowNodeRunStatus.Running });
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = queued.Version,
+            TargetStatus = DevWorkflowNodeRunStatus.Running
+        });
         var afterStart = await store.GetNodeRunAsync(nodeRunId);
         AssertEx.Null(afterStart.QueueReason, "A running node run is not waiting in any queue.");
         AssertEx.True(afterStart.StartedAtUtc is not null);
@@ -479,18 +525,40 @@ public sealed class DevWorkflowNodeRunTests
             RunId = seed.RunId,
             ExpectedVersion = seed.RunVersion,
             OperationId = Guid.NewGuid(),
-            NodeRuns = [
-                                         new DevWorkflowNodeRunSeed { NodeRunId = firstNodeRunId, NodeKey = "research", NodeType = DevWorkflowNodeType.Agent },
-                                         new DevWorkflowNodeRunSeed { NodeRunId = secondNodeRunId, NodeKey = "plan", NodeType = DevWorkflowNodeType.Agent }
-                                     ]
+            NodeRuns =
+            [
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = firstNodeRunId,
+                    NodeKey = "research",
+                    NodeType = DevWorkflowNodeType.Agent
+                },
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = secondNodeRunId,
+                    NodeKey = "plan",
+                    NodeType = DevWorkflowNodeType.Agent
+                }
+            ]
         });
 
         var sessionId = Guid.NewGuid();
-        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = firstNodeRunId, ExpectedVersion = version.Version, WorkSessionId = sessionId });
+        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = firstNodeRunId,
+            ExpectedVersion = version.Version,
+            WorkSessionId = sessionId
+        });
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(
-                              () => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = seed.RunId, NodeRunId = secondNodeRunId, ExpectedVersion = attached.Version, WorkSessionId = sessionId }),
-                              "One session, one owner.");
+        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+            {
+                RunId = seed.RunId,
+                NodeRunId = secondNodeRunId,
+                ExpectedVersion = attached.Version,
+                WorkSessionId = sessionId
+            }),
+            "One session, one owner.");
     }
 
     /// <summary>
@@ -517,16 +585,17 @@ public sealed class DevWorkflowNodeRunTests
             RunId = seed.RunId,
             ExpectedVersion = seed.RunVersion,
             OperationId = Guid.NewGuid(),
-            NodeRuns = [
-                               new DevWorkflowNodeRunSeed
-                               {
-                                   NodeRunId = nodeRunId,
-                                   NodeKey = "validate",
-                                   NodeType = DevWorkflowNodeType.Tool,
-                                   Status = DevWorkflowNodeRunStatus.Succeeded,
-                                   OutputJson = Output
-                               }
-                           ]
+            NodeRuns =
+            [
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = nodeRunId,
+                    NodeKey = "validate",
+                    NodeType = DevWorkflowNodeType.Tool,
+                    Status = DevWorkflowNodeRunStatus.Succeeded,
+                    OutputJson = Output
+                }
+            ]
         });
 
         var nodeRun = await store.GetNodeRunAsync(nodeRunId);
@@ -549,13 +618,22 @@ public sealed class DevWorkflowNodeRunTests
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
-        {
-            RunId = seed.RunId,
-            ExpectedVersion = seed.RunVersion,
-            OperationId = Guid.NewGuid(),
-            NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = "validate", NodeType = DevWorkflowNodeType.Tool, OutputJson = "{}" }]
-        }),
-                              "A pending row that already says what it produced is a caller saying two things at once.");
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = seed.RunVersion,
+                OperationId = Guid.NewGuid(),
+                NodeRuns =
+                [
+                    new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = "validate",
+                        NodeType = DevWorkflowNodeType.Tool,
+                        OutputJson = "{}"
+                    }
+                ]
+            }),
+            "A pending row that already says what it produced is a caller saying two things at once.");
     }
 
     /// <summary>
@@ -572,13 +650,22 @@ public sealed class DevWorkflowNodeRunTests
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
-        {
-            RunId = seed.RunId,
-            ExpectedVersion = seed.RunVersion,
-            OperationId = Guid.NewGuid(),
-            NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = "validate", NodeType = DevWorkflowNodeType.Tool, Status = DevWorkflowNodeRunStatus.Running }]
-        }),
-                              "A row created Running is a row no lane ever took.");
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = seed.RunVersion,
+                OperationId = Guid.NewGuid(),
+                NodeRuns =
+                [
+                    new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = "validate",
+                        NodeType = DevWorkflowNodeType.Tool,
+                        Status = DevWorkflowNodeRunStatus.Running
+                    }
+                ]
+            }),
+            "A row created Running is a row no lane ever took.");
     }
 
     /// <summary>Materializing the same node key twice is a transition error, not a raw constraint violation.</summary>
@@ -593,13 +680,21 @@ public sealed class DevWorkflowNodeRunTests
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, Guid.NewGuid(), "research", seed.RunVersion);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
-        {
-            RunId = seed.RunId,
-            ExpectedVersion = version,
-            OperationId = Guid.NewGuid(),
-            NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = "research", NodeType = DevWorkflowNodeType.Agent }]
-        }),
-                              "The node key is the node run's identity within a run.");
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = version,
+                OperationId = Guid.NewGuid(),
+                NodeRuns =
+                [
+                    new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = "research",
+                        NodeType = DevWorkflowNodeType.Agent
+                    }
+                ]
+            }),
+            "The node key is the node run's identity within a run.");
     }
 
     /// <summary>
@@ -620,7 +715,16 @@ public sealed class DevWorkflowNodeRunTests
             RunId = seed.RunId,
             ExpectedVersion = seed.RunVersion,
             OperationId = Guid.NewGuid(),
-            NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = "implement#1", NodeType = DevWorkflowNodeType.DevTask, MaterializationIndex = 0 }],
+            NodeRuns =
+            [
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = Guid.NewGuid(),
+                    NodeKey = "implement#1",
+                    NodeType = DevWorkflowNodeType.DevTask,
+                    MaterializationIndex = 0
+                }
+            ],
             GraphJson = Expanded
         });
 
@@ -664,12 +768,12 @@ public sealed class DevWorkflowNodeRunTests
 
         var nodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store,
-                                                      seed.RunId,
-                                                      nodeRunId,
-                                                      "implement",
-                                                      seed.RunVersion,
-                                                      DevWorkflowNodeType.DevTask,
-                                                      developmentProjectId: firstTask.ProjectId);
+            seed.RunId,
+            nodeRunId,
+            "implement",
+            seed.RunVersion,
+            DevWorkflowNodeType.DevTask,
+            developmentProjectId: firstTask.ProjectId);
 
         var workItem = await store.GetWorkItemAsync(seed.WorkItemId);
         AssertEx.Equal(firstTask.ProjectId, workItem.DevelopmentProjectId, "O12: the Dev Mode project is the work item's, and the node run inherits it.");
@@ -754,12 +858,12 @@ public sealed class DevWorkflowNodeRunTests
         var first = await DevWorkflowTestFixture.SeedRunAsync(earlier, developmentProjectId: task.ProjectId);
         var firstNodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(earlier,
-                                                      first.RunId,
-                                                      firstNodeRunId,
-                                                      "implement",
-                                                      first.RunVersion,
-                                                      DevWorkflowNodeType.DevTask,
-                                                      developmentProjectId: task.ProjectId);
+            first.RunId,
+            firstNodeRunId,
+            "implement",
+            first.RunVersion,
+            DevWorkflowNodeType.DevTask,
+            developmentProjectId: task.ProjectId);
         _ = await earlier.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {
             RunId = first.RunId,
@@ -783,12 +887,12 @@ public sealed class DevWorkflowNodeRunTests
         var second = await DevWorkflowTestFixture.SeedRunAsync(later, developmentProjectId: task.ProjectId);
         var secondNodeRunId = Guid.NewGuid();
         var secondVersion = await DevWorkflowTestFixture.AddNodeRunAsync(later,
-                                                            second.RunId,
-                                                            secondNodeRunId,
-                                                            "implement",
-                                                            second.RunVersion,
-                                                            DevWorkflowNodeType.DevTask,
-                                                            developmentProjectId: task.ProjectId);
+            second.RunId,
+            secondNodeRunId,
+            "implement",
+            second.RunVersion,
+            DevWorkflowNodeType.DevTask,
+            developmentProjectId: task.ProjectId);
         _ = await later.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {
             RunId = second.RunId,

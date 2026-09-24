@@ -28,17 +28,17 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         files.Add(new StagedFile
         {
             Info = new ConversationUploadedFileInfo
-        {
-            FileId = fileId,
-            ConversationId = conversationId,
-            OriginalFileName = originalFileName,
-            MimeType = "text/markdown",
-            Extension = ".md",
-            SizeBytes = extractedMarkdown.Length,
-            ExtractionStatus = DocumentExtractionStatus.Extracted,
-            ExtractedChars = extractedMarkdown.Length,
-            CreatedAtUtc = 0
-        },
+            {
+                FileId = fileId,
+                ConversationId = conversationId,
+                OriginalFileName = originalFileName,
+                MimeType = "text/markdown",
+                Extension = ".md",
+                SizeBytes = extractedMarkdown.Length,
+                ExtractionStatus = DocumentExtractionStatus.Extracted,
+                ExtractedChars = extractedMarkdown.Length,
+                CreatedAtUtc = 0
+            },
             Markdown = extractedMarkdown
         });
     }

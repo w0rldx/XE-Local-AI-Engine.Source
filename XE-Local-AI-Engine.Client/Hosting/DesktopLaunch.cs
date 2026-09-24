@@ -65,7 +65,7 @@ internal static class DesktopLaunch
 
     internal static bool HasExplicitLocalModeArgument(string[] args) =>
         HasArgument(args, McpOnlyArgument) || HasArgument(args, DesktopArgument)
-        || HasArgument(args, BrowserArgument) || HasArgument(args, HeadlessArgument);
+                                           || HasArgument(args, BrowserArgument) || HasArgument(args, HeadlessArgument);
 
     internal static bool HasNoBrowserFlag(string[] args) =>
         HasArgument(args, NoBrowserArgument) || HasArgument(args, HeadlessArgument);
@@ -105,7 +105,10 @@ internal static class DesktopLaunch
             }
         }
 
-        var sanitized = new List<string>(capacity: 4) { modeArgument };
+        var sanitized = new List<string>(capacity: 4)
+        {
+            modeArgument
+        };
         if (!shellOwned && HasArgument(args, NoBrowserArgument))
         {
             sanitized.Add(NoBrowserArgument);
@@ -212,7 +215,12 @@ internal static class DesktopLaunch
             return true;
         }
 
-        command = new SetupCommand { Email = email.Trim(), Password = password, PasswordFromEnvironment = passwordFromEnvironment };
+        command = new SetupCommand
+        {
+            Email = email.Trim(),
+            Password = password,
+            PasswordFromEnvironment = passwordFromEnvironment
+        };
         error = null;
         return true;
     }

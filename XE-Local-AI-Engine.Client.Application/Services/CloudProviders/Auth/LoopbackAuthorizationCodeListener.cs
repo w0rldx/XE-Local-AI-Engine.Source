@@ -45,16 +45,36 @@ internal sealed class LoopbackCallbackResult
 
     public static LoopbackCallbackResult Success(string code)
     {
-        return new LoopbackCallbackResult { Outcome = LoopbackCallbackOutcome.Success, AuthorizationCode = code };
+        return new LoopbackCallbackResult
+        {
+            Outcome = LoopbackCallbackOutcome.Success,
+            AuthorizationCode = code
+        };
     }
 
-    public static readonly LoopbackCallbackResult StateMismatch = new() { Outcome = LoopbackCallbackOutcome.StateMismatch };
-    public static readonly LoopbackCallbackResult MissingCode = new() { Outcome = LoopbackCallbackOutcome.MissingCode };
-    public static readonly LoopbackCallbackResult TimedOut = new() { Outcome = LoopbackCallbackOutcome.TimedOut };
+    public static readonly LoopbackCallbackResult StateMismatch = new()
+    {
+        Outcome = LoopbackCallbackOutcome.StateMismatch
+    };
+
+    public static readonly LoopbackCallbackResult MissingCode = new()
+    {
+        Outcome = LoopbackCallbackOutcome.MissingCode
+    };
+
+    public static readonly LoopbackCallbackResult TimedOut = new()
+    {
+        Outcome = LoopbackCallbackOutcome.TimedOut
+    };
 
     public static LoopbackCallbackResult AadError(string? error, string? errorDescription)
     {
-        return new LoopbackCallbackResult { Outcome = LoopbackCallbackOutcome.AadError, SanitizedError = error, SanitizedErrorDescription = errorDescription };
+        return new LoopbackCallbackResult
+        {
+            Outcome = LoopbackCallbackOutcome.AadError,
+            SanitizedError = error,
+            SanitizedErrorDescription = errorDescription
+        };
     }
 }
 

@@ -135,7 +135,8 @@ public sealed class NodeChatInvalidBranchSelectionException : InvalidOperationEx
 {
     public const string Code = "invalid-branch-selection";
 
-    public NodeChatInvalidBranchSelectionException(Guid conversationId, Guid variantGroupId, Guid messageId) : base($"Branch selection for conversation {conversationId} referenced message {messageId} which is not a valid member of variant group {variantGroupId}.")
+    public NodeChatInvalidBranchSelectionException(Guid conversationId, Guid variantGroupId, Guid messageId) : base(
+        $"Branch selection for conversation {conversationId} referenced message {messageId} which is not a valid member of variant group {variantGroupId}.")
     {
         ConversationId = conversationId;
         VariantGroupId = variantGroupId;

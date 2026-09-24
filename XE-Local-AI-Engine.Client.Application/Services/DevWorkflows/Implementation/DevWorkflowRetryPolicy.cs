@@ -159,12 +159,12 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // The run's pinned graph no longer declares it, so there is no attempt cap and no retry target to read.
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.Configuration,
-                    $"The run's graph no longer declares node '{nodeRun.NodeKey}', so this failure cannot be retried.",
-                    failure.OutputJson,
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.Configuration,
+                $"The run's graph no longer declares node '{nodeRun.NodeKey}', so this failure cannot be retried.",
+                failure.OutputJson,
+                cancellationToken);
         }
 
         if (!IsRetryable(node, failure.FailureClass, nodeRun.Attempt))
@@ -205,12 +205,12 @@ internal sealed class DevWorkflowRetryPolicy
         if (nodeRun.Attempt >= nodeRun.MaxAttempts)
         {
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    failure.FailureClass,
-                    $"{failure.SanitizedReason} It has now failed {nodeRun.Attempt} times, which is as many attempts as this node allows.",
-                    failure.OutputJson,
-                    cancellationToken);
+                run,
+                nodeRun,
+                failure.FailureClass,
+                $"{failure.SanitizedReason} It has now failed {nodeRun.Attempt} times, which is as many attempts as this node allows.",
+                failure.OutputJson,
+                cancellationToken);
         }
 
         if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + 1 > _options.MaxTotalAttempts)
@@ -223,13 +223,13 @@ internal sealed class DevWorkflowRetryPolicy
         try
         {
             return await ReAttemptAsync(store,
-                    run,
-                    nodeRun,
-                    node.RetryDelaySeconds,
-                    DetailFor(nodeRun, failure),
-                    failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                    cancellationToken,
-                    PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson));
+                run,
+                nodeRun,
+                node.RetryDelaySeconds,
+                DetailFor(nodeRun, failure),
+                failure.Outcome ?? DevWorkflowOutcomes.Failed,
+                cancellationToken,
+                PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson));
         }
         catch (DevWorkflowRetryBudgetExceededException refused)
         {
@@ -270,12 +270,12 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // Declared and validated as an ancestor at parse, so the row exists in every run this build materializes. Reaching here means graph and rows disagree — nothing to guess at.
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.Configuration,
-                    $"This node routes its failures to '{retryTarget}', which this run has no node run for.",
-                    failure.OutputJson,
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.Configuration,
+                $"This node routes its failures to '{retryTarget}', which this run has no node run for.",
+                failure.OutputJson,
+                cancellationToken);
         }
 
         var reset = graph.Descendants(retryTarget)
@@ -291,12 +291,12 @@ internal sealed class DevWorkflowRetryPolicy
         if (target.Attempt >= target.MaxAttempts)
         {
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.BudgetExhausted,
-                    $"{failure.SanitizedReason} Node '{retryTarget}' has already been attempted {target.Attempt} times, which is as many as it allows.",
-                    failure.OutputJson,
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.BudgetExhausted,
+                $"{failure.SanitizedReason} Node '{retryTarget}' has already been attempted {target.Attempt} times, which is as many as it allows.",
+                failure.OutputJson,
+                cancellationToken);
         }
 
         // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said; absent means no cap (ruling D9), a parse-time default silently tightening every stored definition.
@@ -308,13 +308,13 @@ internal sealed class DevWorkflowRetryPolicy
             if (loops >= maxLoopIterations)
             {
                 return await BlockAsync(store,
-                        run,
-                        nodeRun,
-                        DevWorkflowFailureClasses.BudgetExhausted,
-                        $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
-                        + "(invariant GRAPH-C4-4).",
-                        failure.OutputJson,
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    DevWorkflowFailureClasses.BudgetExhausted,
+                    $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
+                    + "(invariant GRAPH-C4-4).",
+                    failure.OutputJson,
+                    cancellationToken);
             }
         }
 
@@ -352,7 +352,13 @@ internal sealed class DevWorkflowRetryPolicy
         var (targetCommand, targetDelay) = ReAttempt(run,
             target,
             node.RetryDelaySeconds,
-            new RetryDetail { Attempt = target.Attempt, FailureClass = failure.FailureClass, Reason = $"Re-attempted because '{nodeRun.NodeKey}' failed.", DelayUntil = null },
+            new RetryDetail
+            {
+                Attempt = target.Attempt,
+                FailureClass = failure.FailureClass,
+                Reason = $"Re-attempted because '{nodeRun.NodeKey}' failed.",
+                DelayUntil = null
+            },
             outcome: null,
             PriorFailure(target.InputJson, nodeRun.NodeKey, nodeRun.Attempt, failure.OutputJson));
         moves.Add((targetCommand, target.Id, targetDelay));
@@ -376,15 +382,21 @@ internal sealed class DevWorkflowRetryPolicy
         var route = new RouteDevWorkflowRetryCommand
         {
             Route = new AppendDevWorkflowEventCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            EventType = DevWorkflowEventTypes.NodeRetryRouted,
-            NodeRunId = nodeRun.Id,
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
-            Outcome = failure.Outcome ?? DevWorkflowOutcomes.Failed,
-            DetailJson = JsonSerializer.Serialize(new RoutedDetail { From = nodeRun.NodeKey, To = retryTarget, FailureClass = failure.FailureClass, Reason = failure.SanitizedReason }, JsonOptions)
-        },
+            {
+                RunId = run.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                NodeRunId = nodeRun.Id,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
+                Outcome = failure.Outcome ?? DevWorkflowOutcomes.Failed,
+                DetailJson = JsonSerializer.Serialize(new RoutedDetail
+                {
+                    From = nodeRun.NodeKey,
+                    To = retryTarget,
+                    FailureClass = failure.FailureClass,
+                    Reason = failure.SanitizedReason
+                }, JsonOptions)
+            },
             Resets = [.. moves.Select(static move => move.Command)],
             MaxTotalAttempts = _options.MaxTotalAttempts
         };
@@ -568,7 +580,11 @@ internal sealed class DevWorkflowRetryPolicy
     {
         if (delayUntil is { } notBefore)
         {
-            _notBefore[nodeRunId] = new ScheduledRetry { RunId = runId, NotBefore = notBefore };
+            _notBefore[nodeRunId] = new ScheduledRetry
+            {
+                RunId = runId,
+                NotBefore = notBefore
+            };
         }
         else
         {
@@ -587,18 +603,18 @@ internal sealed class DevWorkflowRetryPolicy
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
-            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
-            OutputJson = outputJson,
-            FailureClass = failureClass,
-            TerminalReason = sanitizedReason,
-            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+                PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+                OutputJson = outputJson,
+                FailureClass = failureClass,
+                TerminalReason = sanitizedReason,
+                WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -612,18 +628,18 @@ internal sealed class DevWorkflowRetryPolicy
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Failed,
-            OutputJson = failure.OutputJson,
-            FailureClass = failure.FailureClass,
-            TerminalReason = failure.SanitizedReason,
-            Outcome = failure.Outcome,
-            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, DevWorkflowNodeRunStatus.Failed)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Failed,
+                OutputJson = failure.OutputJson,
+                FailureClass = failure.FailureClass,
+                TerminalReason = failure.SanitizedReason,
+                Outcome = failure.Outcome,
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, DevWorkflowNodeRunStatus.Failed)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -704,7 +720,13 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     private static RetryDetail DetailFor(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowFailure failure) =>
-        new() { Attempt = nodeRun.Attempt, FailureClass = failure.FailureClass, Reason = failure.SanitizedReason, DelayUntil = null };
+        new()
+        {
+            Attempt = nodeRun.Attempt,
+            FailureClass = failure.FailureClass,
+            Reason = failure.SanitizedReason,
+            DelayUntil = null
+        };
 
     private static string BudgetExhausted(DevWorkflowFailure failure) =>
         $"{failure.SanitizedReason} This run has spent every re-attempt it allows, so nothing here can try again without a decision.";

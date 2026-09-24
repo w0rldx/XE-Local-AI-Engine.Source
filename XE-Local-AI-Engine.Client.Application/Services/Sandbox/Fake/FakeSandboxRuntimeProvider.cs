@@ -146,8 +146,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         }
 
         await using var registration = cancellationToken
-                                       .Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
-                                           inFlight);
+            .Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
+                inFlight);
 
         bool completedNormally;
         try
@@ -414,7 +414,13 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand { Blocks = false, ExitCode = exitCode, StandardOutput = standardOutput, StandardError = standardError };
+            _scripts[commandLine] = new ScriptedCommand
+            {
+                Blocks = false,
+                ExitCode = exitCode,
+                StandardOutput = standardOutput,
+                StandardError = standardError
+            };
         }
     }
 
@@ -425,7 +431,13 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand { Blocks = true, ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
+            _scripts[commandLine] = new ScriptedCommand
+            {
+                Blocks = true,
+                ExitCode = 0,
+                StandardOutput = string.Empty,
+                StandardError = string.Empty
+            };
         }
     }
 
@@ -458,13 +470,23 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         if (request.TrustedHostWorkspace is not null)
         {
             var workspace = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace.RootPath));
-            bindings.Add(new SandboxMountBinding { HostPath = workspace, SandboxPath = workspace, ReadOnly = false });
+            bindings.Add(new SandboxMountBinding
+            {
+                HostPath = workspace,
+                SandboxPath = workspace,
+                ReadOnly = false
+            });
         }
 
         foreach (var mount in request.Mounts ?? [])
         {
             var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
-            bindings.Add(new SandboxMountBinding { HostPath = canonical, SandboxPath = canonical, ReadOnly = mount.ReadOnly });
+            bindings.Add(new SandboxMountBinding
+            {
+                HostPath = canonical,
+                SandboxPath = canonical,
+                ReadOnly = mount.ReadOnly
+            });
         }
 
         return bindings;
@@ -538,7 +560,13 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         var key = BuildCommandKey(request);
         return _scripts.TryGetValue(key, out var scripted)
             ? scripted
-            : new ScriptedCommand { Blocks = false, ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
+            : new ScriptedCommand
+            {
+                Blocks = false,
+                ExitCode = 0,
+                StandardOutput = string.Empty,
+                StandardError = string.Empty
+            };
     }
 
     private static string BuildCommandKey(SandboxCommandRequest request)

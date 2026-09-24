@@ -149,7 +149,12 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         var info = _supervisor.GetRuntimeInfo(modelName, ModelRole.Chat);
-        return Task.FromResult(info is null ? null : new LocalModelRuntimeInfo { EffectiveContextTokens = info.EffectiveContextTokens });
+        return Task.FromResult(info is null
+            ? null
+            : new LocalModelRuntimeInfo
+            {
+                EffectiveContextTokens = info.EffectiveContextTokens
+            });
     }
 
     /// <inheritdoc />

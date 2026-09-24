@@ -66,7 +66,12 @@ public sealed class FtsSearch : IFtsSearch
         var hits = new List<FtsSearchHit>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            hits.Add(new FtsSearchHit { ChunkId = Guid.Parse(reader.GetString(0)), DocumentId = Guid.Parse(reader.GetString(1)), Bm25Score = reader.GetDouble(2) });
+            hits.Add(new FtsSearchHit
+            {
+                ChunkId = Guid.Parse(reader.GetString(0)),
+                DocumentId = Guid.Parse(reader.GetString(1)),
+                Bm25Score = reader.GetDouble(2)
+            });
         }
 
         return hits;

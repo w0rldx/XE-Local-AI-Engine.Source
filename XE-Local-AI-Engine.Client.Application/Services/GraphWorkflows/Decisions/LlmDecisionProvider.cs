@@ -30,7 +30,14 @@ internal sealed class LlmDecisionProvider : IGraphWorkflowDecisionProvider
         var schema = new JsonObject
         {
             ["type"] = "object",
-            ["properties"] = new JsonObject { ["choice"] = new JsonObject { ["type"] = "string", ["enum"] = labels } },
+            ["properties"] = new JsonObject
+            {
+                ["choice"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["enum"] = labels
+                }
+            },
             ["required"] = new JsonArray("choice")
         };
 
@@ -44,7 +51,10 @@ internal sealed class LlmDecisionProvider : IGraphWorkflowDecisionProvider
             ResponseJsonSchema = JsonSerializer.SerializeToElement(schema),
 
             // Temperature 0: the same input routes the same way on a re-run, which is what an operator debugging a branch needs.
-            SamplingOptions = new SamplingOptions { Temperature = 0 }
+            SamplingOptions = new SamplingOptions
+            {
+                Temperature = 0
+            }
         };
     }
 

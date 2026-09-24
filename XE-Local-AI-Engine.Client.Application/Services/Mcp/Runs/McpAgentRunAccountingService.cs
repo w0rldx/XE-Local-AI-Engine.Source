@@ -11,8 +11,7 @@ internal sealed class McpAgentRunAccountingService
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<McpAgentRunAccountingService> _logger;
 
-    public McpAgentRunAccountingService(
-        IMcpAgentRunStore store,
+    public McpAgentRunAccountingService(IMcpAgentRunStore store,
         McpAgentRunMetrics metrics,
         TimeProvider timeProvider,
         ILogger<McpAgentRunAccountingService> logger)

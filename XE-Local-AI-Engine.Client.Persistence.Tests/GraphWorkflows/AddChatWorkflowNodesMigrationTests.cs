@@ -46,7 +46,16 @@ public sealed class AddChatWorkflowNodesMigrationTests
 
         var columns = await probe.ColumnsAsync("graph_workflow_definitions");
         AssertEx.False(columns.Contains("kind"), "Down must drop the column Up added.");
-        foreach (var column in new[] { "id", "name", "graph_json", "graph_hash", "node_count", "schema_version", "version" })
+        foreach (var column in new[]
+                 {
+                     "id",
+                     "name",
+                     "graph_json",
+                     "graph_hash",
+                     "node_count",
+                     "schema_version",
+                     "version"
+                 })
         {
             AssertEx.True(columns.Contains(column), $"Down rebuilds the table from its previous model and must keep '{column}'.");
         }

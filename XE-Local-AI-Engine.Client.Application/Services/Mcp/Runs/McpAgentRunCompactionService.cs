@@ -13,8 +13,7 @@ internal sealed class McpAgentRunCompactionService : BackgroundService
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<McpAgentRunCompactionService> _logger;
 
-    public McpAgentRunCompactionService(
-        IServiceScopeFactory scopeFactory,
+    public McpAgentRunCompactionService(IServiceScopeFactory scopeFactory,
         McpAgentRunMetrics metrics,
         IOptions<McpAgentRunOptions> options,
         TimeProvider timeProvider,

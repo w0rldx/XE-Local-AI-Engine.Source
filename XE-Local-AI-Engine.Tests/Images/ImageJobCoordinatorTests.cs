@@ -378,14 +378,42 @@ public sealed class ImageJobCoordinatorTests
     public async Task ImageJobHub_WhenLateSubscriber_ReplaysBufferedEventsInSeqOrder()
     {
         var jobId = Guid.NewGuid();
-        var event0 = new ImageJobStatusHubEvent { JobId = jobId, Phase = ImageJobStatus.Queued.ToString(), QueuePosition = null, ElapsedMs = null, ImageId = null, SanitizedError = null, OccurredAtUtc = 1, Seq = 0 };
-        var event1 = new ImageJobStatusHubEvent { JobId = jobId, Phase = ImageJobStatus.Generating.ToString(), QueuePosition = null, ElapsedMs = 0, ImageId = null, SanitizedError = null, OccurredAtUtc = 2, Seq = 1 };
+        var event0 = new ImageJobStatusHubEvent
+        {
+            JobId = jobId,
+            Phase = ImageJobStatus.Queued.ToString(),
+            QueuePosition = null,
+            ElapsedMs = null,
+            ImageId = null,
+            SanitizedError = null,
+            OccurredAtUtc = 1,
+            Seq = 0
+        };
+        var event1 = new ImageJobStatusHubEvent
+        {
+            JobId = jobId,
+            Phase = ImageJobStatus.Generating.ToString(),
+            QueuePosition = null,
+            ElapsedMs = 0,
+            ImageId = null,
+            SanitizedError = null,
+            OccurredAtUtc = 2,
+            Seq = 1
+        };
 
         var coordinator = Substitute.For<IImageJobCoordinator>();
         coordinator.SnapshotBufferedEvents(jobId).Returns(new[]
         {
-            new ImageJobBufferedEvent { MethodName = ImageJobHubEvents.StatusChanged, Payload = event0 },
-            new ImageJobBufferedEvent { MethodName = ImageJobHubEvents.StatusChanged, Payload = event1 }
+            new ImageJobBufferedEvent
+            {
+                MethodName = ImageJobHubEvents.StatusChanged,
+                Payload = event0
+            },
+            new ImageJobBufferedEvent
+            {
+                MethodName = ImageJobHubEvents.StatusChanged,
+                Payload = event1
+            }
         });
 
         var groups = Substitute.For<IGroupManager>();
@@ -478,7 +506,14 @@ public sealed class ImageJobCoordinatorTests
                 gpuWorkGate ?? new GpuWorkGate());
 #pragma warning restore CA2000
 
-            return new Harness { Coordinator = coordinator, Runtime = runtime, Store = store, Images = images, ActivityGate = activityGate };
+            return new Harness
+            {
+                Coordinator = coordinator,
+                Runtime = runtime,
+                Store = store,
+                Images = images,
+                ActivityGate = activityGate
+            };
         }
     }
 
@@ -803,7 +838,16 @@ public sealed class ImageJobCoordinatorTests
         public Task<GeneratedImageInfo> AddAsync(Guid jobId, Guid imageId, ReadOnlyMemory<byte> pngBytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken)
         {
             Added[imageId] = jobId;
-            return Task.FromResult(new GeneratedImageInfo { ImageId = imageId, JobId = jobId, MimeType = metadata.MimeType, Width = metadata.Width, Height = metadata.Height, SizeBytes = pngBytes.Length, CreatedAtUtc = 0 });
+            return Task.FromResult(new GeneratedImageInfo
+            {
+                ImageId = imageId,
+                JobId = jobId,
+                MimeType = metadata.MimeType,
+                Width = metadata.Width,
+                Height = metadata.Height,
+                SizeBytes = pngBytes.Length,
+                CreatedAtUtc = 0
+            });
         }
 
         public Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)

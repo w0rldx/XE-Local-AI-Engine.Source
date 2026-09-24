@@ -43,8 +43,20 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(window => window.DurationMs == 2_000
             ?
             [
-                new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.9, Text = "alpha", Confidence = 0.8 },
-                new WhisperTranscriptSegment { StartSeconds = 0.9, EndSeconds = 1.7, Text = "beta", Confidence = 0.7 }
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = 0.9,
+                    Text = "alpha",
+                    Confidence = 0.8
+                },
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.9,
+                    EndSeconds = 1.7,
+                    Text = "beta",
+                    Confidence = 0.7
+                }
             ]
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
@@ -78,8 +90,20 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(window => window.DurationMs == 2_000
             ?
             [
-                new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 1.0, Text = "and so my fellow", Confidence = 0.9 },
-                new WhisperTranscriptSegment { StartSeconds = 0.5, EndSeconds = 1.5, Text = "my fellow americans", Confidence = 0.9 }
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = 1.0,
+                    Text = "and so my fellow",
+                    Confidence = 0.9
+                },
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.5,
+                    EndSeconds = 1.5,
+                    Text = "my fellow americans",
+                    Confidence = 0.9
+                }
             ]
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
@@ -204,8 +228,26 @@ public sealed class LiveTranscriptionSegmenterTests
     public async Task ASubSecondSuffixAfterACommit_IsSubmittedOnFlush()
     {
         var transcriber = new ScriptedWhisperTranscriber(window => window.DurationMs == 1_000
-            ? [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.9, Text = "first", Confidence = 0.9 }]
-            : [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = window.DurationMs / 1000.0, Text = "second", Confidence = 0.9 }]);
+            ?
+            [
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = 0.9,
+                    Text = "first",
+                    Confidence = 0.9
+                }
+            ]
+            :
+            [
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = window.DurationMs / 1000.0,
+                    Text = "second",
+                    Confidence = 0.9
+                }
+            ]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5, tailGuardMs: 100));
 
         _ = await PushAsync(segmenter, 0, 1_000, 500);
@@ -319,8 +361,7 @@ public sealed class LiveTranscriptionSegmenterTests
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
-        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
-            async () => await segmenter.PushAsync(LivePcm.Range(0, 500), cancellation.Token),
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 500), cancellation.Token),
             "Even a frame shorter than the inference tick must observe cancellation before accepting audio.");
 
         AssertEx.Equal(0L, segmenter.AudioEndMs);
@@ -351,8 +392,7 @@ public sealed class LiveTranscriptionSegmenterTests
         // The registry drains previously admitted frames serially with the same cancelled lane token.
         for (var frame = 0; frame < 4; frame++)
         {
-            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
-                async () => await segmenter.PushAsync(LivePcm.Range(1_000, 1_500), cancellation.Token),
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await segmenter.PushAsync(LivePcm.Range(1_000, 1_500), cancellation.Token),
                 "Cancelled queued frames must not increment the unchanged-boundary stall counter.");
             AssertEx.Equal(1_000L, segmenter.AudioEndMs, "No queued audio is accepted after cancellation.");
             AssertEx.Equal(0L, segmenter.CommittedEndMs, "The cancelled submission committed no audio.");
@@ -367,7 +407,16 @@ public sealed class LiveTranscriptionSegmenterTests
     {
         // A transcriber that answers every window with a zero-length segment at the very start of it: each response
         // commits something, so nothing looks broken, and yet neither the watermark nor the buffer ever moves.
-        var transcriber = new ScriptedWhisperTranscriber(_ => [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.0, Text = "x", Confidence = 0.5 }]);
+        var transcriber = new ScriptedWhisperTranscriber(_ =>
+        [
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0.0,
+                EndSeconds = 0.0,
+                Text = "x",
+                Confidence = 0.5
+            }
+        ]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
         _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None),
@@ -410,7 +459,16 @@ public sealed class LiveTranscriptionSegmenterTests
         // The model reports an end time 20 ms past the audio it was given, which VAD padding does routinely. The cap
         // frees that audio whatever happens next, so a segment rejected here is a segment lost outright.
         var transcriber = new ScriptedWhisperTranscriber(window => window.DurationMs == 2_000
-            ? [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = (window.DurationMs + 20) / 1000.0, Text = "and so my fellow americans", Confidence = 0.9 }]
+            ?
+            [
+                new WhisperTranscriptSegment
+                {
+                    StartSeconds = 0.0,
+                    EndSeconds = (window.DurationMs + 20) / 1000.0,
+                    Text = "and so my fellow americans",
+                    Confidence = 0.9
+                }
+            ]
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
@@ -426,7 +484,15 @@ public sealed class LiveTranscriptionSegmenterTests
     public async Task Flush_ASegmentOverrunningTheWindowEndIsCommittedNotDropped()
     {
         var transcriber = new ScriptedWhisperTranscriber(window =>
-            [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = (window.DurationMs + 20) / 1000.0, Text = "ask what you can do", Confidence = 0.9 }]);
+        [
+            new WhisperTranscriptSegment
+            {
+                StartSeconds = 0.0,
+                EndSeconds = (window.DurationMs + 20) / 1000.0,
+                Text = "ask what you can do",
+                Confidence = 0.9
+            }
+        ]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
         _ = await PushAsync(segmenter, 0, 750, 250);
@@ -503,7 +569,15 @@ public sealed class LiveTranscriptionSegmenterTests
 
     /// <summary>One segment covering the whole submitted window, which is what a speaker talking without pause gives.</summary>
     private static IReadOnlyList<WhisperTranscriptSegment> ContinuousSpeech(SubmittedWindow window) =>
-        [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = window.DurationMs / 1000.0, Text = $"w{window.StartMs}-{window.EndMs}", Confidence = 0.9 }];
+    [
+        new WhisperTranscriptSegment
+        {
+            StartSeconds = 0.0,
+            EndSeconds = window.DurationMs / 1000.0,
+            Text = $"w{window.StartMs}-{window.EndMs}",
+            Confidence = 0.9
+        }
+    ];
 
     private static async Task<List<LiveTick>> PushAsync(LiveTranscriptionSegmenter segmenter, long fromMs, long toMs, int frameMs)
     {

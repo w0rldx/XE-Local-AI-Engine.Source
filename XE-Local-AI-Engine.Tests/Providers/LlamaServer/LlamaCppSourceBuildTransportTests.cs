@@ -94,7 +94,11 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-               .Returns(new LlamaCppSourceBuildStartResult { Outcome = outcome, RunningProcessCount = runningProcessCount });
+               .Returns(new LlamaCppSourceBuildStartResult
+               {
+                   Outcome = outcome,
+                   RunningProcessCount = runningProcessCount
+               });
         var prerequisiteProbe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         await using var factory = new TestServerWebAppFactory
@@ -192,7 +196,10 @@ public sealed class LlamaCppSourceBuildTransportTests
                {
                    // Mirrors what the production service does with whatever the endpoint handed it.
                    _ = LlamaCppSourceBuildRequestValidation.Normalize(call.Arg<LlamaCppSourceBuildRequest>());
-                   return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.Started };
+                   return new LlamaCppSourceBuildStartResult
+                   {
+                       Outcome = LlamaCppSourceBuildStartOutcome.Started
+                   };
                });
         service.GetStatus().Returns(new LlamaCppSourceBuildStatus
         {
@@ -400,7 +407,15 @@ public sealed class LlamaCppSourceBuildTransportTests
             ResolvedCommit = new string('a', 40),
             BuildId = buildId
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent { Phase = "Building", AppendedLogLines = [], AppendedLogStartSequence = 41, Terminal = false, SanitizedError = null, CurrentBuild = custom });
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent
+        {
+            Phase = "Building",
+            AppendedLogLines = [],
+            AppendedLogStartSequence = 41,
+            Terminal = false,
+            SanitizedError = null,
+            CurrentBuild = custom
+        });
 
         await genericProxy.Received(1).SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
         var payloadJson = JsonSerializer.Serialize(genericPayload, genericPayload!.GetType(), WebJsonOptions);
@@ -421,7 +436,15 @@ public sealed class LlamaCppSourceBuildTransportTests
             RequestedCommit = null,
             ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent { Phase = "Building", AppendedLogLines = ["line"], AppendedLogStartSequence = 42, Terminal = false, SanitizedError = null, CurrentBuild = legacy });
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent
+        {
+            Phase = "Building",
+            AppendedLogLines = ["line"],
+            AppendedLogStartSequence = 42,
+            Terminal = false,
+            SanitizedError = null,
+            CurrentBuild = legacy
+        });
 
         // A pinned-official CUDA build is not special-cased: it reaches the same hub under the same event name.
         await genericProxy.Received(2).SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
@@ -441,8 +464,8 @@ public sealed class LlamaCppSourceBuildTransportTests
         var probe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
-                                     SourceBuildPrerequisitesRoute + "?backend=99",
-                                     services => ReplaceSingleton(services, probe));
+            SourceBuildPrerequisitesRoute + "?backend=99",
+            services => ReplaceSingleton(services, probe));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         using var problem = JsonDocument.Parse(body);
@@ -458,15 +481,26 @@ public sealed class LlamaCppSourceBuildTransportTests
              .Returns(new LlamaCppSourceBuildPrerequisiteReport
              {
                  CanBuild = true,
-                 Items = [
-                 new LlamaCppSourceBuildPrerequisiteItem { Key = "cmake", Satisfied = true, Detail = "4.0.1" },
-                 new LlamaCppSourceBuildPrerequisiteItem { Key = "vulkan-sdk", Satisfied = true, Detail = "1.4" }
-             ]
+                 Items =
+                 [
+                     new LlamaCppSourceBuildPrerequisiteItem
+                     {
+                         Key = "cmake",
+                         Satisfied = true,
+                         Detail = "4.0.1"
+                     },
+                     new LlamaCppSourceBuildPrerequisiteItem
+                     {
+                         Key = "vulkan-sdk",
+                         Satisfied = true,
+                         Detail = "1.4"
+                     }
+                 ]
              });
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
-                                     SourceBuildPrerequisitesRoute + "?backend=vulkan",
-                                     services => ReplaceSingleton(services, probe));
+            SourceBuildPrerequisitesRoute + "?backend=vulkan",
+            services => ReplaceSingleton(services, probe));
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var payload = JsonDocument.Parse(body);
@@ -491,13 +525,13 @@ public sealed class LlamaCppSourceBuildTransportTests
         var cacheInvalidator = Substitute.For<ILocalChatClientCacheInvalidator>();
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
-                                     route,
-                                     services =>
-                                     {
-                                         ReplaceSingleton(services, runtimeSettings);
-                                         ReplaceSingleton(services, supervisor);
-                                         ReplaceSingleton(services, cacheInvalidator);
-                                     });
+            route,
+            services =>
+            {
+                ReplaceSingleton(services, runtimeSettings);
+                ReplaceSingleton(services, supervisor);
+                ReplaceSingleton(services, cacheInvalidator);
+            });
 
         AssertEx.Equal(HttpStatusCode.Conflict, status);
         using var blocked = JsonDocument.Parse(body);
@@ -535,15 +569,15 @@ public sealed class LlamaCppSourceBuildTransportTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
-                                     route,
-                                     services =>
-                                     {
-                                         ReplaceSingleton(services, StubNodeRuntimeSettings.Create().Build());
-                                         ReplaceSingleton(services, supervisor);
-                                         ReplaceSingleton(services, installedRuntimeStore);
-                                         ReplaceSingleton(services, binaryManager);
-                                         ReplaceSingleton(services, cacheInvalidator);
-                                     });
+            route,
+            services =>
+            {
+                ReplaceSingleton(services, StubNodeRuntimeSettings.Create().Build());
+                ReplaceSingleton(services, supervisor);
+                ReplaceSingleton(services, installedRuntimeStore);
+                ReplaceSingleton(services, binaryManager);
+                ReplaceSingleton(services, cacheInvalidator);
+            });
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var payload = AssertEx.NotNull(JsonSerializer.Deserialize<LlamaCppRuntimeStatusResponse>(body, WebJsonOptions));

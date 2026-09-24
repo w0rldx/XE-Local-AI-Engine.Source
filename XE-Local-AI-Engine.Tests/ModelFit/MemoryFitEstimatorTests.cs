@@ -224,7 +224,12 @@ public sealed class MemoryFitEstimatorTests
         // A small MoE model that already fits the resident budget must not engage the offload path at all.
         var profile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
-        var moeFacts = new MoeFacts { ActiveParamCount = 200_000_000L, ExpertCount = 8, ExpertUsedCount = 2 };
+        var moeFacts = new MoeFacts
+        {
+            ActiveParamCount = 200_000_000L,
+            ExpertCount = 8,
+            ExpertUsedCount = 2
+        };
 
         var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false, moeFacts);
 
@@ -245,7 +250,12 @@ public sealed class MemoryFitEstimatorTests
 
         var profile = GpuProfile(8 * Gb);
         var estimator = new MemoryFitEstimator();
-        var moeFacts = new MoeFacts { ActiveParamCount = activeParamCount, ExpertCount = 8, ExpertUsedCount = 2 };
+        var moeFacts = new MoeFacts
+        {
+            ActiveParamCount = activeParamCount,
+            ExpertCount = 8,
+            ExpertUsedCount = 2
+        };
 
         var estimate = estimator.Estimate("Q4_K_M", totalParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false, moeFacts);
 
@@ -281,7 +291,12 @@ public sealed class MemoryFitEstimatorTests
 
         var profile = GpuProfile(8 * Gb);
         var estimator = new MemoryFitEstimator();
-        var moeFacts = new MoeFacts { ActiveParamCount = null, ExpertCount = 8, ExpertUsedCount = 2 };
+        var moeFacts = new MoeFacts
+        {
+            ActiveParamCount = null,
+            ExpertCount = 8,
+            ExpertUsedCount = 2
+        };
 
         var estimate = estimator.Estimate("Q4_K_M", totalParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false, moeFacts);
 
@@ -317,7 +332,12 @@ public sealed class MemoryFitEstimatorTests
             FreeDiskBytes = 500 * Gb
         };
         var estimator = new MemoryFitEstimator();
-        var moeFacts = new MoeFacts { ActiveParamCount = activeParamCount, ExpertCount = 8, ExpertUsedCount = 2 };
+        var moeFacts = new MoeFacts
+        {
+            ActiveParamCount = activeParamCount,
+            ExpertCount = 8,
+            ExpertUsedCount = 2
+        };
 
         var estimate = estimator.Estimate("Q4_K_M", totalParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, tinyProfile, kvCacheQuantized: false, moeFacts);
 
@@ -346,7 +366,12 @@ public sealed class MemoryFitEstimatorTests
             FreeDiskBytes = 500 * Gb
         };
         var estimator = new MemoryFitEstimator();
-        var moeFacts = new MoeFacts { ActiveParamCount = 3_000_000_000L, ExpertCount = 8, ExpertUsedCount = 2 };
+        var moeFacts = new MoeFacts
+        {
+            ActiveParamCount = 3_000_000_000L,
+            ExpertCount = 8,
+            ExpertUsedCount = 2
+        };
 
         var estimate = estimator.Estimate("Q4_K_M", totalParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, cpuProfile, kvCacheQuantized: false, moeFacts);
 
@@ -373,7 +398,11 @@ public sealed class MemoryFitEstimatorTests
 
         var derived = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false);
         var explicitShape = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = 128, ValueLength = 128 });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = 128,
+                ValueLength = 128
+            });
 
         // Weights are identical (same param count) → the whole delta is the KV term.
         var weights = (long)(paramCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M")); // 600e6 · 0.5625 = 337_500_000
@@ -413,9 +442,19 @@ public sealed class MemoryFitEstimatorTests
 
         // No window ⇒ every layer holds the full context (the naive figure the old estimator always used).
         var naive = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embeddingLength: 0, attentionHeadCount: 0, ctx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = keyValueLen, ValueLength = keyValueLen });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = keyValueLen,
+                ValueLength = keyValueLen
+            });
         var swa = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embeddingLength: 0, attentionHeadCount: 0, ctx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = keyValueLen, ValueLength = keyValueLen, SlidingWindow = window, SlidingWindowPattern = pattern });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = keyValueLen,
+                ValueLength = keyValueLen,
+                SlidingWindow = window,
+                SlidingWindowPattern = pattern
+            });
 
         var weights = (long)(paramCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
         var perLayer = kvHeads * (keyValueLen + keyValueLen) * 2d; // 8 · 512 · 2 = 8192
@@ -455,7 +494,11 @@ public sealed class MemoryFitEstimatorTests
 
         var derived = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false);
         var explicitShape = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = 128, ValueLength = 128 });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = 128,
+                ValueLength = 128
+            });
 
         AssertEx.Equal(derived.EstimatedBytes, explicitShape.EstimatedBytes);
         AssertEx.Equal(FitConfidence.Approximate, derived.Confidence);
@@ -534,7 +577,11 @@ public sealed class MemoryFitEstimatorTests
         const long totalVram = 16 * Gb;
         const long freeVram = totalVram - (9 * Gb / 4); // 2.25 GiB already resident.
         const long paramCount = 27_000_000_000L;
-        var attention = new GgufAttentionShape { KeyLength = 128, ValueLength = 128 };
+        var attention = new GgufAttentionShape
+        {
+            KeyLength = 128,
+            ValueLength = 128
+        };
         var estimator = new MemoryFitEstimator();
 
         var againstTotal = estimator.Estimate("Q3_K_M", paramCount, fileSizeBytes: 0, blockCount: 62, attentionHeadCountKV: 8,
@@ -620,7 +667,11 @@ public sealed class MemoryFitEstimatorTests
         var profile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
 
-        var generic = new GgufAttentionShape { KeyLength = MlaKeyLength, ValueLength = MlaValueLength };
+        var generic = new GgufAttentionShape
+        {
+            KeyLength = MlaKeyLength,
+            ValueLength = MlaValueLength
+        };
         var mla = new GgufAttentionShape
         {
             KeyLength = MlaKeyLength,
@@ -734,7 +785,11 @@ public sealed class MemoryFitEstimatorTests
         const long qwenCtx = 4096L;
         var qwen = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, qwenBlocks, qwenKvHeads, embeddingLength: 1024,
             attentionHeadCount: 32, qwenCtx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = 128, ValueLength = 128 });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = 128,
+                ValueLength = 128
+            });
         var qwenWeights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
         var qwenKv = (long)(qwenKvHeads * (128d + 128d) * 2d * (qwenBlocks * (double)qwenCtx));
         AssertEx.Equal(qwenWeights + qwenKv + (long)((qwenWeights + qwenKv) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes,
@@ -746,7 +801,13 @@ public sealed class MemoryFitEstimatorTests
         const long gemmaCtx = 8192L;
         var gemma = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, gemmaBlocks, gemmaKvHeads, embeddingLength: 0,
             attentionHeadCount: 0, gemmaCtx, profile, kvCacheQuantized: false,
-            attention: new GgufAttentionShape { KeyLength = 256, ValueLength = 256, SlidingWindow = 1024, SlidingWindowPattern = 6 });
+            attention: new GgufAttentionShape
+            {
+                KeyLength = 256,
+                ValueLength = 256,
+                SlidingWindow = 1024,
+                SlidingWindowPattern = 6
+            });
         var gemmaTokens = (8L * (double)gemmaCtx) + (40L * 1024d);
         var gemmaKv = (long)(gemmaKvHeads * (256d + 256d) * 2d * gemmaTokens);
         AssertEx.Equal(qwenWeights + gemmaKv + (long)((qwenWeights + gemmaKv) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes,

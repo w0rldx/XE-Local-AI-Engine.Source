@@ -19,8 +19,7 @@ public sealed class WorkSessionStartupReconciler : IHostedService
     private readonly WorkSessionOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public WorkSessionStartupReconciler(
-        IServiceScopeFactory scopeFactory,
+    public WorkSessionStartupReconciler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
         ILogger<WorkSessionStartupReconciler> logger)
     {

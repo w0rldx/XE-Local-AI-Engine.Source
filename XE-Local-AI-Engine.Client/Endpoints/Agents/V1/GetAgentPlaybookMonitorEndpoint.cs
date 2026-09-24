@@ -23,8 +23,7 @@ public sealed class GetAgentPlaybookMonitorEndpoint : Endpoint<GetAgentPlaybookM
     private readonly IPlaybookMonitorService _playbookMonitorService;
     private readonly PlaybookRetrievalOptions _retrievalOptions;
 
-    public GetAgentPlaybookMonitorEndpoint(
-        IAgentDefinitionService agentDefinitions,
+    public GetAgentPlaybookMonitorEndpoint(IAgentDefinitionService agentDefinitions,
         IPlaybookMonitorService playbookMonitorService,
         IOptions<PlaybookRetrievalOptions> retrievalOptions)
     {

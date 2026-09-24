@@ -42,7 +42,14 @@ public sealed partial class BenchmarkStore
                 continue;
             }
 
-            var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking { Quality = null, Reason = null, Countable = false };
+            var cell = ranking.Cells.TryGetValue(group.Key, out var entry)
+                ? entry
+                : new CellRanking
+                {
+                    Quality = null,
+                    Reason = null,
+                    Countable = false
+                };
             cells.Add(new BenchmarkCellRecord
             {
                 CellKey = group.Key,
@@ -55,7 +62,8 @@ public sealed partial class BenchmarkStore
                 // Every run of a cell reports its cell's rank, so the first one carries it.
                 Rank = ranking.Runs[members[0].Id].Rank,
                 RankExclusionReason = cell.Reason,
-                Items = [
+                Items =
+                [
                     .. members.Select(member => new BenchmarkCellItemRecord
                     {
                         RunId = member.Id,
@@ -69,6 +77,11 @@ public sealed partial class BenchmarkStore
             });
         }
 
-        return new BenchmarkCellPage { Cells = cells, RankCohort = ranking.Cohort, ScorableItemCount = ranking.ScorableItemCount };
+        return new BenchmarkCellPage
+        {
+            Cells = cells,
+            RankCohort = ranking.Cohort,
+            ScorableItemCount = ranking.ScorableItemCount
+        };
     }
 }

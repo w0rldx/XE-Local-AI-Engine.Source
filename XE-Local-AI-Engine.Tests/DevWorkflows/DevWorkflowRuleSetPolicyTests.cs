@@ -130,18 +130,18 @@ public sealed class DevWorkflowRuleSetPolicyTests
         // one, so a rule set scoped to that project has to reach it and one scoped to another must not — the half that
         // an all-empty scope would have passed without ever being exercised.
         var projectRules = await harness.CreateRuleSetAsync("Project sandbox rules",
-                                            "Never run the slow suite here.",
-                                            $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Tool"]}""");
+            "Never run the slow suite here.",
+            $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Tool"]}""");
         _ = await harness.CreateRuleSetAsync("Another project's sandbox rules",
-                             "Run everything.",
-                             $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":["Tool"]}""");
+            "Run everything.",
+            $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":["Tool"]}""");
 
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: ProjectId);
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         _ = await harness.SaveAgentArtifactAsync(runId,
-                             "decompose",
-                             "tasks.json",
-                             """[{ "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." }]""");
+            "decompose",
+            "tasks.json",
+            """[{ "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." }]""");
         await harness.SettleAgentAsync(runId, "decompose");
         _ = await harness.AdvanceAsync(runId);
 

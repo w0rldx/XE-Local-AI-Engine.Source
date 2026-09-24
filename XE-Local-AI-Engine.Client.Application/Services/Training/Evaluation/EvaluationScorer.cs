@@ -91,11 +91,21 @@ internal static class EvaluationScorer
         var toolParts = TrainingSampleParts.ToolCalls(content.Parts);
         if (toolParts is not [{ ToolName: { Length: > 0 } toolName } toolPart, ..])
         {
-            return new EvaluationExpectation { ToolName = null, ArgumentsJson = null, ParameterSchema = null };
+            return new EvaluationExpectation
+            {
+                ToolName = null,
+                ArgumentsJson = null,
+                ParameterSchema = null
+            };
         }
 
         var snapshot = tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
-        return new EvaluationExpectation { ToolName = toolName, ArgumentsJson = toolPart.Arguments, ParameterSchema = snapshot?.ParameterSchema };
+        return new EvaluationExpectation
+        {
+            ToolName = toolName,
+            ArgumentsJson = toolPart.Arguments,
+            ParameterSchema = snapshot?.ParameterSchema
+        };
     }
 
     /// <summary>The user turn the model is asked to answer — the first user part of the frozen trajectory.</summary>
@@ -200,8 +210,21 @@ internal static class EvaluationScorer
     }
 
     private static TrainingEvaluationResultEntry Pass(Guid sampleId, string kind) =>
-        new() { SampleId = sampleId, Kind = kind, Passed = true, ScoredBy = Deterministic };
+        new()
+        {
+            SampleId = sampleId,
+            Kind = kind,
+            Passed = true,
+            ScoredBy = Deterministic
+        };
 
     private static TrainingEvaluationResultEntry Fail(Guid sampleId, string kind, string reason) =>
-        new() { SampleId = sampleId, Kind = kind, Passed = false, ScoredBy = Deterministic, Reason = reason };
+        new()
+        {
+            SampleId = sampleId,
+            Kind = kind,
+            Passed = false,
+            ScoredBy = Deterministic,
+            Reason = reason
+        };
 }

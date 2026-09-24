@@ -584,7 +584,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         var executor = new StubAgentHomeGoalExecutor((request, _) =>
         {
             registeredInsideTheLoop = executingRuns.IsExecuting(request.RunId);
-            return Task.FromResult(new AgentHomeGoalOutcome { Status = AgentHomeGoalStatus.Completed });
+            return Task.FromResult(new AgentHomeGoalOutcome
+            {
+                Status = AgentHomeGoalStatus.Completed
+            });
         });
         using var harness = CreateHarness(clock, provider, resolver, goalExecutor: executor, executingRuns: executingRuns);
 
@@ -1157,8 +1160,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         private readonly bool _canDenyEgress;
         private readonly bool _canLimitResources;
 
-        public CapabilityOverridingProvider(
-            FakeSandboxRuntimeProvider inner,
+        public CapabilityOverridingProvider(FakeSandboxRuntimeProvider inner,
             bool canDenyEgress,
             bool canLimitResources = false)
         {
@@ -1314,7 +1316,11 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = OwnerUserId, NodeId = NodeId });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = OwnerUserId,
+                NodeId = NodeId
+            });
         }
     }
 
@@ -1330,7 +1336,11 @@ public sealed class AgentHomeServiceTests : IDisposable
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
             IReadOnlyList<SelectedFolderReference> references =
-                _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
+                _folders.Values.Select(folder => new SelectedFolderReference
+                {
+                    Id = folder.Id.ToString(),
+                    Alias = folder.Alias
+                }).ToList();
             return Task.FromResult(references);
         }
 
@@ -1346,7 +1356,13 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         public void Add(Guid id, string alias, string hostPath)
         {
-            _folders[id] = new ResolvedSelectedFolder { Id = id, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
+            _folders[id] = new ResolvedSelectedFolder
+            {
+                Id = id,
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            };
         }
     }
 

@@ -10,7 +10,11 @@ public sealed class McpInboundExecutionContext
 
     public required string? KeyPrefix { get; init; }
 
-    public static McpInboundExecutionContext Delegate { get; } = new() { Scope = McpServerApiKeyScope.Delegate, KeyPrefix = null };
+    public static McpInboundExecutionContext Delegate { get; } = new()
+    {
+        Scope = McpServerApiKeyScope.Delegate,
+        KeyPrefix = null
+    };
 
     public bool IsAgentic => Scope == McpServerApiKeyScope.Agentic;
 
@@ -29,7 +33,11 @@ public sealed class McpInboundExecutionContext
 
         var prefixes = principal.FindAll(NodeAuthorizationPolicies.McpKeyPrefixClaimType).Select(static claim => claim.Value).ToArray();
         return prefixes.Length == 1 && IsBoundedPrefix(prefixes[0])
-            ? new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = prefixes[0] }
+            ? new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = prefixes[0]
+            }
             : Delegate;
     }
 

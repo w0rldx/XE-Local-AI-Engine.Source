@@ -243,7 +243,13 @@ public sealed partial class InvocationRunner
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
                               ?? SumIfAny(inputTokens, outputTokens);
 
-            return new UsageSnapshot { InputTokens = inputTokens, OutputTokens = outputTokens, ReasoningTokens = reasoningTokens, TotalTokens = totalTokens };
+            return new UsageSnapshot
+            {
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                ReasoningTokens = reasoningTokens,
+                TotalTokens = totalTokens
+            };
         }
 
         /// <summary>

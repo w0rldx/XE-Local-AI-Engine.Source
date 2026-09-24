@@ -79,13 +79,21 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         {
             // Provider process down, transport error or unmapped provider: keep the configured name so the caller's
             // graceful "not available" path fires. NOT confident, never a vector identity; no model or chunk text involved.
-            return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
+            return new EmbeddingModelResolution
+            {
+                Name = configuredName,
+                IsConfident = false
+            };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // A provider request TIMEOUT surfaces as TaskCanceledException even though the CALLER never cancelled; the
             // filter separates them, so an unfired caller token means timeout and degrades, and a real cancel rethrows.
-            return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
+            return new EmbeddingModelResolution
+            {
+                Name = configuredName,
+                IsConfident = false
+            };
         }
 
         // (1) Exact configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
@@ -108,7 +116,11 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         }
 
         // (3) Nothing installed matches → keep the configured name, NOT confident (graceful failure downstream).
-        return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
+        return new EmbeddingModelResolution
+        {
+            Name = configuredName,
+            IsConfident = false
+        };
     }
 
     private static EmbeddingModelResolution CreateConfidentResolution(string resolvedName, LocalModelDescriptor descriptor)

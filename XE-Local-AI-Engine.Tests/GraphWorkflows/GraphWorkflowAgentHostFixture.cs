@@ -19,8 +19,8 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -215,14 +215,25 @@ internal sealed class FakeGraphWorkflowCapacity : ICapacityService
     {
         if ((modelName ?? string.Empty).Contains(GraphWorkflowModels.OvercommittedMarker, StringComparison.Ordinal))
         {
-            return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = RejectionReason, OllamaEvictionWarning = false });
+            return Task.FromResult(new CapacityDecision
+            {
+                Verdict = CapacityVerdict.RejectInsufficient,
+                Reason = RejectionReason,
+                OllamaEvictionWarning = false
+            });
         }
 
         // One per CALL, not one per model: a test asserting that a path released its reservation is asking about the
         // turn it ran, and a shared instance would answer about somebody else's.
         var reservation = new GraphWorkflowReservation();
         _reservations.GetOrAdd(modelName!, static _ => new ConcurrentQueue<GraphWorkflowReservation>()).Enqueue(reservation);
-        return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = reservation });
+        return Task.FromResult(new CapacityDecision
+        {
+            Verdict = CapacityVerdict.Allow,
+            Reason = "Capacity available.",
+            OllamaEvictionWarning = false,
+            Reservation = reservation
+        });
     }
 }
 
@@ -270,7 +281,15 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
         bool activeModelIsCloud = false,
         CancellationToken cancellationToken = default)
     {
-        _calls.Enqueue(new GraphWorkflowResolveCall { AgentDefinitionId = agentDefinitionId, ActiveModelId = activeModelId, RetrievalQuery = retrievalQuery, SupportsTools = supportsTools, HonorModelProfile = honorModelProfile, ActiveModelIsCloud = activeModelIsCloud });
+        _calls.Enqueue(new GraphWorkflowResolveCall
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ActiveModelId = activeModelId,
+            RetrievalQuery = retrievalQuery,
+            SupportsTools = supportsTools,
+            HonorModelProfile = honorModelProfile,
+            ActiveModelIsCloud = activeModelIsCloud
+        });
 
         // Null for a null binding, exactly as the real resolver answers it: that null is the "keep today's defaults"
         // signal, not a deleted agent. A fake that fabricated a runtime here made every agent node in this suite look
@@ -343,7 +362,12 @@ internal sealed class RecordingGraphWorkflowEventPublisher : IGraphWorkflowEvent
 
     public Task PublishAsync(Guid runId, long sequence, GraphWorkflowChangeKind kind, CancellationToken cancellationToken = default)
     {
-        _pings.Enqueue(new GraphWorkflowPing { RunId = runId, Sequence = sequence, Kind = kind });
+        _pings.Enqueue(new GraphWorkflowPing
+        {
+            RunId = runId,
+            Sequence = sequence,
+            Kind = kind
+        });
         return Task.CompletedTask;
     }
 }

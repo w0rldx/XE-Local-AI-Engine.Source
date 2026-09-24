@@ -12,8 +12,7 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
     private readonly INodeChatStreamCancellationRegistry _streamCancellationRegistry;
     private readonly TimeProvider _timeProvider;
 
-    public CancelNodeChatMessageEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public CancelNodeChatMessageEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         INodeChatStreamCancellationRegistry streamCancellationRegistry,
         TimeProvider timeProvider)
@@ -39,7 +38,12 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
 
     public override async Task HandleAsync(CancelNodeChatMessageRequest req, CancellationToken ct)
     {
-        var correlation = new NodeChatMessageCorrelation { ConversationId = req.ConversationId, MessageId = req.MessageId, RequestId = req.RequestId };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = req.ConversationId,
+            MessageId = req.MessageId,
+            RequestId = req.RequestId
+        };
 
         // The guard runs OUTSIDE the try below on purpose: NodeChatReadOnlyConversationException derives from InvalidOperationException, so inside it the generic
         // NotFound arm would swallow the 409 the global ConflictExceptionHandler must write.
@@ -48,7 +52,11 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
         try
         {
             _ = _streamCancellationRegistry.TryCancel(correlation);
-            var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest { Correlation = correlation, CancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds() },
+            var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest
+                {
+                    Correlation = correlation,
+                    CancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+                },
                 ct);
 
             await Send.OkAsync(new NodeChatCancelMessageResponse

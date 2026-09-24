@@ -64,8 +64,13 @@ public sealed class BenchmarkRunHub : Hub
         if (replay.ResetRequired || run.LastStreamSequence > replay.LatestSequence)
         {
             await Clients.Caller.SendAsync(BenchmarkRunHubEvents.ReplayReset,
-                             new BenchmarkRunReplayReset { RunId = runId, LatestSequence = latestSequence, RunVersion = run.Version },
-                             cancellationToken);
+                new BenchmarkRunReplayReset
+                {
+                    RunId = runId,
+                    LatestSequence = latestSequence,
+                    RunVersion = run.Version
+                },
+                cancellationToken);
             return;
         }
 

@@ -22,8 +22,8 @@ public sealed class RequestBodyTooLargeExceptionHandlerTests
 
         // The exception Kestrel throws, synthesized: message and status are the two members it sets.
         var handled = await handler.TryHandleAsync(context,
-                                       new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge),
-                                       CancellationToken.None);
+            new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge),
+            CancellationToken.None);
 
         AssertEx.True(handled);
         AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);

@@ -32,7 +32,13 @@ public sealed class RunningLocalModelEndpointTests
         await using var context = await CreateContextAsync("llama3:8b");
         context.Server!.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes = 5_000_000_000, SizeVramBytes = 4_000_000_000 }
+            new FakeOllamaState.FakeOllamaRunningModel
+            {
+                Name = "llama3:8b",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                SizeBytes = 5_000_000_000,
+                SizeVramBytes = 4_000_000_000
+            }
         ];
         using var client = context.Factory.CreateClient();
 

@@ -353,11 +353,25 @@ public sealed class ModelFitRefreshServiceTests
         var store = Substitute.For<IGgufModelStore>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var handle = new GgufModelHandle { ModelName = "org/tiny-GGUF:Q4_K_M", LocalPath = "/models/tiny.gguf", Quant = "Q4_K_M", SizeBytes = 1 * Gb, Sha256 = null, SourceRevision = "main", Role = GgufRole.Chat };
+        var handle = new GgufModelHandle
+        {
+            ModelName = "org/tiny-GGUF:Q4_K_M",
+            LocalPath = "/models/tiny.gguf",
+            Quant = "Q4_K_M",
+            SizeBytes = 1 * Gb,
+            Sha256 = null,
+            SourceRevision = "main",
+            Role = GgufRole.Chat
+        };
         store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>?>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(handle));
         supervisor.EnsureRunningAsync("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult(new LlamaServerEndpoint { ModelName = "org/tiny-GGUF:Q4_K_M", Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:8081/v1") }));
+                  .Returns(Task.FromResult(new LlamaServerEndpoint
+                  {
+                      ModelName = "org/tiny-GGUF:Q4_K_M",
+                      Role = ModelRole.Chat,
+                      BaseAddress = new Uri("http://127.0.0.1:8081/v1")
+                  }));
 
         var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb), store, supervisor);
 
@@ -382,7 +396,12 @@ public sealed class ModelFitRefreshServiceTests
         var advisor = BuildAdvisor(snapshotStore, new InMemoryModelFitRecommendationStore(),
             Substitute.For<IHuggingFaceGgufDiscovery>(), GpuProfile(64 * Gb));
 
-        var result = await advisor.RefreshAsync(new ModelFitRefreshRequest { Operation = ModelFitOperation.Benchmark, UseCase = "coding", Limit = 5 },
+        var result = await advisor.RefreshAsync(new ModelFitRefreshRequest
+            {
+                Operation = ModelFitOperation.Benchmark,
+                UseCase = "coding",
+                Limit = 5
+            },
             reportProgress: null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
@@ -516,7 +535,13 @@ public sealed class ModelFitRefreshServiceTests
 
     private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
-        return new ModelFitRefreshRequest { Operation = ModelFitOperation.Recommend, UseCase = "coding", Limit = 5, QuantOverride = quantOverride };
+        return new ModelFitRefreshRequest
+        {
+            Operation = ModelFitOperation.Recommend,
+            UseCase = "coding",
+            Limit = 5,
+            QuantOverride = quantOverride
+        };
     }
 
     private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore,
@@ -569,7 +594,13 @@ public sealed class ModelFitRefreshServiceTests
 
     private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)
     {
-        return new GgufRepoDetail { RepoId = repoId, IsGated = false, License = "mit", Files = files };
+        return new GgufRepoDetail
+        {
+            RepoId = repoId,
+            IsGated = false,
+            License = "mit",
+            Files = files
+        };
     }
 
     private static GgufRepoFile File(string quant, long paramCount)

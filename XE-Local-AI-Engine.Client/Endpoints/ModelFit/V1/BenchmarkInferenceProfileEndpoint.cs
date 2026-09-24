@@ -43,7 +43,7 @@ public sealed class BenchmarkInferenceProfileEndpoint : Endpoint<BenchmarkInfere
         }
 
         var result = await _inferenceProfileService
-                           .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct);
+            .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct);
 
         // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
         // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.

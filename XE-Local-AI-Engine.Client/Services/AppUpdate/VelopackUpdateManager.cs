@@ -51,7 +51,11 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         // status endpoint degrades gracefully instead of throwing inside Velopack.
         if (!_updateManager.IsInstalled)
         {
-            return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null };
+            return new VelopackCheckResult
+            {
+                Outcome = VelopackCheckOutcome.UpToDate,
+                AvailableVersion = null
+            };
         }
 
         try
@@ -66,14 +70,18 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             {
                 return new VelopackCheckResult
                 {
-                    Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null, RecommendedVersion = recommended
+                    Outcome = VelopackCheckOutcome.UpToDate,
+                    AvailableVersion = null,
+                    RecommendedVersion = recommended
                 };
             }
 
             var version = updateInfo.TargetFullRelease.Version.ToString();
             return new VelopackCheckResult
             {
-                Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = version, RecommendedVersion = recommended
+                Outcome = VelopackCheckOutcome.UpdateAvailable,
+                AvailableVersion = version,
+                RecommendedVersion = recommended
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -83,7 +91,12 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         catch (Exception exception)
         {
             var (outcome, reason) = ClassifyFailure(exception);
-            return new VelopackCheckResult { Outcome = outcome, AvailableVersion = null, FailureReason = reason };
+            return new VelopackCheckResult
+            {
+                Outcome = outcome,
+                AvailableVersion = null,
+                FailureReason = reason
+            };
         }
     }
 
@@ -177,8 +190,10 @@ public sealed class VelopackUpdateManagerFactory : IVelopackUpdateManagerFactory
 
         // Velopack's version-downgrade option stays unassigned; its default of false is what makes every channel
         // switch forward-only (research/velopack-1.2.0-verification.md section a, D6). Naming it here fails a guard.
-        return new VelopackUpdateManager(
-            new UpdateManager(source, new UpdateOptions { ExplicitChannel = feed.VelopackChannel }), source);
+        return new VelopackUpdateManager(new UpdateManager(source, new UpdateOptions
+        {
+            ExplicitChannel = feed.VelopackChannel
+        }), source);
     }
 
     internal PaginatingGithubSource CreateGithubSource(AppUpdateFeed feed)

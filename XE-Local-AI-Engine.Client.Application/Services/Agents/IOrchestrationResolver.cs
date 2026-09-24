@@ -73,18 +73,33 @@ public sealed class OrchestrationResolution
     public required string? ReasonText { get; init; }
 
     /// <summary>The definition is not an orchestrator (or there is no bound definition): no spec, and nothing to report.</summary>
-    public static OrchestrationResolution NotOrchestrated { get; } = new() { Orchestration = null, Reason = OrchestrationDegradationReason.None, ReasonText = null };
+    public static OrchestrationResolution NotOrchestrated { get; } = new()
+    {
+        Orchestration = null,
+        Reason = OrchestrationDegradationReason.None,
+        ReasonText = null
+    };
 
     /// <summary>The turn runs as a single agent and the operator should be told why.</summary>
     public static OrchestrationResolution Degraded(OrchestrationDegradationReason reason, string reasonText)
     {
-        return new OrchestrationResolution { Orchestration = null, Reason = reason, ReasonText = reasonText };
+        return new OrchestrationResolution
+        {
+            Orchestration = null,
+            Reason = reason,
+            ReasonText = reasonText
+        };
     }
 
     /// <summary>The orchestration compiled; the caller carries the spec on the runtime package.</summary>
     public static OrchestrationResolution Compiled(ResolvedOrchestration orchestration)
     {
-        return new OrchestrationResolution { Orchestration = orchestration, Reason = OrchestrationDegradationReason.None, ReasonText = null };
+        return new OrchestrationResolution
+        {
+            Orchestration = orchestration,
+            Reason = OrchestrationDegradationReason.None,
+            ReasonText = null
+        };
     }
 
     /// <summary>

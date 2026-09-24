@@ -57,7 +57,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=4&limit=2");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=4&limit=2");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -87,7 +87,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?limit=2");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?limit=2");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -110,14 +110,14 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var first = await ExternalAppEndpointPayloads
-                                .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=0&limit=2");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=0&limit=2");
         using var firstBody = await ExternalAppEndpointPayloads.ReadJsonAsync(first);
         var watermark = firstBody.RootElement.GetProperty("highestSequence").GetInt64();
 
         using var second = await ExternalAppEndpointPayloads
-                                 .SendAsOperatorAsync(factory,
-                                     "GET",
-                                     $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence={watermark}&limit=2");
+            .SendAsOperatorAsync(factory,
+                "GET",
+                $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence={watermark}&limit=2");
         using var secondBody = await ExternalAppEndpointPayloads.ReadJsonAsync(second);
 
         AssertEx.Equal(2L, watermark);
@@ -139,7 +139,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=9");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=9");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -159,7 +159,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents + query);
+            .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents + query);
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -179,7 +179,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
+            .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -198,7 +198,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
+            .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -224,7 +224,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web&tail={tail}");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web&tail={tail}");
 
         AssertEx.Equal(expected, response.StatusCode);
         if (expected == HttpStatusCode.OK)
@@ -250,7 +250,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=worker");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=worker");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -274,7 +274,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
+            .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -299,7 +299,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -324,7 +324,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -346,7 +346,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=ghost");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=ghost");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -361,7 +361,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
+            .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -379,7 +379,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+            .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
         var body = await response.Content.ReadAsStringAsync();
 
@@ -391,7 +391,15 @@ public sealed class ExternalAppFeedEndpointTests
     private static ExternalAppInstanceEventSnapshot Event(long sequence,
         ExternalAppInstanceEventKind kind = ExternalAppInstanceEventKind.Started,
         string? detailJson = null) =>
-        new() { Id = Guid.NewGuid(), InstanceId = ExternalAppEndpointPayloads.InstanceId, Sequence = sequence, Kind = kind, DetailJson = detailJson, OccurredAtUtc = 1_780_000_000_000L + sequence };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            InstanceId = ExternalAppEndpointPayloads.InstanceId,
+            Sequence = sequence,
+            Kind = kind,
+            DetailJson = detailJson,
+            OccurredAtUtc = 1_780_000_000_000L + sequence
+        };
 
     private static ContainerLogSnapshot Snapshot(bool truncated = false, int lineCount = 1) =>
         new()

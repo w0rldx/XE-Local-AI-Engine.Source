@@ -27,9 +27,15 @@ internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
         ExternalAppInstanceStatus status,
         CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
-                  .SendAsync(ExternalAppHubEvents.Changed,
-                      new ExternalAppChanged { InstanceId = instanceId, Sequence = sequence, Kind = ToWireKind(kind), Status = status.ToString() },
-                      cancellationToken);
+                   .SendAsync(ExternalAppHubEvents.Changed,
+                       new ExternalAppChanged
+                       {
+                           InstanceId = instanceId,
+                           Sequence = sequence,
+                           Kind = ToWireKind(kind),
+                           Status = status.ToString()
+                       },
+                       cancellationToken);
 
     public Task PublishPullProgressAsync(Guid instanceId,
         string service,
@@ -38,9 +44,16 @@ internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
         long bytes,
         CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
-                  .SendAsync(ExternalAppHubEvents.PullProgress,
-                      new ExternalAppPullProgress { InstanceId = instanceId, Service = service, LayerCount = layerCount, CompletedLayers = completedLayers, Bytes = bytes },
-                      cancellationToken);
+                   .SendAsync(ExternalAppHubEvents.PullProgress,
+                       new ExternalAppPullProgress
+                       {
+                           InstanceId = instanceId,
+                           Service = service,
+                           LayerCount = layerCount,
+                           CompletedLayers = completedLayers,
+                           Bytes = bytes
+                       },
+                       cancellationToken);
 
     /// <summary>
     ///     The wire spelling of an event kind, written out rather than derived from the enum name.

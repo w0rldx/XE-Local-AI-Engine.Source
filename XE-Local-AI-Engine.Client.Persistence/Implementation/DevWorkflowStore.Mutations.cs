@@ -43,7 +43,12 @@ public sealed partial class DevWorkflowStore
                 }
 
                 await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken);
-                return new MutationOutcome { EventType = EventTypeFor(command.TargetStatus, isFirstStart), Outcome = OutcomeFor(command.TargetStatus), DetailJson = ReasonDetail(command.SanitizedReason) };
+                return new MutationOutcome
+                {
+                    EventType = EventTypeFor(command.TargetStatus, isFirstStart),
+                    Outcome = OutcomeFor(command.TargetStatus),
+                    DetailJson = ReasonDetail(command.SanitizedReason)
+                };
             },
             cancellationToken);
     }
@@ -93,7 +98,12 @@ public sealed partial class DevWorkflowStore
 
                 var detail = Utf8(JsonSerializer.Serialize(new MaterializationDetail(command.NodeRuns.Count, run.GraphRevision), JsonOptions));
                 var eventType = command.GraphJson is null ? DevWorkflowEventTypes.NodeMaterialized : DevWorkflowEventTypes.GraphChanged;
-                return new MutationOutcome { EventType = eventType, Outcome = $"{command.NodeRuns.Count} node run(s)", DetailJson = detail };
+                return new MutationOutcome
+                {
+                    EventType = eventType,
+                    Outcome = $"{command.NodeRuns.Count} node run(s)",
+                    DetailJson = detail
+                };
             },
             cancellationToken);
     }
@@ -319,7 +329,13 @@ public sealed partial class DevWorkflowStore
                 {
                     // FIRST, so a reader of the log sees the decision before the rows it moved, and so the operation
                     // id that makes the whole command a replay lands on the event that records the decision.
-                    new() { EventType = command.Route.EventType, Outcome = command.Route.Outcome, DetailJson = Utf8OrNull(command.Route.DetailJson), NodeRunId = command.Route.NodeRunId }
+                    new()
+                    {
+                        EventType = command.Route.EventType,
+                        Outcome = command.Route.Outcome,
+                        DetailJson = Utf8OrNull(command.Route.DetailJson),
+                        NodeRunId = command.Route.NodeRunId
+                    }
                 };
 
                 foreach (var reset in command.Resets)
@@ -359,7 +375,13 @@ public sealed partial class DevWorkflowStore
                 }
 
                 var detail = Utf8(JsonSerializer.Serialize(new WorkSessionAttachedDetail(command.WorkSessionId, nodeRun.Attempt, nodeRun.SessionResumes), JsonOptions));
-                return new MutationOutcome { EventType = DevWorkflowEventTypes.WorkSessionAttached, Outcome = null, DetailJson = detail, NodeRunId = nodeRun.Id };
+                return new MutationOutcome
+                {
+                    EventType = DevWorkflowEventTypes.WorkSessionAttached,
+                    Outcome = null,
+                    DetailJson = detail,
+                    NodeRunId = nodeRun.Id
+                };
             },
             cancellationToken);
     }
@@ -422,13 +444,26 @@ public sealed partial class DevWorkflowStore
 
                 if (previous is null)
                 {
-                    return new MutationOutcome { EventType = DevWorkflowEventTypes.ArtifactCreated, Outcome = command.Kind.ToString(), DetailJson = null, NodeRunId = nodeRun.Id };
+                    return new MutationOutcome
+                    {
+                        EventType = DevWorkflowEventTypes.ArtifactCreated,
+                        Outcome = command.Kind.ToString(),
+                        DetailJson = null,
+                        NodeRunId = nodeRun.Id
+                    };
                 }
 
                 // The superseded row and its bytes both stay: versioning is the point. The reference travels on the
                 // event and the result so the caller that owns the blob store can decide what to sweep.
                 var detail = Utf8(JsonSerializer.Serialize(new ArtifactSupersessionDetail(previous.Id, previous.ManagedReference, version), JsonOptions));
-                return new MutationOutcome { EventType = DevWorkflowEventTypes.ArtifactSuperseded, Outcome = command.Kind.ToString(), DetailJson = detail, NodeRunId = nodeRun.Id, SupersededArtifactId = previous.Id };
+                return new MutationOutcome
+                {
+                    EventType = DevWorkflowEventTypes.ArtifactSuperseded,
+                    Outcome = command.Kind.ToString(),
+                    DetailJson = detail,
+                    NodeRunId = nodeRun.Id,
+                    SupersededArtifactId = previous.Id
+                };
             },
             cancellationToken);
     }
@@ -536,7 +571,12 @@ public sealed partial class DevWorkflowStore
                 }
 
                 var detail = Utf8(JsonSerializer.Serialize(new StaleMarkDetail(command.SupersededArtifactId, command.SupersedingArtifactId, dependents.Count), JsonOptions));
-                return new MutationOutcome { EventType = DevWorkflowEventTypes.ArtifactStaleMarked, Outcome = command.StaleReason, DetailJson = detail };
+                return new MutationOutcome
+                {
+                    EventType = DevWorkflowEventTypes.ArtifactStaleMarked,
+                    Outcome = command.StaleReason,
+                    DetailJson = detail
+                };
             },
             cancellationToken);
     }
@@ -594,7 +634,13 @@ public sealed partial class DevWorkflowStore
                 // The decision lands; moving the node-run out of its wait is the runtime's next step, so the pending
                 // marker is cleared here and the status is not guessed at.
                 nodeRun.PendingDecisionKind = null;
-                return new MutationOutcome { EventType = DevWorkflowEventTypes.GateDecided, Outcome = command.Decision.ToString(), DetailJson = null, NodeRunId = nodeRun.Id };
+                return new MutationOutcome
+                {
+                    EventType = DevWorkflowEventTypes.GateDecided,
+                    Outcome = command.Decision.ToString(),
+                    DetailJson = null,
+                    NodeRunId = nodeRun.Id
+                };
             },
             cancellationToken);
     }
@@ -607,7 +653,13 @@ public sealed partial class DevWorkflowStore
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
             command.OperationId,
-            _ => Task.FromResult(new MutationOutcome { EventType = command.EventType, Outcome = command.Outcome, DetailJson = Utf8OrNull(command.DetailJson), NodeRunId = command.NodeRunId }),
+            _ => Task.FromResult(new MutationOutcome
+            {
+                EventType = command.EventType,
+                Outcome = command.Outcome,
+                DetailJson = Utf8OrNull(command.DetailJson),
+                NodeRunId = command.NodeRunId
+            }),
             cancellationToken);
     }
 }

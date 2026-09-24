@@ -212,9 +212,9 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                     var shutdown = stoppingToken.IsCancellationRequested && exception is OperationCanceledException;
                     _logger.LogError(exception, "Integration execution {ExecutionId} faulted; terminalizing it.", executionId);
                     await TerminalizeFromFaultAsync(context,
-                            IntegrationExecutionStatus.Failed,
-                            shutdown ? IntegrationFailureCategories.Shutdown : IntegrationFailureCategories.InternalFailure,
-                            shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.");
+                        IntegrationExecutionStatus.Failed,
+                        shutdown ? IntegrationFailureCategories.Shutdown : IntegrationFailureCategories.InternalFailure,
+                        shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.");
                 }
             }
 
@@ -327,7 +327,14 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         // ONE unpaged read of the whole non-terminal set, then ONE pass over that snapshot: the set both shrinks and grows under live admission, so no offset
         // over it is safe. Why that is affordable, and why a stale snapshot is harmless: ADR 0008 ("Invariants the coordinator enforces").
-        var interrupted = await store.ListAsync(new IntegrationExecutionFilter { TriggerId = null, SessionId = null, Status = NonTerminalStatuses, Limit = int.MaxValue, Offset = 0 }, cancellationToken);
+        var interrupted = await store.ListAsync(new IntegrationExecutionFilter
+        {
+            TriggerId = null,
+            SessionId = null,
+            Status = NonTerminalStatuses,
+            Limit = int.MaxValue,
+            Offset = 0
+        }, cancellationToken);
 
         var recovered = 0;
         foreach (var row in interrupted)
@@ -350,10 +357,10 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             var context = new ExecutionRunContext(store, row);
             if (await TerminalizeAsync(context,
-                        NonTerminalStatuses,
-                        IntegrationExecutionStatus.Failed,
-                        IntegrationFailureCategories.Restart,
-                        "The node restarted while the execution was in flight."))
+                    NonTerminalStatuses,
+                    IntegrationExecutionStatus.Failed,
+                    IntegrationFailureCategories.Restart,
+                    "The node restarted while the execution was in flight."))
             {
                 recovered++;
 
@@ -435,8 +442,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         if (definition.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
-                    IntegrationFailureCategories.TriggerUnavailable,
-                    "The trigger's target agent is an orchestrator, which external integrations do not run.");
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's target agent is an orchestrator, which external integrations do not run.");
             return;
         }
 
@@ -521,8 +528,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         if (resolved.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
-                    IntegrationFailureCategories.TriggerUnavailable,
-                    "The trigger's target agent is an orchestrator, which external integrations do not run.");
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's target agent is an orchestrator, which external integrations do not run.");
             return;
         }
 
@@ -647,19 +654,19 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         try
         {
             await RunLeasedAsync(services,
-                    context,
-                    package,
-                    session,
-                    messageId,
-                    effectiveModel,
-                    terminalState,
-                    dispatcher,
-                    mapper,
-                    persistence,
-                    parts,
-                    runToken,
-                    cancelToken,
-                    stoppingToken);
+                context,
+                package,
+                session,
+                messageId,
+                effectiveModel,
+                terminalState,
+                dispatcher,
+                mapper,
+                persistence,
+                parts,
+                runToken,
+                cancelToken,
+                stoppingToken);
         }
         finally
         {
@@ -710,13 +717,27 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // 7a. A free slot completes the task synchronously, so an incomplete task is an exact, allocation-free "this one had to wait". Accepted straight
             //     to Running is legal; Queued exists only for a real wait, and this is its only producer.
             if (!leaseTask.IsCompleted
-                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate { ExecutionId = executionId, ExpectedVersion = context.Version, ExpectedStatuses = AcceptedOnly, NewStatus = IntegrationExecutionStatus.Queued }, runToken))
+                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+                {
+                    ExecutionId = executionId,
+                    ExpectedVersion = context.Version,
+                    ExpectedStatuses = AcceptedOnly,
+                    NewStatus = IntegrationExecutionStatus.Queued
+                }, runToken))
             {
                 // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal
                 // and no execution.queued may follow it.
                 context.Version++;
                 var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
-                await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = queued.Sequence, EventType = queued.Type, DetailJson = null, OccurredAtUtc = queued.OccurredAtUtc }, runToken);
+                await store.AppendEventAsync(new IntegrationEventAppend
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = executionId,
+                    Sequence = queued.Sequence,
+                    EventType = queued.Type,
+                    DetailJson = null,
+                    OccurredAtUtc = queued.OccurredAtUtc
+                }, runToken);
             }
         }
         catch
@@ -808,16 +829,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //     nothing else ever writes it.
             var startedAtUtc = NowUnixMilliseconds();
             if (!await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
-            {
-                ExecutionId = executionId,
-                ExpectedVersion = context.Version,
-                ExpectedStatuses = BeforeRunStatuses,
-                NewStatus = IntegrationExecutionStatus.Running,
-                StartedAtUtc = startedAtUtc,
-                EndedAtUtc = null,
-                InvocationId = package.InvocationId
-            },
-                                runToken))
+                    {
+                        ExecutionId = executionId,
+                        ExpectedVersion = context.Version,
+                        ExpectedStatuses = BeforeRunStatuses,
+                        NewStatus = IntegrationExecutionStatus.Running,
+                        StartedAtUtc = startedAtUtc,
+                        EndedAtUtc = null,
+                        InvocationId = package.InvocationId
+                    },
+                    runToken))
             {
                 var reloaded = await store.GetByIdAsync(executionId, runToken);
                 if (reloaded is null || !NonTerminalStatuses.Contains(reloaded.Status))
@@ -836,9 +857,9 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 }
 
                 await TerminalizeFromFaultAsync(context,
-                        IntegrationExecutionStatus.Failed,
-                        IntegrationFailureCategories.InternalFailure,
-                        $"The execution could not be moved to Running from {reloaded.Status}.");
+                    IntegrationExecutionStatus.Failed,
+                    IntegrationFailureCategories.InternalFailure,
+                    $"The execution could not be moved to Running from {reloaded.Status}.");
                 return;
             }
 
@@ -848,21 +869,34 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // 7e. execution.started, then the assistant placeholder: terminalization correlates on (ConversationId, MessageId, RequestId) against an EXISTING
             //     placeholder row, so creating it after the run would leave the assistant turn unpersisted.
             var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
-            await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = started.Sequence, EventType = started.Type, DetailJson = null, OccurredAtUtc = started.OccurredAtUtc }, runToken);
+            await store.AppendEventAsync(new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = executionId,
+                Sequence = started.Sequence,
+                EventType = started.Type,
+                DetailJson = null,
+                OccurredAtUtc = started.OccurredAtUtc
+            }, runToken);
 
-            var correlation = new NodeChatMessageCorrelation { ConversationId = session.ConversationId, MessageId = messageId, RequestId = executionId };
-            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+            var correlation = new NodeChatMessageCorrelation
             {
                 ConversationId = session.ConversationId,
                 MessageId = messageId,
-                RequestId = executionId,
-                CreatedAtUtc = startedAtUtc,
-                Model = effectiveModel,
-                MetadataJson = null,
-                Origin = NodeChatOriginValues.Local,
-                AgentDefinitionId = session.AgentDefinitionId
-            },
-                                     runToken);
+                RequestId = executionId
+            };
+            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+                {
+                    ConversationId = session.ConversationId,
+                    MessageId = messageId,
+                    RequestId = executionId,
+                    CreatedAtUtc = startedAtUtc,
+                    Model = effectiveModel,
+                    MetadataJson = null,
+                    Origin = NodeChatOriginValues.Local,
+                    AgentDefinitionId = session.AgentDefinitionId
+                },
+                runToken);
 
             // 8. Run.
             string? failureCategory = null;
@@ -924,12 +958,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // Tools can have run before the runner went silent, so this branch persists the parts too.
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
                               .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-                              {
-                                  Correlation = correlation,
-                                  Status = NodeChatMessageStatusValues.Failed,
-                                  UpdatedAtUtc = NowUnixMilliseconds(),
-                                  Parts = parts.HasParts ? parts.Snapshot() : null
-                              },
+                                  {
+                                      Correlation = correlation,
+                                      Status = NodeChatMessageStatusValues.Failed,
+                                      UpdatedAtUtc = NowUnixMilliseconds(),
+                                      Parts = parts.HasParts ? parts.Snapshot() : null
+                                  },
                                   CancellationToken.None);
         }
         else
@@ -1002,23 +1036,23 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
                               .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-                              {
-                                  Correlation = correlation,
-                                  Status = terminalStatus,
-                                  UpdatedAtUtc = NowUnixMilliseconds(),
-                                  Content = state.StreamedContent,
-                                  Reasoning = null,
-                                  // A cancelled turn persists NO error text: a cancel is an outcome, not a failure.
-                                  Error = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error,
-                                  Model = state.ModelUsed ?? effectiveModel,
-                                  InputCount = state.InputTokens,
-                                  OutputCount = state.OutputTokens,
-                                  TotalCount = state.TotalTokens,
-                                  ReasoningCount = state.ReasoningTokens,
-                                  Parts = parts.HasParts ? parts.Snapshot() : null,
-                                  GenerationDurationMs = state.GenerationDurationMs,
-                                  Envelope = envelope
-                              },
+                                  {
+                                      Correlation = correlation,
+                                      Status = terminalStatus,
+                                      UpdatedAtUtc = NowUnixMilliseconds(),
+                                      Content = state.StreamedContent,
+                                      Reasoning = null,
+                                      // A cancelled turn persists NO error text: a cancel is an outcome, not a failure.
+                                      Error = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error,
+                                      Model = state.ModelUsed ?? effectiveModel,
+                                      InputCount = state.InputTokens,
+                                      OutputCount = state.OutputTokens,
+                                      TotalCount = state.TotalTokens,
+                                      ReasoningCount = state.ReasoningTokens,
+                                      Parts = parts.HasParts ? parts.Snapshot() : null,
+                                      GenerationDurationMs = state.GenerationDurationMs,
+                                      Envelope = envelope
+                                  },
                                   CancellationToken.None);
         }
 
@@ -1066,16 +1100,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         var store = services.GetRequiredService<IIntegrationExecutionStore>();
         var executions = await store.ListAsync(new IntegrationExecutionFilter
-        {
-            TriggerId = null,
-            SessionId = session.Id,
-            Status = null,
-            // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
-            // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
-            Limit = IntegrationPriorOutputsComposer.MaxPayloads + 1,
-            Offset = 0
-        },
-                                        cancellationToken);
+            {
+                TriggerId = null,
+                SessionId = session.Id,
+                Status = null,
+                // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
+                // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
+                Limit = IntegrationPriorOutputsComposer.MaxPayloads + 1,
+                Offset = 0
+            },
+            cancellationToken);
 
         var envelopes = new List<string>(IntegrationPriorOutputsComposer.MaxPayloads);
         foreach (var execution in executions)

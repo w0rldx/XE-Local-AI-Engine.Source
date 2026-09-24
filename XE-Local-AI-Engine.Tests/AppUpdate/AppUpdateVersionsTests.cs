@@ -67,8 +67,7 @@ public sealed class AppUpdateVersionsTests
     [Test]
     public void NewestStable_IgnoresPrereleasesAndDeltas()
     {
-        var newest = AppUpdateVersions.NewestStable(
-        [
+        var newest = AppUpdateVersions.NewestStable([
             Asset("1.0.0", VelopackAssetType.Full),
             Asset("1.0.1-rc.1", VelopackAssetType.Full),
             Asset("1.1.0", VelopackAssetType.Delta)

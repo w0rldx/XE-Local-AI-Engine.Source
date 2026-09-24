@@ -45,8 +45,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
     private readonly IGgufModelRegistry _modelRegistry;
     private readonly LlamaServerSupervisorOptions _supervisorOptions;
 
-    public LaunchPolicyFingerprintProvider(
-        IInstalledRuntimeStore installedRuntimeStore,
+    public LaunchPolicyFingerprintProvider(IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppBinaryManager binaryManager,
         IGgufModelStore modelStore,
         IGgufModelRegistry modelRegistry,
@@ -89,8 +88,8 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         }
 
         var currentValidationDocumentHash = await CaptureValueAsync(ToInput(profile, modelFilePath),
-                includeContentHashes: false,
-                ct);
+            includeContentHashes: false,
+            ct);
         var currentValidationHash = BindValidationHash(expectedStrongHash, currentValidationDocumentHash);
         return string.Equals(currentValidationHash, expectedValidationHash, StringComparison.Ordinal);
     }
@@ -172,10 +171,10 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         }
 
         var modelIdentity = await ResolveModelIdentityAsync(input.ModelName,
-                input.ModelFilePath,
-                file,
-                includeContentHashes,
-                ct);
+            input.ModelFilePath,
+            file,
+            includeContentHashes,
+            ct);
         var runtime = await _installedRuntimeStore.ReadAsync(ct);
         var requestedVariant = input.Backend.ToUpperInvariant() switch
         {
@@ -188,13 +187,13 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         var executableIdentity = includeContentHashes
             ? await _fileHashCache.GetSha256Async(binary.ServerExecutablePath, ct)
             : await RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(binary.ServerExecutablePath,
-                                                       _fileHashCache,
-                                                       ct);
+                _fileHashCache,
+                ct);
         var runtimeBundle = await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
-                                                                     (path, token) => includeContentHashes
-                                                                         ? _fileHashCache.GetSha256Async(path, token)
-                                                                         : RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
-                                                                     ct);
+            (path, token) => includeContentHashes
+                ? _fileHashCache.GetSha256Async(path, token)
+                : RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
+            ct);
         var isOperatorOverride = string.Equals(binary.Version, "override", StringComparison.OrdinalIgnoreCase);
         var isManagedSourceBuild = !isOperatorOverride && runtime?.SourceBuildPath is not null;
         var runtimeProvenance = "prebuilt-or-unavailable";
@@ -412,7 +411,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             && !string.IsNullOrWhiteSpace(_supervisorOptions.SpeculativeDraftModelName))
         {
             draftModelPath = await _modelStore.ResolveModelFilePathAsync(_supervisorOptions.SpeculativeDraftModelName,
-                                                  ct);
+                ct);
         }
 
         if (string.IsNullOrWhiteSpace(draftModelPath) || !File.Exists(draftModelPath))
@@ -434,10 +433,10 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
                     configuredName = _supervisorOptions.SpeculativeDraftModelName,
                     resolvedFileName = Path.GetFileName(draftModelPath),
                     identity = await ResolveModelIdentityAsync(_supervisorOptions.SpeculativeDraftModelName,
-                            draftModelPath,
-                            new FileInfo(draftModelPath),
-                            includeContentHashes,
-                            ct)
+                        draftModelPath,
+                        new FileInfo(draftModelPath),
+                        includeContentHashes,
+                        ct)
                 },
                 draftMaxTokens = speculative.DraftMaxTokens > 0 ? speculative.DraftMaxTokens : (int?)null,
                 speculative.DraftGpuLayers
@@ -518,7 +517,12 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             {
                 var guard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct);
                 return includeContentHashes
-                    ? new ModelContentIdentity { Source = "verified-registry-sha256", ContentIdentity = registrySha256, GuardSha256 = guard }
+                    ? new ModelContentIdentity
+                    {
+                        Source = "verified-registry-sha256",
+                        ContentIdentity = registrySha256,
+                        GuardSha256 = guard
+                    }
                     : new ModelContentIdentity
                     {
                         Source = "validation-stamp-v1",

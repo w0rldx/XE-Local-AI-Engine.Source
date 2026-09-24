@@ -75,7 +75,8 @@ internal sealed class DesktopInstance : IAsyncDisposable
         _processInstance = instance;
     }
 
-    internal void Listen(Action activate) => _listener = ListenAsync(activate, _stopping.Token);
+    internal void Listen(Action activate) =>
+        _listener = ListenAsync(activate, _stopping.Token);
 
     internal static async Task ActivateAsync(string directory, CancellationToken cancellationToken)
     {
@@ -84,7 +85,10 @@ internal sealed class DesktopInstance : IAsyncDisposable
         await using var client = new NamedPipeClientStream(".", PipeName(directory), PipeDirection.Out,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await client.ConnectAsync(timeout.Token);
-        await client.WriteAsync(new byte[] { 1 }, timeout.Token);
+        await client.WriteAsync(new byte[]
+        {
+            1
+        }, timeout.Token);
         await client.FlushAsync(timeout.Token);
     }
 

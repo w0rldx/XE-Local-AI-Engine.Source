@@ -43,7 +43,14 @@ public sealed class McpInboundProtocolTests
         var workspaceId = Guid.NewGuid().ToString("D");
         var workspaces = new FakeSelectedFolderResolver
         {
-            References = [new SelectedFolderReference { Id = workspaceId, Alias = "engine" }]
+            References =
+            [
+                new SelectedFolderReference
+                {
+                    Id = workspaceId,
+                    Alias = "engine"
+                }
+            ]
         };
         await using var factory = CreateFactory(coordinator, workspaces);
         await using var client = await CreateClientAsync(factory);
@@ -223,7 +230,12 @@ public sealed class McpInboundProtocolTests
             Interlocked.Increment(ref _cancelCallCount);
             if (!_runs.TryGetValue(requestId, out var current))
             {
-                return Task.FromResult(new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." });
+                return Task.FromResult(new McpAgentRunCancelResult
+                {
+                    Kind = McpAgentRunCancelKind.NotFound,
+                    Run = null,
+                    DisplayMessage = "Run not found."
+                });
             }
 
             var cancelled = current with
@@ -348,7 +360,11 @@ public sealed class McpInboundProtocolTests
 
         public Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Equals(presented, _validKey, StringComparison.Ordinal)
-                ? new McpServerApiKeyValidation { Scope = _scope, Prefix = "xemcp_protocol" }
+                ? new McpServerApiKeyValidation
+                {
+                    Scope = _scope,
+                    Prefix = "xemcp_protocol"
+                }
                 : null);
     }
 }

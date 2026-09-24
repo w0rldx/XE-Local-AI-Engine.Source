@@ -161,7 +161,12 @@ public sealed class FakeDockerState
         ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
 
-        _execScripts[ExecKey(containerId, commandLine)] = new FakeDockerExecOutcome { ExitCode = exitCode, StandardOutput = standardOutput, StandardError = standardError };
+        _execScripts[ExecKey(containerId, commandLine)] = new FakeDockerExecOutcome
+        {
+            ExitCode = exitCode,
+            StandardOutput = standardOutput,
+            StandardError = standardError
+        };
     }
 
     /// <summary>
@@ -187,7 +192,10 @@ public sealed class FakeDockerState
             }
         }
 
-        return new FakeDockerExecOutcome { ExitCode = 0 };
+        return new FakeDockerExecOutcome
+        {
+            ExitCode = 0
+        };
     }
 
     /// <summary>Register the exact progress stream <c>POST /images/create</c> serves for one image reference.</summary>

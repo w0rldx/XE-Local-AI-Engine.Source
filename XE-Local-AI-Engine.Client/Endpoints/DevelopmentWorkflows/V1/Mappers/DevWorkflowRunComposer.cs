@@ -26,8 +26,7 @@ public sealed class DevWorkflowRunComposer
     private readonly DevWorkflowRunQueryService _queries;
     private readonly IWorkSessionService _sessions;
 
-    public DevWorkflowRunComposer(
-        DevWorkflowRunQueryService queries,
+    public DevWorkflowRunComposer(DevWorkflowRunQueryService queries,
         DevWorkflowAuthoringService authoring,
         IAgentDefinitionService agents,
         IWorkSessionService sessions)
@@ -304,7 +303,14 @@ public sealed class DevWorkflowRunComposer
             agentTurnMs = Add(agentTurnMs, nodeRun.AgentTurnMs);
         }
 
-        return new DevWorkflowRunCostResponse { InputTokens = inputTokens, OutputTokens = outputTokens, ToolCalls = toolCalls, ProviderCalls = providerCalls, AgentTurnMs = agentTurnMs };
+        return new DevWorkflowRunCostResponse
+        {
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens,
+            ToolCalls = toolCalls,
+            ProviderCalls = providerCalls,
+            AgentTurnMs = agentTurnMs
+        };
     }
 
     private static long? Add(long? total, long? term) =>
@@ -323,7 +329,14 @@ public sealed class DevWorkflowRunComposer
     /// </remarks>
     private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
         DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
-            ? new DevWorkflowNodeRouteResponse { Satisfied = route.Satisfied, Dead = route.Dead, Waived = route.Waived, GateAnswer = route.GateAnswer, Truncated = route.Truncated }
+            ? new DevWorkflowNodeRouteResponse
+            {
+                Satisfied = route.Satisfied,
+                Dead = route.Dead,
+                Waived = route.Waived,
+                GateAnswer = route.GateAnswer,
+                Truncated = route.Truncated
+            }
             : null;
 
     /// <summary>

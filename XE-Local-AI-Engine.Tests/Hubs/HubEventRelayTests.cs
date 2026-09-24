@@ -36,7 +36,10 @@ public sealed class HubEventRelayTests
 
         using var relay = new BenchmarkRunHubEventRelay(buffer, hubContext, new RecordingLogger<BenchmarkRunHubEventRelay>());
         await relay.StartAsync(CancellationToken.None);
-        var published = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "live output" });
+        var published = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "live output"
+        });
         await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await relay.StopAsync(CancellationToken.None);
 

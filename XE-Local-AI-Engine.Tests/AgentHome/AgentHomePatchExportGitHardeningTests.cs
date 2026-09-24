@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
-using CategoryAttribute = TUnit.Core.CategoryAttribute;
+using CategoryAttribute = CategoryAttribute;
 
 /// <summary>
 ///     The patch export's git is the node's own, and it runs over the workspace the model just had <c>write_file</c>
@@ -110,16 +110,29 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             ("run_command", new()
             {
                 ["executable"] = "git",
-                ["arguments"] = new[] { "config", configKey, payload }
+                ["arguments"] = new[]
+                {
+                    "config",
+                    configKey,
+                    payload
+                }
             }),
             // …and a real edit, so the export has something to find and the test can prove the diff still works.
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" })
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            })
         };
 
         if (attributes.Length > 0)
         {
             // .gitattributes is NOT under .git, so the write guard does not refuse it. That is the point.
-            script.Insert(index: 1, ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitattributes", ["content"] = attributes + "\n" }));
+            script.Insert(index: 1, ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/.gitattributes",
+                ["content"] = attributes + "\n"
+            }));
         }
 
         var run = await fixture.RunAsync([.. script]);
@@ -145,9 +158,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var payload = PayloadCommand(marker);
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitattributes", ["content"] = "* diff=pwn\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }),
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/.gitattributes",
+                ["content"] = "* diff=pwn\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }),
             ("run_command", new()
             {
                 ["executable"] = "/bin/sh",
@@ -200,9 +220,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             Environment.SetEnvironmentVariable("HOME", home);
 
             using var fixture = CreateFixture();
-            var run = await fixture.RunAsync(
-                ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitattributes", ["content"] = "* diff=pwn\n" }),
-                ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+            var run = await fixture.RunAsync(("write_file", new()
+                {
+                    ["path"] = $"{WorkspaceAlias}/.gitattributes",
+                    ["content"] = "* diff=pwn\n"
+                }),
+                ("write_file", new()
+                {
+                    ["path"] = $"{WorkspaceAlias}/README.md",
+                    ["content"] = "# project\nsmall\n"
+                }));
 
             AssertEx.False(await MarkerExistsAsync(fixture.Provider, marker), "a driver defined in the GLOBAL git config must not execute during export");
             AssertEx.True(run.Patch.ChangedFileCount > 0, "the guard must not break the diff");
@@ -231,9 +258,19 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("run_command", new() { ["executable"] = "/bin/echo", ["arguments"] = new[] { "hello" } }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+        var run = await fixture.RunAsync(("run_command", new()
+            {
+                ["executable"] = "/bin/echo",
+                ["arguments"] = new[]
+                {
+                    "hello"
+                }
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }));
 
         var logged = (await File.ReadAllLinesAsync(Path.Combine(run.LogPath, "commands.jsonl")))
                      .Where(line => !string.IsNullOrWhiteSpace(line))
@@ -265,7 +302,8 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var nodeCommands = logged.Where(record => string.Equals(record.GetProperty("actor").GetString(), AgentHomeCommandActors.Node, StringComparison.Ordinal)).ToList();
         AssertEx.True(nodeCommands.TrueForAll(record => string.Equals(record.GetProperty("executable").GetString(), "git", StringComparison.Ordinal)),
             "every command the node ran itself is git — the baseline's and the export's alike");
-        AssertEx.True(nodeCommands.TrueForAll(record => record.GetProperty("arguments").EnumerateArray().Any(argument => string.Equals(argument.GetString(), "core.autocrlf=false", StringComparison.Ordinal))),
+        AssertEx.True(
+            nodeCommands.TrueForAll(record => record.GetProperty("arguments").EnumerateArray().Any(argument => string.Equals(argument.GetString(), "core.autocrlf=false", StringComparison.Ordinal))),
             "the logged argument vector is the one that really ran, including the byte-stabilizing pins the baseline and the diff must share");
 
         // The run log is an audit of what the node RAN, never of what the workspace said back: no record carries
@@ -285,13 +323,24 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\ncreated by the run\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }),
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = "# notes\ncreated by the run\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }),
             ("run_command", new()
             {
                 ["executable"] = "/bin/sh",
-                ["arguments"] = new[] { "-c", $"rm {WorkspaceAlias}/notes.txt && mv {WorkspaceAlias}/guide.txt {WorkspaceAlias}/manual.txt" }
+                ["arguments"] = new[]
+                {
+                    "-c",
+                    $"rm {WorkspaceAlias}/notes.txt && mv {WorkspaceAlias}/guide.txt {WorkspaceAlias}/manual.txt"
+                }
             }));
 
         var changed = await ReadChangedFilesAsync(run);
@@ -320,7 +369,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var run = await fixture.RunAsync(("run_command", new()
         {
             ["executable"] = "/bin/sh",
-            ["arguments"] = new[] { "-c", $"head -c 4 /dev/zero > {WorkspaceAlias}/data.bin && : > {WorkspaceAlias}/empty.txt" }
+            ["arguments"] = new[]
+            {
+                "-c",
+                $"head -c 4 /dev/zero > {WorkspaceAlias}/data.bin && : > {WorkspaceAlias}/empty.txt"
+            }
         }));
 
         var changed = await ReadChangedFilesAsync(run);
@@ -348,13 +401,20 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("run_command", new()
+        var run = await fixture.RunAsync(("run_command", new()
             {
                 ["executable"] = "/bin/sh",
-                ["arguments"] = new[] { "-c", "printf 'stray\\n' > rootfile.txt" }
+                ["arguments"] = new[]
+                {
+                    "-c",
+                    "printf 'stray\\n' > rootfile.txt"
+                }
             }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }));
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = "# notes\n"
+            }));
 
         var changed = await ReadChangedFilesAsync(run);
         AssertChange(changed, "docs/notes.md", "added");
@@ -386,9 +446,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture(emptyAlias: EmptyAlias);
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = "# notes\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }));
 
         AssertEx.False(run.Patch.Failed,
             "an alias with no directory must never reach a pathspec — git add -A would exit 128 and refuse the whole export");
@@ -419,10 +486,21 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = "hidden.txt\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/hidden.txt", ["content"] = "invisible\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/visible.txt", ["content"] = "visible\n" }));
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/.gitignore",
+                ["content"] = "hidden.txt\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/hidden.txt",
+                ["content"] = "invisible\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/visible.txt",
+                ["content"] = "visible\n"
+            }));
 
         var changed = await ReadChangedFilesAsync(run);
         AssertChange(changed, "visible.txt", "added");
@@ -445,7 +523,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         using var fixture = CreateFixture(maxPatchBytes: 64);
         var run = await fixture.RunAsync(("write_file",
-            new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = new string(c: 'n', count: 4096) + "\n" }));
+            new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = new string(c: 'n', count: 4096) + "\n"
+            }));
 
         AssertEx.True(run.Patch.Blocked, "a patch over MaxPatchBytes is blocked");
         AssertEx.True(run.Patch.PatchRelativePath is null, "a blocked patch is not written");
@@ -465,9 +547,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         using var fixture = CreateFixture();
         const string Created = "# notes\ncreated by the run\n";
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = Created }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = Created
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }));
 
         var target = CreateTempDirectory("xe-ah-apply");
         foreach (var seeded in Directory.GetFiles(fixture.HostFolder))
@@ -476,12 +565,18 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         }
 
         var applyService = CreateApplyService(fixture, target);
-        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = run.RunId
+        });
 
         AssertEx.True(preview.CanApply, $"the exported patch checks clean. rejections: {string.Join(separator: ';', preview.Rejections)}");
         AssertEx.Contains(preview.Files, file => file is { Alias: WorkspaceAlias, RelativePath: "docs/notes.md", ChangeType: "added" });
 
-        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = run.RunId });
+        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = run.RunId
+        });
 
         AssertEx.True(result.Applied, $"the exported patch applies. rejections: {string.Join(separator: ';', result.Rejections)}");
         AssertEx.Equal(Created, await File.ReadAllTextAsync(Path.Combine(target, "docs", "notes.md")),
@@ -500,8 +595,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("run_command", new()
+        var run = await fixture.RunAsync(("run_command", new()
             {
                 ["executable"] = "/bin/sh",
                 ["arguments"] = new[]
@@ -510,7 +604,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                     $"ln -s /etc/passwd {WorkspaceAlias}/abs-link && ln -s ../../escape.txt {WorkspaceAlias}/rel-link"
                 }
             }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }));
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = "# notes\n"
+            }));
 
         // The export is honest about what the run did — it is the APPLY that refuses.
         var changed = await ReadChangedFilesAsync(run);
@@ -524,7 +622,10 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         }
 
         var applyService = CreateApplyService(fixture, target);
-        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = run.RunId
+        });
 
         AssertEx.False(preview.CanApply, "a patch that creates a symbolic link must not be offered as applicable");
         AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("symbolic link", StringComparison.Ordinal));
@@ -533,13 +634,20 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                                                           && rejection.Path?.Contains(fixture.HostFolder, StringComparison.Ordinal) != true),
             "the rejection carries no host path");
 
-        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = run.RunId });
+        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = run.RunId
+        });
 
         AssertEx.False(result.Applied, "the apply refuses the whole patch");
         // Graded on the DIRECTORY LISTING, not on Path.Exists: a dangling link (rel-link points at nothing) is
         // absent from Path.Exists whether or not it was created, so that check could pass over a real escape.
         var entries = Directory.GetFileSystemEntries(target).Select(Path.GetFileName).ToArray();
-        foreach (var name in new[] { "abs-link", "rel-link" })
+        foreach (var name in new[]
+                 {
+                     "abs-link",
+                     "rel-link"
+                 })
         {
             AssertEx.False(entries.Contains(name, StringComparer.Ordinal), $"no '{name}' entry exists on the host");
         }
@@ -583,7 +691,10 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         }
 
         var applyService = CreateApplyService(fixture, target);
-        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = run.RunId
+        });
 
         AssertEx.False(preview.CanApply, "a nested repository is not something the operator can apply");
         AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("submodule", StringComparison.Ordinal));
@@ -600,9 +711,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/docs/notes.md",
+                ["content"] = "# notes\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmall\n"
+            }));
 
         AssertEx.Equal(expected: 0, run.Patch.WrittenGap.Total, "both writes are in the patch, so nothing is missing from it");
         AssertEx.True((await ReadEventsAsync(run)).TrueForAll(static record => record.GetProperty("eventName").GetString() != "written_not_exported"),
@@ -619,24 +737,56 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = "secret.txt\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/secret.txt", ["content"] = "hidden\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/scratch.txt", ["content"] = "temporary\n" }),
+        var run = await fixture.RunAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/.gitignore",
+                ["content"] = "secret.txt\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/secret.txt",
+                ["content"] = "hidden\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/scratch.txt",
+                ["content"] = "temporary\n"
+            }),
             // Byte-identical to what the host folder was seeded with, so the baseline has nothing to diff against.
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmal\n" }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nsmal\n"
+            }),
             ("run_command", new()
             {
                 ["executable"] = "git",
-                ["arguments"] = new[] { "update-index", "--skip-worktree", $"{WorkspaceAlias}/notes.txt" }
+                ["arguments"] = new[]
+                {
+                    "update-index",
+                    "--skip-worktree",
+                    $"{WorkspaceAlias}/notes.txt"
+                }
             }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/notes.txt", ["content"] = "notes rewritten by the run\n" }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/notes.txt",
+                ["content"] = "notes rewritten by the run\n"
+            }),
             ("run_command", new()
             {
                 ["executable"] = "/bin/sh",
-                ["arguments"] = new[] { "-c", $"rm {WorkspaceAlias}/scratch.txt" }
+                ["arguments"] = new[]
+                {
+                    "-c",
+                    $"rm {WorkspaceAlias}/scratch.txt"
+                }
             }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/guide.txt", ["content"] = "rewritten\n" }));
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/guide.txt",
+                ["content"] = "rewritten\n"
+            }));
 
         var gap = run.Patch.WrittenGap;
         AssertEx.Equal(expected: 1, gap.IgnoredCount, $"secret.txt is ignored. gap was {Describe(gap)}");
@@ -662,7 +812,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         // The two classification commands are the node's own, and an audit must see them like every other one.
         var logged = await ReadCommandsAsync(run);
-        foreach (var executionId in new[] { $"{run.RunId}-patch-check-ignore", $"{run.RunId}-patch-ls-files" })
+        foreach (var executionId in new[]
+                 {
+                     $"{run.RunId}-patch-check-ignore",
+                     $"{run.RunId}-patch-ls-files"
+                 })
         {
             var matching = logged.Where(candidate => candidate.GetProperty("executionId").GetString() == executionId).ToList();
             AssertEx.Equal(expected: 1, matching.Count, $"commands.jsonl records '{executionId}' exactly once");
@@ -691,9 +845,12 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
     private static async Task<List<JsonElement>> ReadJsonLinesAsync(string path)
     {
-        return [.. (await File.ReadAllLinesAsync(path))
-                  .Where(static line => !string.IsNullOrWhiteSpace(line))
-                  .Select(static line => JsonDocument.Parse(line).RootElement)];
+        return
+        [
+            .. (await File.ReadAllLinesAsync(path))
+               .Where(static line => !string.IsNullOrWhiteSpace(line))
+               .Select(static line => JsonDocument.Parse(line).RootElement)
+        ];
     }
 
     /// <summary>
@@ -839,7 +996,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                            .BuildServiceProvider();
 
         return new NodePatchApplyService(new StaticSelectedFolderResolver(WorkspaceAlias, targetFolder),
-            Options.Create(new AgentHomeOptions { RootPath = fixture.StateRoot, PatchApplyTimeoutSeconds = 120 }),
+            Options.Create(new AgentHomeOptions
+            {
+                RootPath = fixture.StateRoot,
+                PatchApplyTimeoutSeconds = 120
+            }),
             StubNodeRuntimeSettings.Create().Build(),
             new FakeNodeDataDirectory(fixture.StateRoot),
             new StaticIdentityProvider(),
@@ -1095,7 +1256,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-hardening", NodeId = "node-hardening" });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner-hardening",
+                NodeId = "node-hardening"
+            });
         }
     }
 
@@ -1106,7 +1271,13 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         public StaticSelectedFolderResolver(string alias, string hostPath)
         {
             FolderId = Guid.NewGuid();
-            _folders.Add(new ResolvedSelectedFolder { Id = FolderId, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy });
+            _folders.Add(new ResolvedSelectedFolder
+            {
+                Id = FolderId,
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            });
         }
 
         /// <summary>The first folder's id — the one every test's real content lives in.</summary>
@@ -1118,7 +1289,13 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         /// <summary>Registers a further selected folder, so a run can select more than one.</summary>
         public void Add(string alias, string hostPath)
         {
-            _folders.Add(new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy });
+            _folders.Add(new ResolvedSelectedFolder
+            {
+                Id = Guid.NewGuid(),
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            });
         }
 
         public Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
@@ -1129,7 +1306,13 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
             IReadOnlyList<SelectedFolderReference> references =
-                [.. _folders.Select(static folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias })];
+            [
+                .. _folders.Select(static folder => new SelectedFolderReference
+                {
+                    Id = folder.Id.ToString(),
+                    Alias = folder.Alias
+                })
+            ];
             return Task.FromResult(references);
         }
 

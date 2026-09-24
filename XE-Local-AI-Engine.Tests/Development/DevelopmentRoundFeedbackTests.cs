@@ -57,7 +57,8 @@ public sealed class DevelopmentRoundFeedbackTests
         {
             Disposition = DevelopmentReviewDisposition.ChangesRequested,
             Summary = "The patch does not cover the failing case.",
-            Findings = [
+            Findings =
+            [
                 new DevelopmentReviewFinding("correctness", "ParseBound returns the low bound when the range is inverted."),
                 new DevelopmentReviewFinding("tests", "No test covers an inverted range.")
             ]
@@ -78,7 +79,12 @@ public sealed class DevelopmentRoundFeedbackTests
     public void WithNoFindings_AReviewersChangeRequestFallsBackToTheFixedSentence()
     {
         AssertEx.Equal("The independent reviewer requested changes.",
-            DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission { Disposition = DevelopmentReviewDisposition.ChangesRequested, Summary = "Summary", Findings = [] }));
+            DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission
+            {
+                Disposition = DevelopmentReviewDisposition.ChangesRequested,
+                Summary = "Summary",
+                Findings = []
+            }));
     }
 
     /// <summary>

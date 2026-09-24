@@ -23,8 +23,7 @@ public sealed class GetImageModelCatalogEndpoint : EndpointWithoutRequest<GetIma
     private readonly ILogger<GetImageModelCatalogEndpoint> _logger;
     private readonly IImageModelRegistry _registry;
 
-    public GetImageModelCatalogEndpoint(
-        IImageModelCatalog catalog,
+    public GetImageModelCatalogEndpoint(IImageModelCatalog catalog,
         IImageModelRegistry registry,
         IHardwareProfiler hardwareProfiler,
         ILogger<GetImageModelCatalogEndpoint> logger)

@@ -163,7 +163,10 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         {
             // The acquisition channel opens HERE, not at the top of ProvisionAsync: this probe is the first silent multi-second
             // phase an operator sees no explanation for. Reporting is fire-and-forget inside the registry, so it adds no await.
-            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.DetectingGpu });
+            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.DetectingGpu
+            });
             variant = await _runtime.SelectGpuVariantAsync(probeCts.Token);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)

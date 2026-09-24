@@ -24,8 +24,7 @@ public sealed class ListAgentExecutionLogsEndpoint : Endpoint<ListAgentExecution
     private readonly IAgentDefinitionService _agentDefinitions;
     private readonly AgentExecutionLogQueryService _executionLogs;
 
-    public ListAgentExecutionLogsEndpoint(
-        IAgentDefinitionService agentDefinitions,
+    public ListAgentExecutionLogsEndpoint(IAgentDefinitionService agentDefinitions,
         AgentExecutionLogQueryService executionLogs)
     {
         ArgumentNullException.ThrowIfNull(agentDefinitions);

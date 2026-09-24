@@ -66,7 +66,14 @@ public sealed partial class NodeAdminMcpTools
                 }
                 catch (GgufAcquisitionConflictException exception)
                 {
-                    return new McpModelPullStartResponse { Status = "rejected", ModelName = null, OperationId = null, FailureCode = McpAdminToolFailureCodes.ModelPullConflict, DisplayMessage = exception.Message };
+                    return new McpModelPullStartResponse
+                    {
+                        Status = "rejected",
+                        ModelName = null,
+                        OperationId = null,
+                        FailureCode = McpAdminToolFailureCodes.ModelPullConflict,
+                        DisplayMessage = exception.Message
+                    };
                 }
                 catch (HuggingFaceDownloadException exception)
                 {
@@ -148,7 +155,7 @@ public sealed partial class NodeAdminMcpTools
                 Task.FromResult(new McpModelPullCancelResponse
                 {
                     Cancelled = !string.IsNullOrWhiteSpace(model_name)
-                                                               && _ggufDownloadCoordinator.Cancel(model_name.Trim())
+                                && _ggufDownloadCoordinator.Cancel(model_name.Trim())
                 }),
             static response => !response.Cancelled);
 #pragma warning restore IDE1006
@@ -162,7 +169,13 @@ public sealed partial class NodeAdminMcpTools
         return await InvokeAuditedAsync("delete_model", AuditArguments(("model_name", model_name)), async () =>
         {
             var result = await _localModelAdministrationService.DeleteAsync(model_name, cancellationToken);
-            return new McpModelDeleteResponse { Deleted = result.Deleted, ModelName = result.ModelName, FailureCode = result.FailureCode, DisplayMessage = result.DisplayMessage };
+            return new McpModelDeleteResponse
+            {
+                Deleted = result.Deleted,
+                ModelName = result.ModelName,
+                FailureCode = result.FailureCode,
+                DisplayMessage = result.DisplayMessage
+            };
         }, static response => !response.Deleted);
     }
 

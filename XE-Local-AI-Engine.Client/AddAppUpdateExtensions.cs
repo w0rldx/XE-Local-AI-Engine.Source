@@ -46,8 +46,7 @@ internal static class AddAppUpdateExtensions
         // Velopack update manager seam + the shared snapshot state + the orchestration service.
         builder.Services.AddSingleton<IVelopackUpdateManagerFactory, VelopackUpdateManagerFactory>();
         builder.Services.AddSingleton<IAppUpdateState, AppUpdateState>();
-        builder.Services.AddSingleton<IAppUpdateService>(services => new AppUpdateService(
-            services.GetRequiredService<IVelopackUpdateManagerFactory>(),
+        builder.Services.AddSingleton<IAppUpdateService>(services => new AppUpdateService(services.GetRequiredService<IVelopackUpdateManagerFactory>(),
             services.GetRequiredService<IAppUpdateState>(),
             services.GetRequiredService<IOptions<AppUpdateChannelOptions>>(),
             services.GetRequiredService<AppUpdateHostContext>(),

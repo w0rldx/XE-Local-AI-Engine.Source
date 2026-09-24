@@ -139,7 +139,12 @@ public static class BenchmarkPairwiseResultParser
             var rationale = root.TryGetProperty("rationale", out var rationaleElement) ? rationaleElement.GetString()?.Trim() : null;
             return rationale is null || rationale.Length == 0 || rationale.Length > BenchmarkPairwiseOutputSchemaV1.MaximumRationaleLength
                 ? throw new JsonException()
-                : new BenchmarkPairwiseResultV1 { SchemaVersion = schemaVersion, Verdict = verdict, Rationale = rationale };
+                : new BenchmarkPairwiseResultV1
+                {
+                    SchemaVersion = schemaVersion,
+                    Verdict = verdict,
+                    Rationale = rationale
+                };
         }
         catch (JsonException)
         {

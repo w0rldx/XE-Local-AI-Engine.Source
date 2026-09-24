@@ -99,7 +99,10 @@ public sealed class OllamaProviderMapBackfillTests
 
         public override Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
-            return Task.FromResult<IEnumerable<OllamaModelSummary>>(_installedNames.Select(static name => new OllamaModelSummary { Name = name }).ToArray());
+            return Task.FromResult<IEnumerable<OllamaModelSummary>>(_installedNames.Select(static name => new OllamaModelSummary
+            {
+                Name = name
+            }).ToArray());
         }
     }
 

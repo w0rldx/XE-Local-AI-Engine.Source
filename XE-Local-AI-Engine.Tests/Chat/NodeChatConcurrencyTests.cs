@@ -40,11 +40,21 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         // least one iteration, so the loop is the detector.
         for (var iteration = 0; iteration < SequenceRaceIterations; iteration++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Race", UserId = "node", CreatedAtUtc = iteration });
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+            {
+                Title = "Race",
+                UserId = "node",
+                CreatedAtUtc = iteration
+            });
 
             var inserts = Enumerable.Range(0, ConcurrentInsertsPerConversation)
-                                    .Select(index => Task.Run(() => service.PersistUserMessageAsync(
-                                        new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = $"m{index}", CreatedAtUtc = 100 + index })))
+                                    .Select(index => Task.Run(() => service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+                                    {
+                                        ConversationId = conversation.ConversationId,
+                                        MessageId = Guid.NewGuid(),
+                                        Content = $"m{index}",
+                                        CreatedAtUtc = 100 + index
+                                    })))
                                     .ToArray();
             await Task.WhenAll(inserts);
 
@@ -68,10 +78,26 @@ public sealed class NodeChatConcurrencyTests : IDisposable
 
         for (var iteration = 0; iteration < SequenceRaceIterations; iteration++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Delete race", UserId = "node", CreatedAtUtc = iteration });
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+            {
+                Title = "Delete race",
+                UserId = "node",
+                CreatedAtUtc = iteration
+            });
             var assistantMessageId = Guid.NewGuid();
-            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
-            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
+            var correlation = new NodeChatMessageCorrelation
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = assistantMessageId,
+                RequestId = Guid.NewGuid()
+            };
+            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = assistantMessageId,
+                RequestId = correlation.RequestId,
+                CreatedAtUtc = 1
+            });
             await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
             // Fire streaming flushes concurrently with a hard purge. A flush that loses the race to the delete finds no
@@ -96,7 +122,12 @@ public sealed class NodeChatConcurrencyTests : IDisposable
                                        }
                                    }))
                                    .ToList();
-            writes.Add(Task.Run(() => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation.ConversationId, DeletedAtUtc = 20, PurgeImmediately = true })));
+            writes.Add(Task.Run(() => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+            {
+                ConversationId = conversation.ConversationId,
+                DeletedAtUtc = 20,
+                PurgeImmediately = true
+            })));
             await Task.WhenAll(writes);
 
             AssertEx.Null(await service.GetConversationAsync(conversation.ConversationId));
@@ -115,9 +146,25 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         // than growing with history.
         for (var index = 0; index < 100; index++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = $"c{index}", UserId = "node", CreatedAtUtc = index });
-            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
-            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = correlation.MessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+            {
+                Title = $"c{index}",
+                UserId = "node",
+                CreatedAtUtc = index
+            });
+            var correlation = new NodeChatMessageCorrelation
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            };
+            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = correlation.MessageId,
+                RequestId = correlation.RequestId,
+                CreatedAtUtc = 1
+            });
             await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         }
 

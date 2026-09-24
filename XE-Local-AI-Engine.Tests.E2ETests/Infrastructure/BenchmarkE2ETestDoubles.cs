@@ -137,7 +137,16 @@ public static class BenchmarkE2ETestDoubles
                     policy.RequestedContextTokens,
                     runtime,
                     BenchmarkFrozenPolicies.DeterministicSampling()),
-                Intent = new BenchmarkRunLaunchIntent { Variant = "cpu", KvCacheType = "f16", KvCacheTypeSource = "auto", KvAutoReason = "cpu-variant", FlashAttentionMode = "off", IntendedLaunchIdentity = "e2e-intended-identity", IntendedExecutableSha256 = null }
+                Intent = new BenchmarkRunLaunchIntent
+                {
+                    Variant = "cpu",
+                    KvCacheType = "f16",
+                    KvCacheTypeSource = "auto",
+                    KvAutoReason = "cpu-variant",
+                    FlashAttentionMode = "off",
+                    IntendedLaunchIdentity = "e2e-intended-identity",
+                    IntendedExecutableSha256 = null
+                }
             });
         }
     }
@@ -163,7 +172,12 @@ public static class BenchmarkE2ETestDoubles
         {
             var definitions = await _agentDefinitions.ListAsync(cancellationToken);
             return definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single)
-                              .Select(static definition => new BenchmarkEligibleAgent { Id = definition.Id, Name = definition.Name, Version = definition.Version })
+                              .Select(static definition => new BenchmarkEligibleAgent
+                              {
+                                  Id = definition.Id,
+                                  Name = definition.Name,
+                                  Version = definition.Version
+                              })
                               .ToArray();
         }
 

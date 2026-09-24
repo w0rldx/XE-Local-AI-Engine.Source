@@ -21,8 +21,7 @@ internal sealed class ModelClassificationService : IModelClassificationService
 
     private readonly IModelClassificationStore _store;
 
-    public ModelClassificationService(
-        IModelClassificationStore store,
+    public ModelClassificationService(IModelClassificationStore store,
         IOllamaModelService ollamaModelService,
         ILogger<ModelClassificationService> logger)
     {

@@ -35,7 +35,13 @@ public sealed class CreateDevWorkflowWorkItemEndpoint : Endpoint<CreateDevWorkfl
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var created = await _authoring.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = req.Title, Request = req.Request, DevelopmentProjectId = req.DevelopmentProjectId }, ct);
+        var created = await _authoring.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand
+        {
+            WorkItemId = Guid.NewGuid(),
+            Title = req.Title,
+            Request = req.Request,
+            DevelopmentProjectId = req.DevelopmentProjectId
+        }, ct);
         await Send.CreatedAtAsync<GetDevWorkflowWorkItemEndpoint>(new
             {
                 workItemId = created.Id

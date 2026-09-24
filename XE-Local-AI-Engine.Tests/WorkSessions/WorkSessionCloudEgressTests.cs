@@ -32,8 +32,13 @@ public sealed class WorkSessionCloudEgressTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                        scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                             .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = cloudAgentId }));
+            scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
+                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                 {
+                     Title = null,
+                     Objective = null,
+                     AgentDefinitionId = cloudAgentId
+                 }));
 
         AssertEx.Contains(refusal.Message, "send them off the node");
     }
@@ -48,7 +53,12 @@ public sealed class WorkSessionCloudEgressTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = cloudAgentId });
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                                 {
+                                     Title = null,
+                                     Objective = null,
+                                     AgentDefinitionId = cloudAgentId
+                                 });
 
         AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "There is nothing extracted yet, so there is nothing to keep on the node.");
     }
@@ -65,7 +75,12 @@ public sealed class WorkSessionCloudEgressTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = cloudAgentId });
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                                 {
+                                     Title = null,
+                                     Objective = null,
+                                     AgentDefinitionId = cloudAgentId
+                                 });
 
         AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "The operator's opt-in is the one thing that makes this egress intentional.");
     }
@@ -81,7 +96,12 @@ public sealed class WorkSessionCloudEgressTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = localAgentId });
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                                 {
+                                     Title = null,
+                                     Objective = null,
+                                     AgentDefinitionId = localAgentId
+                                 });
 
         AssertEx.Equal(localAgentId, updated.AgentDefinitionId, "The gate is about leaving the node, not about changing agents.");
     }

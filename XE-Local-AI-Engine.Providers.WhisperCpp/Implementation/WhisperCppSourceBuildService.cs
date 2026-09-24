@@ -164,7 +164,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
                 if (_isRunning)
                 {
-                    return new WhisperCppSourceBuildStartResult { Outcome = WhisperCppSourceBuildStartOutcome.AlreadyRunning };
+                    return new WhisperCppSourceBuildStartResult
+                    {
+                        Outcome = WhisperCppSourceBuildStartOutcome.AlreadyRunning
+                    };
                 }
             }
 
@@ -178,7 +181,11 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 var outcome = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied)
                     ? WhisperCppSourceBuildStartOutcome.InsufficientDisk
                     : WhisperCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new WhisperCppSourceBuildStartResult { Outcome = outcome, Prerequisites = prerequisites };
+                return new WhisperCppSourceBuildStartResult
+                {
+                    Outcome = outcome,
+                    Prerequisites = prerequisites
+                };
             }
 
             var mutationReservation = _activityGate.TryAcquireMutationReservation();
@@ -264,7 +271,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
 
         startSignal.SetResult();
-        return new WhisperCppSourceBuildStartResult { Outcome = WhisperCppSourceBuildStartOutcome.Started };
+        return new WhisperCppSourceBuildStartResult
+        {
+            Outcome = WhisperCppSourceBuildStartOutcome.Started
+        };
     }
 
     /// <inheritdoc />
@@ -298,7 +308,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed is null)
             {
-                return new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled };
+                return new WhisperCppSourceBuildRemoveResult
+                {
+                    Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled
+                };
             }
 
             SetPhase(WhisperCppSourceBuildPhase.Removing);
@@ -306,7 +319,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             await _runtimeStore.DeleteAsync(ct).ConfigureAwait(false);
             _managedSignal.Clear();
             SetTerminal(WhisperCppSourceBuildPhase.Completed, error: null);
-            return new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.Removed };
+            return new WhisperCppSourceBuildRemoveResult
+            {
+                Outcome = WhisperCppSourceBuildRemoveOutcome.Removed
+            };
         }
         finally
         {
@@ -618,11 +634,19 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
             SetPhase(WhisperCppSourceBuildPhase.Adopting);
             await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
-            return new BuildCompletion { Phase = WhisperCppSourceBuildPhase.Completed, Error = null };
+            return new BuildCompletion
+            {
+                Phase = WhisperCppSourceBuildPhase.Completed,
+                Error = null
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new BuildCompletion { Phase = WhisperCppSourceBuildPhase.Cancelled, Error = null };
+            return new BuildCompletion
+            {
+                Phase = WhisperCppSourceBuildPhase.Cancelled,
+                Error = null
+            };
         }
         catch (TimeoutException exception)
         {

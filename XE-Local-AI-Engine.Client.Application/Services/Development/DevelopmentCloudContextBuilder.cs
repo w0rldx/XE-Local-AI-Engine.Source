@@ -148,7 +148,11 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
             throw new DevelopmentWorkspaceSecurityException("Development cloud context excerpts require canonical repository-relative paths.");
         }
 
-        return new DevelopmentCloudContextExcerpt { RelativePath = relativePath, Content = DevelopmentArtifactSanitizer.SanitizeText(excerpt.Content) };
+        return new DevelopmentCloudContextExcerpt
+        {
+            RelativePath = relativePath,
+            Content = DevelopmentArtifactSanitizer.SanitizeText(excerpt.Content)
+        };
     }
 
     private static byte[] SerializeCanonical(DevelopmentCloudContextBuildRequest request,

@@ -17,9 +17,9 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
             return new ProcessLaunchAdmissionSnapshot
             {
                 AdmittedKeys = _entries
-                                                      .Where(static pair => pair.Value.Admission is not null)
-                                                      .Select(static pair => pair.Key)
-                                                      .ToHashSet(),
+                               .Where(static pair => pair.Value.Admission is not null)
+                               .Select(static pair => pair.Key)
+                               .ToHashSet(),
                 HasRequestedKey = _entries.ContainsKey(requested),
                 HasGlobalBlocker = _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true })
             };

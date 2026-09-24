@@ -28,8 +28,8 @@ public sealed class ListEligibleBenchmarkModelsEndpoint : Endpoint<EligibleBench
     {
         var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct);
         await Send.OkAsync(new ListEligibleBenchmarkModelsResponse
-                  {
-                      Items = [.. models.Select(static model => model.ToResponse())]
-                  }, ct);
+        {
+            Items = [.. models.Select(static model => model.ToResponse())]
+        }, ct);
     }
 }

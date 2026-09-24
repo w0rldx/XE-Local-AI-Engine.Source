@@ -203,12 +203,22 @@ public sealed class MemorySemanticDeduplicatorTests
 
     private static MemoryDedupExisting Existing(string behavior, MemoryScope scope)
     {
-        return new MemoryDedupExisting { Id = Guid.NewGuid(), Version = 1, Scope = scope, Behavior = behavior };
+        return new MemoryDedupExisting
+        {
+            Id = Guid.NewGuid(),
+            Version = 1,
+            Scope = scope,
+            Behavior = behavior
+        };
     }
 
     private static MemoryDedupCandidate Candidate(string behavior, MemoryScope scope)
     {
-        return new MemoryDedupCandidate { Scope = scope, Behavior = behavior };
+        return new MemoryDedupCandidate
+        {
+            Scope = scope,
+            Behavior = behavior
+        };
     }
 
     // Deterministic text -> vector map so cosine (and thus threshold behaviour) is fully controllable and Ollama-free.
@@ -349,7 +359,11 @@ public sealed class MemorySemanticDeduplicatorTests
 
         public Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new EmbeddingModelResolution { Name = ResolvedModel, IsConfident = _isConfident });
+            return Task.FromResult(new EmbeddingModelResolution
+            {
+                Name = ResolvedModel,
+                IsConfident = _isConfident
+            });
         }
     }
 }

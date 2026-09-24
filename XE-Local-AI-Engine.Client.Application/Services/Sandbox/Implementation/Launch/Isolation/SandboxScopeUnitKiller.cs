@@ -152,7 +152,14 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
 
         var ages = ReadActiveDurations(names);
 
-        return [.. names.Select(name => new SandboxScopeUnitStatus { UnitName = name, ActiveFor = ages.TryGetValue(name, out var age) ? age : null })];
+        return
+        [
+            .. names.Select(name => new SandboxScopeUnitStatus
+            {
+                UnitName = name,
+                ActiveFor = ages.TryGetValue(name, out var age) ? age : null
+            })
+        ];
     }
 
     /// <summary>Asks the user manager how long each unit has been active, in ONE <c>systemctl show</c> call.</summary>

@@ -183,7 +183,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         // writing the passing implementation — otherwise `dotnet test` would exit non-zero for a reason that has
         // nothing to do with the network.
         await File.WriteAllTextAsync(Path.Combine(worktree, DevelopmentSyntheticSolutionRepository.LibrarySourcePath.Replace('/', Path.DirectorySeparatorChar)),
-                      DevelopmentSyntheticSolutionRepository.PassingLibrarySource);
+            DevelopmentSyntheticSolutionRepository.PassingLibrarySource);
 
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx,
             DevelopmentSyntheticSolutionRepository.SolutionPath);
@@ -194,12 +194,12 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         // assertion below would be measuring that instead.
         var cold = Path.Combine(_root, "runtime-cold");
         var coldEvidence = await RunAsync(probe,
-                worktree,
-                cold,
-                head,
-                profile,
-                SandboxNetworkPolicy.None,
-                DevelopmentCommandIds.DotnetRestore);
+            worktree,
+            cold,
+            head,
+            profile,
+            SandboxNetworkPolicy.None,
+            DevelopmentCommandIds.DotnetRestore);
         AssertEx.NotEqual(notExpected: 0,
             coldEvidence[^1].ExitCode,
             "a cold restore inside a sandbox with no egress must FAIL; it apparently reached packages from somewhere: "
@@ -209,22 +209,22 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         // command, the same runtime roots, with egress.
         var warm = Path.Combine(_root, "runtime-warm");
         var warmEvidence = await RunAsync(probe,
-                worktree,
-                warm,
-                head,
-                profile,
-                SandboxNetworkPolicy.Unrestricted,
-                DevelopmentCommandIds.DotnetRestore);
+            worktree,
+            warm,
+            head,
+            profile,
+            SandboxNetworkPolicy.Unrestricted,
+            DevelopmentCommandIds.DotnetRestore);
         AssertEx.Equal(expected: 0, warmEvidence[^1].ExitCode, warmEvidence[^1].StandardOutput + warmEvidence[^1].StandardError);
 
         // AGENT-FACING: the whole validation profile, denied egress, against the cache the warm left behind.
         var validated = await RunAsync(probe,
-                worktree,
-                warm,
-                head,
-                profile,
-                SandboxNetworkPolicy.None,
-                [.. profile.ValidationCommandIds]);
+            worktree,
+            warm,
+            head,
+            profile,
+            SandboxNetworkPolicy.None,
+            [.. profile.ValidationCommandIds]);
         foreach (var command in validated)
         {
             AssertEx.Equal(expected: 0,
@@ -378,14 +378,14 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 RequireEgressDenial = requireEgressDenial
             }));
         return await provider.PrepareAsync(snapshot,
-                                 new DevelopmentRepositoryBinding
-                                 {
-                                     ProjectId = snapshot.ProjectId,
-                                     SelectedFolderId = snapshot.SelectedFolderId!.Value,
-                                     Alias = "repository",
-                                     RepositoryRoot = repository,
-                                     RepositoryIdentityHash = identity
-                                 });
+            new DevelopmentRepositoryBinding
+            {
+                ProjectId = snapshot.ProjectId,
+                SelectedFolderId = snapshot.SelectedFolderId!.Value,
+                Alias = "repository",
+                RepositoryRoot = repository,
+                RepositoryIdentityHash = identity
+            });
     }
 
     private static async Task CloneDetachedAsync(string repository, string worktree)
@@ -506,7 +506,15 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = [.. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding { HostPath = mount.HostPath, SandboxPath = mount.SandboxPath, ReadOnly = mount.ReadOnly })]
+                Mounts =
+                [
+                    .. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding
+                    {
+                        HostPath = mount.HostPath,
+                        SandboxPath = mount.SandboxPath,
+                        ReadOnly = mount.ReadOnly
+                    })
+                ]
             });
         }
 

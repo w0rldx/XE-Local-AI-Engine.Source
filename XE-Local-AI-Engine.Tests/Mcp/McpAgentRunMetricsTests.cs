@@ -39,7 +39,12 @@ public sealed class McpAgentRunMetricsTests
             UpdatedAtUtc = 99
         };
 
-        metrics.Update(new McpAgentRunLedgerSnapshot { QueueDepth = 5, RunningCount = 2, Counters = counters });
+        metrics.Update(new McpAgentRunLedgerSnapshot
+        {
+            QueueDepth = 5,
+            RunningCount = 2,
+            Counters = counters
+        });
         capture.Observe();
 
         AssertGauge(capture, "mcp_agent_run_queue_depth", 5);
@@ -270,9 +275,17 @@ public sealed class McpAgentRunMetricsTests
                 }
             };
             _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
-                _measurements.Enqueue((instrument.Name, new CapturedMeasurement { Value = value, Tags = ToDictionary(tags) })));
+                _measurements.Enqueue((instrument.Name, new CapturedMeasurement
+                {
+                    Value = value,
+                    Tags = ToDictionary(tags)
+                })));
             _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
-                _measurements.Enqueue((instrument.Name, new CapturedMeasurement { Value = value, Tags = ToDictionary(tags) })));
+                _measurements.Enqueue((instrument.Name, new CapturedMeasurement
+                {
+                    Value = value,
+                    Tags = ToDictionary(tags)
+                })));
             _listener.Start();
         }
 

@@ -34,7 +34,16 @@ public sealed class BenchmarkComparisonExecutorTests
         store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
         var runner = Substitute.For<IInvocationRunner>();
-        var work = new BenchmarkClaimedWork { QueueSequence = 3, RunId = Guid.NewGuid(), Kind = BenchmarkWorkKind.Comparison, Attempt = 1, Version = 2, Run = Run(), ComparisonId = ComparisonId };
+        var work = new BenchmarkClaimedWork
+        {
+            QueueSequence = 3,
+            RunId = Guid.NewGuid(),
+            Kind = BenchmarkWorkKind.Comparison,
+            Attempt = 1,
+            Version = 2,
+            Run = Run(),
+            ComparisonId = ComparisonId
+        };
 
         await Executor(store, runner).ExecuteAsync(work, CancellationToken.None);
 
@@ -53,7 +62,16 @@ public sealed class BenchmarkComparisonExecutorTests
         string? failureMessage = null;
         store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
-        var work = new BenchmarkClaimedWork { QueueSequence = 3, RunId = Guid.NewGuid(), Kind = BenchmarkWorkKind.Comparison, Attempt = 1, Version = 2, Run = Run(), ComparisonId = ComparisonId };
+        var work = new BenchmarkClaimedWork
+        {
+            QueueSequence = 3,
+            RunId = Guid.NewGuid(),
+            Kind = BenchmarkWorkKind.Comparison,
+            Attempt = 1,
+            Version = 2,
+            Run = Run(),
+            ComparisonId = ComparisonId
+        };
 
         await Executor(store, Substitute.For<IInvocationRunner>()).ExecuteAsync(work, CancellationToken.None);
 
@@ -77,7 +95,11 @@ public sealed class BenchmarkComparisonExecutorTests
             new BenchmarkCancellationRegistry(),
             Substitute.For<IRuntimeEnvironmentFactsProvider>(),
             Substitute.For<IBenchmarkPairwiseFitter>(),
-            new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
+            new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 0,
+                Interval = TimeSpan.Zero
+            },
             NullLogger<BenchmarkComparisonExecutor>.Instance);
 
     private static BenchmarkComparisonRecord Comparison(int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion) =>

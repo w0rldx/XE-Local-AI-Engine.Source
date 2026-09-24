@@ -134,10 +134,10 @@ public sealed class SkillImportEndpointTests
         var preview = await PreviewArchiveAsync(factory, client, name);
 
         using var response = await CommitAsync(factory,
-                client,
-                preview.GetProperty("token").GetGuid(),
-                name,
-                acknowledged: false);
+            client,
+            preview.GetProperty("token").GetGuid(),
+            name,
+            acknowledged: false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name)).Count);
@@ -153,10 +153,10 @@ public sealed class SkillImportEndpointTests
         var preview = await PreviewArchiveAsync(factory, client, name);
 
         using var commitResponse = await CommitAsync(factory,
-                client,
-                preview.GetProperty("token").GetGuid(),
-                name,
-                acknowledged: true);
+            client,
+            preview.GetProperty("token").GetGuid(),
+            name,
+            acknowledged: true);
 
         AssertEx.Equal(HttpStatusCode.OK, commitResponse.StatusCode);
 

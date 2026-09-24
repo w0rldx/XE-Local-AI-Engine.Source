@@ -17,7 +17,7 @@ public sealed partial class DevWorkflowStore
                                        .OrderBy(entity => entity.Sequence)
                                        .ToListAsync(cancellationToken);
         var available = await LoadAvailableWorkSessionsAsync([.. nodeRuns.Where(entity => entity.WorkSessionId is not null).Select(entity => entity.WorkSessionId!.Value)],
-                cancellationToken);
+            cancellationToken);
         return [.. nodeRuns.Select(entity => NodeRunSnapshot(entity, available))];
     }
 
@@ -61,7 +61,11 @@ public sealed partial class DevWorkflowStore
                                    .Where(entity => entity.DevelopmentTaskId != null && developmentTaskIds.Contains(entity.DevelopmentTaskId.Value))
                                    .OrderByDescending(entity => entity.CreatedAtUtc)
                                    .ThenByDescending(entity => entity.Id)
-                                   .Select(entity => new DevelopmentTaskRunRow { DevelopmentTaskId = entity.DevelopmentTaskId!.Value, RunId = entity.RunId })
+                                   .Select(entity => new DevelopmentTaskRunRow
+                                   {
+                                       DevelopmentTaskId = entity.DevelopmentTaskId!.Value,
+                                       RunId = entity.RunId
+                                   })
                                    .ToListAsync(cancellationToken);
 
         return rows.GroupBy(static row => row.DevelopmentTaskId)

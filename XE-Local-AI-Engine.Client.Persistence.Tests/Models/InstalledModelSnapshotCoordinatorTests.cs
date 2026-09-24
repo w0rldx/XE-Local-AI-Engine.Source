@@ -187,7 +187,12 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         var weightsOnlyIdentity = CreateIdentity();
         var projectorIntent = CreateDownloadIntent() with
         {
-            Projector = new GgufProjectorAcquisitionMetadata { SourceDisplayName = "mmproj-model-f16.gguf", DeclaredSha256 = new string('c', 64), DeclaredSizeBytes = 7 }
+            Projector = new GgufProjectorAcquisitionMetadata
+            {
+                SourceDisplayName = "mmproj-model-f16.gguf",
+                DeclaredSha256 = new string('c', 64),
+                DeclaredSizeBytes = 7
+            }
         };
         var projectorIdentity = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())))
             .Resolve(projectorIntent);
@@ -216,9 +221,18 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         {
             ModelName = identity.CanonicalModelName,
             Kind = InstalledModelMutationKind.Acquire,
-            IntendedMembers = [
-                new IntendedInstalledModelMember { RelativePath = identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
-                new IntendedInstalledModelMember { RelativePath = identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
+            IntendedMembers =
+            [
+                new IntendedInstalledModelMember
+                {
+                    RelativePath = identity.RelativeGgufPath,
+                    Role = InstalledModelPhysicalMemberRole.Weight
+                },
+                new IntendedInstalledModelMember
+                {
+                    RelativePath = identity.RelativeSidecarPath,
+                    Role = InstalledModelPhysicalMemberRole.Sidecar
+                }
             ]
         };
 
@@ -398,8 +412,7 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         private readonly InstalledGgufSnapshot _snapshot;
         private readonly int _failuresBeforeSuccess;
 
-        public FakeSnapshotStore(
-            InstalledGgufCandidate candidate,
+        public FakeSnapshotStore(InstalledGgufCandidate candidate,
             InstalledGgufSnapshot snapshot,
             int failuresBeforeSuccess)
         {

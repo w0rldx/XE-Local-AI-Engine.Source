@@ -110,15 +110,15 @@ public sealed class ExternalAccessProfileBackfillTests
     public async Task NodeWithExplicitSwitchesAndNoProfile_KeepsItsSwitchesAndStaysUndecided()
     {
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-switches-no-profile",
-                """
-                {
-                  "autoCheckApplicationUpdates": false,
-                  "autoCheckRuntimeUpdates": false,
-                  "autoProvisionFirstRunModel": false
-                }
-                """,
-                expectedProfile: null,
-                expectedSwitches: false);
+            """
+            {
+              "autoCheckApplicationUpdates": false,
+              "autoCheckRuntimeUpdates": false,
+              "autoProvisionFirstRunModel": false
+            }
+            """,
+            expectedProfile: null,
+            expectedSwitches: false);
     }
 
     [Test]
@@ -127,16 +127,16 @@ public sealed class ExternalAccessProfileBackfillTests
         // "Offline" is unrecognised — the comparison is ordinal — so the normaliser hands the backfill "pending" beside
         // three false switches. Pending IS undecided: the gated services keep waiting and nothing is stamped.
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-junk-profile",
-                """
-                {
-                  "externalAccessProfile": "Offline",
-                  "autoCheckApplicationUpdates": false,
-                  "autoCheckRuntimeUpdates": false,
-                  "autoProvisionFirstRunModel": false
-                }
-                """,
-                StoredNodeSettings.ExternalAccessProfilePending,
-                expectedSwitches: false);
+            """
+            {
+              "externalAccessProfile": "Offline",
+              "autoCheckApplicationUpdates": false,
+              "autoCheckRuntimeUpdates": false,
+              "autoProvisionFirstRunModel": false
+            }
+            """,
+            StoredNodeSettings.ExternalAccessProfilePending,
+            expectedSwitches: false);
     }
 
     // The regression the round-2 review bought: a settings file holding ONLY an unrecognised profile. Nulling it made
@@ -146,11 +146,11 @@ public sealed class ExternalAccessProfileBackfillTests
     public async Task NodeWithAJunkProfileAndNoSwitches_IsReadAsPendingAndNotBackfilled()
     {
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-junk-profile-only",
-                """
-                { "externalAccessProfile": "Offline" }
-                """,
-                StoredNodeSettings.ExternalAccessProfilePending,
-                expectedSwitches: null);
+            """
+            { "externalAccessProfile": "Offline" }
+            """,
+            StoredNodeSettings.ExternalAccessProfilePending,
+            expectedSwitches: null);
     }
 
     [Test]
@@ -187,7 +187,7 @@ public sealed class ExternalAccessProfileBackfillTests
             var logger = new RecordingLogger<ExternalAccessProfileBackfillService>();
 
             await ExternalAccessProfileBackfillService
-                  .BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), logger);
+                .BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), logger);
 
             var after = await File.ReadAllBytesAsync(settingsPath);
             AssertEx.True(before.SequenceEqual(after), "The backfill must not write over an unreadable settings file.");
@@ -316,7 +316,11 @@ public sealed class ExternalAccessProfileBackfillTests
     {
         var authService = Substitute.For<INodeAuthService>();
         authService.GetStatusAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>())
-                   .Returns(Task.FromResult(new NodeAuthStatus { SetupRequired = setupRequired, Authenticated = false }));
+                   .Returns(Task.FromResult(new NodeAuthStatus
+                   {
+                       SetupRequired = setupRequired,
+                       Authenticated = false
+                   }));
         return authService;
     }
 

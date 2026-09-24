@@ -106,7 +106,15 @@ public sealed partial class DevWorkflowStore : IDevWorkflowStore
             run.UpdatedAtUtc = Now();
             await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new DevWorkflowMutationResult { RunId = runId, Sequence = sequence, Version = run.Version, Status = run.Status, GraphRevision = run.GraphRevision, SupersededArtifactId = outcomes[0].SupersededArtifactId };
+            return new DevWorkflowMutationResult
+            {
+                RunId = runId,
+                Sequence = sequence,
+                Version = run.Version,
+                Status = run.Status,
+                GraphRevision = run.GraphRevision,
+                SupersededArtifactId = outcomes[0].SupersededArtifactId
+            };
         }
         catch (DbUpdateException exception)
         {
@@ -219,11 +227,19 @@ public sealed partial class DevWorkflowStore : IDevWorkflowStore
     {
         var attempts = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
-                                       .Select(entity => new NodeRunAttempt { NodeRunId = entity.Id, Attempt = entity.Attempt })
+                                       .Select(entity => new NodeRunAttempt
+                                       {
+                                           NodeRunId = entity.Id,
+                                           Attempt = entity.Attempt
+                                       })
                                        .ToListAsync(cancellationToken);
         var recorded = await _dbContext.DevWorkflowDecisions.AsNoTracking()
                                        .Where(entity => entity.RunId == runId && entity.Decision == DevWorkflowDecisionKind.Retry)
-                                       .Select(entity => new NodeRunAttempt { NodeRunId = entity.NodeRunId, Attempt = entity.Attempt })
+                                       .Select(entity => new NodeRunAttempt
+                                       {
+                                           NodeRunId = entity.NodeRunId,
+                                           Attempt = entity.Attempt
+                                       })
                                        .ToListAsync(cancellationToken);
 
         var spent = attempts.Sum(static row => row.Attempt - 1);
@@ -260,7 +276,15 @@ public sealed partial class DevWorkflowStore : IDevWorkflowStore
         var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken);
         return run is null
             ? null
-            : new DevWorkflowMutationResult { RunId = runId, Sequence = recorded.Sequence, Version = run.Version, Status = run.Status, GraphRevision = run.GraphRevision, SupersededArtifactId = RecordedSupersededArtifactId(recorded) };
+            : new DevWorkflowMutationResult
+            {
+                RunId = runId,
+                Sequence = recorded.Sequence,
+                Version = run.Version,
+                Status = run.Status,
+                GraphRevision = run.GraphRevision,
+                SupersededArtifactId = RecordedSupersededArtifactId(recorded)
+            };
     }
 
     /// <summary>

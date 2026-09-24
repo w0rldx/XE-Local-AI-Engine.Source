@@ -21,8 +21,7 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     private readonly IUsageProviderResolver _usageProviderResolver;
     private readonly TimeProvider _timeProvider;
 
-    public NodeChatInvocationPump(
-        INodeChatPersistenceService persistence,
+    public NodeChatInvocationPump(INodeChatPersistenceService persistence,
         IUsageProviderResolver usageProviderResolver,
         TimeProvider timeProvider)
     {
@@ -55,7 +54,13 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
 
         if (!hasContentDelta && !hasReasoningDelta)
         {
-            return new NodeChatPumpFlushResult { Cursor = cursor, Persisted = null, ContentDelta = null, ReasoningDelta = null };
+            return new NodeChatPumpFlushResult
+            {
+                Cursor = cursor,
+                Persisted = null,
+                ContentDelta = null,
+                ReasoningDelta = null
+            };
         }
 
         var contentDelta = hasContentDelta ? state.StreamedContent[cursor.Content.Length..] : null;
@@ -63,15 +68,21 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
         var nextCursor = new NodeChatPumpCursor(state.StreamedContent, state.StreamedThinkingContent);
 
         var persisted = await _persistence.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest
-        {
-            Correlation = correlation,
-            Content = nextCursor.Content,
-            Reasoning = string.IsNullOrEmpty(nextCursor.Reasoning) ? null : nextCursor.Reasoning,
-            UpdatedAtUtc = NowUnixMilliseconds()
-        },
+            {
+                Correlation = correlation,
+                Content = nextCursor.Content,
+                Reasoning = string.IsNullOrEmpty(nextCursor.Reasoning) ? null : nextCursor.Reasoning,
+                UpdatedAtUtc = NowUnixMilliseconds()
+            },
             cancellationToken);
 
-        return new NodeChatPumpFlushResult { Cursor = nextCursor, Persisted = persisted, ContentDelta = contentDelta, ReasoningDelta = reasoningDelta };
+        return new NodeChatPumpFlushResult
+        {
+            Cursor = nextCursor,
+            Persisted = persisted,
+            ContentDelta = contentDelta,
+            ReasoningDelta = reasoningDelta
+        };
     }
 
     /// <summary>
@@ -131,35 +142,40 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
         var terminalError = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error;
 
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-        {
-            Correlation = correlation,
-            Status = terminalStatus,
-            UpdatedAtUtc = NowUnixMilliseconds(),
-            Content = state.StreamedContent,
-            Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-            Error = terminalError,
-            Model = state.ModelUsed ?? requestedModel,
-            InputCount = state.InputTokens,
-            OutputCount = state.OutputTokens,
-            TotalCount = state.TotalTokens,
-            ReasoningCount = state.ReasoningTokens,
-            // Null when the caller assembled no interleave (platform path, or a turn with no parts); the persisted
-            // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
-            Parts = parts,
-            // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
-            GenerationDurationMs = state.GenerationDurationMs,
-            Envelope = envelope,
-            // KB sources that grounded this turn; null when the turn used no knowledge base, which
-            // preserves any existing persisted sources on the row.
-            Sources = sources
-        },
+            {
+                Correlation = correlation,
+                Status = terminalStatus,
+                UpdatedAtUtc = NowUnixMilliseconds(),
+                Content = state.StreamedContent,
+                Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
+                Error = terminalError,
+                Model = state.ModelUsed ?? requestedModel,
+                InputCount = state.InputTokens,
+                OutputCount = state.OutputTokens,
+                TotalCount = state.TotalTokens,
+                ReasoningCount = state.ReasoningTokens,
+                // Null when the caller assembled no interleave (platform path, or a turn with no parts); the persisted
+                // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
+                Parts = parts,
+                // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
+                GenerationDurationMs = state.GenerationDurationMs,
+                Envelope = envelope,
+                // KB sources that grounded this turn; null when the turn used no knowledge base, which
+                // preserves any existing persisted sources on the row.
+                Sources = sources
+            },
             CancellationToken.None);
 
         // The transition guard may have rejected this terminalize, so the persisted row is the authoritative winning
         // state and both the returned status and the single SSE terminal are built from it.
         var winningStatus = persisted.Status;
 
-        return new NodeChatPumpTerminalResult { Persisted = persisted, TerminalStatus = winningStatus, EventType = MapTerminalEventType(winningStatus, eventType) };
+        return new NodeChatPumpTerminalResult
+        {
+            Persisted = persisted,
+            TerminalStatus = winningStatus,
+            EventType = MapTerminalEventType(winningStatus, eventType)
+        };
     }
 
     /// <summary>
@@ -179,29 +195,39 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
 
         // Durable run ledger: a stream that ended without a terminal state still gets one envelope row, written
         // atomically with the terminal message row. It is thin — no InvocationState exists here — but carries the status.
-        var envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() };
+        var envelope = new AgentRunEnvelopeMetadata
+        {
+            InvocationId = null,
+            DurationMs = 0L,
+            TraceId = CurrentTraceId()
+        };
 
         // A user cancel persists NO error text; an interrupted stream (process/stream
         // loss) records the interrupted marker so the row is distinguishable on reload. Failures never reach this path.
         var interruptedError = wasCancelled ? null : terminalStatus;
 
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-        {
-            Correlation = correlation,
-            Status = terminalStatus,
-            UpdatedAtUtc = NowUnixMilliseconds(),
-            Content = cursor.Content,
-            Reasoning = string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
-            Error = interruptedError,
-            Envelope = envelope
-        },
+            {
+                Correlation = correlation,
+                Status = terminalStatus,
+                UpdatedAtUtc = NowUnixMilliseconds(),
+                Content = cursor.Content,
+                Reasoning = string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
+                Error = interruptedError,
+                Envelope = envelope
+            },
             CancellationToken.None);
 
         // The persisted row is the winning state: the guard may have rejected an Interrupted write against an already
         // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the result from it.
         var winningStatus = persisted.Status;
 
-        return new NodeChatPumpTerminalResult { Persisted = persisted, TerminalStatus = winningStatus, EventType = MapTerminalEventType(winningStatus, eventType) };
+        return new NodeChatPumpTerminalResult
+        {
+            Persisted = persisted,
+            TerminalStatus = winningStatus,
+            EventType = MapTerminalEventType(winningStatus, eventType)
+        };
     }
 
     /// <summary>Whether a state represents a terminal invocation outcome the pump should terminalize on.</summary>

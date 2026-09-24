@@ -147,16 +147,16 @@ public sealed class IntegrationTriggerServiceTests
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
-                                      new IntegrationTriggerUpdateInput
-                                      {
-                                          ExpectedVersion = created.Version,
-                                          DisplayName = "Renamed label",
-                                          Description = "notes",
-                                          Enabled = false,
-                                          TargetAgentDefinitionId = agentId,
-                                          SessionPolicy = IntegrationSessionPolicy.PerInvocation,
-                                          AcceptedInputKinds = IntegrationInputKinds.Text
-                                      });
+            new IntegrationTriggerUpdateInput
+            {
+                ExpectedVersion = created.Version,
+                DisplayName = "Renamed label",
+                Description = "notes",
+                Enabled = false,
+                TargetAgentDefinitionId = agentId,
+                SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+                AcceptedInputKinds = IntegrationInputKinds.Text
+            });
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         var updated = AssertEx.NotNull(result.Trigger);
@@ -175,16 +175,16 @@ public sealed class IntegrationTriggerServiceTests
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
-                                      new IntegrationTriggerUpdateInput
-                                      {
-                                          ExpectedVersion = created.Version + 7,
-                                          DisplayName = "Renamed label",
-                                          Description = null,
-                                          Enabled = true,
-                                          TargetAgentDefinitionId = agentId,
-                                          SessionPolicy = IntegrationSessionPolicy.PerInvocation,
-                                          AcceptedInputKinds = IntegrationInputKinds.Text
-                                      });
+            new IntegrationTriggerUpdateInput
+            {
+                ExpectedVersion = created.Version + 7,
+                DisplayName = "Renamed label",
+                Description = null,
+                Enabled = true,
+                TargetAgentDefinitionId = agentId,
+                SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+                AcceptedInputKinds = IntegrationInputKinds.Text
+            });
 
         AssertEx.Equal(IntegrationTriggerOutcome.VersionConflict, result.Outcome);
     }
@@ -195,16 +195,16 @@ public sealed class IntegrationTriggerServiceTests
         var harness = new Harness();
 
         var result = await harness.Service.UpdateAsync(Guid.NewGuid(),
-                                      new IntegrationTriggerUpdateInput
-                                      {
-                                          ExpectedVersion = 1,
-                                          DisplayName = "Label",
-                                          Description = null,
-                                          Enabled = true,
-                                          TargetAgentDefinitionId = Guid.NewGuid(),
-                                          SessionPolicy = IntegrationSessionPolicy.PerInvocation,
-                                          AcceptedInputKinds = IntegrationInputKinds.Text
-                                      });
+            new IntegrationTriggerUpdateInput
+            {
+                ExpectedVersion = 1,
+                DisplayName = "Label",
+                Description = null,
+                Enabled = true,
+                TargetAgentDefinitionId = Guid.NewGuid(),
+                SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+                AcceptedInputKinds = IntegrationInputKinds.Text
+            });
 
         AssertEx.Equal(IntegrationTriggerOutcome.NotFound, result.Outcome);
     }
@@ -218,16 +218,16 @@ public sealed class IntegrationTriggerServiceTests
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
-                                      new IntegrationTriggerUpdateInput
-                                      {
-                                          ExpectedVersion = created.Version,
-                                          DisplayName = "Label",
-                                          Description = null,
-                                          Enabled = true,
-                                          TargetAgentDefinitionId = agentId,
-                                          SessionPolicy = IntegrationSessionPolicy.CallerManaged,
-                                          AcceptedInputKinds = IntegrationInputKinds.Text
-                                      });
+            new IntegrationTriggerUpdateInput
+            {
+                ExpectedVersion = created.Version,
+                DisplayName = "Label",
+                Description = null,
+                Enabled = true,
+                TargetAgentDefinitionId = agentId,
+                SessionPolicy = IntegrationSessionPolicy.CallerManaged,
+                AcceptedInputKinds = IntegrationInputKinds.Text
+            });
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);

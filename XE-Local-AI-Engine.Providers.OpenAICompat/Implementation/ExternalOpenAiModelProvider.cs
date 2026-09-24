@@ -115,7 +115,12 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     public async Task<LocalModelRuntimeInfo?> GetRuntimeInfoAsync(string modelName, CancellationToken ct)
     {
         var registration = await _registry.TryResolveAsync(modelName, ct).ConfigureAwait(false);
-        return registration?.Model.ContextLength is > 0 ? new LocalModelRuntimeInfo { EffectiveContextTokens = registration.Model.ContextLength.Value } : null;
+        return registration?.Model.ContextLength is > 0
+            ? new LocalModelRuntimeInfo
+            {
+                EffectiveContextTokens = registration.Model.ContextLength.Value
+            }
+            : null;
     }
 
     /// <inheritdoc />

@@ -61,8 +61,17 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
             EmbeddingModel = "test-embedding-model",
             VectorIdentity = "test-embedding-model::native:v1:1",
             VectorDimension = 1,
-            Sections = [new KnowledgeChunkingSection { Ordinal = 0, Heading = null, Level = null }],
-            Chunks = [
+            Sections =
+            [
+                new KnowledgeChunkingSection
+                {
+                    Ordinal = 0,
+                    Heading = null,
+                    Level = null
+                }
+            ],
+            Chunks =
+            [
                 new KnowledgeIndexChunk
                 {
                     ChunkIndex = 0,

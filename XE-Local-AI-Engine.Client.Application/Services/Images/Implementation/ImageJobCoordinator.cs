@@ -175,7 +175,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
         var items = await store.ListAsync(limit, offset, cancellationToken);
         var total = await store.CountAsync(cancellationToken);
-        return new ImageJobPage { Items = items, TotalCount = total };
+        return new ImageJobPage
+        {
+            Items = items,
+            TotalCount = total
+        };
     }
 
     public async Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
@@ -340,21 +344,21 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             // Persist the image encrypted-at-rest BEFORE marking the job succeeded.
             var imageId = Guid.NewGuid();
             await _imageStore.AddAsync(jobId,
-                                 imageId,
-                                 result.ImageBytes,
-                                 new GeneratedImageMetadata
-                                 {
-                                     Width = result.Width,
-                                     Height = result.Height
-                                 },
-                                 CancellationToken.None);
+                imageId,
+                result.ImageBytes,
+                new GeneratedImageMetadata
+                {
+                    Width = result.Width,
+                    Height = result.Height
+                },
+                CancellationToken.None);
 
             var durationMs = (long)result.Duration.TotalMilliseconds;
             // The runtime reports the dimensions of the PNG it actually produced (rounded up to a multiple of 64), which
             // is what the job row must record — the requested size is not what the operator can see.
             await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, result.Width, result.Height, result.Seed, CancellationToken.None),
-                    jobId,
-                    "mark succeeded");
+                jobId,
+                "mark succeeded");
             PushStatus(jobId, ImageJobStatus.Succeeded, queuePosition: null, elapsedMs: durationMs, imageId: imageId, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
         }
         catch (OperationCanceledException)
@@ -444,19 +448,19 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
         await store.CreateQueuedAsync(new ImageJobCreate
-                   {
-                       Id = jobId,
-                       ModelName = input.ModelName,
-                       Prompt = input.Prompt,
-                       NegativePrompt = input.NegativePrompt,
-                       Seed = input.Seed,
-                       Width = input.Width,
-                       Height = input.Height,
-                       Steps = input.Steps,
-                       Sampler = input.Sampler ?? string.Empty,
-                       CfgScale = input.CfgScale,
-                       CreatedAtUtc = createdAtUtc
-                   }, cancellationToken);
+        {
+            Id = jobId,
+            ModelName = input.ModelName,
+            Prompt = input.Prompt,
+            NegativePrompt = input.NegativePrompt,
+            Seed = input.Seed,
+            Width = input.Width,
+            Height = input.Height,
+            Steps = input.Steps,
+            Sampler = input.Sampler ?? string.Empty,
+            CfgScale = input.CfgScale,
+            CreatedAtUtc = createdAtUtc
+        }, cancellationToken);
     }
 
     // Runs a persistence action in a fresh scope, swallowing failures with a warning so a detached run task never faults
@@ -528,7 +532,22 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         // Seq is assigned for EVERY push, buffered or not, so the client's monotonic dedupe stays correct across the
         // two delivery paths; only the retention in the replay log is conditional.
         var payload = (ImageJobStatusHubEvent)log.Append(ImageJobHubEvents.StatusChanged,
-            seq => new ImageJobStatusHubEvent { JobId = jobId, Phase = status.ToString(), QueuePosition = queuePosition, ElapsedMs = elapsedMs, ImageId = imageId, SanitizedError = sanitizedError, OccurredAtUtc = nowUnixMs, Seq = seq, GenerationPhase = detail.GenerationPhase, Step = detail.Step, TotalSteps = detail.TotalSteps, SecondsPerIteration = detail.SecondsPerIteration, EstimatedRemainingMs = detail.EstimatedRemainingMs },
+            seq => new ImageJobStatusHubEvent
+            {
+                JobId = jobId,
+                Phase = status.ToString(),
+                QueuePosition = queuePosition,
+                ElapsedMs = elapsedMs,
+                ImageId = imageId,
+                SanitizedError = sanitizedError,
+                OccurredAtUtc = nowUnixMs,
+                Seq = seq,
+                GenerationPhase = detail.GenerationPhase,
+                Step = detail.Step,
+                TotalSteps = detail.TotalSteps,
+                SecondsPerIteration = detail.SecondsPerIteration,
+                EstimatedRemainingMs = detail.EstimatedRemainingMs
+            },
             isTerminal,
             nowUnixMs,
             buffer,
@@ -647,7 +666,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         public required long? EstimatedRemainingMs { get; init; }
 
-        public static ImageJobProgressDetail None { get; } = new() { GenerationPhase = null, Step = null, TotalSteps = null, SecondsPerIteration = null, EstimatedRemainingMs = null };
+        public static ImageJobProgressDetail None { get; } = new()
+        {
+            GenerationPhase = null,
+            Step = null,
+            TotalSteps = null,
+            SecondsPerIteration = null,
+            EstimatedRemainingMs = null
+        };
     }
 
     /// <summary>
@@ -720,7 +746,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
                 if (buffer)
                 {
-                    _events.Add(new BufferedEvent { MethodName = methodName, Payload = payload, Seq = seq });
+                    _events.Add(new BufferedEvent
+                    {
+                        MethodName = methodName,
+                        Payload = payload,
+                        Seq = seq
+                    });
                     if (_events.Count > _maxEvents)
                     {
                         _events.RemoveAt(index: 0);
@@ -744,7 +775,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 var copy = new List<ImageJobBufferedEvent>(_events.Count);
                 foreach (var buffered in _events)
                 {
-                    copy.Add(new ImageJobBufferedEvent { MethodName = buffered.MethodName, Payload = buffered.Payload });
+                    copy.Add(new ImageJobBufferedEvent
+                    {
+                        MethodName = buffered.MethodName,
+                        Payload = buffered.Payload
+                    });
                 }
 
                 return copy;

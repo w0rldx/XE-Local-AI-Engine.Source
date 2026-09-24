@@ -74,7 +74,11 @@ internal sealed class GoldenAssertion
             return null;
         }
 
-        return new GoldenAssertion { RequiredPhrases = Filter(raw.RequiredPhrases), ForbiddenPhrases = Filter(raw.ForbiddenPhrases) };
+        return new GoldenAssertion
+        {
+            RequiredPhrases = Filter(raw.RequiredPhrases),
+            ForbiddenPhrases = Filter(raw.ForbiddenPhrases)
+        };
     }
 
     /// <summary>

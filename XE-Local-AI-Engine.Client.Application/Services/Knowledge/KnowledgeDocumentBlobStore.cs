@@ -133,32 +133,41 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         if (inserted == 0)
         {
             var existing = await SelectDocumentByIdentityAsync(connection,
-                    collectionId,
-                    sourceKind,
-                    sourceId,
-                    sourcePath,
-                    input.ContentHash,
-                    repositorySource,
-                    cancellationToken);
+                collectionId,
+                sourceKind,
+                sourceId,
+                sourcePath,
+                input.ContentHash,
+                repositorySource,
+                cancellationToken);
             if (existing is not { } row || row.DocumentId == Guid.Empty)
             {
-                return new KnowledgeDocumentAddResult { DocumentId = Guid.Empty, WasInserted = false };
+                return new KnowledgeDocumentAddResult
+                {
+                    DocumentId = Guid.Empty,
+                    WasInserted = false
+                };
             }
 
             if (repositorySource && !string.Equals(row.ContentHash, input.ContentHash, StringComparison.Ordinal))
             {
                 await UpdateRepositoryDocumentAsync(connection,
-                        dbContext,
-                        row,
-                        input,
-                        collectionId,
-                        sourceKind,
-                        sourceId!,
-                        sourcePath!,
-                        extension,
-                        now,
-                        cancellationToken);
-                return new KnowledgeDocumentAddResult { DocumentId = row.DocumentId, WasInserted = false, WasUpdated = true };
+                    dbContext,
+                    row,
+                    input,
+                    collectionId,
+                    sourceKind,
+                    sourceId!,
+                    sourcePath!,
+                    extension,
+                    now,
+                    cancellationToken);
+                return new KnowledgeDocumentAddResult
+                {
+                    DocumentId = row.DocumentId,
+                    WasInserted = false,
+                    WasUpdated = true
+                };
             }
 
             // Dedupe hit: unchanged content already exists. Do not write a second blob — but if a crash between the
@@ -172,7 +181,11 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken);
             }
 
-            return new KnowledgeDocumentAddResult { DocumentId = row.DocumentId, WasInserted = false };
+            return new KnowledgeDocumentAddResult
+            {
+                DocumentId = row.DocumentId,
+                WasInserted = false
+            };
         }
 
         // Only write the encrypted blob for a freshly inserted row so a dedupe never orphans bytes on disk. If the blob
@@ -187,7 +200,11 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             throw;
         }
 
-        return new KnowledgeDocumentAddResult { DocumentId = input.DocumentId, WasInserted = true };
+        return new KnowledgeDocumentAddResult
+        {
+            DocumentId = input.DocumentId,
+            WasInserted = true
+        };
     }
 
     /// <summary>Encrypts and writes a document blob via a temp sibling plus an atomic rename.</summary>
@@ -275,7 +292,11 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var documentsDirectory = DocumentsDirectory();
         if (!Directory.Exists(documentsDirectory))
         {
-            return new KnowledgeBlobReconciliationResult { RestoredBlobNames = [], RemovedLitterCount = 0 };
+            return new KnowledgeBlobReconciliationResult
+            {
+                RestoredBlobNames = [],
+                RemovedLitterCount = 0
+            };
         }
 
         var staleBefore = (_timeProvider.GetUtcNow() - InterruptedWriteGrace).UtcDateTime;
@@ -308,7 +329,11 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             }
         }
 
-        return new KnowledgeBlobReconciliationResult { RestoredBlobNames = restored, RemovedLitterCount = removed };
+        return new KnowledgeBlobReconciliationResult
+        {
+            RestoredBlobNames = restored,
+            RemovedLitterCount = removed
+        };
     }
 
     public Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken)
@@ -495,7 +520,12 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var storedContentHash = await reader.IsDBNullAsync(2, cancellationToken)
             ? string.Empty
             : reader.GetString(2);
-        return new DocumentIdentity { DocumentId = documentId, Extension = extension, ContentHash = storedContentHash };
+        return new DocumentIdentity
+        {
+            DocumentId = documentId,
+            Extension = extension,
+            ContentHash = storedContentHash
+        };
     }
 
     private static async Task<string?> SelectExtensionAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)

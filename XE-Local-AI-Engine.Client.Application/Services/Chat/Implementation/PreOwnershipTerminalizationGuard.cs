@@ -23,8 +23,7 @@ internal sealed class PreOwnershipTerminalizationGuard : IAsyncDisposable
 
     private bool _ownershipEstablished;
 
-    public PreOwnershipTerminalizationGuard(
-        INodeChatPersistenceService persistence,
+    public PreOwnershipTerminalizationGuard(INodeChatPersistenceService persistence,
         NodeChatMessageCorrelation correlation,
         TimeProvider timeProvider,
         ILogger logger)
@@ -63,13 +62,18 @@ internal sealed class PreOwnershipTerminalizationGuard : IAsyncDisposable
             // A thin run envelope rides along so this terminal row gets one in the SAME transaction, or this would be
             // the one live path writing a terminal without it. No InvocationState exists here, so the detail is empty.
             await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-            {
-                Correlation = _correlation,
-                Status = NodeChatMessageStatusValues.Interrupted,
-                UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                Error = PreOwnershipInterruptedError,
-                Envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() }
-            },
+                {
+                    Correlation = _correlation,
+                    Status = NodeChatMessageStatusValues.Interrupted,
+                    UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                    Error = PreOwnershipInterruptedError,
+                    Envelope = new AgentRunEnvelopeMetadata
+                    {
+                        InvocationId = null,
+                        DurationMs = 0L,
+                        TraceId = CurrentTraceId()
+                    }
+                },
                 CancellationToken.None);
         }
         catch (Exception exception)

@@ -23,8 +23,7 @@ public sealed class DatasetGenerationHostedService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IDatasetGenerationQueueSignal _signal;
 
-    public DatasetGenerationHostedService(
-        IServiceScopeFactory scopeFactory,
+    public DatasetGenerationHostedService(IServiceScopeFactory scopeFactory,
         IDatasetGenerationQueueSignal signal,
         IDatasetGenerationEventBuffer events,
         IGpuWorkGate gpuWorkGate,

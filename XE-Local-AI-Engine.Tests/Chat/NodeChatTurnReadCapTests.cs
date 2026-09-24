@@ -37,7 +37,13 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
 
         // The synopsis covers up to sequence 3, so the turn drops sequences 1-3 from the verbatim history. Set it LAST:
         // both SetSelectedPathAsync and CreateMessageVariantAsync deliberately invalidate a stored synopsis.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = built.ConversationId, Summary = "SYNOPSIS", CoversToSequence = 3, UpdatedAtUtc = 60 });
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        {
+            ConversationId = built.ConversationId,
+            Summary = "SYNOPSIS",
+            CoversToSequence = 3,
+            UpdatedAtUtc = 60
+        });
 
         var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
         var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
@@ -138,7 +144,13 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         // Sequences are 0-based: 0 user-one, 1 assistant-one (sibling A), 2 user-two, 3 assistant-two, 4 assistant-one-variant
         // (sibling B). The boundary sits at 2, so the cap blanks sibling A's payload and keeps assistant-two's — the one
         // message the turn still sends verbatim.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = built.ConversationId, Summary = "SYNOPSIS", CoversToSequence = 2, UpdatedAtUtc = 60 });
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        {
+            ConversationId = built.ConversationId,
+            Summary = "SYNOPSIS",
+            CoversToSequence = 2,
+            UpdatedAtUtc = 60
+        });
 
         var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
         var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
@@ -173,14 +185,37 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         // the full read carries the parts, the turn read does not.
         await using var provider = await BuildProviderAsync("turn-read-cap-parts.sqlite");
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Parts", UserId = "node", CreatedAtUtc = 10 });
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Parts",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
         var conversationId = conversation.ConversationId;
 
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "user-one", CreatedAtUtc = 11 });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "user-one",
+            CreatedAtUtc = 11
+        });
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = 12, Model = "llama" });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            CreatedAtUtc = 12,
+            Model = "llama"
+        });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -191,20 +226,27 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             Reasoning = null,
             Error = null,
             Model = "llama",
-            Parts = [
-                             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
-                                 Sequence: 0,
-                                 Text: null,
-                                 "call-1",
-                                 "save_artifact",
-                                 NodeChatToolPartStates.Received,
-                                 "{\"name\":\"s6.txt\"}",
-                                 "saved")
-                         ]
+            Parts =
+            [
+                new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
+                    Sequence: 0,
+                    Text: null,
+                    "call-1",
+                    "save_artifact",
+                    NodeChatToolPartStates.Received,
+                    "{\"name\":\"s6.txt\"}",
+                    "saved")
+            ]
         });
 
         // The synopsis covers the assistant row itself (sequence 1), which is exactly the shape the survivor rule exists for.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = conversationId, Summary = "SYNOPSIS", CoversToSequence = 1, UpdatedAtUtc = 60 });
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        {
+            ConversationId = conversationId,
+            Summary = "SYNOPSIS",
+            CoversToSequence = 1,
+            UpdatedAtUtc = 60
+        });
 
         var full = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(conversationId));
@@ -228,8 +270,20 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         await using var provider = await BuildProviderAsync("read-message-targeted.sqlite");
         var service = CreateService(provider);
         var built = await BuildBranchedConversationAsync(service);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest { ConversationId = built.ConversationId, MessageId = built.NewerSiblingId, Rating = "up", Comment = "nice", UpdatedAtUtc = 40 });
-        var other = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Other", UserId = "node", CreatedAtUtc = 10 });
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest
+        {
+            ConversationId = built.ConversationId,
+            MessageId = built.NewerSiblingId,
+            Rating = "up",
+            Comment = "nice",
+            UpdatedAtUtc = 40
+        });
+        var other = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Other",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
 
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
@@ -295,18 +349,47 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     /// </summary>
     private static async Task<BranchedConversation> BuildBranchedConversationAsync(NodeChatPersistenceService service, bool pinOldSibling = true)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Branched", UserId = "node", CreatedAtUtc = 10 });
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Branched",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
         var conversationId = conversation.ConversationId;
 
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "user-one", CreatedAtUtc = 11 });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "user-one",
+            CreatedAtUtc = 11
+        });
         var oldSiblingId = await CompleteAssistantAsync(service, conversationId, "assistant-one", "reasoning-one", createdAtUtc: 12);
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "user-two", CreatedAtUtc = 13 });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "user-two",
+            CreatedAtUtc = 13
+        });
         await CompleteAssistantAsync(service, conversationId, "assistant-two", "reasoning-two", createdAtUtc: 14);
 
         var newerSiblingId = Guid.NewGuid();
         var variantRequestId = Guid.NewGuid();
-        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest { ConversationId = conversationId, OriginalMessageId = oldSiblingId, NewMessageId = newerSiblingId, RequestId = variantRequestId, CreatedAtUtc = 15 });
-        var variantCorrelation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = newerSiblingId, RequestId = variantRequestId };
+        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+        {
+            ConversationId = conversationId,
+            OriginalMessageId = oldSiblingId,
+            NewMessageId = newerSiblingId,
+            RequestId = variantRequestId,
+            CreatedAtUtc = 15
+        });
+        var variantCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = newerSiblingId,
+            RequestId = variantRequestId
+        };
         await service.MarkAssistantStreamingAsync(variantCorrelation, updatedAtUtc: 16);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -330,14 +413,19 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             {
                 ConversationId = conversationId,
                 SelectedPath = new Dictionary<Guid, Guid>
-                             {
-                                 [variantGroupId!.Value] = oldSiblingId
-                             },
+                {
+                    [variantGroupId!.Value] = oldSiblingId
+                },
                 UpdatedAtUtc = 18
             });
         }
 
-        return new BranchedConversation { ConversationId = conversationId, PinnedOldSiblingId = oldSiblingId, NewerSiblingId = newerSiblingId };
+        return new BranchedConversation
+        {
+            ConversationId = conversationId,
+            PinnedOldSiblingId = oldSiblingId,
+            NewerSiblingId = newerSiblingId
+        };
     }
 
     private static async Task<Guid> CompleteAssistantAsync(NodeChatPersistenceService service,
@@ -348,8 +436,20 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     {
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = createdAtUtc, Model = "llama" });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            CreatedAtUtc = createdAtUtc,
+            Model = "llama"
+        });
         await service.MarkAssistantStreamingAsync(correlation, createdAtUtc);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {

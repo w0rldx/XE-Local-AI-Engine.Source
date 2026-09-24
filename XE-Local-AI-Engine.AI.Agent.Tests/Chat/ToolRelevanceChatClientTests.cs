@@ -742,7 +742,11 @@ public sealed class ToolRelevanceChatClientTests
         }
 
         var received = inner.ReceivedOptions.Single();
-        return new SentArray { PassedThrough = ReferenceEquals(options, received), Names = NamesOf(received) };
+        return new SentArray
+        {
+            PassedThrough = ReferenceEquals(options, received),
+            Names = NamesOf(received)
+        };
     }
 
     private static (List<AITool> Tools, ListToolsFunction ListTools) BuildArray(IReadOnlyList<string> names)
@@ -836,7 +840,11 @@ public sealed class ToolRelevanceChatClientTests
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             ArgumentNullException.ThrowIfNull(formatter);
-            Entries.Add(new Entry { Message = formatter(state, exception), Exception = exception });
+            Entries.Add(new Entry
+            {
+                Message = formatter(state, exception),
+                Exception = exception
+            });
         }
 
         public sealed record Entry

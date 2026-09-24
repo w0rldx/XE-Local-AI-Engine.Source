@@ -120,17 +120,22 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         // A real conversation, because a session owns one and the delete path sweeps it. Nothing here sends a turn on it.
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest { Title = title, UserId = null, CreatedAtUtc = 0 }, cancellationToken);
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                      {
+                                          Title = title,
+                                          UserId = null,
+                                          CreatedAtUtc = 0
+                                      }, cancellationToken);
         var created = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                                  .CreateAsync(new CreateWorkSessionCommand
-                                 {
-                                     SessionId = Guid.NewGuid(),
-                                     ConversationId = conversation.ConversationId,
-                                     AgentDefinitionId = agentDefinitionId,
-                                     Kind = AgentWorkSessionKind.Workflow,
-                                     Title = title,
-                                     Objective = objective
-                                 },
+                                     {
+                                         SessionId = Guid.NewGuid(),
+                                         ConversationId = conversation.ConversationId,
+                                         AgentDefinitionId = agentDefinitionId,
+                                         Kind = AgentWorkSessionKind.Workflow,
+                                         Title = title,
+                                         Objective = objective
+                                     },
                                      cancellationToken);
         lock (_gate)
         {
@@ -196,7 +201,12 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = WorkSessionVersions.Any, TargetStatus = target }, cancellationToken);
+        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            TargetStatus = target
+        }, cancellationToken);
         return ToDetail(moved);
     }
 

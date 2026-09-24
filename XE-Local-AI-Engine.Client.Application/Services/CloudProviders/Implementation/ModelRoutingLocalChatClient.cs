@@ -4,8 +4,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     The single local-branch <see cref="IChatClient" />: per request it reads <see cref="ChatOptions.ModelId" />,

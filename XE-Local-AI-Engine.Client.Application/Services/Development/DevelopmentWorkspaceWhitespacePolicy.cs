@@ -57,8 +57,8 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
         }
 
         var result = await git.RunAsync(workspacePath,
-                                  AgentHomeGit.Arguments("ls-files", "--eol", "--", "."),
-                                  cancellationToken);
+            AgentHomeGit.Arguments("ls-files", "--eol", "--", "."),
+            cancellationToken);
         if (result.ExitCode != 0)
         {
             return;

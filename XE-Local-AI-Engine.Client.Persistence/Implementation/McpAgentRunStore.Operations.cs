@@ -33,7 +33,11 @@ public sealed partial class McpAgentRunStore
             await transaction.CommitAsync(cancellationToken);
             if (!CryptographicOperations.FixedTimeEquals(fingerprint, existing.RequestFingerprint))
             {
-                return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.RequestIdConflict, Run = ToRecord(existing) };
+                return new McpAgentRunAdmissionResult
+                {
+                    Kind = McpAgentRunAdmissionKind.RequestIdConflict,
+                    Run = ToRecord(existing)
+                };
             }
 
             return new McpAgentRunAdmissionResult
@@ -48,7 +52,12 @@ public sealed partial class McpAgentRunStore
         if (capacityKind != McpAgentRunCapacityKind.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.CapacityExceeded, Run = null, CapacityKind = capacityKind };
+            return new McpAgentRunAdmissionResult
+            {
+                Kind = McpAgentRunAdmissionKind.CapacityExceeded,
+                Run = null,
+                CapacityKind = capacityKind
+            };
         }
 
         var taskPayload = _protector.Protect(request.RequestId, "task", task);
@@ -186,19 +195,31 @@ public sealed partial class McpAgentRunStore
         if (row is null)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.NotFound, Run = null };
+            return new McpAgentRunClaimResult
+            {
+                Kind = McpAgentRunClaimKind.NotFound,
+                Run = null
+            };
         }
 
         if (row.Version != expectedVersion)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.VersionConflict, Run = ToRecord(row) };
+            return new McpAgentRunClaimResult
+            {
+                Kind = McpAgentRunClaimKind.VersionConflict,
+                Run = ToRecord(row)
+            };
         }
 
         if (row.Status != McpAgentRunStatus.Queued || row.StopReason != McpAgentRunStopReason.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.NotQueued, Run = ToRecord(row) };
+            return new McpAgentRunClaimResult
+            {
+                Kind = McpAgentRunClaimKind.NotQueued,
+                Run = ToRecord(row)
+            };
         }
 
         var token = Guid.NewGuid();
@@ -261,25 +282,41 @@ public sealed partial class McpAgentRunStore
         if (row is null)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.NotFound, Run = null };
+            return new McpAgentRunStopResult
+            {
+                Kind = McpAgentRunStopKind.NotFound,
+                Run = null
+            };
         }
 
         if (IsTerminal(row.Status))
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyTerminal, Run = ToRecord(row) };
+            return new McpAgentRunStopResult
+            {
+                Kind = McpAgentRunStopKind.AlreadyTerminal,
+                Run = ToRecord(row)
+            };
         }
 
         if (row.StopReason != McpAgentRunStopReason.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyRequested, Run = ToRecord(row) };
+            return new McpAgentRunStopResult
+            {
+                Kind = McpAgentRunStopKind.AlreadyRequested,
+                Run = ToRecord(row)
+            };
         }
 
         if (row.Version != expectedVersion)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.VersionConflict, Run = ToRecord(row) };
+            return new McpAgentRunStopResult
+            {
+                Kind = McpAgentRunStopKind.VersionConflict,
+                Run = ToRecord(row)
+            };
         }
 
         var queued = row.Status == McpAgentRunStatus.Queued;
@@ -570,7 +607,12 @@ public sealed partial class McpAgentRunStore
         var persisted = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
         var reconstructed = await ReconstructCountersAsync(connection, transaction, persisted.UpdatedAtUtc, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunLedgerVerification { IsConsistent = CountersEqual(persisted, reconstructed), Persisted = persisted, Reconstructed = reconstructed };
+        return new McpAgentRunLedgerVerification
+        {
+            IsConsistent = CountersEqual(persisted, reconstructed),
+            Persisted = persisted,
+            Reconstructed = reconstructed
+        };
     }
 
     public async Task<McpAgentRunLedgerCounters> RebuildLedgerAsync(long updatedAtUtc, CancellationToken cancellationToken = default)
@@ -589,6 +631,11 @@ public sealed partial class McpAgentRunStore
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         var counters = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunLedgerSnapshot { QueueDepth = counters.QueuedRunCount, RunningCount = counters.RunningRunCount, Counters = counters };
+        return new McpAgentRunLedgerSnapshot
+        {
+            QueueDepth = counters.QueuedRunCount,
+            RunningCount = counters.RunningRunCount,
+            Counters = counters
+        };
     }
 }

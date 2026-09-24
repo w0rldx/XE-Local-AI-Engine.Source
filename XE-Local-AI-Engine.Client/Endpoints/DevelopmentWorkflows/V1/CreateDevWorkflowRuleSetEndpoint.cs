@@ -32,15 +32,15 @@ public sealed class CreateDevWorkflowRuleSetEndpoint : Endpoint<CreateDevWorkflo
         ArgumentNullException.ThrowIfNull(req);
 
         var created = await _authoring.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand
-        {
-            RuleSetId = Guid.NewGuid(),
-            Name = req.Name,
-            Body = req.Body,
-            ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
-            Description = req.Description,
-            Enabled = req.Enabled
-        },
-                                      ct);
+            {
+                RuleSetId = Guid.NewGuid(),
+                Name = req.Name,
+                Body = req.Body,
+                ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
+                Description = req.Description,
+                Enabled = req.Enabled
+            },
+            ct);
         await Send.CreatedAtAsync<GetDevWorkflowRuleSetEndpoint>(new
             {
                 ruleSetId = created.Id

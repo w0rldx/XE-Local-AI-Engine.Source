@@ -34,12 +34,34 @@ public sealed class FilePlacementConventionTests
     /// <summary>Everything that may stand between a declaration's start and its type keyword.</summary>
     private static readonly HashSet<string> Modifiers = new(StringComparer.Ordinal)
     {
-        "public", "internal", "private", "protected", "file", "static", "sealed", "abstract", "partial",
-        "readonly", "ref", "unsafe", "new", "extern", "required", "virtual", "override"
+        "public",
+        "internal",
+        "private",
+        "protected",
+        "file",
+        "static",
+        "sealed",
+        "abstract",
+        "partial",
+        "readonly",
+        "ref",
+        "unsafe",
+        "new",
+        "extern",
+        "required",
+        "virtual",
+        "override"
     };
 
     private static readonly HashSet<string> TypeKeywords = new(StringComparer.Ordinal)
-        { "class", "struct", "interface", "enum", "record", "delegate" };
+    {
+        "class",
+        "struct",
+        "interface",
+        "enum",
+        "record",
+        "delegate"
+    };
 
     /// <summary>The scan is pure and every test needs all of it, so one walk serves them.</summary>
     private static readonly Lazy<Scan> Scanned = new(Walk, isThreadSafe: true);
@@ -253,9 +275,8 @@ public sealed class FilePlacementConventionTests
                 || count < 2
                 || !entries.TryAdd(fields[0], count))
             {
-                throw new InvalidDataException(
-                    $"Architecture/FilePlacementAllowlist.txt line {number} is not a unique "
-                    + $"'file|count of at least 2' entry: {line}");
+                throw new InvalidDataException($"Architecture/FilePlacementAllowlist.txt line {number} is not a unique "
+                                               + $"'file|count of at least 2' entry: {line}");
             }
         }
 
@@ -381,7 +402,8 @@ public sealed class FilePlacementConventionTests
     /// </remarks>
     private readonly record struct Declaration(string Kind, string Name, string Bases)
     {
-        public override string ToString() => $"{Kind} {Name}";
+        public override string ToString() =>
+            $"{Kind} {Name}";
 
         /// <summary>Whether the base list names <paramref name="type" /> as a whole word.</summary>
         internal bool Implements(string type)
@@ -590,7 +612,12 @@ public sealed class FilePlacementConventionTests
 
         for (; index >= 0; index--)
         {
-            angles += head[index] switch { '>' => 1, '<' => -1, _ => 0 };
+            angles += head[index] switch
+            {
+                '>' => 1,
+                '<' => -1,
+                _ => 0
+            };
 
             if (angles == 0)
             {
@@ -609,7 +636,12 @@ public sealed class FilePlacementConventionTests
 
         for (var index = 0; index < head.Length; index++)
         {
-            depth += head[index] switch { '<' or '(' or '[' => 1, '>' or ')' or ']' => -1, _ => 0 };
+            depth += head[index] switch
+            {
+                '<' or '(' or '[' => 1,
+                '>' or ')' or ']' => -1,
+                _ => 0
+            };
 
             if (depth == 0 && head[index] == ':' && (index + 1 >= head.Length || head[index + 1] != ':'))
             {
@@ -627,7 +659,12 @@ public sealed class FilePlacementConventionTests
 
         for (var index = from; index < text.Length; index++)
         {
-            depth += text[index] switch { '[' => 1, ']' => -1, _ => 0 };
+            depth += text[index] switch
+            {
+                '[' => 1,
+                ']' => -1,
+                _ => 0
+            };
 
             if (depth == 0)
             {
@@ -666,25 +703,26 @@ public sealed class FilePlacementConventionTests
         (start == 0 || !IsWordCharacter(text[start - 1]))
         && (start + length >= text.Length || !IsWordCharacter(text[start + length]));
 
-    private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
+    private static bool IsWordCharacter(char character) =>
+        char.IsLetterOrDigit(character) || character == '_';
 
     private const string AllowlistHeader = """
-        # Top-level type counts — the allowlist for FilePlacementConventionTests.
-        #
-        # Format: <repository-relative file>|<count>, one line per file, sorted. The count is how many top-level
-        # types that file declares today, and every listed file declares at least two. A production file with no
-        # line here must declare one type, or take one of the four exception shapes the test encodes:
-        #   family file   *Dtos.cs, *Contracts.cs, *ServiceModels.cs, *Models.cs
-        #   pair          exactly an interface IFoo and its implementation Foo
-        #   satellites    one primary type beside only enums and delegates
-        #   contract      I*Store.cs / I*Service.cs declaring that interface plus its own vocabulary
-        # Test projects and generated/migration code are out of scope. Endpoints are not judged here at all:
-        # EndpointConventionTests owns one-endpoint-per-file by reflection, and has no allowlist.
-        #
-        # The list is SHRINK-ONLY. Declaring more than the count fails; declaring less fails as stale, so the commit
-        # that splits a file lowers or deletes its line in the same change and the room cannot be spent twice. To
-        # rewrite the whole file after a cleanup batch, run the test with XE_FILE_PLACEMENT_SHRINK=1: it lowers
-        # counts, drops emptied entries, never adds a key, never raises a count, and always fails afterwards.
+                                           # Top-level type counts — the allowlist for FilePlacementConventionTests.
+                                           #
+                                           # Format: <repository-relative file>|<count>, one line per file, sorted. The count is how many top-level
+                                           # types that file declares today, and every listed file declares at least two. A production file with no
+                                           # line here must declare one type, or take one of the four exception shapes the test encodes:
+                                           #   family file   *Dtos.cs, *Contracts.cs, *ServiceModels.cs, *Models.cs
+                                           #   pair          exactly an interface IFoo and its implementation Foo
+                                           #   satellites    one primary type beside only enums and delegates
+                                           #   contract      I*Store.cs / I*Service.cs declaring that interface plus its own vocabulary
+                                           # Test projects and generated/migration code are out of scope. Endpoints are not judged here at all:
+                                           # EndpointConventionTests owns one-endpoint-per-file by reflection, and has no allowlist.
+                                           #
+                                           # The list is SHRINK-ONLY. Declaring more than the count fails; declaring less fails as stale, so the commit
+                                           # that splits a file lowers or deletes its line in the same change and the room cannot be spent twice. To
+                                           # rewrite the whole file after a cleanup batch, run the test with XE_FILE_PLACEMENT_SHRINK=1: it lowers
+                                           # counts, drops emptied entries, never adds a key, never raises a count, and always fails afterwards.
 
-        """;
+                                           """;
 }

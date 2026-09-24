@@ -123,8 +123,14 @@ public sealed class AgentHomeToolSchemaContractTests
         return JsonSerializer.Serialize(new
         {
             goal = "list the files",
-            selectedFolderIds = new[] { folderId },
-            allowedActions = new[] { "read_workspace" }
+            selectedFolderIds = new[]
+            {
+                folderId
+            },
+            allowedActions = new[]
+            {
+                "read_workspace"
+            }
         });
     }
 

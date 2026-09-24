@@ -407,7 +407,14 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
 
         public static BundleState Valid(string id = "bundle-1")
         {
-            return new BundleState { Id = id, Hash = "bundle-hash", SizeBytes = 256, SecretScanPassed = true, ExpiresAt = Now.AddMinutes(10) };
+            return new BundleState
+            {
+                Id = id,
+                Hash = "bundle-hash",
+                SizeBytes = 256,
+                SecretScanPassed = true,
+                ExpiresAt = Now.AddMinutes(10)
+            };
         }
     }
 

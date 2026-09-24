@@ -140,20 +140,27 @@ internal sealed partial class ExternalAppService : IExternalAppService
             {
                 // Written BEFORE the stop, so the acknowledgement is on the record even if the update then fails.
                 _ = await ApplyAsync(services.Store,
-                        cursor,
-                        Transition(cursor, row.Status, ExternalAppInstanceEventKind.PermissionAccepted),
-                        cancellationToken);
+                    cursor,
+                    Transition(cursor, row.Status, ExternalAppInstanceEventKind.PermissionAccepted),
+                    cancellationToken);
             }
 
             if (!await ApplyAsync(services.Store,
-                        cursor,
-                        Transition(cursor, admitted, ExternalAppInstanceEventKind.UpdateRequested),
-                        cancellationToken))
+                    cursor,
+                    Transition(cursor, admitted, ExternalAppInstanceEventKind.UpdateRequested),
+                    cancellationToken))
             {
                 throw new ExternalAppConcurrencyException("The instance changed while this update was being admitted.");
             }
 
-            var context = new LifecycleContext { InstanceId = instanceId, Version = cursor.Version, Sequence = cursor.Sequence, Status = admitted, Row = row };
+            var context = new LifecycleContext
+            {
+                InstanceId = instanceId,
+                Version = cursor.Version,
+                Sequence = cursor.Sequence,
+                Status = admitted,
+                Row = row
+            };
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Update,
                     lease,
@@ -216,44 +223,44 @@ internal sealed partial class ExternalAppService : IExternalAppService
             var committed = false;
 
             var published = await RebuildAsync(runtime,
-                    resolution.Daemon.IsRootless,
-                    context.InstanceId,
-                    target,
-                    variables,
-                    bridgeGrant,
-                    async (planned, token) =>
+                resolution.Daemon.IsRootless,
+                context.InstanceId,
+                target,
+                variables,
+                bridgeGrant,
+                async (planned, token) =>
+                {
+                    if (committed)
                     {
-                        if (committed)
+                        // A replanned attempt reaches this a second time: the row already describes the target,
+                        // so re-committing would lose its own compare-and-swap against the version it set.
+                        return;
+                    }
+
+                    var result = await services.Store.CommitUpdateAsync(context.InstanceId,
+                        cursor.Version,
+                        snapshotJson,
+                        variablesJson,
+                        ExternalAppPublishedPorts.Serialize(planned),
+                        target.ManifestVersion,
+                        Now(),
+                        mintedBridgeToken,
+                        token);
+
+                    if (!result.Applied)
+                    {
+                        throw new ExternalAppPipelineException(new ExternalAppFailure
                         {
-                            // A replanned attempt reaches this a second time: the row already describes the target,
-                            // so re-committing would lose its own compare-and-swap against the version it set.
-                            return;
-                        }
+                            Category = ExternalAppFailureCategory.Unknown,
+                            Summary = "This application changed while it was being updated; nothing was started."
+                        });
+                    }
 
-                        var result = await services.Store.CommitUpdateAsync(context.InstanceId,
-                                                       cursor.Version,
-                                                       snapshotJson,
-                                                       variablesJson,
-                                                       ExternalAppPublishedPorts.Serialize(planned),
-                                                       target.ManifestVersion,
-                                                       Now(),
-                                                       mintedBridgeToken,
-                                                       token);
-
-                        if (!result.Applied)
-                        {
-                            throw new ExternalAppPipelineException(new ExternalAppFailure
-                            {
-                                Category = ExternalAppFailureCategory.Unknown,
-                                Summary = "This application changed while it was being updated; nothing was started."
-                            });
-                        }
-
-                        cursor.Version = result.Version;
-                        cursor.Sequence = result.Sequence;
-                        committed = true;
-                    },
-                    cancellationToken);
+                    cursor.Version = result.Version;
+                    cursor.Sequence = result.Sequence;
+                    committed = true;
+                },
+                cancellationToken);
 
             // The desired state is the user's: an update does not start what was stopped. Stopped against the TARGET
             // manifest, since the containers standing here are the rebuild's and the target may have added services.
@@ -264,17 +271,17 @@ internal sealed partial class ExternalAppService : IExternalAppService
             }
 
             _ = await ApplyAsync(services.Store,
-                    cursor,
-                    Transition(cursor,
-                            restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
-                            ExternalAppInstanceEventKind.Updated) with
-                        {
-                            DesiredState = context.Row.DesiredState,
-                            PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                            NeedsRecreate = false,
-                            ClearFailure = true
-                        },
-                    cancellationToken);
+                cursor,
+                Transition(cursor,
+                        restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
+                        ExternalAppInstanceEventKind.Updated) with
+                    {
+                        DesiredState = context.Row.DesiredState,
+                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                        NeedsRecreate = false,
+                        ClearFailure = true
+                    },
+                cancellationToken);
         }
         catch (Exception exception)
         {
@@ -303,7 +310,12 @@ internal sealed partial class ExternalAppService : IExternalAppService
         var hostPorts = target.Services
                               .SelectMany(service => service.Ports
                                                             .Where(static port => string.Equals(port.Role, UiPortRole, StringComparison.Ordinal))
-                                                            .Select(port => new ExternalAppHostPort { Service = service.Name, ContainerPort = port.ContainerPort, HostPort = port.ContainerPort }))
+                                                            .Select(port => new ExternalAppHostPort
+                                                            {
+                                                                Service = service.Name,
+                                                                ContainerPort = port.ContainerPort,
+                                                                HostPort = port.ContainerPort
+                                                            }))
                               .ToList();
 
         try

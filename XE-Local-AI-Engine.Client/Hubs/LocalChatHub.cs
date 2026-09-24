@@ -26,8 +26,7 @@ public sealed class LocalChatHub : Hub
     private readonly IInvocationAttachmentTracker _attachmentTracker;
     private readonly IOptions<SecurityOptions> _securityOptions;
 
-    public LocalChatHub(
-        INodeChatStreamService streamService,
+    public LocalChatHub(INodeChatStreamService streamService,
         INodeChatRegenerationService regenerationService,
         IInvocationResumeRegistry resumeRegistry,
         IInvocationAttachmentTracker attachmentTracker,

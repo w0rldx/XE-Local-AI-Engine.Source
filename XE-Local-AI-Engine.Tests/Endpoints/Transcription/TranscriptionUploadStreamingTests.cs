@@ -257,8 +257,8 @@ public sealed class TranscriptionUploadStreamingTests
         // The handler unwinds through the same await using every other ending goes through. Eventually, because the
         // client stops waiting the moment it cancels, while the server-side unwind is still a step behind it.
         await AssertEx.EventuallyAsync(() => OwnedFiles(service).Count == 0,
-                          GateTimeout,
-                          "A cancelled upload must leave no engine-owned audio behind.");
+            GateTimeout,
+            "A cancelled upload must leave no engine-owned audio behind.");
         await AssertNoFrameworkSpillEventuallyAsync("after the client abandoned the request");
     }
 

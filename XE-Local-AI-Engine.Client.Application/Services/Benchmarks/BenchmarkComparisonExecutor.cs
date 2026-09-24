@@ -57,8 +57,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
     private readonly BenchmarkAdmissionRetry _admissionRetry;
     private readonly ILogger<BenchmarkComparisonExecutor> _logger;
 
-    public BenchmarkComparisonExecutor(
-        IBenchmarkStore store,
+    public BenchmarkComparisonExecutor(IBenchmarkStore store,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         ICapacityService capacity,
@@ -171,25 +170,25 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             // back. ONE BenchmarkWaitBudget for the phase, shared with the exclusive-spawn wait after it, so a transient rejection is waited out, not terminalized (see BenchmarkAdmissionRetry).
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                               new CapacityRequest
-                                                               {
-                                                                   ModelName = runtime.Model.ModelName,
-                                                                   Role = ModelRole.Chat,
-                                                                   RequiredContextTokens = runtime.Runtime.ContextTokens,
-                                                                   PublishLaunchAdmission = false,
-                                                                   KvCacheType = runtime.Runtime.KvTypeK
-                                                               },
-                                                               new BenchmarkAdmissionContext
-                                                               {
-                                                                   RunId = work.RunId,
-                                                                   Phase = "comparison",
-                                                                   RequestedContextTokens = runtime.RequestedContextTokens,
-                                                                   KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                                   RejectedMessage = CapacityRejectedMessage
-                                                               },
-                                                               waitBudget,
-                                                               _logger,
-                                                               token);
+                new CapacityRequest
+                {
+                    ModelName = runtime.Model.ModelName,
+                    Role = ModelRole.Chat,
+                    RequiredContextTokens = runtime.Runtime.ContextTokens,
+                    PublishLaunchAdmission = false,
+                    KvCacheType = runtime.Runtime.KvTypeK
+                },
+                new BenchmarkAdmissionContext
+                {
+                    RunId = work.RunId,
+                    Phase = "comparison",
+                    RequestedContextTokens = runtime.RequestedContextTokens,
+                    KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                    RejectedMessage = CapacityRejectedMessage
+                },
+                waitBudget,
+                _logger,
+                token);
             using var reservation = decision.Reservation;
             var package = BuildComparisonPackage(snapshot, policy, runtime, comparison.Order == 0 ? answerA : answerB,
                 comparison.Order == 0 ? answerB : answerA,
@@ -211,27 +210,27 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
             // spawn waits and retries rather than terminalizing this comparison. See BenchmarkExclusiveSpawn.
             _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
-                                                     _supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
-                                                         ModelRole.Chat,
-                                                         runtime.Runtime.ToResolvedLaunchArguments(),
-                                                         runtime.Runtime.LaunchPolicy,
-                                                         async (profiling, profilingToken) =>
-                                                         {
-                                                             // Durable BEFORE a token is generated: the receipt, the environment facts and
-                                                             // the execution key the fit will insist every fitted comparison shares.
-                                                             await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment);
-                                                             using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
-                                                             await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
-                                                             var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
-                                                             await _runner.RunAsync(context, profilingToken);
-                                                             return true;
-                                                         },
-                                                         spawnToken),
-                                                 waitBudget,
-                                                 work.RunId,
-                                                 "comparison",
-                                                 _logger,
-                                                 token);
+                    _supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                        ModelRole.Chat,
+                        runtime.Runtime.ToResolvedLaunchArguments(),
+                        runtime.Runtime.LaunchPolicy,
+                        async (profiling, profilingToken) =>
+                        {
+                            // Durable BEFORE a token is generated: the receipt, the environment facts and
+                            // the execution key the fit will insist every fitted comparison shares.
+                            await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment);
+                            using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
+                            await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
+                            var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
+                            await _runner.RunAsync(context, profilingToken);
+                            return true;
+                        },
+                        spawnToken),
+                waitBudget,
+                work.RunId,
+                "comparison",
+                _logger,
+                token);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
@@ -313,7 +312,8 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             InvocationId = Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
             ResolvedSystemPrompt = BenchmarkPairwisePromptV1.SystemPromptFor(firstTruncated || secondTruncated),
-            ConversationContext = [
+            ConversationContext =
+            [
                 new ConversationMessageDto
                 {
                     Id = Guid.NewGuid(),
@@ -349,11 +349,11 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
         try
         {
             _ = await _store.MarkComparisonLaunchReadyAsync(comparison.Id,
-                               work.QueueSequence,
-                               work.Version,
-                               command,
-                               BenchmarkJudgeExecutionKey.TryCompute(policyHash!, receipt, environment),
-                               CancellationToken.None);
+                work.QueueSequence,
+                work.Version,
+                command,
+                BenchmarkJudgeExecutionKey.TryCompute(policyHash!, receipt, environment),
+                CancellationToken.None);
         }
         catch (Exception exception)
         {

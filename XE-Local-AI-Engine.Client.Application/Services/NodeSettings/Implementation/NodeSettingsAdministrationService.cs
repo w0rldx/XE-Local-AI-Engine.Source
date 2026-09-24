@@ -30,8 +30,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly INodeSettingsStore _store;
 
-    public NodeSettingsAdministrationService(
-        INodeSettingsStore store,
+    public NodeSettingsAdministrationService(INodeSettingsStore store,
         INodeRuntimeSettings runtimeSettings,
         DefaultModelSelectionPolicy defaultModelSelectionPolicy,
         IGgufModelStore ggufModelStore,
@@ -95,11 +94,15 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
 
         if (patch.DefaultModelName is not null
             && await _defaultModelSelectionPolicy
-                     .ValidateAsync(patch.DefaultModelName, LocalModelSelectionPolicy.ConfiguredModel, cancellationToken) is { } selectionFailure)
+                .ValidateAsync(patch.DefaultModelName, LocalModelSelectionPolicy.ConfiguredModel, cancellationToken) is { } selectionFailure)
         {
             return NodeSettingsAdministrationResult.Rejected(current,
             [
-                new NodeSettingsValidationError { Field = NodeSettingsField.DefaultModelName, Message = selectionFailure.DisplayMessage }
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.DefaultModelName,
+                    Message = selectionFailure.DisplayMessage
+                }
             ]);
         }
 
@@ -139,7 +142,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         if (result.Updated && patch.DefaultModelName is not null)
         {
             await _defaultModelSelectionPolicy
-                  .InvalidateCacheForTransitionAsync(previousDefaultModelName, result.Settings.DefaultModelName, cancellationToken);
+                .InvalidateCacheForTransitionAsync(previousDefaultModelName, result.Settings.DefaultModelName, cancellationToken);
         }
 
         return result;
@@ -174,7 +177,11 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             {
                 return NodeSettingsAdministrationResult.Rejected(settings,
                 [
-                    new NodeSettingsValidationError { Field = NodeSettingsField.AutoEffortFastModelName, Message = AutoEffortFastModelNotLocalMessage }
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.AutoEffortFastModelName,
+                        Message = AutoEffortFastModelNotLocalMessage
+                    }
                 ]);
             }
 
@@ -188,23 +195,23 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             // is re-applied to the LATEST record, MachineKey included (IMachineKeyProvider races every save on this node).
             var changedUnderTheValidation = false;
             var persisted = await _store.UpdateAsync(latest =>
-                                            {
-                                                changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
-                                                if (changedUnderTheValidation)
-                                                {
-                                                    // Nothing may be projected onto a record this attempt never validated — on the last
-                                                    // attempt as much as the first. Returning `latest` costs one redundant, byte-identical write.
-                                                    return latest;
-                                                }
+                {
+                    changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
+                    if (changedUnderTheValidation)
+                    {
+                        // Nothing may be projected onto a record this attempt never validated — on the last
+                        // attempt as much as the first. Returning `latest` costs one redundant, byte-identical write.
+                        return latest;
+                    }
 
-                                                return apply(latest) with
-                                                {
-                                                    MachineKey = latest.MachineKey,
-                                                    TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId,
-                                                    TranscriptionIdleTimeoutMinutes = latest.TranscriptionIdleTimeoutMinutes
-                                                };
-                                            },
-                                            cancellationToken);
+                    return apply(latest) with
+                    {
+                        MachineKey = latest.MachineKey,
+                        TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId,
+                        TranscriptionIdleTimeoutMinutes = latest.TranscriptionIdleTimeoutMinutes
+                    };
+                },
+                cancellationToken);
 
             if (changedUnderTheValidation)
             {

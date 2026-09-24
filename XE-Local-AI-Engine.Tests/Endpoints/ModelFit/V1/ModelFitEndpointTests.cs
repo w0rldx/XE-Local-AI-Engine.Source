@@ -292,7 +292,8 @@ public sealed class ModelFitEndpointTests
                      RepoId = repoId,
                      IsGated = false,
                      License = null,
-                     Files = [
+                     Files =
+                     [
                          new GgufRepoFile
                          {
                              FileName = "model-Q4_K_M.gguf",
@@ -313,7 +314,13 @@ public sealed class ModelFitEndpointTests
                  });
         discovery.FindProjectorAsync(repoId, Arg.Any<CancellationToken>())
                  .Returns(repoHasProjector
-                     ? new GgufProjectorFile { FileName = "mmproj-model-f16.gguf", SizeBytes = 1234, Sha256 = new string('b', 64), Revision = "rev-1" }
+                     ? new GgufProjectorFile
+                     {
+                         FileName = "mmproj-model-f16.gguf",
+                         SizeBytes = 1234,
+                         Sha256 = new string('b', 64),
+                         Revision = "rev-1"
+                     }
                      : (GgufProjectorFile?)null);
         await using var factory = new TestServerWebAppFactory
         {

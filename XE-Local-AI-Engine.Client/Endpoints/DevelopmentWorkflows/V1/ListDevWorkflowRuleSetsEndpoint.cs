@@ -26,6 +26,9 @@ public sealed class ListDevWorkflowRuleSetsEndpoint : EndpointWithoutRequest<Lis
     public override async Task HandleAsync(CancellationToken ct)
     {
         var ruleSets = await _authoring.ListRuleSetsAsync(ct);
-        await Send.OkAsync(new ListDevWorkflowRuleSetsResponse { Items = [.. ruleSets.Select(DevWorkflowContractMapper.ToResponse)] }, ct);
+        await Send.OkAsync(new ListDevWorkflowRuleSetsResponse
+        {
+            Items = [.. ruleSets.Select(DevWorkflowContractMapper.ToResponse)]
+        }, ct);
     }
 }

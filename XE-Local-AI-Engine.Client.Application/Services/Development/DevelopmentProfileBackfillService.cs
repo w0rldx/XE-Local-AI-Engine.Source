@@ -33,8 +33,7 @@ internal sealed class DevelopmentProfileBackfillService : IDevelopmentProfileBac
     private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
     private readonly IDevelopmentStore _store;
 
-    public DevelopmentProfileBackfillService(
-        IDevelopmentStore store,
+    public DevelopmentProfileBackfillService(IDevelopmentStore store,
         IDevelopmentRepositoryBindingService repositoryBindings,
         IDevelopmentCommandProfileDetector profileDetector,
         ILogger<DevelopmentProfileBackfillService> logger)

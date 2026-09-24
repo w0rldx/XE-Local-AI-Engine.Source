@@ -110,7 +110,13 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new GgufRepoDetail { RepoId = repoId, IsGated = false, License = null, Files = [] };
+            return new GgufRepoDetail
+            {
+                RepoId = repoId,
+                IsGated = false,
+                License = null,
+                Files = []
+            };
         }
 
         var usable = new List<UsableFile>();
@@ -168,7 +174,13 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             });
         }
 
-        return new GgufRepoDetail { RepoId = detail.RepoId, IsGated = detail.IsGated, License = detail.License, Files = files };
+        return new GgufRepoDetail
+        {
+            RepoId = detail.RepoId,
+            IsGated = detail.IsGated,
+            License = detail.License,
+            Files = files
+        };
     }
 
     /// <inheritdoc />
@@ -194,7 +206,13 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
         return projector is null
             ? null
-            : new GgufProjectorFile { FileName = projector.FileName, SizeBytes = projector.SizeBytes, Sha256 = projector.Sha256, Revision = detail.Revision };
+            : new GgufProjectorFile
+            {
+                FileName = projector.FileName,
+                SizeBytes = projector.SizeBytes,
+                Sha256 = projector.Sha256,
+                Revision = detail.Revision
+            };
     }
 
     // Ranks a projector filename by encoder precision (higher = preferred): F32 > F16/BF16 > everything else. The markers are matched case-insensitively anywhere in the name (mmproj-F16.gguf,
@@ -289,7 +307,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 shardGroups[baseName] = group;
             }
 
-            group.Add(new ShardCandidate { File = entry.File, Quant = entry.Quant, Part = match.Groups["part"].Value });
+            group.Add(new ShardCandidate
+            {
+                File = entry.File,
+                Quant = entry.Quant,
+                Part = match.Groups["part"].Value
+            });
         }
 
         if (shardGroups.Count == 0)

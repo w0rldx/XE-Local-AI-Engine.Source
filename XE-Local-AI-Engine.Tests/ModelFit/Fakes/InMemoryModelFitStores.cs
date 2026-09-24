@@ -111,7 +111,13 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
             return Task.FromResult<ModelFitSnapshotRawRecord?>(null);
         }
 
-        return Task.FromResult<ModelFitSnapshotRawRecord?>(new ModelFitSnapshotRawRecord { Id = id, RawJson = snapshot.RawJson, StderrExcerpt = snapshot.StderrExcerpt, DiagnosticsJson = snapshot.DiagnosticsJson });
+        return Task.FromResult<ModelFitSnapshotRawRecord?>(new ModelFitSnapshotRawRecord
+        {
+            Id = id,
+            RawJson = snapshot.RawJson,
+            StderrExcerpt = snapshot.StderrExcerpt,
+            DiagnosticsJson = snapshot.DiagnosticsJson
+        });
     }
 
     private static bool SameKey(StoredSnapshot a, StoredSnapshot b)
@@ -220,7 +226,18 @@ internal sealed class EmptyCatalogRecommendationService : ICatalogRecommendation
         CancellationToken cancellationToken)
     {
         var emptyDocument = new ModelCatalogDocument(SchemaVersion: 1, "test-empty", UpdatedAt: null, Models: []);
-        var snapshot = new ModelCatalogSnapshot { Document = emptyDocument, Source = ModelCatalogSource.Bundled, FetchedAtUtc = null, SourceUrl = null };
-        return Task.FromResult(new CatalogRecommendationResult { Recommended = [], CanRun = [], CatalogSnapshot = snapshot });
+        var snapshot = new ModelCatalogSnapshot
+        {
+            Document = emptyDocument,
+            Source = ModelCatalogSource.Bundled,
+            FetchedAtUtc = null,
+            SourceUrl = null
+        };
+        return Task.FromResult(new CatalogRecommendationResult
+        {
+            Recommended = [],
+            CanRun = [],
+            CatalogSnapshot = snapshot
+        });
     }
 }

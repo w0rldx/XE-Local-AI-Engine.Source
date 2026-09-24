@@ -28,8 +28,7 @@ public sealed class LocalRuntimeWarmer
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly TimeProvider _timeProvider;
 
-    public LocalRuntimeWarmer(
-        ILocalModelProviderResolver providerResolver,
+    public LocalRuntimeWarmer(ILocalModelProviderResolver providerResolver,
         IActiveCloudChatClientFactory activeCloudFactory,
         IModelTrustResolver modelTrustResolver,
         ILogger<LocalRuntimeWarmer> logger,

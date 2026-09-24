@@ -44,8 +44,8 @@ public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjec
             export.Fidelity.ExpectedKldDigest,
             export.PairwiseFit);
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
-                      BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
-                      "text/csv",
-                      cancellation: ct);
+            BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
+            "text/csv",
+            cancellation: ct);
     }
 }

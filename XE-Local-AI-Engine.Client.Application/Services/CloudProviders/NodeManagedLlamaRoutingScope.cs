@@ -22,6 +22,7 @@ internal static class NodeManagedLlamaRoutingScope
             _prior = prior;
         }
 
-        public void Dispose() => RequiredModel.Value = _prior;
+        public void Dispose() =>
+            RequiredModel.Value = _prior;
     }
 }

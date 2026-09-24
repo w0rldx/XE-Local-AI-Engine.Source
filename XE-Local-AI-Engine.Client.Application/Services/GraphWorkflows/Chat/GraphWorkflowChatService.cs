@@ -79,7 +79,13 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
 
         var messageId = GraphWorkflowChatIds.UserMessage(request.RequestId);
-        var input = JsonSerializer.Serialize(new RunInput { Message = content, Attachments = attachments, ConversationId = conversationId, MessageId = messageId }, JsonOptions);
+        var input = JsonSerializer.Serialize(new RunInput
+        {
+            Message = content,
+            Attachments = attachments,
+            ConversationId = conversationId,
+            MessageId = messageId
+        }, JsonOptions);
         if (Encoding.UTF8.GetByteCount(input) > _options.MaxRunInputBytes)
         {
             throw new GraphWorkflowValidationException($"The message and its attachments are larger than the {_options.MaxRunInputBytes} bytes one run input may carry.");
@@ -114,10 +120,19 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
                     request.RequestId,
                     input,
                     definitionVersion: null,
-                    new GraphWorkflowRunBinding { ConversationId = conversationId, TriggerMessageId = messageId },
+                    new GraphWorkflowRunBinding
+                    {
+                        ConversationId = conversationId,
+                        TriggerMessageId = messageId
+                    },
                     cancellationToken),
                 cancellationToken);
-            return new GraphWorkflowChatSendResult { RunId = started.Run.Id, MessageId = messageId, Action = GraphWorkflowChatSendAction.Started };
+            return new GraphWorkflowChatSendResult
+            {
+                RunId = started.Run.Id,
+                MessageId = messageId,
+                Action = GraphWorkflowChatSendAction.Started
+            };
         }
 
         if (await ParkedInputAsync(newest, cancellationToken) is not { } parked)
@@ -149,11 +164,19 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
                 request.RequestId,
                 GraphWorkflowDecisionKind.Answer,
                 comment: null,
-                JsonSerializer.Serialize(new AnswerPayload { Text = content }, JsonOptions),
+                JsonSerializer.Serialize(new AnswerPayload
+                {
+                    Text = content
+                }, JsonOptions),
                 decidedBySubject,
                 cancellationToken),
             cancellationToken);
-        return new GraphWorkflowChatSendResult { RunId = newest.Id, MessageId = messageId, Action = GraphWorkflowChatSendAction.Answered };
+        return new GraphWorkflowChatSendResult
+        {
+            RunId = newest.Id,
+            MessageId = messageId,
+            Action = GraphWorkflowChatSendAction.Answered
+        };
     }
 
     public async Task<IReadOnlyList<GraphWorkflowChatBoundRun>> ListBoundRunsAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default)
@@ -180,14 +203,20 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
                 prompt = pendingKey is null ? null : PromptOf(run, pendingKey);
                 steerable = nodeRuns.FirstOrDefault(static nodeRun => nodeRun.Kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall
                                                                       && nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running)
-                                   ?.NodeKey;
+                                    ?.NodeKey;
             }
 
             bound.Add(new GraphWorkflowChatBoundRun
             {
                 Run = run,
                 DefinitionName = names.GetValueOrDefault(run.DefinitionId),
-                PendingInput = pendingKey is null ? null : new GraphWorkflowChatPendingInput { NodeKey = pendingKey, Prompt = prompt ?? string.Empty },
+                PendingInput = pendingKey is null
+                    ? null
+                    : new GraphWorkflowChatPendingInput
+                    {
+                        NodeKey = pendingKey,
+                        Prompt = prompt ?? string.Empty
+                    },
                 SteerableNodeKey = steerable
             });
         }
@@ -315,9 +344,12 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
 
         var files = (await _files.ListAsync(conversationId, cancellationToken)).ToDictionary(static file => file.FileId);
-        return [.. fileIds.Distinct().Select(fileId => files.TryGetValue(fileId, out var file)
-            ? Reference(file)
-            : throw new GraphWorkflowValidationException($"Attachment '{fileId}' is not a file of this conversation."))];
+        return
+        [
+            .. fileIds.Distinct().Select(fileId => files.TryGetValue(fileId, out var file)
+                ? Reference(file)
+                : throw new GraphWorkflowValidationException($"Attachment '{fileId}' is not a file of this conversation."))
+        ];
     }
 
     private static AttachmentReference Reference(ConversationUploadedFileInfo file) =>
@@ -343,13 +375,23 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
             }
 
             _ = await InsertUserMessageAsync(conversationId, messageId, content, cancellationToken);
-            return new GraphWorkflowChatSendResult { RunId = started.Id, MessageId = messageId, Action = GraphWorkflowChatSendAction.Started };
+            return new GraphWorkflowChatSendResult
+            {
+                RunId = started.Id,
+                MessageId = messageId,
+                Action = GraphWorkflowChatSendAction.Started
+            };
         }
 
         if (await _store.FindConversationDecisionAsync(conversationId, requestId, cancellationToken) is { } answered)
         {
             _ = await InsertUserMessageAsync(conversationId, messageId, content, cancellationToken);
-            return new GraphWorkflowChatSendResult { RunId = answered.RunId, MessageId = messageId, Action = GraphWorkflowChatSendAction.Answered };
+            return new GraphWorkflowChatSendResult
+            {
+                RunId = answered.RunId,
+                MessageId = messageId,
+                Action = GraphWorkflowChatSendAction.Answered
+            };
         }
 
         return null;
@@ -367,12 +409,12 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
             return await write();
         }
         catch (Exception exception) when (inserted && exception is GraphWorkflowNotFoundException
-                                                                 or GraphWorkflowRunBusyException
-                                                                 or GraphWorkflowGateAlreadyDecidedException
-                                                                 or GraphWorkflowRunConflictException
-                                                                 or GraphWorkflowSteerLimitReachedException
-                                                                 or GraphWorkflowInvalidTransitionException
-                                                                 or GraphWorkflowValidationException)
+                                              or GraphWorkflowRunBusyException
+                                              or GraphWorkflowGateAlreadyDecidedException
+                                              or GraphWorkflowRunConflictException
+                                              or GraphWorkflowSteerLimitReachedException
+                                              or GraphWorkflowInvalidTransitionException
+                                              or GraphWorkflowValidationException)
         {
             await _persistence.DeleteMessageAsync(conversationId, messageId, CancellationToken.None);
             throw;

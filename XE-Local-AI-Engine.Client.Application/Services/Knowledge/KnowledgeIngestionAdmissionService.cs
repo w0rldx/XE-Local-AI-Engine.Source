@@ -9,8 +9,7 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
     private readonly IKnowledgeDocumentCatalogService _catalogService;
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
 
-    public KnowledgeIngestionAdmissionService(
-        IKnowledgeDocumentCatalogService catalogService,
+    public KnowledgeIngestionAdmissionService(IKnowledgeDocumentCatalogService catalogService,
         IKnowledgeIngestionDispatcher ingestionDispatcher)
     {
         ArgumentNullException.ThrowIfNull(catalogService);
@@ -30,11 +29,19 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
 
         if (!wasWritten && !IsRetryableOnReUpload(status))
         {
-            return new KnowledgeIngestionAdmissionResult { Status = status, Enqueue = null };
+            return new KnowledgeIngestionAdmissionResult
+            {
+                Status = status,
+                Enqueue = null
+            };
         }
 
         var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken);
-        return new KnowledgeIngestionAdmissionResult { Status = status, Enqueue = admission };
+        return new KnowledgeIngestionAdmissionResult
+        {
+            Status = status,
+            Enqueue = admission
+        };
     }
 
     /// <summary>

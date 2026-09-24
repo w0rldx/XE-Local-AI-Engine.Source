@@ -52,7 +52,7 @@ public sealed class AgentWorkSessionStoreTests
         var store = WorkSessionTestFixture.StoreFor(context);
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() =>
-                              store.CreateAsync(WorkSessionTestFixture.CreateSeed(Guid.NewGuid(), kind: AgentWorkSessionKind.Development)));
+            store.CreateAsync(WorkSessionTestFixture.CreateSeed(Guid.NewGuid(), kind: AgentWorkSessionKind.Development)));
     }
 
     [Test]
@@ -66,7 +66,13 @@ public sealed class AgentWorkSessionStoreTests
         {
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-            var updated = await store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = sessionId, ExpectedVersion = created.Version, Title = "Renamed", Objective = replacement });
+            var updated = await store.UpdateAsync(new UpdateWorkSessionCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = created.Version,
+                Title = "Renamed",
+                Objective = replacement
+            });
             AssertEx.Equal("Renamed", updated.Title);
             AssertEx.Equal(replacement, updated.Objective);
             AssertEx.Equal(created.Version + 1, updated.Version);
@@ -99,11 +105,27 @@ public sealed class AgentWorkSessionStoreTests
                 ExpectedVersion = created.Version,
                 OperationId = Guid.NewGuid(),
                 Origin = AgentWorkSessionTaskOrigin.Agent,
-                Changes = [
-                                           new WorkPlanTaskChange { TaskId = first, Operation = WorkPlanTaskOperation.Add, Title = "Survey sources" },
-                                           new WorkPlanTaskChange { TaskId = second, Operation = WorkPlanTaskOperation.Add, Title = "Draft findings" },
-                                           new WorkPlanTaskChange { TaskId = third, Operation = WorkPlanTaskOperation.Add, Title = "Abandoned branch" }
-                                       ]
+                Changes =
+                [
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = first,
+                        Operation = WorkPlanTaskOperation.Add,
+                        Title = "Survey sources"
+                    },
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = second,
+                        Operation = WorkPlanTaskOperation.Add,
+                        Title = "Draft findings"
+                    },
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = third,
+                        Operation = WorkPlanTaskOperation.Add,
+                        Title = "Abandoned branch"
+                    }
+                ]
             });
 
             _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
@@ -112,11 +134,27 @@ public sealed class AgentWorkSessionStoreTests
                 ExpectedVersion = added.Version,
                 OperationId = Guid.NewGuid(),
                 Origin = AgentWorkSessionTaskOrigin.Agent,
-                Changes = [
-                                   new WorkPlanTaskChange { TaskId = first, Operation = WorkPlanTaskOperation.Complete },
-                                   new WorkPlanTaskChange { TaskId = second, Operation = WorkPlanTaskOperation.Update, Title = "Draft the findings section", Status = AgentWorkSessionTaskStatus.Active },
-                                   new WorkPlanTaskChange { TaskId = third, Operation = WorkPlanTaskOperation.Drop, BlockedReason = "Superseded by the second task." }
-                               ]
+                Changes =
+                [
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = first,
+                        Operation = WorkPlanTaskOperation.Complete
+                    },
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = second,
+                        Operation = WorkPlanTaskOperation.Update,
+                        Title = "Draft the findings section",
+                        Status = AgentWorkSessionTaskStatus.Active
+                    },
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = third,
+                        Operation = WorkPlanTaskOperation.Drop,
+                        BlockedReason = "Superseded by the second task."
+                    }
+                ]
             });
         }
 
@@ -153,7 +191,16 @@ public sealed class AgentWorkSessionStoreTests
             ExpectedVersion = created.Version,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, ParentTaskId = Guid.NewGuid(), Title = "Orphan child" }]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = Guid.NewGuid(),
+                    Operation = WorkPlanTaskOperation.Add,
+                    ParentTaskId = Guid.NewGuid(),
+                    Title = "Orphan child"
+                }
+            ]
         }));
     }
 
@@ -235,7 +282,12 @@ public sealed class AgentWorkSessionStoreTests
         _ = await WorkSessionTestFixture.SeedAsync(store, newer, "Newer");
 
         // Same-millisecond creations are possible, so move the older row explicitly rather than trusting the clock.
-        _ = await store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = older, ExpectedVersion = createdOlder.Version, Title = "Older, touched" });
+        _ = await store.UpdateAsync(new UpdateWorkSessionCommand
+        {
+            SessionId = older,
+            ExpectedVersion = createdOlder.Version,
+            Title = "Older, touched"
+        });
 
         var sessions = await store.ListAsync();
         AssertEx.Equal(expected: 2, sessions.Count);

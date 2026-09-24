@@ -42,11 +42,11 @@ public sealed class ListDevWorkflowRunEventsEndpoint : Endpoint<DevWorkflowRunEv
         var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct);
         var page = events.Take(req.Limit).Select(DevWorkflowContractMapper.ToResponse).ToList();
         await Send.OkAsync(new ListDevWorkflowRunEventsResponse
-        {
-            Items = page,
-            LastSequence = DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
-            HasMore = events.Count > req.Limit
-        },
+            {
+                Items = page,
+                LastSequence = DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
+                HasMore = events.Count > req.Limit
+            },
             ct);
     }
 }

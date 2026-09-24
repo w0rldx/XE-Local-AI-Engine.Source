@@ -259,7 +259,11 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
             new RecordingLogger<AgentHomeRunDeleteService>());
 
     private AgentHomeOptions AgentHomeOptions() =>
-        new() { Enabled = true, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") };
+        new()
+        {
+            Enabled = true,
+            RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+        };
 
     private string RunsRoot()
     {
@@ -278,5 +282,4 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         File.WriteAllText(Path.Combine(directory, "logs", "events.jsonl"), "{\"eventName\":\"started\"}\n");
         return directory;
     }
-
 }

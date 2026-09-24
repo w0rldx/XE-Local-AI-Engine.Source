@@ -49,8 +49,7 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
     /// </summary>
     private const int MaxListedAddedTasks = 10;
 
-    public UpdateWorkPlanToolHandler(
-        IServiceScopeFactory scopeFactory,
+    public UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
         IWorkSessionEventPublisher publisher,
         ILogger<UpdateWorkPlanToolHandler> logger) : base(scopeFactory, options, publisher, logger)
@@ -106,21 +105,29 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
                 continue;
             }
 
-            return new WorkSessionToolOutcome { Message = error };
+            return new WorkSessionToolOutcome
+            {
+                Message = error
+            };
         }
 
         var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
-        {
-            SessionId = session.Id,
-            ExpectedVersion = session.Version,
-            // One operation id per batch content, so the same batch replayed after a lost response commits once.
-            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
-            Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = changes
-        },
-                                    cancellationToken);
+            {
+                SessionId = session.Id,
+                ExpectedVersion = session.Version,
+                // One operation id per batch content, so the same batch replayed after a lost response commits once.
+                OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
+                Origin = AgentWorkSessionTaskOrigin.Agent,
+                Changes = changes
+            },
+            cancellationToken);
 
-        return new WorkSessionToolOutcome { Message = Describe(changes), Sequence = result.Sequence, Kind = WorkSessionChangeKind.Task };
+        return new WorkSessionToolOutcome
+        {
+            Message = Describe(changes),
+            Sequence = result.Sequence,
+            Kind = WorkSessionChangeKind.Task
+        };
     }
 
     /// <summary>

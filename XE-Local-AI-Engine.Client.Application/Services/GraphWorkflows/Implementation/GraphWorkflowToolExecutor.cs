@@ -89,14 +89,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // Unreachable through the parser, which types a node's config by its kind. Refused rather than assumed,
             // because the alternative is a NullReferenceException inside a detached task nobody is watching.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailureClass.ValidationFailed,
-                    $"Node '{node.NodeKey}' is a Tool node without tool settings.",
-                    eventType: null,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailureClass.ValidationFailed,
+                $"Node '{node.NodeKey}' is a Tool node without tool settings.",
+                eventType: null,
+                cancellationToken);
         }
 
         string inputJson;
@@ -108,15 +108,15 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                TargetStatus = GraphWorkflowNodeRunStatus.Queued,
-                QueueReason = AwaitingToolSlot,
-                InputJson = inputJson
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowNodeRunStatus.Queued,
+                    QueueReason = AwaitingToolSlot,
+                    InputJson = inputJson
+                },
+                cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Queued
@@ -140,10 +140,10 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path must hand its runner something, and a tool call has
         // no such handle — an in-process await its token ends. An id minted here would appear on the row as a correlation nothing else in the system carries.
         var flight = await _lane.TryStartAsync(nodeRun.Id,
-                                    nodeRun.Attempt,
-                                    Guid.Empty,
-                                    (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config.ToolName, argumentsJson, leaseAcquired, token),
-                                    cancellationToken);
+            nodeRun.Attempt,
+            Guid.Empty,
+            (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config.ToolName, argumentsJson, leaseAcquired, token),
+            cancellationToken);
 
         // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it is
         // waiting for, and the next tick asks again.
@@ -171,14 +171,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // Nothing on this node is driving this row and nothing will: the lane holds no memory across a restart, which is what the startup reconciler
             // collapses such rows for. Reaching here means it did not, so the row is judged rather than swept forever; never resumed, and whether it is tried again is the retry stage's answer.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
-                    "The host stopped while this node run's tool call was in flight.",
-                    GraphWorkflowEventTypes.NodeInterrupted,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
+                "The host stopped while this node run's tool call was in flight.",
+                GraphWorkflowEventTypes.NodeInterrupted,
+                cancellationToken);
         }
 
         if (!flight.Work.IsCompleted)
@@ -205,14 +205,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 nodeRun.Id,
                 node.NodeKey);
             written = await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
-                    "This node run's tool call did not complete. See the node logs for details.",
-                    eventType: null,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
+                "This node run's tool call did not complete. See the node logs for details.",
+                eventType: null,
+                cancellationToken);
         }
         else
         {
@@ -280,7 +280,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.
         var timeout = TimeSpan.FromSeconds(node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds);
-        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext { RunId = runId, NodeRunId = nodeRunId, NodeKey = node.NodeKey, Timeout = timeout }, cancellationToken);
+        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext
+        {
+            RunId = runId,
+            NodeRunId = nodeRunId,
+            NodeKey = node.NodeKey,
+            Timeout = timeout
+        }, cancellationToken);
     }
 
     /// <summary>The arguments this call is made with: the node's literals, then every binding on top.</summary>
@@ -348,13 +354,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Running
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Running
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -387,14 +393,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // Classified at the moment of the failing write, like every other failure this runtime records: the state
             // machine has no Failed → Failed edge, so nothing can re-classify one afterwards.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailures.Classify(failureClass, nodeRun.Attempt, node.MaxAttempts),
-                    outcome.Reason,
-                    eventType: null,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailures.Classify(failureClass, nodeRun.Attempt, node.MaxAttempts),
+                outcome.Reason,
+                eventType: null,
+                cancellationToken);
         }
 
         string document;
@@ -412,26 +418,26 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // A real, reachable outcome: a knowledge-base search may legitimately answer with fifty thousand characters. Not retryable, deliberately — the same
             // call composes the same bytes. The tool is named beside the node the exception already names, because "which node" alone does not say what to shrink.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailureClass.OutputTooLarge,
-                    $"{exception.Message} Its tool was '{toolName}'.",
-                    eventType: null,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailureClass.OutputTooLarge,
+                $"{exception.Message} Its tool was '{toolName}'.",
+                eventType: null,
+                cancellationToken);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Succeeded, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
-            OutputJson = document
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
+                OutputJson = document
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -444,15 +450,15 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Cancelled,
-            FailureClass = GraphWorkflowFailureClass.Cancelled,
-            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Cancelled,
+                FailureClass = GraphWorkflowFailureClass.Cancelled,
+                TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -475,13 +481,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         {
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                TargetStatus = GraphWorkflowNodeRunStatus.Running
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowNodeRunStatus.Running
+                },
+                cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
@@ -506,17 +512,17 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Failed,
-            OutputJson = document,
-            FailureClass = failureClass,
-            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
-            EventType = eventType
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+                OutputJson = document,
+                FailureClass = failureClass,
+                TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
+                EventType = eventType
+            },
+            cancellationToken);
         return written + 1;
     }
 }

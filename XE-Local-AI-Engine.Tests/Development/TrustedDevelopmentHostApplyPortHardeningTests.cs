@@ -70,11 +70,11 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
                  {
                      Status = DevelopmentArtifactReadStatus.Found,
                      Content = new byte[]
-                 {
-                     1,
-                     2,
-                     3
-                 }
+                     {
+                         1,
+                         2,
+                         3
+                     }
                  });
 
         var port = new TrustedDevelopmentHostApplyPort(blobStore, Options.Create(OptionsValue()));
@@ -86,22 +86,22 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
         // command (`write-tree` / `status`) is what fires fsmonitor, and every path through ResolveAsync runs one once
         // the identity hash matches.
         _ = await port.InspectAsync(new DevelopmentApprovedApplySubject(projectId,
-                              Guid.NewGuid(),
-                              ExpectedTaskVersion: 1,
-                              await ReadHeadAsync(repository),
-                              "PATCHHASH",
-                              "MANIFESTHASH",
-                              "RESULTHASH",
-                              $"{projectId:N}/{patchArtifactId:N}",
-                              $"{projectId:N}/{manifestArtifactId:N}",
-                              patchArtifactId,
-                              manifestArtifactId,
-                              "SUBJECTHASH",
-                              DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
-                              "main",
-                              PatchByteCount: 3,
-                              ManifestByteCount: 3),
-                          repository);
+                Guid.NewGuid(),
+                ExpectedTaskVersion: 1,
+                await ReadHeadAsync(repository),
+                "PATCHHASH",
+                "MANIFESTHASH",
+                "RESULTHASH",
+                $"{projectId:N}/{patchArtifactId:N}",
+                $"{projectId:N}/{manifestArtifactId:N}",
+                patchArtifactId,
+                manifestArtifactId,
+                "SUBJECTHASH",
+                DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
+                "main",
+                PatchByteCount: 3,
+                ManifestByteCount: 3),
+            repository);
 
         AssertEx.False(File.Exists(sentinel), "the repository-local core.fsmonitor command executed on the host.");
     }

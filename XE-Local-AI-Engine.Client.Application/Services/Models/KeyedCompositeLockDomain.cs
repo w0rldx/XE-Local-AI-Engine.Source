@@ -37,7 +37,10 @@ public sealed class KeyedCompositeLockDomain
         }
 
         var normalizedKeys = ModelCoordinationKeys.NormalizeSet(keys);
-        var ownership = new OwnershipToken { Value = Guid.NewGuid() };
+        var ownership = new OwnershipToken
+        {
+            Value = Guid.NewGuid()
+        };
         CurrentOwnership.Value = ownership;
         lock (_gate)
         {
@@ -56,7 +59,12 @@ public sealed class KeyedCompositeLockDomain
                 {
                     var registration = (CancellationState)state!;
                     registration.Domain.Cancel(registration.Waiter, registration.Token);
-                }, new CancellationState { Domain = this, Waiter = waiter, Token = cancellationToken });
+                }, new CancellationState
+                {
+                    Domain = this,
+                    Waiter = waiter,
+                    Token = cancellationToken
+                });
             }
 
             return AwaitWaiterAsync(waiter);

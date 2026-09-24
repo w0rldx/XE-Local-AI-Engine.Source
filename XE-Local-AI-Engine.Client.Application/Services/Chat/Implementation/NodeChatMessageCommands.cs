@@ -185,7 +185,14 @@ internal sealed class NodeChatMessageCommands
             ifAbsent: true,
             // A finished assistant row carries its run envelope from the start, in the insert's transaction, so the restart
             // reconcile never backfills it as a chat run. Thin, like the cancel path's, and never clobbering an existing one.
-            envelope: isAssistant ? new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() } : null);
+            envelope: isAssistant
+                ? new AgentRunEnvelopeMetadata
+                {
+                    InvocationId = null,
+                    DurationMs = 0L,
+                    TraceId = CurrentTraceId()
+                }
+                : null);
     }
 
     /// <summary>Removes one message the caller itself inserted, with any run envelope it carries — a compensating write, never a chat delete.</summary>
@@ -353,7 +360,12 @@ internal sealed class NodeChatMessageCommands
 
         // A cancel is a terminal transition, so it writes its envelope in the same guarded UPDATE, or a cancel before
         // queued leaves the row envelope-less until the next reconcile. Thin, and InsertIfAbsent so it never clobbers.
-        var envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() };
+        var envelope = new AgentRunEnvelopeMetadata
+        {
+            InvocationId = null,
+            DurationMs = 0L,
+            TraceId = CurrentTraceId()
+        };
 
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
@@ -375,7 +387,12 @@ internal sealed class NodeChatMessageCommands
         // The guard leaves an already-terminal message untouched, so report the true persisted status and claim a
         // cancellation only when the row actually landed in Cancelled. A repeat cancel is therefore idempotent.
         var cancelled = string.Equals(message.Status, NodeChatMessageStatusValues.Cancelled, StringComparison.Ordinal);
-        return new NodeChatCancelResultDto { Correlation = request.Correlation, Status = message.Status, Cancelled = cancelled };
+        return new NodeChatCancelResultDto
+        {
+            Correlation = request.Correlation,
+            Status = message.Status,
+            Cancelled = cancelled
+        };
     }
 
     private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(Guid conversationId,
@@ -433,7 +450,11 @@ internal sealed class NodeChatMessageCommands
                 // Inside the exclusive section, so no concurrent insert of the same id can land between this read and the write below.
                 if (ifAbsent && await ReadExistingAsync(dbContext, conversationId, messageId, token) is { } existing)
                 {
-                    return new NodeChatInsertMessageIfAbsentResult { Message = existing, Inserted = false };
+                    return new NodeChatInsertMessageIfAbsentResult
+                    {
+                        Message = existing,
+                        Inserted = false
+                    };
                 }
 
                 var attempt = 0;
@@ -502,7 +523,11 @@ internal sealed class NodeChatMessageCommands
                             AgentName = agentName,
                             ReasoningEffort = reasoningEffort
                         };
-                        return new NodeChatInsertMessageIfAbsentResult { Message = message, Inserted = true };
+                        return new NodeChatInsertMessageIfAbsentResult
+                        {
+                            Message = message,
+                            Inserted = true
+                        };
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {

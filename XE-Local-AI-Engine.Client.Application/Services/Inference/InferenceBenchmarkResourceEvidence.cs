@@ -23,7 +23,11 @@ internal sealed class InferenceBenchmarkResourceSampler
             ? null
             : hardware.AvailableVramBytes;
 
-        return new ResourceObservation { Vram = VramObservation.Create(globalFree, processBudget), WorkingSetBytes = TryGetWorkingSetBytes(processId) };
+        return new ResourceObservation
+        {
+            Vram = VramObservation.Create(globalFree, processBudget),
+            WorkingSetBytes = TryGetWorkingSetBytes(processId)
+        };
     }
 
     private static long? TryGetWorkingSetBytes(int? processId)
@@ -70,12 +74,30 @@ internal sealed record VramObservation
     {
         if (globalFreeBytes is not { } global || processBudgetBytes is not { } process || process <= global)
         {
-            return new VramObservation { GlobalFreeBytes = globalFreeBytes, ProcessBudgetBytes = processBudgetBytes, ProcessBudgetExcessBytes = null, ProcessBudgetExcessRatio = null, PressureAboveBaselineBytes = null, PressureAboveBaselineRatio = null, ExternalPressureDetected = false };
+            return new VramObservation
+            {
+                GlobalFreeBytes = globalFreeBytes,
+                ProcessBudgetBytes = processBudgetBytes,
+                ProcessBudgetExcessBytes = null,
+                ProcessBudgetExcessRatio = null,
+                PressureAboveBaselineBytes = null,
+                PressureAboveBaselineRatio = null,
+                ExternalPressureDetected = false
+            };
         }
 
         var excess = process - global;
         var ratio = process > 0 ? (double)excess / process : 0d;
-        return new VramObservation { GlobalFreeBytes = globalFreeBytes, ProcessBudgetBytes = processBudgetBytes, ProcessBudgetExcessBytes = excess, ProcessBudgetExcessRatio = ratio, PressureAboveBaselineBytes = null, PressureAboveBaselineRatio = null, ExternalPressureDetected = false };
+        return new VramObservation
+        {
+            GlobalFreeBytes = globalFreeBytes,
+            ProcessBudgetBytes = processBudgetBytes,
+            ProcessBudgetExcessBytes = excess,
+            ProcessBudgetExcessRatio = ratio,
+            PressureAboveBaselineBytes = null,
+            PressureAboveBaselineRatio = null,
+            ExternalPressureDetected = false
+        };
     }
 }
 

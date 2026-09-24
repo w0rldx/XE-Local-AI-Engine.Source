@@ -188,7 +188,13 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(runId);
-            return new BenchmarkRunStreamEvent { RunId = runId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
+            return new BenchmarkRunStreamEvent
+            {
+                RunId = runId,
+                Sequence = ++state.LatestSequence,
+                Kind = kind,
+                Payload = payload
+            };
         }
     }
 
@@ -209,7 +215,11 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             }
 
             var bytes = JsonSerializer.SerializeToUtf8Bytes(streamEvent, JsonOptions).Length;
-            state.Events.AddLast(new BufferedEvent { Event = streamEvent, Utf8Bytes = bytes });
+            state.Events.AddLast(new BufferedEvent
+            {
+                Event = streamEvent,
+                Utf8Bytes = bytes
+            });
             state.Utf8Bytes += bytes;
             state.LastPublishedSequence = streamEvent.Sequence;
             Trim(state);
@@ -224,7 +234,13 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         {
             if (!_runs.TryGetValue(runId, out var state))
             {
-                return new BenchmarkReplayResult { Events = [], ResetRequired = false, LatestSequence = 0, RunVersion = runVersion };
+                return new BenchmarkReplayResult
+                {
+                    Events = [],
+                    ResetRequired = false,
+                    LatestSequence = 0,
+                    RunVersion = runVersion
+                };
             }
 
             var firstRetained = state.Events.First?.Value.Event.Sequence;
@@ -233,11 +249,23 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
                         || firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence;
             if (reset)
             {
-                return new BenchmarkReplayResult { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence, RunVersion = runVersion };
+                return new BenchmarkReplayResult
+                {
+                    Events = [],
+                    ResetRequired = true,
+                    LatestSequence = state.LatestSequence,
+                    RunVersion = runVersion
+                };
             }
 
             var events = state.Events.Where(item => item.Event.Sequence > afterSequence).Select(item => item.Event).ToArray();
-            return new BenchmarkReplayResult { Events = events, ResetRequired = false, LatestSequence = state.LatestSequence, RunVersion = runVersion };
+            return new BenchmarkReplayResult
+            {
+                Events = events,
+                ResetRequired = false,
+                LatestSequence = state.LatestSequence,
+                RunVersion = runVersion
+            };
         }
     }
 

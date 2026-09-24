@@ -26,7 +26,12 @@ public sealed partial class AgentWorkSessionStore
                     await ApplyPlanChangeAsync(session, command.Origin, change, cancellationToken);
                 }
 
-                return new MutationOutcome { EventType = "WorkPlanApplied", Outcome = $"{command.Changes.Count} change(s)", DetailJson = null };
+                return new MutationOutcome
+                {
+                    EventType = "WorkPlanApplied",
+                    Outcome = $"{command.Changes.Count} change(s)",
+                    DetailJson = null
+                };
             },
             cancellationToken);
     }
@@ -67,7 +72,12 @@ public sealed partial class AgentWorkSessionStore
                     CreatedStep = session.StepCount,
                     Superseded = false
                 });
-                return new MutationOutcome { EventType = "FindingRecorded", Outcome = command.Kind.ToString(), DetailJson = null };
+                return new MutationOutcome
+                {
+                    EventType = "FindingRecorded",
+                    Outcome = command.Kind.ToString(),
+                    DetailJson = null
+                };
             },
             cancellationToken);
     }
@@ -121,7 +131,13 @@ public sealed partial class AgentWorkSessionStore
                     ManagedReference = command.ManagedReference,
                     CreatedStep = session.StepCount
                 });
-                return new MutationOutcome { EventType = "ArtifactSaved", Outcome = command.Kind.ToString(), DetailJson = detail, SupersededArtifactId = supersededId };
+                return new MutationOutcome
+                {
+                    EventType = "ArtifactSaved",
+                    Outcome = command.Kind.ToString(),
+                    DetailJson = detail,
+                    SupersededArtifactId = supersededId
+                };
             },
             cancellationToken);
     }
@@ -151,7 +167,12 @@ public sealed partial class AgentWorkSessionStore
                     CreatedAtUtc = Now()
                 });
                 session.LastCheckpointId = command.CheckpointId;
-                return Task.FromResult(new MutationOutcome { EventType = "CheckpointRecorded", Outcome = command.Step.ToString(CultureInfo.InvariantCulture), DetailJson = null });
+                return Task.FromResult(new MutationOutcome
+                {
+                    EventType = "CheckpointRecorded",
+                    Outcome = command.Step.ToString(CultureInfo.InvariantCulture),
+                    DetailJson = null
+                });
             },
             cancellationToken);
     }
@@ -164,7 +185,12 @@ public sealed partial class AgentWorkSessionStore
         return ExecuteMutationAsync(command.SessionId,
             command.ExpectedVersion,
             command.OperationId,
-            _ => Task.FromResult(new MutationOutcome { EventType = command.EventType, Outcome = command.Outcome, DetailJson = Utf8OrNull(command.DetailJson) }),
+            _ => Task.FromResult(new MutationOutcome
+            {
+                EventType = command.EventType,
+                Outcome = command.Outcome,
+                DetailJson = Utf8OrNull(command.DetailJson)
+            }),
             cancellationToken);
     }
 
@@ -176,7 +202,12 @@ public sealed partial class AgentWorkSessionStore
             session =>
             {
                 session.StepCount++;
-                return Task.FromResult(new MutationOutcome { EventType = "StepAdvanced", Outcome = session.StepCount.ToString(CultureInfo.InvariantCulture), DetailJson = null });
+                return Task.FromResult(new MutationOutcome
+                {
+                    EventType = "StepAdvanced",
+                    Outcome = session.StepCount.ToString(CultureInfo.InvariantCulture),
+                    DetailJson = null
+                });
             },
             cancellationToken);
     }

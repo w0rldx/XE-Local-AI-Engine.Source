@@ -210,7 +210,12 @@ public sealed class GeneratedImageStoreTests : IDisposable
             Path.Combine(_rootPath, "generated-images", traversalJob.ToString("D"), "..", "..", "outside-by-traversal.png"));
         await RewriteStoragePathAsync(scopeFactory, absoluteImage, outsideByAbsolutePath);
 
-        foreach (var jobId in new[] { traversalJob, absoluteJob, controlJob })
+        foreach (var jobId in new[]
+                 {
+                     traversalJob,
+                     absoluteJob,
+                     controlJob
+                 })
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var jobStore = new ImageJobStore(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>());

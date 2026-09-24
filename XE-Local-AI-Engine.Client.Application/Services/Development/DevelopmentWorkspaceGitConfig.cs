@@ -127,7 +127,13 @@ internal static class DevelopmentWorkspaceGitConfig
             var value = line[(separator + 1)..].Trim();
             if (ResolvePreservedSection(section, key) is { } canonicalSection)
             {
-                entries.Add(new PreservedEntry { Section = canonicalSection, Subsection = subsection, Key = key, Value = value });
+                entries.Add(new PreservedEntry
+                {
+                    Section = canonicalSection,
+                    Subsection = subsection,
+                    Key = key,
+                    Value = value
+                });
             }
         }
 

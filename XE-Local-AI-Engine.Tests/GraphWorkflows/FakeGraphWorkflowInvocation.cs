@@ -194,12 +194,12 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
             default:
                 await _eventDispatcher.Value.ReportInvocationStreamChunkAsync(package.InvocationId, turn.Text);
                 await _eventDispatcher.Value.ReportInvocationCompletedAsync(package.InvocationId,
-                                          inputTokens: 11,
-                                          outputTokens: 22,
-                                          totalTokens: 33,
-                                          reasoningTokens: 4,
-                                          generationDurationMs: 55,
-                                          turn.FinishReason);
+                    inputTokens: 11,
+                    outputTokens: 22,
+                    totalTokens: 33,
+                    reasoningTokens: 4,
+                    generationDurationMs: 55,
+                    turn.FinishReason);
                 return;
         }
     }

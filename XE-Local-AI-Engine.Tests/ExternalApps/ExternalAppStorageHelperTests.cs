@@ -267,11 +267,11 @@ public sealed class ExternalAppStorageHelperTests
                        ?? throw new AssertionException("The harness catalog does not hold the fixture manifest.");
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;
@@ -282,10 +282,10 @@ public sealed class ExternalAppStorageHelperTests
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync()
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(Manifest(),
-                                                         static options => options with
-                                                         {
-                                                             StorageHelperImage = HelperImage
-                                                         });
+            static options => options with
+            {
+                StorageHelperImage = HelperImage
+            });
         _ = await InstallAsync(harness);
         return harness;
     }

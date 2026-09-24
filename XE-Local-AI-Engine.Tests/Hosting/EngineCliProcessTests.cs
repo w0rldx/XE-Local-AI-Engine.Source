@@ -77,7 +77,12 @@ public sealed class EngineCliProcessTests : IDisposable
                 return null;
             }
 
-            return new ServingEngine { Engine = started, Port = candidate, ReadyLine = line };
+            return new ServingEngine
+            {
+                Engine = started,
+                Port = candidate,
+                ReadyLine = line
+            };
         });
 
         await using var engine = serving.Engine;

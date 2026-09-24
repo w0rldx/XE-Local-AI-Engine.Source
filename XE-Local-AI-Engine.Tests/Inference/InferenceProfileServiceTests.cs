@@ -37,7 +37,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
 
@@ -58,7 +65,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         // Automatic GPU placement without authoritative full-offload startup evidence is not replayable.
         fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 24/25 layers to GPU"], "-c 8192 -ngl -1");
 
@@ -76,7 +90,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput(["load_tensors: offloaded 25/25 layers to GPU"], "-c 8192 -ngl -1");
         fixture.EchoExploredUpsert();
 
@@ -95,7 +116,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"],
             "-c 8192 -ngl 33");
@@ -115,7 +143,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "-c", "8192"],
             "-c 8192 -ngl 33");
@@ -138,7 +173,14 @@ public sealed class InferenceProfileServiceTests
         // placement the admission ledger booked, without a --cpu-moe the replay branch never sets.
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 30_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = 128, IsMoe = true });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 30_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = 128,
+            IsMoe = true
+        });
         fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "--cpu-moe"],
             $@"-c 8192 -ngl 33 -ot ""{ExpertOverride}""");
@@ -159,7 +201,14 @@ public sealed class InferenceProfileServiceTests
         // onto the GPU, outside the reserved footprint, so the explore fails instead of saving a partial profile.
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 30_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = 128, IsMoe = true });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 30_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = 128,
+            IsMoe = true
+        });
         fixture.WithExploreFitParamsOutput(startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "--cpu-moe"],
             "-c 8192 -ngl 33");
@@ -286,7 +335,11 @@ public sealed class InferenceProfileServiceTests
         AssertEx.True(result.Success);
         AssertEx.Equal<Guid?>(snapshotId, result.SnapshotId);
         AssertEx.Equal<double?>(42d, AssertEx.NotNull(result.Metrics).TokensPerSecond);
-        AssertEx.Equal(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6000, ProcessBudgetBytes = 8000 },
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot
+            {
+                GlobalFreeBytes = 6000,
+                ProcessBudgetBytes = 8000
+            },
             AssertEx.NotNull(fixture.CapturedBenchmarkContext).PreSpawnVram);
         await fixture.Supervisor.Received(1).RunExclusiveProfilingAsync(profile.ModelName,
             ModelRole.Chat,
@@ -324,7 +377,14 @@ public sealed class InferenceProfileServiceTests
         // own, so a refusal implemented as a plain runtime throw would escape the service entirely.
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreProfilingRefusal(ModelRole.Chat, activeLeases: 2);
 
         var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -670,7 +730,14 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 131072, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 131072,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 32768 -ngl 33");
         fixture.EchoExploredUpsert();
 
@@ -693,7 +760,14 @@ public sealed class InferenceProfileServiceTests
         // null override, which is what makes the resolver reproduce its pre-override branch, window and cache key.
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 8192 -ngl 33");
         fixture.EchoExploredUpsert();
         var service = fixture.CreateService();
@@ -717,7 +791,14 @@ public sealed class InferenceProfileServiceTests
         // indistinguishable from one issued before the feature existed.
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 131072, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 131072,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 32768 -ngl 33");
         fixture.EchoExploredUpsert();
         var service = fixture.CreateService();
@@ -758,7 +839,14 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithVariant(GpuVariant.Cpu);
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 8192 -ngl -1");
         fixture.EchoExploredUpsert();
 
@@ -786,7 +874,14 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         fixture.WithLocalModel();
         fixture.WithVariant(GpuVariant.Cpu);
-        fixture.WithMetadata(new GgufModelMetadata { ParamCount = 7_000_000_000, QuantType = "15", ContextLength = 8192, ExpertCount = null, IsMoe = false });
+        fixture.WithMetadata(new GgufModelMetadata
+        {
+            ParamCount = 7_000_000_000,
+            QuantType = "15",
+            ContextLength = 8192,
+            ExpertCount = null,
+            IsMoe = false
+        });
         fixture.WithExploreFitParamsOutput("-c 8192 -ngl -1");
         fixture.EchoExploredUpsert();
 
@@ -935,7 +1030,12 @@ public sealed class InferenceProfileServiceTests
             IReadOnlyList<string> successfulLaunchArguments,
             params string[] fitParamsOutput)
         {
-            var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = Model, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:18100/v1") },
+            var context = new LlamaServerProfilingContext(new LlamaServerEndpoint
+                {
+                    ModelName = Model,
+                    Role = ModelRole.Chat,
+                    BaseAddress = new Uri("http://127.0.0.1:18100/v1")
+                },
                 startupOutput,
                 FitParamsOutput: fitParamsOutput)
             {
@@ -977,7 +1077,12 @@ public sealed class InferenceProfileServiceTests
                           var captureVram =
                               callInfo.Arg<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>();
                           var preSpawnVram = await captureVram(CancellationToken.None);
-                          var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = Model, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:18100/v1") },
+                          var context = new LlamaServerProfilingContext(new LlamaServerEndpoint
+                              {
+                                  ModelName = Model,
+                                  Role = ModelRole.Chat,
+                                  BaseAddress = new Uri("http://127.0.0.1:18100/v1")
+                              },
                               [])
                           {
                               PreSpawnVram = preSpawnVram

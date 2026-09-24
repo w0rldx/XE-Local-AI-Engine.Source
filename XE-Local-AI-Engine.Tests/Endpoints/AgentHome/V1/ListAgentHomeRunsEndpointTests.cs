@@ -145,7 +145,11 @@ public sealed class ListAgentHomeRunsEndpointTests
     /// <summary>The service, stubbed to one page and recording the paging the endpoint composed.</summary>
     private sealed class StubRunListService : IAgentHomeRunListService
     {
-        public AgentHomeRunPage Page { get; init; } = new() { Items = [], TotalCount = 0 };
+        public AgentHomeRunPage Page { get; init; } = new()
+        {
+            Items = [],
+            TotalCount = 0
+        };
 
         public int Calls { get; private set; }
 

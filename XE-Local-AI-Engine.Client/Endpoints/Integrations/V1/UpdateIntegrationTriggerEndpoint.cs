@@ -34,17 +34,17 @@ public sealed class UpdateIntegrationTriggerEndpoint : Endpoint<UpdateIntegratio
         var acceptedInputKinds = IntegrationMapper.FromWireInputKinds(req.AcceptedInputKinds).GetValueOrDefault();
 
         var result = await _triggerService.UpdateAsync(Route<Guid>("triggerId"),
-                                              new IntegrationTriggerUpdateInput
-                                              {
-                                                  ExpectedVersion = req.ExpectedVersion,
-                                                  DisplayName = req.DisplayName,
-                                                  Description = req.Description,
-                                                  Enabled = req.Enabled,
-                                                  TargetAgentDefinitionId = req.TargetAgentDefinitionId,
-                                                  SessionPolicy = req.SessionPolicy,
-                                                  AcceptedInputKinds = acceptedInputKinds
-                                              },
-                                              ct);
+            new IntegrationTriggerUpdateInput
+            {
+                ExpectedVersion = req.ExpectedVersion,
+                DisplayName = req.DisplayName,
+                Description = req.Description,
+                Enabled = req.Enabled,
+                TargetAgentDefinitionId = req.TargetAgentDefinitionId,
+                SessionPolicy = req.SessionPolicy,
+                AcceptedInputKinds = acceptedInputKinds
+            },
+            ct);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {

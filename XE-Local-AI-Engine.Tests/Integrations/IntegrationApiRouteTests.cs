@@ -224,7 +224,16 @@ public sealed class IntegrationApiRouteTests
         var foreign = await GenerateKeyAsync(client, $"{prefix}-foreign", allowedTriggerIds: null, principalId: null);
 
         var (executionId, sessionId) = await SeedExecutionAsync(triggerB.Id, broad.View.PrincipalId, broad.View.KeyPrefix);
-        return new Seeded { TriggerBName = triggerB.Name, ExecutionUnderB = executionId, SessionUnderB = sessionId, BroadKey = broad.Key, NarrowKey = narrow.Key, ForeignKey = foreign.Key, BroadKeyId = broad.View.Id };
+        return new Seeded
+        {
+            TriggerBName = triggerB.Name,
+            ExecutionUnderB = executionId,
+            SessionUnderB = sessionId,
+            BroadKey = broad.Key,
+            NarrowKey = narrow.Key,
+            ForeignKey = foreign.Key,
+            BroadKeyId = broad.View.Id
+        };
     }
 
     private async Task<GeneratedIntegrationApiKeyBody> GenerateKeyAsync(HttpClient client, string label, Guid[]? allowedTriggerIds, Guid? principalId)
@@ -250,22 +259,28 @@ public sealed class IntegrationApiRouteTests
         var executionId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var admitted = await store.AcceptAsync(new IntegrationAcceptCommand
-        {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
-            ExecutionId = executionId,
-            TriggerId = triggerId,
-            SessionId = sessionId,
-            PrincipalId = principalId,
-            RequestId = Guid.NewGuid(),
-            RequestFingerprint = new byte[]
+            {
+                NewSession = new IntegrationSessionCreate
+                {
+                    SessionId = sessionId,
+                    TriggerId = triggerId,
+                    ConversationId = Guid.NewGuid(),
+                    AgentDefinitionId = Guid.NewGuid()
+                },
+                ExecutionId = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = Guid.NewGuid(),
+                RequestFingerprint = new byte[]
                 {
                     1,
                     2,
                     3
                 },
-            KeyPrefix = keyPrefix,
-            ReceivedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            AcceptedEvent = new IntegrationEventAppend
+                KeyPrefix = keyPrefix,
+                ReceivedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                AcceptedEvent = new IntegrationEventAppend
                 {
                     EventId = Guid.NewGuid(),
                     ExecutionId = executionId,
@@ -274,7 +289,7 @@ public sealed class IntegrationApiRouteTests
                     DetailJson = null,
                     OccurredAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 }
-        },
+            },
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the execution row must be admitted.");

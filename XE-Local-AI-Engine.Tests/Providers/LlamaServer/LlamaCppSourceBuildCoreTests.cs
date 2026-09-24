@@ -14,7 +14,11 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments(LlamaCppSourceBackend.Cuda)]
     public void Normalize_OfficialBackendWithoutCommit_UsesCanonicalRepository(LlamaCppSourceBackend backend)
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest { Backend = backend, Source = LlamaCppSourceSelection.Official });
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = backend,
+            Source = LlamaCppSourceSelection.Official
+        });
 
         AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
         AssertEx.Null(normalized.Commit);
@@ -28,7 +32,11 @@ public sealed class LlamaCppSourceBuildCoreTests
     {
         // Regression: the transport edge and ILlamaCppSourceBuildService.StartAsync both normalize, so the second pass
         // sees the canonical repository the first pass wrote. Rejecting it there failed EVERY official build with a 409.
-        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest { Backend = backend, Source = LlamaCppSourceSelection.Official });
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = backend,
+            Source = LlamaCppSourceSelection.Official
+        });
 
         var twice = LlamaCppSourceBuildRequestValidation.Normalize(once);
 

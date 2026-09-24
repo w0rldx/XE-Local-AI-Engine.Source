@@ -28,8 +28,8 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint : Endpoint<EligibleBench
     {
         var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct);
         await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
-                  {
-                      Items = [.. agents.Select(static agent => agent.ToResponse())]
-                  }, ct);
+        {
+            Items = [.. agents.Select(static agent => agent.ToResponse())]
+        }, ct);
     }
 }

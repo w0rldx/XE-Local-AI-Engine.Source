@@ -57,7 +57,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         ResolvedGgufAcquisitionIdentity? identity = null;
         if (inspection.DetectedQuantization is not null)
         {
-            identity = _resolver.Resolve(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = modelBaseName, Quantization = inspection.DetectedQuantization });
+            identity = _resolver.Resolve(new GgufAcquisitionIntent
+            {
+                OperationKind = PreflightKind.Import,
+                ModelBaseName = modelBaseName,
+                Quantization = inspection.DetectedQuantization
+            });
         }
 
         var quantizationChoices = inspection.DetectedQuantization is null
@@ -70,7 +75,13 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         RemoveExpiredPreviews();
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var expiresAt = _timeProvider.GetUtcNow().Add(PreviewLifetime);
-        _previews[token] = new PreviewState { SourcePath = sourcePath, Inspection = inspection, CanonicalQuantizationChoices = quantizationChoices, ExpiresAtUtc = expiresAt };
+        _previews[token] = new PreviewState
+        {
+            SourcePath = sourcePath,
+            Inspection = inspection,
+            CanonicalQuantizationChoices = quantizationChoices,
+            ExpiresAtUtc = expiresAt
+        };
         return new PreviewGgufImportResult
         {
             ModelBaseName = modelBaseName,
@@ -116,7 +127,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         ResolvedGgufAcquisitionIdentity requestedIdentity;
         try
         {
-            requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = command.ModelBaseName, Quantization = command.Quantization });
+            requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent
+            {
+                OperationKind = PreflightKind.Import,
+                ModelBaseName = command.ModelBaseName,
+                Quantization = command.Quantization
+            });
         }
         catch (ArgumentException exception)
         {
@@ -143,7 +159,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
-            reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = command.ModelBaseName, Quantization = command.Quantization },
+            reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent
+                {
+                    OperationKind = PreflightKind.Import,
+                    ModelBaseName = command.ModelBaseName,
+                    Quantization = command.Quantization
+                },
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -219,7 +240,10 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                     value.CompletedBytes,
                     value.TotalBytes));
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Copying);
-                prepared = await _importer.PrepareAsync(new GgufImportSource { AbsolutePath = sourcePath },
+                prepared = await _importer.PrepareAsync(new GgufImportSource
+                    {
+                        AbsolutePath = sourcePath
+                    },
                     new GgufImportDestination
                     {
                         CanonicalModelName = identity.CanonicalModelName,
@@ -392,7 +416,10 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     {
         try
         {
-            var inspection = await _inspector.InspectAsync(new GgufImportSource { AbsolutePath = sourcePath }, cancellationToken);
+            var inspection = await _inspector.InspectAsync(new GgufImportSource
+            {
+                AbsolutePath = sourcePath
+            }, cancellationToken);
             var blocking = inspection.Rejections.FirstOrDefault(rejection => !allowQuantizationRequired
                                                                              || rejection != GgufImportRejectionCode.QuantizationRequired);
             if (blocking != default || inspection.Rejections.Contains(GgufImportRejectionCode.InvalidSource))

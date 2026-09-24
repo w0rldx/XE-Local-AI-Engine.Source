@@ -38,7 +38,14 @@ public sealed class TranscriptionRuntimeEndpointTests
                     BinarySource = WhisperBinarySource.Pinned,
                     SupportsTranscode = true
                 },
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false },
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 1,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                },
                 ManagedRuntime = null,
                 SelectedModelId = "large-v3-turbo",
                 RecommendedModelId = "large-v3-turbo-q8_0",
@@ -93,7 +100,15 @@ public sealed class TranscriptionRuntimeEndpointTests
         {
             Runtime = StoppedRuntime() with
             {
-                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = false }
+                Runtime = new WhisperRuntimeStatusSnapshot
+                {
+                    State = WhisperRuntimeState.Stopped,
+                    LoadedModelId = null,
+                    Backend = null,
+                    BinaryVersion = null,
+                    BinarySource = null,
+                    SupportsTranscode = false
+                }
             }
         };
         await using var factory = FactoryWith(service);
@@ -163,10 +178,21 @@ public sealed class TranscriptionRuntimeEndpointTests
     [Test]
     public async Task Eject_WhileATranscriptionIsRunning_Returns409RuntimeBusyWithTheActivitySnapshot()
     {
-        var busy = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 1, SpawnReadinessCount = 0, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false };
+        var busy = new WhisperRuntimeActivitySnapshot
+        {
+            ActiveTranscriptionCount = 1,
+            SpawnReadinessCount = 0,
+            ResidentProcessCount = 1,
+            MutationReserved = false,
+            EvictionReserved = false
+        };
         var service = new StubTranscriptionRuntimeService
         {
-            EvictResult = new WhisperServerEvictResult { Evicted = false, Activity = busy }
+            EvictResult = new WhisperServerEvictResult
+            {
+                Evicted = false,
+                Activity = busy
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -193,7 +219,14 @@ public sealed class TranscriptionRuntimeEndpointTests
             EvictResult = new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
             }
         };
         await using var factory = FactoryWith(service);
@@ -320,8 +353,23 @@ public sealed class TranscriptionRuntimeEndpointTests
         new()
         {
             Enabled = true,
-            Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
-            Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
+            Runtime = new WhisperRuntimeStatusSnapshot
+            {
+                State = WhisperRuntimeState.Stopped,
+                LoadedModelId = null,
+                Backend = null,
+                BinaryVersion = null,
+                BinarySource = null,
+                SupportsTranscode = true
+            },
+            Activity = new WhisperRuntimeActivitySnapshot
+            {
+                ActiveTranscriptionCount = 0,
+                SpawnReadinessCount = 0,
+                ResidentProcessCount = 0,
+                MutationReserved = false,
+                EvictionReserved = false
+            },
             ManagedRuntime = null,
             SelectedModelId = null,
             RecommendedModelId = "base",
@@ -335,7 +383,18 @@ public sealed class TranscriptionRuntimeEndpointTests
         public TranscriptionRuntimeView Runtime { get; init; } = StoppedRuntime();
 
         public WhisperServerEvictResult EvictResult { get; init; } =
-            new() { Evicted = true, Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false } };
+            new()
+            {
+                Evicted = true,
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
+            };
 
         public WhisperModelEntry Recommended { get; init; } = WhisperModelCatalog.Models[0];
 
@@ -351,13 +410,23 @@ public sealed class TranscriptionRuntimeEndpointTests
         }
 
         public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
-            Task.FromResult(new TranscriptionModelCatalogView { Models = [], SelectedModelId = null, RecommendedModelId = Recommended.Id });
+            Task.FromResult(new TranscriptionModelCatalogView
+            {
+                Models = [],
+                SelectedModelId = null,
+                RecommendedModelId = Recommended.Id
+            });
 
         public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) =>
             Task.FromResult(Recommended);
 
         public Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct) =>
-            Task.FromResult(new TranscriptionModelCatalogView { Models = [], SelectedModelId = modelId, RecommendedModelId = Recommended.Id });
+            Task.FromResult(new TranscriptionModelCatalogView
+            {
+                Models = [],
+                SelectedModelId = modelId,
+                RecommendedModelId = Recommended.Id
+            });
 
         public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
             Task.FromResult(Recommended.Id);

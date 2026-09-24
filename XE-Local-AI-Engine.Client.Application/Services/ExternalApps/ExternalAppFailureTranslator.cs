@@ -74,19 +74,31 @@ public static class ExternalAppFailureTranslator
         // that was well formed but that what the daemon already holds makes unsafe.
         if (exception is ContainerPolicyException)
         {
-            return new ExternalAppFailure { Category = ExternalAppFailureCategory.PolicyViolation, Summary = "The container runtime refused the request on policy grounds." };
+            return new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.PolicyViolation,
+                Summary = "The container runtime refused the request on policy grounds."
+            };
         }
 
         if (exception is ContainerRuntimeUnavailableException)
         {
-            return new ExternalAppFailure { Category = ExternalAppFailureCategory.RuntimeUnavailable, Summary = "The container runtime is not available." };
+            return new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.RuntimeUnavailable,
+                Summary = "The container runtime is not available."
+            };
         }
 
         // ProbeFailed is the type's default, i.e. "no status was stated"; anything else is the daemon telling us it
         // cannot serve this engine at all, which is a runtime problem rather than this application's.
         if (exception is DockerRuntimeException { Status: not DockerDaemonPreflightStatus.ProbeFailed })
         {
-            return new ExternalAppFailure { Category = ExternalAppFailureCategory.RuntimeUnavailable, Summary = "The container daemon is not usable." };
+            return new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.RuntimeUnavailable,
+                Summary = "The container daemon is not usable."
+            };
         }
 
         if (phase is ExternalAppFailurePhase.Create or ExternalAppFailurePhase.Start
@@ -132,7 +144,11 @@ public static class ExternalAppFailureTranslator
                 Category = ExternalAppFailureCategory.HealthCheckFailed,
                 Summary = "A service did not become ready."
             },
-            _ => new ExternalAppFailure { Category = ExternalAppFailureCategory.Unknown, Summary = "This application could not be started." }
+            _ => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.Unknown,
+                Summary = "This application could not be started."
+            }
         };
     }
 
@@ -175,7 +191,11 @@ public static class ExternalAppFailureTranslator
 
         if (violations.Count == 0)
         {
-            return new ExternalAppFailure { Category = ExternalAppFailureCategory.PolicyViolation, Summary = $"Service '{serviceName}' failed verification." };
+            return new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.PolicyViolation,
+                Summary = $"Service '{serviceName}' failed verification."
+            };
         }
 
         return new ExternalAppFailure

@@ -36,8 +36,8 @@ public sealed class ListTranscriptionSessionsEndpoint : Endpoint<ListTranscripti
         ArgumentNullException.ThrowIfNull(req);
 
         var page = await _sessions.ListSessionsAsync(Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListTranscriptionSessionsRequestValidator.MaxLimit),
-                                      Math.Max(req.Offset ?? 0, val2: 0),
-                                      ct);
+            Math.Max(req.Offset ?? 0, val2: 0),
+            ct);
 
         await Send.OkAsync(new ListTranscriptionSessionsResponse
             {

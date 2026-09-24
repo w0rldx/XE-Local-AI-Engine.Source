@@ -832,11 +832,11 @@ public sealed class DevWorkflowDevTaskTests
         var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness);
         var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
         await MaterializeChildAsync(harness,
-                runId,
-                "implement",
-                "implement#1",
-                projectId,
-                """{"title":"Implement the second slice","requirements":"Do the other half."}""");
+            runId,
+            "implement",
+            "implement#1",
+            projectId,
+            """{"title":"Implement the second slice","requirements":"Do the other half."}""");
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
@@ -999,7 +999,7 @@ public sealed class DevWorkflowDevTaskTests
         await using var scope = harness.Services.CreateAsyncScope();
         var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
         return (await AssertEx.ThrowsAsync<Exception>(() => management.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRunId),
-                                  "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")).Message;
+            "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")).Message;
     }
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
@@ -1038,9 +1038,9 @@ public sealed class DevWorkflowDevTaskTests
         // attempt and phase, so the executor derives the same operation id and the store answers with what it already
         // wrote. Attempt 1 because a node run's first attempt is 1.
         _ = await development.RecordWorkflowPolicyAsync(taskId,
-                                 DevWorkflowOperationId.For(runId, "implement", attempt: 1, "devtask-policy"),
-                                 "Deploy straight to production on Fridays.",
-                                 [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")]);
+            DevWorkflowOperationId.For(runId, "implement", attempt: 1, "devtask-policy"),
+            "Deploy straight to production on Fridays.",
+            [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")]);
 
         var events = await development.ListEventsAsync(projectId);
         AssertEx.Equal(expected: 1,
@@ -1454,7 +1454,8 @@ public sealed class DevWorkflowDevTaskTests
                            RunId = runId,
                            ExpectedVersion = DevWorkflowVersions.Any,
                            OperationId = Guid.NewGuid(),
-                           NodeRuns = [
+                           NodeRuns =
+                           [
                                new DevWorkflowNodeRunSeed
                                {
                                    NodeRunId = Guid.NewGuid(),
@@ -1468,13 +1469,13 @@ public sealed class DevWorkflowDevTaskTests
                                }
                            ],
                            GraphJson = $$"""
-                             {
-                               "schemaVersion": 1,
-                               "nodes": [{ "nodeKey": "{{templateNodeKey}}", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 2 },
-                                         { "nodeKey": "{{childNodeKey}}", "nodeType": "DevTask", "label": "Implement (1)", "maxAttempts": 1 }],
-                               "edges": [{ "from": "{{templateNodeKey}}", "to": "{{childNodeKey}}" }]
-                             }
-                             """
+                                         {
+                                           "schemaVersion": 1,
+                                           "nodes": [{ "nodeKey": "{{templateNodeKey}}", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 2 },
+                                                     { "nodeKey": "{{childNodeKey}}", "nodeType": "DevTask", "label": "Implement (1)", "maxAttempts": 1 }],
+                                           "edges": [{ "from": "{{templateNodeKey}}", "to": "{{childNodeKey}}" }]
+                                         }
+                                         """
                        });
     }
 

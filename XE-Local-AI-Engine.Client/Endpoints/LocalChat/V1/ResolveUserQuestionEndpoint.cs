@@ -46,7 +46,11 @@ public sealed class ResolveUserQuestionEndpoint : Endpoint<ResolveUserQuestionRe
                          })
                          .ToArray();
 
-        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent { RequestId = req.RequestId, Answers = answers });
+        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent
+        {
+            RequestId = req.RequestId,
+            Answers = answers
+        });
 
         // The answers are the operator's words: the response echoes the correlation id and a count only, never content.
         await Send.OkAsync(new ResolveUserQuestionResponse

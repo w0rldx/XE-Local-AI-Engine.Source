@@ -37,8 +37,7 @@ internal sealed class DevelopmentApplyService : IDevelopmentApplyService
     private readonly TimeProvider _timeProvider;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
 
-    public DevelopmentApplyService(
-        IDevelopmentStore store,
+    public DevelopmentApplyService(IDevelopmentStore store,
         IDevelopmentCoordinator coordinator,
         IDevelopmentWorkspaceProvider workspaceProvider,
         IDevelopmentEvidenceService evidence,

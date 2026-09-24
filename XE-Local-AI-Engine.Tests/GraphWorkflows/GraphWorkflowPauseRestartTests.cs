@@ -86,9 +86,9 @@ public sealed class GraphWorkflowPauseRestartTests
     private static async Task RestartAsync(GraphWorkflowHarness harness)
     {
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                  Options.Create(harness.CurrentOptions()),
-                  harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None);
+                Options.Create(harness.CurrentOptions()),
+                harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
+            .StartAsync(CancellationToken.None);
 
         _ = harness.CreateReplacementDispatcher();
     }

@@ -105,7 +105,7 @@ public sealed class GraphWorkflowPurgeCoverageTests
 
         var survivorRunId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id);
         var survivorNodeRunId = await GraphWorkflowTestFixture
-                                      .SeedNodeRunAsync(context, survivorRunId, "review", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":2}}""");
+            .SeedNodeRunAsync(context, survivorRunId, "review", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":2}}""");
         var survivorEventId = await GraphWorkflowTestFixture.SeedRunEventAsync(context, survivorRunId, seq: 1, "run.started", """{"note":"survivor"}""");
 
         await using (var transaction = await context.Database.BeginTransactionAsync())

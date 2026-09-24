@@ -89,7 +89,12 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         _ = TrackCompletionAsync(completion, credential, cacheKey, newCts);
 
-        return new EntraDeviceCodeSignInHandle { UserCode = deviceCodeInfo.UserCode, VerificationUri = deviceCodeInfo.VerificationUri.ToString(), ExpiresAtUtc = deviceCodeInfo.ExpiresOn };
+        return new EntraDeviceCodeSignInHandle
+        {
+            UserCode = deviceCodeInfo.UserCode,
+            VerificationUri = deviceCodeInfo.VerificationUri.ToString(),
+            ExpiresAtUtc = deviceCodeInfo.ExpiresOn
+        };
     }
 
     /// <inheritdoc />

@@ -65,7 +65,11 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 
             // A profile frozen under the PREVIOUS version is hard-rejected on version alone, whatever its value says —
             // it cannot prove whether an adapter was applied, because adapters did not exist when it was written.
-            var stale = new LaunchPolicyFingerprint { Version = LaunchPolicyFingerprintProvider.CurrentVersion - 1, Value = captured.Value };
+            var stale = new LaunchPolicyFingerprint
+            {
+                Version = LaunchPolicyFingerprintProvider.CurrentVersion - 1,
+                Value = captured.Value
+            };
             var staleMatches = await provider.MatchesAsync(Profile(Input(path), stale), path, CancellationToken.None);
             AssertEx.False(staleMatches, "A fingerprint from before the adapter input joined must not match.");
 

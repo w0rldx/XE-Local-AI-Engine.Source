@@ -34,9 +34,9 @@ public sealed class GraphWorkflowToolValidationTests
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                                        definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
-                                            description: null,
-                                            GraphWorkflowGraphs.ToolValidationWriteExecuteTool));
+            definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
+                description: null,
+                GraphWorkflowGraphs.ToolValidationWriteExecuteTool));
 
         var error = AssertEx.NotNull(refusal.Result.Errors.SingleOrDefault(), $"one offending node, one error: {refusal.Message}");
         AssertEx.Equal("runner", error.Key, "the error is keyed by NODE key, so the editor draws it on the node that named the tool.");
@@ -54,9 +54,9 @@ public sealed class GraphWorkflowToolValidationTests
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                                        definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
-                                            description: null,
-                                            GraphWorkflowGraphs.ToolValidationTwoRefusedTools));
+            definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
+                description: null,
+                GraphWorkflowGraphs.ToolValidationTwoRefusedTools));
 
         AssertEx.Equal("asker,runner",
             string.Join(',', refusal.Result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),
@@ -100,8 +100,18 @@ public sealed class GraphWorkflowToolValidationTests
         var tools = Substitute.For<IToolInvocationService>();
         IReadOnlyList<InvocableToolDescriptor> catalog =
         [
-            new InvocableToolDescriptor { Name = "read_file", Description = "Reads a file.", ParameterSchema = """{"type":"object"}""" },
-            new InvocableToolDescriptor { Name = "list_files", Description = "Lists files.", ParameterSchema = """{"type":"object"}""" }
+            new InvocableToolDescriptor
+            {
+                Name = "read_file",
+                Description = "Reads a file.",
+                ParameterSchema = """{"type":"object"}"""
+            },
+            new InvocableToolDescriptor
+            {
+                Name = "list_files",
+                Description = "Lists files.",
+                ParameterSchema = """{"type":"object"}"""
+            }
         ];
         _ = tools.ListInvocableToolsAsync(Arg.Any<CancellationToken>()).Returns(catalog);
 
@@ -121,8 +131,8 @@ public sealed class GraphWorkflowToolValidationTests
         var requestId = Guid.NewGuid();
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                                        scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                                             .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null));
+            scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
+                 .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null));
 
         AssertEx.Equal("lookup,peek",
             string.Join(',', refusal.Result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),

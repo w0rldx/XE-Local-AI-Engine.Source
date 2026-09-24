@@ -107,7 +107,13 @@ public sealed class InvocationAgentFactoryTests
     {
         // The no-override guarantee: every path but the judge leaves this null, and null must send no response_format
         // at all rather than a permissive one.
-        var definition = new InvocationAgentDefinition { ModelId = "llama3.2:3b", Instructions = "Be helpful.", Tools = [], ConversationContext = [] };
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -793,7 +799,13 @@ public sealed class InvocationAgentFactoryTests
             {
                 Name = "mcp__files__write_file",
                 Executable = wrapped,
-                Descriptor = new LocalChatToolDescriptor { Name = "mcp__files__write_file", Description = "Writes a file.", ParameterSchema = """{"type":"object"}""", RequiresApproval = true }
+                Descriptor = new LocalChatToolDescriptor
+                {
+                    Name = "mcp__files__write_file",
+                    Description = "Writes a file.",
+                    ParameterSchema = """{"type":"object"}""",
+                    RequiresApproval = true
+                }
             }
         };
         var mcpRegistry = new FakeMcpToolRegistry();
@@ -828,7 +840,8 @@ public sealed class InvocationAgentFactoryTests
             ModelId = "qwen3.5:0.8b",
             Instructions = "Be helpful.",
             Tools = [],
-            ConversationContext = [
+            ConversationContext =
+            [
                 new ChatMessage(ChatRole.User, "first"),
                 new ChatMessage(ChatRole.Assistant, "second")
             ]
@@ -1057,7 +1070,13 @@ public sealed class InvocationAgentFactoryTests
 
         // No skills: the agent is built via the positional constructor, so no context providers are attached
         // (AIContextProviders is null per MAF when none are configured) — byte-identical to the pre-skills build.
-        var noSkills = new InvocationAgentDefinition { ModelId = "qwen3.5:0.8b", Instructions = "Be helpful.", Tools = [], ConversationContext = [] };
+        var noSkills = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = []
+        };
         await using var noSkillsContext = await sut.CreateAsync(noSkills);
         var noSkillsAgent = ResolveChatClientAgent(noSkillsContext.Agent);
         AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
@@ -1073,9 +1092,20 @@ public sealed class InvocationAgentFactoryTests
             Instructions = "Be helpful.",
             Tools = [],
             ConversationContext = [],
-            Skills = [
-                new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" },
-                new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }
+            Skills =
+            [
+                new InvocationSkill
+                {
+                    Name = "kubernetes-debug",
+                    Description = "Debug k8s issues",
+                    Body = "## Body"
+                },
+                new InvocationSkill
+                {
+                    Name = "log-triage",
+                    Description = "Triage logs",
+                    Body = "## Logs"
+                }
             ]
         };
         await using var withSkillsContext = await sut.CreateAsync(withSkills);
@@ -1106,9 +1136,22 @@ public sealed class InvocationAgentFactoryTests
             {
                 ["author"] = "acme"
             },
-            Resources = [
-                new InvocationSkillResource { Name = "references/runbook.md", Description = "Escalation runbook", MediaType = "text/markdown", Content = "step one" },
-                new InvocationSkillResource { Name = "references/faq.md", Description = "Frequently asked questions", MediaType = "text/markdown", Content = "answer one" }
+            Resources =
+            [
+                new InvocationSkillResource
+                {
+                    Name = "references/runbook.md",
+                    Description = "Escalation runbook",
+                    MediaType = "text/markdown",
+                    Content = "step one"
+                },
+                new InvocationSkillResource
+                {
+                    Name = "references/faq.md",
+                    Description = "Frequently asked questions",
+                    MediaType = "text/markdown",
+                    Content = "answer one"
+                }
             ]
         };
 
@@ -1132,7 +1175,12 @@ public sealed class InvocationAgentFactoryTests
     {
         // The 3-argument constructor this replaced IS the full constructor taking its defaults, so a skill carrying
         // neither frontmatter nor resources must build exactly what it built before either existed.
-        var skill = new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" };
+        var skill = new InvocationSkill
+        {
+            Name = "log-triage",
+            Description = "Triage logs",
+            Body = "## Logs"
+        };
 
         var built = InvocationAgentFactory.BuildInlineSkill(skill);
         var baseline = new AgentInlineSkill("log-triage", "Triage logs", "## Logs");
@@ -1205,9 +1253,20 @@ public sealed class InvocationAgentFactoryTests
             Instructions = instructions,
             Tools = [],
             ConversationContext = [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
-            Skills = [
-                new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" },
-                new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }
+            Skills =
+            [
+                new InvocationSkill
+                {
+                    Name = "kubernetes-debug",
+                    Description = "Debug k8s issues",
+                    Body = "## Body"
+                },
+                new InvocationSkill
+                {
+                    Name = "log-triage",
+                    Description = "Triage logs",
+                    Body = "## Logs"
+                }
             ]
         };
 
@@ -1331,7 +1390,17 @@ public sealed class InvocationAgentFactoryTests
             Instructions = "Be helpful.",
             Tools = [.. names.Select(name => InvocationToolBridge.CreateOfferPlaceholder(name, requiresApproval))],
             ConversationContext = [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
-            Skills = withSkills ? [new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" }] : null
+            Skills = withSkills
+                ?
+                [
+                    new InvocationSkill
+                    {
+                        Name = "kubernetes-debug",
+                        Description = "Debug k8s issues",
+                        Body = "## Body"
+                    }
+                ]
+                : null
         };
 
         var sut = CreateSut(chatClient, registry);
@@ -1548,7 +1617,13 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor { Name = function.Name, Description = function.Description, ParameterSchema = function.JsonSchema.GetRawText(), RequiresApproval = false })
+                         .Select(static function => new LocalChatToolDescriptor
+                         {
+                             Name = function.Name,
+                             Description = function.Description,
+                             ParameterSchema = function.JsonSchema.GetRawText(),
+                             RequiresApproval = false
+                         })
             ];
         }
     }
@@ -1593,7 +1668,13 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.Values.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor { Name = function.Name, Description = function.Description, ParameterSchema = function.JsonSchema.GetRawText(), RequiresApproval = true })
+                         .Select(static function => new LocalChatToolDescriptor
+                         {
+                             Name = function.Name,
+                             Description = function.Description,
+                             ParameterSchema = function.JsonSchema.GetRawText(),
+                             RequiresApproval = true
+                         })
             ];
         }
 

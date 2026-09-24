@@ -30,8 +30,7 @@ public sealed class NativeSqliteVersionTests
         var reported = (string?)await command.ExecuteScalarAsync();
 
         var actual = Version.Parse(AssertEx.NotNull(reported, "sqlite_version() should report a version string."));
-        AssertEx.True(
-            actual >= MinimumPatchedVersion,
+        AssertEx.True(actual >= MinimumPatchedVersion,
             $"The loaded native SQLite is {actual}; CVE-2025-6965 requires at least {MinimumPatchedVersion}.");
     }
 }

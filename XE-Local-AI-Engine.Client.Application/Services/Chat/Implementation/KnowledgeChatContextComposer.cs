@@ -112,7 +112,11 @@ internal static class KnowledgeChatContextComposer
             builder.Append("\n\n").Append(TruncationNotice);
         }
 
-        return new KnowledgeChatContext { Context = builder.ToString(), Sources = sources };
+        return new KnowledgeChatContext
+        {
+            Context = builder.ToString(),
+            Sources = sources
+        };
     }
 }
 

@@ -201,7 +201,12 @@ public sealed class TestServerWebAppFactoryTimingTests
     }
 
     private static void Record(List<Sample> samples, int iteration, string phase, TimeSpan elapsed) =>
-        samples.Add(new Sample { Iteration = iteration, Phase = phase, Milliseconds = elapsed.TotalMilliseconds });
+        samples.Add(new Sample
+        {
+            Iteration = iteration,
+            Phase = phase,
+            Milliseconds = elapsed.TotalMilliseconds
+        });
 
     private static string Report(List<Sample> samples)
     {

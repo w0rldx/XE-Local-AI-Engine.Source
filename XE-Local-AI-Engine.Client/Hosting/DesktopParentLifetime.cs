@@ -58,7 +58,7 @@ internal sealed class DesktopParentLifetime : IAsyncDisposable
     internal static void ValidatePipeName(string pipeName)
     {
         if (string.IsNullOrEmpty(pipeName) || pipeName.Length > 128
-            || pipeName.Any(static character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_')))
+                                           || pipeName.Any(static character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_')))
         {
             throw new ArgumentException("The desktop parent pipe name is invalid.", nameof(pipeName));
         }

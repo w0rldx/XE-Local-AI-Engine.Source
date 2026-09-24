@@ -260,7 +260,11 @@ internal static class AddNodeModelRuntimeExtensions
         {
             var chatConnectionSettings = ResolveChatConnectionSettings(sp, configuration);
             GuardOllamaEndpointIsLoopback(chatConnectionSettings.Endpoint, configuration);
-            return new OllamaLocalModelProviderRegistration { Endpoint = chatConnectionSettings.Endpoint, Model = chatConnectionSettings.Model };
+            return new OllamaLocalModelProviderRegistration
+            {
+                Endpoint = chatConnectionSettings.Endpoint,
+                Model = chatConnectionSettings.Model
+            };
         });
 
         // IOllamaModelService's real registration rides inside AddOllamaLocalModelProvider, next to the IOllamaApiClient it wraps —
@@ -323,7 +327,11 @@ internal static class AddNodeModelRuntimeExtensions
                 && modelValue is string model
                 && !string.IsNullOrWhiteSpace(model))
             {
-                return new ChatConnectionSettings { Endpoint = endpointUri, Model = model };
+                return new ChatConnectionSettings
+                {
+                    Endpoint = endpointUri,
+                    Model = model
+                };
             }
         }
 
@@ -336,7 +344,11 @@ internal static class AddNodeModelRuntimeExtensions
                             ?? runtimeSettings.GetDefaultModelName();
 #pragma warning restore MA0045
 
-        return new ChatConnectionSettings { Endpoint = new Uri(fallbackEndpoint, UriKind.Absolute), Model = fallbackModel };
+        return new ChatConnectionSettings
+        {
+            Endpoint = new Uri(fallbackEndpoint, UriKind.Absolute),
+            Model = fallbackModel
+        };
     }
 
     /// <summary>

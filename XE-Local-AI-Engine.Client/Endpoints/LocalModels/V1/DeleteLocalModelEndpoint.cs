@@ -9,8 +9,7 @@ public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest,
 {
     private readonly ILocalModelAdministrationService _administrationService;
 
-    public DeleteLocalModelEndpoint(
-        ILocalModelAdministrationService administrationService)
+    public DeleteLocalModelEndpoint(ILocalModelAdministrationService administrationService)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
         _administrationService = administrationService;

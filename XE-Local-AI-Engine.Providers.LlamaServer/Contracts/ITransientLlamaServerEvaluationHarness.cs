@@ -49,7 +49,12 @@ public sealed class TransientLlamaServerEvaluationSession
 
     public required LlamaServerLaunchReceipt Launch { get; init; }
 
-    public TransientLlamaServerEvaluationProvenance Provenance => new() { Model = Model, Launch = Launch };
+    public TransientLlamaServerEvaluationProvenance Provenance =>
+        new()
+        {
+            Model = Model,
+            Launch = Launch
+        };
 }
 
 /// <summary>The caller result paired with immutable launch/model provenance and post-body teardown evidence.</summary>
@@ -63,7 +68,12 @@ public sealed class TransientLlamaServerEvaluationResult<T>
 
     public required TransientLlamaServerTeardownEvidence Teardown { get; init; }
 
-    public TransientLlamaServerEvaluationProvenance Provenance => new() { Model = Model, Launch = Launch };
+    public TransientLlamaServerEvaluationProvenance Provenance =>
+        new()
+        {
+            Model = Model,
+            Launch = Launch
+        };
 }
 
 /// <summary>

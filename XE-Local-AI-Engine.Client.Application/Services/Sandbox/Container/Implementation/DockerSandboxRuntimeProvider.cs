@@ -180,20 +180,20 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         try
         {
             var outcome = await state.Client.ExecuteAsync(state.ContainerId,
-                                         new DockerExecutionRequest
-                                         {
-                                             Executable = request.Executable,
-                                             Arguments = request.Arguments,
-                                             // MAPPED, not forwarded: the caller's working directory names the
-                                             // sandbox namespace, whose root is the workspace, not the container's.
-                                             WorkingDirectory = request.WorkingDirectory is null
-                                                 ? state.WorkspaceMountTarget
-                                                 : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
-                                             Environment = request.Environment,
-                                             StandardInput = request.StandardInput,
-                                             MaxCapturedBytes = DefaultMaxCapturedOutputBytes
-                                         },
-                                         execution.Token);
+                new DockerExecutionRequest
+                {
+                    Executable = request.Executable,
+                    Arguments = request.Arguments,
+                    // MAPPED, not forwarded: the caller's working directory names the
+                    // sandbox namespace, whose root is the workspace, not the container's.
+                    WorkingDirectory = request.WorkingDirectory is null
+                        ? state.WorkspaceMountTarget
+                        : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
+                    Environment = request.Environment,
+                    StandardInput = request.StandardInput,
+                    MaxCapturedBytes = DefaultMaxCapturedOutputBytes
+                },
+                execution.Token);
 
             return new SandboxCommandResult
             {
@@ -247,10 +247,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var content = await File.ReadAllBytesAsync(request.SourcePath, cancellationToken);
 
         await DockerWorkspaceHostFiles.WriteAsync(state.WorkspaceRoot,
-                                          state.WorkspaceMountTarget,
-                                          request.DestinationPath,
-                                          content,
-                                          cancellationToken);
+            state.WorkspaceMountTarget,
+            request.DestinationPath,
+            content,
+            cancellationToken);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -273,15 +273,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var state = GetAliveState(handle);
         var containerPath = DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, sandboxPath);
         var outcome = await state.Client.ExecuteAsync(state.ContainerId,
-                                     new DockerExecutionRequest
-                                     {
-                                         Executable = "cat",
-                                         Arguments = [containerPath],
-                                         // One byte over the caller's bound, so a file exactly at the bound is
-                                         // returned while one over it is detected rather than silently trimmed.
-                                         MaxCapturedBytes = maxBytes + 1
-                                     },
-                                     cancellationToken);
+            new DockerExecutionRequest
+            {
+                Executable = "cat",
+                Arguments = [containerPath],
+                // One byte over the caller's bound, so a file exactly at the bound is
+                // returned while one over it is detected rather than silently trimmed.
+                MaxCapturedBytes = maxBytes + 1
+            },
+            cancellationToken);
 
         if (outcome.ExitCode != 0)
         {
@@ -373,7 +373,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                                              + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the ids that own this node's workspace.");
         }
 
-        return new ResolvedContainerIdentity { UserId = userId, GroupId = groupId };
+        return new ResolvedContainerIdentity
+        {
+            UserId = userId,
+            GroupId = groupId
+        };
     }
 
     private static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options, bool daemonIsRootless)
@@ -494,9 +498,21 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         var strict = new List<ContainerMountTarget>
         {
-            new() { Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget), Path = options.WorkspaceMountTarget },
-            new() { Name = nameof(ContainerSandboxOptions.ScratchMountTarget), Path = options.ScratchMountTarget },
-            new() { Name = nameof(ContainerSandboxOptions.TempMountTarget), Path = options.TempMountTarget }
+            new()
+            {
+                Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget),
+                Path = options.WorkspaceMountTarget
+            },
+            new()
+            {
+                Name = nameof(ContainerSandboxOptions.ScratchMountTarget),
+                Path = options.ScratchMountTarget
+            },
+            new()
+            {
+                Name = nameof(ContainerSandboxOptions.TempMountTarget),
+                Path = options.TempMountTarget
+            }
         };
         var overlays = new List<string>();
 
@@ -521,7 +537,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             }
             else
             {
-                strict.Add(new ContainerMountTarget { Name = "mount " + target, Path = target });
+                strict.Add(new ContainerMountTarget
+                {
+                    Name = "mount " + target,
+                    Path = target
+                });
             }
         }
 
@@ -623,7 +643,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 // Read off the SPECIFICATION, which is the same list the read-back was verified against — so what the
                 // handle reports is what the daemon confirmed it applied, not what the caller asked for.
-                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding { HostPath = mount.HostPath, SandboxPath = mount.ContainerPath, ReadOnly = mount.ReadOnly })],
+                Mounts =
+                [
+                    .. bindMounts.Select(static mount => new SandboxMountBinding
+                    {
+                        HostPath = mount.HostPath,
+                        SandboxPath = mount.ContainerPath,
+                        ReadOnly = mount.ReadOnly
+                    })
+                ],
                 // The CONTAINER path a command with no working directory runs in — the same value ExecuteAsync falls
                 // back to. It names nothing on the host, which is exactly why the handle reports it as a sandbox path.
                 WorkingRoot = options.WorkspaceMountTarget
@@ -734,13 +762,13 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             // `touch` through the exec API rather than a shell line: no quoting, and therefore nothing for a mount
             // target containing a space or a quote to do.
             var outcome = await client.ExecuteAsync(containerId,
-                                          new DockerExecutionRequest
-                                          {
-                                              Executable = "touch",
-                                              Arguments = [DockerSandboxPaths.ResolveContainerPath(workspaceMountTarget, probeName)],
-                                              MaxCapturedBytes = ProbeCapturedOutputBytes
-                                          },
-                                          cancellationToken);
+                new DockerExecutionRequest
+                {
+                    Executable = "touch",
+                    Arguments = [DockerSandboxPaths.ResolveContainerPath(workspaceMountTarget, probeName)],
+                    MaxCapturedBytes = ProbeCapturedOutputBytes
+                },
+                cancellationToken);
 
             var engineUserId = OperatingSystem.IsLinux() ? GetEffectiveUserId() : (uint?)null;
             var failure = DescribeWorkspaceMappingFailure(outcome.ExitCode == 0,

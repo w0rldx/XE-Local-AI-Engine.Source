@@ -10,8 +10,7 @@ public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChat
     private readonly INodeChatPersistenceService _chatPersistence;
     private readonly TimeProvider _timeProvider;
 
-    public DeleteNodeChatConversationEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public DeleteNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
@@ -36,7 +35,12 @@ public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChat
         }
 
         var deletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var result = await _chatPersistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = req.ConversationId, DeletedAtUtc = deletedAtUtc, PurgeImmediately = req.PurgeImmediately },
+        var result = await _chatPersistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+            {
+                ConversationId = req.ConversationId,
+                DeletedAtUtc = deletedAtUtc,
+                PurgeImmediately = req.PurgeImmediately
+            },
             ct);
 
         await Send.OkAsync(new NodeChatDeleteConversationResponse

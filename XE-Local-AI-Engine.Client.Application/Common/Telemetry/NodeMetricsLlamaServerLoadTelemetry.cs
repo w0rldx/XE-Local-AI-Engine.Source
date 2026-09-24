@@ -50,7 +50,11 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
             else
             {
                 _lastReadyLoads[key] =
-                    new LlamaServerVramAtLoad { GlobalFreeVramBytesAtLoad = observation.GlobalFreeVramBytesAtLoad, AdmittedVramBytes = observation.AdmittedVramBytes };
+                    new LlamaServerVramAtLoad
+                    {
+                        GlobalFreeVramBytesAtLoad = observation.GlobalFreeVramBytesAtLoad,
+                        AdmittedVramBytes = observation.AdmittedVramBytes
+                    };
             }
         }
 

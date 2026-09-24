@@ -56,7 +56,11 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
         {
             if (entry.TryGetDetachedAt(out var detachedAtUtc))
             {
-                (detached ??= []).Add(new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = detachedAtUtc });
+                (detached ??= []).Add(new DetachedInvocation
+                {
+                    InvocationId = invocationId,
+                    DetachedAtUtc = detachedAtUtc
+                });
             }
         }
 

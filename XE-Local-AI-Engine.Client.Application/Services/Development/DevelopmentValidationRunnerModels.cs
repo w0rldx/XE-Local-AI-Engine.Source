@@ -74,7 +74,12 @@ internal sealed class DevelopmentValidationVerdict
 
     public required string? FailureDetail { get; init; }
 
-    private static readonly DevelopmentValidationVerdict Success = new() { Passed = true, FailureCode = null, FailureDetail = null };
+    private static readonly DevelopmentValidationVerdict Success = new()
+    {
+        Passed = true,
+        FailureCode = null,
+        FailureDetail = null
+    };
 
     public static DevelopmentValidationVerdict Evaluate(DevelopmentCommandProfile profile,
         IReadOnlyList<DevelopmentCommandEvidence> commands)

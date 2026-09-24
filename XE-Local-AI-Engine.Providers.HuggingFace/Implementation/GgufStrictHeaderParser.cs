@@ -88,7 +88,12 @@ internal static class GgufStrictHeaderParser
                 || !reader.TryReadUInt32(out var type)
                 || !TryReadValue(ref reader, type, out var value))
             {
-                return new StrictHeader { Version = version, Values = values, IsComplete = false };
+                return new StrictHeader
+                {
+                    Version = version,
+                    Values = values,
+                    IsComplete = false
+                };
             }
 
             if (value is not null)
@@ -97,7 +102,12 @@ internal static class GgufStrictHeaderParser
             }
         }
 
-        return new StrictHeader { Version = version, Values = values, IsComplete = true };
+        return new StrictHeader
+        {
+            Version = version,
+            Values = values,
+            IsComplete = true
+        };
     }
 
     public static string? ResolveQuantization(StrictHeader header)

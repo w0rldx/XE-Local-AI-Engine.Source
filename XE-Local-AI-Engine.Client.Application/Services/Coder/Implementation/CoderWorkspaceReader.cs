@@ -80,15 +80,15 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         // The provider surveys its own jail (ISandboxRuntimeProvider.ListFilesAsync), applying the same ResolveJailPath and no-symlink controls a read
         // goes through. Suppression is caller policy but runs inside that bounded walk: a large .git baseline would otherwise consume the whole cap.
         var survey = await TrySurveyAsync(token => _provider.ListFilesAsync(handle,
-                    new SandboxListFilesRequest
-                    {
-                        DirectoryPath = confined.SandboxPath,
-                        MaxEntries = maxResults,
-                        NameGlob = request.Glob,
-                        IsPathSuppressed = IsExcludedRelativePath
-                    },
-                    token),
-                cancellationToken);
+                new SandboxListFilesRequest
+                {
+                    DirectoryPath = confined.SandboxPath,
+                    MaxEntries = maxResults,
+                    NameGlob = request.Glob,
+                    IsPathSuppressed = IsExcludedRelativePath
+                },
+                token),
+            cancellationToken);
         if (survey.ErrorMessage is not null)
         {
             return $"list_files failed: {survey.ErrorMessage}";
@@ -211,17 +211,17 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         // The provider searches its own jail, and the pattern travels as DATA on a typed request, not in an argument vector, so a leading '-' cannot read
         // as a flag (what `grep -e` bought). Fixed-string unless regex is opted into (`-F`), binary skipped (`-I`), per-line timeout, bounded suppression.
         var survey = await TrySurveyAsync(token => _provider.SearchTextAsync(handle,
-                    new SandboxSearchTextRequest
-                    {
-                        DirectoryPath = confined.SandboxPath,
-                        Pattern = pattern,
-                        IsRegex = request.IsRegex == true,
-                        MaxMatches = maxMatches,
-                        MaxOutputBytes = _options.MaxSearchOutputBytes,
-                        IsPathSuppressed = IsExcludedRelativePath
-                    },
-                    token),
-                cancellationToken);
+                new SandboxSearchTextRequest
+                {
+                    DirectoryPath = confined.SandboxPath,
+                    Pattern = pattern,
+                    IsRegex = request.IsRegex == true,
+                    MaxMatches = maxMatches,
+                    MaxOutputBytes = _options.MaxSearchOutputBytes,
+                    IsPathSuppressed = IsExcludedRelativePath
+                },
+                token),
+            cancellationToken);
         if (survey.ErrorMessage is not null)
         {
             return $"search_text failed: {survey.ErrorMessage}";
@@ -249,7 +249,12 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         var lease = _leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId));
         if (lease is null)
         {
-            return new CoderWorkspaceAccess { Handle = null, Lease = null, IsBusy = true };
+            return new CoderWorkspaceAccess
+            {
+                Handle = null,
+                Lease = null,
+                IsBusy = true
+            };
         }
 
         var attachKey = new SandboxAttachKey
@@ -265,13 +270,23 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         {
             // The operation owns or ambiently borrows the same owner-node lease AgentHome preparation and execution use.
             var handle = await _provider.ConnectAsync(attachKey, cancellationToken);
-            return new CoderWorkspaceAccess { Handle = handle, Lease = lease, IsBusy = false };
+            return new CoderWorkspaceAccess
+            {
+                Handle = handle,
+                Lease = lease,
+                IsBusy = false
+            };
         }
         catch (SandboxHandleInvalidException)
         {
             // No live sandbox / no folder selected — a model-facing message, not an exception.
             lease.Dispose();
-            return new CoderWorkspaceAccess { Handle = null, Lease = null, IsBusy = false };
+            return new CoderWorkspaceAccess
+            {
+                Handle = null,
+                Lease = null,
+                IsBusy = false
+            };
         }
         catch
         {
@@ -296,37 +311,69 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         try
         {
-            return new SurveyOutcome { Lines = await survey(timeoutCts.Token), ErrorMessage = null };
+            return new SurveyOutcome
+            {
+                Lines = await survey(timeoutCts.Token),
+                ErrorMessage = null
+            };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace survey did not complete (it may have timed out)." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "the workspace survey did not complete (it may have timed out)."
+            };
         }
         catch (SandboxHandleInvalidException)
         {
-            return new SurveyOutcome { Lines = null, ErrorMessage = NoWorkspaceMessage };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = NoWorkspaceMessage
+            };
         }
         catch (SandboxCapabilityNotSupportedException)
         {
-            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace provider cannot survey files." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "the workspace provider cannot survey files."
+            };
         }
         catch (UnauthorizedAccessException)
         {
             // The provider rejected a traversal or a symlink component in the requested directory.
-            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace path was rejected because it may escape the workspace." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "the workspace path was rejected because it may escape the workspace."
+            };
         }
         catch (WorkspaceScanRejectedException)
         {
-            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace path was rejected because it may escape the workspace." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "the workspace path was rejected because it may escape the workspace."
+            };
         }
         catch (DirectoryNotFoundException)
         {
-            return new SurveyOutcome { Lines = null, ErrorMessage = "that workspace path does not exist." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "that workspace path does not exist."
+            };
         }
         catch (ArgumentException)
         {
             // Only the pattern can be argument-invalid by the time it reaches here, and the model supplied it.
-            return new SurveyOutcome { Lines = null, ErrorMessage = "the search pattern is not a valid regular expression." };
+            return new SurveyOutcome
+            {
+                Lines = null,
+                ErrorMessage = "the search pattern is not a valid regular expression."
+            };
         }
     }
 

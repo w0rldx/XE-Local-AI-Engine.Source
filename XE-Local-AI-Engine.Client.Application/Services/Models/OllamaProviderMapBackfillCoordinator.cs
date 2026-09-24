@@ -12,8 +12,7 @@ public sealed class OllamaProviderMapBackfillCoordinator : IOllamaProviderMapBac
     private readonly IOllamaModelService _ollamaModelService;
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public OllamaProviderMapBackfillCoordinator(
-        IOllamaModelService ollamaModelService,
+    public OllamaProviderMapBackfillCoordinator(IOllamaModelService ollamaModelService,
         IModelProviderMapLeaseCoordinator leaseCoordinator,
         ICoordinatedModelProviderMapStore mapStore,
         ILocalModelProviderResolver providerResolver,

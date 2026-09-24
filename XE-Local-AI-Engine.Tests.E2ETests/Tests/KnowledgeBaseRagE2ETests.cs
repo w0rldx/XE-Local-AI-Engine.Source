@@ -100,10 +100,10 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         });
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
-              {
-                  Name = "Knowledge base"
-              }))
-              .ToBeVisibleAsync();
+            {
+                Name = "Knowledge base"
+            }))
+            .ToBeVisibleAsync();
         await Expect(Page.GetByTestId("knowledge-active-collection")).ToContainTextAsync(DefaultCollection);
     }
 
@@ -306,10 +306,10 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
             Timeout = 20_000
         });
         await Expect(Page.GetByText(GroundedReplyMarker, new PageGetByTextOptions
-              {
-                  Exact = true
-              }).Last)
-              .ToBeVisibleAsync();
+            {
+                Exact = true
+            }).Last)
+            .ToBeVisibleAsync();
 
         await Expect(Page.GetByTestId("chat-sources-strip")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
@@ -339,7 +339,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         await Expect(option).ToBeVisibleAsync();
         await option.ClickAsync();
         await Expect(Page.GetByTestId("chat-model-selector-selected"))
-              .ToContainTextAsync(FakeOllamaChatModel);
+            .ToContainTextAsync(FakeOllamaChatModel);
     }
 
     private async Task PurgeScenarioDocumentsAsync()
@@ -391,13 +391,13 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
     private static async Task WriteRepositorySnapshotAsync(string repositoryRoot, string token, bool includeObsolete)
     {
         await File.WriteAllTextAsync(Path.Combine(repositoryRoot, SharedDocument),
-                      $"# Shared knowledge\n\nThe deterministic repository fact is {token}.\n");
+            $"# Shared knowledge\n\nThe deterministic repository fact is {token}.\n");
 
         var obsoletePath = Path.Combine(repositoryRoot, ObsoleteDocument);
         if (includeObsolete)
         {
             await File.WriteAllTextAsync(obsoletePath,
-                          $"# Retiring knowledge\n\nThis tracked fact is {ObsoleteToken}.\n");
+                $"# Retiring knowledge\n\nThis tracked fact is {ObsoleteToken}.\n");
         }
         else if (File.Exists(obsoletePath))
         {

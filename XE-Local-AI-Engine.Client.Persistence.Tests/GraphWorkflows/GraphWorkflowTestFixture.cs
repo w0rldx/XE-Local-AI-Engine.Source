@@ -93,7 +93,15 @@ internal sealed class GraphWorkflowTestFixture : IDisposable
         string graphJson = SampleGraph,
         int nodeCount = 2,
         string? description = null) =>
-        store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = name, GraphJson = graphJson, NodeCount = nodeCount, SchemaVersion = 1, Description = description });
+        store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = name,
+            GraphJson = graphJson,
+            NodeCount = nodeCount,
+            SchemaVersion = 1,
+            Description = description
+        });
 
     /// <summary>A run pinned to <paramref name="definitionId" />, written through the context so the interceptors run.</summary>
     public static async Task<Guid> SeedRunAsync(NodeChatDbContext context,

@@ -11,8 +11,7 @@ internal sealed class DefaultModelSelectionPolicy
     private readonly IActiveCloudChatClientFactory _activeCloudChatClientFactory;
     private readonly ModelNameValidator _modelNameValidator;
 
-    public DefaultModelSelectionPolicy(
-        IGgufModelStore ggufModelStore,
+    public DefaultModelSelectionPolicy(IGgufModelStore ggufModelStore,
         ICloudModelResolver cloudModelResolver,
         IActiveCloudChatClientFactory activeCloudChatClientFactory,
         ModelNameValidator modelNameValidator)
@@ -29,20 +28,32 @@ internal sealed class DefaultModelSelectionPolicy
     {
         if (string.IsNullOrWhiteSpace(modelName))
         {
-            return new() { FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = "Model name is required." };
+            return new()
+            {
+                FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName,
+                DisplayMessage = "Model name is required."
+            };
         }
 
         var canonicalName = modelName.Trim();
         var validationError = _modelNameValidator.GetValidationError(canonicalName);
         if (validationError is not null)
         {
-            return new() { FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = validationError };
+            return new()
+            {
+                FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName,
+                DisplayMessage = validationError
+            };
         }
 
         if (policy == LocalModelSelectionPolicy.InstalledLocalOnly
             && !await _ggufModelStore.ExistsAsync(canonicalName, cancellationToken))
         {
-            return new() { FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled, DisplayMessage = "The requested local model is not installed." };
+            return new()
+            {
+                FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled,
+                DisplayMessage = "The requested local model is not installed."
+            };
         }
 
         return null;

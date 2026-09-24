@@ -27,12 +27,48 @@ internal sealed class RetrievalCapacityProfile
     public static IReadOnlyDictionary<string, RetrievalCapacityProfile> All { get; } =
         new[]
         {
-            new RetrievalCapacityProfile { Name = "smoke", ChunkCount = 256, NamespaceCount = 2, QueryRepetitions = 2 },
-            new RetrievalCapacityProfile { Name = "10k", ChunkCount = 10_000, NamespaceCount = 4, QueryRepetitions = 3 },
-            new RetrievalCapacityProfile { Name = "100k", ChunkCount = 100_000, NamespaceCount = 4, QueryRepetitions = 2 },
-            new RetrievalCapacityProfile { Name = "250k", ChunkCount = 250_000, NamespaceCount = 4, QueryRepetitions = 1 },
-            new RetrievalCapacityProfile { Name = "500k", ChunkCount = 500_000, NamespaceCount = 4, QueryRepetitions = 1 },
-            new RetrievalCapacityProfile { Name = "1m", ChunkCount = 1_000_000, NamespaceCount = 4, QueryRepetitions = 1 }
+            new RetrievalCapacityProfile
+            {
+                Name = "smoke",
+                ChunkCount = 256,
+                NamespaceCount = 2,
+                QueryRepetitions = 2
+            },
+            new RetrievalCapacityProfile
+            {
+                Name = "10k",
+                ChunkCount = 10_000,
+                NamespaceCount = 4,
+                QueryRepetitions = 3
+            },
+            new RetrievalCapacityProfile
+            {
+                Name = "100k",
+                ChunkCount = 100_000,
+                NamespaceCount = 4,
+                QueryRepetitions = 2
+            },
+            new RetrievalCapacityProfile
+            {
+                Name = "250k",
+                ChunkCount = 250_000,
+                NamespaceCount = 4,
+                QueryRepetitions = 1
+            },
+            new RetrievalCapacityProfile
+            {
+                Name = "500k",
+                ChunkCount = 500_000,
+                NamespaceCount = 4,
+                QueryRepetitions = 1
+            },
+            new RetrievalCapacityProfile
+            {
+                Name = "1m",
+                ChunkCount = 1_000_000,
+                NamespaceCount = 4,
+                QueryRepetitions = 1
+            }
         }.ToDictionary(static profile => profile.Name, StringComparer.OrdinalIgnoreCase);
 
     public static RetrievalCapacityProfile Parse(string name) =>
@@ -80,7 +116,12 @@ internal sealed class RetrievalCapacityLatency
         }
 
         var ordered = samples.Order().ToArray();
-        return new RetrievalCapacityLatency { P50Milliseconds = Percentile(ordered, 0.50d), P95Milliseconds = Percentile(ordered, 0.95d), MaxMilliseconds = ordered[^1] };
+        return new RetrievalCapacityLatency
+        {
+            P50Milliseconds = Percentile(ordered, 0.50d),
+            P95Milliseconds = Percentile(ordered, 0.95d),
+            MaxMilliseconds = ordered[^1]
+        };
     }
 
     private static double Percentile(IReadOnlyList<double> ordered, double percentile)
@@ -512,13 +553,13 @@ internal static class RetrievalCapacityBenchmark
         if (query.VectorDimension is int vectorDimension)
         {
             vectorHits = await vectorSearch.SearchAsync(UnitVector(vectorDimension),
-                                               EmbeddingModel,
-                                               VectorIdentity,
-                                               VectorDimensions,
-                                               K * 4,
-                                               null,
-                                               query.CollectionId,
-                                               cancellationToken);
+                EmbeddingModel,
+                VectorIdentity,
+                VectorDimensions,
+                K * 4,
+                null,
+                query.CollectionId,
+                cancellationToken);
         }
 
         var vectorMilliseconds = Stopwatch.GetElapsedTime(vectorStarted).TotalMilliseconds;
@@ -592,7 +633,14 @@ internal static class RetrievalCapacityBenchmark
 
         if (query.ExpectsNoAnswer)
         {
-            return new CapacityEvaluation { ExpectsNoAnswer = true, RelevantRetrieved = false, ReciprocalRank = 0d, NdcgAtK = 0d, ResultCount = result.ChunkIds.Count };
+            return new CapacityEvaluation
+            {
+                ExpectsNoAnswer = true,
+                RelevantRetrieved = false,
+                ReciprocalRank = 0d,
+                NdcgAtK = 0d,
+                ResultCount = result.ChunkIds.Count
+            };
         }
 
         var rank = 0;
@@ -606,8 +654,22 @@ internal static class RetrievalCapacityBenchmark
         }
 
         return rank == 0
-            ? new CapacityEvaluation { ExpectsNoAnswer = false, RelevantRetrieved = false, ReciprocalRank = 0d, NdcgAtK = 0d, ResultCount = result.ChunkIds.Count }
-            : new CapacityEvaluation { ExpectsNoAnswer = false, RelevantRetrieved = true, ReciprocalRank = 1d / rank, NdcgAtK = 1d / Math.Log2(rank + 1d), ResultCount = result.ChunkIds.Count };
+            ? new CapacityEvaluation
+            {
+                ExpectsNoAnswer = false,
+                RelevantRetrieved = false,
+                ReciprocalRank = 0d,
+                NdcgAtK = 0d,
+                ResultCount = result.ChunkIds.Count
+            }
+            : new CapacityEvaluation
+            {
+                ExpectsNoAnswer = false,
+                RelevantRetrieved = true,
+                ReciprocalRank = 1d / rank,
+                NdcgAtK = 1d / Math.Log2(rank + 1d),
+                ResultCount = result.ChunkIds.Count
+            };
     }
 
     private static IReadOnlyList<CapacityQuery> BuildQueries(RetrievalCapacityProfile profile)
@@ -617,11 +679,51 @@ internal static class RetrievalCapacityBenchmark
         {
             var baseGlobalIndex = Enumerable.Range(0, namespaceIndex).Sum(index => ChunkCountForNamespace(profile, index));
             var collectionId = GetCollectionId(namespaceIndex);
-            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-english", Text = "quartz retention seven31", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex), VectorDimension = 0, ExpectsNoAnswer = false });
-            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-german", Text = "aufbewahrung kupfer sieben31", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 1), VectorDimension = 1, ExpectsNoAnswer = false });
-            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-code", Text = "ResolveTenantToken src auth tenantresolver cs", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 2), VectorDimension = 2, ExpectsNoAnswer = false });
-            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-distractor", Text = "cobalt orchid beacon", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 3), VectorDimension = 3, ExpectsNoAnswer = false });
-            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-no-answer", Text = "zephyr nonexistent axiom", CollectionId = collectionId, RelevantChunkId = Guid.Empty, VectorDimension = VectorDimensions - 1, ExpectsNoAnswer = true });
+            queries.Add(new CapacityQuery
+            {
+                Id = $"ns{namespaceIndex}-english",
+                Text = "quartz retention seven31",
+                CollectionId = collectionId,
+                RelevantChunkId = StableGuid("chunk", baseGlobalIndex),
+                VectorDimension = 0,
+                ExpectsNoAnswer = false
+            });
+            queries.Add(new CapacityQuery
+            {
+                Id = $"ns{namespaceIndex}-german",
+                Text = "aufbewahrung kupfer sieben31",
+                CollectionId = collectionId,
+                RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 1),
+                VectorDimension = 1,
+                ExpectsNoAnswer = false
+            });
+            queries.Add(new CapacityQuery
+            {
+                Id = $"ns{namespaceIndex}-code",
+                Text = "ResolveTenantToken src auth tenantresolver cs",
+                CollectionId = collectionId,
+                RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 2),
+                VectorDimension = 2,
+                ExpectsNoAnswer = false
+            });
+            queries.Add(new CapacityQuery
+            {
+                Id = $"ns{namespaceIndex}-distractor",
+                Text = "cobalt orchid beacon",
+                CollectionId = collectionId,
+                RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 3),
+                VectorDimension = 3,
+                ExpectsNoAnswer = false
+            });
+            queries.Add(new CapacityQuery
+            {
+                Id = $"ns{namespaceIndex}-no-answer",
+                Text = "zephyr nonexistent axiom",
+                CollectionId = collectionId,
+                RelevantChunkId = Guid.Empty,
+                VectorDimension = VectorDimensions - 1,
+                ExpectsNoAnswer = true
+            });
         }
 
         return queries;
@@ -687,7 +789,17 @@ internal static class RetrievalCapacityBenchmark
         var third = DistractorToken(Next(ref state));
         var content = string.Create(CultureInfo.InvariantCulture,
             $"Synthetic distractor namespace {namespaceIndex} item {localIndex}: {first} {second} {third} routine handbook material.");
-        return new CapacityCorpusRow { ChunkId = StableGuid("chunk", globalIndex), Content = content, TokenCount = 10, HeadingPath = "Synthetic > Distractor", ContentKind = "text", SourcePath = $"synthetic/{localIndex:D8}.md", Language = "en", Symbol = null };
+        return new CapacityCorpusRow
+        {
+            ChunkId = StableGuid("chunk", globalIndex),
+            Content = content,
+            TokenCount = 10,
+            HeadingPath = "Synthetic > Distractor",
+            ContentKind = "text",
+            SourcePath = $"synthetic/{localIndex:D8}.md",
+            Language = "en",
+            Symbol = null
+        };
     }
 
     private static string DistractorToken(uint value)

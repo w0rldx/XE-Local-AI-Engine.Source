@@ -234,7 +234,11 @@ public static class RetrievalEvalHarness
         {
             var relevantDocumentIds = ResolveRelevantDocumentIds(query, documentIdsByKey);
             var startedAt = Stopwatch.GetTimestamp();
-            var result = await search.SearchAsync(new KnowledgeSearchRequest { Query = query.Text, Limit = k }, cancellationToken);
+            var result = await search.SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = query.Text,
+                Limit = k
+            }, cancellationToken);
             var elapsed = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
             perQuery.Add(EvaluateQuery(query, relevantDocumentIds, result.Results, k) with
             {
@@ -249,7 +253,25 @@ public static class RetrievalEvalHarness
             : (double)evaluation.RetrievedRelevantCount / evaluation.RelevantDocumentCount);
         var mrr = AverageOrZero(answerable, evaluation => evaluation.ReciprocalRank);
         var citation = AverageOrZero(answerable, evaluation => evaluation.CitationCoverage);
-        return new RetrievalMetrics { K = k, QueryCount = perQuery.Count, RecallAtK = recall, MeanReciprocalRank = mrr, CitationCoverage = citation, PerQuery = perQuery, PrecisionAtK = AverageOrZero(answerable, evaluation => evaluation.PrecisionAtK), NdcgAtK = AverageOrZero(answerable, evaluation => evaluation.NdcgAtK), SourceAnchorCoverage = AverageOrZero(answerable, evaluation => evaluation.SourceAnchorCoverage), CitationAnchorRate = AverageOrZero(answerable, evaluation => evaluation.CitationAnchorPresent ? 1d : 0d), NoAnswerAccuracy = AverageOrZero(noAnswer, evaluation => evaluation.NoAnswerCorrect ? 1d : 0d), AnswerableQueryCount = answerable.Count, NoAnswerQueryCount = noAnswer.Count, QueryLatencyP50Milliseconds = Percentile(perQuery, 0.50d), QueryLatencyP95Milliseconds = Percentile(perQuery, 0.95d), QueryLatencyMaxMilliseconds = perQuery.Count == 0 ? 0d : perQuery.Max(static evaluation => evaluation.ElapsedMilliseconds) };
+        return new RetrievalMetrics
+        {
+            K = k,
+            QueryCount = perQuery.Count,
+            RecallAtK = recall,
+            MeanReciprocalRank = mrr,
+            CitationCoverage = citation,
+            PerQuery = perQuery,
+            PrecisionAtK = AverageOrZero(answerable, evaluation => evaluation.PrecisionAtK),
+            NdcgAtK = AverageOrZero(answerable, evaluation => evaluation.NdcgAtK),
+            SourceAnchorCoverage = AverageOrZero(answerable, evaluation => evaluation.SourceAnchorCoverage),
+            CitationAnchorRate = AverageOrZero(answerable, evaluation => evaluation.CitationAnchorPresent ? 1d : 0d),
+            NoAnswerAccuracy = AverageOrZero(noAnswer, evaluation => evaluation.NoAnswerCorrect ? 1d : 0d),
+            AnswerableQueryCount = answerable.Count,
+            NoAnswerQueryCount = noAnswer.Count,
+            QueryLatencyP50Milliseconds = Percentile(perQuery, 0.50d),
+            QueryLatencyP95Milliseconds = Percentile(perQuery, 0.95d),
+            QueryLatencyMaxMilliseconds = perQuery.Count == 0 ? 0d : perQuery.Max(static evaluation => evaluation.ElapsedMilliseconds)
+        };
     }
 
     private static IReadOnlySet<Guid> ResolveRelevantDocumentIds(LabeledQuery query,
@@ -288,7 +310,22 @@ public static class RetrievalEvalHarness
         var reciprocalRank = relevantRetrieved ? 1d / firstRelevantRank : 0d;
         var coverage = ComputeCitationCoverage(query.CitationSnippet, evaluatedHits);
         var retrievedRelevantCount = evaluatedHits.Select(hit => hit.DocumentId).Distinct().Count(relevantDocumentIds.Contains);
-        return new QueryEvaluation { QueryId = query.Id, RelevantRetrieved = relevantRetrieved, FirstRelevantRank = firstRelevantRank, ReciprocalRank = reciprocalRank, CitationCoverage = coverage, RetrievedRelevantCount = retrievedRelevantCount, RelevantDocumentCount = relevantDocumentIds.Count, PrecisionAtK = (double)retrievedRelevantCount / k, NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k), SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits), CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits), ExpectsNoAnswer = query.ExpectsNoAnswer, NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0 };
+        return new QueryEvaluation
+        {
+            QueryId = query.Id,
+            RelevantRetrieved = relevantRetrieved,
+            FirstRelevantRank = firstRelevantRank,
+            ReciprocalRank = reciprocalRank,
+            CitationCoverage = coverage,
+            RetrievedRelevantCount = retrievedRelevantCount,
+            RelevantDocumentCount = relevantDocumentIds.Count,
+            PrecisionAtK = (double)retrievedRelevantCount / k,
+            NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k),
+            SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits),
+            CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits),
+            ExpectsNoAnswer = query.ExpectsNoAnswer,
+            NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0
+        };
     }
 
     private static double AverageOrZero(IReadOnlyCollection<QueryEvaluation> evaluations,

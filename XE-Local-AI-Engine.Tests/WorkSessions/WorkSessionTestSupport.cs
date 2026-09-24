@@ -69,7 +69,7 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
     public async Task InitializeAsync()
     {
         await new WorkSessionAgentSeeder(Factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None);
+            .StartAsync(CancellationToken.None);
 
         // StartAsync reports success whether or not it seeded: it catches its own failures by contract, and this
         // fixture hands it a NullLogger, so the warning goes nowhere. Without this check a seeding failure would
@@ -197,7 +197,10 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
 
         var script = _scripts.TryDequeue(out var next)
             ? next
-            : new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] };
+            : new StepScript
+            {
+                EventTypes = [ChatStreamEventTypes.AssistantCompleted]
+            };
 
         var correlation = new NodeChatMessageCorrelation
         {
@@ -344,7 +347,12 @@ internal static class WorkSessionTestSupport
     {
         await using var scope = services.CreateAsyncScope();
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Seeded session", UserId = null, CreatedAtUtc = 0 });
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                      {
+                                          Title = "Seeded session",
+                                          UserId = null,
+                                          CreatedAtUtc = 0
+                                      });
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         return await store.CreateAsync(new CreateWorkSessionCommand
         {

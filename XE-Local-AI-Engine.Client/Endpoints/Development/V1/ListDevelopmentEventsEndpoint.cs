@@ -25,6 +25,9 @@ public sealed class ListDevelopmentEventsEndpoint : Endpoint<DevelopmentProjectR
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
         var events = await _service.ListEventsAsync(req.ProjectId, ct);
-        await Send.OkAsync(new ListDevelopmentEventsResponse { Items = events.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
+        await Send.OkAsync(new ListDevelopmentEventsResponse
+        {
+            Items = events.Select(DevelopmentContractMapper.ToResponse).ToArray()
+        }, ct);
     }
 }

@@ -19,7 +19,12 @@ internal sealed class DesktopStartupOptions
         if (args.Contains("--origin", StringComparer.Ordinal))
         {
             var probe = DesktopLaunchOptions.Parse(args);
-            return new DesktopStartupOptions { DataDirectory = probe.ProfileDirectory, ProfileDirectory = probe.ProfileDirectory, Origin = probe.Origin };
+            return new DesktopStartupOptions
+            {
+                DataDirectory = probe.ProfileDirectory,
+                ProfileDirectory = probe.ProfileDirectory,
+                Origin = probe.Origin
+            };
         }
 
         int? port = null;
@@ -44,7 +49,7 @@ internal sealed class DesktopStartupOptions
             }
 
             if (port is not null || !int.TryParse(portValue, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
-                || value is < 1 or > 65535)
+                                 || value is < 1 or > 65535)
             {
                 throw new ArgumentException("Unsupported desktop arguments.", nameof(args));
             }
@@ -55,7 +60,12 @@ internal sealed class DesktopStartupOptions
         var data = NormalizeDirectory(string.IsNullOrWhiteSpace(dataOverride)
             ? Path.Combine(localApplicationData, ApplicationDataFolderName)
             : dataOverride);
-        return new DesktopStartupOptions { DataDirectory = data, ProfileDirectory = Path.Combine(data, "desktop-profile"), Port = port };
+        return new DesktopStartupOptions
+        {
+            DataDirectory = data,
+            ProfileDirectory = Path.Combine(data, "desktop-profile"),
+            Port = port
+        };
     }
 
     internal static string NormalizeDirectory(string path)

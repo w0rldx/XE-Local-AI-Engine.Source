@@ -102,5 +102,6 @@ public sealed class ConcreteStoreConstructionArchitectureTests
         return false;
     }
 
-    private static bool IsIdentifierCharacter(char value) => value == '_' || char.IsLetterOrDigit(value);
+    private static bool IsIdentifierCharacter(char value) =>
+        value == '_' || char.IsLetterOrDigit(value);
 }

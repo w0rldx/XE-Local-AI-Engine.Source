@@ -118,7 +118,10 @@ public sealed class GraphWorkflowOptionsTests
     [Arguments(1, true)]
     public void Validator_HoldsTheSteerBoundAtItsFloor(int maxSteersPerNode, bool expected)
     {
-        var result = new GraphWorkflowOptionsValidator().Validate(name: null, new GraphWorkflowOptions { MaxSteersPerNode = maxSteersPerNode });
+        var result = new GraphWorkflowOptionsValidator().Validate(name: null, new GraphWorkflowOptions
+        {
+            MaxSteersPerNode = maxSteersPerNode
+        });
 
         AssertEx.Equal(expected, result.Succeeded, result.FailureMessage ?? "accepted");
     }

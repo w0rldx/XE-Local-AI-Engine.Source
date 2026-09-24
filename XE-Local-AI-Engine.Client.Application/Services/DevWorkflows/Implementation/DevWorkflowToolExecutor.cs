@@ -75,14 +75,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         {
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = DevWorkflowNodeRunStatus.Queued,
-                QueueReason = DevWorkflowQueueReasons.AwaitingSandboxSlot
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Queued,
+                    QueueReason = DevWorkflowQueueReasons.AwaitingSandboxSlot
+                },
+                cancellationToken);
             written++;
         }
 
@@ -119,18 +119,18 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // Nothing is driving this row and nothing ever will: the lane holds no memory across a restart, and the
             // startup reconciler did not collapse it. Judged here rather than swept forever; an interrupted pass retries.
             return await _retries.SettleFailureAsync(store,
-                                     graph,
-                                     run,
-                                     nodeRun,
-                                     nodeRuns,
-                                     new DevWorkflowFailure
-                                     {
-                                         FailureClass = DevWorkflowFailureClasses.Interrupted,
-                                         SanitizedReason = StoppedReason(graph, nodeRun, "The host stopped"),
-                                         OutputJson = Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
-                                         Outcome = DevWorkflowOutcomes.Interrupted
-                                     },
-                                     cancellationToken);
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure
+                {
+                    FailureClass = DevWorkflowFailureClasses.Interrupted,
+                    SanitizedReason = StoppedReason(graph, nodeRun, "The host stopped"),
+                    OutputJson = Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
+                    Outcome = DevWorkflowOutcomes.Interrupted
+                },
+                cancellationToken);
         }
 
         var written = 0;
@@ -153,15 +153,15 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         written += flight.Work.IsCanceled
             ? await SettleAsync(store,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowNodeRunStatus.Cancelled,
-                    DevWorkflowFailureClasses.Cancelled,
-                    StoppedReason(graph, nodeRun, "The run was cancelled"),
-                    Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
-                    DevWorkflowOutcomes.Cancelled,
-                    cancellationToken)
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowNodeRunStatus.Cancelled,
+                DevWorkflowFailureClasses.Cancelled,
+                StoppedReason(graph, nodeRun, "The run was cancelled"),
+                Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
+                DevWorkflowOutcomes.Cancelled,
+                cancellationToken)
             : await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work, cancellationToken);
 
         // Consumed only once the settle has COMMITTED: doing it first would spend the result on a write that may
@@ -189,15 +189,15 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         if (result.Passed)
         {
             return await SettleAsync(store,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowNodeRunStatus.Succeeded,
-                    failureClass: null,
-                    terminalReason: null,
-                    Output(nodeRun, failureClass: null, result),
-                    outcome: null,
-                    cancellationToken);
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowNodeRunStatus.Succeeded,
+                failureClass: null,
+                terminalReason: null,
+                Output(nodeRun, failureClass: null, result),
+                outcome: null,
+                cancellationToken);
         }
 
         if (string.Equals(result.FailureClass, DevWorkflowFailureClasses.Cancelled, StringComparison.Ordinal))
@@ -205,33 +205,33 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // A pass ASKED to stop, which answered with an account of what it had done rather than letting the token
             // throw. Same terminal as the cancelled arm; it comes through here only so the evidence comes with it.
             return await SettleAsync(store,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowNodeRunStatus.Cancelled,
-                    DevWorkflowFailureClasses.Cancelled,
-                    result.SanitizedReason ?? "The run was cancelled while this node run was working.",
-                    Output(nodeRun, DevWorkflowFailureClasses.Cancelled, result),
-                    DevWorkflowOutcomes.Cancelled,
-                    cancellationToken);
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowNodeRunStatus.Cancelled,
+                DevWorkflowFailureClasses.Cancelled,
+                result.SanitizedReason ?? "The run was cancelled while this node run was working.",
+                Output(nodeRun, DevWorkflowFailureClasses.Cancelled, result),
+                DevWorkflowOutcomes.Cancelled,
+                cancellationToken);
         }
 
         // A failed verdict is the fix loop's fuel rather than an error, so where it goes — another attempt here, another
         // attempt at the node that produced what these commands judged, or a human — is the retry policy's to decide.
         var failureClass = result.FailureClass ?? DevWorkflowFailureClasses.Internal;
         return await _retries.SettleFailureAsync(store,
-                                 graph,
-                                 run,
-                                 nodeRun,
-                                 nodeRuns,
-                                 new DevWorkflowFailure
-                                 {
-                                     FailureClass = failureClass,
-                                     SanitizedReason = result.SanitizedReason ?? "This node run's validation commands did not pass.",
-                                     OutputJson = Output(nodeRun, failureClass, result),
-                                     Outcome = failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null
-                                 },
-                                 cancellationToken);
+            graph,
+            run,
+            nodeRun,
+            nodeRuns,
+            new DevWorkflowFailure
+            {
+                FailureClass = failureClass,
+                SanitizedReason = result.SanitizedReason ?? "This node run's validation commands did not pass.",
+                OutputJson = Output(nodeRun, failureClass, result),
+                Outcome = failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null
+            },
+            cancellationToken);
     }
 
     /// <summary>Asks a node run's commands to stop, and answers whether there was anything to ask.</summary>
@@ -330,7 +330,12 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     private InFlight Start(DevWorkflowRunSnapshot run, DevWorkflowGraphNode node, DevWorkflowNodeRunSnapshot nodeRun)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        return new InFlight { Cancellation = cancellation, Work = RunAsync(run, node, nodeRun, cancellation.Token), Attempt = nodeRun.Attempt };
+        return new InFlight
+        {
+            Cancellation = cancellation,
+            Work = RunAsync(run, node, nodeRun, cancellation.Token),
+            Attempt = nodeRun.Attempt
+        };
     }
 
     private async Task<DevWorkflowToolRun> RunAsync(DevWorkflowRunSnapshot run,
@@ -425,13 +430,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Running
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Running
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -451,15 +456,18 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         }
 
         _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            EventType = DevWorkflowEventTypes.WorkspaceSecretsDetected,
-            NodeRunId = nodeRun.Id,
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
-            DetailJson = JsonSerializer.Serialize(new SecretsDetail { Paths = result.SecretPaths }, JsonOptions)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.WorkspaceSecretsDetected,
+                NodeRunId = nodeRun.Id,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
+                DetailJson = JsonSerializer.Serialize(new SecretsDetail
+                {
+                    Paths = result.SecretPaths
+                }, JsonOptions)
+            },
+            cancellationToken);
     }
 
     /// <summary>Writes the node run's report into the run's artifacts, so the evidence outlives its workspace.</summary>
@@ -486,20 +494,20 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
         var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken);
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
-        {
-            RunId = run.Id,
-            ArtifactId = artifactId,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
-            Kind = apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
-            Name = apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
-            MediaType = "application/json",
-            ContentSha256 = write.ContentHash,
-            SizeBytes = write.ByteCount,
-            ManagedReference = write.OpaqueReference
-        },
-                                      cancellationToken);
+            {
+                RunId = run.Id,
+                ArtifactId = artifactId,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
+                Kind = apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
+                Name = apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
+                MediaType = "application/json",
+                ContentSha256 = write.ContentHash,
+                SizeBytes = write.ByteCount,
+                ManagedReference = write.OpaqueReference
+            },
+            cancellationToken);
 
         if (appended.SupersededArtifactId is not { } superseded)
         {
@@ -509,14 +517,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         // A re-attempt's report replaces the one a downstream node may already have read. Mark-only: nothing is
         // regenerated, and a human decides what a stale consumer is worth.
         _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
-        {
-            RunId = run.Id,
-            SupersededArtifactId = superseded,
-            SupersedingArtifactId = artifactId,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                SupersededArtifactId = superseded,
+                SupersedingArtifactId = artifactId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")
+            },
+            cancellationToken);
     }
 
     private static async Task<int> SettleAsync(IDevWorkflowStore store,
@@ -532,23 +540,23 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            // A node run standing down for a human names the answer it is waiting for, the same way
-            // every other blocked row does.
-            TargetStatus = target,
-            PendingDecisionKind = target == DevWorkflowNodeRunStatus.Blocked ? DevWorkflowDecisionKind.Abandon : null,
-            OutputJson = outputJson,
-            FailureClass = failureClass,
-            TerminalReason = terminalReason,
-            Outcome = outcome,
-            WorkItemStatus = target == DevWorkflowNodeRunStatus.Blocked
-                                   ? DevWorkflowWorkItemStatus.Blocked
-                                   : DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                // A node run standing down for a human names the answer it is waiting for, the same way
+                // every other blocked row does.
+                TargetStatus = target,
+                PendingDecisionKind = target == DevWorkflowNodeRunStatus.Blocked ? DevWorkflowDecisionKind.Abandon : null,
+                OutputJson = outputJson,
+                FailureClass = failureClass,
+                TerminalReason = terminalReason,
+                Outcome = outcome,
+                WorkItemStatus = target == DevWorkflowNodeRunStatus.Blocked
+                    ? DevWorkflowWorkItemStatus.Blocked
+                    : DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -559,17 +567,17 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     /// </remarks>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, string? failureClass, DevWorkflowToolRun? run) =>
         JsonSerializer.Serialize(new ToolOutput
-        {
-            Status = run is { Passed: true } ? DevWorkflowNodeOutputStatuses.Succeeded : DevWorkflowNodeOutputStatuses.Failed,
-            Attempt = nodeRun.Attempt,
-            FailureClass = failureClass,
-            Passed = run?.Passed ?? false,
-            FailureCode = run?.FailureCode,
-            CommandsRun = run?.CommandsRun ?? 0,
-            CommandsFailed = run?.CommandsFailed ?? 0,
-            TestsPassed = run?.TestsPassed,
-            TestsFailed = run?.TestsFailed
-        },
+            {
+                Status = run is { Passed: true } ? DevWorkflowNodeOutputStatuses.Succeeded : DevWorkflowNodeOutputStatuses.Failed,
+                Attempt = nodeRun.Attempt,
+                FailureClass = failureClass,
+                Passed = run?.Passed ?? false,
+                FailureCode = run?.FailureCode,
+                CommandsRun = run?.CommandsRun ?? 0,
+                CommandsFailed = run?.CommandsFailed ?? 0,
+                TestsPassed = run?.TestsPassed,
+                TestsFailed = run?.TestsFailed
+            },
             JsonOptions);
 
     /// <summary>Awaits a detached pass without letting its outcome escape; the poll is what reads that.</summary>

@@ -92,7 +92,10 @@ public sealed class ModelLaunchArgumentsValidationTests
 
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/local/v1/models/{Uri.EscapeDataString(modelName)}/launch-args")
         {
-            Content = JsonContent.Create(new SetModelLaunchArgumentsRequest { RawArguments = rawArguments })
+            Content = JsonContent.Create(new SetModelLaunchArgumentsRequest
+            {
+                RawArguments = rawArguments
+            })
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");

@@ -35,7 +35,7 @@ using DevWorkflowNodeType = XE_Local_AI_Engine.Client.Persistence.Entities.DevWo
 using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunStatus;
 using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
-using CategoryAttribute = TUnit.Core.CategoryAttribute;
+using CategoryAttribute = CategoryAttribute;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeAdminMcpToolsTests
@@ -147,7 +147,19 @@ public sealed class NodeAdminMcpToolsTests
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("model-a"));
         harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus
         {
-            Installed = new LlamaCppInstalledRuntimeView { Tag = "b7000", Asset = "runtime.zip", Variant = "cuda", InstalledAtUnixTimeMilliseconds = 10, IsSourceBuild = true, SourceRepository = "/private/runtime", SourceCommit = "secret-commit", SourceRevisionMode = 1, SourceRequestedCommit = "requested", SourceSelection = 2 },
+            Installed = new LlamaCppInstalledRuntimeView
+            {
+                Tag = "b7000",
+                Asset = "runtime.zip",
+                Variant = "cuda",
+                InstalledAtUnixTimeMilliseconds = 10,
+                IsSourceBuild = true,
+                SourceRepository = "/private/runtime",
+                SourceCommit = "secret-commit",
+                SourceRevisionMode = 1,
+                SourceRequestedCommit = "requested",
+                SourceSelection = 2
+            },
             RecommendedTag = "b7001",
             UpstreamLatestTag = "b7002",
             UpdateAvailable = true,
@@ -192,8 +204,19 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         var operationId = Guid.NewGuid();
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult { Accepted = true, Variant = "cuda", Failure = LlamaCppRuntimeAdministrationFailure.None, DisplayMessage = null });
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = operationId });
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult
+        {
+            Accepted = true,
+            Variant = "cuda",
+            Failure = LlamaCppRuntimeAdministrationFailure.None,
+            DisplayMessage = null
+        });
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket
+        {
+            ModelName = "repo/model:Q4_K_M",
+            AlreadyInFlight = false,
+            OperationId = operationId
+        });
         harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus
         {
             ModelName = "repo/model:Q4_K_M",
@@ -204,9 +227,19 @@ public sealed class NodeAdminMcpToolsTests
             OperationId = operationId
         });
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "repo/model:Q4_K_M", Deleted = true });
+        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult
+        {
+            Succeeded = true,
+            ModelName = "repo/model:Q4_K_M",
+            Deleted = true
+        });
         harness.Models.SelectDefaultAsync("repo/model:Q4_K_M", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
-               .Returns(new LocalModelSelectionResult { Succeeded = true, SelectedModelName = "repo/model:Q4_K_M", PreviousModelName = "old" });
+               .Returns(new LocalModelSelectionResult
+               {
+                   Succeeded = true,
+                   SelectedModelName = "repo/model:Q4_K_M",
+                   PreviousModelName = "old"
+               });
 
         AssertEx.Equal("accepted", (await harness.Tools.StartRuntimeAcquisitionAsync(CancellationToken.None)).Status);
         AssertEx.Equal(McpAdminToolFailureCodes.InvalidVariant,
@@ -229,7 +262,12 @@ public sealed class NodeAdminMcpToolsTests
         var harness = new Harness();
         var requests = new List<GgufModelRequest>();
         harness.Download.StartAsync(Arg.Do<GgufModelRequest>(requests.Add), Arg.Any<CancellationToken>())
-               .Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = Guid.NewGuid() });
+               .Returns(new GgufDownloadTicket
+               {
+                   ModelName = "repo/model:Q4_K_M",
+                   AlreadyInFlight = false,
+                   OperationId = Guid.NewGuid()
+               });
 
         _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M");
         _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M", include_projector: false);
@@ -253,13 +291,29 @@ public sealed class NodeAdminMcpToolsTests
         harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>())
                .Returns<Task<GgufDownloadTicket>>(_ => throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                    "Model source not found."));
-        harness.Models.DeleteAsync("bad", Arg.Any<CancellationToken>()).Returns(
-            new LocalModelDeletionResult { Succeeded = false, ModelName = null, Deleted = false, FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = "Invalid model." });
-        harness.Models.SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(
-            new LocalModelSelectionResult { Succeeded = false, SelectedModelName = null, PreviousModelName = null, FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled, DisplayMessage = "Model not installed." });
+        harness.Models.DeleteAsync("bad", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult
+        {
+            Succeeded = false,
+            ModelName = null,
+            Deleted = false,
+            FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName,
+            DisplayMessage = "Invalid model."
+        });
+        harness.Models.SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(new LocalModelSelectionResult
+        {
+            Succeeded = false,
+            SelectedModelName = null,
+            PreviousModelName = null,
+            FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled,
+            DisplayMessage = "Model not installed."
+        });
         harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>()).Returns(NodeSettingsAdministrationResult.Rejected(new StoredNodeSettings(),
         [
-            new NodeSettingsValidationError { Field = NodeSettingsField.LlamaMaxLoadedProcesses, Message = "Invalid process count." }
+            new NodeSettingsValidationError
+            {
+                Field = NodeSettingsField.LlamaMaxLoadedProcesses,
+                Message = "Invalid process count."
+            }
         ]));
 
         AssertEx.Equal(McpAdminToolFailureCodes.Busy,
@@ -366,7 +420,12 @@ public sealed class NodeAdminMcpToolsTests
         NodeSettingsAgenticPatch? capturedPatch = null;
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("current"));
         harness.Settings.ApplyAgenticPatchAsync(Arg.Do<NodeSettingsAgenticPatch>(patch => capturedPatch = patch), Arg.Any<CancellationToken>())
-               .Returns(new NodeSettingsAdministrationResult { Updated = true, Settings = new StoredNodeSettings(), ValidationErrors = [] });
+               .Returns(new NodeSettingsAdministrationResult
+               {
+                   Updated = true,
+                   Settings = new StoredNodeSettings(),
+                   ValidationErrors = []
+               });
         var record = AgentRecord();
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync("agent", Arg.Any<CancellationToken>()).Returns(record);
@@ -603,7 +662,12 @@ public sealed class NodeAdminMcpToolsTests
         var record = AgentRecord();
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("model"));
         harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>())
-               .Returns(new NodeSettingsAdministrationResult { Updated = true, Settings = new StoredNodeSettings(), ValidationErrors = [] });
+               .Returns(new NodeSettingsAdministrationResult
+               {
+                   Updated = true,
+                   Settings = new StoredNodeSettings(),
+                   ValidationErrors = []
+               });
         harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus
         {
             Installed = null,
@@ -614,7 +678,13 @@ public sealed class NodeAdminMcpToolsTests
             RunningProcessCount = 0,
             CheckedAtUtc = null
         });
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult { Accepted = true, Variant = "cpu", Failure = LlamaCppRuntimeAdministrationFailure.None, DisplayMessage = null });
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult
+        {
+            Accepted = true,
+            Variant = "cpu",
+            Failure = LlamaCppRuntimeAdministrationFailure.None,
+            DisplayMessage = null
+        });
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus
         {
             Sequence = 1,
@@ -627,7 +697,12 @@ public sealed class NodeAdminMcpToolsTests
             StepCount = 0,
             SanitizedError = null
         });
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = Guid.NewGuid() });
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket
+        {
+            ModelName = "repo/model:Q4_K_M",
+            AlreadyInFlight = false,
+            OperationId = Guid.NewGuid()
+        });
         harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus
         {
             ModelName = "repo/model:Q4_K_M",
@@ -637,9 +712,19 @@ public sealed class NodeAdminMcpToolsTests
             SanitizedError = null
         });
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "repo/model:Q4_K_M", Deleted = true });
+        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult
+        {
+            Succeeded = true,
+            ModelName = "repo/model:Q4_K_M",
+            Deleted = true
+        });
         harness.Models.SelectDefaultAsync(Arg.Any<string>(), LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
-               .Returns(new LocalModelSelectionResult { Succeeded = true, SelectedModelName = "repo/model:Q4_K_M", PreviousModelName = "old" });
+               .Returns(new LocalModelSelectionResult
+               {
+                   Succeeded = true,
+                   SelectedModelName = "repo/model:Q4_K_M",
+                   PreviousModelName = "old"
+               });
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
@@ -800,7 +885,12 @@ public sealed class NodeAdminMcpToolsTests
     {
         var successLogger = new ThrowingLogger();
         var successful = new Harness(logger: successLogger);
-        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "model", Deleted = true });
+        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult
+        {
+            Succeeded = true,
+            ModelName = "model",
+            Deleted = true
+        });
 
         var result = await successful.Tools.DeleteModelAsync("model", CancellationToken.None);
 
@@ -1000,7 +1090,17 @@ public sealed class NodeAdminMcpToolsTests
             LatestRunId = latestRunStatus is null ? null : Guid.NewGuid(),
             LatestRunStatus = latestRunStatus,
             LatestRunDefinitionName = latestRunStatus is null ? null : "seeded",
-            LatestRunNodes = latestRunStatus is null ? DevWorkflowNodeCounters.Empty : new DevWorkflowNodeCounters { Queued = 1, Running = 2, Completed = 3, Total = 7, PendingDecisionCount = 1, BlockingGateNodeRunId = null },
+            LatestRunNodes = latestRunStatus is null
+                ? DevWorkflowNodeCounters.Empty
+                : new DevWorkflowNodeCounters
+                {
+                    Queued = 1,
+                    Running = 2,
+                    Completed = 3,
+                    Total = 7,
+                    PendingDecisionCount = 1,
+                    BlockingGateNodeRunId = null
+                },
             CreatedAtUtc = 10,
             UpdatedAtUtc = 10,
             Version = 1
@@ -1010,24 +1110,24 @@ public sealed class NodeAdminMcpToolsTests
         new()
         {
             Run = new DevWorkflowRunSnapshot
-        {
-            Id = Guid.NewGuid(),
-            WorkItemId = Guid.NewGuid(),
-            DefinitionId = Guid.NewGuid(),
-            DefinitionVersion = 1,
-            DefinitionGraphHash = "hash",
-            GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
-            GraphRevision = 1,
-            Status = DevWorkflowRunStatus.WaitingForApproval,
-            LastSequence = 4,
-            FailureClass = "gate_rejected",
-            TerminalReason = "a sanitized reason",
-            StartedAtUtc = 11,
-            EndedAtUtc = 12,
-            CreatedAtUtc = 10,
-            UpdatedAtUtc = 10,
-            Version = 1
-        },
+            {
+                Id = Guid.NewGuid(),
+                WorkItemId = Guid.NewGuid(),
+                DefinitionId = Guid.NewGuid(),
+                DefinitionVersion = 1,
+                DefinitionGraphHash = "hash",
+                GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
+                GraphRevision = 1,
+                Status = DevWorkflowRunStatus.WaitingForApproval,
+                LastSequence = 4,
+                FailureClass = "gate_rejected",
+                TerminalReason = "a sanitized reason",
+                StartedAtUtc = 11,
+                EndedAtUtc = 12,
+                CreatedAtUtc = 10,
+                UpdatedAtUtc = 10,
+                Version = 1
+            },
             NodeRuns = [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
             PendingDecisionCount = 1,
             BlockingGateNodeRunId = null
@@ -1104,7 +1204,27 @@ public sealed class NodeAdminMcpToolsTests
         };
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
-        new() { DefaultModelName = model, EnableTools = null, ToolCapableModels = null, HuggingFaceDefaultQuant = null, LlamaMaxLoadedProcesses = null, LlamaIdleTimeToLiveSeconds = null, KeepModelWarmEnabled = null, KeepModelWarmModelName = null, KeepModelWarmIntervalSeconds = null, MaxMessageRequestTimeoutSeconds = 600, ChatCacheReuse = null, SpeculativeMode = null, SpeculativeDraftModelName = null, SpeculativeDraftMaxTokens = null, SpeculativeDraftGpuLayers = null, KvCacheType = null, RerankerModelName = null, AutoEffortFastModelName = null };
+        new()
+        {
+            DefaultModelName = model,
+            EnableTools = null,
+            ToolCapableModels = null,
+            HuggingFaceDefaultQuant = null,
+            LlamaMaxLoadedProcesses = null,
+            LlamaIdleTimeToLiveSeconds = null,
+            KeepModelWarmEnabled = null,
+            KeepModelWarmModelName = null,
+            KeepModelWarmIntervalSeconds = null,
+            MaxMessageRequestTimeoutSeconds = 600,
+            ChatCacheReuse = null,
+            SpeculativeMode = null,
+            SpeculativeDraftModelName = null,
+            SpeculativeDraftMaxTokens = null,
+            SpeculativeDraftGpuLayers = null,
+            KvCacheType = null,
+            RerankerModelName = null,
+            AutoEffortFastModelName = null
+        };
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
@@ -1181,7 +1301,7 @@ public sealed class NodeAdminMcpToolsTests
                 EventId = eventId,
                 Message = formatter(state, exception),
                 Properties = properties?.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
-                ?? new Dictionary<string, object?>(StringComparer.Ordinal),
+                             ?? new Dictionary<string, object?>(StringComparer.Ordinal),
                 Exception = exception
             });
         }

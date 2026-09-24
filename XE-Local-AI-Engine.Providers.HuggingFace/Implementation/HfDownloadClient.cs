@@ -333,7 +333,13 @@ internal sealed class HfDownloadClient
             CompletedBytes = finalSize
         });
 
-        return new HfDownloadResult { LocalPath = destinationPath, SizeBytes = finalSize, Sha256 = verifiedSha, ResolvedRevision = resolvedRevision };
+        return new HfDownloadResult
+        {
+            LocalPath = destinationPath,
+            SizeBytes = finalSize,
+            Sha256 = verifiedSha,
+            ResolvedRevision = resolvedRevision
+        };
     }
 
     /// <summary>
@@ -400,7 +406,17 @@ internal sealed class HfDownloadClient
         {
             RandomAccess.SetLength(handle, total);
 
-            var context = new ChunkContext { RequestUri = chunkUri, Handle = handle, State = state, ModelName = modelName, TotalBytes = total, ChunkSize = chunkSize, Progress = progress, Revision = probe.Revision };
+            var context = new ChunkContext
+            {
+                RequestUri = chunkUri,
+                Handle = handle,
+                State = state,
+                ModelName = modelName,
+                TotalBytes = total,
+                ChunkSize = chunkSize,
+                Progress = progress,
+                Revision = probe.Revision
+            };
             using var failureCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             // Chunks capture their own failure rather than faulting, so one dead connection cannot leave a sibling's
             // exception unobserved and the real cause is still the one that surfaces.
@@ -448,7 +464,12 @@ internal sealed class HfDownloadClient
 
         var total = response.Content.Headers.ContentRange?.Length;
         return total == expectedSizeBytes && total > 0
-            ? new RangeProbe { TotalBytes = total.Value, Revision = ReadRepoCommit(response) ?? string.Empty, LinkedSha = ReadLinkedSha256(response) }
+            ? new RangeProbe
+            {
+                TotalBytes = total.Value,
+                Revision = ReadRepoCommit(response) ?? string.Empty,
+                LinkedSha = ReadLinkedSha256(response)
+            }
             : null;
     }
 
@@ -667,7 +688,11 @@ internal sealed class HfDownloadClient
         return await RangeResumeState.TryReadRecordAsync(partPath + RangeSidecarSuffix, ct).ConfigureAwait(false) is { Cursors.Length: 1 } record
                && record.Total == expectedSizeBytes
                && record.Cursors[0] == partBytes
-            ? new SingleStreamResume { Bytes = partBytes, Revision = record.Revision }
+            ? new SingleStreamResume
+            {
+                Bytes = partBytes,
+                Revision = record.Revision
+            }
             : null;
     }
 

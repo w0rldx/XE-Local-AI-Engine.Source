@@ -34,9 +34,9 @@ public sealed class AgentHomeRunRetentionOptionsValidator : IValidateOptions<Age
                                .AppendIf(options.SweepInterval < MinSweepInterval || options.SweepInterval > MaxSweepInterval,
                                    Invariant($"AgentHome:RunRetention:SweepInterval ({options.SweepInterval}) must be between {MinSweepInterval} and {MaxSweepInterval}."))
                                .AppendIf(options.Enabled
-                                   && options.RetentionDays == 0
-                                   && options.MaxRuns == 0
-                                   && options.MaxTotalBytes == 0,
+                                         && options.RetentionDays == 0
+                                         && options.MaxRuns == 0
+                                         && options.MaxTotalBytes == 0,
                                    "AgentHome:RunRetention is enabled but RetentionDays, MaxRuns and MaxTotalBytes are all 0, "
                                    + "so the sweep would delete nothing. Set one of them, or set AgentHome:RunRetention:Enabled to false.")
                                .ToArray();

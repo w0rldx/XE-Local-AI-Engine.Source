@@ -119,9 +119,9 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             }
 
             var bytes = await ReadFileUnderGuardAsync(fullPath,
-                    resolvedRoot,
-                    Math.Min(maxFileBytes, remainingBytes),
-                    cancellationToken);
+                resolvedRoot,
+                Math.Min(maxFileBytes, remainingBytes),
+                cancellationToken);
             admittedBytes = checked(admittedBytes + bytes.LongLength);
             if (admittedBytes > maxAggregateBytes)
             {
@@ -163,8 +163,8 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             // The re-enqueue rule lives once, in the admission service: a written document is always queued, an unchanged
             // dedupe hit only from a retryable status, and Enqueue is null when it decided not to queue at all.
             var admission = await _admission.AdmitStoredDocumentAsync(result.DocumentId,
-                                                result.WasInserted || result.WasUpdated,
-                                                cancellationToken);
+                result.WasInserted || result.WasUpdated,
+                cancellationToken);
             if (admission.QueueFull)
             {
                 // Stop the scan: the rest of the repository was never offered to the queue, so the snapshot is partial
@@ -183,9 +183,9 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         if (!queueFull)
         {
             var existingDocuments = await _catalog.ListAsync(normalizedCollection,
-                                                      SourceKind,
-                                                      repositorySourceId,
-                                                      cancellationToken);
+                SourceKind,
+                repositorySourceId,
+                cancellationToken);
             foreach (var existing in existingDocuments)
             {
                 if (!string.Equals(existing.SourceKind, SourceKind, StringComparison.Ordinal)

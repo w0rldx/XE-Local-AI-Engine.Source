@@ -179,6 +179,9 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             _hitsByQuery = hitsByQuery;
 
         public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken) =>
-            Task.FromResult(new KnowledgeSearchResult { Results = _hitsByQuery[request.Query] });
+            Task.FromResult(new KnowledgeSearchResult
+            {
+                Results = _hitsByQuery[request.Query]
+            });
     }
 }

@@ -403,14 +403,54 @@ public sealed class EmbeddingToolRelevanceSelectorTests
     {
         return
         [
-            new ToolRelevanceCandidate { Name = "core_tool", Description = "the always-on state tool", IsCore = true },
-            new ToolRelevanceCandidate { Name = "deploy_production_build", Description = "deploy the production build to the cluster", IsCore = false },
-            new ToolRelevanceCandidate { Name = "summarise_notes", Description = "summarise the meeting notes", IsCore = false },
-            new ToolRelevanceCandidate { Name = "incident_runbook", Description = "production incident response runbook", IsCore = false },
-            new ToolRelevanceCandidate { Name = "weather_forecast", Description = "the weekend weather forecast", IsCore = false },
-            new ToolRelevanceCandidate { Name = "cooking_recipe", Description = "an oven recipe", IsCore = false },
-            new ToolRelevanceCandidate { Name = "translate_text", Description = "translate a phrase", IsCore = false },
-            new ToolRelevanceCandidate { Name = "play_music", Description = "start a playlist", IsCore = false }
+            new ToolRelevanceCandidate
+            {
+                Name = "core_tool",
+                Description = "the always-on state tool",
+                IsCore = true
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "deploy_production_build",
+                Description = "deploy the production build to the cluster",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "summarise_notes",
+                Description = "summarise the meeting notes",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "incident_runbook",
+                Description = "production incident response runbook",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "weather_forecast",
+                Description = "the weekend weather forecast",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "cooking_recipe",
+                Description = "an oven recipe",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "translate_text",
+                Description = "translate a phrase",
+                IsCore = false
+            },
+            new ToolRelevanceCandidate
+            {
+                Name = "play_music",
+                Description = "start a playlist",
+                IsCore = false
+            }
         ];
     }
 

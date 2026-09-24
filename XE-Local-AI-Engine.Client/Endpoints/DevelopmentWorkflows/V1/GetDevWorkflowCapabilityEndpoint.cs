@@ -33,5 +33,8 @@ public sealed class GetDevWorkflowCapabilityEndpoint : EndpointWithoutRequest<De
     }
 
     public override Task HandleAsync(CancellationToken ct) =>
-        Send.OkAsync(new DevWorkflowCapabilityResponse { Enabled = _options.Value.Enabled }, ct);
+        Send.OkAsync(new DevWorkflowCapabilityResponse
+        {
+            Enabled = _options.Value.Enabled
+        }, ct);
 }

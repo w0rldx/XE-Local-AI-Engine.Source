@@ -10,7 +10,11 @@ internal sealed class ActiveModelInfo
     public required DateTimeOffset? ExpiresAt { get; init; }
 
     /// <summary>Sentinel representing "no active model".</summary>
-    public static ActiveModelInfo None { get; } = new() { Name = null, ExpiresAt = null };
+    public static ActiveModelInfo None { get; } = new()
+    {
+        Name = null,
+        ExpiresAt = null
+    };
 }
 
 /// <summary>Detected GPU facts used when composing capability reports.</summary>

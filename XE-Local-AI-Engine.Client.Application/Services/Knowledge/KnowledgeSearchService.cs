@@ -86,12 +86,18 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Query))
         {
-            return new KnowledgeSearchResult { Results = [] };
+            return new KnowledgeSearchResult
+            {
+                Results = []
+            };
         }
 
         if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
         {
-            return new KnowledgeSearchResult { Results = [] };
+            return new KnowledgeSearchResult
+            {
+                Results = []
+            };
         }
 
         var limit = Math.Max(1, request.Limit);
@@ -116,13 +122,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var vectorStart = Stopwatch.GetTimestamp();
             var vectorSearch = _vectorSearchFactory.Create();
             var vectorHits = await vectorSearch.SearchAsync(queryVector,
-                                                   resolvedModel,
-                                                   vectorIdentity,
-                                                   queryVector.Length,
-                                                   candidatePool,
-                                                   request.DocumentId,
-                                                   collectionId,
-                                                   cancellationToken);
+                resolvedModel,
+                vectorIdentity,
+                queryVector.Length,
+                candidatePool,
+                request.DocumentId,
+                collectionId,
+                cancellationToken);
             RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
         }
@@ -130,7 +136,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var fused = _fusion.FuseScored([ftsRanked, vectorRanked], _options.FusionStrategy, _options.FusionScoreWeight);
         if (fused.Count == 0)
         {
-            return new KnowledgeSearchResult { Results = [] };
+            return new KnowledgeSearchResult
+            {
+                Results = []
+            };
         }
 
         var connection = _dbContext.Database.GetDbConnection();
@@ -193,7 +202,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             });
         }
 
-        return new KnowledgeSearchResult { Results = hits };
+        return new KnowledgeSearchResult
+        {
+            Results = hits
+        };
     }
 
     // Lexical arm wrapper: times the FTS round trip. Reads the request-scoped DB connection (so it never overlaps another
@@ -273,16 +285,21 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     {
         var pooled = fused.Take(candidatePool).ToList();
         var hydrated = await HydrateChunksAsync(connection,
-                pooled.Select(static entry => entry.ChunkId).ToList(),
-                collectionId,
-                cancellationToken);
+            pooled.Select(static entry => entry.ChunkId).ToList(),
+            collectionId,
+            cancellationToken);
 
         var pool = new List<ChunkSelection>(pooled.Count);
         foreach (var entry in pooled)
         {
             if (hydrated.TryGetValue(entry.ChunkId, out var row))
             {
-                pool.Add(new ChunkSelection { ChunkId = entry.ChunkId, Row = row, Score = entry.Score });
+                pool.Add(new ChunkSelection
+                {
+                    ChunkId = entry.ChunkId,
+                    Row = row,
+                    Score = entry.Score
+                });
             }
         }
 
@@ -361,7 +378,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // The linked deadline flows through reranker acquisition and scoring, winning over the provider's larger
             // internal timeout; WaitAsync bounds the caller even if a provider violates the cancellation contract.
             return await RerankAsync(query, pool, limit, budgetCts.Token)
-                         .WaitAsync(remaining, cancellationToken);
+                .WaitAsync(remaining, cancellationToken);
         }
         catch (TimeoutException)
         {
@@ -416,7 +433,11 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // identity (including native width), which the read path validates before accepting a hit.
             _queryEmbeddingCache.Store(cacheFamilyIdentity,
                 query,
-                new KnowledgeQueryEmbeddingCacheEntry { Vector = transformed.Values, VectorIdentity = transformed.Identity });
+                new KnowledgeQueryEmbeddingCacheEntry
+                {
+                    Vector = transformed.Values,
+                    VectorIdentity = transformed.Identity
+                });
             return new QueryEmbedding(transformed.Values, embeddingModelName, transformed.Identity);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException or KnowledgeIngestionException)

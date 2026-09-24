@@ -321,7 +321,12 @@ public sealed class ImageJobEndpointTests
         await using var factory = NewFactory(new StubImageJobCoordinator());
         using var client = factory.CreateClient();
 
-        foreach (var query in new[] { "?limit=0", "?limit=201", "?offset=-1" })
+        foreach (var query in new[]
+                 {
+                     "?limit=0",
+                     "?limit=201",
+                     "?offset=-1"
+                 })
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs{query}");
             factory.AddNodeBearerToken(request);
@@ -416,7 +421,11 @@ public sealed class ImageJobEndpointTests
                             .Skip(offset)
                             .Take(limit)
                             .ToArray();
-            return Task.FromResult(new ImageJobPage { Items = page, TotalCount = _jobs.Count });
+            return Task.FromResult(new ImageJobPage
+            {
+                Items = page,
+                TotalCount = _jobs.Count
+            });
         }
 
         public Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)

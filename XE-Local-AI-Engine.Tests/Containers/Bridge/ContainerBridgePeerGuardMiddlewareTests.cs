@@ -101,7 +101,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-              .InvokeAsync(context, static _ => Task.CompletedTask);
+            .InvokeAsync(context, static _ => Task.CompletedTask);
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode, "The diagnosis must not change the verdict.");
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "rootful"),
@@ -118,7 +118,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-              .InvokeAsync(context, static _ => Task.CompletedTask);
+            .InvokeAsync(context, static _ => Task.CompletedTask);
 
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "accepts this computer's own addresses only"), "The refusal is still reported.");
         AssertEx.False(logger.HasEntry(LogLevel.Warning, "rootful"), "A routable public peer is another machine; naming the daemon would be a wrong diagnosis.");
@@ -212,13 +212,13 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(new ContainerBridgeEndpointSource(endpoint: null),
-                  watcher,
-                  NullLogger<ContainerBridgePeerGuardMiddleware>.Instance)
-              .InvokeAsync(context, _ =>
-              {
-                  nextCalled = true;
-                  return Task.CompletedTask;
-              });
+                watcher,
+                NullLogger<ContainerBridgePeerGuardMiddleware>.Instance)
+            .InvokeAsync(context, _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            });
 
         AssertEx.True(nextCalled, "With no resolved bridge there is no bridge connection to refuse, and the node's own pipeline owns the request.");
     }

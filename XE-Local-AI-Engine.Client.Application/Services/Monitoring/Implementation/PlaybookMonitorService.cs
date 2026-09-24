@@ -19,8 +19,7 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
     private readonly PlaybookMonitorOptions _options;
     private readonly IPlaybookActionStore _playbookActionStore;
 
-    public PlaybookMonitorService(
-        IPlaybookMonitorStore monitorStore,
+    public PlaybookMonitorService(IPlaybookMonitorStore monitorStore,
         IPlaybookActionStore playbookActionStore,
         IOptions<PlaybookMonitorOptions> monitorOptions)
     {

@@ -29,7 +29,15 @@ public sealed class AgentWorkSessionEncryptionTests
                 ExpectedVersion = created.Version,
                 OperationId = Guid.NewGuid(),
                 Origin = AgentWorkSessionTaskOrigin.Agent,
-                Changes = [new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, Title = taskTitle }]
+                Changes =
+                [
+                    new WorkPlanTaskChange
+                    {
+                        TaskId = Guid.NewGuid(),
+                        Operation = WorkPlanTaskOperation.Add,
+                        Title = taskTitle
+                    }
+                ]
             });
             var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
             {
@@ -94,11 +102,11 @@ public sealed class AgentWorkSessionEncryptionTests
         // The threat the AAD binding exists for: a database writer who cannot forge ciphertext moves an existing row
         // onto another session and has its text fed to that agent for free.
         await fixture.RawExecuteAsync("UPDATE agent_work_session_findings SET session_id = $attacker WHERE session_id = $victim;",
-                         command =>
-                         {
-                             command.Parameters.AddWithValue("$attacker", attackerId);
-                             command.Parameters.AddWithValue("$victim", victimId);
-                         });
+            command =>
+            {
+                command.Parameters.AddWithValue("$attacker", attackerId);
+                command.Parameters.AddWithValue("$victim", victimId);
+            });
 
         await using (var readContext = fixture.CreateContext())
         {
@@ -133,11 +141,11 @@ public sealed class AgentWorkSessionEncryptionTests
         }
 
         await fixture.RawExecuteAsync("UPDATE agent_work_session_checkpoints SET session_id = $attacker WHERE session_id = $victim;",
-                         command =>
-                         {
-                             command.Parameters.AddWithValue("$attacker", attackerId);
-                             command.Parameters.AddWithValue("$victim", victimId);
-                         });
+            command =>
+            {
+                command.Parameters.AddWithValue("$attacker", attackerId);
+                command.Parameters.AddWithValue("$victim", victimId);
+            });
 
         await using (var readContext = fixture.CreateContext())
         {

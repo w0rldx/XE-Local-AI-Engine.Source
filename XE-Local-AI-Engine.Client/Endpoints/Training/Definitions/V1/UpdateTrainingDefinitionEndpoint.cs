@@ -25,7 +25,11 @@ public sealed class UpdateTrainingDefinitionEndpoint : Endpoint<UpdateTrainingDe
 
     public override async Task HandleAsync(UpdateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft { Name = req.Name, Body = req.Body }, ct);
+        var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft
+        {
+            Name = req.Name,
+            Body = req.Body
+        }, ct);
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

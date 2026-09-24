@@ -128,14 +128,22 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
                                      .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
         if (entity is null)
         {
-            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.NotFound, Record = null };
+            return new PlaybookPromotionCommit
+            {
+                Status = PlaybookPromotionCommitStatus.NotFound,
+                Record = null
+            };
         }
 
         // Optimistic-concurrency guard: the row must still be the exact snapshot the caller validated. A concurrent UpdateSuggestedAsync bumps Version and clears
         // the eval, a concurrent promote moves State off Suggested — either way the eval evidence no longer proves this content, so refuse rather than enable on it.
         if (entity.Version != expectedVersion || entity.State != (int)PlaybookActionState.Suggested)
         {
-            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.VersionConflict, Record = null };
+            return new PlaybookPromotionCommit
+            {
+                Status = PlaybookPromotionCommitStatus.VersionConflict,
+                Record = null
+            };
         }
 
         // Cap re-check adjacent to the write, in the same transaction: two concurrent promotes cannot both read a
@@ -145,7 +153,11 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
                                            .CountAsync(action => action.AgentDefinitionId == entity.AgentDefinitionId && action.State == enabled, cancellationToken);
         if (enabledCount >= maxEnabledActions)
         {
-            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.CapReached, Record = null };
+            return new PlaybookPromotionCommit
+            {
+                Status = PlaybookPromotionCommitStatus.CapReached,
+                Record = null
+            };
         }
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -159,7 +171,11 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.Committed, Record = ToRecord(entity) };
+        return new PlaybookPromotionCommit
+        {
+            Status = PlaybookPromotionCommitStatus.Committed,
+            Record = ToRecord(entity)
+        };
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)

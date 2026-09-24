@@ -76,8 +76,7 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     private readonly ITrainingDatasetStore _store;
     private readonly IToolInvocationService _toolInvocation;
 
-    public HeadlessToolExecutor(
-        ILocalToolOfferProvider offerProvider,
+    public HeadlessToolExecutor(ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy,
         ITrainingDatasetStore store,
         IToolMockEngine mockEngine,
@@ -105,19 +104,34 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     {
         if (string.IsNullOrWhiteSpace(toolName))
         {
-            return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = "The generated call names no tool." };
+            return new HeadlessToolOutcome
+            {
+                Kind = HeadlessToolOutcomeKind.Failed,
+                Result = null,
+                Reason = "The generated call names no tool."
+            };
         }
 
         var offered = await _offerProvider.GetOfferedToolsAsync(teacherModelName, isCloudModel: false, cancellationToken);
         var offer = offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
         if (offer is null)
         {
-            return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = $"The tool catalog does not offer '{toolName}'." };
+            return new HeadlessToolOutcome
+            {
+                Kind = HeadlessToolOutcomeKind.Failed,
+                Result = null,
+                Reason = $"The tool catalog does not offer '{toolName}'."
+            };
         }
 
         if (!TryParseArguments(argumentsJson, out var argumentsElement, out var parseError))
         {
-            return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = parseError };
+            return new HeadlessToolOutcome
+            {
+                Kind = HeadlessToolOutcomeKind.Failed,
+                Result = null,
+                Reason = parseError
+            };
         }
 
         // THE enforcement point: the composed effective approval for this tool, tighten-only over the catalog default.
@@ -144,14 +158,25 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
         CancellationToken cancellationToken)
     {
         var outcome = await _toolInvocation.InvokeAsync(toolName,
-                                               argumentsJson,
-                                               new ToolInvocationContext { RunId = Guid.Empty, NodeRunId = Guid.Empty, NodeKey = GenerationNodeKey, Timeout = UnboundedBudget },
-                                               cancellationToken);
+            argumentsJson,
+            new ToolInvocationContext
+            {
+                RunId = Guid.Empty,
+                NodeRunId = Guid.Empty,
+                NodeKey = GenerationNodeKey,
+                Timeout = UnboundedBudget
+            },
+            cancellationToken);
 
         switch (outcome.Kind)
         {
             case ToolInvocationOutcomeKind.Executed:
-                return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Executed, Result = outcome.Result, Reason = "read-local" };
+                return new HeadlessToolOutcome
+                {
+                    Kind = HeadlessToolOutcomeKind.Executed,
+                    Result = outcome.Result,
+                    Reason = "read-local"
+                };
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "approval-gated", StringComparison.Ordinal):
                 return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: true, cancellationToken);
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "not-read-local", StringComparison.Ordinal):
@@ -159,12 +184,27 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
             // The seam answers this one with a structural token rather than a sentence, and a per-sample reason is
             // written into ValidationJson for a human to read. The other refusals already carry prose.
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "no-executable", StringComparison.Ordinal):
-                return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = $"'{toolName}' has no executable in the local tool registry." };
+                return new HeadlessToolOutcome
+                {
+                    Kind = HeadlessToolOutcomeKind.Failed,
+                    Result = null,
+                    Reason = $"'{toolName}' has no executable in the local tool registry."
+                };
             case ToolInvocationOutcomeKind.Cancelled:
                 cancellationToken.ThrowIfCancellationRequested();
-                return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = outcome.Reason };
+                return new HeadlessToolOutcome
+                {
+                    Kind = HeadlessToolOutcomeKind.Failed,
+                    Result = null,
+                    Reason = outcome.Reason
+                };
             default:
-                return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Failed, Result = null, Reason = outcome.Reason };
+                return new HeadlessToolOutcome
+                {
+                    Kind = HeadlessToolOutcomeKind.Failed,
+                    Result = null,
+                    Reason = outcome.Reason
+                };
         }
     }
 
@@ -184,7 +224,12 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
 
             if (_mockEngine.TryRespond(body, arguments) is { } response)
             {
-                return new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Mocked, Result = response, Reason = reason };
+                return new HeadlessToolOutcome
+                {
+                    Kind = HeadlessToolOutcomeKind.Mocked,
+                    Result = response,
+                    Reason = reason
+                };
             }
         }
 

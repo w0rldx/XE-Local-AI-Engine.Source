@@ -273,12 +273,12 @@ public sealed partial class BenchmarkStore
                                   // Inline rather than through ToThroughput: a helper call would not translate in a server-side projection.
                                   // Absence is all SEVEN columns NULL, every one projected — the rule ToThroughput uses; omitting one empties that column everywhere.
                                   Throughput = entity.TtftMs == null
-                                  && entity.PromptTokens == null
-                                  && entity.PromptMs == null
-                                  && entity.GenerationTokens == null
-                                  && entity.GenerationMs == null
-                                  && entity.CachedPromptTokens == null
-                                  && entity.SegmentCount == null
+                                               && entity.PromptTokens == null
+                                               && entity.PromptMs == null
+                                               && entity.GenerationTokens == null
+                                               && entity.GenerationMs == null
+                                               && entity.CachedPromptTokens == null
+                                               && entity.SegmentCount == null
                                       ? null
                                       : new BenchmarkRunThroughput
                                       {
@@ -310,6 +310,11 @@ public sealed partial class BenchmarkStore
 
         // One extra query for the page rather than a join inside the no-payload projection: the judge view is derived
         // from three more tables, and folding it in would make that projection unreadable.
-        return new BenchmarkRunPage { Items = [.. items.Select(item => WithRanking(item, ranking))], TotalCount = totalCount, RankCohort = ranking.Cohort };
+        return new BenchmarkRunPage
+        {
+            Items = [.. items.Select(item => WithRanking(item, ranking))],
+            TotalCount = totalCount,
+            RankCohort = ranking.Cohort
+        };
     }
 }

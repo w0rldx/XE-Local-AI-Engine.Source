@@ -43,8 +43,7 @@ public sealed partial class NodeAdminMcpTools
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<NodeAdminMcpTools> _logger;
 
-    public NodeAdminMcpTools(
-        ILlamaCppRuntimeAdministrationService runtimeAdministrationService,
+    public NodeAdminMcpTools(ILlamaCppRuntimeAdministrationService runtimeAdministrationService,
         IGgufDownloadCoordinator ggufDownloadCoordinator,
         ILocalModelAdministrationService localModelAdministrationService,
         INodeSettingsAdministrationService nodeSettingsAdministrationService,
@@ -237,12 +236,24 @@ public sealed partial class NodeAdminMcpTools
 
         if (!TryMapGenerationMetadata(generationMetadata, out var metadata, out var metadataError))
         {
-            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = metadataError };
+            return new McpAgentResponse
+            {
+                Status = "rejected",
+                Agent = null,
+                FailureCode = McpAdminToolFailureCodes.ValidationFailed,
+                DisplayMessage = metadataError
+            };
         }
 
         if (GenerationProvenance.Validate(metadata) is { } validationError)
         {
-            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = validationError };
+            return new McpAgentResponse
+            {
+                Status = "rejected",
+                Agent = null,
+                FailureCode = McpAdminToolFailureCodes.ValidationFailed,
+                DisplayMessage = validationError
+            };
         }
 
         var input = new AgentDefinitionInput
@@ -278,16 +289,32 @@ public sealed partial class NodeAdminMcpTools
             }
 
             var status = id is null ? "created" : "updated";
-            return new McpAgentResponse { Status = status, Agent = McpAgentDefinition.FromRecord(record) };
+            return new McpAgentResponse
+            {
+                Status = status,
+                Agent = McpAgentDefinition.FromRecord(record)
+            };
         }
         catch (AgentDefinitionValidationException exception)
         {
-            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = exception.Message };
+            return new McpAgentResponse
+            {
+                Status = "rejected",
+                Agent = null,
+                FailureCode = McpAdminToolFailureCodes.ValidationFailed,
+                DisplayMessage = exception.Message
+            };
         }
     }
 
     private static McpAgentResponse AgentNotFound() =>
-        new() { Status = "not_found", Agent = null, FailureCode = McpAdminToolFailureCodes.AgentNotFound, DisplayMessage = "Agent not found." };
+        new()
+        {
+            Status = "not_found",
+            Agent = null,
+            FailureCode = McpAdminToolFailureCodes.AgentNotFound,
+            DisplayMessage = "Agent not found."
+        };
 
     private static string ToWirePhase(GgufDownloadPhase phase) =>
         phase switch

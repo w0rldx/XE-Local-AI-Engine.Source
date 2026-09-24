@@ -147,7 +147,12 @@ internal sealed class ExternalAppPortHold : IDisposable
                      ?? throw new InvalidOperationException($"No loopback host port could be reserved for service '{service}' port {containerPort.ToString(CultureInfo.InvariantCulture)}.");
 
         _listeners[Key(service, containerPort)] = socket;
-        _ports.Add(new ExternalAppHostPort { Service = service, ContainerPort = containerPort, HostPort = ((IPEndPoint)socket.LocalEndPoint!).Port });
+        _ports.Add(new ExternalAppHostPort
+        {
+            Service = service,
+            ContainerPort = containerPort,
+            HostPort = ((IPEndPoint)socket.LocalEndPoint!).Port
+        });
     }
 
     private static Socket? BindLoopback(int hostPort)

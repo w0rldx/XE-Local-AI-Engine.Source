@@ -282,7 +282,12 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             var workspaceRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace!.RootPath));
             var mounts = new List<SandboxMountBinding>
             {
-                new() { HostPath = workspaceRoot, SandboxPath = WorkspaceTarget, ReadOnly = false }
+                new()
+                {
+                    HostPath = workspaceRoot,
+                    SandboxPath = WorkspaceTarget,
+                    ReadOnly = false
+                }
             };
             mounts.AddRange((request.Mounts ?? []).Select(mount =>
             {
@@ -291,7 +296,12 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                 var target = hostPath.StartsWith(prefix, StringComparison.Ordinal)
                     ? WorkspaceTarget + "/" + hostPath[prefix.Length..].Replace(Path.DirectorySeparatorChar, '/')
                     : mount.SandboxPath;
-                return new SandboxMountBinding { HostPath = hostPath, SandboxPath = target, ReadOnly = mount.ReadOnly };
+                return new SandboxMountBinding
+                {
+                    HostPath = hostPath,
+                    SandboxPath = target,
+                    ReadOnly = mount.ReadOnly
+                };
             }));
 
             _handle = new SandboxHandle

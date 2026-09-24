@@ -28,8 +28,7 @@ public sealed class ChatInvocationStatePump
     private readonly INodeChatInvocationPump _invocationPump;
     private readonly TimeProvider _timeProvider;
 
-    public ChatInvocationStatePump(
-        INodeChatInvocationPump invocationPump,
+    public ChatInvocationStatePump(INodeChatInvocationPump invocationPump,
         TimeProvider timeProvider,
         IOptions<ChatStreamBudgetOptions>? options = null)
     {

@@ -312,7 +312,11 @@ public sealed class DevelopmentMigrationTests : IDisposable
             return null;
         }
 
-        return new ColumnSchema { Type = reader.GetString(0), IsNullable = reader.GetInt64(1) == 0 };
+        return new ColumnSchema
+        {
+            Type = reader.GetString(0),
+            IsNullable = reader.GetInt64(1) == 0
+        };
     }
 
     private static async Task<HashSet<string>> ReadDevelopmentProjectIndexNamesAsync(SqliteConnection connection)
@@ -344,7 +348,13 @@ public sealed class DevelopmentMigrationTests : IDisposable
             return null;
         }
 
-        return new ForeignKeySchema { TargetTable = reader.GetString(0), SourceColumn = reader.GetString(1), TargetColumn = reader.GetString(2), OnDelete = reader.GetString(3) };
+        return new ForeignKeySchema
+        {
+            TargetTable = reader.GetString(0),
+            SourceColumn = reader.GetString(1),
+            TargetColumn = reader.GetString(2),
+            OnDelete = reader.GetString(3)
+        };
     }
 
     private sealed record ColumnSchema

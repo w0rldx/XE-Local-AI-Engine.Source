@@ -113,8 +113,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
     private readonly TimeProvider _timeProvider;
 
-    public DevelopmentManagementService(
-        IDevelopmentStore store,
+    public DevelopmentManagementService(IDevelopmentStore store,
         IDevelopmentCoordinator coordinator,
         IDevelopmentAttemptExecutionSupervisor supervisor,
         IDevelopmentArtifactBlobStore blobStore,
@@ -174,7 +173,12 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     {
         var repository = await _repositoryBindings.ResolveFolderAsync(selectedFolderId, cancellationToken);
         var detected = _profileDetector.Detect(repository.RepositoryRoot);
-        return new DevelopmentProfileDetectionResult { ProfileId = detected.ProfileId, BuildTarget = detected.BuildTarget, Candidates = detected.Candidates };
+        return new DevelopmentProfileDetectionResult
+        {
+            ProfileId = detected.ProfileId,
+            BuildTarget = detected.BuildTarget,
+            Candidates = detected.Candidates
+        };
     }
 
     public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
@@ -209,28 +213,28 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
         _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand
-        {
-            ProjectId = projectId,
-            TaskId = taskId,
-            OperationId = input.OperationId,
-            Objective = input.Objective,
-            SelectedFolderId = input.SelectedFolderId,
-            RepositoryIdentityHash = repository.RepositoryIdentityHash,
-            BaseBranch = input.BaseBranch,
-            Title = input.TaskTitle,
-            Requirements = input.Requirements,
-            AcceptanceCriteriaJson = input.AcceptanceCriteriaJson,
-            EgressPolicy = input.EgressPolicy,
-            CoderModelId = input.CoderModelId,
-            ReviewerModelId = input.ReviewerModelId,
-            TrustedRepositoryAcknowledged = true,
-            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
-            TrustedRepositoryAcknowledgedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            MaxTokens = input.MaxTokens,
-            MaxDurationSeconds = input.MaxDurationSeconds,
-            CommandProfileJson = Encoding.UTF8.GetString(profile.ToCanonicalUtf8())
-        },
-                                  cancellationToken);
+            {
+                ProjectId = projectId,
+                TaskId = taskId,
+                OperationId = input.OperationId,
+                Objective = input.Objective,
+                SelectedFolderId = input.SelectedFolderId,
+                RepositoryIdentityHash = repository.RepositoryIdentityHash,
+                BaseBranch = input.BaseBranch,
+                Title = input.TaskTitle,
+                Requirements = input.Requirements,
+                AcceptanceCriteriaJson = input.AcceptanceCriteriaJson,
+                EgressPolicy = input.EgressPolicy,
+                CoderModelId = input.CoderModelId,
+                ReviewerModelId = input.ReviewerModelId,
+                TrustedRepositoryAcknowledged = true,
+                TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+                TrustedRepositoryAcknowledgedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                MaxTokens = input.MaxTokens,
+                MaxDurationSeconds = input.MaxDurationSeconds,
+                CommandProfileJson = Encoding.UTF8.GetString(profile.ToCanonicalUtf8())
+            },
+            cancellationToken);
         return await GetProjectAsync(projectId, cancellationToken);
     }
 
@@ -348,19 +352,27 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         if (task.Status == DevelopmentTaskStatus.Blocked
             && string.Equals(task.BlockedReason, ReviewRoundLimitReason, StringComparison.Ordinal))
         {
-            return new DevelopmentNextActionResult { Action = "Blocked", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Blocked, Role = null };
+            return new DevelopmentNextActionResult
+            {
+                Action = "Blocked",
+                ProjectId = projectId,
+                TaskId = taskId,
+                AttemptId = null,
+                TaskStatus = DevelopmentTaskStatus.Blocked,
+                Role = null
+            };
         }
 
         if (task.Status == DevelopmentTaskStatus.Planned)
         {
             var ready = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-            {
-                TaskId = taskId,
-                OperationId = DerivedOperationId(operationId, "ready"),
-                TargetStatus = DevelopmentTaskStatus.Ready,
-                ExpectedTaskVersion = task.Version
-            },
-                                              cancellationToken);
+                {
+                    TaskId = taskId,
+                    OperationId = DerivedOperationId(operationId, "ready"),
+                    TargetStatus = DevelopmentTaskStatus.Ready,
+                    ExpectedTaskVersion = task.Version
+                },
+                cancellationToken);
             task = (await _store.GetTaskAsync(taskId, cancellationToken)) with
             {
                 Version = ready.Version
@@ -384,14 +396,14 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             && task.CurrentReviewRound >= task.MaxReviewRounds)
         {
             _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-            {
-                TaskId = taskId,
-                OperationId = DerivedOperationId(operationId, "review-round-limit"),
-                TargetStatus = DevelopmentTaskStatus.Blocked,
-                ExpectedTaskVersion = task.Version,
-                Reason = ReviewRoundLimitReason
-            },
-                                      cancellationToken);
+                {
+                    TaskId = taskId,
+                    OperationId = DerivedOperationId(operationId, "review-round-limit"),
+                    TargetStatus = DevelopmentTaskStatus.Blocked,
+                    ExpectedTaskVersion = task.Version,
+                    Reason = ReviewRoundLimitReason
+                },
+                cancellationToken);
             _logger.LogInformation("Development task status moved {From} to Blocked for task {TaskId} in project {ProjectId} after {Round} of {Max} rounds: {Reason}",
                 task.Status,
                 taskId,
@@ -399,7 +411,15 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 task.CurrentReviewRound,
                 task.MaxReviewRounds,
                 ReviewRoundLimitReason);
-            return new DevelopmentNextActionResult { Action = "Blocked", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Blocked, Role = null };
+            return new DevelopmentNextActionResult
+            {
+                Action = "Blocked",
+                ProjectId = projectId,
+                TaskId = taskId,
+                AttemptId = null,
+                TaskStatus = DevelopmentTaskStatus.Blocked,
+                Role = null
+            };
         }
 
         if (awaitingValidation)
@@ -409,7 +429,15 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 throw new DevelopmentConcurrencyException("Deterministic validation is already scheduled for this task.");
             }
 
-            return new DevelopmentNextActionResult { Action = "Validation", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = task.Status, Role = null };
+            return new DevelopmentNextActionResult
+            {
+                Action = "Validation",
+                ProjectId = projectId,
+                TaskId = taskId,
+                AttemptId = null,
+                TaskStatus = task.Status,
+                Role = null
+            };
         }
 
         var role = task.Status switch
@@ -443,17 +471,17 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var predecessor = attempts.LastOrDefault(attempt => attempt.Role == role && attempt.Status == DevelopmentAttemptStatus.Interrupted)?.Id;
         var attemptId = Guid.NewGuid();
         _ = await _coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
-        {
-            TaskId = taskId,
-            AttemptId = attemptId,
-            OperationId = operationId,
-            Role = role,
-            ModelId = modelId,
-            Provider = provider,
-            ExpectedTaskVersion = task.Version,
-            PredecessorAttemptId = predecessor
-        },
-                                  cancellationToken);
+            {
+                TaskId = taskId,
+                AttemptId = attemptId,
+                OperationId = operationId,
+                Role = role,
+                ModelId = modelId,
+                Provider = provider,
+                ExpectedTaskVersion = task.Version,
+                PredecessorAttemptId = predecessor
+            },
+            cancellationToken);
         if (!_supervisor.StartAttempt(attemptId, role))
         {
             throw new DevelopmentConcurrencyException("The Development attempt is already scheduled.");
@@ -466,7 +494,15 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             taskId,
             projectId,
             role);
-        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = taskId, AttemptId = attemptId, TaskStatus = startedTask.Status, Role = role };
+        return new DevelopmentNextActionResult
+        {
+            Action = "Attempt",
+            ProjectId = projectId,
+            TaskId = taskId,
+            AttemptId = attemptId,
+            TaskStatus = startedTask.Status,
+            Role = role
+        };
     }
 
     public async Task<bool> CancelAttemptAsync(Guid projectId,
@@ -522,7 +558,11 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             throw new DevelopmentInvalidTransitionException("The Development artifact failed immutable blob verification.");
         }
 
-        return new DevelopmentArtifactContent { Artifact = artifact, Content = Encoding.UTF8.GetString(read.Content.Span) };
+        return new DevelopmentArtifactContent
+        {
+            Artifact = artifact,
+            Content = Encoding.UTF8.GetString(read.Content.Span)
+        };
     }
 
     public async Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId,
@@ -539,7 +579,12 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             ManifestHash = preview.Subject.ManifestHash,
             ExpectedResultHash = preview.Subject.ExpectedResultHash,
             Patch = preview.Patch,
-            ChangedFiles = preview.ChangedFiles.Select(static file => new DevelopmentPatchPreviewFile { Path = file.Path, ChangeType = file.ChangeType, PreviousPath = file.PreviousPath }).ToArray()
+            ChangedFiles = preview.ChangedFiles.Select(static file => new DevelopmentPatchPreviewFile
+            {
+                Path = file.Path,
+                ChangeType = file.ChangeType,
+                PreviousPath = file.PreviousPath
+            }).ToArray()
         };
     }
 

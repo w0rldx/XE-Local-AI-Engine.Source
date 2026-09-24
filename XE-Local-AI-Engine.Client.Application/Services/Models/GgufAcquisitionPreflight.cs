@@ -265,8 +265,7 @@ public sealed class GgufAcquisitionPreflight : IGgufAcquisitionPreflight
     private readonly IInstalledModelSnapshotCoordinator _snapshotCoordinator;
     private readonly GgufAcquisitionStateProbe _stateProbe;
 
-    public GgufAcquisitionPreflight(
-        GgufAcquisitionIdentityResolver identityResolver,
+    public GgufAcquisitionPreflight(GgufAcquisitionIdentityResolver identityResolver,
         IInstalledModelSnapshotCoordinator snapshotCoordinator,
         GgufAcquisitionStateProbe stateProbe)
     {
@@ -284,15 +283,32 @@ public sealed class GgufAcquisitionPreflight : IGgufAcquisitionPreflight
         var identity = _identityResolver.Resolve(intent);
         var members = new List<IntendedInstalledModelMember>
         {
-            new() { RelativePath = identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
-            new() { RelativePath = identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
+            new()
+            {
+                RelativePath = identity.RelativeGgufPath,
+                Role = InstalledModelPhysicalMemberRole.Weight
+            },
+            new()
+            {
+                RelativePath = identity.RelativeSidecarPath,
+                Role = InstalledModelPhysicalMemberRole.Sidecar
+            }
         };
         if (identity.ProjectorRelativePath is not null)
         {
-            members.Add(new IntendedInstalledModelMember { RelativePath = identity.ProjectorRelativePath, Role = InstalledModelPhysicalMemberRole.Projector });
+            members.Add(new IntendedInstalledModelMember
+            {
+                RelativePath = identity.ProjectorRelativePath,
+                Role = InstalledModelPhysicalMemberRole.Projector
+            });
         }
 
-        var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest { ModelName = identity.CanonicalModelName, Kind = InstalledModelMutationKind.Acquire, IntendedMembers = members },
+        var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest
+            {
+                ModelName = identity.CanonicalModelName,
+                Kind = InstalledModelMutationKind.Acquire,
+                IntendedMembers = members
+            },
             cancellationToken);
         try
         {

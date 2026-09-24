@@ -19,8 +19,7 @@ public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest,
 {
     private readonly IModelUnloadCoordinator _unloadCoordinator;
 
-    public UnloadLocalModelEndpoint(
-        IModelUnloadCoordinator unloadCoordinator)
+    public UnloadLocalModelEndpoint(IModelUnloadCoordinator unloadCoordinator)
     {
         ArgumentNullException.ThrowIfNull(unloadCoordinator);
         _unloadCoordinator = unloadCoordinator;

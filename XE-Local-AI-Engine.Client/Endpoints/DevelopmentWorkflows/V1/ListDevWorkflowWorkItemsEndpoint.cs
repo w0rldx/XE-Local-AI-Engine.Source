@@ -35,6 +35,9 @@ public sealed class ListDevWorkflowWorkItemsEndpoint : Endpoint<ListDevWorkflowW
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member.
         var status = req.Status is null ? (DevWorkflowWorkItemStatus?)null : Enum.Parse<DevWorkflowWorkItemStatus>(req.Status, ignoreCase: true);
         var items = await _authoring.ListWorkItemsAsync(status, ct);
-        await Send.OkAsync(new ListDevWorkflowWorkItemsResponse { Items = [.. items.Select(DevWorkflowContractMapper.ToSummaryResponse)] }, ct);
+        await Send.OkAsync(new ListDevWorkflowWorkItemsResponse
+        {
+            Items = [.. items.Select(DevWorkflowContractMapper.ToSummaryResponse)]
+        }, ct);
     }
 }

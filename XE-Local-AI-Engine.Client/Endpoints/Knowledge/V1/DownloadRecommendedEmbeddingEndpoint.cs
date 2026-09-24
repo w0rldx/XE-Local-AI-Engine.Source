@@ -23,8 +23,7 @@ public sealed class DownloadRecommendedEmbeddingEndpoint : EndpointWithoutReques
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _modelStore;
 
-    public DownloadRecommendedEmbeddingEndpoint(
-        IGgufDownloadCoordinator downloadCoordinator,
+    public DownloadRecommendedEmbeddingEndpoint(IGgufDownloadCoordinator downloadCoordinator,
         IGgufModelStore modelStore)
     {
         ArgumentNullException.ThrowIfNull(downloadCoordinator);

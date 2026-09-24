@@ -38,8 +38,18 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
         ArgumentOutOfRangeException.ThrowIfNegative(offloadedLayers);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(totalLayers);
 
-        var placement = new LlamaLayerPlacement { ModelName = modelName, Role = role, OffloadedLayers = offloadedLayers, TotalLayers = totalLayers };
-        var observation = new Observation { Placement = placement, Sequence = Interlocked.Increment(ref _sequence) };
+        var placement = new LlamaLayerPlacement
+        {
+            ModelName = modelName,
+            Role = role,
+            OffloadedLayers = offloadedLayers,
+            TotalLayers = totalLayers
+        };
+        var observation = new Observation
+        {
+            Placement = placement,
+            Sequence = Interlocked.Increment(ref _sequence)
+        };
         _observations[new ObservationKey(modelName, role, variant)] = observation;
     }
 

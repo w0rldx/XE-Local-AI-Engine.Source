@@ -41,8 +41,8 @@ public sealed class EjectTranscriptionRuntimeEndpoint : Endpoint<TranscriptionRu
         if (!result.Evicted)
         {
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
-                          "Wait for the running transcription, runtime startup, or runtime mutation to finish before ejecting the transcription runtime.",
-                          result.Activity));
+                "Wait for the running transcription, runtime startup, or runtime mutation to finish before ejecting the transcription runtime.",
+                result.Activity));
             return;
         }
 

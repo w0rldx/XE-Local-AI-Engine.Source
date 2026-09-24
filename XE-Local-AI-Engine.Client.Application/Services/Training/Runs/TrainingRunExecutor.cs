@@ -57,8 +57,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
     private readonly TimeProvider _timeProvider;
     private readonly TrainingRunWorkspace _workspace;
 
-    public TrainingRunExecutor(
-        ITrainingRunStore store,
+    public TrainingRunExecutor(ITrainingRunStore store,
         ITrainingRunEventBuffer events,
         ITrainingOptionDefaultsCalculator defaults,
         ITrainingCapacityGate capacity,
@@ -262,7 +261,10 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 {
                     Phase = parsed.Phase ?? string.Empty
                 };
-                _ = _events.Append(runId, TrainingRunEventKind.Phase, new TrainingRunPayload { Phase = parsed.Phase });
+                _ = _events.Append(runId, TrainingRunEventKind.Phase, new TrainingRunPayload
+                {
+                    Phase = parsed.Phase
+                });
                 break;
             case TrainingStdioEventKind.Progress:
                 state.Progress = state.Progress with
@@ -292,7 +294,10 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 break;
             case TrainingStdioEventKind.Error:
                 state.ErrorMessage = parsed.Message ?? parsed.Category;
-                _ = _events.Append(runId, TrainingRunEventKind.Error, new TrainingRunPayload { Message = state.ErrorMessage });
+                _ = _events.Append(runId, TrainingRunEventKind.Error, new TrainingRunPayload
+                {
+                    Message = state.ErrorMessage
+                });
                 break;
             case TrainingStdioEventKind.Artifact:
             case TrainingStdioEventKind.Heartbeat:
@@ -392,8 +397,16 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
             return;
         }
 
-        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = kind, Path = full }, CancellationToken.None);
-        _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload { Message = kind.ToString() });
+        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput
+        {
+            RunId = runId,
+            Kind = kind,
+            Path = full
+        }, CancellationToken.None);
+        _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload
+        {
+            Message = kind.ToString()
+        });
     }
 
     private async Task FlushAsync(Guid runId, StreamState state, bool force)
@@ -413,11 +426,11 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         }
 
         await _store.UpdateProgressAsync(runId,
-                        Serialize(state.Progress with
-                        {
-                            UpdatedAtUtc = now.ToUnixTimeMilliseconds()
-                        }),
-                        CancellationToken.None);
+            Serialize(state.Progress with
+            {
+                UpdatedAtUtc = now.ToUnixTimeMilliseconds()
+            }),
+            CancellationToken.None);
     }
 
     private async Task CompleteAsync(Guid runId, StreamState state, int exitCode, bool cancelRequested)
@@ -440,13 +453,22 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         var run = await _store.CompleteRunAsync(runId, status, message, CancellationToken.None);
         _ = _events.Append(runId,
             TrainingRunEventKind.State,
-            new TrainingRunPayload { State = run.Status.ToString(), Message = message, RunVersion = run.Version });
+            new TrainingRunPayload
+            {
+                State = run.Status.ToString(),
+                Message = message,
+                RunVersion = run.Version
+            });
     }
 
     private async Task<long> TransitionAsync(Guid runId, long expectedVersion, TrainingRunStatus status, CancellationToken cancellationToken)
     {
         var run = await _store.TransitionAsync(runId, expectedVersion, status, cancellationToken);
-        _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload { State = run.Status.ToString(), RunVersion = run.Version });
+        _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload
+        {
+            State = run.Status.ToString(),
+            RunVersion = run.Version
+        });
         return run.Version;
     }
 

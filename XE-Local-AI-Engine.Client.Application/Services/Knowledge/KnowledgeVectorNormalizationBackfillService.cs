@@ -44,8 +44,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService : BackgroundServ
     private readonly IKnowledgeVectorNormalizationState _normalizationState;
     private readonly ILogger<KnowledgeVectorNormalizationBackfillService> _logger;
 
-    public KnowledgeVectorNormalizationBackfillService(
-        IServiceScopeFactory scopeFactory,
+    public KnowledgeVectorNormalizationBackfillService(IServiceScopeFactory scopeFactory,
         IKnowledgeVectorNormalizationState normalizationState,
         ILogger<KnowledgeVectorNormalizationBackfillService> logger)
     {

@@ -68,7 +68,11 @@ public sealed class AppUpdateChannelPolicyTests
     [Arguments(AppUpdateChannel.Preview)]
     public void ResolveFeeds_ForStableAndPreview_NeverNamesADevelopmentChannel(AppUpdateChannel channel)
     {
-        foreach (var os in new[] { "win", "linux" })
+        foreach (var os in new[]
+                 {
+                     "win",
+                     "linux"
+                 })
         {
             foreach (var feed in AppUpdateChannelPolicy.ResolveFeeds(channel, os))
             {

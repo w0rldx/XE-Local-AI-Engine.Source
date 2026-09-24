@@ -26,6 +26,7 @@ internal sealed class DevelopmentAttemptLiveProgress
     private long _patchByteCount;
     private int _providerRoundCount = 1;
     private int _toolCallCount;
+
     /// <summary>
     ///     Whether the first "model is reasoning" notice has gone out.
     /// </summary>

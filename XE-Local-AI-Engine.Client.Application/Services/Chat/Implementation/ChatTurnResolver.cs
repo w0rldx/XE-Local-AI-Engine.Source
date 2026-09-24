@@ -23,8 +23,7 @@ public sealed class ChatTurnResolver
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly ILogger<ChatTurnResolver> _logger;
 
-    public ChatTurnResolver(
-        IAgentDefinitionResolver agentDefinitionResolver,
+    public ChatTurnResolver(IAgentDefinitionResolver agentDefinitionResolver,
         IAgentDefinitionStore agentDefinitionStore,
         IOrchestrationResolver orchestrationResolver,
         IModelCapabilityResolver modelCapabilityResolver,
@@ -90,7 +89,7 @@ public sealed class ChatTurnResolver
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
         {
             resolved = await _agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
-                                                        cancellationToken);
+                cancellationToken);
         }
 
         var agentMs = Stopwatch.GetElapsedTime(agentStart).TotalMilliseconds;

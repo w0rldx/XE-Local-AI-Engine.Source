@@ -102,8 +102,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     /// <summary>The ceiling the chat sampling UI already enforces.</summary>
     public const double MaxAnswerVarianceTemperature = 2d;
 
-    public BenchmarkRunFreezeService(
-        IBenchmarkStore benchmarkStore,
+    public BenchmarkRunFreezeService(IBenchmarkStore benchmarkStore,
         IAgentDefinitionStore agentDefinitions,
         IAgentDefinitionResolver agentResolver,
         IGgufModelCapabilityResolver modelCapabilities,
@@ -292,7 +291,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         // could straddle a runtime swap or select a variant disagreeing with the manifest whose digest is recorded.
         var (binaryCapabilities, variant) = await freezeScope.InspectAsync(_launchResolver, cancellationToken);
         var primaryLaunch = await _launchResolver
-                                  .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken);
+            .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken);
         // Frozen off the capabilities read ABOVE, never re-resolved at execution: a model swap or re-detection must not change what a frozen run replays. The conjunction with
         // SupportsThinking is load-bearing — GgufModelCapabilities defaults ReasoningBudgetEnforceable to true. See docs/wiki/20-benchmarks.md ("Freeze — what a launch produces").
         var reasoningBudgetEnforceable = capabilities.SupportsThinking && capabilities.ReasoningBudgetEnforceable;
@@ -308,19 +307,19 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         {
             var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
             var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
-                                                   primaryModelName,
-                                                   itemCoreTask,
-                                                   capabilities.SupportsTools,
-                                                   honorModelProfile: false,
-                                                   activeModelIsCloud: false,
-                                                   cancellationToken)
+                               primaryModelName,
+                               itemCoreTask,
+                               capabilities.SupportsTools,
+                               honorModelProfile: false,
+                               activeModelIsCloud: false,
+                               cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
             var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
-                                                       eligible,
-                                                       primaryModelName,
-                                                       judgeModelName: null,
-                                                       cancellationToken);
+                eligible,
+                primaryModelName,
+                judgeModelName: null,
+                cancellationToken);
             frozenItems.Add(new FrozenTaskItem
             {
                 Item = item,
@@ -412,7 +411,12 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                            TaskItemSetHash = project.TaskItemSetHash
                        }))
                        .ToArray();
-        return new BenchmarkFrozenRunPlan { ProjectId = project.Id, ExpectedProjectVersion = expectedProjectVersion, Commands = commands };
+        return new BenchmarkFrozenRunPlan
+        {
+            ProjectId = project.Id,
+            ExpectedProjectVersion = expectedProjectVersion,
+            Commands = commands
+        };
     }
 
     /// <summary>
@@ -518,8 +522,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         private readonly string _primaryModelName;
         private readonly string? _judgeModelName;
 
-        public FreezeCommitGuard(
-            IBenchmarkFreezeDependencyService dependencies,
+        public FreezeCommitGuard(IBenchmarkFreezeDependencyService dependencies,
             BenchmarkFreezeDependencySetV1 expected,
             Guid agentDefinitionId,
             ResolvedAgentRuntime runtime,

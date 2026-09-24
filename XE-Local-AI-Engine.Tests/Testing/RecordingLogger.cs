@@ -41,7 +41,12 @@ internal sealed class RecordingLogger<T> : ILogger<T>
         Func<TState, Exception?, string> formatter)
     {
         ArgumentNullException.ThrowIfNull(formatter);
-        var entry = new Entry { Level = logLevel, Message = formatter(state, exception), Exception = exception };
+        var entry = new Entry
+        {
+            Level = logLevel,
+            Message = formatter(state, exception),
+            Exception = exception
+        };
         lock (_gate)
         {
             _entries.Add(entry);

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -11,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The run list against real run directories: what it reads out of a well-formed run, what it does with a
 ///     malformed or oversized one, and what it refuses to carry off disk.
 /// </summary>
-[Category(TestCategories.Integration)]
+[TUnit.Core.Category(TestCategories.Integration)]
 public sealed class AgentHomeRunListServiceTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);
@@ -183,7 +185,11 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         {
             for (var index = 0; index < 8; index++)
             {
-                await writer.WriteLineAsync(JsonSerializer.Serialize(new { eventName = "noise", detail = $"{Marker}-{padding}" }));
+                await writer.WriteLineAsync(JsonSerializer.Serialize(new
+                {
+                    eventName = "noise",
+                    detail = $"{Marker}-{padding}"
+                }));
             }
         }
 
@@ -223,9 +229,24 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         Directory.CreateDirectory(Path.Combine(run, "patches"));
         await File.WriteAllTextAsync(Path.Combine(run, "patches", "changes.patch"), $"diff --git a/{Marker} b/{Marker}\n+{Marker}\n");
         await File.WriteAllTextAsync(Path.Combine(run, "patches", "changed-files.json"),
-            JsonSerializer.Serialize(new[] { new { alias = Marker, relativePath = $"src/{Marker}.cs", changeType = "modified" } }));
+            JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    alias = Marker,
+                    relativePath = $"src/{Marker}.cs",
+                    changeType = "modified"
+                }
+            }));
         await File.WriteAllTextAsync(Path.Combine(run, "logs", "commands.jsonl"),
-            JsonSerializer.Serialize(new { executable = "git", arguments = new[] { Marker } }) + "\n");
+            JsonSerializer.Serialize(new
+            {
+                executable = "git",
+                arguments = new[]
+                {
+                    Marker
+                }
+            }) + "\n");
 
         var item = (await Service().ListAsync(limit: 10, offset: 0)).Items[0];
         var serialized = Serialize(item);
@@ -250,7 +271,11 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         Directory.CreateDirectory(outside);
         var target = Path.Combine(outside, "planted.jsonl");
         await File.WriteAllTextAsync(target,
-            JsonSerializer.Serialize(new { eventName = "run_completed", detail = $"status=Completed;note={Marker}" }) + "\n");
+            JsonSerializer.Serialize(new
+            {
+                eventName = "run_completed",
+                detail = $"status=Completed;note={Marker}"
+            }) + "\n");
 
         var run = SeedRun(Now.AddDays(-1));
         File.Delete(EventsPath(run));
@@ -465,7 +490,11 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
     }
 
     private AgentHomeRunListService Service() =>
-        new(Options.Create(new AgentHomeOptions { Enabled = true, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") }),
+        new(Options.Create(new AgentHomeOptions
+            {
+                Enabled = true,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            }),
             new FakeNodeDataDirectory(_dataRoot.Path));
 
     private static string Serialize(AgentHomeRunSummary summary) =>
@@ -503,9 +532,12 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
     {
         try
         {
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("mkfifo")
+            using var process = Process.Start(new ProcessStartInfo("mkfifo")
             {
-                ArgumentList = { path },
+                ArgumentList =
+                {
+                    path
+                },
                 RedirectStandardError = true
             });
             if (process is null)
@@ -516,14 +548,18 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
             process.WaitForExit(milliseconds: 10000);
             return process.HasExited && process.ExitCode == 0 && File.Exists(path);
         }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or PlatformNotSupportedException)
         {
             return false;
         }
     }
 
     private static void WriteEvent(string runDirectory, string eventName, string? detail) =>
-        File.AppendAllText(EventsPath(runDirectory), JsonSerializer.Serialize(new { eventName, detail }) + "\n");
+        File.AppendAllText(EventsPath(runDirectory), JsonSerializer.Serialize(new
+        {
+            eventName,
+            detail
+        }) + "\n");
 
     private static void WritePatch(string runDirectory, int changedFiles)
     {
@@ -532,6 +568,10 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         File.WriteAllText(Path.Combine(patches, "changes.patch"), "diff --git a/x b/x\n");
         File.WriteAllText(Path.Combine(patches, "changed-files.json"),
             JsonSerializer.Serialize(Enumerable.Range(start: 0, changedFiles)
-                                               .Select(index => new { alias = "repo-01", relativePath = $"src/File{index}.cs" })));
+                                               .Select(index => new
+                                               {
+                                                   alias = "repo-01",
+                                                   relativePath = $"src/File{index}.cs"
+                                               })));
     }
 }

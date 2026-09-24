@@ -82,7 +82,15 @@ public sealed class NodeAgentMcpTools
     public async Task<IReadOnlyList<AgentSummary>> ListAgentsAsync(CancellationToken cancellationToken)
     {
         var definitions = await _agentDefinitionStore.ListAsync(cancellationToken);
-        return [.. definitions.Select(static definition => new AgentSummary { Id = definition.Id.ToString(), Name = definition.Name, Description = definition.Description })];
+        return
+        [
+            .. definitions.Select(static definition => new AgentSummary
+            {
+                Id = definition.Id.ToString(),
+                Name = definition.Name,
+                Description = definition.Description
+            })
+        ];
     }
 
     [McpServerTool(Name = "list_models")]
@@ -112,9 +120,20 @@ public sealed class NodeAgentMcpTools
     {
         var references = await _selectedFolderResolver.ListReferencesAsync(cancellationToken);
         var bounded = references.Take(_runOptions.MaxListLimit)
-                                .Select(static reference => new McpWorkspaceSummary { Id = reference.Id, Alias = reference.Alias, Mode = "read-only" })
+                                .Select(static reference => new McpWorkspaceSummary
+                                {
+                                    Id = reference.Id,
+                                    Alias = reference.Alias,
+                                    Mode = "read-only"
+                                })
                                 .ToArray();
-        return new McpWorkspaceListResponse { Status = "ok", Workspaces = bounded, Count = references.Count, Truncated = references.Count > bounded.Length };
+        return new McpWorkspaceListResponse
+        {
+            Status = "ok",
+            Workspaces = bounded,
+            Count = references.Count,
+            Truncated = references.Count > bounded.Length
+        };
     }
 
     [McpServerTool(Name = "start_agent_run")]
@@ -159,10 +178,10 @@ public sealed class NodeAgentMcpTools
         }
 
         var result = await _runCoordinator.StartAsync(new McpAgentRunStartRequest
-        {
-            RequestId = requestId,
-            Task = task,
-            Binding = new McpExecutionBindingRequest
+            {
+                RequestId = requestId,
+                Task = task,
+                Binding = new McpExecutionBindingRequest
                 {
                     AgentKey = NullIfWhiteSpace(agent),
                     ModelId = NullIfWhiteSpace(model),
@@ -171,8 +190,8 @@ public sealed class NodeAgentMcpTools
                     InboundContext = inboundContext,
                     ExecutionRequestId = requestId
                 },
-            WorkspaceId = workspaceId
-        },
+                WorkspaceId = workspaceId
+            },
             cancellationToken);
 
         return new McpAgentRunStartResponse
@@ -194,13 +213,25 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
-            return new McpAgentRunGetResponse { Status = "invalid_request", Run = null, FailureCode = InvalidRequestCode, DisplayMessage = "Cannot get: provide a valid request UUID." };
+            return new McpAgentRunGetResponse
+            {
+                Status = "invalid_request",
+                Run = null,
+                FailureCode = InvalidRequestCode,
+                DisplayMessage = "Cannot get: provide a valid request UUID."
+            };
         }
 
         var run = await _runCoordinator.GetAsync(requestId, cancellationToken);
         if (run is null)
         {
-            return new McpAgentRunGetResponse { Status = "not_found", Run = null, FailureCode = RunNotFoundCode, DisplayMessage = "Run not found." };
+            return new McpAgentRunGetResponse
+            {
+                Status = "not_found",
+                Run = null,
+                FailureCode = RunNotFoundCode,
+                DisplayMessage = "Run not found."
+            };
         }
 
         var result = run.PayloadExpired ? null : run.Result;
@@ -220,7 +251,12 @@ public sealed class NodeAgentMcpTools
         return new McpAgentRunGetResponse
         {
             Status = responseStatus,
-            Run = new McpAgentRunDetail { Metadata = McpAgentToolResponseMapper.ToSummary(run), Result = result, ResultTruncated = resultTruncated },
+            Run = new McpAgentRunDetail
+            {
+                Metadata = McpAgentToolResponseMapper.ToSummary(run),
+                Result = result,
+                ResultTruncated = resultTruncated
+            },
             FailureCode = failureCode,
             DisplayMessage = displayMessage
         };
@@ -236,7 +272,13 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
-            return new McpAgentRunCancelResponse { Status = "not_found", Run = null, FailureCode = InvalidRequestCode, DisplayMessage = "Cannot cancel: provide a valid request UUID." };
+            return new McpAgentRunCancelResponse
+            {
+                Status = "not_found",
+                Run = null,
+                FailureCode = InvalidRequestCode,
+                DisplayMessage = "Cannot cancel: provide a valid request UUID."
+            };
         }
 
         var result = await _runCoordinator.CancelAsync(requestId, cancellationToken);
@@ -412,7 +454,13 @@ public sealed class NodeAgentMcpTools
     }
 
     private static McpAgentRunStartResponse RejectedStart(string failureCode, string displayMessage) =>
-        new() { Status = "rejected", Run = null, FailureCode = failureCode, DisplayMessage = displayMessage };
+        new()
+        {
+            Status = "rejected",
+            Run = null,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage
+        };
 
     private static string MapStartStatus(McpAgentRunStartKind kind) =>
         kind switch

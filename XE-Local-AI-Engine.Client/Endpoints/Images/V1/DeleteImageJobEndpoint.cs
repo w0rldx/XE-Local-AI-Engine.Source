@@ -46,10 +46,10 @@ public sealed class DeleteImageJobEndpoint : Endpoint<ImageJobRouteRequest>
                 // The outcome stays machine-readable as an `outcome` extension member so the SPA can tell "still
                 // running, cancel it first" from any other conflict without matching on the message.
                 await Send.ConflictProblemAsync("The job is still queued or generating. Cancel it, then delete it.",
-                              new Dictionary<string, object?>(StringComparer.Ordinal)
-                              {
-                                  ["outcome"] = outcome.ToString()
-                              });
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = outcome.ToString()
+                    });
                 return;
 
             default:

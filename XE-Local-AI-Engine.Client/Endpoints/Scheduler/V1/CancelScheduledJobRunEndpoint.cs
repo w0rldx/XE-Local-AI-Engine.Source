@@ -47,10 +47,10 @@ public sealed class CancelScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRout
                 // The outcome stays machine-readable as an `outcome` extension member so a client can branch on it
                 // exactly as it did when the 409 carried a ScheduledJobRunCancelResponse body.
                 await Send.ConflictProblemAsync("The run already reached a terminal state and cannot be cancelled.",
-                              new Dictionary<string, object?>(StringComparer.Ordinal)
-                              {
-                                  ["outcome"] = outcome.ToString()
-                              });
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = outcome.ToString()
+                    });
                 return;
 
             default:

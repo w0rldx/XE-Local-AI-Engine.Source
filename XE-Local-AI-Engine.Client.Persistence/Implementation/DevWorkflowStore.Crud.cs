@@ -122,17 +122,17 @@ public sealed partial class DevWorkflowStore
                               {
                                   WorkItem = entity,
                                   LatestRun = _dbContext.DevWorkflowRuns.Where(run => run.WorkItemId == entity.Id)
-                                            .OrderByDescending(run => run.CreatedAtUtc)
-                                            .ThenByDescending(run => run.Id)
-                                            .Select(run => new LatestRunProjection
-                                            {
-                                                RunId = run.Id,
-                                                Status = run.Status,
-                                                DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
-                                                          .Select(definition => definition.Name)
-                                                          .FirstOrDefault()
-                                            })
-                                            .FirstOrDefault()
+                                                        .OrderByDescending(run => run.CreatedAtUtc)
+                                                        .ThenByDescending(run => run.Id)
+                                                        .Select(run => new LatestRunProjection
+                                                        {
+                                                            RunId = run.Id,
+                                                            Status = run.Status,
+                                                            DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
+                                                                                       .Select(definition => definition.Name)
+                                                                                       .FirstOrDefault()
+                                                        })
+                                                        .FirstOrDefault()
                               })
                               .ToListAsync(cancellationToken);
 
@@ -196,7 +196,12 @@ public sealed partial class DevWorkflowStore
             await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             _dbContext.ChangeTracker.Clear();
-            return new DevWorkflowWorkItemDeletion { RemovedRows = removed, RunIds = runIds, WorkSessionIds = sessionIds };
+            return new DevWorkflowWorkItemDeletion
+            {
+                RemovedRows = removed,
+                RunIds = runIds,
+                WorkSessionIds = sessionIds
+            };
         }
         catch (DbUpdateException exception)
         {
@@ -485,8 +490,8 @@ public sealed partial class DevWorkflowStore
                                   WorkItemId = entity.WorkItemId,
                                   DefinitionId = entity.DefinitionId,
                                   DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == entity.DefinitionId)
-                                            .Select(definition => definition.Name)
-                                            .FirstOrDefault(),
+                                                             .Select(definition => definition.Name)
+                                                             .FirstOrDefault(),
                                   Status = entity.Status,
                                   FailureClass = entity.FailureClass,
                                   StartedAtUtc = entity.StartedAtUtc,
@@ -715,8 +720,8 @@ public sealed partial class DevWorkflowStore
                                          RunId = run.Id,
                                          Status = run.Status,
                                          DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
-                                                   .Select(definition => definition.Name)
-                                                   .FirstOrDefault()
+                                                                    .Select(definition => definition.Name)
+                                                                    .FirstOrDefault()
                                      })
                                      .FirstOrDefaultAsync(cancellationToken);
         if (latest is null)
@@ -745,7 +750,12 @@ public sealed partial class DevWorkflowStore
         var rows = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                    .Where(entity => runIds.Contains(entity.RunId))
                                    .OrderBy(entity => entity.Sequence)
-                                   .Select(entity => new NodeCounterRow { RunId = entity.RunId, NodeRunId = entity.Id, Status = entity.Status })
+                                   .Select(entity => new NodeCounterRow
+                                   {
+                                       RunId = entity.RunId,
+                                       NodeRunId = entity.Id,
+                                       Status = entity.Status
+                                   })
                                    .ToListAsync(cancellationToken);
 
         return rows.GroupBy(row => row.RunId)

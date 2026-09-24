@@ -71,7 +71,7 @@ public sealed class DevWorkflowRouteRetryTests
         // The second reset names a node run this run has none of, so the cascade throws AFTER the first row was
         // written into the transaction and BEFORE the rest were.
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() =>
-                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
+            store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
 
         var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRuns["verify"].Status, "The first reset must roll back with the rest: a lone Pending row is re-dispatched as if fresh.");
@@ -126,7 +126,7 @@ public sealed class DevWorkflowRouteRetryTests
         var seed = await SeedRoundOneAsync(store);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() =>
-                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
+            store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
 
         // The SAME store instance, as the retry policy uses it: one scoped store, asked twice inside one tick.
         _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId]));
@@ -189,16 +189,17 @@ public sealed class DevWorkflowRouteRetryTests
         new()
         {
             Route = new AppendDevWorkflowEventCommand
-        {
-            RunId = runId,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            EventType = DevWorkflowEventTypes.NodeRetryRouted,
-            NodeRunId = FullValidateId,
-            OperationId = operationId,
-            Outcome = "failed",
-            DetailJson = """{"from":"fullvalidate","to":"verify"}"""
-        },
-            Resets = [
+            {
+                RunId = runId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                NodeRunId = FullValidateId,
+                OperationId = operationId,
+                Outcome = "failed",
+                DetailJson = """{"from":"fullvalidate","to":"verify"}"""
+            },
+            Resets =
+            [
                 .. resetIds.Select(nodeRunId => new TransitionDevWorkflowNodeRunCommand
                 {
                     RunId = runId,

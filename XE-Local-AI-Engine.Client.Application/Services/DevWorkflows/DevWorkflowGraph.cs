@@ -503,7 +503,7 @@ internal sealed class DevWorkflowGraph
             ArtifactKind = RequiredEnum<DevWorkflowArtifactKind>(materialization, "artifactKind", $"the materialization on node '{nodeKey}'"),
             JoinNodeKey = RequiredString(materialization, "joinNodeKey", $"the materialization on node '{nodeKey}'"),
             MaxChildren = OptionalPositiveInt(materialization, "maxChildren", nodeKey)
-            ?? throw new DevWorkflowValidationException($"The materialization on node '{nodeKey}' needs a positive 'maxChildren'.")
+                          ?? throw new DevWorkflowValidationException($"The materialization on node '{nodeKey}' needs a positive 'maxChildren'.")
         };
     }
 

@@ -30,8 +30,7 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
     private readonly string _embeddingModel;
     private readonly long _maxUploadBytes;
 
-    public UploadKnowledgeDocumentEndpoint(
-        IKnowledgeDocumentBlobStore blobStore,
+    public UploadKnowledgeDocumentEndpoint(IKnowledgeDocumentBlobStore blobStore,
         IKnowledgeIngestionAdmissionService ingestionAdmission,
         IDocumentTextExtractor extractor,
         IOptions<KnowledgeBaseOptions> knowledgeBaseOptions,

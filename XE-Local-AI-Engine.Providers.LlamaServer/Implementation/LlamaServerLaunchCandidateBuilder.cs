@@ -8,8 +8,7 @@ internal sealed class LlamaServerLaunchCandidateBuilder
     private readonly IProcessContextAllocationResolver _allocationResolver;
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
 
-    public LlamaServerLaunchCandidateBuilder(
-        IProcessContextAllocationResolver allocationResolver,
+    public LlamaServerLaunchCandidateBuilder(IProcessContextAllocationResolver allocationResolver,
         ILlamaServerLaunchPolicy launchPolicy)
     {
         _allocationResolver = allocationResolver;
@@ -32,7 +31,15 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             return new LlamaServerLaunchPlanSet
             {
                 Allocation = null,
-                Candidates = [new LlamaServerLaunchCandidate { Resolved = resolved, Plan = cpuReplayPlan, AttemptKind = LlamaServerLoadAttemptKind.Primary }]
+                Candidates =
+                [
+                    new LlamaServerLaunchCandidate
+                    {
+                        Resolved = resolved,
+                        Plan = cpuReplayPlan,
+                        AttemptKind = LlamaServerLoadAttemptKind.Primary
+                    }
+                ]
             };
         }
 
@@ -66,10 +73,21 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             return new LlamaServerLaunchPlanSet
             {
                 Allocation = allocation,
-                Candidates = [
-                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary },
-                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan.WithoutKvCacheQuantization(), AttemptKind = LlamaServerLoadAttemptKind.SafeRetry }
-            ]
+                Candidates =
+                [
+                    new LlamaServerLaunchCandidate
+                    {
+                        Resolved = resolved,
+                        Plan = plan,
+                        AttemptKind = LlamaServerLoadAttemptKind.Primary
+                    },
+                    new LlamaServerLaunchCandidate
+                    {
+                        Resolved = resolved,
+                        Plan = plan.WithoutKvCacheQuantization(),
+                        AttemptKind = LlamaServerLoadAttemptKind.SafeRetry
+                    }
+                ]
             };
         }
 
@@ -78,17 +96,36 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             return new LlamaServerLaunchPlanSet
             {
                 Allocation = allocation,
-                Candidates = [
-                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary },
-                new LlamaServerLaunchCandidate { Resolved = resolved.WithoutKvCacheQuantization(), Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.SafeRetry }
-            ]
+                Candidates =
+                [
+                    new LlamaServerLaunchCandidate
+                    {
+                        Resolved = resolved,
+                        Plan = plan,
+                        AttemptKind = LlamaServerLoadAttemptKind.Primary
+                    },
+                    new LlamaServerLaunchCandidate
+                    {
+                        Resolved = resolved.WithoutKvCacheQuantization(),
+                        Plan = plan,
+                        AttemptKind = LlamaServerLoadAttemptKind.SafeRetry
+                    }
+                ]
             };
         }
 
         return new LlamaServerLaunchPlanSet
         {
             Allocation = allocation,
-            Candidates = [new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary }]
+            Candidates =
+            [
+                new LlamaServerLaunchCandidate
+                {
+                    Resolved = resolved,
+                    Plan = plan,
+                    AttemptKind = LlamaServerLoadAttemptKind.Primary
+                }
+            ]
         };
     }
 }

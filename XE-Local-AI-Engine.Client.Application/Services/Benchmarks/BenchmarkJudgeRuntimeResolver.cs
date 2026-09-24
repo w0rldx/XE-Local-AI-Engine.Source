@@ -73,8 +73,7 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions;
 
-    public BenchmarkPhaseLaunchResolver(
-        IInferenceProfileResolver inferenceProfiles,
+    public BenchmarkPhaseLaunchResolver(IInferenceProfileResolver inferenceProfiles,
         IGpuVariantSelector variantSelector,
         ILlamaServerLaunchCapabilityInspector launchCapabilities,
         ILlamaServerLaunchFallbackStore launchFallbackStore,
@@ -272,8 +271,7 @@ public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolv
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IBenchmarkPhaseLaunchResolver _launchResolver;
 
-    public BenchmarkJudgeRuntimeResolver(
-        IBenchmarkInstalledModelLeaseProvider installedModels,
+    public BenchmarkJudgeRuntimeResolver(IBenchmarkInstalledModelLeaseProvider installedModels,
         IBenchmarkPhaseLaunchResolver launchResolver)
     {
         ArgumentNullException.ThrowIfNull(installedModels);
@@ -298,11 +296,11 @@ public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolv
 
         // The judge is scoring, not being measured: it never takes a run's KV pick, only Auto.
         var launch = await _launchResolver.ResolveAsync(model.ModelName,
-                                              policy.RequestedContextTokens,
-                                              requestedKvCacheType: null,
-                                              capabilities,
-                                              variant,
-                                              cancellationToken);
+            policy.RequestedContextTokens,
+            requestedKvCacheType: null,
+            capabilities,
+            variant,
+            cancellationToken);
         return new BenchmarkJudgeRuntimeResolution
         {
             Runtime = new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,

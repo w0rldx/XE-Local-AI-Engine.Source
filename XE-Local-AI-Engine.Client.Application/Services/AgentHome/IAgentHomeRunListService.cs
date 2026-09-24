@@ -84,7 +84,14 @@ public static class AgentHomeRunOutcomes
     ///     set maps to <see cref="Unknown" />, which is what keeps a model-influenced log off the wire.
     /// </summary>
     public static readonly IReadOnlySet<string> CompletedStatuses =
-        new HashSet<string>(StringComparer.Ordinal) { "NotRun", "Completed", "ToolCallBudgetExceeded", "TimeBudgetExceeded", "Failed" };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "NotRun",
+            "Completed",
+            "ToolCallBudgetExceeded",
+            "TimeBudgetExceeded",
+            "Failed"
+        };
 }
 
 /// <summary>Whether a run's exported patch was landed on the host.</summary>

@@ -88,7 +88,13 @@ public sealed class WhisperCppBinaryManagerTests
             overrideOptions: null,
             installedRuntimeStore: null,
             managedSourceSignal: null,
-            new WhisperAssetPin { AssetName = pin.AssetName, Sha256 = handler.Digest, ServerRelativePath = pin.ServerRelativePath, ArchiveKind = WhisperArchiveKind.TarGz });
+            new WhisperAssetPin
+            {
+                AssetName = pin.AssetName,
+                Sha256 = handler.Digest,
+                ServerRelativePath = pin.ServerRelativePath,
+                ArchiveKind = WhisperArchiveKind.TarGz
+            });
 
         var binary = await manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None);
 

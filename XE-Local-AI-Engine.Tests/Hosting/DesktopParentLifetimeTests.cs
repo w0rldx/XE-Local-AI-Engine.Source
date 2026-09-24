@@ -216,7 +216,8 @@ public sealed class DesktopParentLifetimeTests
         AssertEx.False(terminated);
     }
 
-    private static string NewPipeName() => $"xe-desktop-{Guid.NewGuid():N}";
+    private static string NewPipeName() =>
+        $"xe-desktop-{Guid.NewGuid():N}";
 
     private static NamedPipeServerStream CreateServer(string name) =>
         new(name, PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);

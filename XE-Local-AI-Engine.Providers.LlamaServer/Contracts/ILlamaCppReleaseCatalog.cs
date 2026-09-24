@@ -45,31 +45,61 @@ public sealed class LlamaCppReleaseResult
     /// <summary>A successful tag-only resolution (no asset requested).</summary>
     public static LlamaCppReleaseResult ForTag(string tag)
     {
-        return new LlamaCppReleaseResult { Tag = tag, Asset = null, IsOffline = false, IsRateLimited = false };
+        return new LlamaCppReleaseResult
+        {
+            Tag = tag,
+            Asset = null,
+            IsOffline = false,
+            IsRateLimited = false
+        };
     }
 
     /// <summary>A successful tag + asset resolution.</summary>
     public static LlamaCppReleaseResult ForAsset(string tag, LlamaCppReleaseAsset asset)
     {
-        return new LlamaCppReleaseResult { Tag = tag, Asset = asset, IsOffline = false, IsRateLimited = false };
+        return new LlamaCppReleaseResult
+        {
+            Tag = tag,
+            Asset = asset,
+            IsOffline = false,
+            IsRateLimited = false
+        };
     }
 
     /// <summary>The live API was unreachable — fall through to the next acquisition tier.</summary>
     public static LlamaCppReleaseResult Offline()
     {
-        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = true, IsRateLimited = false };
+        return new LlamaCppReleaseResult
+        {
+            Tag = null,
+            Asset = null,
+            IsOffline = true,
+            IsRateLimited = false
+        };
     }
 
     /// <summary>The live API rate-limited the request — back off, fall through to the next tier.</summary>
     public static LlamaCppReleaseResult RateLimited()
     {
-        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = false, IsRateLimited = true };
+        return new LlamaCppReleaseResult
+        {
+            Tag = null,
+            Asset = null,
+            IsOffline = false,
+            IsRateLimited = true
+        };
     }
 
     /// <summary>The request succeeded but no matching data was found (no such tag/asset) — fall through.</summary>
     public static LlamaCppReleaseResult NotFound()
     {
-        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = false, IsRateLimited = false };
+        return new LlamaCppReleaseResult
+        {
+            Tag = null,
+            Asset = null,
+            IsOffline = false,
+            IsRateLimited = false
+        };
     }
 
     /// <summary>True when this result carries no usable live payload (offline, rate-limited, or empty).</summary>

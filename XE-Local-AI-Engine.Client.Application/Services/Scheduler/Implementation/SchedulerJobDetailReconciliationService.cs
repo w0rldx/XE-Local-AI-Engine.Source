@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using System.Reflection;
 using Quartz;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Startup self-heal for persisted Quartz job details whose stored <c>JOB_CLASS_NAME</c> no longer resolves.

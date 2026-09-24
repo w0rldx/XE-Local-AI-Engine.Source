@@ -194,8 +194,18 @@ public sealed class FakeDockerServerTests
     {
         await using var docker = await FakeDockerServer.StartAsync();
 
-        docker.State.Record(new FakeDockerRequest { Method = "POST", Path = "/containers/a/stop", Query = Query("t", "30") });
-        docker.State.Record(new FakeDockerRequest { Method = "POST", Path = "/containers/b/stop", Query = Query("t", "5") });
+        docker.State.Record(new FakeDockerRequest
+        {
+            Method = "POST",
+            Path = "/containers/a/stop",
+            Query = Query("t", "30")
+        });
+        docker.State.Record(new FakeDockerRequest
+        {
+            Method = "POST",
+            Path = "/containers/b/stop",
+            Query = Query("t", "5")
+        });
 
         AssertEx.Equal("5", docker.State.LastQueryValue("/stop", "t"));
         AssertEx.Null(docker.State.LastQueryValue("/start", "t"));

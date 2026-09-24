@@ -70,7 +70,14 @@ public static class TrainingLifecycleE2ETestDoubles
         private static readonly TrainingRunDefaults Value = new()
         {
             Options = new TrainingRunOptionsV1(),
-            Estimate = new TrainingFootprintEstimate { GpuBytes = 1, RamBytes = 1, ParameterCount = 1, TrainableParameterCount = 1, Experimental = false },
+            Estimate = new TrainingFootprintEstimate
+            {
+                GpuBytes = 1,
+                RamBytes = 1,
+                ParameterCount = 1,
+                TrainableParameterCount = 1,
+                Experimental = false
+            },
             AvailableVramBytes = 1,
             VramKnown = true,
             Fits = true,
@@ -94,7 +101,12 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Linker : IInstalledBaseModelLinker
     {
-        private static readonly InstalledBaseModelLink Link = new() { ModelName = InstalledBaseModel, RepoId = "e2e/base", ContentFingerprint = InstalledBaseFingerprint };
+        private static readonly InstalledBaseModelLink Link = new()
+        {
+            ModelName = InstalledBaseModel,
+            RepoId = "e2e/base",
+            ContentFingerprint = InstalledBaseFingerprint
+        };
 
         public Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string repo, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<InstalledBaseModelLink>>([Link]);
@@ -108,10 +120,24 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class Runtime : ITrainingRuntimeService
     {
         public Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct) =>
-            Task.FromResult(new TrainingRuntimeInstallResult { Outcome = TrainingRuntimeInstallOutcome.AlreadyRunning });
+            Task.FromResult(new TrainingRuntimeInstallResult
+            {
+                Outcome = TrainingRuntimeInstallOutcome.AlreadyRunning
+            });
 
         public TrainingRuntimeStatus GetStatus() =>
-            new() { Phase = TrainingRuntimePhase.Ready, IsRunning = false, Terminal = true, LogLines = [], LogStartSequence = 0, SanitizedError = null, Installed = null, StartedAtUtc = null, CompletedAtUtc = null };
+            new()
+            {
+                Phase = TrainingRuntimePhase.Ready,
+                IsRunning = false,
+                Terminal = true,
+                LogLines = [],
+                LogStartSequence = 0,
+                SanitizedError = null,
+                Installed = null,
+                StartedAtUtc = null,
+                CompletedAtUtc = null
+            };
 
         public Task<bool> RemoveAsync(CancellationToken ct) =>
             Task.FromResult(false);
@@ -126,7 +152,12 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class Capacity : ITrainingCapacityGate
     {
         public Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate, CancellationToken ct = default) =>
-            Task.FromResult(new TrainingCapacityReservation { Granted = true, Reason = null, Handle = null });
+            Task.FromResult(new TrainingCapacityReservation
+            {
+                Granted = true,
+                Reason = null,
+                Handle = null
+            });
     }
 
     public sealed class ProcessSpawner : ITrainingProcessSpawner
@@ -183,7 +214,14 @@ public static class TrainingLifecycleE2ETestDoubles
                 _lines = lines;
             }
 
-            public TrainingLaunchReceipt Receipt { get; } = new() { Pid = 4242, Pgid = 4242, ExecutablePath = "/e2e/python", StartTicks = 1, RunToken = "e2e-token" };
+            public TrainingLaunchReceipt Receipt { get; } = new()
+            {
+                Pid = 4242,
+                Pgid = 4242,
+                ExecutablePath = "/e2e/python",
+                StartTicks = 1,
+                RunToken = "e2e-token"
+            };
 
             public async IAsyncEnumerable<string> ReadOutputAsync([EnumeratorCancellation] CancellationToken ct)
             {
@@ -207,7 +245,13 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class ConvertScripts : IConvertScriptProvisioner
     {
-        private static readonly ConvertScriptPaths Paths = new() { HfToGgufScriptPath = "/e2e/convert_hf_to_gguf.py", LoraToGgufScriptPath = "/e2e/convert_lora_to_gguf.py", GgufPyDirectory = "/e2e/gguf-py", SourceCommit = "e2e" };
+        private static readonly ConvertScriptPaths Paths = new()
+        {
+            HfToGgufScriptPath = "/e2e/convert_hf_to_gguf.py",
+            LoraToGgufScriptPath = "/e2e/convert_lora_to_gguf.py",
+            GgufPyDirectory = "/e2e/gguf-py",
+            SourceCommit = "e2e"
+        };
 
         public ConvertScriptPaths TryResolve() =>
             Paths;
@@ -230,14 +274,26 @@ public static class TrainingLifecycleE2ETestDoubles
         }
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
-            Task.FromResult(new LlamaBinary { ServerExecutablePath = _server, Version = "e2e", Variant = GpuVariant.Cpu, IsPinnedFallback = true });
+            Task.FromResult(new LlamaBinary
+            {
+                ServerExecutablePath = _server,
+                Version = "e2e",
+                Variant = GpuVariant.Cpu,
+                IsPinnedFallback = true
+            });
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, ILlamaServerRuntimeMutationLease lease, CancellationToken ct) =>
             EnsureBinaryAsync(variant, ct);
 
         // The fixture writes the server file in its constructor, so it is genuinely already installed.
         public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
-            Task.FromResult<LlamaBinary?>(new LlamaBinary { ServerExecutablePath = _server, Version = "e2e", Variant = GpuVariant.Cpu, IsPinnedFallback = true });
+            Task.FromResult<LlamaBinary?>(new LlamaBinary
+            {
+                ServerExecutablePath = _server,
+                Version = "e2e",
+                Variant = GpuVariant.Cpu,
+                IsPinnedFallback = true
+            });
 
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digest, long size, GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
@@ -282,7 +338,11 @@ public static class TrainingLifecycleE2ETestDoubles
                 throw new InvalidOperationException("Smoke was invoked without staged bytes.");
             }
 
-            return body(new TransientLlamaServerSession { BaseAddress = new Uri("http://127.0.0.1:1/v1"), ModelId = Path.GetFileName(request.ModelFilePath) }, ct);
+            return body(new TransientLlamaServerSession
+            {
+                BaseAddress = new Uri("http://127.0.0.1:1/v1"),
+                ModelId = Path.GetFileName(request.ModelFilePath)
+            }, ct);
         }
     }
 
@@ -394,15 +454,32 @@ public static class TrainingLifecycleE2ETestDoubles
         {
             var model = await IdentityAsync(request.ModelFilePath, request.AdapterFilePath, ct);
             var launch = LaunchReceipt();
-            await bind(new TransientLlamaServerEvaluationProvenance { Model = model, Launch = launch }, ct);
-            var session = new TransientLlamaServerEvaluationSession { BaseAddress = new Uri("http://127.0.0.1:1/v1"), ModelId = model.ModelId, Model = model, Launch = launch };
+            await bind(new TransientLlamaServerEvaluationProvenance
+            {
+                Model = model,
+                Launch = launch
+            }, ct);
+            var session = new TransientLlamaServerEvaluationSession
+            {
+                BaseAddress = new Uri("http://127.0.0.1:1/v1"),
+                ModelId = model.ModelId,
+                Model = model,
+                Launch = launch
+            };
             var value = await body(session, ct);
             return new TransientLlamaServerEvaluationResult<T>
             {
                 Value = value,
                 Model = model,
                 Launch = launch,
-                Teardown = new TransientLlamaServerTeardownEvidence { ProcessId = 4242, TreeKillRequested = true, ProcessExitObserved = true, ExitObservationTimedOut = false, HandleDisposed = true }
+                Teardown = new TransientLlamaServerTeardownEvidence
+                {
+                    ProcessId = 4242,
+                    TreeKillRequested = true,
+                    ProcessExitObserved = true,
+                    ExitObservationTimedOut = false,
+                    HandleDisposed = true
+                }
             };
         }
 

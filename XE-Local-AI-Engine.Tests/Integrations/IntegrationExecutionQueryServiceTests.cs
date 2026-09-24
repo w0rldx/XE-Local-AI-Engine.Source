@@ -160,20 +160,20 @@ public sealed class IntegrationExecutionQueryServiceTests
             var row = Row(executionId);
             AssertEx.True(_buffer.TryCreate(executionId, row.LastSequence));
             _ = Executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand
-            {
-                ExecutionId = executionId,
-                ExpectedVersion = row.Version,
-                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                              {
+                                  ExecutionId = executionId,
+                                  ExpectedVersion = row.Version,
+                                  ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                                   {
                                       row.Status
                                   },
-                NewStatus = IntegrationExecutionStatus.Completed,
-                Sequence = _buffer.Reserve(executionId),
-                EventType = IntegrationStreamEventTypes.ExecutionCompleted,
-                EndedAtUtc = 9,
-                FailureCategory = null,
-                FailureSummary = null
-            },
+                                  NewStatus = IntegrationExecutionStatus.Completed,
+                                  Sequence = _buffer.Reserve(executionId),
+                                  EventType = IntegrationStreamEventTypes.ExecutionCompleted,
+                                  EndedAtUtc = 9,
+                                  FailureCategory = null,
+                                  FailureSummary = null
+                              },
                               CancellationToken.None)
                           .GetAwaiter()
                           .GetResult();

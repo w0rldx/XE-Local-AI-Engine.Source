@@ -393,8 +393,7 @@ public sealed class BenchmarkJudgePolicyContractsTests
     [Test]
     public void DeserializePolicy_WhenTheStoredBytesAreNotJson_KeepsTheReaderFailureAsTheInnerException()
     {
-        var refusal = AssertEx.Throws<BenchmarkSnapshotException>(
-            () => BenchmarkJudgeSerialization.DeserializePolicy("not json at all"u8));
+        var refusal = AssertEx.Throws<BenchmarkSnapshotException>(() => BenchmarkJudgeSerialization.DeserializePolicy("not json at all"u8));
 
         var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
         AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");

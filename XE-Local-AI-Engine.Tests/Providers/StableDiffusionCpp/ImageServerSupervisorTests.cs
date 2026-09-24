@@ -27,8 +27,7 @@ public sealed class ImageServerSupervisorTests
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, probe, logger: logger);
 
-        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(
-            () => supervisor.EnsureRunningAsync("sd15", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => supervisor.EnsureRunningAsync("sd15", CancellationToken.None));
 
         AssertEx.True(exception.Message.StartsWith("The image runtime exited while loading the model.", StringComparison.Ordinal));
         AssertEx.True(exception.Message.Contains("exit code 2", StringComparison.Ordinal));

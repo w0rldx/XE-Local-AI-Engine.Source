@@ -31,11 +31,11 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint : Endpoint<C
         {
             var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct);
             await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse
-            {
-                Repository = result.Repository.ToResponse(),
-                TemplateAlias = result.TemplateAlias,
-                TemplateCommit = result.TemplateCommit
-            },
+                {
+                    Repository = result.Repository.ToResponse(),
+                    TemplateAlias = result.TemplateAlias,
+                    TemplateCommit = result.TemplateCommit
+                },
                 ct);
         }
         catch (Exception exception) when (exception is ArgumentException

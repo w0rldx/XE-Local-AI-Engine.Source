@@ -17,7 +17,11 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> inputs,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest { Model = modelName, Input = inputs }, SerializerOptions, ct);
+        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest
+        {
+            Model = modelName,
+            Input = inputs
+        }, SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(SerializerOptions, ct);
         if (payload?.Data is null || payload.Data.Count != inputs.Count)
@@ -40,7 +44,11 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> documents,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest { Query = query, Documents = documents }, SerializerOptions, ct);
+        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest
+        {
+            Query = query,
+            Documents = documents
+        }, SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, ct);
         if (payload?.Results is null || payload.Results.Count != documents.Count)

@@ -18,27 +18,62 @@ public sealed class AgentSkillServiceTests
 
         // Uppercase + space is not a MAF-safe kebab-case skill name.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "Bad Name", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "Bad Name",
+                Description = "desc",
+                Body = "body"
+            }));
 
         // Leading, trailing AND consecutive dashes are all rejected. The consecutive case is the regression: the
         // superseded ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ regex accepted "foo--bar", which MAF rejects, so the skill
         // persisted here and then threw ArgumentException when built into an AgentInlineSkill.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "-leading", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "-leading",
+                Description = "desc",
+                Body = "body"
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "trailing-", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "trailing-",
+                Description = "desc",
+                Body = "body"
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "foo--bar", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "foo--bar",
+                Description = "desc",
+                Body = "body"
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "UPPER", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "UPPER",
+                Description = "desc",
+                Body = "body"
+            }));
 
         // Blank body is rejected.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "desc", Body = "   " }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "desc",
+                Body = "   "
+            }));
 
         // Blank description is rejected.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "  ", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "  ",
+                Body = "body"
+            }));
 
         // None of the rejected inputs reached the store.
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
@@ -72,7 +107,12 @@ public sealed class AgentSkillServiceTests
         var serviceAccepted = true;
         try
         {
-            await service.CreateAsync(new AgentSkillInput { Name = candidate, Description = "desc", Body = "body" });
+            await service.CreateAsync(new AgentSkillInput
+            {
+                Name = candidate,
+                Description = "desc",
+                Body = "body"
+            });
         }
         catch (AgentSkillValidationException)
         {
@@ -102,11 +142,29 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "desc", Body = "body", License = new string(c: 'a', count: 201) }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "desc",
+                Body = "body",
+                License = new string(c: 'a', count: 201)
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "desc", Body = "body", Compatibility = new string(c: 'a', count: 501) }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "desc",
+                Body = "body",
+                Compatibility = new string(c: 'a', count: 501)
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "desc", Body = "body", AllowedTools = new string(c: 'a', count: 1025) }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "desc",
+                Body = "body",
+                AllowedTools = new string(c: 'a', count: 1025)
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput
             {
@@ -161,11 +219,26 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = new string(c: 'a', count: 65), Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = new string(c: 'a', count: 65),
+                Description = "desc",
+                Body = "body"
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = new string(c: 'a', count: 1025), Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = new string(c: 'a', count: 1025),
+                Body = "body"
+            }));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "good-name", Description = "desc", Body = new string(c: 'a', count: 20001) }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "good-name",
+                Description = "desc",
+                Body = new string(c: 'a', count: 20001)
+            }));
 
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
@@ -176,13 +249,28 @@ public sealed class AgentSkillServiceTests
         var store = Substitute.For<IAgentSkillStore>();
         store.ListAsync(Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
-                 new AgentSkillRecord { Id = Guid.NewGuid(), Name = "kubernetes-debug", Description = "d", Body = "b", Enabled = true, Version = 1, CreatedAtUtc = 10, UpdatedAtUtc = 10 }
+                 new AgentSkillRecord
+                 {
+                     Id = Guid.NewGuid(),
+                     Name = "kubernetes-debug",
+                     Description = "d",
+                     Body = "b",
+                     Enabled = true,
+                     Version = 1,
+                     CreatedAtUtc = 10,
+                     UpdatedAtUtc = 10
+                 }
              ]));
         var service = new AgentSkillService(store);
 
         // Same name, different casing — NOCASE uniqueness must reject it.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput { Name = "KUBERNETES-DEBUG", Description = "desc", Body = "body" }));
+            service.CreateAsync(new AgentSkillInput
+            {
+                Name = "KUBERNETES-DEBUG",
+                Description = "desc",
+                Body = "body"
+            }));
 
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
@@ -191,8 +279,23 @@ public sealed class AgentSkillServiceTests
     public async Task AgentSkillService_Create_PersistsValidSkill()
     {
         var store = CreateEmptyStore();
-        var input = new AgentSkillInput { Name = "kubernetes-debug", Description = "Debug k8s", Body = "## Body" };
-        var stored = new AgentSkillRecord { Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, Body = input.Body, Enabled = true, Version = 1, CreatedAtUtc = 10, UpdatedAtUtc = 10 };
+        var input = new AgentSkillInput
+        {
+            Name = "kubernetes-debug",
+            Description = "Debug k8s",
+            Body = "## Body"
+        };
+        var stored = new AgentSkillRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            Description = input.Description,
+            Body = input.Body,
+            Enabled = true,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
         store.CreateAsync(input, Arg.Any<CancellationToken>()).Returns(Task.FromResult(stored));
         var service = new AgentSkillService(store);
 
@@ -208,10 +311,37 @@ public sealed class AgentSkillServiceTests
         var id = Guid.NewGuid();
         var store = Substitute.For<IAgentSkillStore>();
         store.ListAsync(Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([new AgentSkillRecord { Id = id, Name = "kubernetes-debug", Description = "d", Body = "b", Enabled = true, Version = 1, CreatedAtUtc = 10, UpdatedAtUtc = 10 }]));
-        var input = new AgentSkillInput { Name = "kubernetes-debug", Description = "Updated description", Body = "## Updated body" };
+             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
+                 new AgentSkillRecord
+                 {
+                     Id = id,
+                     Name = "kubernetes-debug",
+                     Description = "d",
+                     Body = "b",
+                     Enabled = true,
+                     Version = 1,
+                     CreatedAtUtc = 10,
+                     UpdatedAtUtc = 10
+                 }
+             ]));
+        var input = new AgentSkillInput
+        {
+            Name = "kubernetes-debug",
+            Description = "Updated description",
+            Body = "## Updated body"
+        };
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentSkillRecord?>(new AgentSkillRecord { Id = id, Name = input.Name, Description = input.Description, Body = input.Body, Enabled = true, Version = 2, CreatedAtUtc = 10, UpdatedAtUtc = 20 }));
+             .Returns(Task.FromResult<AgentSkillRecord?>(new AgentSkillRecord
+             {
+                 Id = id,
+                 Name = input.Name,
+                 Description = input.Description,
+                 Body = input.Body,
+                 Enabled = true,
+                 Version = 2,
+                 CreatedAtUtc = 10,
+                 UpdatedAtUtc = 20
+             }));
         var service = new AgentSkillService(store);
 
         // Re-saving the same skill with its own (unchanged) name must NOT trip the NOCASE-uniqueness guard.

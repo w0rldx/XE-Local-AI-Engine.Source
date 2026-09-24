@@ -12,8 +12,7 @@ public sealed class RenameNodeChatConversationEndpoint : Endpoint<RenameNodeChat
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public RenameNodeChatConversationEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public RenameNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -39,7 +38,12 @@ public sealed class RenameNodeChatConversationEndpoint : Endpoint<RenameNodeChat
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = req.ConversationId, Title = req.Title, UpdatedAtUtc = updatedAtUtc }, ct);
+        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest
+        {
+            ConversationId = req.ConversationId,
+            Title = req.Title,
+            UpdatedAtUtc = updatedAtUtc
+        }, ct);
 
         if (updated is null)
         {

@@ -53,8 +53,18 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         await using var context = await CreateDatabaseAsync("sample-null-validation.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
 
-        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await store.ClaimNextAsync();
         var appended = await store.AppendSampleAsync(new TrainingSampleInput
         {
@@ -79,8 +89,18 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         await using var context = await CreateDatabaseAsync("dataset-null-definition.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
 
-        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
 
         // The shape of a row written before pinning existed: the additive migration leaves the column NULL. Reading it
         // as an empty-but-present body would let both executors believe an unreadable definition was pinned.
@@ -97,7 +117,12 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         await using var context = await CreateDatabaseAsync("mock-null-verification.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
 
-        var mock = await store.CreateMockAsync(new ToolMockInput { ToolName = "read_file", MockJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"rules":[]}"""), Enabled = true });
+        var mock = await store.CreateMockAsync(new ToolMockInput
+        {
+            ToolName = "read_file",
+            MockJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"rules":[]}"""),
+            Enabled = true
+        });
 
         AssertEx.False(mock.VerificationJson.HasValue, "An unverified mock must read back as absent, not as an empty verdict.");
         var reread = AssertEx.NotNull(await store.GetMockAsync(mock.Id), "The mock must still exist.");

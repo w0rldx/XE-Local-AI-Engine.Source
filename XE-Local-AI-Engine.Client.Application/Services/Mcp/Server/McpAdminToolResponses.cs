@@ -487,7 +487,11 @@ internal static class McpAdminToolResponseMapper
         var fields = result.ValidationErrors.Select(static error => McpAdminWireNames.SettingsField(error.Field)).ToArray();
         if (result.Updated)
         {
-            return new McpNodeSettingsUpdateResponse { Updated = true, RejectedFields = [] };
+            return new McpNodeSettingsUpdateResponse
+            {
+                Updated = true,
+                RejectedFields = []
+            };
         }
 
         // A conflict is not a rejection: it names no field, and the caller's own patch was valid. Told apart here so a
@@ -507,6 +511,12 @@ internal static class McpAdminToolResponseMapper
         var displayMessage = result.ValidationErrors.Count == 0
             ? "The settings update was rejected."
             : result.ValidationErrors[0].Message;
-        return new McpNodeSettingsUpdateResponse { Updated = false, RejectedFields = fields, FailureCode = failureCode, DisplayMessage = displayMessage };
+        return new McpNodeSettingsUpdateResponse
+        {
+            Updated = false,
+            RejectedFields = fields,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage
+        };
     }
 }

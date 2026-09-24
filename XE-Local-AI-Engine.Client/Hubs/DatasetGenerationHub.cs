@@ -63,8 +63,13 @@ public sealed class DatasetGenerationHub : Hub
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(DatasetGenerationHubEvents.ReplayReset,
-                             new DatasetGenerationReplayReset { DatasetId = datasetId, LatestSequence = replay.LatestSequence, DatasetVersion = dataset.Version },
-                             cancellationToken);
+                new DatasetGenerationReplayReset
+                {
+                    DatasetId = datasetId,
+                    LatestSequence = replay.LatestSequence,
+                    DatasetVersion = dataset.Version
+                },
+                cancellationToken);
             return;
         }
 

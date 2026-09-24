@@ -41,7 +41,12 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
                                    .Distinct(StringComparer.OrdinalIgnoreCase)
                                    .OrderBy(static path => path, StringComparer.Ordinal)
                                    .ToArray();
-            return new InstalledGgufCandidate { ModelName = requested.ModelName, RegistryAliases = Array.AsReadOnly(snapshots), MemberRelativePaths = Array.AsReadOnly(members) };
+            return new InstalledGgufCandidate
+            {
+                ModelName = requested.ModelName,
+                RegistryAliases = Array.AsReadOnly(snapshots),
+                MemberRelativePaths = Array.AsReadOnly(members)
+            };
         }
         catch (OperationCanceledException)
         {

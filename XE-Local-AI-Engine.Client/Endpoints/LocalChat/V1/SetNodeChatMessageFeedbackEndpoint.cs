@@ -16,8 +16,7 @@ public sealed class SetNodeChatMessageFeedbackEndpoint : Endpoint<SetNodeChatMes
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public SetNodeChatMessageFeedbackEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public SetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -42,13 +41,13 @@ public sealed class SetNodeChatMessageFeedbackEndpoint : Endpoint<SetNodeChatMes
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var feedback = await _chatPersistence.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest
-        {
-            ConversationId = req.ConversationId,
-            MessageId = req.MessageId,
-            Rating = req.Rating,
-            Comment = req.Comment,
-            UpdatedAtUtc = updatedAtUtc
-        },
+            {
+                ConversationId = req.ConversationId,
+                MessageId = req.MessageId,
+                Rating = req.Rating,
+                Comment = req.Comment,
+                UpdatedAtUtc = updatedAtUtc
+            },
             ct);
 
         await Send.OkAsync(feedback.ToResponse(), ct);

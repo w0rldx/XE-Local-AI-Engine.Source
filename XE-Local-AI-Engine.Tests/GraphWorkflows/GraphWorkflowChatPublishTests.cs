@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -34,7 +34,11 @@ public sealed class GraphWorkflowChatPublishTests
         _ = await harness.Services.GetRequiredService<INodeChatPersistenceService>()
                          .InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
                          {
-                             ConversationId = conversationId, MessageId = messageId, Role = "assistant", Content = "written before the crash", CreatedAtUtc = 2
+                             ConversationId = conversationId,
+                             MessageId = messageId,
+                             Role = "assistant",
+                             Content = "written before the crash",
+                             CreatedAtUtc = 2
                          });
 
         await AnswerAndFinishAsync(harness, definitionId, conversationId, runId);
@@ -123,7 +127,8 @@ public sealed class GraphWorkflowChatPublishTests
         await using var scope = harness.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var envelopes = await db.Database
-                                .SqlQuery<int>($"SELECT COUNT(*) AS \"Value\" FROM agent_execution_logs WHERE message_id = {messageId} AND record_kind = {(int)AgentExecutionLogRecordKind.ChatRunEnvelope} AND success = 1")
+                                .SqlQuery<int>(
+                                    $"SELECT COUNT(*) AS \"Value\" FROM agent_execution_logs WHERE message_id = {messageId} AND record_kind = {(int)AgentExecutionLogRecordKind.ChatRunEnvelope} AND success = 1")
                                 .SingleAsync();
 
         AssertEx.Equal(1, envelopes);
@@ -149,7 +154,11 @@ public sealed class GraphWorkflowChatPublishTests
         await using var harness = new GraphWorkflowHarness(Host);
         var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph());
         var conversationId = await CreateConversationAsync(harness.Services);
-        var binding = new GraphWorkflowRunBinding { ConversationId = conversationId, TriggerMessageId = Guid.NewGuid() };
+        var binding = new GraphWorkflowRunBinding
+        {
+            ConversationId = conversationId,
+            TriggerMessageId = Guid.NewGuid()
+        };
         await using var scope = harness.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         _ = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null, binding);
@@ -166,7 +175,12 @@ public sealed class GraphWorkflowChatPublishTests
         var (_, conversationId, runId) = await ParkedBoundRunAsync(harness);
 
         _ = await harness.Services.GetRequiredService<INodeChatPersistenceService>()
-                         .DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversationId, DeletedAtUtc = 3, PurgeImmediately = true });
+                         .DeleteConversationAsync(new NodeChatDeleteConversationRequest
+                         {
+                             ConversationId = conversationId,
+                             DeletedAtUtc = 3,
+                             PurgeImmediately = true
+                         });
 
         var run = await harness.ReadRunAsync(runId);
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, run.Status, "a run parked on a ChatInput has nobody left to answer it.");
@@ -182,7 +196,11 @@ public sealed class GraphWorkflowChatPublishTests
         var (_, conversationId, runId) = await ParkedBoundRunAsync(harness);
 
         _ = await harness.Services.GetRequiredService<INodeChatPersistenceService>()
-                         .DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversationId, DeletedAtUtc = 3 });
+                         .DeleteConversationAsync(new NodeChatDeleteConversationRequest
+                         {
+                             ConversationId = conversationId,
+                             DeletedAtUtc = 3
+                         });
 
         var run = await harness.ReadRunAsync(runId);
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, run.Status);
@@ -250,7 +268,11 @@ public sealed class GraphWorkflowChatPublishTests
         _ = await harness.Services.GetRequiredService<INodeChatPersistenceService>()
                          .InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
                          {
-                             ConversationId = elsewhere, MessageId = messageId, Role = "assistant", Content = "squatter", CreatedAtUtc = 2
+                             ConversationId = elsewhere,
+                             MessageId = messageId,
+                             Role = "assistant",
+                             Content = "squatter",
+                             CreatedAtUtc = 2
                          });
         return (elsewhere, messageId);
     }

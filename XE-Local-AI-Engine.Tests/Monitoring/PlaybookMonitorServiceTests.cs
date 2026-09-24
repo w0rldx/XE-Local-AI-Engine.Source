@@ -18,7 +18,13 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 6/10 down (0.6). After: 1/10 down (0.1). Drop > epsilon (0.05) and after sample (10) >= floor (3).
-        var service = CreateService(out _, agentId, new CohortComparison { BeforeTotal = 10, BeforeDown = 6, AfterTotal = 10, AfterDown = 1 }, enabledAtUtc: 100);
+        var service = CreateService(out _, agentId, new CohortComparison
+        {
+            BeforeTotal = 10,
+            BeforeDown = 6,
+            AfterTotal = 10,
+            AfterDown = 1
+        }, enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId);
 
@@ -36,7 +42,13 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 1/10 down (0.1). After: 8/10 down (0.8). Rise > epsilon and after sample >= floor → Regressed + flagged.
-        var service = CreateService(out _, agentId, new CohortComparison { BeforeTotal = 10, BeforeDown = 1, AfterTotal = 10, AfterDown = 8 }, enabledAtUtc: 100);
+        var service = CreateService(out _, agentId, new CohortComparison
+        {
+            BeforeTotal = 10,
+            BeforeDown = 1,
+            AfterTotal = 10,
+            AfterDown = 8
+        }, enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId);
 
@@ -50,7 +62,13 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 5/10 (0.5). After: 5/10 (0.5). Within epsilon → Flat; after sample >= floor → flagged (dead action).
-        var service = CreateService(out _, agentId, new CohortComparison { BeforeTotal = 10, BeforeDown = 5, AfterTotal = 10, AfterDown = 5 }, enabledAtUtc: 100);
+        var service = CreateService(out _, agentId, new CohortComparison
+        {
+            BeforeTotal = 10,
+            BeforeDown = 5,
+            AfterTotal = 10,
+            AfterDown = 5
+        }, enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId);
 
@@ -63,7 +81,13 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // After total 2 < the min sample size 3: regardless of the rate delta, the verdict is InsufficientData, unflagged.
-        var service = CreateService(out _, agentId, new CohortComparison { BeforeTotal = 10, BeforeDown = 1, AfterTotal = 2, AfterDown = 2 }, enabledAtUtc: 100);
+        var service = CreateService(out _, agentId, new CohortComparison
+        {
+            BeforeTotal = 10,
+            BeforeDown = 1,
+            AfterTotal = 2,
+            AfterDown = 2
+        }, enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId);
 
@@ -83,7 +107,13 @@ public sealed class PlaybookMonitorServiceTests
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([scopedAction]));
         monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, "run_in_agent_home", Arg.Any<CancellationToken>())
-                    .Returns(new CohortComparison { BeforeTotal = 4, BeforeDown = 3, AfterTotal = 4, AfterDown = 0 });
+                    .Returns(new CohortComparison
+                    {
+                        BeforeTotal = 4,
+                        BeforeDown = 3,
+                        AfterTotal = 4,
+                        AfterDown = 0
+                    });
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
         var views = await service.GetMonitorAsync(agentId);
@@ -109,7 +139,13 @@ public sealed class PlaybookMonitorServiceTests
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([action]));
         monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>())
-                    .Returns(new CohortComparison { BeforeTotal = 10, BeforeDown = 5, AfterTotal = 10, AfterDown = 5 });
+                    .Returns(new CohortComparison
+                    {
+                        BeforeTotal = 10,
+                        BeforeDown = 5,
+                        AfterTotal = 10,
+                        AfterDown = 5
+                    });
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
         var views = await service.GetMonitorAsync(agentId);

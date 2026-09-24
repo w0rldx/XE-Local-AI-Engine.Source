@@ -140,8 +140,7 @@ public sealed class TranscriptionHub : Hub
     private readonly TranscriptionOptions _options;
     private readonly ITranscriptionService _sessions;
 
-    public TranscriptionHub(
-        ITranscriptionService sessions,
+    public TranscriptionHub(ITranscriptionService sessions,
         ILiveTranscriptionSessionRegistry live,
         IOptions<TranscriptionOptions> options)
     {

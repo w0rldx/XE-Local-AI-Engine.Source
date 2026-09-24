@@ -172,7 +172,12 @@ public sealed class DevelopmentEndpointTests
         const string HostPath = "/secret/operator/repository";
         var service = Substitute.For<IDevelopmentManagementService>();
         service.RegisterRepositoryAsync("repository", HostPath, Arg.Any<CancellationToken>())
-               .Returns(new DevelopmentRepositoryReference { Id = "44444444-4444-4444-4444-444444444444", Alias = "repository", Availability = "Available" });
+               .Returns(new DevelopmentRepositoryReference
+               {
+                   Id = "44444444-4444-4444-4444-444444444444",
+                   Alias = "repository",
+                   Availability = "Available"
+               });
         await using var factory = EnabledFactory(service);
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/development/repositories")
@@ -205,7 +210,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderIdIsUnknown_ReturnsNotFound(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new SelectedFolderNotFoundException("The selected folder id is not registered."));
+            new SelectedFolderNotFoundException("The selected folder id is not registered."));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -219,7 +224,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderInputIsRejected_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new SelectedFolderValidationException("The selected folder id is not a valid identifier."));
+            new SelectedFolderValidationException("The selected folder id is not a valid identifier."));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -235,7 +240,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenWorkspaceSecurityRejectsTheSuppliedFolder_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."));
+            new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -249,7 +254,7 @@ public sealed class DevelopmentEndpointTests
         // These three carry no folder at all — projectId/taskId/operationId only — so every workspace-security
         // rejection they can produce is the stored workspace state blocking a well-formed request.
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."));
+            new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -262,7 +267,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenPersistedRepositoryStateBlocksIt_ReturnsConflict(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."));
+            new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -271,7 +276,7 @@ public sealed class DevelopmentEndpointTests
     public async Task CreateProject_WhenSelectedFolderAliasIsAlreadyRegistered_ReturnsConflict()
     {
         using var response = await SendWithFailingServiceAsync("create",
-                new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."));
+            new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -363,27 +368,27 @@ public sealed class DevelopmentEndpointTests
         new()
         {
             Project = new DevelopmentProjectSnapshot
-        {
-            Id = projectId,
-            Objective = "objective",
-            SelectedFolderId = Guid.NewGuid(),
-            RepositoryIdentityHash = "repository-hash",
-            BaseBranch = "main",
-            Status = DevelopmentProjectStatus.Active,
-            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
-            CoderModelId = "coder-model",
-            ReviewerModelId = "reviewer-model",
-            MaxTokens = null,
-            MaxDurationSeconds = null,
-            ConfigurationVersion = 1,
-            TrustedRepositoryAcknowledged = true,
-            TrustedRepositoryPolicyVersion = 1,
-            TrustedRepositoryAcknowledgedAtUtc = 1,
-            CreatedAtUtc = 1,
-            UpdatedAtUtc = 1,
-            Version = 1,
-            CommandProfileJson = null
-        },
+            {
+                Id = projectId,
+                Objective = "objective",
+                SelectedFolderId = Guid.NewGuid(),
+                RepositoryIdentityHash = "repository-hash",
+                BaseBranch = "main",
+                Status = DevelopmentProjectStatus.Active,
+                EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+                CoderModelId = "coder-model",
+                ReviewerModelId = "reviewer-model",
+                MaxTokens = null,
+                MaxDurationSeconds = null,
+                ConfigurationVersion = 1,
+                TrustedRepositoryAcknowledged = true,
+                TrustedRepositoryPolicyVersion = 1,
+                TrustedRepositoryAcknowledgedAtUtc = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1,
+                Version = 1,
+                CommandProfileJson = null
+            },
             Tasks = [],
             Events = []
         };
@@ -394,22 +399,22 @@ public sealed class DevelopmentEndpointTests
         new()
         {
             Task = new DevelopmentTaskSnapshot
-        {
-            Id = taskId,
-            ProjectId = projectId,
-            Title = "task",
-            Requirements = "requirements",
-            AcceptanceCriteriaJson = "[]",
-            Status = DevelopmentTaskStatus.InProgress,
-            CurrentReviewRound = 0,
-            MaxReviewRounds = 3,
-            BlockedReason = null,
-            BlockedAtUtc = null,
-            ApprovedSubjectHash = null,
-            CreatedAtUtc = 1,
-            UpdatedAtUtc = 1,
-            Version = 1
-        },
+            {
+                Id = taskId,
+                ProjectId = projectId,
+                Title = "task",
+                Requirements = "requirements",
+                AcceptanceCriteriaJson = "[]",
+                Status = DevelopmentTaskStatus.InProgress,
+                CurrentReviewRound = 0,
+                MaxReviewRounds = 3,
+                BlockedReason = null,
+                BlockedAtUtc = null,
+                ApprovedSubjectHash = null,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1,
+                Version = 1
+            },
             Attempts = attempts,
             Artifacts = []
         };

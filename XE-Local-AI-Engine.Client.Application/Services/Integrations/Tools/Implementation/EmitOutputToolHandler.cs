@@ -136,7 +136,11 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
 
         // Compose the DURABLE payload first, then measure IT, never the raw payload: the event's column is capped and encrypted, so a payload just under the
         // limit plus its wrapper plus a nonce and auth tag would overrun a bound this handler claims to respect.
-        var detailJson = JsonSerializer.Serialize(new EmitOutputEnvelope { ContentType = contentType, Payload = payload }, SerializerOptions);
+        var detailJson = JsonSerializer.Serialize(new EmitOutputEnvelope
+        {
+            ContentType = contentType,
+            Payload = payload
+        }, SerializerOptions);
         var plaintextBytes = (long)Encoding.UTF8.GetByteCount(detailJson);
         if (plaintextBytes > _options.MaxOutputBytes)
         {
@@ -193,16 +197,16 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         try
         {
             recorded = await executionStore.AppendOutputEventAsync(new IntegrationEventAppend
-            {
-                EventId = Guid.NewGuid(),
-                ExecutionId = execution.Id,
-                Sequence = sequence,
-                EventType = IntegrationStreamEventTypes.ExternalOutput,
-                DetailJson = detailJson,
-                OccurredAtUtc = occurredAtUtc
-            },
-                                               _options.MaxOutputBytesPerExecution,
-                                               cancellationToken);
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = execution.Id,
+                    Sequence = sequence,
+                    EventType = IntegrationStreamEventTypes.ExternalOutput,
+                    DetailJson = detailJson,
+                    OccurredAtUtc = occurredAtUtc
+                },
+                _options.MaxOutputBytesPerExecution,
+                cancellationToken);
         }
         catch (Exception exception)
         {

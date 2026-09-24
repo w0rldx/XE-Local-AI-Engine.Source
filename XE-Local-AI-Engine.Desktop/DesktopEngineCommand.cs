@@ -18,7 +18,10 @@ internal static partial class DesktopEngineCommand
             start.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = start };
+        using var process = new Process
+        {
+            StartInfo = start
+        };
         if (!process.Start())
         {
             throw new InvalidOperationException("The engine could not start.");

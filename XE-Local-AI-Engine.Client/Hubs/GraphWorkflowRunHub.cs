@@ -128,7 +128,7 @@ public sealed class GraphWorkflowRunHub : Hub
             RunningNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
             // Split by the pending ACT the row names, not by the graph: the row carries it precisely so a reader need not parse the graph.
             PendingDecisions = detail.NodeRuns.Count(static nodeRun => nodeRun is { Status: GraphWorkflowNodeRunStatus.WaitingForApproval }
-                                                                         && nodeRun.PendingDecisionKind != GraphWorkflowDecisionKind.Answer),
+                                                                       && nodeRun.PendingDecisionKind != GraphWorkflowDecisionKind.Answer),
             PendingInputs = detail.NodeRuns.Count(static nodeRun => nodeRun is { Status: GraphWorkflowNodeRunStatus.WaitingForApproval, PendingDecisionKind: GraphWorkflowDecisionKind.Answer }),
             LastSeq = replay.LastSeq,
             Events = [.. replay.Events.Select(static @event => @event.ToResponse())],

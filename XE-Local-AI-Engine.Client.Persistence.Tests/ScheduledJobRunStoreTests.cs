@@ -427,12 +427,24 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         // Old run — CreatedAtUtc = 1_000.
         var oldRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded));
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = oldRun.Id, Sequence = 1, Level = ScheduledRunEventLevel.Info, Message = "old-event" });
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = oldRun.Id,
+            Sequence = 1,
+            Level = ScheduledRunEventLevel.Info,
+            Message = "old-event"
+        });
 
         // New run — CreatedAtUtc = 2_000.
         clock.Advance(1_000);
         var newRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded));
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = newRun.Id, Sequence = 1, Level = ScheduledRunEventLevel.Info, Message = "new-event" });
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = newRun.Id,
+            Sequence = 1,
+            Level = ScheduledRunEventLevel.Info,
+            Message = "new-event"
+        });
 
         // Cut off at 1_500 → old run (1_000) is expired; new run (2_000) survives.
         var deleted = await runStore.SweepOlderThanAsync(1_500);
@@ -546,10 +558,28 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
         var otherRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var e1 = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = run.Id, Sequence = 2, Level = ScheduledRunEventLevel.Info, Message = "second" });
-        var e2 = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = run.Id, Sequence = 1, Level = ScheduledRunEventLevel.Warning, Message = "first" });
+        var e1 = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = run.Id,
+            Sequence = 2,
+            Level = ScheduledRunEventLevel.Info,
+            Message = "second"
+        });
+        var e2 = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = run.Id,
+            Sequence = 1,
+            Level = ScheduledRunEventLevel.Warning,
+            Message = "first"
+        });
         // Event on a different run — must be excluded.
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = otherRun.Id, Sequence = 1, Level = ScheduledRunEventLevel.Info, Message = "other-run" });
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = otherRun.Id,
+            Sequence = 1,
+            Level = ScheduledRunEventLevel.Info,
+            Message = "other-run"
+        });
 
         var events = await eventStore.ListByRunAsync(run.Id);
 
@@ -580,7 +610,14 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             var eventStore = new ScheduledJobRunEventStore(writeContext, TimeProvider.System);
 
             var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-            var added = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = run.Id, Sequence = 1, Level = ScheduledRunEventLevel.Progress, Message = "progress", DataJson = dataJson });
+            var added = await eventStore.AddAsync(new ScheduledJobRunEventInput
+            {
+                RunId = run.Id,
+                Sequence = 1,
+                Level = ScheduledRunEventLevel.Progress,
+                Message = "progress",
+                DataJson = dataJson
+            });
 
             AssertEx.Equal(dataJson, added.DataJson);
             eventId = added.Id;
@@ -617,7 +654,14 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
             var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-            _ = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = run.Id, Sequence = 1, Level = ScheduledRunEventLevel.Info, Message = "msg", DataJson = dataJson });
+            _ = await eventStore.AddAsync(new ScheduledJobRunEventInput
+            {
+                RunId = run.Id,
+                Sequence = 1,
+                Level = ScheduledRunEventLevel.Info,
+                Message = "msg",
+                DataJson = dataJson
+            });
         }
 
         var rawBytes = await ReadRawEventDataJsonAsync(databasePath);
@@ -643,7 +687,13 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput { RunId = run.Id, Sequence = 1, Level = ScheduledRunEventLevel.Info, Message = "msg" });
+        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput
+        {
+            RunId = run.Id,
+            Sequence = 1,
+            Level = ScheduledRunEventLevel.Info,
+            Message = "msg"
+        });
 
         AssertEx.Null(added.DataJson, "Null DataJson should round-trip as null.");
     }

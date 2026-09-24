@@ -125,7 +125,13 @@ internal static class GgufStoreTestInfrastructure
         // both with the same canned detail so either resolution path sees the seeded files.
         Task<GgufRepoDetail> Detail(CallInfo callInfo)
         {
-            return Task.FromResult(new GgufRepoDetail { RepoId = callInfo.ArgAt<string>(0), IsGated = false, License = "apache-2.0", Files = files });
+            return Task.FromResult(new GgufRepoDetail
+            {
+                RepoId = callInfo.ArgAt<string>(0),
+                IsGated = false,
+                License = "apache-2.0",
+                Files = files
+            });
         }
 
         discovery.ListRepoFilesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Detail);

@@ -23,14 +23,14 @@ internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAudit
     {
         var categoryLabel = category.ToString();
         await _store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput
-        {
-            InvocationId = requestId,
-            ToolName = toolName,
-            Category = categoryLabel,
-            Decision = ApprovalDecisions.Approve,
-            Source = $"mcp-agentic:{keyPrefix}",
-            LatencyMs = 0
-        },
+            {
+                InvocationId = requestId,
+                ToolName = toolName,
+                Category = categoryLabel,
+                Decision = ApprovalDecisions.Approve,
+                Source = $"mcp-agentic:{keyPrefix}",
+                LatencyMs = 0
+            },
             cancellationToken);
         NodeMetrics.ToolApprovalDecisionsTotal.Add(1,
             new KeyValuePair<string, object?>("category", categoryLabel),

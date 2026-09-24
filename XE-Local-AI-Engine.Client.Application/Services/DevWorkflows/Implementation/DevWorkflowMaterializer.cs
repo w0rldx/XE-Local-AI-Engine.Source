@@ -125,32 +125,33 @@ internal sealed class DevWorkflowMaterializer
         // Read once for this expansion, after the decision to expand: every clone's resolution comes off the same list, and a tick that expands nothing never touches the table.
         var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken);
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = operationId,
-            NodeRuns = [
-                                   .. expansion.Clones.Select(clone => new DevWorkflowNodeRunSeed
-                                   {
-                                       NodeRunId = Guid.NewGuid(),
-                                       NodeKey = clone.NodeKey,
-                                       NodeType = clone.Node.NodeType,
-                                       MaxAttempts = clone.Node.MaxAttempts,
-                                       AgentDefinitionId = clone.Node.AgentDefinitionId,
-                                       DevelopmentProjectId = producer.DevelopmentProjectId,
-                                       InputJson = clone.InputJson,
-                                       // The clone inherits the producer's project, resolving against the same project axis its parent did — and against its OWN node
-                                       // type, which is what makes a rule set scoped to Tool nodes reach a materialized Tool clone.
-                                       PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, producer.DevelopmentProjectId, clone.Node.NodeType),
-                                       MaterializedFromNodeRunId = producer.Id,
-                                       MaterializationIndex = clone.Index
-                                   })
-                               ],
-            GraphJson = expansion.GraphJson,
-            RouteNodeRunId = producer.Id,
-            RouteJson = producerRoute
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = operationId,
+                NodeRuns =
+                [
+                    .. expansion.Clones.Select(clone => new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = clone.NodeKey,
+                        NodeType = clone.Node.NodeType,
+                        MaxAttempts = clone.Node.MaxAttempts,
+                        AgentDefinitionId = clone.Node.AgentDefinitionId,
+                        DevelopmentProjectId = producer.DevelopmentProjectId,
+                        InputJson = clone.InputJson,
+                        // The clone inherits the producer's project, resolving against the same project axis its parent did — and against its OWN node
+                        // type, which is what makes a rule set scoped to Tool nodes reach a materialized Tool clone.
+                        PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, producer.DevelopmentProjectId, clone.Node.NodeType),
+                        MaterializedFromNodeRunId = producer.Id,
+                        MaterializationIndex = clone.Index
+                    })
+                ],
+                GraphJson = expansion.GraphJson,
+                RouteNodeRunId = producer.Id,
+                RouteJson = producerRoute
+            },
+            cancellationToken);
         return expansion.Clones.Count;
     }
 
@@ -170,24 +171,24 @@ internal sealed class DevWorkflowMaterializer
         string reason,
         CancellationToken cancellationToken) =>
         await _retries.SettleFailureAsync(store,
-                          graph,
-                          run,
-                          producer,
-                          nodeRuns,
-                          new DevWorkflowFailure
-                          {
-                              FailureClass = DevWorkflowFailureClasses.Configuration,
-                              SanitizedReason = reason,
-                              OutputJson = JsonSerializer.Serialize(new RejectedOutput
-                              {
-                                  Status = DevWorkflowNodeOutputStatuses.Failed,
-                                  Attempt = producer.Attempt,
-                                  FailureClass = DevWorkflowFailureClasses.Configuration,
-                                  MaterializationError = reason
-                              },
-                                  JsonOptions)
-                          },
-                          cancellationToken);
+            graph,
+            run,
+            producer,
+            nodeRuns,
+            new DevWorkflowFailure
+            {
+                FailureClass = DevWorkflowFailureClasses.Configuration,
+                SanitizedReason = reason,
+                OutputJson = JsonSerializer.Serialize(new RejectedOutput
+                    {
+                        Status = DevWorkflowNodeOutputStatuses.Failed,
+                        Attempt = producer.Attempt,
+                        FailureClass = DevWorkflowFailureClasses.Configuration,
+                        MaterializationError = reason
+                    },
+                    JsonOptions)
+            },
+            cancellationToken);
 
     /// <summary>
     ///     The newest task package this node produced, parsed — or the sentence an operator and the next attempt are
@@ -270,7 +271,12 @@ internal sealed class DevWorkflowMaterializer
             }
         }
 
-        return new TaskPackage { Tasks = [.. items], ArtifactId = artifactId, Error = null };
+        return new TaskPackage
+        {
+            Tasks = [.. items],
+            ArtifactId = artifactId,
+            Error = null
+        };
     }
 
     /// <summary>
@@ -444,7 +450,12 @@ internal sealed class DevWorkflowMaterializer
         var wired = new HashSet<(string From, string To)>();
         foreach (var (task, index) in tasks.Select(static (task, index) => (task, index + 1)))
         {
-            var brief = JsonSerializer.Serialize(new DevTaskBrief { Title = Present(task.Title), Requirements = RequirementsFor(task), AcceptanceCriteriaJson = Criteria(task.AcceptanceCriteria) }, JsonOptions);
+            var brief = JsonSerializer.Serialize(new DevTaskBrief
+            {
+                Title = Present(task.Title),
+                Requirements = RequirementsFor(task),
+                AcceptanceCriteriaJson = Criteria(task.AcceptanceCriteria)
+            }, JsonOptions);
             foreach (var key in subtree.OrderBy(static key => key, StringComparer.Ordinal))
             {
                 var clone = (JsonObject)templates[key].DeepClone();
@@ -455,7 +466,13 @@ internal sealed class DevWorkflowMaterializer
                 }
 
                 nodes.Add(clone);
-                clones.Add(new Clone { NodeKey = CloneKey(key, task.Id!), Node = graph.Nodes[key], InputJson = brief, Index = index });
+                clones.Add(new Clone
+                {
+                    NodeKey = CloneKey(key, task.Id!),
+                    Node = graph.Nodes[key],
+                    InputJson = brief,
+                    Index = index
+                });
 
                 foreach (var edge in graph.OutboundEdges(key).Where(edge => subtree.Contains(edge.To)))
                 {
@@ -484,7 +501,11 @@ internal sealed class DevWorkflowMaterializer
 
         // The decomposition's OWN edge into the join is KEPT. A join waiting on an already-Succeeded node does not fire early — All and Any both wait while any inbound edge is Pending —
         // and removing it takes the decomposition off every path back from the join, which upstream artifact resolution walks: the node behind it would lose the task package.
-        return new Expansion { Clones = clones, GraphJson = root.ToJsonString(JsonOptions) };
+        return new Expansion
+        {
+            Clones = clones,
+            GraphJson = root.ToJsonString(JsonOptions)
+        };
 
         void Wire(string from, string to, JsonNode? condition)
         {
@@ -536,63 +557,64 @@ internal sealed class DevWorkflowMaterializer
             // The detail says so: this is the one graph.changed that changes no graph, and a consumer refetching on the token alone gets the same revision back. `graphRevision` is the
             // run's CURRENT one, which has not moved.
             _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
-            {
-                RunId = run.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                EventType = DevWorkflowEventTypes.GraphChanged,
-                NodeRunId = producer.Id,
-                OperationId = operationId,
-                DetailJson = JsonSerializer.Serialize(new ExpansionDetail
                 {
-                    NodeKey = producer.NodeKey,
-                    TaskCount = 0,
-                    SourceArtifactId = artifactId,
-                    GraphRevision = run.GraphRevision,
-                    RevisionBumped = false
+                    RunId = run.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    EventType = DevWorkflowEventTypes.GraphChanged,
+                    NodeRunId = producer.Id,
+                    OperationId = operationId,
+                    DetailJson = JsonSerializer.Serialize(new ExpansionDetail
+                        {
+                            NodeKey = producer.NodeKey,
+                            TaskCount = 0,
+                            SourceArtifactId = artifactId,
+                            GraphRevision = run.GraphRevision,
+                            RevisionBumped = false
+                        },
+                        JsonOptions)
                 },
-                                       JsonOptions)
-            },
-                               cancellationToken);
+                cancellationToken);
             return 1;
         }
 
         // Under the SAME operation id the marker would have taken, so the replay guard is unchanged and rows and marker commit together with no window in which one exists without the
         // other. A null GraphJson is what makes the marker node.materialized rather than graph.changed, the honest token here because no graph changed.
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = operationId,
-            NodeRuns = [
-                                   .. checks.Select(check => new DevWorkflowNodeRunSeed
-                                   {
-                                       NodeRunId = Guid.NewGuid(),
-                                       NodeKey = check.NodeKey,
-                                       NodeType = check.NodeType,
-                                       MaxAttempts = check.MaxAttempts,
-                                       AgentDefinitionId = check.AgentDefinitionId,
-                                       DevelopmentProjectId = producer.DevelopmentProjectId,
-                                       InputJson = null,
-                                       PolicyResolutionJson = null,
-                                       MaterializedFromNodeRunId = producer.Id,
-                                       // Not clone n: this row stands for ZERO clones, which is a different fact and
-                                       // the one a reader of the panel needs.
-                                       MaterializationIndex = null,
-                                       Status = DevWorkflowNodeRunStatus.Succeeded,
-                                       OutputJson = JsonSerializer.Serialize(new NotApplicableOutput
-                                       {
-                                           Status = DevWorkflowNodeOutputStatuses.Succeeded,
-                                           Attempt = 1,
-                                           Verdict = DevWorkflowNodeOutputVerdicts.ValidationNotApplicable,
-                                           ProducedBy = producer.NodeKey,
-                                           TaskPackageArtifactId = artifactId
-                                       },
-                                           JsonOptions)
-                                   })
-                               ],
-            GraphJson = null
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = operationId,
+                NodeRuns =
+                [
+                    .. checks.Select(check => new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = Guid.NewGuid(),
+                        NodeKey = check.NodeKey,
+                        NodeType = check.NodeType,
+                        MaxAttempts = check.MaxAttempts,
+                        AgentDefinitionId = check.AgentDefinitionId,
+                        DevelopmentProjectId = producer.DevelopmentProjectId,
+                        InputJson = null,
+                        PolicyResolutionJson = null,
+                        MaterializedFromNodeRunId = producer.Id,
+                        // Not clone n: this row stands for ZERO clones, which is a different fact and
+                        // the one a reader of the panel needs.
+                        MaterializationIndex = null,
+                        Status = DevWorkflowNodeRunStatus.Succeeded,
+                        OutputJson = JsonSerializer.Serialize(new NotApplicableOutput
+                            {
+                                Status = DevWorkflowNodeOutputStatuses.Succeeded,
+                                Attempt = 1,
+                                Verdict = DevWorkflowNodeOutputVerdicts.ValidationNotApplicable,
+                                ProducedBy = producer.NodeKey,
+                                TaskPackageArtifactId = artifactId
+                            },
+                            JsonOptions)
+                    })
+                ],
+                GraphJson = null
+            },
+            cancellationToken);
         return checks.Count;
     }
 
@@ -643,7 +665,12 @@ internal sealed class DevWorkflowMaterializer
         public required string? Error { get; init; }
 
         public static TaskPackage Rejected(string error) =>
-            new() { Tasks = [], ArtifactId = Guid.Empty, Error = error };
+            new()
+            {
+                Tasks = [],
+                ArtifactId = Guid.Empty,
+                Error = error
+            };
     }
 
     /// <summary>One node run to create: its new key, the template node it copies, and the brief its task carries.</summary>

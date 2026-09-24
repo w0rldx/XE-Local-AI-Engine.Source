@@ -274,13 +274,21 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task<ImageServerEndpoint> EnsureRunningAsync(string modelName, CancellationToken ct)
         {
             EnsureCount++;
-            return Task.FromResult(new ImageServerEndpoint { ModelName = modelName, BaseAddress = _baseAddress });
+            return Task.FromResult(new ImageServerEndpoint
+            {
+                ModelName = modelName,
+                BaseAddress = _baseAddress
+            });
         }
 
         public Task<ImageServerEndpoint> RestartAsync(string modelName, CancellationToken ct)
         {
             RestartCount++;
-            return Task.FromResult(new ImageServerEndpoint { ModelName = modelName, BaseAddress = _baseAddress });
+            return Task.FromResult(new ImageServerEndpoint
+            {
+                ModelName = modelName,
+                BaseAddress = _baseAddress
+            });
         }
 
         public Task EvictAsync(string modelName, CancellationToken ct)
@@ -295,7 +303,14 @@ public sealed class StableDiffusionCppRuntimeTests
             return Task.FromResult(new ImageServerEvictAllResult
             {
                 Evicted = true,
-                Activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+                Activity = new ImageRuntimeActivitySnapshot
+                {
+                    ActiveJobCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
             });
         }
 

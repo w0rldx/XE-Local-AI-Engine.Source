@@ -66,7 +66,12 @@ internal sealed class ModelCapabilityProber
         var cachedModels = TryGetCachedInstalledModels();
         if (cachedModels is not null)
         {
-            return new InstalledModelInventoryResult { Models = cachedModels, OllamaQuerySucceeded = true, Diagnostics = [] };
+            return new InstalledModelInventoryResult
+            {
+                Models = cachedModels,
+                OllamaQuerySucceeded = true,
+                Diagnostics = []
+            };
         }
 
         try
@@ -79,9 +84,19 @@ internal sealed class ModelCapabilityProber
                                        Digest = NormalizeModelName(model.Digest)
                                    })
                                    .Where(model => !string.IsNullOrWhiteSpace(model.Name))
-                                   .Select(model => new InstalledModelInfo { Name = model.Name!, Digest = model.Digest, IsDiscovered = true })
+                                   .Select(model => new InstalledModelInfo
+                                   {
+                                       Name = model.Name!,
+                                       Digest = model.Digest,
+                                       IsDiscovered = true
+                                   })
                                    .ToArray();
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo { Name = modelName, Digest = null, IsDiscovered = false });
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo
+            {
+                Name = modelName,
+                Digest = null,
+                IsDiscovered = false
+            });
             var normalizedModels = discoveredModels
                                    .Concat(configuredModels)
                                    .DistinctBy(model => model.Name, StringComparer.OrdinalIgnoreCase)
@@ -96,7 +111,12 @@ internal sealed class ModelCapabilityProber
                 string.Join(", ", normalizedModels.Select(model => model.Name)));
 
             CacheInstalledModels(normalizedModels);
-            return new InstalledModelInventoryResult { Models = normalizedModels, OllamaQuerySucceeded = true, Diagnostics = [] };
+            return new InstalledModelInventoryResult
+            {
+                Models = normalizedModels,
+                OllamaQuerySucceeded = true,
+                Diagnostics = []
+            };
         }
         catch (HttpRequestException exception)
         {
@@ -105,8 +125,18 @@ internal sealed class ModelCapabilityProber
             _logger.LogDebug(exception, "Ollama not reachable while querying installed models; reporting {ConfiguredModelCount} configured fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo { Name = modelName, Digest = null, IsDiscovered = false }).ToArray();
-            return new InstalledModelInventoryResult { Models = configuredModels, OllamaQuerySucceeded = false, Diagnostics = [DiagnosticOllamaUnreachable] };
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo
+            {
+                Name = modelName,
+                Digest = null,
+                IsDiscovered = false
+            }).ToArray();
+            return new InstalledModelInventoryResult
+            {
+                Models = configuredModels,
+                OllamaQuerySucceeded = false,
+                Diagnostics = [DiagnosticOllamaUnreachable]
+            };
         }
     }
 
@@ -142,17 +172,32 @@ internal sealed class ModelCapabilityProber
             if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken))
             {
                 diagnostics.Add(DiagnosticOllamaUnreachable);
-                return new OllamaRuntimeStatus { Reachable = false, Version = null, Diagnostics = diagnostics };
+                return new OllamaRuntimeStatus
+                {
+                    Reachable = false,
+                    Version = null,
+                    Diagnostics = diagnostics
+                };
             }
 
             var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken);
-            return new OllamaRuntimeStatus { Reachable = true, Version = NormalizeModelName(version), Diagnostics = diagnostics };
+            return new OllamaRuntimeStatus
+            {
+                Reachable = true,
+                Version = NormalizeModelName(version),
+                Diagnostics = diagnostics
+            };
         }
         catch (HttpRequestException exception)
         {
             _logger.LogDebug(exception, "Ollama runtime not reachable (expected in desktop mode without an Ollama daemon).");
             diagnostics.Add(DiagnosticOllamaUnreachable);
-            return new OllamaRuntimeStatus { Reachable = false, Version = null, Diagnostics = diagnostics };
+            return new OllamaRuntimeStatus
+            {
+                Reachable = false,
+                Version = null,
+                Diagnostics = diagnostics
+            };
         }
     }
 
@@ -176,7 +221,11 @@ internal sealed class ModelCapabilityProber
                 return ActiveModelInfo.None;
             }
 
-            return new ActiveModelInfo { Name = modelName, ExpiresAt = active.ExpiresAt };
+            return new ActiveModelInfo
+            {
+                Name = modelName,
+                ExpiresAt = active.ExpiresAt
+            };
         }
         catch (HttpRequestException exception)
         {
@@ -187,7 +236,11 @@ internal sealed class ModelCapabilityProber
 
     private async Task<int?> GetMaxContextTokensAsync(InstalledModelInfo installedModel, CancellationToken cancellationToken)
     {
-        var cacheKey = new ModelContextCacheKey { ModelName = installedModel.Name, Digest = installedModel.Digest! };
+        var cacheKey = new ModelContextCacheKey
+        {
+            ModelName = installedModel.Name,
+            Digest = installedModel.Digest!
+        };
         lock (_modelContextCacheSync)
         {
             if (_modelContextCache.TryGetValue(cacheKey, out var cachedContextLength))
@@ -284,7 +337,11 @@ internal sealed class ModelCapabilityProber
     {
         lock (_installedModelsCacheSync)
         {
-            _installedModelsCache = new CachedInstalledModels { Models = models, ExpiresAt = _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime) };
+            _installedModelsCache = new CachedInstalledModels
+            {
+                Models = models,
+                ExpiresAt = _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime)
+            };
         }
     }
 

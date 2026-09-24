@@ -95,7 +95,11 @@ public static class DevWorkflowRulePolicyResolver
         try
         {
             return JsonSerializer.Deserialize<StoredScope>(scopeJson, JsonOptions) is { } scope
-                ? new DevWorkflowRuleSetScope { ProjectIds = scope.ProjectIds ?? [], NodeTypes = scope.NodeTypes ?? [] }
+                ? new DevWorkflowRuleSetScope
+                {
+                    ProjectIds = scope.ProjectIds ?? [],
+                    NodeTypes = scope.NodeTypes ?? []
+                }
                 : null;
         }
         catch (JsonException)

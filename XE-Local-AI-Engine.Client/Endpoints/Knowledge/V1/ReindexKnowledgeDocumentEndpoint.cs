@@ -17,8 +17,7 @@ public sealed class ReindexKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumen
     private readonly IKnowledgeDocumentCatalogService _catalogService;
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
 
-    public ReindexKnowledgeDocumentEndpoint(
-        IKnowledgeDocumentCatalogService catalogService,
+    public ReindexKnowledgeDocumentEndpoint(IKnowledgeDocumentCatalogService catalogService,
         IKnowledgeIngestionDispatcher ingestionDispatcher)
     {
         ArgumentNullException.ThrowIfNull(catalogService);

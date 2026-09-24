@@ -25,6 +25,9 @@ public sealed class ListDevelopmentTemplatesEndpoint : EndpointWithoutRequest<Li
     public override async Task HandleAsync(CancellationToken ct)
     {
         var templates = await _service.ListTemplatesAsync(ct);
-        await Send.OkAsync(new ListDevelopmentTemplatesResponse { Templates = templates.Select(template => template.ToResponse()).ToArray() }, ct);
+        await Send.OkAsync(new ListDevelopmentTemplatesResponse
+        {
+            Templates = templates.Select(template => template.ToResponse()).ToArray()
+        }, ct);
     }
 }

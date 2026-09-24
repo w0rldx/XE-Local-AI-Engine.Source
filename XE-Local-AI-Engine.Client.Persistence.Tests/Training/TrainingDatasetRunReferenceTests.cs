@@ -82,8 +82,18 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
     {
         await using var context = await CreateDatabaseAsync("cancel-queued-generation.sqlite");
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         AssertEx.Equal(DatasetGenerationWorkStatus.Queued, dataset.WorkStatus);
 
         var cancelled = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.");
@@ -105,8 +115,18 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
 
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context, TrainingDatasetStore datasets)
     {
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await datasets.ClaimNextAsync();
         _ = await datasets.AppendSampleAsync(new TrainingSampleInput
         {
@@ -123,7 +143,12 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
         var artifacts = new TrainingBaseArtifactStore(context, TimeProvider.System);
         var downloading = await artifacts.StartDownloadAsync("org/base-model", new string('b', count: 40));
         var baseArtifact = await artifacts.MarkReadyAsync(downloading.Id, downloading.Version, Encoding.UTF8.GetBytes("[]"), totalBytes: 1, licenseJson: null);
-        return new RunFixture { DatasetId = ready.Id, DatasetVersion = ready.Version, BaseArtifactId = baseArtifact.Id };
+        return new RunFixture
+        {
+            DatasetId = ready.Id,
+            DatasetVersion = ready.Version,
+            BaseArtifactId = baseArtifact.Id
+        };
     }
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName)

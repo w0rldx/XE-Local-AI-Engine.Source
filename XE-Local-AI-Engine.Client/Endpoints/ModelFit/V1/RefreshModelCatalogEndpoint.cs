@@ -22,8 +22,7 @@ public sealed class RefreshModelCatalogEndpoint : EndpointWithoutRequest<ModelCa
     private readonly IModelCatalogProvider _catalogProvider;
     private readonly IOptions<ModelCatalogOptions> _options;
 
-    public RefreshModelCatalogEndpoint(
-        IModelCatalogProvider catalogProvider,
+    public RefreshModelCatalogEndpoint(IModelCatalogProvider catalogProvider,
         IOptions<ModelCatalogOptions> options)
     {
         ArgumentNullException.ThrowIfNull(catalogProvider);

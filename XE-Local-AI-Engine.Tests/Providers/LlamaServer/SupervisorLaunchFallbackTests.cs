@@ -172,7 +172,13 @@ public sealed class SupervisorLaunchFallbackTests
                             --cache-type-v TYPE
                                 allowed values: f16, q8_0
                             """;
-        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cuda,
+            IsPinnedFallback = true
+        };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,

@@ -35,8 +35,7 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
     private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
 
-    public DevelopmentCloudAttemptContextService(
-        IDevelopmentCloudContextBuilder contextBuilder,
+    public DevelopmentCloudAttemptContextService(IDevelopmentCloudContextBuilder contextBuilder,
         DevelopmentCloudRoleRouteFactory routeFactory,
         IDevelopmentArtifactBlobStore blobStore,
         IDevelopmentStore store,
@@ -110,24 +109,28 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
         _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand
-        {
-            ArtifactId = artifactId,
-            ProjectId = snapshot.ProjectId,
-            TaskId = snapshot.TaskId,
-            AttemptId = snapshot.AttemptId,
-            OperationId = Guid.NewGuid(),
-            Kind = DevelopmentArtifactKind.CloudContextBundle,
-            SchemaVersion = 1,
-            ContentHash = written.ContentHash,
-            ByteCount = written.ByteCount,
-            ManagedReference = written.OpaqueReference,
-            InputArtifactIdsJson = inputArtifactIds is null
-                                    ? null
-                                    : JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions)
-        },
-                            cancellationToken);
+            {
+                ArtifactId = artifactId,
+                ProjectId = snapshot.ProjectId,
+                TaskId = snapshot.TaskId,
+                AttemptId = snapshot.AttemptId,
+                OperationId = Guid.NewGuid(),
+                Kind = DevelopmentArtifactKind.CloudContextBundle,
+                SchemaVersion = 1,
+                ContentHash = written.ContentHash,
+                ByteCount = written.ByteCount,
+                ManagedReference = written.OpaqueReference,
+                InputArtifactIdsJson = inputArtifactIds is null
+                    ? null
+                    : JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions)
+            },
+            cancellationToken);
 
-        return new DevelopmentCloudAttemptContext { Route = _routeFactory.Create(bundle), ArtifactId = artifactId };
+        return new DevelopmentCloudAttemptContext
+        {
+            Route = _routeFactory.Create(bundle),
+            ArtifactId = artifactId
+        };
     }
 
     /// <summary>

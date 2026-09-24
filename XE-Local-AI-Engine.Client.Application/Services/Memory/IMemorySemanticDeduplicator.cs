@@ -66,5 +66,9 @@ internal sealed class MemorySemanticDedupResult
     public required IReadOnlySet<int> DuplicateIndexes { get; init; }
 
     /// <summary>The "did not run" result: no candidate is a semantic duplicate; the caller keeps them all.</summary>
-    public static MemorySemanticDedupResult NotApplied { get; } = new() { Applied = false, DuplicateIndexes = new HashSet<int>() };
+    public static MemorySemanticDedupResult NotApplied { get; } = new()
+    {
+        Applied = false,
+        DuplicateIndexes = new HashSet<int>()
+    };
 }

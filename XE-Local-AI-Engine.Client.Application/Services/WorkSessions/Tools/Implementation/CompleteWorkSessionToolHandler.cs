@@ -16,8 +16,7 @@ internal sealed record CompleteWorkSessionRequest(string? Summary, bool? Objecti
 /// </remarks>
 internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<CompleteWorkSessionRequest>
 {
-    public CompleteWorkSessionToolHandler(
-        IServiceScopeFactory scopeFactory,
+    public CompleteWorkSessionToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
         IWorkSessionEventPublisher publisher,
         ILogger<CompleteWorkSessionToolHandler> logger) : base(scopeFactory, options, publisher, logger)
@@ -50,19 +49,22 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
         CancellationToken cancellationToken)
     {
         _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
-        {
-            SessionId = session.Id,
-            ExpectedVersion = session.Version,
-            EventType = WorkSessionEventTypes.CompletionRequested,
-            // One completion per step: a model that calls this twice in one turn records it once.
-            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
-            Outcome = null,
-            DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))
-        },
-                           cancellationToken);
+            {
+                SessionId = session.Id,
+                ExpectedVersion = session.Version,
+                EventType = WorkSessionEventTypes.CompletionRequested,
+                // One completion per step: a model that calls this twice in one turn records it once.
+                OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
+                Outcome = null,
+                DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))
+            },
+            cancellationToken);
 
         // No sequence is published: the session is not finished until the supervisor closes it, and announcing a change
         // now would put the UI ahead of the truth.
-        return new WorkSessionToolOutcome { Message = "The work session will close at the end of this turn. Say anything else you still need to say now." };
+        return new WorkSessionToolOutcome
+        {
+            Message = "The work session will close at the end of this turn. Say anything else you still need to say now."
+        };
     }
 }

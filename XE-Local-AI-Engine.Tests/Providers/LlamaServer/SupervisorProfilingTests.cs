@@ -313,14 +313,22 @@ public sealed class SupervisorProfilingTests
                 chatEvictedAtCapture = chatHandle.WasTreeKilled;
                 embeddingEvictedAtCapture = embeddingHandle.WasTreeKilled;
                 launchCountAtCapture = launcher.LaunchCount;
-                return Task.FromResult(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 });
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot
+                {
+                    GlobalFreeBytes = 6,
+                    ProcessBudgetBytes = 8
+                });
             });
 
         AssertEx.True(chatEvictedAtCapture, "The target-role warm process must be evicted before ambient VRAM is captured.");
         AssertEx.True(embeddingEvictedAtCapture, "Every sibling-role warm process for the model must be evicted before ambient VRAM is captured.");
         AssertEx.Equal(expected: 2, launchCountAtCapture); // only the two warm processes have launched at capture time.
         AssertEx.Equal(expected: 3, launchCountAtBody); // two warm processes + exclusive profiling spawn.
-        AssertEx.Equal(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 }, capturedPreSpawnVram);
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot
+        {
+            GlobalFreeBytes = 6,
+            ProcessBudgetBytes = 8
+        }, capturedPreSpawnVram);
     }
 
     [Test]
@@ -347,7 +355,11 @@ public sealed class SupervisorProfilingTests
             {
                 captureEntered = true;
                 siblingEvictedAtCapture = launcher.Handles.Single().WasTreeKilled;
-                return Task.FromResult(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 });
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot
+                {
+                    GlobalFreeBytes = 6,
+                    ProcessBudgetBytes = 8
+                });
             });
 
         await AssertEx.SettleAsync();
@@ -463,7 +475,13 @@ public sealed class SupervisorProfilingTests
                                                  -ctv, --cache-type-v TYPE
                                                      allowed values: f16, q8_0
                                                  """;
-        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cuda,
+            IsPinnedFallback = true
+        };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,

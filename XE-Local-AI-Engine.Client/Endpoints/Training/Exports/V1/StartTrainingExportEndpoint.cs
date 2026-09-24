@@ -37,16 +37,20 @@ public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRe
         var quantization = kind == TrainingArtifactKind.MergedGguf
             ? TrainingExportQuantizations.TryNormalize(req.QuantType) ?? req.QuantType ?? string.Empty
             : TrainingExportQuantizations.Float16;
-        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest { Kind = kind, QuantType = req.QuantType }, ct);
+        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest
+        {
+            Kind = kind,
+            QuantType = req.QuantType
+        }, ct);
         if (start.Outcome == TrainingExportStartOutcome.Accepted)
         {
             await Send.ResultAsync(TypedResults.Accepted((string?)null,
-                          new TrainingExportAcceptedResponse
-                          {
-                              RunId = req.RunId,
-                              Kind = kind.ToString(),
-                              QuantType = quantization
-                          }));
+                new TrainingExportAcceptedResponse
+                {
+                    RunId = req.RunId,
+                    Kind = kind.ToString(),
+                    QuantType = quantization
+                }));
             return;
         }
 
@@ -55,10 +59,10 @@ public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRe
         if (start.Outcome is TrainingExportStartOutcome.Busy or TrainingExportStartOutcome.RuntimeUnavailable)
         {
             await Send.ResultAsync(TypedResults.Conflict(new TrainingExportBlockedResponse
-                      {
-                          Reason = start.Outcome.ToString(),
-                          Message = start.Reason ?? "The export cannot start right now."
-                      }));
+            {
+                Reason = start.Outcome.ToString(),
+                Message = start.Reason ?? "The export cannot start right now."
+            }));
             return;
         }
 

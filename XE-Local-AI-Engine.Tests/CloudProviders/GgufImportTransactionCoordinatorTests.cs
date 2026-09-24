@@ -167,12 +167,12 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         var secondPreview = await coordinator.PreviewAsync(sourcePath);
         var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand
-        {
-            SourcePath = sourcePath,
-            PreviewToken = secondPreview.PreviewToken,
-            ModelBaseName = secondPreview.ModelBaseName,
-            Quantization = "Q4_K_M"
-        })
+                                                                                                  {
+                                                                                                      SourcePath = sourcePath,
+                                                                                                      PreviewToken = secondPreview.PreviewToken,
+                                                                                                      ModelBaseName = secondPreview.ModelBaseName,
+                                                                                                      Quantization = "Q4_K_M"
+                                                                                                  })
                                                                                                   .WaitAsync(TimeSpan.FromSeconds(2)));
 
         AssertEx.Equal("AcquisitionAlreadyActive", exception!.ErrorCode);
@@ -487,9 +487,18 @@ public sealed class GgufImportTransactionCoordinatorTests
             {
                 ModelName = _identity.CanonicalModelName,
                 Kind = InstalledModelMutationKind.Acquire,
-                IntendedMembers = [
-                    new IntendedInstalledModelMember { RelativePath = _identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
-                    new IntendedInstalledModelMember { RelativePath = _identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
+                IntendedMembers =
+                [
+                    new IntendedInstalledModelMember
+                    {
+                        RelativePath = _identity.RelativeGgufPath,
+                        Role = InstalledModelPhysicalMemberRole.Weight
+                    },
+                    new IntendedInstalledModelMember
+                    {
+                        RelativePath = _identity.RelativeSidecarPath,
+                        Role = InstalledModelPhysicalMemberRole.Sidecar
+                    }
                 ]
             };
             var keys = new[]
@@ -537,9 +546,18 @@ public sealed class GgufImportTransactionCoordinatorTests
             {
                 ModelName = _identity.CanonicalModelName,
                 Kind = InstalledModelMutationKind.Acquire,
-                IntendedMembers = [
-                    new IntendedInstalledModelMember { RelativePath = _identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
-                    new IntendedInstalledModelMember { RelativePath = _identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
+                IntendedMembers =
+                [
+                    new IntendedInstalledModelMember
+                    {
+                        RelativePath = _identity.RelativeGgufPath,
+                        Role = InstalledModelPhysicalMemberRole.Weight
+                    },
+                    new IntendedInstalledModelMember
+                    {
+                        RelativePath = _identity.RelativeSidecarPath,
+                        Role = InstalledModelPhysicalMemberRole.Sidecar
+                    }
                 ]
             };
             var keys = new[]

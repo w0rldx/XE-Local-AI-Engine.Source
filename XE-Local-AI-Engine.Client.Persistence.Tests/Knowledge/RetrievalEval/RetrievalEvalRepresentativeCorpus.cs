@@ -14,91 +14,95 @@ internal static class RetrievalEvalRepresentativeCorpus
         {
             Key = "english-canary",
             Body = """
-            # Canary deployment
+                   # Canary deployment
 
-            A canary rollout pauses when the error budget exceeds seven percent. Operators then revert the green
-            deployment slot and keep the stable blue slot serving traffic until the incident review is complete.
-            """
+                   A canary rollout pauses when the error budget exceeds seven percent. Operators then revert the green
+                   deployment slot and keep the stable blue slot serving traffic until the incident review is complete.
+                   """
         },
         new()
         {
             Key = "english-distractor",
             Body = """
-            # Canary bird habitat
+                   # Canary bird habitat
 
-            The Atlantic canary builds a nest in shrubs and eats grass seed. Bird keepers provide daylight, fresh
-            water, and a wide flight enclosure for healthy feathers.
-            """
+                   The Atlantic canary builds a nest in shrubs and eats grass seed. Bird keepers provide daylight, fresh
+                   water, and a wide flight enclosure for healthy feathers.
+                   """
         },
         new()
         {
             Key = "german-backup",
             Body = """
-            # Datenbanksicherung
+                   # Datenbanksicherung
 
-            Die verschlüsselte Datenbanksicherung wird jeden Dienstag um 03:15 Uhr erstellt. Der
-            Wiederherstellungstest prüft anschließend das Archiv und protokolliert die Prüfsumme.
-            """
+                   Die verschlüsselte Datenbanksicherung wird jeden Dienstag um 03:15 Uhr erstellt. Der
+                   Wiederherstellungstest prüft anschließend das Archiv und protokolliert die Prüfsumme.
+                   """
         },
         new()
         {
             Key = "german-distractor",
             Body = """
-            # Datenbankabfrage
+                   # Datenbankabfrage
 
-            Eine Datenbankabfrage filtert aktive Datensätze und sortiert die Ergebnisliste nach dem Zeitstempel.
-            Diese Anleitung beschreibt keine Sicherung und keinen Wiederherstellungstest.
-            """
+                   Eine Datenbankabfrage filtert aktive Datensätze und sortiert die Ergebnisliste nach dem Zeitstempel.
+                   Diese Anleitung beschreibt keine Sicherung und keinen Wiederherstellungstest.
+                   """
         },
         new()
         {
             Key = "code-writer",
             Body = """
-            # Knowledge index writer
+                   # Knowledge index writer
 
-            The exact method identifier is KnowledgeIndexWriter.WriteAsync. Its implementation lives at
-            XE-Local-AI-Engine.Client.Persistence/Knowledge/KnowledgeIndexWriter.cs and commits chunks atomically.
-            """
+                   The exact method identifier is KnowledgeIndexWriter.WriteAsync. Its implementation lives at
+                   XE-Local-AI-Engine.Client.Persistence/Knowledge/KnowledgeIndexWriter.cs and commits chunks atomically.
+                   """
         },
         new()
         {
             Key = "code-distractor",
             Body = """
-            # Knowledge search reader
+                   # Knowledge search reader
 
-            KnowledgeSearchService.SearchAsync reads indexed chunks. The implementation is in
-            XE-Local-AI-Engine.Client.Application/Services/Knowledge/KnowledgeSearchService.cs.
-            """
+                   KnowledgeSearchService.SearchAsync reads indexed chunks. The implementation is in
+                   XE-Local-AI-Engine.Client.Application/Services/Knowledge/KnowledgeSearchService.cs.
+                   """
         },
-        new() { Key = "long-boundary", Body = BuildLongBoundaryDocument() },
+        new()
+        {
+            Key = "long-boundary",
+            Body = BuildLongBoundaryDocument()
+        },
         new()
         {
             Key = "retention-policy",
             Body = """
-            # Retention policy
+                   # Retention policy
 
-            The compliance retention schedule keeps audit exports for thirteen months. Policy owners approve any
-            extension and record the approval reference in the archive register.
-            """
+                   The compliance retention schedule keeps audit exports for thirteen months. Policy owners approve any
+                   extension and record the approval reference in the archive register.
+                   """
         },
         new()
         {
             Key = "retention-runbook",
             Body = """
-            # Retention runbook
+                   # Retention runbook
 
-            The archive runbook applies the thirteen month retention schedule, verifies the audit export checksum,
-            and records the storage location before old snapshots are removed.
-            """
+                   The archive runbook applies the thirteen month retention schedule, verifies the audit export checksum,
+                   and records the storage location before old snapshots are removed.
+                   """
         },
         new()
         {
             Key = "irrelevant-gardening",
             Body = """
-            # Balcony gardening
+                   # Balcony gardening
 
-            Basil seedlings need drainage, morning sunlight, and regular watering in a sheltered balcony planter.
-            """
+                   Basil seedlings need drainage, morning sunlight, and regular watering in a sheltered balcony planter.
+                   """
         }
     ];
 

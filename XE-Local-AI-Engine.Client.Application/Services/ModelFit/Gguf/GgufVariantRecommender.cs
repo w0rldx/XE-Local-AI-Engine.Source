@@ -62,7 +62,13 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         var annotations = new GgufVariantAnnotation[files.Count];
         for (var i = 0; i < files.Count; i++)
         {
-            annotations[i] = new GgufVariantAnnotation { FileName = files[i].FileName, QualityTier = tiers[i], FitVerdict = verdicts[i], IsRecommended = i == recommendedIndex };
+            annotations[i] = new GgufVariantAnnotation
+            {
+                FileName = files[i].FileName,
+                QualityTier = tiers[i],
+                FitVerdict = verdicts[i],
+                IsRecommended = i == recommendedIndex
+            };
         }
 
         return annotations;

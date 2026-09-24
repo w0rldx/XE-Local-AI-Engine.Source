@@ -15,7 +15,12 @@ internal sealed partial class SubAgentSpawnService
             var instructions = string.IsNullOrWhiteSpace(request.Instructions)
                 ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
                 : request.Instructions;
-            return new ResolvedBinding { ModelName = request.ModelId, Instructions = instructions, Tools = null };
+            return new ResolvedBinding
+            {
+                ModelName = request.ModelId,
+                Instructions = instructions,
+                Tools = null
+            };
         }
 
         var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct);
@@ -27,7 +32,7 @@ internal sealed partial class SubAgentSpawnService
         // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send consumes — so it inherits the
         // resolved prompt, reasoning and skills as one unit. Hand over the snapshot already read, not the id: a second read could assemble one child from two versions.
         var resolved = await _agentDefinitionResolver
-                             .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct);
+            .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct);
         if (resolved is null)
         {
             // The resolver seam is nullable for every caller, so guard it here too: reject with the sanitized
@@ -42,7 +47,7 @@ internal sealed partial class SubAgentSpawnService
         // The child model's OWN thinking capability gates the reasoning field, as the direct (resolution.SupportsThinking) and orchestration-participant
         // paths do: a non-thinking Ollama model 400s on think, so ParticipantReasoningOptions omits it. Cache-first. Locality was gated by the resolver above.
         var childCapabilities = await _modelCapabilityResolver
-                                      .ResolveAsync(definition.ModelProfile, ct);
+            .ResolveAsync(definition.ModelProfile, ct);
         var (supportsThinking, _, _) = childCapabilities;
 
         return new ResolvedBinding
@@ -52,7 +57,12 @@ internal sealed partial class SubAgentSpawnService
             Tools = tools,
             // The child model's own reasoning-budget enforceability rides alongside its thinking capability, so a child
             // pinned to a template that renders no reasoning end marker is not handed a cap llama.cpp would ignore.
-            Reasoning = new ChildReasoning { ReasoningEffort = resolved.ReasoningEffort, SupportsThinking = supportsThinking, ReasoningBudgetEnforceable = childCapabilities.ReasoningBudgetEnforceable },
+            Reasoning = new ChildReasoning
+            {
+                ReasoningEffort = resolved.ReasoningEffort,
+                SupportsThinking = supportsThinking,
+                ReasoningBudgetEnforceable = childCapabilities.ReasoningBudgetEnforceable
+            },
             Skills = resolved.Skills
         };
     }

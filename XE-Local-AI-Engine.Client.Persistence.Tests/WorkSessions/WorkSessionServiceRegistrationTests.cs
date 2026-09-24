@@ -62,10 +62,10 @@ public sealed class WorkSessionServiceRegistrationTests
         var enabledStore = WorkSessionTestFixture.StoreFor(enabledContext);
         var enabledSessionId = await ArrangeRunningAsync(enabledStore);
         await RunReconcilerAsync(enabledStore,
-                new WorkSessionOptions
-                {
-                    Enabled = true
-                });
+            new WorkSessionOptions
+            {
+                Enabled = true
+            });
         AssertEx.Equal(AgentWorkSessionStatus.Interrupted, (await enabledStore.GetAsync(enabledSessionId)).Status);
     }
 
@@ -87,7 +87,12 @@ public sealed class WorkSessionServiceRegistrationTests
     {
         var sessionId = Guid.NewGuid();
         var created = await store.CreateAsync(WorkSessionTestFixture.CreateSeed(sessionId));
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = created.Version, TargetStatus = AgentWorkSessionStatus.Running });
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            TargetStatus = AgentWorkSessionStatus.Running
+        });
         return sessionId;
     }
 

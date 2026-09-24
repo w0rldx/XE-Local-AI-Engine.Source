@@ -21,7 +21,11 @@ public sealed class WorkSessionCheckpointTests
     [Test]
     public async Task Compose_WritesTheStructuredStateFromTheSessionsRows()
     {
-        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Three documents read, two open questions." });
+        var compaction = new StubCompactionService(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.Compacted,
+            Summary = "Three documents read, two open questions."
+        });
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
@@ -54,11 +58,21 @@ public sealed class WorkSessionCheckpointTests
         // The configured chat window keeps eight messages — four whole steps — verbatim, so a session that checkpoints
         // before its fourth step has nothing OUTSIDE the window to fold: compaction answered NothingToCompact and the
         // checkpoint's prose half stayed null, on exactly the sessions whose checkpoint is the only record of them.
-        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact })
+        var compaction = new StubCompactionService(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.NothingToCompact
+        })
         {
             ResultByKeepVerbatim = keep => keep == ConversationStepContextBound.SessionKeepVerbatim
-                ? new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Two steps in, one document read." }
-                : new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact }
+                ? new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.Compacted,
+                    Summary = "Two steps in, one document read."
+                }
+                : new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.NothingToCompact
+                }
         };
 
         await using var factory = NewFactory(compaction);
@@ -81,14 +95,21 @@ public sealed class WorkSessionCheckpointTests
     [Arguments(ConversationCompactionOutcome.TimedOut)]
     public async Task Compose_WhenCompactionIsANoOp_StillCheckpointsAndKeepsThePriorSummary(ConversationCompactionOutcome outcome)
     {
-        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "First pass." });
+        var compaction = new StubCompactionService(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.Compacted,
+            Summary = "First pass."
+        });
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await ComposeAsync(factory, sessionId);
 
-        compaction.Result = new ConversationCompactionResult { Outcome = outcome };
+        compaction.Result = new ConversationCompactionResult
+        {
+            Outcome = outcome
+        };
         await ComposeAsync(factory, sessionId);
 
         var checkpoints = await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId);
@@ -101,7 +122,10 @@ public sealed class WorkSessionCheckpointTests
     {
         // Nullable end to end on purpose: a node with no local model produces no synopsis, and a placeholder would be a
         // lie the resumed session would then read as fact.
-        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NoLocalModel }));
+        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.NoLocalModel
+        }));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
@@ -114,7 +138,11 @@ public sealed class WorkSessionCheckpointTests
     [Test]
     public async Task AfterACheckpoint_TheStateBlockCarriesItsSummary()
     {
-        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Where the work stands." }));
+        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult
+        {
+            Outcome = ConversationCompactionOutcome.Compacted,
+            Summary = "Where the work stands."
+        }));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
@@ -166,10 +194,23 @@ public sealed class WorkSessionCheckpointTests
             ExpectedVersion = WorkSessionVersions.Any,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [
-                               new WorkPlanTaskChange { TaskId = activeTaskId, Operation = WorkPlanTaskOperation.Add, Title = "Read the ADR", Status = AgentWorkSessionTaskStatus.Active },
-                               new WorkPlanTaskChange { TaskId = doneTaskId, Operation = WorkPlanTaskOperation.Add, Title = "Already finished", Status = AgentWorkSessionTaskStatus.Done }
-                           ]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = activeTaskId,
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "Read the ADR",
+                    Status = AgentWorkSessionTaskStatus.Active
+                },
+                new WorkPlanTaskChange
+                {
+                    TaskId = doneTaskId,
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "Already finished",
+                    Status = AgentWorkSessionTaskStatus.Done
+                }
+            ]
         });
 
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand

@@ -374,7 +374,15 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
-        parked.PendingApproval = new InvocationApprovalState { RequestId = "approval-1", Description = "Run a command", RequestedAt = DateTimeOffset.UtcNow, CallId = "call-7", ToolName = "run_command", SessionScopeEligible = true };
+        parked.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "approval-1",
+            Description = "Run a command",
+            RequestedAt = DateTimeOffset.UtcNow,
+            CallId = "call-7",
+            ToolName = "run_command",
+            SessionScopeEligible = true
+        };
         RaiseState(dispatcher, parked);
 
         var events = new List<ChatStreamEvent>();
@@ -409,7 +417,12 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
-        parked.PendingApproval = new InvocationApprovalState { RequestId = "approval-2", Description = "Run a command", RequestedAt = DateTimeOffset.UtcNow };
+        parked.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "approval-2",
+            Description = "Run a command",
+            RequestedAt = DateTimeOffset.UtcNow
+        };
         RaiseState(dispatcher, parked);
 
         var events = new List<ChatStreamEvent>();
@@ -477,15 +490,27 @@ public sealed class InvocationResumeRegistryTests
             RequestId = requestId,
             CallId = callId,
             ToolName = "ask_user",
-            Questions = [
+            Questions =
+            [
                 new UserQuestionSpec
                 {
                     Header = "Auth",
                     Question = "Which auth method?",
                     MultiSelect = false,
-                    Options = [
-                        new UserQuestionOption { Label = "OAuth", Description = null, Recommended = true },
-                        new UserQuestionOption { Label = "API key", Description = null, Recommended = false }
+                    Options =
+                    [
+                        new UserQuestionOption
+                        {
+                            Label = "OAuth",
+                            Description = null,
+                            Recommended = true
+                        },
+                        new UserQuestionOption
+                        {
+                            Label = "API key",
+                            Description = null,
+                            Recommended = false
+                        }
                     ]
                 }
             ],

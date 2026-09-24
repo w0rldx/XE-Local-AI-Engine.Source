@@ -25,8 +25,7 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
     private readonly ILogger<BaseArtifactDownloadCoordinator> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public BaseArtifactDownloadCoordinator(
-        IServiceScopeFactory scopeFactory,
+    public BaseArtifactDownloadCoordinator(IServiceScopeFactory scopeFactory,
         IBaseCheckpointStore checkpointStore,
         INodeDataDirectory dataDirectory,
         ILogger<BaseArtifactDownloadCoordinator> logger)
@@ -132,14 +131,14 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
             });
 
             var completed = await _checkpointStore
-                                  .DownloadAsync(manifest, directory, progress, download.Cancellation.Token);
+                .DownloadAsync(manifest, directory, progress, download.Cancellation.Token);
 
             await UpdateStoreAsync(async (store, ct) => await store.MarkReadyAsync(artifactId,
-                                                                       expectedVersion,
-                                                                       BaseArtifactManifest.SerializeFiles(completed.Files),
-                                                                       completed.TotalBytes,
-                                                                       BaseArtifactManifest.SerializeLicense(license),
-                                                                       ct));
+                expectedVersion,
+                BaseArtifactManifest.SerializeFiles(completed.Files),
+                completed.TotalBytes,
+                BaseArtifactManifest.SerializeLicense(license),
+                ct));
         }
         catch (OperationCanceledException)
         {
@@ -155,8 +154,8 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
         {
             _logger.LogWarning(exception, "The base checkpoint download for {ArtifactId} failed.", artifactId);
             await FailAsync(artifactId,
-                    expectedVersion,
-                    "The base checkpoint download failed. Check the network connection and try again.");
+                expectedVersion,
+                "The base checkpoint download failed. Check the network connection and try again.");
         }
         finally
         {
@@ -168,7 +167,7 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
     private async Task FailAsync(Guid artifactId, long expectedVersion, string message)
     {
         await UpdateStoreAsync(async (store, ct) =>
-                await store.MarkFailedAsync(artifactId, expectedVersion, message, ct));
+            await store.MarkFailedAsync(artifactId, expectedVersion, message, ct));
     }
 
     private async Task UpdateStoreAsync(Func<ITrainingBaseArtifactStore, CancellationToken, Task> update)

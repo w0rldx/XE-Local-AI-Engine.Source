@@ -26,8 +26,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     private readonly ITrainingBaseArtifactStore _store;
     private readonly TimeProvider _timeProvider;
 
-    public BaseArtifactService(
-        ITrainingBaseArtifactStore store,
+    public BaseArtifactService(ITrainingBaseArtifactStore store,
         IBaseCheckpointStore checkpointStore,
         BaseArtifactDownloadCoordinator coordinator,
         IFreeSpaceProbe freeSpaceProbe,

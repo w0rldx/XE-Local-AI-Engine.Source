@@ -78,12 +78,26 @@ public sealed class GraphWorkflowRunHubTests
     {
         var store = Store();
         store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
-             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>(
-             [
-                 NodeRun("review", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.Pause, PendingDecisionKind = GraphWorkflowDecisionKind.Approve },
-                 NodeRun("ask", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.ChatInput, PendingDecisionKind = GraphWorkflowDecisionKind.Answer },
-                 NodeRun("ask-again", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.ChatInput, PendingDecisionKind = GraphWorkflowDecisionKind.Answer },
-                 NodeRun("answered", GraphWorkflowNodeRunStatus.Succeeded) with { Kind = GraphWorkflowNodeKind.ChatInput },
+             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>([
+                 NodeRun("review", GraphWorkflowNodeRunStatus.WaitingForApproval) with
+                 {
+                     Kind = GraphWorkflowNodeKind.Pause,
+                     PendingDecisionKind = GraphWorkflowDecisionKind.Approve
+                 },
+                 NodeRun("ask", GraphWorkflowNodeRunStatus.WaitingForApproval) with
+                 {
+                     Kind = GraphWorkflowNodeKind.ChatInput,
+                     PendingDecisionKind = GraphWorkflowDecisionKind.Answer
+                 },
+                 NodeRun("ask-again", GraphWorkflowNodeRunStatus.WaitingForApproval) with
+                 {
+                     Kind = GraphWorkflowNodeKind.ChatInput,
+                     PendingDecisionKind = GraphWorkflowDecisionKind.Answer
+                 },
+                 NodeRun("answered", GraphWorkflowNodeRunStatus.Succeeded) with
+                 {
+                     Kind = GraphWorkflowNodeKind.ChatInput
+                 },
                  NodeRun("draft", GraphWorkflowNodeRunStatus.Running)
              ]);
         using var fixture = CreateHub(store);
@@ -237,7 +251,10 @@ public sealed class GraphWorkflowRunHubTests
         ChatStreamEvent[] expected = [StreamEvent(invocationId, "snapshot", 0), StreamEvent(invocationId, "delta", 1)];
         var registry = Substitute.For<IInvocationResumeRegistry>();
         registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>()).Returns(Yield(expected));
-        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = invocationId }), registry);
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with
+        {
+            InvocationId = invocationId
+        }), registry);
 
         var received = await Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None));
 
@@ -249,7 +266,10 @@ public sealed class GraphWorkflowRunHubTests
     public async Task StreamNodeActivity_ForANodeKeyThisRunDoesNotHave_ThrowsWithoutAttaching()
     {
         var registry = Substitute.For<IInvocationResumeRegistry>();
-        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = Guid.NewGuid() }), registry);
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with
+        {
+            InvocationId = Guid.NewGuid()
+        }), registry);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "other-runs-node", CancellationToken.None)));
 
@@ -260,7 +280,10 @@ public sealed class GraphWorkflowRunHubTests
     public async Task StreamNodeActivity_ForARowThatIsNotRunning_ThrowsWithoutAttaching()
     {
         var registry = Substitute.For<IInvocationResumeRegistry>();
-        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Succeeded) with { InvocationId = Guid.NewGuid() }), registry);
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Succeeded) with
+        {
+            InvocationId = Guid.NewGuid()
+        }), registry);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None)));
 
@@ -285,7 +308,10 @@ public sealed class GraphWorkflowRunHubTests
         var invocationId = Guid.NewGuid();
         var registry = Substitute.For<IInvocationResumeRegistry>();
         registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>()).Throws(new InvalidOperationException($"Invocation {invocationId} is not resumable."));
-        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = invocationId }), registry);
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with
+        {
+            InvocationId = invocationId
+        }), registry);
 
         var exception = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None)));
 
@@ -333,8 +359,7 @@ public sealed class GraphWorkflowRunHubTests
         };
         store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
         store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
-             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>(
-             [
+             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>([
                  NodeRun("draft", GraphWorkflowNodeRunStatus.Running),
                  NodeRun("review", GraphWorkflowNodeRunStatus.Queued),
                  NodeRun("finish", GraphWorkflowNodeRunStatus.Pending)
@@ -390,7 +415,16 @@ public sealed class GraphWorkflowRunHubTests
     }
 
     private static ChatStreamEvent StreamEvent(Guid invocationId, string type, long sequence) =>
-        new() { Type = type, ConversationId = Guid.NewGuid(), MessageId = invocationId, RequestId = invocationId, Status = "Running", Sequence = sequence, OccurredAtUtc = 100 + sequence };
+        new()
+        {
+            Type = type,
+            ConversationId = Guid.NewGuid(),
+            MessageId = invocationId,
+            RequestId = invocationId,
+            Status = "Running",
+            Sequence = sequence,
+            OccurredAtUtc = 100 + sequence
+        };
 
     private static async IAsyncEnumerable<ChatStreamEvent> Yield(IEnumerable<ChatStreamEvent> events)
     {
@@ -413,7 +447,16 @@ public sealed class GraphWorkflowRunHubTests
     }
 
     private static GraphWorkflowRunEventSnapshot Event(long sequence) =>
-        new() { Id = Guid.NewGuid(), RunId = RunId, Seq = sequence, EventType = "node.started", NodeKey = "draft", DetailJson = null, CreatedAtUtc = 100 };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            Seq = sequence,
+            EventType = "node.started",
+            NodeKey = "draft",
+            DetailJson = null,
+            CreatedAtUtc = 100
+        };
 
     private static HubFixture CreateHub(IGraphWorkflowStore store, IInvocationResumeRegistry registry) =>
         CreateHub(store, enabled: true, registry);
@@ -456,7 +499,11 @@ public sealed class GraphWorkflowRunHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture { Hub = hub, Groups = groups };
+        return new HubFixture
+        {
+            Hub = hub,
+            Groups = groups
+        };
     }
 
     private sealed record HubFixture : IDisposable

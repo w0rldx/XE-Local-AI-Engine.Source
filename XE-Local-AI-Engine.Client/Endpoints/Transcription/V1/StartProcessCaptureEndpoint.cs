@@ -55,10 +55,10 @@ public sealed class StartProcessCaptureEndpoint : Endpoint<StartProcessCaptureRe
         {
             case StartProcessCaptureOutcome.Started:
                 await Send.OkAsync(new ProcessCaptureStatusResponse
-                          {
-                              SessionId = req.SessionId,
-                              Capturing = true
-                          }, ct);
+                {
+                    SessionId = req.SessionId,
+                    Capturing = true
+                }, ct);
                 return;
 
             case StartProcessCaptureOutcome.NotSupported:

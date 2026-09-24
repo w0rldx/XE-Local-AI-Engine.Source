@@ -45,8 +45,7 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;
     private readonly IDevelopmentStore _store;
 
-    public DevelopmentEvidenceService(
-        IDevelopmentStore store,
+    public DevelopmentEvidenceService(IDevelopmentStore store,
         IDevelopmentArtifactBlobStore blobStore,
         IDevelopmentPatchEvidenceService patchEvidence)
     {
@@ -90,7 +89,14 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
                 throw new DevelopmentInvalidTransitionException("The current workspace no longer matches its exact patch evidence.");
             }
 
-            return new DevelopmentEvidenceSet { Current = current, PatchArtifact = patch, ManifestArtifact = manifest, Patch = patchContent, Manifest = manifestContent };
+            return new DevelopmentEvidenceSet
+            {
+                Current = current,
+                PatchArtifact = patch,
+                ManifestArtifact = manifest,
+                Patch = patchContent,
+                Manifest = manifestContent
+            };
         }
         catch (DevelopmentInvalidTransitionException)
         {
@@ -126,13 +132,13 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
         try
         {
             _ = await _store.InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand
-            {
-                TaskId = taskId,
-                OperationId = Guid.NewGuid(),
-                ExpectedTaskVersion = task.Version,
-                SanitizedReason = sanitizedReason
-            },
-                                cancellationToken);
+                {
+                    TaskId = taskId,
+                    OperationId = Guid.NewGuid(),
+                    ExpectedTaskVersion = task.Version,
+                    SanitizedReason = sanitizedReason
+                },
+                cancellationToken);
         }
         catch (DevelopmentConcurrencyException)
         {

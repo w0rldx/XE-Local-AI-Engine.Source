@@ -13,8 +13,7 @@ internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
     private readonly IOllamaModelService _modelService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
-    public ModelUnloadCoordinator(
-        IOllamaModelService modelService,
+    public ModelUnloadCoordinator(IOllamaModelService modelService,
         ILlamaServerProcessSupervisor supervisor,
         IConfiguration configuration,
         ILogger<ModelUnloadCoordinator> logger)

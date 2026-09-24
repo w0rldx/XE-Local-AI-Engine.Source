@@ -16,7 +16,13 @@ public sealed partial class NodeAdminMcpTools
         {
             var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken);
             var runtime = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken);
-            return new McpNodeStatusResponse { Version = GetVersion(), UptimeSeconds = GetProcessUptimeSeconds(), DefaultModelName = settings.DefaultModelName, LoadedProcessCount = runtime.RunningProcessCount };
+            return new McpNodeStatusResponse
+            {
+                Version = GetVersion(),
+                UptimeSeconds = GetProcessUptimeSeconds(),
+                DefaultModelName = settings.DefaultModelName,
+                LoadedProcessCount = runtime.RunningProcessCount
+            };
         });
 
     [McpServerTool(Name = "get_runtime_status")]
@@ -59,8 +65,18 @@ public sealed partial class NodeAdminMcpTools
 
             var result = await _runtimeAdministrationService.StartAcquisitionAsync(parsedVariant, cancellationToken);
             return result.Accepted
-                ? new McpRuntimeAcquisitionStartResponse { Status = "accepted", Variant = result.Variant }
-                : new McpRuntimeAcquisitionStartResponse { Status = "busy", Variant = result.Variant, FailureCode = McpAdminToolFailureCodes.Busy, DisplayMessage = result.DisplayMessage };
+                ? new McpRuntimeAcquisitionStartResponse
+                {
+                    Status = "accepted",
+                    Variant = result.Variant
+                }
+                : new McpRuntimeAcquisitionStartResponse
+                {
+                    Status = "busy",
+                    Variant = result.Variant,
+                    FailureCode = McpAdminToolFailureCodes.Busy,
+                    DisplayMessage = result.DisplayMessage
+                };
         }, static response => response.FailureCode is not null);
     }
 

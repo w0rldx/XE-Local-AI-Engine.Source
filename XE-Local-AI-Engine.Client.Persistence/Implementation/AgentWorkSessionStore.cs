@@ -83,7 +83,16 @@ public sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
             session.UpdatedAtUtc = Now();
             await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new WorkSessionMutationResult { SessionId = sessionId, Sequence = sequence, Step = session.StepCount, Version = session.Version, Status = session.Status, CurrentTaskId = session.CurrentTaskId, SupersededArtifactId = outcome.SupersededArtifactId };
+            return new WorkSessionMutationResult
+            {
+                SessionId = sessionId,
+                Sequence = sequence,
+                Step = session.StepCount,
+                Version = session.Version,
+                Status = session.Status,
+                CurrentTaskId = session.CurrentTaskId,
+                SupersededArtifactId = outcome.SupersededArtifactId
+            };
         }
         catch (DbUpdateException exception)
         {
@@ -113,7 +122,15 @@ public sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
         var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken);
         return session is null
             ? null
-            : new WorkSessionMutationResult { SessionId = sessionId, Sequence = recorded.Sequence, Step = recorded.Step, Version = session.Version, Status = session.Status, CurrentTaskId = session.CurrentTaskId };
+            : new WorkSessionMutationResult
+            {
+                SessionId = sessionId,
+                Sequence = recorded.Sequence,
+                Step = recorded.Step,
+                Version = session.Version,
+                Status = session.Status,
+                CurrentTaskId = session.CurrentTaskId
+            };
     }
 
     private long AddEvent(AgentWorkSession session, string eventType, string? outcome, Guid? operationId, byte[]? detailJson)

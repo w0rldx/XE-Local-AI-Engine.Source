@@ -41,18 +41,18 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
             {
                 case TrainingRuntimeInstallOutcome.AlreadyRunning:
                     await BlockAsync(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
-                            "A training runtime install is already in progress.",
-                            prerequisites: null);
+                        "A training runtime install is already in progress.",
+                        prerequisites: null);
                     return;
                 case TrainingRuntimeInstallOutcome.InsufficientDisk:
                     await BlockAsync("disk",
-                            "There is not enough free disk space to install the training runtime.",
-                            result.Prerequisites?.ToResponse());
+                        "There is not enough free disk space to install the training runtime.",
+                        result.Prerequisites?.ToResponse());
                     return;
                 case TrainingRuntimeInstallOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
-                            "One or more training runtime prerequisites are missing; resolve the checklist before installing.",
-                            result.Prerequisites?.ToResponse());
+                        "One or more training runtime prerequisites are missing; resolve the checklist before installing.",
+                        result.Prerequisites?.ToResponse());
                     return;
                 case TrainingRuntimeInstallOutcome.Started:
                     break;

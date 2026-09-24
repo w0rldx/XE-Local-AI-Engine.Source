@@ -287,7 +287,8 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     private readonly record struct RunCandidate(string Path, string RunId, DateTimeOffset StartedAt, long SizeBytes);
 
     [LoggerMessage(EventId = 4810, Level = LogLevel.Information,
-        Message = "AgentHome run retention removed {DeletedCount} run(s) — {ByAge} past the age limit, {ByCount} over the run cap, {ByBytes} over the byte cap — reclaiming {BytesReclaimed} byte(s): {RunIds}.")]
+        Message =
+            "AgentHome run retention removed {DeletedCount} run(s) — {ByAge} past the age limit, {ByCount} over the run cap, {ByBytes} over the byte cap — reclaiming {BytesReclaimed} byte(s): {RunIds}.")]
     private static partial void SweepCompleted(ILogger logger, int deletedCount, int byAge, int byCount, int byBytes, long bytesReclaimed, string runIds);
 
     [LoggerMessage(EventId = 4811, Level = LogLevel.Debug,

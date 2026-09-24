@@ -38,7 +38,7 @@ public sealed class ProbeExternalProviderEndpoint : Endpoint<ExternalProviderPro
     public override async Task HandleAsync(ExternalProviderProbeRequest req, CancellationToken ct)
     {
         var result = await _probeService
-                           .ProbeAsync(new ExternalProviderProbeQuery(req.ConnectionId, req.BaseUrl, req.ApiKey), ct);
+            .ProbeAsync(new ExternalProviderProbeQuery(req.ConnectionId, req.BaseUrl, req.ApiKey), ct);
 
         switch (result.Outcome)
         {

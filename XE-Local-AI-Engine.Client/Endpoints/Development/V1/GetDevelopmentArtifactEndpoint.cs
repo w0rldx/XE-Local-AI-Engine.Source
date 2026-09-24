@@ -25,6 +25,10 @@ public sealed class GetDevelopmentArtifactEndpoint : Endpoint<DevelopmentArtifac
     public override async Task HandleAsync(DevelopmentArtifactRequest req, CancellationToken ct)
     {
         var artifact = await _service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct);
-        await Send.OkAsync(new DevelopmentArtifactContentResponse { Artifact = artifact.Artifact.ToResponse(), Content = artifact.Content }, ct);
+        await Send.OkAsync(new DevelopmentArtifactContentResponse
+        {
+            Artifact = artifact.Artifact.ToResponse(),
+            Content = artifact.Content
+        }, ct);
     }
 }

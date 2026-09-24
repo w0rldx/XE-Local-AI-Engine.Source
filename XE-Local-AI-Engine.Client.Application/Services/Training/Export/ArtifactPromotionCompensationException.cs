@@ -4,12 +4,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public sealed class ArtifactPromotionCompensationException : AggregateException
 {
-    public ArtifactPromotionCompensationException(
-        GgufImportCommitReceipt commitReceipt,
+    public ArtifactPromotionCompensationException(GgufImportCommitReceipt commitReceipt,
         Exception persistenceFailure,
         Exception rollbackFailure) : base("The promoted registry entry could not be recorded or rolled back; recovery receipt evidence is attached.",
-            persistenceFailure,
-            rollbackFailure)
+        persistenceFailure,
+        rollbackFailure)
     {
         CommitReceipt = commitReceipt;
     }

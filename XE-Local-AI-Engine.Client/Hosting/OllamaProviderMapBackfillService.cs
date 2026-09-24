@@ -18,8 +18,7 @@ public sealed class OllamaProviderMapBackfillService : BackgroundService
     private readonly ILogger<OllamaProviderMapBackfillService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public OllamaProviderMapBackfillService(
-        IServiceScopeFactory scopeFactory,
+    public OllamaProviderMapBackfillService(IServiceScopeFactory scopeFactory,
         ILogger<OllamaProviderMapBackfillService> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);

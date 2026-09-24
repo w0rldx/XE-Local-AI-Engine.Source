@@ -255,7 +255,7 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.Equal(expected: 1, graph.GetProperty("schemaVersion").GetInt32());
 
         using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}")).Content
-            .ReadAsStringAsync());
+                                                                                                                      .ReadAsStringAsync());
         AssertEx.Equal("analyze, check, done, review, ship, start",
             NodeKeys(definition.RootElement.GetProperty("graph")),
             "the definition really did move on, so the two reads are answering about different graphs.");
@@ -273,7 +273,7 @@ public sealed class GraphWorkflowRunEndpointTests
 
         using var run = JsonDocument.Parse(await (await SendAsync("GET", $"{Runs}/{runId}")).Content.ReadAsStringAsync());
         using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}")).Content
-            .ReadAsStringAsync());
+                                                                                                                      .ReadAsStringAsync());
 
         // Structural, not raw text: what matters is that the two documents SAY the same thing, and property order is
         // the serializer's business rather than the contract's.

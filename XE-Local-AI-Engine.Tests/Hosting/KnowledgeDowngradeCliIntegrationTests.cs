@@ -124,7 +124,11 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         }
 
         var output = string.Concat(await standardOutput, Environment.NewLine, await standardError);
-        return new CommandResult { ExitCode = process.ExitCode, Output = output };
+        return new CommandResult
+        {
+            ExitCode = process.ExitCode,
+            Output = output
+        };
     }
 
     private static ProcessStartInfo CreateStartInfo(string commandArgument, string databasePath, string nodeDirectory)

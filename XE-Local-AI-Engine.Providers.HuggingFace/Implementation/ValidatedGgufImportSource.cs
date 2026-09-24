@@ -227,7 +227,13 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
             var inode = ReadField(fields, "ino:");
             if (mount is not null && inode is not null)
             {
-                return new SourceIdentity { Platform = "linux", Volume = mount, FileId = inode, Length = length };
+                return new SourceIdentity
+                {
+                    Platform = "linux",
+                    Volume = mount,
+                    FileId = inode,
+                    Length = length
+                };
             }
         }
         else if (OperatingSystem.IsWindows())
@@ -257,7 +263,13 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
             };
         }
 
-        return new SourceIdentity { Platform = "best-effort", Volume = canonicalPath, FileId = File.GetLastWriteTimeUtc(canonicalPath).Ticks.ToString(CultureInfo.InvariantCulture), Length = length };
+        return new SourceIdentity
+        {
+            Platform = "best-effort",
+            Volume = canonicalPath,
+            FileId = File.GetLastWriteTimeUtc(canonicalPath).Ticks.ToString(CultureInfo.InvariantCulture),
+            Length = length
+        };
     }
 
     private static string? ReadField(IEnumerable<string> lines, string prefix)

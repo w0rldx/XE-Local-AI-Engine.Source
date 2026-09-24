@@ -88,9 +88,9 @@ public sealed class ExternalAppEntityConfigurationTests
             InstanceId = command.Id,
             ExpectedVersion = created.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                           {
-                               ExternalAppInstanceStatus.Installing
-                           },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Failed,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = null,

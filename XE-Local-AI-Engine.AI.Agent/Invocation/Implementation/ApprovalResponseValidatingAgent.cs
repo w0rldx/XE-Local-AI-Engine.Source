@@ -153,7 +153,11 @@ internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
                 _responseStates[requestId] = ApprovalResponseState.Reserved;
             }
 
-            return new ValidatedRun { Messages = materialized, ReservedRequestIds = reservations };
+            return new ValidatedRun
+            {
+                Messages = materialized,
+                ReservedRequestIds = reservations
+            };
         }
     }
 

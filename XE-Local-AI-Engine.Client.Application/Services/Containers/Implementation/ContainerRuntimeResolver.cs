@@ -85,9 +85,9 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         // Always probes, cache or no cache: a confirmation applied to an observation made a moment ago would approve
         // whichever daemon is there now rather than the one the operator was shown.
         var (resolution, _) = await ResolveWithEndpointAsync(instanceOverride: null,
-                forceRefresh: true,
-                expectedDaemonId,
-                cancellationToken);
+            forceRefresh: true,
+            expectedDaemonId,
+            cancellationToken);
         return resolution;
     }
 
@@ -95,9 +95,9 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         CancellationToken cancellationToken = default)
     {
         var (resolution, endpoint) = await ResolveWithEndpointAsync(instanceOverride,
-                forceRefresh: false,
-                confirmingDaemonId: null,
-                cancellationToken);
+            forceRefresh: false,
+            confirmingDaemonId: null,
+            cancellationToken);
 
         if (!resolution.Ready)
         {

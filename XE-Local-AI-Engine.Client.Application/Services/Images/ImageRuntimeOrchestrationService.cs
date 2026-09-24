@@ -24,8 +24,7 @@ public sealed class ImageRuntimeOrchestrationService
     private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
     private readonly IImageServerSupervisor _supervisor;
 
-    public ImageRuntimeOrchestrationService(
-        IStableDiffusionCppSourceBuildService buildService,
+    public ImageRuntimeOrchestrationService(IStableDiffusionCppSourceBuildService buildService,
         IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         IStableDiffusionInstalledRuntimeStore installedRuntimeStore,
         IImageRuntimeActivityGate activityGate,

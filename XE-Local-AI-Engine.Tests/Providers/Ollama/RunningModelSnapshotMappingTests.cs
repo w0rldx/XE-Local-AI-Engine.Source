@@ -25,7 +25,13 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes = 5_000_000_000, SizeVramBytes = 4_000_000_000 }
+            new FakeOllamaState.FakeOllamaRunningModel
+            {
+                Name = "llama3:8b",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                SizeBytes = 5_000_000_000,
+                SizeVramBytes = 4_000_000_000
+            }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
@@ -47,7 +53,13 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes = 7_000_000_000, SizeVramBytes = 6_000_000_000 }
+            new FakeOllamaState.FakeOllamaRunningModel
+            {
+                Name = "llama3:8b",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                SizeBytes = 7_000_000_000,
+                SizeVramBytes = 6_000_000_000
+            }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
@@ -71,7 +83,11 @@ public sealed class RunningModelSnapshotMappingTests
         // (A running model always reports an expiry, so this case isolates the size/vram normalization.)
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5) }
+            new FakeOllamaState.FakeOllamaRunningModel
+            {
+                Name = "llama3:8b",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+            }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
@@ -89,7 +105,12 @@ public sealed class RunningModelSnapshotMappingTests
         // A snapshot with no expiry/footprint maps to a row with null memory + null countdown rather than zeroed values, so
         // the UI can omit those columns.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot { Name = "llama3:8b", ModelName = null, ExpiresAt = null }
+            new RunningModelSnapshot
+            {
+                Name = "llama3:8b",
+                ModelName = null,
+                ExpiresAt = null
+            }
         ], ollamaConfigured: true);
 
         AssertEx.True(response.IsAvailable);
@@ -106,8 +127,18 @@ public sealed class RunningModelSnapshotMappingTests
     {
         // The runtime may report the canonical id under "model"; nameless rows (neither field set) are dropped.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot { Name = "raw", ModelName = "llama3:8b", ExpiresAt = null },
-            new RunningModelSnapshot { Name = null, ModelName = null, ExpiresAt = null }
+            new RunningModelSnapshot
+            {
+                Name = "raw",
+                ModelName = "llama3:8b",
+                ExpiresAt = null
+            },
+            new RunningModelSnapshot
+            {
+                Name = null,
+                ModelName = null,
+                ExpiresAt = null
+            }
         ], ollamaConfigured: true);
 
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());

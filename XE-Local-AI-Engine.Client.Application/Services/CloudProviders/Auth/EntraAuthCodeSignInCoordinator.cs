@@ -112,7 +112,11 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
 
         _ = TrackCallbackAsync(listener, connection, redirectUriString, state, codeVerifier, newCts);
 
-        return new EntraAuthCodeSignInHandle { AuthorizeUrl = authorizeUrl, ExpiresAtUtc = expiresAtUtc };
+        return new EntraAuthCodeSignInHandle
+        {
+            AuthorizeUrl = authorizeUrl,
+            ExpiresAtUtc = expiresAtUtc
+        };
     }
 
     /// <inheritdoc />

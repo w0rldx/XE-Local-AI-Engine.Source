@@ -43,7 +43,11 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
         // is never touched. A blank query and an all-function-word query are the same case — every score is zero.
         if (candidates.Count <= threshold || queryTokens.Count == 0)
         {
-            return Task.FromResult(new ToolRelevanceSelection { OfferedNames = [.. candidates.Select(static candidate => candidate.Name)], HiddenNames = [] });
+            return Task.FromResult(new ToolRelevanceSelection
+            {
+                OfferedNames = [.. candidates.Select(static candidate => candidate.Name)],
+                HiddenNames = []
+            });
         }
 
         var coreCount = candidates.Count(static candidate => candidate.IsCore);

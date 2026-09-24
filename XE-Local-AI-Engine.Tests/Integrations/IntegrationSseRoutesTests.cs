@@ -416,7 +416,16 @@ public sealed class IntegrationSseRoutesTests
         var narrow = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-narrow", [other.Id], broad.View.PrincipalId);
         var foreign = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-foreign");
 
-        return new Seeded { TriggerName = trigger.Name, TriggerId = trigger.Id, PrincipalId = broad.View.PrincipalId, KeyPrefix = broad.View.KeyPrefix, BroadKey = broad.Key, NarrowKey = narrow.Key, ForeignKey = foreign.Key };
+        return new Seeded
+        {
+            TriggerName = trigger.Name,
+            TriggerId = trigger.Id,
+            PrincipalId = broad.View.PrincipalId,
+            KeyPrefix = broad.View.KeyPrefix,
+            BroadKey = broad.Key,
+            NarrowKey = narrow.Key,
+            ForeignKey = foreign.Key
+        };
     }
 
     /// <summary>
@@ -437,18 +446,32 @@ public sealed class IntegrationSseRoutesTests
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var admitted = await store.AcceptAsync(new IntegrationAcceptCommand
-        {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
-            ExecutionId = executionId,
-            TriggerId = triggerId,
-            SessionId = sessionId,
-            PrincipalId = principalId,
-            RequestId = requestId ?? Guid.NewGuid(),
-            RequestFingerprint = fingerprint ?? [1, 2, 3],
-            KeyPrefix = keyPrefix,
-            ReceivedAtUtc = now,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = now }
-        },
+            {
+                NewSession = new IntegrationSessionCreate
+                {
+                    SessionId = sessionId,
+                    TriggerId = triggerId,
+                    ConversationId = Guid.NewGuid(),
+                    AgentDefinitionId = Guid.NewGuid()
+                },
+                ExecutionId = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = requestId ?? Guid.NewGuid(),
+                RequestFingerprint = fingerprint ?? [1, 2, 3],
+                KeyPrefix = keyPrefix,
+                ReceivedAtUtc = now,
+                AcceptedEvent = new IntegrationEventAppend
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = executionId,
+                    Sequence = 1,
+                    EventType = IntegrationStreamEventTypes.ExecutionAccepted,
+                    DetailJson = null,
+                    OccurredAtUtc = now
+                }
+            },
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the execution row must be admitted.");
@@ -490,7 +513,15 @@ public sealed class IntegrationSseRoutesTests
     {
         using var scope = Factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>()
-                   .AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = sequence, EventType = eventType, DetailJson = detailJson, OccurredAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+                   .AppendEventAsync(new IntegrationEventAppend
+                   {
+                       EventId = Guid.NewGuid(),
+                       ExecutionId = executionId,
+                       Sequence = sequence,
+                       EventType = eventType,
+                       DetailJson = detailJson,
+                       OccurredAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                   });
     }
 
     private static async Task<string> ReadFirstFrameAsync(HttpResponseMessage response)
@@ -743,18 +774,32 @@ public sealed class IntegrationSseStreamCapTests
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         AssertEx.True(await store.AcceptAsync(new IntegrationAcceptCommand
-        {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
-            ExecutionId = executionId,
-            TriggerId = triggerId,
-            SessionId = sessionId,
-            PrincipalId = principalId,
-            RequestId = requestId ?? Guid.NewGuid(),
-            RequestFingerprint = fingerprint ?? [1, 2, 3],
-            KeyPrefix = keyPrefix,
-            ReceivedAtUtc = now,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = now }
-        },
+            {
+                NewSession = new IntegrationSessionCreate
+                {
+                    SessionId = sessionId,
+                    TriggerId = triggerId,
+                    ConversationId = Guid.NewGuid(),
+                    AgentDefinitionId = Guid.NewGuid()
+                },
+                ExecutionId = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = requestId ?? Guid.NewGuid(),
+                RequestFingerprint = fingerprint ?? [1, 2, 3],
+                KeyPrefix = keyPrefix,
+                ReceivedAtUtc = now,
+                AcceptedEvent = new IntegrationEventAppend
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = executionId,
+                    Sequence = 1,
+                    EventType = IntegrationStreamEventTypes.ExecutionAccepted,
+                    DetailJson = null,
+                    OccurredAtUtc = now
+                }
+            },
             maxActive: 4096,
             maxActivePerPrincipal: 4096));
 

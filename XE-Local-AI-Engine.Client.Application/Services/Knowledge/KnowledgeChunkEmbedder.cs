@@ -63,7 +63,13 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         {
             // No provider round-trip for empty input; report the configured name as the resolved identity. RunAsync marks
             // a zero-chunk document Failed first, so a document stamped here never reaches Indexed or a vector comparison.
-            return new KnowledgeEmbeddingResult { Vectors = [], ResolvedModel = _options.EmbeddingModelName, VectorIdentity = KnowledgeEmbeddingVectorPolicy.LegacyIdentity, Dimension = 0 };
+            return new KnowledgeEmbeddingResult
+            {
+                Vectors = [],
+                ResolvedModel = _options.EmbeddingModelName,
+                VectorIdentity = KnowledgeEmbeddingVectorPolicy.LegacyIdentity,
+                Dimension = 0
+            };
         }
 
         var provider = ResolveProvider();
@@ -138,7 +144,13 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             }
         }
 
-        return new KnowledgeEmbeddingResult { Vectors = blobs, ResolvedModel = embeddingModelName, VectorIdentity = vectorIdentity!, Dimension = dimension };
+        return new KnowledgeEmbeddingResult
+        {
+            Vectors = blobs,
+            ResolvedModel = embeddingModelName,
+            VectorIdentity = vectorIdentity!,
+            Dimension = dimension
+        };
     }
 
     public async Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken)
@@ -183,7 +195,12 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             var identity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
             return identity is null
                 ? null
-                : new KnowledgeEmbeddingDescriptor { ResolvedModel = resolution.Name, VectorIdentity = identity, Dimension = KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth };
+                : new KnowledgeEmbeddingDescriptor
+                {
+                    ResolvedModel = resolution.Name,
+                    VectorIdentity = identity,
+                    Dimension = KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth
+                };
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {

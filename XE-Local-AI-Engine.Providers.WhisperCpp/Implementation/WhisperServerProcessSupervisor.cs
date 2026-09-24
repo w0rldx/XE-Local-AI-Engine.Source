@@ -182,7 +182,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         {
             // A transcription or a spawn is in flight. This is the 409 the endpoint reports, with the snapshot that
             // tells the operator what to wait for.
-            return new WhisperServerEvictResult { Evicted = false, Activity = _runtimeActivityGate.GetSnapshot() };
+            return new WhisperServerEvictResult
+            {
+                Evicted = false,
+                Activity = _runtimeActivityGate.GetSnapshot()
+            };
         }
 
         await using (reservation.ConfigureAwait(false))
@@ -194,7 +198,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        return new WhisperServerEvictResult { Evicted = true, Activity = _runtimeActivityGate.GetSnapshot() };
+        return new WhisperServerEvictResult
+        {
+            Evicted = true,
+            Activity = _runtimeActivityGate.GetSnapshot()
+        };
     }
 
     /// <inheritdoc />
@@ -453,7 +461,12 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
             var generation = Interlocked.Increment(ref _generation);
             var running = new RunningServer(handle,
-                new WhisperServerEndpoint { ModelId = modelId, Generation = generation, BaseAddress = spec.BaseAddress },
+                new WhisperServerEndpoint
+                {
+                    ModelId = modelId,
+                    Generation = generation,
+                    BaseAddress = spec.BaseAddress
+                },
                 binary,
                 port,
                 _timeProvider.GetUtcNow(),
@@ -881,8 +894,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         private WhisperServerEndpoint _endpoint;
 
-        public RunningServer(
-            IWhisperServerProcessHandle handle,
+        public RunningServer(IWhisperServerProcessHandle handle,
             WhisperServerEndpoint endpoint,
             WhisperBinary binary,
             int port,
@@ -1018,8 +1030,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         private readonly TimeProvider _timeProvider;
         private int _disposed;
 
-        public WhisperTranscriptionLease(
-            RunningServer server,
+        public WhisperTranscriptionLease(RunningServer server,
             IWhisperRuntimeActivityLease activityLease,
             TimeProvider timeProvider)
         {

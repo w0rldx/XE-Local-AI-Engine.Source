@@ -23,8 +23,7 @@ public sealed class InspectGgufRepositoryEndpoint : Endpoint<InspectGgufReposito
     private readonly IGgufVariantRecommender _recommender;
     private readonly ILogger<InspectGgufRepositoryEndpoint> _logger;
 
-    public InspectGgufRepositoryEndpoint(
-        IHuggingFaceGgufDiscovery discovery,
+    public InspectGgufRepositoryEndpoint(IHuggingFaceGgufDiscovery discovery,
         IGgufVariantRecommender recommender,
         ILogger<InspectGgufRepositoryEndpoint> logger)
     {

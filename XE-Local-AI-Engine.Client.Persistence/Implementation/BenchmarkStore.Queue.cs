@@ -91,7 +91,7 @@ public sealed partial class BenchmarkStore
                         // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
                         // polling the run still sees that something about it changed.
                         var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
-                                cancellationToken);
+                            cancellationToken);
                         if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                         {
                             throw new BenchmarkConflictException("InvalidJudgeTransition");
@@ -106,7 +106,7 @@ public sealed partial class BenchmarkStore
                 case BenchmarkWorkKind.Fidelity:
                     {
                         var attempt = await RequireFidelityAttemptAsync(work.FidelityAttemptId ?? throw new BenchmarkConflictException("InvalidFidelityTransition"),
-                                cancellationToken);
+                            cancellationToken);
                         if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                         {
                             throw new BenchmarkConflictException("InvalidFidelityTransition");
@@ -125,7 +125,7 @@ public sealed partial class BenchmarkStore
                 case BenchmarkWorkKind.Comparison:
                     {
                         var comparison = await RequireComparisonAsync(work.ComparisonId ?? throw new BenchmarkConflictException("InvalidComparisonTransition"),
-                                cancellationToken);
+                            cancellationToken);
                         if (comparison.Status != BenchmarkJudgeAttemptStatus.Queued)
                         {
                             throw new BenchmarkConflictException("InvalidComparisonTransition");
@@ -245,12 +245,12 @@ public sealed partial class BenchmarkStore
 
             var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken);
             _ = await InsertJudgeAttemptAsync(run,
-                    revision,
-                    seed?.RuntimeJson,
-                    seed?.RuntimeUnresolvedReason,
-                    seed?.LaunchIntent,
-                    now,
-                    cancellationToken);
+                revision,
+                seed?.RuntimeJson,
+                seed?.RuntimeUnresolvedReason,
+                seed?.LaunchIntent,
+                now,
+                cancellationToken);
         }
 
         // Seeded here rather than at freeze, for the judge attempt's own reason: a measurement is queued against an answer, so it must not exist until there IS one.
@@ -330,22 +330,22 @@ public sealed partial class BenchmarkStore
         }
 
         return await TerminalizeJudgeAsync(command.RunId,
-                command.ExpectedWorkVersion,
-                BenchmarkJudgeAttemptStatus.Succeeded,
-                BenchmarkWorkStatus.Succeeded,
-                errorMessage: null,
-                command.LastStreamSequence,
-                (attempt, promote) =>
-                {
-                    attempt.ResultJson = command.JudgeResultJson.ToArray();
-                    attempt.Score = command.Score;
+            command.ExpectedWorkVersion,
+            BenchmarkJudgeAttemptStatus.Succeeded,
+            BenchmarkWorkStatus.Succeeded,
+            errorMessage: null,
+            command.LastStreamSequence,
+            (attempt, promote) =>
+            {
+                attempt.ResultJson = command.JudgeResultJson.ToArray();
+                attempt.Score = command.Score;
 
-                    // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL stays the only thing this can fill: a measured
-                    // identity is written once, at launch, and an incomplete one must never be repaired into a rankable one afterwards.
-                    attempt.JudgeExecutionKey ??= command.VerifiedExecutionKey;
-                    return promote;
-                },
-                cancellationToken);
+                // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL stays the only thing this can fill: a measured
+                // identity is written once, at launch, and an incomplete one must never be repaired into a rankable one afterwards.
+                attempt.JudgeExecutionKey ??= command.VerifiedExecutionKey;
+                return promote;
+            },
+            cancellationToken);
     }
 
     public Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,

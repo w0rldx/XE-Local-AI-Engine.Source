@@ -214,7 +214,11 @@ public static class BenchmarkNiahGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedAnswer);
         return JsonSerializer.Serialize(new Dictionary<string, ExactOverride>(StringComparer.Ordinal)
         {
-            [criterionId] = new() { Expected = expectedAnswer, Normalize = new BenchmarkVerifierNormalizeV1(Trim: true, CollapseWhitespace: true, CaseInsensitive: true, StripMarkdown: true) }
+            [criterionId] = new()
+            {
+                Expected = expectedAnswer,
+                Normalize = new BenchmarkVerifierNormalizeV1(Trim: true, CollapseWhitespace: true, CaseInsensitive: true, StripMarkdown: true)
+            }
         }, SerializerOptions);
     }
 

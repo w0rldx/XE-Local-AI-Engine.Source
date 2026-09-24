@@ -18,12 +18,12 @@ internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
 {
     /// <summary>Conservative age threshold before a stale acquisition artifact is considered abandoned.</summary>
     internal static readonly TimeSpan StaleArtifactAge = TimeSpan.FromHours(24);
+
     private readonly HuggingFaceOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<GgufAcquisitionArtifactStartupReaper> _logger;
 
-    public GgufAcquisitionArtifactStartupReaper(
-        HuggingFaceOptions options,
+    public GgufAcquisitionArtifactStartupReaper(HuggingFaceOptions options,
         TimeProvider timeProvider,
         ILogger<GgufAcquisitionArtifactStartupReaper> logger)
     {

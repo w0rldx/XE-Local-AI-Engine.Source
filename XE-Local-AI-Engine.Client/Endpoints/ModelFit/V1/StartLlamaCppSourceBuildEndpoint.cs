@@ -14,8 +14,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint : Endpoint<StartLlamaCppSou
     private readonly LlamaCppRuntimeOrchestrationService _runtime;
     private readonly INodeRuntimeSettings _nodeRuntimeSettings;
 
-    public StartLlamaCppSourceBuildEndpoint(
-        LlamaCppRuntimeOrchestrationService runtime,
+    public StartLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime,
         INodeRuntimeSettings nodeRuntimeSettings)
     {
         _runtime = runtime;
@@ -41,7 +40,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint : Endpoint<StartLlamaCppSou
         }
 
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
+                .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage);
             return;

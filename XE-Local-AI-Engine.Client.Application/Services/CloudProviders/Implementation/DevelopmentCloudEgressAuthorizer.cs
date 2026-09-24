@@ -12,8 +12,7 @@ public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
     private readonly int _maximumBundleBytes;
     private readonly TimeProvider _timeProvider;
 
-    public DevelopmentCloudEgressAuthorizer(
-        IDevelopmentCloudContextCatalog contextCatalog,
+    public DevelopmentCloudEgressAuthorizer(IDevelopmentCloudContextCatalog contextCatalog,
         IDevelopmentCloudEgressAuditSink auditSink,
         TimeProvider timeProvider,
         int maximumBundleBytes = DevelopmentCloudContextBuilder.DefaultMaximumBytes)

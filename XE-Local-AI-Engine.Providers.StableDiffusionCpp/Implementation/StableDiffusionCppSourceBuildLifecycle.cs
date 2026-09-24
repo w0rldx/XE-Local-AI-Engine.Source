@@ -13,8 +13,7 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle : IHostedService
     private readonly IStableDiffusionCppSourceBuildService _service;
     private readonly ILogger<StableDiffusionCppSourceBuildLifecycle> _logger;
 
-    public StableDiffusionCppSourceBuildLifecycle(
-        IStableDiffusionCppSourceBuildService service,
+    public StableDiffusionCppSourceBuildLifecycle(IStableDiffusionCppSourceBuildService service,
         ILogger<StableDiffusionCppSourceBuildLifecycle> logger)
     {
         _service = service;
@@ -49,7 +48,7 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle : IHostedService
             // Same contract as CudaBuildStartupService.StopAsync: the host's shutdown token means "stop being graceful", not "throw". ShutdownAsync awaits the start gate on this token, so an
             // over-budget shutdown throws here and Host.StopAsync rethrows the aggregate, killing the process with an unhandled exception instead of exiting cleanly.
             _logger.LogWarning("The managed stable-diffusion.cpp shutdown drain was cut short by the host shutdown "
-                              + "budget; any in-flight build is abandoned and will be reconciled on the next start.");
+                               + "budget; any in-flight build is abandoned and will be reconciled on the next start.");
         }
     }
 }

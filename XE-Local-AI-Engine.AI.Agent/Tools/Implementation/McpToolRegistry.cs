@@ -55,7 +55,11 @@ internal sealed class McpToolRegistry : IMcpToolRegistry
             descriptors.Add(tool.Descriptor);
         }
 
-        _snapshot = new Snapshot { Executables = executables.ToImmutable(), Descriptors = descriptors.ToImmutable() };
+        _snapshot = new Snapshot
+        {
+            Executables = executables.ToImmutable(),
+            Descriptors = descriptors.ToImmutable()
+        };
     }
 
     private sealed record Snapshot
@@ -64,6 +68,10 @@ internal sealed class McpToolRegistry : IMcpToolRegistry
 
         public required ImmutableArray<LocalChatToolDescriptor> Descriptors { get; init; }
 
-        public static Snapshot Empty { get; } = new() { Executables = ImmutableDictionary<string, AITool>.Empty.WithComparers(StringComparer.Ordinal), Descriptors = [] };
+        public static Snapshot Empty { get; } = new()
+        {
+            Executables = ImmutableDictionary<string, AITool>.Empty.WithComparers(StringComparer.Ordinal),
+            Descriptors = []
+        };
     }
 }

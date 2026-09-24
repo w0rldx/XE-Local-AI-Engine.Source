@@ -56,7 +56,7 @@ public sealed class MemoryExtractionWorker : BackgroundService
         // A host stop completes the writer so the read loop drains and exits on its own, the safety net for a stop
         // that trips before StopAsync. The loop reads the DRAIN token, so no stop abandons a buffered job.
         await using var stopRegistration = stoppingToken.Register(static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
-                                                            _dispatcher);
+            _dispatcher);
 
         try
         {
@@ -166,18 +166,18 @@ public sealed class MemoryExtractionWorker : BackgroundService
         var executionLogStore = serviceProvider.GetRequiredService<IAgentExecutionLogStore>();
 
         _ = await executionLogStore.AddAsync(new AgentExecutionLogInput
-        {
-            AgentDefinitionId = telemetry.AgentDefinitionId,
-            ConversationId = telemetry.ConversationId,
-            MessageId = telemetry.MessageId,
-            ModelName = telemetry.ModelName,
-            ConfigHash = telemetry.ConfigHash,
-            LatencyMs = telemetry.LatencyMs,
-            Success = telemetry.Success,
-            PromptTokens = telemetry.PromptTokens,
-            CompletionTokens = telemetry.CompletionTokens,
-            ErrorClass = telemetry.ErrorClass
-        },
+            {
+                AgentDefinitionId = telemetry.AgentDefinitionId,
+                ConversationId = telemetry.ConversationId,
+                MessageId = telemetry.MessageId,
+                ModelName = telemetry.ModelName,
+                ConfigHash = telemetry.ConfigHash,
+                LatencyMs = telemetry.LatencyMs,
+                Success = telemetry.Success,
+                PromptTokens = telemetry.PromptTokens,
+                CompletionTokens = telemetry.CompletionTokens,
+                ErrorClass = telemetry.ErrorClass
+            },
             cancellationToken);
     }
 

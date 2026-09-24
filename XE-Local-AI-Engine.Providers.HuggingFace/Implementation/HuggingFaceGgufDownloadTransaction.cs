@@ -16,8 +16,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
     private readonly HuggingFaceOptions _options;
     private readonly TimeProvider _timeProvider;
 
-    public HuggingFaceGgufDownloadTransaction(
-        HfDownloadClient downloadClient,
+    public HuggingFaceGgufDownloadTransaction(HfDownloadClient downloadClient,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,
         HuggingFaceOptions options,
@@ -289,16 +288,44 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
             var artifacts = new List<OwnedArtifact>
             {
-                new() { Path = temporarySidecarPath, Owned = true },
-                new() { Path = temporaryWeightPath, Owned = true },
-                new() { Path = weightPartPath, Owned = abandoned },
-                new() { Path = weightPartPath + HfDownloadClient.RangeSidecarSuffix, Owned = abandoned }
+                new()
+                {
+                    Path = temporarySidecarPath,
+                    Owned = true
+                },
+                new()
+                {
+                    Path = temporaryWeightPath,
+                    Owned = true
+                },
+                new()
+                {
+                    Path = weightPartPath,
+                    Owned = abandoned
+                },
+                new()
+                {
+                    Path = weightPartPath + HfDownloadClient.RangeSidecarSuffix,
+                    Owned = abandoned
+                }
             };
             if (temporaryProjectorPath is not null)
             {
-                artifacts.Add(new OwnedArtifact { Path = temporaryProjectorPath, Owned = true });
-                artifacts.Add(new OwnedArtifact { Path = projectorPartPath!, Owned = abandoned });
-                artifacts.Add(new OwnedArtifact { Path = projectorPartPath + HfDownloadClient.RangeSidecarSuffix, Owned = abandoned });
+                artifacts.Add(new OwnedArtifact
+                {
+                    Path = temporaryProjectorPath,
+                    Owned = true
+                });
+                artifacts.Add(new OwnedArtifact
+                {
+                    Path = projectorPartPath!,
+                    Owned = abandoned
+                });
+                artifacts.Add(new OwnedArtifact
+                {
+                    Path = projectorPartPath + HfDownloadClient.RangeSidecarSuffix,
+                    Owned = abandoned
+                });
             }
 
             var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll([.. artifacts]);
@@ -425,13 +452,21 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
             }
         }
 
-        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalGgufPath, Owned = commitReceipt.OwnsFinalGguf },
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact
+            {
+                Path = commitReceipt.FinalGgufPath,
+                Owned = commitReceipt.OwnsFinalGguf
+            },
             new OwnedArtifact
             {
                 Path = commitReceipt.FinalProjectorPath ?? string.Empty,
                 Owned = commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector
             },
-            new OwnedArtifact { Path = commitReceipt.FinalSidecarPath, Owned = commitReceipt.OwnsFinalSidecar });
+            new OwnedArtifact
+            {
+                Path = commitReceipt.FinalSidecarPath,
+                Owned = commitReceipt.OwnsFinalSidecar
+            });
     }
 
     public Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
@@ -439,12 +474,24 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         ArgumentNullException.ThrowIfNull(preparedDownload);
         var artifacts = new List<OwnedArtifact>
         {
-            new() { Path = preparedDownload.TemporarySidecarPath, Owned = true },
-            new() { Path = preparedDownload.TemporaryGgufPath, Owned = true }
+            new()
+            {
+                Path = preparedDownload.TemporarySidecarPath,
+                Owned = true
+            },
+            new()
+            {
+                Path = preparedDownload.TemporaryGgufPath,
+                Owned = true
+            }
         };
         if (preparedDownload.TemporaryProjectorPath is not null)
         {
-            artifacts.Add(new OwnedArtifact { Path = preparedDownload.TemporaryProjectorPath, Owned = true });
+            artifacts.Add(new OwnedArtifact
+            {
+                Path = preparedDownload.TemporaryProjectorPath,
+                Owned = true
+            });
         }
 
         OwnedArtifactCleanup.DeleteAll(CleanupOwnership, [.. artifacts]);
@@ -498,8 +545,8 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
     {
         var partPath = PartPathFor(finalPath);
         var legacy = Directory.EnumerateFiles(directory, Path.GetFileName(finalPath) + ".*" + HfDownloadClient.PartSuffix + HfDownloadClient.PartSuffix)
-            .OrderByDescending(File.GetLastWriteTimeUtc)
-            .ToList();
+                              .OrderByDescending(File.GetLastWriteTimeUtc)
+                              .ToList();
         foreach (var file in legacy)
         {
             var cursors = file + HfDownloadClient.RangeSidecarSuffix;

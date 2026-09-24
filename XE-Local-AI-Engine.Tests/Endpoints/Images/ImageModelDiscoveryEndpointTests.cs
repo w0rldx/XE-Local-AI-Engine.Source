@@ -162,9 +162,24 @@ public sealed class ImageModelDiscoveryEndpointTests
                 RepoId = "second-state/FLUX.1-schnell-GGUF",
                 IsGated = false,
                 License = "apache-2.0",
-                Files = [
-                    new ImageRepoFile { FileName = "flux1-schnell-Q4_0.gguf", Format = ImageWeightFormat.Gguf, SizeBytes = 6_688_845_536L, Sha256 = "aa", SuggestedRole = ImageModelPartRole.Diffusion },
-                    new ImageRepoFile { FileName = "ae.safetensors", Format = ImageWeightFormat.Safetensors, SizeBytes = 335_304_388L, Sha256 = null, SuggestedRole = ImageModelPartRole.Vae }
+                Files =
+                [
+                    new ImageRepoFile
+                    {
+                        FileName = "flux1-schnell-Q4_0.gguf",
+                        Format = ImageWeightFormat.Gguf,
+                        SizeBytes = 6_688_845_536L,
+                        Sha256 = "aa",
+                        SuggestedRole = ImageModelPartRole.Diffusion
+                    },
+                    new ImageRepoFile
+                    {
+                        FileName = "ae.safetensors",
+                        Format = ImageWeightFormat.Safetensors,
+                        SizeBytes = 335_304_388L,
+                        Sha256 = null,
+                        SuggestedRole = ImageModelPartRole.Vae
+                    }
                 ]
             }
         };
@@ -242,7 +257,13 @@ public sealed class ImageModelDiscoveryEndpointTests
     {
         public IReadOnlyList<ImageRepoSummary> Summaries { get; init; } = [];
 
-        public ImageRepoDetail Detail { get; init; } = new() { RepoId = "owner/repo", IsGated = false, License = null, Files = [] };
+        public ImageRepoDetail Detail { get; init; } = new()
+        {
+            RepoId = "owner/repo",
+            IsGated = false,
+            License = null,
+            Files = []
+        };
 
         public Func<Exception>? Failure { get; init; }
 
@@ -269,7 +290,8 @@ public sealed class ImageModelDiscoveryEndpointTests
 
         public StubImageModelRegistry(params string[] installedModelNames)
         {
-            _entries = [
+            _entries =
+            [
                 .. installedModelNames.Select(static name => new ImageModelRegistryEntry
                 {
                     ModelName = name,

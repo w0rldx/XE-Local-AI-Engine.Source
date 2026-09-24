@@ -463,15 +463,48 @@ public sealed class ArtifactQualityServiceTests
             IReadOnlyList<TrainingEvaluationResultEntry> baseResults = kindOnlyRegression
                 ?
                 [
-                    new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = true, ScoredBy = "deterministic" },
-                    new TrainingEvaluationResultEntry { SampleId = secondSampleId, Kind = "other", Passed = false, ScoredBy = "deterministic" }
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = firstSampleId,
+                        Kind = "tool",
+                        Passed = true,
+                        ScoredBy = "deterministic"
+                    },
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = secondSampleId,
+                        Kind = "other",
+                        Passed = false,
+                        ScoredBy = "deterministic"
+                    }
                 ]
-                : [new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = true, ScoredBy = "deterministic" }];
+                :
+                [
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = firstSampleId,
+                        Kind = "tool",
+                        Passed = true,
+                        ScoredBy = "deterministic"
+                    }
+                ];
             IReadOnlyList<TrainingEvaluationResultEntry> tunedResults = kindOnlyRegression
                 ?
                 [
-                    new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = false, ScoredBy = "deterministic" },
-                    new TrainingEvaluationResultEntry { SampleId = secondSampleId, Kind = "other", Passed = true, ScoredBy = "deterministic" }
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = firstSampleId,
+                        Kind = "tool",
+                        Passed = false,
+                        ScoredBy = "deterministic"
+                    },
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = secondSampleId,
+                        Kind = "other",
+                        Passed = true,
+                        ScoredBy = "deterministic"
+                    }
                 ]
                 :
                 [
@@ -510,7 +543,20 @@ public sealed class ArtifactQualityServiceTests
                     BaseAccuracy = 0,
                     TunedAccuracy = 1,
                     AccuracyDelta = 1,
-                    PerKind = [new ComparisonKindDeltaV1 { Kind = "tool", BaseTotal = 1, BasePassed = 0, TunedTotal = 1, TunedPassed = 1, BaseAccuracy = 0, TunedAccuracy = 1, AccuracyDelta = 1 }]
+                    PerKind =
+                    [
+                        new ComparisonKindDeltaV1
+                        {
+                            Kind = "tool",
+                            BaseTotal = 1,
+                            BasePassed = 0,
+                            TunedTotal = 1,
+                            TunedPassed = 1,
+                            BaseAccuracy = 0,
+                            TunedAccuracy = 1,
+                            AccuracyDelta = 1
+                        }
+                    ]
                 };
             }
             else if (storedDeltasTampered)
@@ -520,7 +566,20 @@ public sealed class ArtifactQualityServiceTests
                     TunedPassedCount = 0,
                     TunedAccuracy = 0,
                     AccuracyDelta = -1,
-                    PerKind = [new ComparisonKindDeltaV1 { Kind = "tool", BaseTotal = 1, BasePassed = 1, TunedTotal = 1, TunedPassed = 0, BaseAccuracy = 1, TunedAccuracy = 0, AccuracyDelta = -1 }]
+                    PerKind =
+                    [
+                        new ComparisonKindDeltaV1
+                        {
+                            Kind = "tool",
+                            BaseTotal = 1,
+                            BasePassed = 1,
+                            TunedTotal = 1,
+                            TunedPassed = 0,
+                            BaseAccuracy = 1,
+                            TunedAccuracy = 0,
+                            AccuracyDelta = -1
+                        }
+                    ]
                 };
             }
 

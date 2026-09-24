@@ -115,7 +115,7 @@ public sealed class ArtifactQualityService : IArtifactQualityService
             History = prior?.History ?? []
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparison.Id,
-                              JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken);
+            JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> BeginRevalidationAsync(Guid artifactId, long expectedVersion,
@@ -156,7 +156,7 @@ public sealed class ArtifactQualityService : IArtifactQualityService
             History = history
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, current.ComparisonId,
-                              JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken);
+            JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> OverrideAsync(Guid artifactId, long expectedVersion, string reason,
@@ -204,7 +204,7 @@ public sealed class ArtifactQualityService : IArtifactQualityService
             OverriddenAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparisonId,
-                              JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken);
+            JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken);
     }
 
     public static ArtifactQualityDecisionV1? ReadDecision(TrainingArtifactRecord artifact)

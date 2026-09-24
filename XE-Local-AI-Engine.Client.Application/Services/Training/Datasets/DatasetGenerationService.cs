@@ -32,8 +32,7 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
     private readonly IDatasetGenerationQueueSignal _signal;
     private readonly ITrainingDatasetStore _store;
 
-    public DatasetGenerationService(
-        ITrainingDatasetStore store,
+    public DatasetGenerationService(ITrainingDatasetStore store,
         IGpuWorkGate gpuWorkGate,
         TrainingRunCancellationRegistry cancellations,
         IDatasetGenerationQueueSignal signal)
@@ -58,8 +57,13 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
             throw new TrainingConflictException("TrainingBusy");
         }
 
-        var dataset = await _store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definitionId, ExpectedDefinitionVersion = expectedDefinitionVersion, Name = name },
-                                      cancellationToken);
+        var dataset = await _store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+            {
+                DefinitionId = definitionId,
+                ExpectedDefinitionVersion = expectedDefinitionVersion,
+                Name = name
+            },
+            cancellationToken);
         _signal.Wake();
         return dataset;
     }

@@ -126,8 +126,8 @@ public sealed class GraphWorkflowPauseTests
         _ = await harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve);
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Reject));
+            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Reject));
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Approve, refusal.StandingDecision);
     }
@@ -146,8 +146,8 @@ public sealed class GraphWorkflowPauseTests
         _ = await harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, decidedBySubject: "alice");
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, decidedBySubject: "bob"));
+            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, decidedBySubject: "bob"));
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Approve, refusal.StandingDecision);
         AssertEx.Equal("alice",
@@ -164,8 +164,8 @@ public sealed class GraphWorkflowPauseTests
         _ = await harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Reject);
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve));
+            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve));
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Reject, refusal.StandingDecision);
     }
@@ -185,8 +185,8 @@ public sealed class GraphWorkflowPauseTests
         await AdvanceUntilWaitingAsync(harness, runId, "second");
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                harness.DecideAsync(runId, "second", operationId, GraphWorkflowDecisionKind.Approve));
+            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                harness.DecideAsync(runId, "second", operationId, GraphWorkflowDecisionKind.Approve));
 
         AssertEx.Contains(refusal.Message, "first", StringComparison.Ordinal);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
@@ -223,7 +223,7 @@ public sealed class GraphWorkflowPauseTests
         var runId = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoPausesInSequence, "first");
 
         var refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "first", Guid.NewGuid(), GraphWorkflowDecisionKind.Reject));
+            .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "first", Guid.NewGuid(), GraphWorkflowDecisionKind.Reject));
 
         AssertEx.Contains(refusal.Message, "Approve", StringComparison.Ordinal);
     }
@@ -235,8 +235,8 @@ public sealed class GraphWorkflowPauseTests
         var runId = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseRequiringComment, "review");
 
         _ = await AssertEx
-                  .ThrowsAsync<GraphWorkflowValidationException>(() =>
-                      harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, "   "));
+            .ThrowsAsync<GraphWorkflowValidationException>(() =>
+                harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, "   "));
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
             (await harness.ReadNodeRunAsync(runId, "review")).Status,
@@ -250,8 +250,8 @@ public sealed class GraphWorkflowPauseTests
         var runId = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoDecisions, "review");
 
         _ = await AssertEx
-                  .ThrowsAsync<GraphWorkflowValidationException>(() =>
-                      harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, new string('c', count: 501)));
+            .ThrowsAsync<GraphWorkflowValidationException>(() =>
+                harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, new string('c', count: 501)));
     }
 
     /// <summary>
@@ -266,8 +266,8 @@ public sealed class GraphWorkflowPauseTests
 
         var oversized = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoDecisions, "review");
         _ = await AssertEx
-                  .ThrowsAsync<GraphWorkflowValidationException>(() =>
-                      harness.DecideAsync(oversized, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, PayloadOf(half + 1)));
+            .ThrowsAsync<GraphWorkflowValidationException>(() =>
+                harness.DecideAsync(oversized, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, PayloadOf(half + 1)));
 
         var accepted = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoDecisions, "review");
         _ = await harness.DecideAsync(accepted, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, PayloadOf(half));
@@ -286,8 +286,8 @@ public sealed class GraphWorkflowPauseTests
         var runId = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoDecisions, "review");
 
         _ = await AssertEx
-                  .ThrowsAsync<GraphWorkflowValidationException>(() =>
-                      harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, "[1,2,3]"));
+            .ThrowsAsync<GraphWorkflowValidationException>(() =>
+                harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, "[1,2,3]"));
     }
 
     /// <summary>

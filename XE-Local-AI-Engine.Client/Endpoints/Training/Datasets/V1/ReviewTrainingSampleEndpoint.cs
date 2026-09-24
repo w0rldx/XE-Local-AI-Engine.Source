@@ -27,7 +27,12 @@ public sealed class ReviewTrainingSampleEndpoint : Endpoint<ReviewTrainingSample
 
     public override async Task HandleAsync(ReviewTrainingSampleRequest req, CancellationToken ct)
     {
-        var record = await _datasets.ReviewSampleAsync(new TrainingSampleReviewCommand { SampleId = req.SampleId, Verb = req.Verb, Label = req.Label }, ct);
+        var record = await _datasets.ReviewSampleAsync(new TrainingSampleReviewCommand
+        {
+            SampleId = req.SampleId,
+            Verb = req.Verb,
+            Label = req.Label
+        }, ct);
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

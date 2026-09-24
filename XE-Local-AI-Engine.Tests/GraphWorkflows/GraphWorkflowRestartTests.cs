@@ -315,9 +315,9 @@ public sealed class GraphWorkflowRestartTests
     private static async Task RestartAsync(GraphWorkflowHarness harness)
     {
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                  Options.Create(harness.CurrentOptions()),
-                  harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None);
+                Options.Create(harness.CurrentOptions()),
+                harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
+            .StartAsync(CancellationToken.None);
 
         _ = harness.CreateReplacementDispatcher();
     }
@@ -339,23 +339,24 @@ public sealed class GraphWorkflowRestartTests
         AssertEx.NotEmpty(interrupted, "there was no in-flight node run for the failed recovery to have died on.");
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => store.ReconcileNonTerminalNodeRunsAsync("the host restarted",
-                          [
-                              .. interrupted.Select(static row => new GraphWorkflowNodeRunVerdict
-                              {
-                                  NodeRunId = row.NodeRunId,
-                                  ObservedStatus = row.Status,
-                                  ObservedAttempt = row.Attempt,
-                                  Repairs = [
-                                      new TransitionGraphWorkflowNodeRunCommand
-                                      {
-                                          RunId = row.RunId,
-                                          NodeRunId = row.NodeRunId,
-                                          ExpectedVersion = long.MaxValue,
-                                          TargetStatus = GraphWorkflowNodeRunStatus.Pending
-                                      }
-                                  ]
-                              })
-                          ]));
+        [
+            .. interrupted.Select(static row => new GraphWorkflowNodeRunVerdict
+            {
+                NodeRunId = row.NodeRunId,
+                ObservedStatus = row.Status,
+                ObservedAttempt = row.Attempt,
+                Repairs =
+                [
+                    new TransitionGraphWorkflowNodeRunCommand
+                    {
+                        RunId = row.RunId,
+                        NodeRunId = row.NodeRunId,
+                        ExpectedVersion = long.MaxValue,
+                        TargetStatus = GraphWorkflowNodeRunStatus.Pending
+                    }
+                ]
+            })
+        ]));
     }
 
     private static GraphWorkflowStartupReconciler NewReconciler(bool enabled) =>
@@ -376,13 +377,13 @@ public sealed class GraphWorkflowRestartTests
                                               """;
 
     private const string LlmCallGraph = """
-                                              { "schemaVersion": 1,
-                                                "nodes": [{ "key": "start", "kind": "Start" },
-                                                          { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Go." } },
-                                                          { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
-                                                "edges": [{ "key": "e1", "from": "start", "to": "analyze" },
-                                                          { "key": "e2", "from": "analyze", "to": "done" }] }
-                                          """;
+                                            { "schemaVersion": 1,
+                                              "nodes": [{ "key": "start", "kind": "Start" },
+                                                        { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Go." } },
+                                                        { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                                              "edges": [{ "key": "e1", "from": "start", "to": "analyze" },
+                                                        { "key": "e2", "from": "analyze", "to": "done" }] }
+                                        """;
 
     /// <summary>A run ticked far enough that its inline work node is in flight, the way a host death would leave it.</summary>
     private static async Task<Guid> InFlightWorkNodeAsync(GraphWorkflowHarness harness, GraphWorkflowNodeRunStatus status)

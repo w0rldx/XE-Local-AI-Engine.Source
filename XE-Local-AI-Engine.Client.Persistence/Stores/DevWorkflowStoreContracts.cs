@@ -33,7 +33,15 @@ public sealed class DevWorkflowNodeCounters
 
     public required Guid? BlockingGateNodeRunId { get; init; }
 
-    public static DevWorkflowNodeCounters Empty { get; } = new() { Queued = 0, Running = 0, Completed = 0, Total = 0, PendingDecisionCount = 0, BlockingGateNodeRunId = null };
+    public static DevWorkflowNodeCounters Empty { get; } = new()
+    {
+        Queued = 0,
+        Running = 0,
+        Completed = 0,
+        Total = 0,
+        PendingDecisionCount = 0,
+        BlockingGateNodeRunId = null
+    };
 }
 
 public sealed class DevWorkflowWorkItemSnapshot

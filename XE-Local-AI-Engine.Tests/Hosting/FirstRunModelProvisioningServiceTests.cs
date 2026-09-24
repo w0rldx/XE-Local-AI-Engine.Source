@@ -480,20 +480,45 @@ public sealed class FirstRunModelProvisioningServiceTests
                 throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available.");
             }
 
-            AcquisitionStatus?.Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Completed, Variant = variant.ToString(), Tag = "b9692" });
-            return Task.FromResult(new LlamaBinary { ServerExecutablePath = "/fake/llama-server", Version = "b9692", Variant = variant, IsPinnedFallback = true });
+            AcquisitionStatus?.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Completed,
+                Variant = variant.ToString(),
+                Tag = "b9692"
+            });
+            return Task.FromResult(new LlamaBinary
+            {
+                ServerExecutablePath = "/fake/llama-server",
+                Version = "b9692",
+                Variant = variant,
+                IsPinnedFallback = true
+            });
         }
 
         // Nothing is on disk until an ensure runs, and this lookup never acquires — so it must also never flip
         // EnsureCalled, which is exactly what the provisioning assertions read.
         public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
         {
-            return Task.FromResult(EnsureCalled ? new LlamaBinary { ServerExecutablePath = "/fake/llama-server", Version = "b9692", Variant = variant, IsPinnedFallback = true } : null);
+            return Task.FromResult(EnsureCalled
+                ? new LlamaBinary
+                {
+                    ServerExecutablePath = "/fake/llama-server",
+                    Version = "b9692",
+                    Variant = variant,
+                    IsPinnedFallback = true
+                }
+                : null);
         }
 
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
         {
-            return Task.FromResult(new LlamaBinary { ServerExecutablePath = "/fake/llama-server", Version = tag, Variant = variant, IsPinnedFallback = false });
+            return Task.FromResult(new LlamaBinary
+            {
+                ServerExecutablePath = "/fake/llama-server",
+                Version = tag,
+                Variant = variant,
+                IsPinnedFallback = false
+            });
         }
 
         public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct)
@@ -677,7 +702,11 @@ public sealed class FirstRunModelProvisioningServiceTests
 
             StartCalls.Add(request);
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
-            return Task.FromResult(new GgufDownloadTicket { ModelName = modelName, AlreadyInFlight = false });
+            return Task.FromResult(new GgufDownloadTicket
+            {
+                ModelName = modelName,
+                AlreadyInFlight = false
+            });
         }
 
         public bool Cancel(string modelName)
@@ -687,7 +716,14 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public GgufDownloadStatus? GetStatus(string modelName)
         {
-            return new GgufDownloadStatus { ModelName = modelName, Phase = _terminalPhase, CompletedBytes = null, TotalBytes = null, SanitizedError = _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null };
+            return new GgufDownloadStatus
+            {
+                ModelName = modelName,
+                Phase = _terminalPhase,
+                CompletedBytes = null,
+                TotalBytes = null,
+                SanitizedError = _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null
+            };
         }
 
         public IReadOnlyList<GgufDownloadStatus> ListStatuses()

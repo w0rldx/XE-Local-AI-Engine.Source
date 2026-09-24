@@ -101,7 +101,7 @@ public sealed class AgentHomeOfferSeamTests
         var provider = CreateProvider(CapableModel);
 
         AssertEx.False((await provider.GetOfferedToolsForProfileAsync(CapableModel, isCloudModel: true))
-                       .Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+            .Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
             "run_in_agent_home must never be offered to a cloud-hosted model on the async pool either");
     }
 

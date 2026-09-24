@@ -54,7 +54,12 @@ internal sealed class LlamaCommandProcessRunner : ILlamaCommandProcessRunner
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             var stdout = await stdoutTask.ConfigureAwait(false);
             var stderr = await stderrTask.ConfigureAwait(false);
-            return new LlamaCommandResult { ExitCode = process.ExitCode, StandardOutput = stdout, StandardError = stderr };
+            return new LlamaCommandResult
+            {
+                ExitCode = process.ExitCode,
+                StandardOutput = stdout,
+                StandardError = stderr
+            };
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {

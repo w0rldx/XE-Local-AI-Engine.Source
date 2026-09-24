@@ -83,8 +83,15 @@ public sealed class DevWorkflowSliceATests
         var fake = ResolveStream(factory, ref stream);
         for (var node = 0; node < 2; node++)
         {
-            fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
-            fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => FinishTheWorkflowSessionAsync(services) });
+            fake.Enqueue(new StepScript
+            {
+                EventTypes = [ChatStreamEventTypes.AssistantCompleted]
+            });
+            fake.Enqueue(new StepScript
+            {
+                EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+                DuringTurn = (services, _) => FinishTheWorkflowSessionAsync(services)
+            });
         }
 
         var definitionId = await FindSeededDefinitionAsync(factory);
@@ -103,10 +110,10 @@ public sealed class DevWorkflowSliceATests
         // the run is genuinely mid-work, and the engine dies here.
         var dispatcher = factory.Services.GetRequiredService<DevWorkflowDispatcher>();
         await DriveUntilAsync(factory,
-                dispatcher,
-                runId,
-                _ => ReadNodeRun(factory, runId, "research") is { Status: DevWorkflowNodeRunStatus.Running, WorkSessionId: { } parked }
-                     && ReadSession(factory, parked).Status == AgentWorkSessionStatus.Paused);
+            dispatcher,
+            runId,
+            _ => ReadNodeRun(factory, runId, "research") is { Status: DevWorkflowNodeRunStatus.Running, WorkSessionId: { } parked }
+                 && ReadSession(factory, parked).Status == AgentWorkSessionStatus.Paused);
 
         var beforeRestart = ReadNodeRun(factory, runId, "research");
         var sessionId = beforeRestart.WorkSessionId;
@@ -166,9 +173,9 @@ public sealed class DevWorkflowSliceATests
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionAgentSeeder(scopes, factory.Services.GetRequiredService<ILogger<WorkSessionAgentSeeder>>()).StartAsync(CancellationToken.None);
         await new DevWorkflowDefinitionSeeder(scopes,
-                  factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                  factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
-              .StartAsync(CancellationToken.None);
+                factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
+            .StartAsync(CancellationToken.None);
     }
 
     /// <summary>A host restart: both reconcilers in registration order, then a dispatcher that remembers nothing.</summary>
@@ -178,13 +185,13 @@ public sealed class DevWorkflowSliceATests
 
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionStartupReconciler(scopes,
-                  factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
-                  factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
-              .StartAsync(CancellationToken.None);
+                factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+                factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
+            .StartAsync(CancellationToken.None);
         await new DevWorkflowStartupReconciler(scopes,
-                  factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                  factory.Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None);
+                factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                factory.Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
+            .StartAsync(CancellationToken.None);
 
         return new DevWorkflowDispatcher(scopes,
             new DevWorkflowGraphCache(),
@@ -278,9 +285,9 @@ public sealed class DevWorkflowSliceATests
             OperationId = Guid.NewGuid(),
             Outcome = null,
             DetailJson = JsonSerializer.Serialize(new
-                           {
-                               summary = "This step is done."
-                           })
+            {
+                summary = "This step is done."
+            })
         });
     }
 
@@ -313,7 +320,12 @@ public sealed class DevWorkflowSliceATests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var workItem = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Understand the inference path", Request = request });
+                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand
+                                  {
+                                      WorkItemId = Guid.NewGuid(),
+                                      Title = "Understand the inference path",
+                                      Request = request
+                                  });
         return workItem.Id;
     }
 

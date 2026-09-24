@@ -80,13 +80,25 @@ public static class ExternalAppContainerIdentity
         }
 
         return daemonIsRootless
-            ? new ResolvedContainerIdentity { UserId = RootlessMappedId, GroupId = RootlessMappedId }
-            : new ResolvedContainerIdentity { UserId = userIdReader(), GroupId = groupIdReader() };
+            ? new ResolvedContainerIdentity
+            {
+                UserId = RootlessMappedId,
+                GroupId = RootlessMappedId
+            }
+            : new ResolvedContainerIdentity
+            {
+                UserId = userIdReader(),
+                GroupId = groupIdReader()
+            };
     }
 
     private static bool TryParseOption(string? option, out ResolvedContainerIdentity identity)
     {
-        identity = new ResolvedContainerIdentity { UserId = 0, GroupId = 0 };
+        identity = new ResolvedContainerIdentity
+        {
+            UserId = 0,
+            GroupId = 0
+        };
         if (string.IsNullOrWhiteSpace(option))
         {
             return false;
@@ -100,7 +112,11 @@ public static class ExternalAppContainerIdentity
             throw new ArgumentException($"'{option}' is not a 'uid:gid' container identity.", nameof(option));
         }
 
-        identity = new ResolvedContainerIdentity { UserId = userId, GroupId = groupId };
+        identity = new ResolvedContainerIdentity
+        {
+            UserId = userId,
+            GroupId = groupId
+        };
         return true;
     }
 

@@ -100,21 +100,21 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
 
             var now = _timeProvider.GetUtcNow();
             var admission = await _store.AdmitAsync(new McpAgentRunAdmissionRequest
-            {
-                RequestId = request.RequestId,
-                CanonicalRequest = requestFingerprint,
-                Task = request.Task,
-                Instructions = binding.Instructions,
-                AgentDefinitionId = binding.AgentDefinitionId,
-                AgentDefinitionVersion = binding.AgentDefinitionVersion,
-                ModelId = binding.ModelId,
-                ModelOverrideId = NullIfWhiteSpace(request.Binding.ModelOverrideId),
-                WorkspaceId = request.WorkspaceId,
-                BindingFingerprint = Convert.FromHexString(binding.BindingFingerprint),
-                CreatedAtUtc = now.ToUnixTimeMilliseconds(),
-                IsAgenticAutoApprove = request.Binding.InboundContext.IsAgentic,
-                RequestingKeyPrefix = request.Binding.InboundContext.KeyPrefix
-            },
+                {
+                    RequestId = request.RequestId,
+                    CanonicalRequest = requestFingerprint,
+                    Task = request.Task,
+                    Instructions = binding.Instructions,
+                    AgentDefinitionId = binding.AgentDefinitionId,
+                    AgentDefinitionVersion = binding.AgentDefinitionVersion,
+                    ModelId = binding.ModelId,
+                    ModelOverrideId = NullIfWhiteSpace(request.Binding.ModelOverrideId),
+                    WorkspaceId = request.WorkspaceId,
+                    BindingFingerprint = Convert.FromHexString(binding.BindingFingerprint),
+                    CreatedAtUtc = now.ToUnixTimeMilliseconds(),
+                    IsAgenticAutoApprove = request.Binding.InboundContext.IsAgentic,
+                    RequestingKeyPrefix = request.Binding.InboundContext.KeyPrefix
+                },
                 cancellationToken);
 
             await _metrics.RefreshAsync(_store, CancellationToken.None);
@@ -180,7 +180,12 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
     {
         if (requestId == Guid.Empty)
         {
-            return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
+            return new McpAgentRunCancelResult
+            {
+                Kind = McpAgentRunCancelKind.NotFound,
+                Run = null,
+                DisplayMessage = "Run not found."
+            };
         }
 
         try
@@ -190,7 +195,12 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                 var current = await _store.GetAsync(requestId, cancellationToken);
                 if (current is null)
                 {
-                    return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
+                    return new McpAgentRunCancelResult
+                    {
+                        Kind = McpAgentRunCancelKind.NotFound,
+                        Run = null,
+                        DisplayMessage = "Run not found."
+                    };
                 }
 
                 var stopped = await _store.RequestStopAsync(requestId,
@@ -220,7 +230,12 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
             }
 
             _metrics.RecordStop("user", "version_conflict");
-            return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.Conflict, Run = null, DisplayMessage = "Run state changed; read it and retry." };
+            return new McpAgentRunCancelResult
+            {
+                Kind = McpAgentRunCancelKind.Conflict,
+                Run = null,
+                DisplayMessage = "Run state changed; read it and retry."
+            };
         }
         catch (Exception exception)
         {
@@ -250,7 +265,13 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         }
 
         _metrics.RecordLifecycle("existing");
-        return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Existing, Run = ToView(existing), FailureCode = null, DisplayMessage = "Existing run returned." };
+        return new McpAgentRunStartResult
+        {
+            Kind = McpAgentRunStartKind.Existing,
+            Run = ToView(existing),
+            FailureCode = null,
+            DisplayMessage = "Existing run returned."
+        };
     }
 
     private McpAgentRunStartResult MapAdmission(McpAgentRunAdmissionResult admission)
@@ -260,10 +281,22 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         {
             case McpAgentRunAdmissionKind.Accepted:
                 _metrics.RecordLifecycle("accepted");
-                return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Accepted, Run = view, FailureCode = null, DisplayMessage = "Run accepted." };
+                return new McpAgentRunStartResult
+                {
+                    Kind = McpAgentRunStartKind.Accepted,
+                    Run = view,
+                    FailureCode = null,
+                    DisplayMessage = "Run accepted."
+                };
             case McpAgentRunAdmissionKind.Existing:
                 _metrics.RecordLifecycle("existing");
-                return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Existing, Run = view, FailureCode = null, DisplayMessage = "Existing run returned." };
+                return new McpAgentRunStartResult
+                {
+                    Kind = McpAgentRunStartKind.Existing,
+                    Run = view,
+                    FailureCode = null,
+                    DisplayMessage = "Existing run returned."
+                };
             case McpAgentRunAdmissionKind.ResultExpired:
                 _metrics.RecordLifecycle("result_expired");
                 return new McpAgentRunStartResult
@@ -295,11 +328,36 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         var view = result.Run is null ? null : ToView(result.Run);
         return result.Kind switch
         {
-            McpAgentRunStopKind.Requested => new() { Kind = McpAgentRunCancelKind.Requested, Run = view, DisplayMessage = "Cancellation recorded." },
-            McpAgentRunStopKind.AlreadyRequested => new() { Kind = McpAgentRunCancelKind.AlreadyRequested, Run = view, DisplayMessage = "Cancellation was already recorded." },
-            McpAgentRunStopKind.AlreadyTerminal => new() { Kind = McpAgentRunCancelKind.AlreadyTerminal, Run = view, DisplayMessage = "Run is already terminal." },
-            McpAgentRunStopKind.NotFound => new() { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." },
-            _ => new() { Kind = McpAgentRunCancelKind.Conflict, Run = view, DisplayMessage = "Run state changed; read it and retry." }
+            McpAgentRunStopKind.Requested => new()
+            {
+                Kind = McpAgentRunCancelKind.Requested,
+                Run = view,
+                DisplayMessage = "Cancellation recorded."
+            },
+            McpAgentRunStopKind.AlreadyRequested => new()
+            {
+                Kind = McpAgentRunCancelKind.AlreadyRequested,
+                Run = view,
+                DisplayMessage = "Cancellation was already recorded."
+            },
+            McpAgentRunStopKind.AlreadyTerminal => new()
+            {
+                Kind = McpAgentRunCancelKind.AlreadyTerminal,
+                Run = view,
+                DisplayMessage = "Run is already terminal."
+            },
+            McpAgentRunStopKind.NotFound => new()
+            {
+                Kind = McpAgentRunCancelKind.NotFound,
+                Run = null,
+                DisplayMessage = "Run not found."
+            },
+            _ => new()
+            {
+                Kind = McpAgentRunCancelKind.Conflict,
+                Run = view,
+                DisplayMessage = "Run state changed; read it and retry."
+            }
         };
     }
 
@@ -325,7 +383,13 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         };
 
     private static McpAgentRunStartResult Reject(string failureCode, string displayMessage) =>
-        new() { Kind = McpAgentRunStartKind.Rejected, Run = null, FailureCode = failureCode, DisplayMessage = displayMessage };
+        new()
+        {
+            Kind = McpAgentRunStartKind.Rejected,
+            Run = null,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage
+        };
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;

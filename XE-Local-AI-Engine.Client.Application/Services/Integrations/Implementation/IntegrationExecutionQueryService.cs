@@ -98,20 +98,20 @@ public sealed class IntegrationExecutionQueryService
             // CancellationToken.None from here down: a cancel that has decided to stop a run must finish stamping and closing it even if the client walks
             // away. NewStatus equal to the current status makes this a pure marker write under the same CAS, so it cannot resurrect a just-terminalized row.
             var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
-            {
-                ExecutionId = executionId,
-                ExpectedVersion = execution.Version,
-                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
-                                                  {
-                                                      execution.Status
-                                                  },
-                NewStatus = execution.Status,
-                StartedAtUtc = null,
-                EndedAtUtc = null,
-                InvocationId = null,
-                StopRequestedAtUtc = nowUnixMs
-            },
-                                              CancellationToken.None);
+                {
+                    ExecutionId = executionId,
+                    ExpectedVersion = execution.Version,
+                    ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                    {
+                        execution.Status
+                    },
+                    NewStatus = execution.Status,
+                    StartedAtUtc = null,
+                    EndedAtUtc = null,
+                    InvocationId = null,
+                    StopRequestedAtUtc = nowUnixMs
+                },
+                CancellationToken.None);
 
             if (!marked)
             {
@@ -189,24 +189,24 @@ public sealed class IntegrationExecutionQueryService
         try
         {
             var won = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand
-            {
-                ExecutionId = execution.Id,
-                ExpectedVersion = expectedVersion,
-                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
-                                               {
-                                                   IntegrationExecutionStatus.Accepted,
-                                                   IntegrationExecutionStatus.Queued
-                                               },
-                NewStatus = IntegrationExecutionStatus.Cancelled,
-                Sequence = sequence,
-                EventType = IntegrationStreamEventTypes.ExecutionCancelled,
-                EndedAtUtc = nowUnixMs,
-                FailureCategory = null,
-                FailureSummary = null,
-                EventDetailJson = null,
-                Audit = audit
-            },
-                                           cancellationToken);
+                {
+                    ExecutionId = execution.Id,
+                    ExpectedVersion = expectedVersion,
+                    ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                    {
+                        IntegrationExecutionStatus.Accepted,
+                        IntegrationExecutionStatus.Queued
+                    },
+                    NewStatus = IntegrationExecutionStatus.Cancelled,
+                    Sequence = sequence,
+                    EventType = IntegrationStreamEventTypes.ExecutionCancelled,
+                    EndedAtUtc = nowUnixMs,
+                    FailureCategory = null,
+                    FailureSummary = null,
+                    EventDetailJson = null,
+                    Audit = audit
+                },
+                cancellationToken);
             if (!won)
             {
                 return false;

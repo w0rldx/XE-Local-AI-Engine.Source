@@ -670,7 +670,11 @@ public sealed class ComputeToolGatewayTests
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
             Requested = true;
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-1", NodeId = "node-1" });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner-1",
+                NodeId = "node-1"
+            });
         }
     }
 
@@ -681,12 +685,20 @@ public sealed class ComputeToolGatewayTests
 
         public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null)
         {
-            _runtime = new ComputePythonRuntime { InterpreterPath = interpreter, ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"] };
+            _runtime = new ComputePythonRuntime
+            {
+                InterpreterPath = interpreter,
+                ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"]
+            };
         }
 
         public StubEnvironment(ComputeEnvironmentException failure)
         {
-            _runtime = new ComputePythonRuntime { InterpreterPath = string.Empty, ReadOnlyTrees = [] };
+            _runtime = new ComputePythonRuntime
+            {
+                InterpreterPath = string.Empty,
+                ReadOnlyTrees = []
+            };
             _failure = failure;
         }
 

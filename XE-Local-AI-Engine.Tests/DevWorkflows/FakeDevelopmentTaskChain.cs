@@ -240,13 +240,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                 // The supervisor finishing BETWEEN the ask and the caller's re-read: the ask is still refused, but by
                 // the time anyone looks again the task has moved on and its version has bumped.
                 _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-                {
-                    TaskId = taskId,
-                    OperationId = operationId,
-                    TargetStatus = DevelopmentTaskStatus.InReview,
-                    ExpectedTaskVersion = task.Version
-                },
-                                   cancellationToken);
+                    {
+                        TaskId = taskId,
+                        OperationId = operationId,
+                        TargetStatus = DevelopmentTaskStatus.InReview,
+                        ExpectedTaskVersion = task.Version
+                    },
+                    cancellationToken);
             }
 
             throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
@@ -255,11 +255,11 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         if (refused)
         {
             return await StartAnAttemptAsync(store,
-                    projectId,
-                    task,
-                    DevelopmentAttemptStatus.Failed,
-                    cancellationToken,
-                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, DevelopmentTestWritePolicy.RefusalSentence));
+                projectId,
+                task,
+                DevelopmentAttemptStatus.Failed,
+                cancellationToken,
+                DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, DevelopmentTestWritePolicy.RefusalSentence));
         }
 
         if (fail || hold)
@@ -289,15 +289,23 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
 
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = taskId,
+                OperationId = operationId,
+                TargetStatus = next,
+                ExpectedTaskVersion = task.Version,
+                ApprovedSubjectHash = next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null
+            },
+            cancellationToken);
+        return new DevelopmentNextActionResult
         {
+            Action = "Attempt",
+            ProjectId = projectId,
             TaskId = taskId,
-            OperationId = operationId,
-            TargetStatus = next,
-            ExpectedTaskVersion = task.Version,
-            ApprovedSubjectHash = next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null
-        },
-                           cancellationToken);
-        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = next, Role = DevelopmentAttemptRole.Coder };
+            AttemptId = null,
+            TaskStatus = next,
+            Role = DevelopmentAttemptRole.Coder
+        };
     }
 
     /// <summary>
@@ -324,56 +332,64 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         {
             var attemptId = Guid.NewGuid();
             var started = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
-            {
-                TaskId = task.Id,
-                AttemptId = attemptId,
-                OperationId = Guid.NewGuid(),
-                Role = DevelopmentAttemptRole.Coder,
-                ModelId = "scripted-model",
-                Provider = "local",
-                ExpectedTaskVersion = (await store.GetTaskAsync(task.Id, cancellationToken)).Version
-            },
-                                         cancellationToken);
+                {
+                    TaskId = task.Id,
+                    AttemptId = attemptId,
+                    OperationId = Guid.NewGuid(),
+                    Role = DevelopmentAttemptRole.Coder,
+                    ModelId = "scripted-model",
+                    Provider = "local",
+                    ExpectedTaskVersion = (await store.GetTaskAsync(task.Id, cancellationToken)).Version
+                },
+                cancellationToken);
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
-            {
-                AttemptId = attemptId,
-                OperationId = Guid.NewGuid(),
-                Status = DevelopmentAttemptStatus.Succeeded,
-                ExpectedAttemptVersion = started.Version
-            },
-                               cancellationToken);
+                {
+                    AttemptId = attemptId,
+                    OperationId = Guid.NewGuid(),
+                    Status = DevelopmentAttemptStatus.Succeeded,
+                    ExpectedAttemptVersion = started.Version
+                },
+                cancellationToken);
             judged = (await store.ListAttemptsAsync(task.Id, cancellationToken)).Single(attempt => attempt.Id == attemptId);
         }
 
         var opened = await store.StartValidationAsync(new DevelopmentStartValidationCommand
-        {
-            TaskId = task.Id,
-            OperationId = Guid.NewGuid(),
-            ExpectedTaskVersion = (await store.GetTaskAsync(task.Id, cancellationToken)).Version
-        },
-                                    cancellationToken);
+            {
+                TaskId = task.Id,
+                OperationId = Guid.NewGuid(),
+                ExpectedTaskVersion = (await store.GetTaskAsync(task.Id, cancellationToken)).Version
+            },
+            cancellationToken);
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+            {
+                Artifact = new DevelopmentAttachArtifactCommand
+                {
+                    ArtifactId = Guid.NewGuid(),
+                    ProjectId = projectId,
+                    TaskId = task.Id,
+                    AttemptId = judged.Id,
+                    OperationId = Guid.NewGuid(),
+                    Kind = DevelopmentArtifactKind.ValidationReport,
+                    SchemaVersion = 1,
+                    ContentHash = "content-hash",
+                    ByteCount = 2,
+                    ContentJson = Encoding.UTF8.GetBytes("{}")
+                },
+                OperationId = Guid.NewGuid(),
+                ExpectedTaskVersion = opened.Version,
+                TargetStatus = DevelopmentValidationRunner.TargetFor(passed: false),
+                SanitizedReason = GateFailureReason
+            },
+            cancellationToken);
+        return new DevelopmentNextActionResult
         {
-            Artifact = new DevelopmentAttachArtifactCommand
-        {
-            ArtifactId = Guid.NewGuid(),
+            Action = "Validation",
             ProjectId = projectId,
             TaskId = task.Id,
-            AttemptId = judged.Id,
-            OperationId = Guid.NewGuid(),
-            Kind = DevelopmentArtifactKind.ValidationReport,
-            SchemaVersion = 1,
-            ContentHash = "content-hash",
-            ByteCount = 2,
-            ContentJson = Encoding.UTF8.GetBytes("{}")
-        },
-            OperationId = Guid.NewGuid(),
-            ExpectedTaskVersion = opened.Version,
-            TargetStatus = DevelopmentValidationRunner.TargetFor(passed: false),
-            SanitizedReason = GateFailureReason
-        },
-                           cancellationToken);
-        return new DevelopmentNextActionResult { Action = "Validation", ProjectId = projectId, TaskId = task.Id, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Validation, Role = null };
+            AttemptId = null,
+            TaskStatus = DevelopmentTaskStatus.Validation,
+            Role = null
+        };
     }
 
     /// <summary>What the scripted gate reports, in the shape <c>DevelopmentValidationRunner</c> composes.</summary>
@@ -395,13 +411,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         if (task.Status == DevelopmentTaskStatus.Planned)
         {
             var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-            {
-                TaskId = task.Id,
-                OperationId = Guid.NewGuid(),
-                TargetStatus = DevelopmentTaskStatus.Ready,
-                ExpectedTaskVersion = task.Version
-            },
-                                       cancellationToken);
+                {
+                    TaskId = task.Id,
+                    OperationId = Guid.NewGuid(),
+                    TargetStatus = DevelopmentTaskStatus.Ready,
+                    ExpectedTaskVersion = task.Version
+                },
+                cancellationToken);
             ready = task with
             {
                 Status = DevelopmentTaskStatus.Ready,
@@ -411,30 +427,38 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
-        {
-            TaskId = ready.Id,
-            AttemptId = attemptId,
-            OperationId = Guid.NewGuid(),
-            Role = DevelopmentAttemptRole.Coder,
-            ModelId = "scripted-model",
-            Provider = "local",
-            ExpectedTaskVersion = ready.Version
-        },
-                           cancellationToken);
+            {
+                TaskId = ready.Id,
+                AttemptId = attemptId,
+                OperationId = Guid.NewGuid(),
+                Role = DevelopmentAttemptRole.Coder,
+                ModelId = "scripted-model",
+                Provider = "local",
+                ExpectedTaskVersion = ready.Version
+            },
+            cancellationToken);
         if (terminal is { } landed)
         {
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
-            {
-                AttemptId = attemptId,
-                OperationId = Guid.NewGuid(),
-                Status = landed,
-                ExpectedAttemptVersion = 1,
-                TerminalReason = terminalReason
-            },
-                               cancellationToken);
+                {
+                    AttemptId = attemptId,
+                    OperationId = Guid.NewGuid(),
+                    Status = landed,
+                    ExpectedAttemptVersion = 1,
+                    TerminalReason = terminalReason
+                },
+                cancellationToken);
         }
 
-        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = ready.Id, AttemptId = attemptId, TaskStatus = DevelopmentTaskStatus.InProgress, Role = DevelopmentAttemptRole.Coder };
+        return new DevelopmentNextActionResult
+        {
+            Action = "Attempt",
+            ProjectId = projectId,
+            TaskId = ready.Id,
+            AttemptId = attemptId,
+            TaskStatus = DevelopmentTaskStatus.InProgress,
+            Role = DevelopmentAttemptRole.Coder
+        };
     }
 
     public async Task<bool> CancelAttemptAsync(Guid projectId, Guid taskId, Guid attemptId, CancellationToken cancellationToken = default)
@@ -443,14 +467,14 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var attempt = (await store.ListAttemptsAsync(taskId, cancellationToken)).Single(candidate => candidate.Id == attemptId);
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
-        {
-            AttemptId = attemptId,
-            OperationId = Guid.NewGuid(),
-            Status = DevelopmentAttemptStatus.Cancelled,
-            ExpectedAttemptVersion = attempt.Version,
-            TerminalReason = "The run was cancelled."
-        },
-                           cancellationToken);
+            {
+                AttemptId = attemptId,
+                OperationId = Guid.NewGuid(),
+                Status = DevelopmentAttemptStatus.Cancelled,
+                ExpectedAttemptVersion = attempt.Version,
+                TerminalReason = "The run was cancelled."
+            },
+            cancellationToken);
         lock (_gate)
         {
             _cancelled.Add(attemptId);

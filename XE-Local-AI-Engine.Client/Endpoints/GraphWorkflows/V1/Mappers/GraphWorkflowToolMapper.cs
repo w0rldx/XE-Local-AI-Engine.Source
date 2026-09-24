@@ -14,6 +14,11 @@ internal static class GraphWorkflowToolMapper
     public static GraphWorkflowToolResponse ToResponse(this InvocableToolDescriptor value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowToolResponse { Name = value.Name, Description = value.Description, ParameterSchema = value.ParameterSchema };
+        return new GraphWorkflowToolResponse
+        {
+            Name = value.Name,
+            Description = value.Description,
+            ParameterSchema = value.ParameterSchema
+        };
     }
 }

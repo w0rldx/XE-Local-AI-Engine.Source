@@ -19,8 +19,7 @@ public sealed class ApplyAppUpdateEndpoint : EndpointWithoutRequest<ApplyAppUpda
     private readonly IAppUpdateService _updateService;
     private readonly AppUpdateShutdownCoordinator _shutdownCoordinator;
 
-    public ApplyAppUpdateEndpoint(
-        IAppUpdateService updateService,
+    public ApplyAppUpdateEndpoint(IAppUpdateService updateService,
         AppUpdateShutdownCoordinator shutdownCoordinator)
     {
         ArgumentNullException.ThrowIfNull(updateService);

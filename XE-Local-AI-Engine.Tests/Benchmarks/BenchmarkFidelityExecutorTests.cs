@@ -353,7 +353,17 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                                              """;
 
         public BenchmarkClaimedWork Work() =>
-            new() { QueueSequence = 3, RunId = RunId, Kind = BenchmarkWorkKind.Fidelity, Attempt = 1, Version = WorkVersion, Run = _run, JudgeAttemptId = null, FidelityAttemptId = AttemptId };
+            new()
+            {
+                QueueSequence = 3,
+                RunId = RunId,
+                Kind = BenchmarkWorkKind.Fidelity,
+                Attempt = 1,
+                Version = WorkVersion,
+                Run = _run,
+                JudgeAttemptId = null,
+                FidelityAttemptId = AttemptId
+            };
 
         /// <summary>
         ///     PerplexityExecutablePath resolves off DISK, beside the server binary, so the two cases are two real
@@ -364,7 +374,13 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         {
             var binaries = Substitute.For<ILlamaCppBinaryManager>();
             _ = binaries.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                        .Returns(call => new LlamaBinary { ServerExecutablePath = serverPath, Version = "b10201", Variant = call.Arg<GpuVariant>(), IsPinnedFallback = false });
+                        .Returns(call => new LlamaBinary
+                        {
+                            ServerExecutablePath = serverPath,
+                            Version = "b10201",
+                            Variant = call.Arg<GpuVariant>(),
+                            IsPinnedFallback = false
+                        });
             return binaries;
         }
 
@@ -372,7 +388,12 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         {
             var capacity = Substitute.For<ICapacityService>();
             _ = capacity.DecideAsync(Arg.Do<CapacityRequest>(request => CapacityRequests.Add(request)), Arg.Any<CancellationToken>())
-                        .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "allowed", OllamaEvictionWarning = false });
+                        .Returns(new CapacityDecision
+                        {
+                            Verdict = CapacityVerdict.Allow,
+                            Reason = "allowed",
+                            OllamaEvictionWarning = false
+                        });
             return capacity;
         }
 
@@ -388,7 +409,11 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 Options.Create(new BenchmarkKldCacheOptions()),
                 new StubEnvironment(),
                 new BenchmarkCancellationRegistry(),
-                new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
+                new BenchmarkAdmissionRetry
+                {
+                    MaxRetries = 0,
+                    Interval = TimeSpan.Zero
+                },
                 NullLogger<BenchmarkFidelityExecutor>.Instance,
                 measurementTimeout);
 
@@ -576,7 +601,11 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken);
             }
 
-            return new BenchmarkPerplexityProcessResult { ExitCode = 0, Output = _output() };
+            return new BenchmarkPerplexityProcessResult
+            {
+                ExitCode = 0,
+                Output = _output()
+            };
         }
     }
 

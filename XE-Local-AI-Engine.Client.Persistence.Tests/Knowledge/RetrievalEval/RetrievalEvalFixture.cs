@@ -299,7 +299,11 @@ internal sealed class RetrievalEvalFixture : IDisposable
         }
 
         public KnowledgeBlobReconciliationResult ReconcileInterruptedWrites() =>
-            new() { RestoredBlobNames = [], RemovedLitterCount = 0 };
+            new()
+            {
+                RestoredBlobNames = [],
+                RemovedLitterCount = 0
+            };
     }
 
     /// <summary>Returns the one managed cosine search instance bound to the search service's scoped context.</summary>

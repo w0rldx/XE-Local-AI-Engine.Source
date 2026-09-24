@@ -134,11 +134,10 @@ public sealed partial class Program
         await standardOutput.WriteLineAsync("XE Local AI Engine");
         await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput
-              .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
+            .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
         await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export");
         await standardOutput
-              .WriteLineAsync(
-                  "Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");
+            .WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");
         await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.");
         await standardOutput.WriteLineAsync("Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.");
     }
@@ -155,7 +154,16 @@ public sealed partial class Program
         {
             await standardError.WriteLineAsync(dataDirectoryError);
             return await WriteStatusAsync(args,
-                new EngineStatus { Running = false, Version = null, Url = null, McpUrl = null, DataDir = string.Empty, SetupRequired = null, InstallKind = ResolveInstallKind(isManagedInstall) },
+                new EngineStatus
+                {
+                    Running = false,
+                    Version = null,
+                    Url = null,
+                    McpUrl = null,
+                    DataDir = string.Empty,
+                    SetupRequired = null,
+                    InstallKind = ResolveInstallKind(isManagedInstall)
+                },
                 standardOutput);
         }
 

@@ -84,8 +84,16 @@ public static class TrainingRunStdioParser
 
             return name.GetString() switch
             {
-                "handshake" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Handshake, ContractVersion = ReadInt(root, "contractVersion") },
-                "phase" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Phase, Phase = ReadString(root, "phase") },
+                "handshake" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Handshake,
+                    ContractVersion = ReadInt(root, "contractVersion")
+                },
+                "phase" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Phase,
+                    Phase = ReadString(root, "phase")
+                },
                 "progress" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Progress,
@@ -96,14 +104,22 @@ public static class TrainingRunStdioParser
                     LearningRate = ReadDouble(root, "lr"),
                     VramBytes = ReadLong(root, "vramBytes")
                 },
-                "heartbeat" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Heartbeat, Phase = ReadString(root, "phase") },
+                "heartbeat" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Heartbeat,
+                    Phase = ReadString(root, "phase")
+                },
                 "artifact" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Artifact,
                     ArtifactKind = ReadString(root, "kind"),
                     Path = ReadString(root, "path")
                 },
-                "done" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Done, Cancelled = ReadBool(root, "cancelled") },
+                "done" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Done,
+                    Cancelled = ReadBool(root, "cancelled")
+                },
                 "error" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Error,

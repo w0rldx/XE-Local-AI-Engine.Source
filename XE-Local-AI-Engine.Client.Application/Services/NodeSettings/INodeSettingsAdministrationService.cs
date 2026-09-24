@@ -106,17 +106,33 @@ public sealed class NodeSettingsAdministrationResult
     public bool Conflicted { get; init; }
 
     public static NodeSettingsAdministrationResult Saved(StoredNodeSettings settings) =>
-        new() { Updated = true, Settings = settings, ValidationErrors = [] };
+        new()
+        {
+            Updated = true,
+            Settings = settings,
+            ValidationErrors = []
+        };
 
     public static NodeSettingsAdministrationResult Rejected(StoredNodeSettings settings,
         IReadOnlyList<NodeSettingsValidationError> errors) =>
-        new() { Updated = false, Settings = settings, ValidationErrors = errors };
+        new()
+        {
+            Updated = false,
+            Settings = settings,
+            ValidationErrors = errors
+        };
 
     /// <summary>The save was abandoned unwritten after every attempt found the record changed. Named
     ///     <c>Conflict</c> rather than <c>Conflicted</c> only because a type cannot hold a method and a property of
     ///     the same name.</summary>
     public static NodeSettingsAdministrationResult Conflict(StoredNodeSettings latest) =>
-        new() { Updated = false, Settings = latest, ValidationErrors = [], Conflicted = true };
+        new()
+        {
+            Updated = false,
+            Settings = latest,
+            ValidationErrors = [],
+            Conflicted = true
+        };
 }
 
 /// <summary>Transport-neutral field validation for the restricted agentic settings patch.</summary>
@@ -194,5 +210,11 @@ public static class NodeSettingsAgenticPatchValidation
         value >= minimum && value <= maximum;
 
     private static IReadOnlyList<NodeSettingsValidationError> Reject(NodeSettingsField field, string message) =>
-        [new NodeSettingsValidationError { Field = field, Message = message }];
+    [
+        new NodeSettingsValidationError
+        {
+            Field = field,
+            Message = message
+        }
+    ];
 }

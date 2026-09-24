@@ -160,7 +160,8 @@ public sealed class BenchmarkExportEndpointTests
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkCellPage
                {
-                   Cells = [
+                   Cells =
+                   [
                        new BenchmarkCellRecord
                        {
                            CellKey = "cell:model:1",
@@ -172,10 +173,28 @@ public sealed class BenchmarkExportEndpointTests
                            Quality = 84,
                            Rank = 1,
                            RankExclusionReason = null,
-                           Items = [new BenchmarkCellItemRecord { RunId = summary.Id, TaskItemId = taskItemId, TaskItemIndex = 0, QualityScore = 84, PrimaryStopReason = null, RankExclusionReason = null }]
+                           Items =
+                           [
+                               new BenchmarkCellItemRecord
+                               {
+                                   RunId = summary.Id,
+                                   TaskItemId = taskItemId,
+                                   TaskItemIndex = 0,
+                                   QualityScore = 84,
+                                   PrimaryStopReason = null,
+                                   RankExclusionReason = null
+                               }
+                           ]
                        }
                    ],
-                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 },
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = 2,
+                       ExecutionKey = "cohort-key",
+                       CohortGeneration = 3,
+                       RankedCount = 1,
+                       TotalScored = 1
+                   },
                    ScorableItemCount = 1
                });
         using var client = context.Factory.CreateClient();
@@ -383,7 +402,22 @@ public sealed class BenchmarkExportEndpointTests
     private const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     private static BenchmarkRunFidelity Fidelity(string digest) =>
-        new() { Status = "succeeded", AttemptId = Guid.NewGuid(), PerplexityMean = 6.7977, PerplexityStdErr = 0.074, PerplexityChunks = 200, PerplexityContextTokens = 512, PerplexityCorpusId = "wikitext2", KldMean = 0.012, KldP99 = 0.31, TopTokenAgreement = 0.94, KldBaseFingerprint = BaseFingerprint, KldBaseLogitsDigest = digest, ErrorMessage = null };
+        new()
+        {
+            Status = "succeeded",
+            AttemptId = Guid.NewGuid(),
+            PerplexityMean = 6.7977,
+            PerplexityStdErr = 0.074,
+            PerplexityChunks = 200,
+            PerplexityContextTokens = 512,
+            PerplexityCorpusId = "wikitext2",
+            KldMean = 0.012,
+            KldP99 = 0.31,
+            TopTokenAgreement = 0.94,
+            KldBaseFingerprint = BaseFingerprint,
+            KldBaseLogitsDigest = digest,
+            ErrorMessage = null
+        };
 
     private static BenchmarkPairwiseFitRecord Fit(Guid first, Guid second) =>
         new()
@@ -583,7 +617,19 @@ public sealed class BenchmarkExportEndpointTests
         // both come back empty rather than absent — the export still has to say what the ranking counted.
         context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage { Cells = [], RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 }, ScorableItemCount = 0 });
+               .Returns(new BenchmarkCellPage
+               {
+                   Cells = [],
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = 2,
+                       ExecutionKey = "cohort-key",
+                       CohortGeneration = 3,
+                       RankedCount = 1,
+                       TotalScored = 1
+                   },
+                   ScorableItemCount = 0
+               });
     }
 
     private static void ArrangeRuns(Context context, params BenchmarkRunRecord[] runs)
@@ -596,7 +642,14 @@ public sealed class BenchmarkExportEndpointTests
                        Rank = 1
                    }).ToArray(),
                    TotalCount = runs.Length,
-                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 }
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = 2,
+                       ExecutionKey = "cohort-key",
+                       CohortGeneration = 3,
+                       RankedCount = 1,
+                       TotalScored = 1
+                   }
                });
         foreach (var run in runs)
         {

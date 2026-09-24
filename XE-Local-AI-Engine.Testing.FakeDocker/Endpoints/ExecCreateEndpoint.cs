@@ -34,10 +34,10 @@ internal static class ExecCreateEndpoint
         state.ExecSessions[session.Id] = session;
 
         await FakeDockerEndpointMapper.WriteJsonAsync(context,
-                                          new JsonObject
-                                          {
-                                              ["Id"] = session.Id
-                                          },
-                                          StatusCodes.Status201Created);
+            new JsonObject
+            {
+                ["Id"] = session.Id
+            },
+            StatusCodes.Status201Created);
     }
 }

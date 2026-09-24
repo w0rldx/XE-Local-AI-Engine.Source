@@ -40,9 +40,9 @@ public sealed class UpdateExternalAppEndpoint : Endpoint<UpdateExternalAppReques
 
         // The validator's NotNull rule ran first, so the value is present here and only here.
         var summary = await _apps.UpdateAsync(req.InstanceId,
-                                     req.ExpectedVersion!.Value,
-                                     new UpdateCommand(req.ManifestVersion, req.ManifestSha256, req.AcceptPermissions, req.Variables),
-                                     ct);
+            req.ExpectedVersion!.Value,
+            new UpdateCommand(req.ManifestVersion, req.ManifestSha256, req.AcceptPermissions, req.Variables),
+            ct);
 
         await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary)));
     }

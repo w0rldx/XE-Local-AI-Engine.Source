@@ -25,6 +25,9 @@ public sealed class ListDevelopmentRepositoriesEndpoint : EndpointWithoutRequest
     public override async Task HandleAsync(CancellationToken ct)
     {
         var repositories = await _service.ListRepositoriesAsync(ct);
-        await Send.OkAsync(new ListDevelopmentRepositoriesResponse { Items = repositories.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
+        await Send.OkAsync(new ListDevelopmentRepositoriesResponse
+        {
+            Items = repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()
+        }, ct);
     }
 }

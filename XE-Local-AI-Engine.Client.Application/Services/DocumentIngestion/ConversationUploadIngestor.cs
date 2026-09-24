@@ -23,8 +23,7 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
     private readonly IDocumentTextExtractor _extractor;
     private readonly IConversationUploadedFileStore _fileStore;
 
-    public ConversationUploadIngestor(
-        IConversationUploadedFileStore fileStore,
+    public ConversationUploadIngestor(IConversationUploadedFileStore fileStore,
         IDocumentTextExtractor extractor,
         IDocumentExtractionAdmissionGate extractionGate)
     {

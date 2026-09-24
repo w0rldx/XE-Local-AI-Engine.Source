@@ -29,8 +29,7 @@ public sealed class DevelopmentAttemptHub : Hub
     private readonly IDevelopmentManagementService _managementService;
     private readonly IDevelopmentAttemptLiveBroker _broker;
 
-    public DevelopmentAttemptHub(
-        IDevelopmentManagementService managementService,
+    public DevelopmentAttemptHub(IDevelopmentManagementService managementService,
         IDevelopmentAttemptLiveBroker broker)
     {
         _managementService = managementService;

@@ -375,7 +375,13 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                 new FakeHealthProbe(),
                 NullLogger<TransientLlamaServerLauncher>.Instance);
 
-            await transient.RunAsync(new TransientLlamaServerRequest { ModelFilePath = modelPath, AdapterFilePath = null, ContextTokens = 2048, ReadinessTimeout = TimeSpan.FromSeconds(5) },
+            await transient.RunAsync(new TransientLlamaServerRequest
+                {
+                    ModelFilePath = modelPath,
+                    AdapterFilePath = null,
+                    ContextTokens = 2048,
+                    ReadinessTimeout = TimeSpan.FromSeconds(5)
+                },
                 static (_, _) => Task.FromResult(true), CancellationToken.None);
 
             AssertEx.True(launcher.Launches.TryDequeue(out var spec));

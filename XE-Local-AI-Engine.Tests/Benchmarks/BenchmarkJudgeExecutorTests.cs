@@ -76,7 +76,16 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         var package = AssertEx.NotNull(assignedPackage);
         AssertEx.Equal(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), package.ResolvedSystemPrompt);
@@ -129,7 +138,16 @@ public sealed class BenchmarkJudgeExecutorTests
         var supervisor = PassthroughSupervisor();
         var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal<int?>(4096, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
@@ -203,7 +221,16 @@ public sealed class BenchmarkJudgeExecutorTests
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
             Substitute.For<IWorkerEventDispatcher>(), runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         AssertEx.Equal(BenchmarkJudgeExecutor.OutdatedPolicyVersionMessage, AssertEx.NotNull(failureMessage));
         AssertEx.Contains(failureMessage!, "Re-save the judge", StringComparison.Ordinal);
@@ -233,7 +260,16 @@ public sealed class BenchmarkJudgeExecutorTests
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
             Substitute.For<IWorkerEventDispatcher>(), runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         AssertEx.Contains(AssertEx.NotNull(failureMessage), BenchmarkLaunchIdentityScheme.SupersededReason);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
@@ -266,7 +302,16 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         var terminal = AssertEx.NotNull(failed);
         AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, terminal.PrimaryStatus);
@@ -307,9 +352,22 @@ public sealed class BenchmarkJudgeExecutorTests
             capacity,
             Substitute.For<IWorkerEventDispatcher>(),
             runner,
-            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 5, Interval = TimeSpan.Zero });
+            admissionRetry: new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 5,
+                Interval = TimeSpan.Zero
+            });
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         AssertEx.Equal(3, capacity.DecisionCount);
         await runner.ReceivedWithAnyArgs(1).RunAsync(default!, default);
@@ -343,9 +401,22 @@ public sealed class BenchmarkJudgeExecutorTests
             capacity,
             Substitute.For<IWorkerEventDispatcher>(),
             runner,
-            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 3, Interval = TimeSpan.Zero });
+            admissionRetry: new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 3,
+                Interval = TimeSpan.Zero
+            });
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         // 3 retries + the first decision, then a terminal failure that tells the operator it was a wait, not a glance.
         AssertEx.Equal(4, capacity.DecisionCount);
@@ -384,7 +455,16 @@ public sealed class BenchmarkJudgeExecutorTests
             Substitute.For<IInvocationRunner>(),
             logger: logger);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         AssertEx.Equal<string?>(frozenKvCacheType, AssertEx.NotNull(capacity.LastRequest).KvCacheType);
         var admission = AssertEx.NotNull(logger.Entries.FirstOrDefault(entry =>
@@ -443,11 +523,24 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations,
             new StubEnvironmentFacts(),
-            new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
+            new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 0,
+                Interval = TimeSpan.Zero
+            },
             Substitute.For<IBenchmarkPythonTestsVerifier>(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = workVersion, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = workVersion,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>());
         AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
@@ -489,7 +582,16 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         AssertEx.True(checkpointedBeforeInference, "The judge launch evidence must be durable before the first token is generated.");
         AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, AssertEx.NotNull(checkpoint).KvCacheTypeSource);
@@ -523,7 +625,16 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         _ = supervisor.DidNotReceive()
                       .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
@@ -584,7 +695,16 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         // The parser demands the reply's criteria array match the rubric it parses against exactly, so the model must
         // be handed the FILTERED rubric — a one-criterion reply against a two-criterion rubric is a failed judging.
@@ -642,7 +762,16 @@ public sealed class BenchmarkJudgeExecutorTests
             Substitute.For<IInvocationRunner>(),
             supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
         _ = supervisor.DidNotReceive()
@@ -713,7 +842,16 @@ public sealed class BenchmarkJudgeExecutorTests
             Substitute.For<IInvocationRunner>(),
             supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
         _ = supervisor.DidNotReceive()
@@ -774,9 +912,22 @@ public sealed class BenchmarkJudgeExecutorTests
             Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(),
             supervisor,
-            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 2, Interval = TimeSpan.Zero });
+            admissionRetry: new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 2,
+                Interval = TimeSpan.Zero
+            });
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
 
         _ = supervisor.Received(3).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
             Arg.Any<ModelRole>(),
@@ -829,7 +980,11 @@ public sealed class BenchmarkJudgeExecutorTests
             new StubEnvironmentFacts(),
             // Default: decide ONCE and never wait, so the tests that assert the rejection path stay instant. Tests
             // about the wait itself pass their own budget with a zero interval.
-            admissionRetry ?? new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
+            admissionRetry ?? new BenchmarkAdmissionRetry
+            {
+                MaxRetries = 0,
+                Interval = TimeSpan.Zero
+            },
             pythonTests ?? Substitute.For<IBenchmarkPythonTestsVerifier>(),
             logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
 
@@ -886,7 +1041,17 @@ public sealed class BenchmarkJudgeExecutorTests
         };
 
     private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
-        new() { Id = RevisionId, ProjectId = Guid.NewGuid(), Revision = 1, PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion, rubric)), PolicyHash = PolicyHash, ReferenceExecutionKey = null, CohortGeneration = 1, CreatedAtUtc = 1 };
+        new()
+        {
+            Id = RevisionId,
+            ProjectId = Guid.NewGuid(),
+            Revision = 1,
+            PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion, rubric)),
+            PolicyHash = PolicyHash,
+            ReferenceExecutionKey = null,
+            CohortGeneration = 1,
+            CreatedAtUtc = 1
+        };
 
     private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
@@ -918,7 +1083,21 @@ public sealed class BenchmarkJudgeExecutorTests
         };
 
     private static BenchmarkRunJudgeView JudgeView(string state, string? errorMessage = null) =>
-        new() { State = state, AttemptId = AttemptId, Score = null, PolicyRevision = 1, PolicyRevisionId = RevisionId, AttemptSequence = 1, CohortGeneration = 1, ExecutionKey = null, ErrorMessage = errorMessage, PolicyCurrent = true, ExecutionCurrent = false, RankExclusionReason = null };
+        new()
+        {
+            State = state,
+            AttemptId = AttemptId,
+            Score = null,
+            PolicyRevision = 1,
+            PolicyRevisionId = RevisionId,
+            AttemptSequence = 1,
+            CohortGeneration = 1,
+            ExecutionKey = null,
+            ErrorMessage = errorMessage,
+            PolicyCurrent = true,
+            ExecutionCurrent = false,
+            RankExclusionReason = null
+        };
 
     private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version, string? primaryStopReason = null) =>
         new()
@@ -958,7 +1137,21 @@ public sealed class BenchmarkJudgeExecutorTests
             PrimaryLaunchIntent = null,
             PrimaryLaunchEvidence = null,
             PrimaryStopReason = primaryStopReason,
-            Judge = new BenchmarkRunJudgeView { State = judgeState, AttemptId = null, Score = null, PolicyRevision = null, PolicyRevisionId = null, AttemptSequence = null, CohortGeneration = null, ExecutionKey = null, ErrorMessage = null, PolicyCurrent = true, ExecutionCurrent = false, RankExclusionReason = null }
+            Judge = new BenchmarkRunJudgeView
+            {
+                State = judgeState,
+                AttemptId = null,
+                Score = null,
+                PolicyRevision = null,
+                PolicyRevisionId = null,
+                AttemptSequence = null,
+                CohortGeneration = null,
+                ExecutionKey = null,
+                ErrorMessage = null,
+                PolicyCurrent = true,
+                ExecutionCurrent = false,
+                RankExclusionReason = null
+            }
         };
 
     private static InstalledModelSnapshot Installed()
@@ -1056,7 +1249,12 @@ public sealed class BenchmarkJudgeExecutorTests
                   .Returns(call =>
                   {
                       var modelName = call.ArgAt<string>(0);
-                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = modelName, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:19001") }, []);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint
+                      {
+                          ModelName = modelName,
+                          Role = ModelRole.Chat,
+                          BaseAddress = new Uri("http://127.0.0.1:19001")
+                      }, []);
                       return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
                   });
         return supervisor;
@@ -1137,7 +1335,12 @@ public sealed class BenchmarkJudgeExecutorTests
         public TrackingDisposable Reservation { get; } = new();
 
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
-            Task.FromResult(new CapacityDecision { Verdict = Next(), Reason = "capacity", OllamaEvictionWarning = false });
+            Task.FromResult(new CapacityDecision
+            {
+                Verdict = Next(),
+                Reason = "capacity",
+                OllamaEvictionWarning = false
+            });
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {

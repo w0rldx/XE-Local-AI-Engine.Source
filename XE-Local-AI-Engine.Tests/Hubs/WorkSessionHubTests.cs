@@ -171,7 +171,17 @@ public sealed class WorkSessionHubTests
     }
 
     private static WorkSessionEventDto Event(long sequence) =>
-        new() { Id = Guid.NewGuid(), Sequence = sequence, Step = 1, EventType = "step.started", DetailJson = null, Outcome = null, OccurredUtc = 10, OperationId = null };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Sequence = sequence,
+            Step = 1,
+            EventType = "step.started",
+            DetailJson = null,
+            Outcome = null,
+            OccurredUtc = 10,
+            OperationId = null
+        };
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
@@ -193,7 +203,11 @@ public sealed class WorkSessionHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture { Hub = hub, Groups = groups };
+        return new HubFixture
+        {
+            Hub = hub,
+            Groups = groups
+        };
     }
 
     private sealed record HubFixture : IDisposable

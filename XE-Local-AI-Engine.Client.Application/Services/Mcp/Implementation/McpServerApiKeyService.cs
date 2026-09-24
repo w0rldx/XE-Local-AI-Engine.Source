@@ -49,7 +49,11 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         var record = await _store.SetAsync(prefix, HashKey(key), (int)scope, cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedMcpServerApiKey { Key = key, View = ToView(record) };
+        return new GeneratedMcpServerApiKey
+        {
+            Key = key,
+            View = ToView(record)
+        };
     }
 
     public async Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default)

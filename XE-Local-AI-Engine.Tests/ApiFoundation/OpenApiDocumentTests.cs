@@ -111,7 +111,7 @@ public sealed class OpenApiDocumentTests
         var propertyNames = document.RootElement.GetProperty("components").GetProperty("schemas").EnumerateObject()
                                     .Where(static schema => schema.Value.TryGetProperty("properties", out _))
                                     .SelectMany(static schema => schema.Value.GetProperty("properties").EnumerateObject()
-                                                                      .Select(property => $"{schema.Name}.{property.Name}"))
+                                                                       .Select(property => $"{schema.Name}.{property.Name}"))
                                     .ToList();
         var parameterNames = document.RootElement.GetProperty("paths").EnumerateObject()
                                      .SelectMany(static path => path.Value.EnumerateObject()

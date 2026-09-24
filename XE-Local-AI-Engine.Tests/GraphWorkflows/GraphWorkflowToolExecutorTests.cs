@@ -44,11 +44,11 @@ public sealed class GraphWorkflowToolExecutorTests
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
         harness.Tools.Declare(tool);
         var runId = await harness.StartRunAsync(Graph(tool,
-                                         """
-                                         , "arguments": { "path": "typed-by-the-author.md", "limit": 1, "recursive": true }
-                                         , "argumentBindings": { "path": "run.input.path", "limit": "run.input.limit" }
-                                         """),
-                                     """{"path":"computed-by-the-run.md","limit":7}""");
+                """
+                , "arguments": { "path": "typed-by-the-author.md", "limit": 1, "recursive": true }
+                , "argumentBindings": { "path": "run.input.path", "limit": "run.input.limit" }
+                """),
+            """{"path":"computed-by-the-run.md","limit":7}""");
 
         _ = await SettleToolAsync(harness, runId);
 
@@ -69,7 +69,7 @@ public sealed class GraphWorkflowToolExecutorTests
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
         harness.Tools.Declare(tool);
         var runId = await harness.StartRunAsync(Graph(tool, """, "argumentBindings": { "path": "run.input.absent" }"""),
-                                     """{"secret":"never-repeat-this"}""");
+            """{"secret":"never-repeat-this"}""");
 
         var call = await SettleToolAsync(harness, runId);
 
@@ -92,7 +92,10 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string tool = "probe_text";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Result = "42 files, none of them interesting" });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            Result = "42 files, none of them interesting"
+        });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);
@@ -115,12 +118,15 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         // The graph fixture names this tool, and only this test uses that fixture.
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script("probe_json", new GraphWorkflowScriptedTool { Result = """{"ok":true,"hits":3}""" });
+        harness.Tools.Script("probe_json", new GraphWorkflowScriptedTool
+        {
+            Result = """{"ok":true,"hits":3}"""
+        });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolThenCondition);
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed,
-                         "the tool node's answer never routed the run to an end.");
+            async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed,
+            "the tool node's answer never routed the run to an end.");
 
         AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "call")).OutputJson, "the tool node carries a document."),
             "\"result\":{\"ok\":true,\"hits\":3}",
@@ -149,7 +155,11 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string reason = "the fake refused, and said so structurally";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Kind = kind, Reason = reason });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            Kind = kind,
+            Reason = reason
+        });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);
@@ -185,15 +195,19 @@ public sealed class GraphWorkflowToolExecutorTests
         GraphWorkflowFailureClass failureClass)
     {
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Kind = kind, Reason = "the fake could not answer" });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            Kind = kind,
+            Reason = "the fake could not answer"
+        });
 
         // The shipped three attempts, deliberately: at maxAttempts 1 every retryable class reports AttemptsExhausted
         // on its only try, and the two would be indistinguishable.
         var runId = await harness.StartRunAsync(Graph(tool));
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Failed,
-                         "the tool node never spent its attempt budget.");
+            async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Failed,
+            "the tool node never spent its attempt budget.");
 
         var retried = (await harness.ReadEventsAsync(runId)).First(static entry => entry.EventType == "node.retried");
         AssertEx.Contains(retried.DetailJson, failureClass.ToString(), message: "the class the lane wrote is what the retry replaced.");
@@ -219,7 +233,10 @@ public sealed class GraphWorkflowToolExecutorTests
         // A private host: the cap is host-level configuration, and 1024 is the validator's floor — the smallest cap a
         // real node can be configured with.
         await using var harness = GraphWorkflowHarness.PrivateToolHost(("GraphWorkflows:MaxOutputJsonBytes", "1024"));
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Result = new string('a', count: 4096) });
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool
+        {
+            Result = new string('a', count: 4096)
+        });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);
@@ -263,7 +280,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         await using var harness = new GraphWorkflowHarness(RealHost);
         var runId = await harness.StartRunAsync(Graph("read_file", """, "argumentBindings": { "path": "run.input.path" }"""),
-                                     """{"path":"../../etc/passwd"}""");
+            """{"path":"../../etc/passwd"}""");
 
         var call = await SettleToolAsync(harness, runId);
 
@@ -300,8 +317,8 @@ public sealed class GraphWorkflowToolExecutorTests
     private static async Task<GraphWorkflowNodeRunSnapshot> SettleToolAsync(GraphWorkflowHarness harness, Guid runId)
     {
         await harness.AdvanceUntilAsync(runId,
-                         async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadNodeRunAsync(runId, "call")).Status),
-                         $"Run {runId} left its tool node unsettled.");
+            async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadNodeRunAsync(runId, "call")).Status),
+            $"Run {runId} left its tool node unsettled.");
         return await harness.ReadNodeRunAsync(runId, "call");
     }
 

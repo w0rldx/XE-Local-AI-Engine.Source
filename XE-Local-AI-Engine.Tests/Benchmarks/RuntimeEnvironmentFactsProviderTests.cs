@@ -165,7 +165,13 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
         {
             binaryManager = Substitute.For<ILlamaCppBinaryManager>();
             binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                         .Returns(Task.FromResult(new LlamaBinary { ServerExecutablePath = Path.Combine(bundlePath!, ExecutableName), Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = false }));
+                         .Returns(Task.FromResult(new LlamaBinary
+                         {
+                             ServerExecutablePath = Path.Combine(bundlePath!, ExecutableName),
+                             Version = "b10201",
+                             Variant = GpuVariant.Cuda,
+                             IsPinnedFallback = false
+                         }));
         }
 
         var installedRuntimeStore = Substitute.For<IInstalledRuntimeStore>();
@@ -196,7 +202,15 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
                        InferenceBackend = "cuda",
                        GpuExpected = true,
                        CpuFallback = false,
-                       Devices = [new RuntimeAuditDevice { Name = "NVIDIA GeForce RTX 5090", TotalBytes = 32L * 1024 * 1024 * 1024, FreeBytes = 30L * 1024 * 1024 * 1024 }]
+                       Devices =
+                       [
+                           new RuntimeAuditDevice
+                           {
+                               Name = "NVIDIA GeForce RTX 5090",
+                               TotalBytes = 32L * 1024 * 1024 * 1024,
+                               FreeBytes = 30L * 1024 * 1024 * 1024
+                           }
+                       ]
                    }));
 
         return new RuntimeEnvironmentFactsProvider(binaryManager,

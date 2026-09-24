@@ -40,6 +40,10 @@ public sealed class ListDevWorkflowArtifactsEndpoint : Endpoint<DevWorkflowArtif
 
         var artifacts = await _runQueries.ListArtifactsAsync(req.RunId, req.SinceSeq, ct);
         var items = artifacts.Select(DevWorkflowContractMapper.ToResponse).ToList();
-        await Send.OkAsync(new ListDevWorkflowArtifactsResponse { Items = items, LastSequence = DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence)) }, ct);
+        await Send.OkAsync(new ListDevWorkflowArtifactsResponse
+        {
+            Items = items,
+            LastSequence = DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence))
+        }, ct);
     }
 }

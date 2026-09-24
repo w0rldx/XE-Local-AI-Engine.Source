@@ -66,7 +66,24 @@ public sealed class BenchmarkRunBatchServiceTests
         {
             ProjectId = ProjectId,
             ExpectedProjectVersion = 4,
-            Items = [new BenchmarkRunBatchItem { ModelName = " ", KvCacheType = null }, new BenchmarkRunBatchItem { ModelName = "unsupported", KvCacheType = null }, new BenchmarkRunBatchItem { ModelName = "good", KvCacheType = null }],
+            Items =
+            [
+                new BenchmarkRunBatchItem
+                {
+                    ModelName = " ",
+                    KvCacheType = null
+                },
+                new BenchmarkRunBatchItem
+                {
+                    ModelName = "unsupported",
+                    KvCacheType = null
+                },
+                new BenchmarkRunBatchItem
+                {
+                    ModelName = "good",
+                    KvCacheType = null
+                }
+            ],
             RepeatCount = 1,
             Warmup = false,
             RepeatMode = BenchmarkRepeatMode.Throughput,
@@ -90,7 +107,14 @@ public sealed class BenchmarkRunBatchServiceTests
         {
             ProjectId = ProjectId,
             ExpectedProjectVersion = 4,
-            Items = [.. modelNames.Select(static name => new BenchmarkRunBatchItem { ModelName = name, KvCacheType = null })],
+            Items =
+            [
+                .. modelNames.Select(static name => new BenchmarkRunBatchItem
+                {
+                    ModelName = name,
+                    KvCacheType = null
+                })
+            ],
             RepeatCount = 1,
             Warmup = false,
             RepeatMode = BenchmarkRepeatMode.Throughput,
@@ -98,7 +122,15 @@ public sealed class BenchmarkRunBatchServiceTests
         };
 
     private static BenchmarkRunStartRequest Request(string modelName, long expectedVersion) =>
-        new() { ProjectId = ProjectId, PrimaryModelName = modelName, ExpectedProjectVersion = expectedVersion, KvCacheType = null, RepeatCount = 1, Warmup = false };
+        new()
+        {
+            ProjectId = ProjectId,
+            PrimaryModelName = modelName,
+            ExpectedProjectVersion = expectedVersion,
+            KvCacheType = null,
+            RepeatCount = 1,
+            Warmup = false
+        };
 
     private static BenchmarkRunRecord Run() =>
         new()

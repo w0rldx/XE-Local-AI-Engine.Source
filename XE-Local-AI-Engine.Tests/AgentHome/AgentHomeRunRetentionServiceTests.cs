@@ -29,7 +29,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var recent = SeedRun(Now.AddDays(-2));
         var newest = SeedRun(Now.AddHours(-1));
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30, MaxRuns = 0, MaxTotalBytes = 0 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30,
+            MaxRuns = 0,
+            MaxTotalBytes = 0
+        });
 
         AssertEx.False(Directory.Exists(old), "a run older than the age limit must be deleted.");
         AssertEx.True(Directory.Exists(recent), "a run inside the age window must survive.");
@@ -43,7 +48,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var middle = SeedRun(Now.AddDays(-4));
         var newest = SeedRun(Now.AddDays(-3));
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 0, MaxRuns = 2, MaxTotalBytes = 0 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 0,
+            MaxRuns = 2,
+            MaxTotalBytes = 0
+        });
 
         AssertEx.False(Directory.Exists(oldest), "the run cap evicts the oldest run first.");
         AssertEx.True(Directory.Exists(middle), "the cap is reached exactly, never overshot.");
@@ -57,7 +67,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var middle = SeedRun(Now.AddDays(-4), payloadBytes: 4000);
         var newest = SeedRun(Now.AddDays(-3), payloadBytes: 4000);
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 0, MaxRuns = 0, MaxTotalBytes = 9000 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 0,
+            MaxRuns = 0,
+            MaxTotalBytes = 9000
+        });
 
         AssertEx.False(Directory.Exists(oldest), "the byte ceiling evicts the oldest run first.");
         AssertEx.True(Directory.Exists(middle), "eviction stops as soon as the total fits, rather than emptying the directory.");
@@ -73,7 +88,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         SeedRun(Now.AddDays(-3), payloadBytes: 4000);
 
         var logger = new RecordingLogger<AgentHomeRunRetentionService>();
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30, MaxRuns = 3, MaxTotalBytes = 9000 }, logger: logger);
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30,
+            MaxRuns = 3,
+            MaxTotalBytes = 9000
+        }, logger: logger);
 
         var line = AuditLine(logger);
         AssertEx.Contains(line, "removed 2 run(s)");
@@ -92,7 +112,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         SeedRun(Now.AddHours(-1));
 
         var logger = new RecordingLogger<AgentHomeRunRetentionService>();
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30, MaxRuns = 0, MaxTotalBytes = 0 }, logger: logger);
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30,
+            MaxRuns = 0,
+            MaxTotalBytes = 0
+        }, logger: logger);
 
         var line = AuditLine(logger);
         AssertEx.Contains(line, Path.GetFileName(removed));
@@ -116,7 +141,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
         using (executing.Begin(Path.GetFileName(live)))
         {
-            await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, executing, logger: logger);
+            await SweepAsync(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30
+            }, executing, logger: logger);
 
             AssertEx.True(Directory.Exists(live),
                 "the run is still writing its log and its patch export into this directory; the sweep must not take it.");
@@ -126,7 +154,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
                 "a run the sweep skipped for a reason other than its limits says so, or the skip is invisible.");
         }
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, executing);
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30
+        }, executing);
 
         AssertEx.False(Directory.Exists(live), "the next sweep after the run finishes takes it like any other.");
     }
@@ -146,7 +177,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var executing = new AgentHomeRunExecutionRegistry();
 
         using var scope = executing.Begin(Path.GetFileName(live));
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 0, MaxRuns = 2, MaxTotalBytes = 0 },
+        await SweepAsync(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 0,
+                MaxRuns = 2,
+                MaxTotalBytes = 0
+            },
             executing);
 
         AssertEx.True(Directory.Exists(live), "the executing run is skipped, not deleted.");
@@ -172,7 +208,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
         using (guard.BeginApply(Path.GetFileName(applying)))
         {
-            await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, logger: logger, applyGuard: guard);
+            await SweepAsync(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30
+            }, logger: logger, applyGuard: guard);
 
             AssertEx.True(Directory.Exists(applying),
                 "the apply writes its outcome into this directory when it finishes; the sweep must not take it first.");
@@ -182,7 +221,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
                 "a run the sweep skipped for a reason other than its limits says so, or the skip is invisible.");
         }
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, applyGuard: guard);
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30
+        }, applyGuard: guard);
 
         AssertEx.False(Directory.Exists(applying), "the next sweep after the apply finishes takes it like any other.");
     }
@@ -194,7 +236,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var justStarted = SeedRun(Now.AddMinutes(-5));
         SeedRun(Now);
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 0, MaxRuns = 1, MaxTotalBytes = 0 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 0,
+            MaxRuns = 1,
+            MaxTotalBytes = 0
+        });
 
         AssertEx.False(Directory.Exists(ancient), "the run cap still bites, or the grace assertion below proves nothing.");
         AssertEx.True(Directory.Exists(justStarted),
@@ -209,7 +256,12 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var minted = SeedRun(Now.AddDays(-40));
         SeedRun(Now.AddHours(-1));
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30, MaxRuns = 1, MaxTotalBytes = 1 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30,
+            MaxRuns = 1,
+            MaxTotalBytes = 1
+        });
 
         AssertEx.False(Directory.Exists(minted), "the sweep must have run, or the assertion below is vacuous.");
         AssertEx.True(Directory.Exists(foreign),
@@ -238,7 +290,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
         SeedRun(Now.AddHours(-1));
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 });
+        await SweepAsync(new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30
+        });
 
         AssertEx.True(File.Exists(treasure), "nothing the sweep does may reach outside the runs root through a link.");
         AssertEx.True(Directory.Exists(linkedRun), "a run directory that is itself a link is unclassifiable, so it is left alone.");
@@ -255,7 +310,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         var old = SeedRun(Now.AddDays(-40));
         SeedRun(Now.AddHours(-1));
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 },
+        await SweepAsync(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30
+            },
             rootPath: Path.Combine(_dataRoot.Path, "agent-home-state") + Path.DirectorySeparatorChar);
 
         AssertEx.False(Directory.Exists(old),
@@ -269,8 +327,16 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
     {
         var old = SeedRun(Now.AddDays(-40));
 
-        using var service = CreateService(new AgentHomeRunRetentionOptions { Enabled = retentionEnabled, RetentionDays = 30 },
-            new AgentHomeOptions { Enabled = agentHomeEnabled, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") },
+        using var service = CreateService(new AgentHomeRunRetentionOptions
+            {
+                Enabled = retentionEnabled,
+                RetentionDays = 30
+            },
+            new AgentHomeOptions
+            {
+                Enabled = agentHomeEnabled,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            },
             new RecordingLogger<AgentHomeRunRetentionService>(),
             new ManualTimeProvider(Now));
 
@@ -292,9 +358,16 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
         var clock = new ManualTimeProvider(Now);
         var logger = new RecordingLogger<AgentHomeRunRetentionService>();
-        using var service = new AgentHomeRunRetentionService(
-            Options.Create(new AgentHomeRunRetentionOptions { RetentionDays = 30, SweepInterval = TimeSpan.FromHours(1) }),
-            Options.Create(new AgentHomeOptions { Enabled = true, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") }),
+        using var service = new AgentHomeRunRetentionService(Options.Create(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30,
+                SweepInterval = TimeSpan.FromHours(1)
+            }),
+            Options.Create(new AgentHomeOptions
+            {
+                Enabled = true,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            }),
             new FakeNodeDataDirectory(_dataRoot.Path),
             new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
@@ -321,7 +394,7 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
     private static string AuditLine(RecordingLogger<AgentHomeRunRetentionService> logger) =>
         AssertEx.NotNull(logger.Entries.FirstOrDefault(static entry => entry.Message.Contains("retention removed", StringComparison.Ordinal)),
-                "a sweep that deleted something writes exactly one audit line.")
+                    "a sweep that deleted something writes exactly one audit line.")
                 .Message;
 
     private async Task SweepAsync(AgentHomeRunRetentionOptions options,
@@ -331,7 +404,11 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         AgentHomeRunApplyGuard? applyGuard = null)
     {
         using var service = CreateService(options,
-            new AgentHomeOptions { Enabled = true, RootPath = rootPath ?? Path.Combine(_dataRoot.Path, "agent-home-state") },
+            new AgentHomeOptions
+            {
+                Enabled = true,
+                RootPath = rootPath ?? Path.Combine(_dataRoot.Path, "agent-home-state")
+            },
             logger ?? new RecordingLogger<AgentHomeRunRetentionService>(),
             new ManualTimeProvider(Now),
             applyGuard,

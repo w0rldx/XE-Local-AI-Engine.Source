@@ -36,8 +36,7 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
     private readonly IGpuModelLoadAdmission _loadAdmission;
     private readonly ILogger<TrainedModelSmokeGate> _logger;
 
-    public TrainedModelSmokeGate(
-        ITransientLlamaServerLauncher launcher,
+    public TrainedModelSmokeGate(ITransientLlamaServerLauncher launcher,
         IInferenceChatClientFactory chatClientFactory,
         IHttpClientFactory httpClientFactory,
         IGpuModelLoadAdmission loadAdmission,
@@ -63,7 +62,13 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         // adapter on top, which is exactly how a promoted adapter entry would later be served.
         var modelPath = artifact.BaseModelFilePath ?? artifact.ArtifactPath;
         var adapterPath = artifact.BaseModelFilePath is null ? null : artifact.ArtifactPath;
-        var request = new TransientLlamaServerRequest { ModelFilePath = modelPath, AdapterFilePath = adapterPath, ContextTokens = SmokeContextTokens, ReadinessTimeout = ReadinessTimeout };
+        var request = new TransientLlamaServerRequest
+        {
+            ModelFilePath = modelPath,
+            AdapterFilePath = adapterPath,
+            ContextTokens = SmokeContextTokens,
+            ReadinessTimeout = ReadinessTimeout
+        };
 
         try
         {
@@ -147,7 +152,11 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         }
 
         return string.Equals(call.Name, ToolName, StringComparison.Ordinal) && HasArgument(call)
-            ? new TrainedModelSmokeResult { State = TrainingArtifactSmokeState.Passed, Reason = null }
+            ? new TrainedModelSmokeResult
+            {
+                State = TrainingArtifactSmokeState.Passed,
+                Reason = null
+            }
             : Failed($"the model emitted a malformed tool call (name '{call.Name}')");
     }
 
@@ -185,5 +194,9 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         && value?.ToString() is { Length: > 0 };
 
     private static TrainedModelSmokeResult Failed(string reason) =>
-        new() { State = TrainingArtifactSmokeState.Failed, Reason = $"The smoke test failed: {reason}." };
+        new()
+        {
+            State = TrainingArtifactSmokeState.Failed,
+            Reason = $"The smoke test failed: {reason}."
+        };
 }

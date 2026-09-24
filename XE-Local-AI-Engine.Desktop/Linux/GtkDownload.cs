@@ -39,7 +39,11 @@ internal sealed class GtkDownload
         _failed = (_, _, _) => { _completion?.TrySetResult(false); };
         _received = OnReceived;
         try { _startedSignal = api.Connect(_context, "download-started", _started); }
-        catch { api.Unref(_context); throw; }
+        catch
+        {
+            api.Unref(_context);
+            throw;
+        }
     }
 
     internal async Task SaveAsync(GtkSaveIntent intent, string destination, bool overwrite, long generation, CancellationToken cancellationToken)
@@ -56,7 +60,7 @@ internal sealed class GtkDownload
             await using (var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
             {
                 if (stream.Length != intent.Size || stream.Length > GtkSaveIntent.MaximumBytes
-                    || !string.Equals(Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)), intent.Sha256, StringComparison.OrdinalIgnoreCase))
+                                                 || !string.Equals(Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)), intent.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidDataException("The export failed integrity validation.");
                 }
@@ -64,14 +68,18 @@ internal sealed class GtkDownload
 
             cancellationToken.ThrowIfCancellationRequested();
             if (!await _verifyFrames() || !await GtkInteropHelper.RunOnGlibThread(() => !_closed && _api.VerifyDocument(_view, _origin))
-                || !Commit(_gate, generation, temporary, destination, overwrite, cancellationToken))
+                                       || !Commit(_gate, generation, temporary, destination, overwrite, cancellationToken))
             {
                 throw new InvalidOperationException("The export document changed.");
             }
         }
         finally
         {
-            await GtkInteropHelper.RunOnGlibThread(() => { ClearOnGlib(); return true; });
+            await GtkInteropHelper.RunOnGlibThread(() =>
+            {
+                ClearOnGlib();
+                return true;
+            });
             File.Delete(temporary);
         }
     }
@@ -86,7 +94,7 @@ internal sealed class GtkDownload
     internal static string TemporaryPath(string destination)
     {
         if (!Path.IsPathFullyQualified(destination) || destination.Any(char.IsControl)
-            || string.IsNullOrEmpty(Path.GetFileName(destination)))
+                                                    || string.IsNullOrEmpty(Path.GetFileName(destination)))
         {
             throw new ArgumentException("A local file destination is required.", nameof(destination));
         }
@@ -107,6 +115,7 @@ internal sealed class GtkDownload
         _generation = generation;
         _download = _api.WebKit<GtkNativeApi.StringPointer>("webkit_web_view_download_uri")(_view, intent.Url);
         if (_download == 0) { throw new InvalidOperationException("The native download could not start."); }
+
         _api.WebKit<GtkNativeApi.SetBoolean>("webkit_download_set_allow_overwrite")(_download, 0);
         _signals.Add(_api.Connect(_download, "decide-destination", _decide));
         _signals.Add(_api.Connect(_download, "finished", _finished));
@@ -120,6 +129,7 @@ internal sealed class GtkDownload
         try
         {
             if (_api.WebKit<GtkNativeApi.Pointer>("webkit_download_get_web_view")(download) != _view) { return; }
+
             var request = _api.WebKit<GtkNativeApi.Pointer>("webkit_download_get_request")(download);
             var url = GtkNativeApi.Text(_api.WebKit<GtkNativeApi.Pointer>("webkit_uri_request_get_uri")(request));
             if (_closed || download != _download || _intent?.Url != url || !_gate.IsCurrent(_generation))
@@ -130,7 +140,10 @@ internal sealed class GtkDownload
         catch (Exception)
         {
             try { _api.WebKit<GtkNativeApi.Command>("webkit_download_cancel")(download); }
-            catch (Exception) { /* Never unwind a native callback. */ }
+            catch (Exception)
+            {
+                /* Never unwind a native callback. */
+            }
         }
     }
 
@@ -147,6 +160,7 @@ internal sealed class GtkDownload
             _api.WebKit<GtkNativeApi.SetString>("webkit_download_set_destination")(download, new Uri(_temporaryPath, UriKind.Absolute).AbsoluteUri);
         }
         catch (Exception) { CancelOnGlib(); }
+
         return 1;
     }
 
@@ -166,14 +180,23 @@ internal sealed class GtkDownload
     private void OnFinished(nint download, nint data)
     {
         try { _completion?.TrySetResult(download == _download && _gate.IsCurrent(_generation)); }
-        catch (Exception) { /* Never unwind a native callback. */ }
+        catch (Exception)
+        {
+            /* Never unwind a native callback. */
+        }
     }
 
     internal void CancelOnGlib()
     {
         _completion?.TrySetResult(false);
-        try { if (_download != 0) { _api.WebKit<GtkNativeApi.Command>("webkit_download_cancel")(_download); } }
-        catch (Exception) { /* Cancellation must not unwind a native callback. */ }
+        try
+        {
+            if (_download != 0) { _api.WebKit<GtkNativeApi.Command>("webkit_download_cancel")(_download); }
+        }
+        catch (Exception)
+        {
+            /* Cancellation must not unwind a native callback. */
+        }
     }
 
     private void ClearOnGlib()
@@ -182,6 +205,7 @@ internal sealed class GtkDownload
         if (_download != 0)
         {
             foreach (var signal in _signals) { _api.Disconnect(_download, signal); }
+
             _signals.Clear();
             _api.Unref(_download);
             _download = 0;

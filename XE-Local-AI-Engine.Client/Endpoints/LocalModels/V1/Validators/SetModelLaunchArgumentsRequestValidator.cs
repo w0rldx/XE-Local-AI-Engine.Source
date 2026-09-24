@@ -60,5 +60,6 @@ public sealed class SetModelLaunchArgumentsRequestValidator : Validator<SetModel
     }
 
     /// <summary>The same trimmed, never-null string the endpoint stores, so the checks measure what is persisted.</summary>
-    private static string Normalize(string? rawArguments) => (rawArguments ?? string.Empty).Trim();
+    private static string Normalize(string? rawArguments) =>
+        (rawArguments ?? string.Empty).Trim();
 }

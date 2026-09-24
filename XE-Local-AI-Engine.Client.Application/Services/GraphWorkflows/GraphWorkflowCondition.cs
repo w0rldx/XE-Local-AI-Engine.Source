@@ -192,7 +192,12 @@ internal sealed class GraphWorkflowCondition
         var value = element.TryGetProperty("value", out var valueElement) ? valueElement.Clone() : default;
         if (op is GraphWorkflowConditionOperator.Exists or GraphWorkflowConditionOperator.NotExists)
         {
-            return new GraphWorkflowCondition { Path = path, Operator = op, Value = value };
+            return new GraphWorkflowCondition
+            {
+                Path = path,
+                Operator = op,
+                Value = value
+            };
         }
 
         if (value.ValueKind == JsonValueKind.Undefined)
@@ -217,6 +222,11 @@ internal sealed class GraphWorkflowCondition
                                                        + "Booleans compare for equality only, so this edge could never fire.");
         }
 
-        return new GraphWorkflowCondition { Path = path, Operator = op, Value = value };
+        return new GraphWorkflowCondition
+        {
+            Path = path,
+            Operator = op,
+            Value = value
+        };
     }
 }

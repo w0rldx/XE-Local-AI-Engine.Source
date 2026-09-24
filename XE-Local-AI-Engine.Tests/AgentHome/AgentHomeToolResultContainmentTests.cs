@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
-using CategoryAttribute = TUnit.Core.CategoryAttribute;
+using CategoryAttribute = CategoryAttribute;
 
 /// <summary>
 ///     The one rule the <c>run_in_agent_home</c> result may never break: no command output and no workspace file
@@ -77,13 +77,23 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
 
         // The marker enters by all three routes a summary could widen into: the CONTENT of a file the model wrote
         // (the tracked README, so it also reaches the patch), the PATH it chose, and the STDOUT of a command.
-        var result = await fixture.ExecuteToolAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = $"# project\n{Marker}\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/{Marker}.md", ["content"] = "notes\n" }),
+        var result = await fixture.ExecuteToolAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = $"# project\n{Marker}\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/{Marker}.md",
+                ["content"] = "notes\n"
+            }),
             ("run_command", new()
             {
                 ["executable"] = "/bin/echo",
-                ["arguments"] = new[] { Marker }
+                ["arguments"] = new[]
+                {
+                    Marker
+                }
             }));
 
         AssertEx.False(result.Contains(Marker, StringComparison.Ordinal),
@@ -118,10 +128,21 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
 
         // The marker is the NAME of a file the run's own .gitignore then hides, so the path lands in the gap and
         // the only question left is where its name is allowed to appear.
-        var result = await fixture.ExecuteToolAsync(
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = $"{Marker}.txt\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/{Marker}.txt", ["content"] = "hidden\n" }),
-            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nedited\n" }));
+        var result = await fixture.ExecuteToolAsync(("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/.gitignore",
+                ["content"] = $"{Marker}.txt\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/{Marker}.txt",
+                ["content"] = "hidden\n"
+            }),
+            ("write_file", new()
+            {
+                ["path"] = $"{WorkspaceAlias}/README.md",
+                ["content"] = "# project\nedited\n"
+            }));
 
         AssertEx.False(result.Contains(Marker, StringComparison.Ordinal),
             $"the gap note names no path, not even one the patch left out. The result was: {result}");
@@ -393,7 +414,11 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-containment", NodeId = "node-containment" });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner-containment",
+                NodeId = "node-containment"
+            });
         }
     }
 
@@ -404,7 +429,13 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
         public StaticSelectedFolderResolver(string alias, string hostPath)
         {
             FolderId = Guid.NewGuid();
-            _folder = new ResolvedSelectedFolder { Id = FolderId, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
+            _folder = new ResolvedSelectedFolder
+            {
+                Id = FolderId,
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            };
         }
 
         public Guid FolderId { get; }
@@ -416,7 +447,14 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
 
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<SelectedFolderReference> references = [new() { Id = _folder.Id.ToString(), Alias = _folder.Alias }];
+            IReadOnlyList<SelectedFolderReference> references =
+            [
+                new()
+                {
+                    Id = _folder.Id.ToString(),
+                    Alias = _folder.Alias
+                }
+            ];
             return Task.FromResult(references);
         }
 

@@ -76,7 +76,11 @@ internal static class StartImageModelDownloadWireValidator
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static StartImageModelDownloadWireValidationResult Invalid(string error) =>
-        new() { Values = null, Error = error };
+        new()
+        {
+            Values = null,
+            Error = error
+        };
 }
 
 internal sealed class StartImageModelDownloadWireValidationResult

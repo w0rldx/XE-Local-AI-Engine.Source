@@ -37,9 +37,9 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         // Repository updates preserve document_id, so existence alone cannot prove that the embedded chunks came from the
         // current blob. Commit only against the exact content-hash revision captured before extraction.
         var currentContentHash = await ReadCurrentContentHashAsync(connection,
-                transaction,
-                input.DocumentId,
-                cancellationToken);
+            transaction,
+            input.DocumentId,
+            cancellationToken);
         if (currentContentHash is null)
         {
             await transaction.RollbackAsync(cancellationToken);

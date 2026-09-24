@@ -278,8 +278,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             private readonly IReadOnlyList<int> _dimensions;
             private readonly HttpStatusCode? _failureStatus;
 
-            public FixedEmbeddingGenerator(
-                bool throwOnGenerate,
+            public FixedEmbeddingGenerator(bool throwOnGenerate,
                 IReadOnlyList<int> dimensions,
                 HttpStatusCode? failureStatus = null)
             {

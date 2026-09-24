@@ -660,7 +660,11 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-live", NodeId = "node-live" });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner-live",
+                NodeId = "node-live"
+            });
         }
     }
 
@@ -737,7 +741,11 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         {
             Requested = true;
 
-            return Task.FromResult(new ComputePythonRuntime { InterpreterPath = "/never/used", ReadOnlyTrees = ["/never/used"] });
+            return Task.FromResult(new ComputePythonRuntime
+            {
+                InterpreterPath = "/never/used",
+                ReadOnlyTrees = ["/never/used"]
+            });
         }
     }
 }

@@ -30,7 +30,11 @@ internal static class AgentHomeRunContractMapper
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        return new AgentHomeRunTextResponse { Text = text.Text, Truncated = text.Truncated };
+        return new AgentHomeRunTextResponse
+        {
+            Text = text.Text,
+            Truncated = text.Truncated
+        };
     }
 
     private static AgentHomeRunDto ToDto(AgentHomeRunSummary summary)

@@ -33,8 +33,8 @@ internal static class Program
             var options = DesktopStartupOptions.Parse(args, Environment.GetEnvironmentVariable("XE_DATA_DIR"),
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
             return AppBuilder.Configure(() => new DesktopApplication(options))
-                .UsePlatformDetect()
-                .StartWithClassicDesktopLifetime([]);
+                             .UsePlatformDetect()
+                             .StartWithClassicDesktopLifetime([]);
         }
         catch (Exception exception)
         {

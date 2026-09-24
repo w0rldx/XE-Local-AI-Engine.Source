@@ -40,7 +40,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = content
+                }
+            ],
             ModelName = "model"
         });
 
@@ -83,7 +90,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 1400) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 1400)
+                }
+            ],
             ModelName = "model"
         });
 
@@ -105,7 +119,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = content
+                }
+            ],
             ModelName = "model"
         });
 
@@ -128,7 +149,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 4000)
+                }
+            ],
             ModelName = "model"
         });
 
@@ -147,7 +175,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 4000)
+                }
+            ],
             ModelName = "model"
         });
 
@@ -168,7 +203,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 6000) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 6000)
+                }
+            ],
             ModelName = "model"
         });
 
@@ -185,7 +227,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 4000)
+                }
+            ],
             ModelName = "model",
             SupportsThinking = true
         });
@@ -213,7 +262,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('a', 4000)
+                }
+            ],
             ModelName = "model"
         });
 
@@ -238,7 +294,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = han }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = han
+                }
+            ],
             ModelName = "model"
         });
 
@@ -260,7 +323,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = "the node supervises llama-server" }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = "the node supervises llama-server"
+                }
+            ],
             ModelName = "model"
         });
 
@@ -296,7 +366,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = content
+                }
+            ],
             ModelName = "model"
         });
 
@@ -317,7 +394,14 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
         {
             PriorSummary = null,
-            Messages = [new ConversationSummarizerMessage { Role = "user", Content = "the node supervises llama-server" }],
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = "the node supervises llama-server"
+                }
+            ],
             ModelName = "model"
         });
 
@@ -400,14 +484,24 @@ public sealed class ConversationSummarizerBoundaryTests
     public async Task SummarizeAsync_WhenTheWindowShrinks_FoldsInMoreRequestsEachWithinTheDerivedBudget()
     {
         var messages = Enumerable.Range(0, 40)
-                                 .Select(index => new ConversationSummarizerMessage { Role = index % 2 == 0 ? "user" : "assistant", Content = new string('x', 480) })
+                                 .Select(index => new ConversationSummarizerMessage
+                                 {
+                                     Role = index % 2 == 0 ? "user" : "assistant",
+                                     Content = new string('x', 480)
+                                 })
                                  .ToList();
 
         async Task<IReadOnlyList<IReadOnlyList<ChatMessage>>> FoldAsync(int? windowTokens)
         {
             using var client = new CapturingChatClient();
             var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000);
-            var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput { PriorSummary = null, Messages = messages, ModelName = "model", EffectiveContextTokens = windowTokens });
+            var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+            {
+                PriorSummary = null,
+                Messages = messages,
+                ModelName = "model",
+                EffectiveContextTokens = windowTokens
+            });
             AssertEx.NotNull(result);
             return client.Requests;
         }
@@ -424,7 +518,13 @@ public sealed class ConversationSummarizerBoundaryTests
     }
 
     private static ConversationSummarizerInput BudgetInput(int? effectiveContextTokens) =>
-        new() { PriorSummary = null, Messages = [], ModelName = "model", EffectiveContextTokens = effectiveContextTokens };
+        new()
+        {
+            PriorSummary = null,
+            Messages = [],
+            ModelName = "model",
+            EffectiveContextTokens = effectiveContextTokens
+        };
 
     private static IEnumerable<string> PromptContents(IReadOnlyList<ChatMessage> request)
     {

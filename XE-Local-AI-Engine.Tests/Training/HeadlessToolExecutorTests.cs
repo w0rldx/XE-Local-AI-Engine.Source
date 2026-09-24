@@ -171,6 +171,15 @@ public sealed class HeadlessToolExecutorTests
             [AIFunctionFactory.Create((string path) => $"read:{path}", ToolName)];
 
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors() =>
-            [new LocalChatToolDescriptor { Name = ToolName, Description = "Reads a file.", ParameterSchema = Schema, RequiresApproval = false, Category = ToolCategory.ReadLocal }];
+        [
+            new LocalChatToolDescriptor
+            {
+                Name = ToolName,
+                Description = "Reads a file.",
+                ParameterSchema = Schema,
+                RequiresApproval = false,
+                Category = ToolCategory.ReadLocal
+            }
+        ];
     }
 }

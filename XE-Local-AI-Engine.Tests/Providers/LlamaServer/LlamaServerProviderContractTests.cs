@@ -73,7 +73,16 @@ public sealed class LlamaServerProviderContractTests
     {
         var store = Substitute.For<IGgufModelStore>();
         store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult(new GgufModelHandle { ModelName = Model, LocalPath = "/fake/m.gguf", Quant = "Q4_K_M", SizeBytes = 1, Sha256 = null, SourceRevision = "rev", Role = GgufRole.Unknown }));
+             .Returns(Task.FromResult(new GgufModelHandle
+             {
+                 ModelName = Model,
+                 LocalPath = "/fake/m.gguf",
+                 Quant = "Q4_K_M",
+                 SizeBytes = 1,
+                 Sha256 = null,
+                 SourceRevision = "rev",
+                 Role = GgufRole.Unknown
+             }));
         var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store, TimeProvider.System);
 
         await provider.PullModelAsync($"{Model}:Q4_K_M", progress: null, CancellationToken.None);
@@ -99,7 +108,12 @@ public sealed class LlamaServerProviderContractTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.EnsureRunningAsync(Model, ModelRole.Chat, Arg.Any<CancellationToken>())
-                  .Returns(new LlamaServerEndpoint { ModelName = Model, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:18100/v1") });
+                  .Returns(new LlamaServerEndpoint
+                  {
+                      ModelName = Model,
+                      Role = ModelRole.Chat,
+                      BaseAddress = new Uri("http://127.0.0.1:18100/v1")
+                  });
         var provider = CreateProvider(supervisor);
 
         await provider.WarmModelAsync(Model, CancellationToken.None);
@@ -142,7 +156,15 @@ public sealed class LlamaServerProviderContractTests
     public async Task CheckHealthAsync_AggregatesSupervisorHealth_HealthyWhenOperational()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns([new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]);
+        supervisor.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns([
+            new LlamaServerProcessHealth
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                IsResponsive = true,
+                Detail = "ok"
+            }
+        ]);
         var provider = CreateProvider(supervisor);
 
         var health = await provider.CheckHealthAsync(CancellationToken.None);

@@ -236,7 +236,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
 
     private static async Task<BenchmarkProjectRecord> CreateSuiteAsync(BenchmarkStore store, int itemCount) =>
         await store.CreateProjectAsync(NewProject(),
-                       initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);
+            initialItems: [.. Enumerable.Range(0, itemCount).Select(index => Prompt("question " + index))]);
 
     private static Task<IReadOnlyList<Guid>> ScoredCellAsync(BenchmarkStore store, Guid projectId, params int?[] scores) =>
         ScoredCellAsync(store, projectId, [.. scores.Select(static score => (score, "stop"))]);
@@ -304,13 +304,33 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     }
 
     private static BenchmarkTaskItemInput Prompt(string prompt) =>
-        new() { PromptJson = JsonSerializer.SerializeToUtf8Bytes(prompt) };
+        new()
+        {
+            PromptJson = JsonSerializer.SerializeToUtf8Bytes(prompt)
+        };
 
     private static BenchmarkPrimarySuccessCommand PrimarySuccess(Guid runId, long expectedWorkVersion) =>
-        new() { RunId = runId, ExpectedWorkVersion = expectedWorkVersion, OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), LastStreamSequence = 1, EffectiveContextTokens = 4096, DurationMs = 10, TotalTokens = 12, TokensPerSecond = 120 };
+        new()
+        {
+            RunId = runId,
+            ExpectedWorkVersion = expectedWorkVersion,
+            OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        };
 
     private static BenchmarkProjectInput NewProject() =>
-        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes("answer the question"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Benchmark",
+            CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes("answer the question"),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        };
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
         new()

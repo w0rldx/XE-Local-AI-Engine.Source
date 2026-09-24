@@ -5,8 +5,7 @@ public sealed class LocalModelDeletionStartupReconciler : IHostedService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<LocalModelDeletionStartupReconciler> _logger;
 
-    public LocalModelDeletionStartupReconciler(
-        IServiceScopeFactory scopeFactory,
+    public LocalModelDeletionStartupReconciler(IServiceScopeFactory scopeFactory,
         ILogger<LocalModelDeletionStartupReconciler> logger)
     {
         _scopeFactory = scopeFactory;

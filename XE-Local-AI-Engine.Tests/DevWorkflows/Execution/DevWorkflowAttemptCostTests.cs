@@ -113,13 +113,23 @@ public sealed class DevWorkflowAttemptCostTests
         var runId = Guid.NewGuid();
         inner.GetNodeRunAsync(nodeRunId, Arg.Any<CancellationToken>()).Returns(NodeRun(runId, nodeRunId));
         inner.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowMutationResult { RunId = runId, Sequence = 1, Version = 2, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+             .Returns(new DevWorkflowMutationResult
+             {
+                 RunId = runId,
+                 Sequence = 1,
+                 Version = 2,
+                 Status = DevWorkflowRunStatus.Running,
+                 GraphRevision = 0
+             });
 
         var store = new PublishingDevWorkflowStore(inner,
             Substitute.For<IDevWorkflowEventPublisher>(),
             new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource
             {
-                Answer = new DevWorkflowNodeTelemetry { InputTokens = 5 }
+                Answer = new DevWorkflowNodeTelemetry
+                {
+                    InputTokens = 5
+                }
             }),
             new DevWorkflowGraphCache(),
 

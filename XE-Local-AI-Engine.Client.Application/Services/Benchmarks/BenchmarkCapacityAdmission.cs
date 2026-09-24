@@ -20,7 +20,11 @@ public sealed class BenchmarkAdmissionRetry
     public required TimeSpan Interval { get; init; }
 
     /// <summary>24 retries × 5 s ⇒ up to two minutes, which covers a large model's VRAM release with room to spare.</summary>
-    public static BenchmarkAdmissionRetry Default { get; } = new() { MaxRetries = 24, Interval = TimeSpan.FromSeconds(5) };
+    public static BenchmarkAdmissionRetry Default { get; } = new()
+    {
+        MaxRetries = 24,
+        Interval = TimeSpan.FromSeconds(5)
+    };
 
     /// <summary>The wall-clock wait the caller is told about when the budget is exhausted.</summary>
     public TimeSpan Budget => MaxRetries * Interval;

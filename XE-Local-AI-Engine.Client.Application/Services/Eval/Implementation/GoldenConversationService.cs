@@ -27,8 +27,7 @@ internal sealed class GoldenConversationService : IGoldenConversationService
 
     private readonly IGoldenConversationStore _store;
 
-    public GoldenConversationService(
-        IGoldenConversationStore store,
+    public GoldenConversationService(IGoldenConversationStore store,
         IAgentDefinitionStore agentDefinitionStore)
     {
         ArgumentNullException.ThrowIfNull(agentDefinitionStore);

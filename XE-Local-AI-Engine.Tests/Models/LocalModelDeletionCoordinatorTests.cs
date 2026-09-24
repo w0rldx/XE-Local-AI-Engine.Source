@@ -49,7 +49,7 @@ public sealed class LocalModelDeletionCoordinatorTests
         });
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
+            context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.True(File.Exists(context.WeightPath));
         AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None));
@@ -76,7 +76,7 @@ public sealed class LocalModelDeletionCoordinatorTests
         // The compensation failure must not become the caller's exception: the endpoint discriminates on the
         // ORIGINAL type to answer its 409, and the journal left behind is what startup recovery replays.
         var thrown = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                                       context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
+            context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.Equal("injected cache failure", thrown.Message);
         var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
@@ -127,7 +127,7 @@ public sealed class LocalModelDeletionCoordinatorTests
         // The TYPE is the contract: ConflictExceptionHandler discriminates on it to answer 409
         // InstalledModelHasDependentAdapters instead of the 500 a bare InvalidOperationException would produce.
         _ = await AssertEx.ThrowsAsync<InstalledModelDependentAdaptersException>(() =>
-                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
+            context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.True(File.Exists(context.WeightPath), "A refused delete must not touch the base weights.");
         AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None));
@@ -214,7 +214,16 @@ public sealed class LocalModelDeletionCoordinatorTests
                 registry,
                 options,
                 NullLogger<LocalModelDeletionCoordinator>.Instance);
-            return new TestContext { Directory = directory, Registry = registry, MapStore = mapStore, ProviderResolver = providerResolver, Coordinator = coordinator, ModelName = modelName, WeightPath = weightPath };
+            return new TestContext
+            {
+                Directory = directory,
+                Registry = registry,
+                MapStore = mapStore,
+                ProviderResolver = providerResolver,
+                Coordinator = coordinator,
+                ModelName = modelName,
+                WeightPath = weightPath
+            };
         }
         catch
         {

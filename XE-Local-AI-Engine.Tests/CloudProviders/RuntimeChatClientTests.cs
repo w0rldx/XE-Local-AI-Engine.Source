@@ -60,11 +60,17 @@ public sealed class RuntimeChatClientTests
     {
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
-        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        var selector = new ToggleableCloudFactory(cloudClient)
+        {
+            CloudActive = true
+        };
         using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
         using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
 
-        await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions { ModelId = "gguf-model" });
+        await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions
+        {
+            ModelId = "gguf-model"
+        });
 
         AssertEx.Equal(expected: 1, localClient.CallCount);
         AssertEx.Equal(expected: 0, cloudClient.CallCount);
@@ -75,7 +81,10 @@ public sealed class RuntimeChatClientTests
     {
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
-        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        var selector = new ToggleableCloudFactory(cloudClient)
+        {
+            CloudActive = true
+        };
         using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
         using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
 
@@ -95,10 +104,16 @@ public sealed class RuntimeChatClientTests
     {
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
-        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        var selector = new ToggleableCloudFactory(cloudClient)
+        {
+            CloudActive = true
+        };
         using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
         using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
-        var options = new ChatOptions { ModelId = modelId };
+        var options = new ChatOptions
+        {
+            ModelId = modelId
+        };
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
         {

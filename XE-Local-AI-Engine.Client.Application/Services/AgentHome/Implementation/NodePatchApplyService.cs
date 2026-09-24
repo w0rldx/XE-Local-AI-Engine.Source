@@ -724,7 +724,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return new ApplyPlan
             {
                 IsValid = false,
-                Rejections = [new PatchApplyRejection { Reason = reason }]
+                Rejections =
+                [
+                    new PatchApplyRejection
+                    {
+                        Reason = reason
+                    }
+                ]
             };
         }
 
@@ -734,7 +740,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return new ApplyPlan
             {
                 IsValid = false,
-                Rejections = [new PatchApplyRejection { Reason = reason }],
+                Rejections =
+                [
+                    new PatchApplyRejection
+                    {
+                        Reason = reason
+                    }
+                ],
                 PatchMissing = true
             };
         }

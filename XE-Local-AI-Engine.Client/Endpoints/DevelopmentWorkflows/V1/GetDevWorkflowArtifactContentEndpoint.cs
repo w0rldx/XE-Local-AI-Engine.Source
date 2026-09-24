@@ -54,9 +54,9 @@ public sealed class GetDevWorkflowArtifactContentEndpoint : Endpoint<DevWorkflow
         if (artifact.SizeBytes > _options.MaxArtifactBytes)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status413PayloadTooLarge,
-                          title: "Artifact too large",
-                          detail: string.Create(CultureInfo.InvariantCulture,
-                              $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")));
+                title: "Artifact too large",
+                detail: string.Create(CultureInfo.InvariantCulture,
+                    $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")));
             return;
         }
 
@@ -69,6 +69,11 @@ public sealed class GetDevWorkflowArtifactContentEndpoint : Endpoint<DevWorkflow
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
-        await Send.OkAsync(new DevWorkflowArtifactContentResponse { Artifact = artifact.ToResponse(), Content = content, IsBase64 = isBase64 }, ct);
+        await Send.OkAsync(new DevWorkflowArtifactContentResponse
+        {
+            Artifact = artifact.ToResponse(),
+            Content = content,
+            IsBase64 = isBase64
+        }, ct);
     }
 }

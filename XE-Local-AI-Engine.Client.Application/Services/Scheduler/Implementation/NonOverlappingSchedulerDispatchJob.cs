@@ -17,8 +17,7 @@ internal sealed class NonOverlappingSchedulerDispatchJob : IJob
     private readonly ISchedulerDispatchExecutor _dispatchExecutor;
     private readonly ILogger<NonOverlappingSchedulerDispatchJob> _logger;
 
-    public NonOverlappingSchedulerDispatchJob(
-        ISchedulerDispatchExecutor dispatchExecutor,
+    public NonOverlappingSchedulerDispatchJob(ISchedulerDispatchExecutor dispatchExecutor,
         ILogger<NonOverlappingSchedulerDispatchJob> logger)
     {
         ArgumentNullException.ThrowIfNull(dispatchExecutor);

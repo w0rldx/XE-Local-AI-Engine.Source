@@ -25,7 +25,12 @@ public sealed class UpdateToolMockEndpoint : Endpoint<UpdateToolMockRequest, Too
 
     public override async Task HandleAsync(UpdateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft { ToolName = req.ToolName, Body = req.Body, Enabled = req.Enabled }, ct);
+        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft
+        {
+            ToolName = req.ToolName,
+            Body = req.Body,
+            Enabled = req.Enabled
+        }, ct);
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

@@ -18,16 +18,35 @@ public sealed class BenchmarkExportQueryTests
     public async Task GetJsonAsync_ReadsTheFullExportGraphAndOnlyResolvesFactsForMeasuredGroupRepresentatives()
     {
         var groupId = Guid.Parse("30000000-0000-0000-0000-000000000003");
-        var repeatOne = Run(1, repeatGroupId: groupId, repeatIndex: 1, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 5 });
-        var repeatZero = Run(2, repeatGroupId: groupId, repeatIndex: 0, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 4 });
-        var ungrouped = Run(3, throughput: new BenchmarkRunThroughput { GenerationTokens = 10, GenerationMs = 8 });
-        var warmup = Run(4, isWarmup: true, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 3 });
+        var repeatOne = Run(1, repeatGroupId: groupId, repeatIndex: 1, throughput: new BenchmarkRunThroughput
+        {
+            PromptTokens = 10,
+            PromptMs = 5
+        });
+        var repeatZero = Run(2, repeatGroupId: groupId, repeatIndex: 0, throughput: new BenchmarkRunThroughput
+        {
+            PromptTokens = 10,
+            PromptMs = 4
+        });
+        var ungrouped = Run(3, throughput: new BenchmarkRunThroughput
+        {
+            GenerationTokens = 10,
+            GenerationMs = 8
+        });
+        var warmup = Run(4, isWarmup: true, throughput: new BenchmarkRunThroughput
+        {
+            PromptTokens = 10,
+            PromptMs = 3
+        });
         var unmeasured = Run(5);
         BenchmarkRunRecord[] summaries = [repeatOne, repeatZero, ungrouped, warmup, unmeasured];
         var store = Store(Project(), summaries);
         store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns((BenchmarkJudgeAttemptRecord?)null);
         var resolver = Substitute.For<IBenchmarkExportFactsResolver>();
-        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts { ExpectedKldDigest = "expected" });
+        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts
+        {
+            ExpectedKldDigest = "expected"
+        });
         resolver.ResolveRun(Arg.Any<BenchmarkRunRecord>()).Returns(BenchmarkExportRunFacts.Empty);
         var query = new BenchmarkExportQuery(store, resolver);
 
@@ -66,7 +85,10 @@ public sealed class BenchmarkExportQueryTests
         BenchmarkRunRecord[] summaries = [Run(1), Run(2)];
         var store = Store(Project(), summaries);
         var resolver = Substitute.For<IBenchmarkExportFactsResolver>();
-        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts { ExpectedKldDigest = "expected" });
+        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts
+        {
+            ExpectedKldDigest = "expected"
+        });
         var query = new BenchmarkExportQuery(store, resolver);
 
         var result = AssertEx.NotNull(await query.GetCsvAsync(ProjectId, CancellationToken.None));
@@ -119,7 +141,11 @@ public sealed class BenchmarkExportQueryTests
     {
         var store = Substitute.For<IBenchmarkStore>();
         store.GetProjectAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
-        store.ListAllRunsAsync(project.Id, Arg.Any<CancellationToken>()).Returns(new BenchmarkRunPage { Items = summaries, TotalCount = summaries.Count });
+        store.ListAllRunsAsync(project.Id, Arg.Any<CancellationToken>()).Returns(new BenchmarkRunPage
+        {
+            Items = summaries,
+            TotalCount = summaries.Count
+        });
         store.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(call => summaries.SingleOrDefault(run => run.Id == call.ArgAt<Guid>(0)));
         return store;
@@ -173,7 +199,23 @@ public sealed class BenchmarkExportQueryTests
             StartedAtUtc = ordinal,
             PrimaryCompletedAtUtc = ordinal,
             UpdatedAtUtc = ordinal,
-            Judge = ordinal == 1 ? new BenchmarkRunJudgeView { State = "succeeded", AttemptId = AttemptId, Score = 80, PolicyRevision = 1, PolicyRevisionId = null, AttemptSequence = 1, CohortGeneration = 1, ExecutionKey = "key", ErrorMessage = null, PolicyCurrent = true, ExecutionCurrent = true, RankExclusionReason = null } : null,
+            Judge = ordinal == 1
+                ? new BenchmarkRunJudgeView
+                {
+                    State = "succeeded",
+                    AttemptId = AttemptId,
+                    Score = 80,
+                    PolicyRevision = 1,
+                    PolicyRevisionId = null,
+                    AttemptSequence = 1,
+                    CohortGeneration = 1,
+                    ExecutionKey = "key",
+                    ErrorMessage = null,
+                    PolicyCurrent = true,
+                    ExecutionCurrent = true,
+                    RankExclusionReason = null
+                }
+                : null,
             Throughput = throughput,
             RepeatGroupId = repeatGroupId,
             RepeatIndex = repeatIndex,

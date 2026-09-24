@@ -169,7 +169,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         AssertEx.Equal("ToolCommandFailed", broken.FailureClass, "a build that does not compile is a verdict, not an engine fault.");
         AssertEx.Contains(AssertEx.NotNull(broken.OutputJson), "\"failureCode\":\"command_failed\"");
         AssertEx.Contains(await harness.ReadArtifactTextAsync(failing,
-                                           (await harness.ReadArtifactsAsync(failing)).Single()),
+                (await harness.ReadArtifactsAsync(failing)).Single()),
             "CS1002",
             message: "the report names the compiler error, which is the whole point of keeping it.");
     }
@@ -265,7 +265,15 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var taskId = Guid.NewGuid();
-        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand { ProjectId = projectId, TaskId = taskId, OperationId = Guid.NewGuid(), Title = "Add the slice", Requirements = "Add slice.txt.", AcceptanceCriteriaJson = "[]" });
+        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = projectId,
+            TaskId = taskId,
+            OperationId = Guid.NewGuid(),
+            Title = "Add the slice",
+            Requirements = "Add slice.txt.",
+            AcceptanceCriteriaJson = "[]"
+        });
 
         var attemptId = Guid.NewGuid();
         var task = await store.GetTaskAsync(taskId);
@@ -351,28 +359,29 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
             RunId = runId,
             ExpectedVersion = DevWorkflowVersions.Any,
             OperationId = Guid.NewGuid(),
-            NodeRuns = [
-                               new DevWorkflowNodeRunSeed
-                               {
-                                   NodeRunId = implementId,
-                                   NodeKey = "implement#1",
-                                   NodeType = DevWorkflowNodeType.DevTask,
-                                   MaxAttempts = 1,
-                                   DevelopmentProjectId = projectId,
-                                   MaterializedFromNodeRunId = gate.Id,
-                                   MaterializationIndex = 1
-                               },
-                               new DevWorkflowNodeRunSeed
-                               {
-                                   NodeRunId = Guid.NewGuid(),
-                                   NodeKey = "validate#1",
-                                   NodeType = DevWorkflowNodeType.Tool,
-                                   MaxAttempts = 1,
-                                   DevelopmentProjectId = projectId,
-                                   MaterializedFromNodeRunId = gate.Id,
-                                   MaterializationIndex = 1
-                               }
-                           ],
+            NodeRuns =
+            [
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = implementId,
+                    NodeKey = "implement#1",
+                    NodeType = DevWorkflowNodeType.DevTask,
+                    MaxAttempts = 1,
+                    DevelopmentProjectId = projectId,
+                    MaterializedFromNodeRunId = gate.Id,
+                    MaterializationIndex = 1
+                },
+                new DevWorkflowNodeRunSeed
+                {
+                    NodeRunId = Guid.NewGuid(),
+                    NodeKey = "validate#1",
+                    NodeType = DevWorkflowNodeType.Tool,
+                    MaxAttempts = 1,
+                    DevelopmentProjectId = projectId,
+                    MaterializedFromNodeRunId = gate.Id,
+                    MaterializationIndex = 1
+                }
+            ],
             GraphJson = GateThenCloneGroup
         });
 
@@ -427,7 +436,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     private static async Task WriteAndCommitAsync(string repository, string librarySource, string message)
     {
         await File.WriteAllTextAsync(Path.Combine(repository, DevelopmentSyntheticSolutionRepository.LibrarySourcePath.Replace('/', Path.DirectorySeparatorChar)),
-                      librarySource);
+            librarySource);
         await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
         await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", message);
     }

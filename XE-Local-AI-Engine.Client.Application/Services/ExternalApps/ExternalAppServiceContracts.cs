@@ -120,7 +120,12 @@ public static class ExternalAppPublishedPorts
                 continue;
             }
 
-            ports.Add(new ExternalAppPublishedPort { Service = entry.Key[..separator], ContainerPort = containerPort, HostPort = entry.Value });
+            ports.Add(new ExternalAppPublishedPort
+            {
+                Service = entry.Key[..separator],
+                ContainerPort = containerPort,
+                HostPort = entry.Value
+            });
         }
 
         return ports;

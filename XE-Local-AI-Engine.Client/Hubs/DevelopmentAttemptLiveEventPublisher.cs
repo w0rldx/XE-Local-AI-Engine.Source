@@ -16,6 +16,6 @@ internal sealed class DevelopmentAttemptLiveEventPublisher : IDevelopmentAttempt
     {
         ArgumentNullException.ThrowIfNull(update);
         return _hubContext.Clients.Group(DevelopmentAttemptHubGroups.Attempt(update.ProjectId, update.AttemptId))
-                         .SendAsync("developmentAttemptUpdate", update, cancellationToken);
+                          .SendAsync("developmentAttemptUpdate", update, cancellationToken);
     }
 }

@@ -31,8 +31,7 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
     private readonly IBenchmarkProjectService _projects;
     private readonly ITrainingRunStore _runs;
 
-    public ComparisonBenchmarkHandoffService(
-        ITrainingEvaluationStore evaluations,
+    public ComparisonBenchmarkHandoffService(ITrainingEvaluationStore evaluations,
         ITrainingRunStore runs,
         IBenchmarkStore benchmarks,
         IBenchmarkProjectService projects,

@@ -54,7 +54,10 @@ public sealed class PaginatingGithubSource : GithubSource
         IFileDownloader downloader)
     {
         ArgumentNullException.ThrowIfNull(downloader);
-        return new PaginatingGithubSource(repositoryUrl, prerelease, velopackChannel) { _downloader = downloader };
+        return new PaginatingGithubSource(repositoryUrl, prerelease, velopackChannel)
+        {
+            _downloader = downloader
+        };
     }
 
     /// <summary>The assets of the most recent feed this source produced; empty before the first check.</summary>

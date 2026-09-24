@@ -71,7 +71,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         // 1. The cohort ranked both judgings under revision 1 of the judge policy, generation 1.
         await Expect(Page.GetByTestId("benchmark-runs-table")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("benchmark-rank-cohort"))
-              .ToHaveTextAsync("2 of 2 ranked · judge policy r1 · gen 1", Polled);
+            .ToHaveTextAsync("2 of 2 ranked · judge policy r1 · gen 1", Polled);
         await ExpectRankAsync(_runA, "1");
         await ExpectRankAsync(_runB, "2");
         await Expect(QualityScore(_runA)).ToHaveTextAsync(judgeScoreA.ToString(provider: null));
@@ -84,9 +84,9 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         var paneA = Page.GetByTestId($"benchmark-run-{_runA}");
         await Expect(paneA.GetByTestId("benchmark-judge-policy")).ToHaveTextAsync("policy r1");
         await Expect(paneA.GetByTestId("benchmark-judge-score"))
-              .ToHaveTextAsync($"Judge score: {judgeScoreA} / 100");
+            .ToHaveTextAsync($"Judge score: {judgeScoreA} / 100");
         await Expect(paneA.GetByTestId("benchmark-judge-criteria").GetByRole(AriaRole.Progressbar))
-              .ToHaveCountAsync(BenchmarkJudgeRubricDefaults.Default().Criteria.Count);
+            .ToHaveCountAsync(BenchmarkJudgeRubricDefaults.Default().Criteria.Count);
 
         // 3. An operator score overrides the judge for ranking without hiding it, and 80 still outranks the other run.
         await paneA.GetByTestId("benchmark-score-input").FillAsync("80");
@@ -95,7 +95,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         await Expect(QualityScore(_runA)).ToHaveTextAsync("80");
         await ExpectRankAsync(_runA, "1");
         await Expect(paneA.GetByTestId("benchmark-judge-score"))
-              .ToHaveTextAsync($"Judge score: {judgeScoreA} / 100", Polled);
+            .ToHaveTextAsync($"Judge score: {judgeScoreA} / 100", Polled);
 
         // 4. Clearing the override hands ranking back to the judge score.
         await paneA.GetByTestId("benchmark-score-clear").ClickAsync();
@@ -112,15 +112,15 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         await firstWeight.FillAsync("50");
         await Expect(firstWeight).ToHaveValueAsync("50");
         var refusal = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-                                    {
-                                        Name = "Save judge"
-                                    }).ClickAsync(),
-                                    response => response.Request.Method == "PUT"
-                                                && response.Url.EndsWith("/judge", StringComparison.Ordinal),
-                                    new PageRunAndWaitForResponseOptions
-                                    {
-                                        Timeout = 15_000
-                                    });
+            {
+                Name = "Save judge"
+            }).ClickAsync(),
+            response => response.Request.Method == "PUT"
+                        && response.Url.EndsWith("/judge", StringComparison.Ordinal),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 15_000
+            });
         var refusalBody = await refusal.TextAsync();
         if (refusal.Status != 409)
         {
@@ -141,7 +141,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         var rejudgedScoreA = await CompleteQueuedJudgeWorkAsync();
         await Expect(paneA.GetByTestId("benchmark-judge-state")).ToHaveTextAsync("Judged", Polled);
         await Expect(Page.GetByTestId("benchmark-rank-cohort"))
-              .ToHaveTextAsync("2 of 2 ranked · judge policy r2 · gen 1", Polled);
+            .ToHaveTextAsync("2 of 2 ranked · judge policy r2 · gen 1", Polled);
         await Expect(paneA.GetByTestId("benchmark-judge-policy")).ToHaveTextAsync("policy r2");
         await Expect(QualityScore(_runA)).ToHaveTextAsync(rejudgedScoreA.ToString(provider: null), Polled);
         await ExpectRankAsync(_runA, "1");
@@ -213,9 +213,9 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
 
         var policy = BenchmarkE2ETestDoubles.Policy(BenchmarkJudgeRubricDefaults.Default(), ReferenceAnswer);
         var activation = await store.ActivateJudgePolicyAsync(_projectId,
-                                        project.Version,
-                                        BenchmarkJudgeSerialization.SerializePolicy(policy),
-                                        BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy));
+            project.Version,
+            BenchmarkJudgeSerialization.SerializePolicy(policy),
+            BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy));
 
         // One run at a time, primary then its automatic first judging: the work queue is global FIFO, so starting the
         // second run before the first run's judge work is drained would hand the next claim the wrong work item.
@@ -263,11 +263,11 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
             TotalTokens = 128,
             TokensPerSecond = 32.5,
             JudgeAttempt = new BenchmarkJudgeAttemptSeed
-                           {
-                               ExpectedJudgePolicyRevisionId = revisionId,
-                               RuntimeJson = BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime),
-                               LaunchIntent = resolution.Intent
-                           }
+            {
+                ExpectedJudgePolicyRevisionId = revisionId,
+                RuntimeJson = BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime),
+                LaunchIntent = resolution.Intent
+            }
         });
         _criterionScores[run.Id] = criterionScore;
         return run.Id;
@@ -309,32 +309,32 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
             var score = BenchmarkJudgeScoreCalculator.Compute(policy.Rubric, criteria);
 
             _ = await store.MarkJudgeLaunchReadyAsync(attemptId,
-                               work.QueueSequence,
-                               work.Version,
-                               new BenchmarkLaunchReceiptCommand
-                               {
-                                   ReceiptJson = "{}",
-                                   EnvironmentFactsJson = "{}",
-                                   EnvironmentFactsHash = new string('e', count: 64),
-                                   ReceiptHash = new string('r', count: 64),
-                                   EffectiveLaunchIdentity = "e2e-effective-identity",
-                                   EffectiveBackend = "cpu",
-                                   PlacementOffloaded = null,
-                                   PlacementTotal = null,
-                                   ExecutableSha256 = new string('x', count: 64),
-                                   HasAuxAssets = false,
-                                   KvCacheTypeSource = "auto"
-                               },
-                               ExecutionKey);
+                work.QueueSequence,
+                work.Version,
+                new BenchmarkLaunchReceiptCommand
+                {
+                    ReceiptJson = "{}",
+                    EnvironmentFactsJson = "{}",
+                    EnvironmentFactsHash = new string('e', count: 64),
+                    ReceiptHash = new string('r', count: 64),
+                    EffectiveLaunchIdentity = "e2e-effective-identity",
+                    EffectiveBackend = "cpu",
+                    PlacementOffloaded = null,
+                    PlacementTotal = null,
+                    ExecutableSha256 = new string('x', count: 64),
+                    HasAuxAssets = false,
+                    KvCacheTypeSource = "auto"
+                },
+                ExecutionKey);
             _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
             {
                 RunId = work.RunId,
                 ExpectedWorkVersion = work.Version,
                 JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
-                                   criteria,
-                                   "The output covers the task at the expected depth.",
-                                   score,
-                                   BenchmarkE2ETestDoubles.ModelContentFingerprint)),
+                    criteria,
+                    "The output covers the task at the expected depth.",
+                    score,
+                    BenchmarkE2ETestDoubles.ModelContentFingerprint)),
                 LastStreamSequence = 5,
                 Score = score
             });

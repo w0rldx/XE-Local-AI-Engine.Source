@@ -205,8 +205,7 @@ public sealed class BenchmarkNiahGeneratorTests
     [Test]
     public void TryRead_WhenTheStoredParametersAreNotJson_KeepsTheReaderFailureAsTheInnerException()
     {
-        var refusal = AssertEx.Throws<BenchmarkValidationException>(
-            () => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, "not json at all"u8.ToArray())));
+        var refusal = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, "not json at all"u8.ToArray())));
 
         var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
         AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");

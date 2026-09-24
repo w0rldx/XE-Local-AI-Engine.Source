@@ -55,16 +55,35 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // FTS5 BM25 is more-negative-for-stronger (best first), so the scores descend into the negatives with rank.
         var ftsHits = new List<FtsSearchHit>
         {
-            new() { ChunkId = chunkAlpha, DocumentId = documentId, Bm25Score = -3.0 },
-            new() { ChunkId = chunkBeta, DocumentId = documentId, Bm25Score = -2.0 },
-            new() { ChunkId = chunkGamma, DocumentId = documentId, Bm25Score = -1.0 }
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -3.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkGamma,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
         };
         var reranker = RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 3 }, CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(3, orderedChunkIds.Count);
@@ -91,8 +110,18 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
         {
-            new() { ChunkId = chunkAlpha, DocumentId = documentId, Bm25Score = -2.0 },
-            new() { ChunkId = chunkBeta, DocumentId = documentId, Bm25Score = -1.0 }
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
         };
         // Reranker is CONFIGURED but unavailable → returns null → the search must keep the fusion order.
         var reranker = Substitute.For<IRerankerClient>();
@@ -102,7 +131,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 3 }, CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(2, orderedChunkIds.Count);
@@ -126,8 +159,18 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
         {
-            new() { ChunkId = chunkAlpha, DocumentId = documentId, Bm25Score = -2.0 },
-            new() { ChunkId = chunkBeta, DocumentId = documentId, Bm25Score = -1.0 }
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
         };
         var reranker = Substitute.For<IRerankerClient>();
 
@@ -135,7 +178,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // Empty reranker model name = reranking OFF.
         var service = CreateSearchService(context, ftsHits, reranker, rerankerModelName: string.Empty);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 3 }, CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, CancellationToken.None);
 
         AssertEx.Equal(chunkAlpha, result.Results[0].ChunkId);
         AssertEx.Equal(chunkBeta, result.Results[1].ChunkId);
@@ -160,9 +207,24 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // BM25 is more-negative-for-stronger, so the fused order alpha, beta, gamma descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new() { ChunkId = chunkAlpha, DocumentId = documentId, Bm25Score = -3.0 },
-            new() { ChunkId = chunkBeta, DocumentId = documentId, Bm25Score = -2.0 },
-            new() { ChunkId = chunkGamma, DocumentId = documentId, Bm25Score = -1.0 }
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -3.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkGamma,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
         };
         IReadOnlyList<string>? rerankedDocuments = null;
         var reranker = Substitute.For<IRerankerClient>();
@@ -179,7 +241,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
         // Limit is smaller than the fused pool: the reranker must see the whole pool, then the result is cut to limit.
-        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 2 }, CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 2
+        }, CancellationToken.None);
 
         AssertEx.True(rerankedDocuments is not null, "The reranker must be invoked when a model is configured.");
         AssertEx.Equal(3, rerankedDocuments!.Count); // whole fused pool, not just `limit`

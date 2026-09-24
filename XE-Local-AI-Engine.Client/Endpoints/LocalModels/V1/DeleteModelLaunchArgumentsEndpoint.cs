@@ -13,8 +13,7 @@ public sealed class DeleteModelLaunchArgumentsEndpoint : Endpoint<GetModelLaunch
 {
     private readonly ModelLaunchArgumentsService _launchArguments;
 
-    public DeleteModelLaunchArgumentsEndpoint(
-        ModelLaunchArgumentsService launchArguments)
+    public DeleteModelLaunchArgumentsEndpoint(ModelLaunchArgumentsService launchArguments)
     {
         ArgumentNullException.ThrowIfNull(launchArguments);
         _launchArguments = launchArguments;

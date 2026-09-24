@@ -94,7 +94,11 @@ internal sealed record GraphWorkflowDecisionModelConfig : GraphWorkflowNodeConfi
 /// <summary>The graph-level <c>chat</c> block. Only a <c>Chat</c> graph may declare one; a Chat graph that omits it reads these defaults.</summary>
 internal sealed record GraphWorkflowChatSettings
 {
-    public static GraphWorkflowChatSettings Default { get; } = new() { AcceptsAttachments = false, RequireRerunConfirmation = true };
+    public static GraphWorkflowChatSettings Default { get; } = new()
+    {
+        AcceptsAttachments = false,
+        RequireRerunConfirmation = true
+    };
 
     public required bool AcceptsAttachments { get; init; }
 

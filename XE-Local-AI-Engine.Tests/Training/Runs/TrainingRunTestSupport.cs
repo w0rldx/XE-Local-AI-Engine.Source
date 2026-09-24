@@ -58,8 +58,7 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
     private readonly int _exitCode;
     private readonly bool _exitsOnStreamClose;
 
-    public FakeTrainingProcessHandle(
-        TrainingLaunchReceipt receipt,
+    public FakeTrainingProcessHandle(TrainingLaunchReceipt receipt,
         IReadOnlyList<string> lines,
         int exitCode,
         bool exitsOnStreamClose = true)

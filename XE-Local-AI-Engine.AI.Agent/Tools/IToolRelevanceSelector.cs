@@ -66,7 +66,11 @@ public sealed class ToolRelevanceSelection
             }
         }
 
-        return new ToolRelevanceSelection { OfferedNames = offered, HiddenNames = hidden };
+        return new ToolRelevanceSelection
+        {
+            OfferedNames = offered,
+            HiddenNames = hidden
+        };
     }
 }
 

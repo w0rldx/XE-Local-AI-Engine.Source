@@ -197,7 +197,13 @@ public sealed partial class WorkerEventDispatcher
                 state.PendingToolCalls =
                 [
                     .. state.PendingToolCalls,
-                    new InvocationToolCallState { RequestId = payload.RequestId, ToolName = payload.ToolName, Parameters = payload.Parameters, RequestedAt = _timeProvider.GetUtcNow() }
+                    new InvocationToolCallState
+                    {
+                        RequestId = payload.RequestId,
+                        ToolName = payload.ToolName,
+                        Parameters = payload.Parameters,
+                        RequestedAt = _timeProvider.GetUtcNow()
+                    }
                 ];
                 return state;
             });
@@ -212,7 +218,12 @@ public sealed partial class WorkerEventDispatcher
         UpdateInvocation(payload.InvocationId,
             state =>
             {
-                state.PendingApproval = new InvocationApprovalState { RequestId = payload.RequestId, Description = payload.Description, RequestedAt = _timeProvider.GetUtcNow() };
+                state.PendingApproval = new InvocationApprovalState
+                {
+                    RequestId = payload.RequestId,
+                    Description = payload.Description,
+                    RequestedAt = _timeProvider.GetUtcNow()
+                };
                 return state;
             });
 

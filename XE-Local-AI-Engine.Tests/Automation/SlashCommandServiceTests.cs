@@ -29,7 +29,13 @@ public sealed class SlashCommandServiceTests
              });
         var service = new SlashCommandService(store);
 
-        var result = await service.CreateAsync(new SlashCommandInput { Name = " review ", Description = "  Review changes  ", ActionType = SlashCommandActionType.SendPrompt, Prompt = "  line one\n  line two  " });
+        var result = await service.CreateAsync(new SlashCommandInput
+        {
+            Name = " review ",
+            Description = "  Review changes  ",
+            ActionType = SlashCommandActionType.SendPrompt,
+            Prompt = "  line one\n  line two  "
+        });
 
         var input = AssertEx.NotNull(captured);
         AssertEx.Equal("review", input.Name);
@@ -49,7 +55,13 @@ public sealed class SlashCommandServiceTests
         var service = new SlashCommandService(store);
 
         await AssertEx.ThrowsAsync<SlashCommandValidationException>(() =>
-            service.CreateAsync(new SlashCommandInput { Name = name, Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" }));
+            service.CreateAsync(new SlashCommandInput
+            {
+                Name = name,
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "prompt"
+            }));
         await store.DidNotReceive().AddAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>());
     }
 
@@ -58,8 +70,26 @@ public sealed class SlashCommandServiceTests
     {
         var store = Substitute.For<ISlashCommandStore>();
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([
-            new SlashCommandRecord { Id = Guid.NewGuid(), Name = "review", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "review", CreatedAtUtc = 1, UpdatedAtUtc = 1 },
-            new SlashCommandRecord { Id = Guid.NewGuid(), Name = "alpha", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "alpha", CreatedAtUtc = 1, UpdatedAtUtc = 1 }
+            new SlashCommandRecord
+            {
+                Id = Guid.NewGuid(),
+                Name = "review",
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "review",
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            },
+            new SlashCommandRecord
+            {
+                Id = Guid.NewGuid(),
+                Name = "alpha",
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "alpha",
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            }
         ]);
         var service = new SlashCommandService(store);
 
@@ -81,7 +111,13 @@ public sealed class SlashCommandServiceTests
         var overLimit = string.Concat(Enumerable.Repeat("😀", 5_001));
 
         await AssertEx.ThrowsAsync<SlashCommandValidationException>(() =>
-            service.CreateAsync(new SlashCommandInput { Name = "review", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = overLimit }));
+            service.CreateAsync(new SlashCommandInput
+            {
+                Name = "review",
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = overLimit
+            }));
         await store.DidNotReceive().AddAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>());
     }
 
@@ -94,7 +130,13 @@ public sealed class SlashCommandServiceTests
         var service = new SlashCommandService(store);
 
         _ = await AssertEx.ThrowsAsync<SlashCommandConflictException>(() =>
-            service.CreateAsync(new SlashCommandInput { Name = "review", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" }));
+            service.CreateAsync(new SlashCommandInput
+            {
+                Name = "review",
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "prompt"
+            }));
     }
 
     [Test]
@@ -106,7 +148,13 @@ public sealed class SlashCommandServiceTests
         var service = new SlashCommandService(store);
 
         var actual = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
-            service.CreateAsync(new SlashCommandInput { Name = "review", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" }));
+            service.CreateAsync(new SlashCommandInput
+            {
+                Name = "review",
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "prompt"
+            }));
         AssertEx.True(ReferenceEquals(failure, actual), "Unrelated database failures must propagate unchanged.");
     }
 }

@@ -188,16 +188,16 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     private async Task<Guid> StartRunAsync()
     {
         using var created = await SendAsync("POST",
-                $"{Root}/definitions",
-                $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""");
+            $"{Root}/definitions",
+            $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""");
         var createdBody = await created.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Created, created.StatusCode, createdBody);
         using var definition = JsonDocument.Parse(createdBody);
         var definitionId = definition.RootElement.GetProperty("id").GetGuid();
 
         using var started = await SendAsync("POST",
-                $"{Root}/definitions/{definitionId}/runs",
-                $$"""{"requestId":"{{Guid.NewGuid()}}"}""");
+            $"{Root}/definitions/{definitionId}/runs",
+            $$"""{"requestId":"{{Guid.NewGuid()}}"}""");
         var startedBody = await started.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Accepted, started.StatusCode, startedBody);
         using var run = JsonDocument.Parse(startedBody);
@@ -213,12 +213,12 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     /// </summary>
     private async Task AdvanceUntilRunStatusAsync(GraphWorkflowHarness harness, Guid runId, string status) =>
         await harness.AdvanceUntilAsync(runId,
-                         async () =>
-                         {
-                             using var run = await RunAsync(runId);
-                             return string.Equals(run.RootElement.GetProperty("run").GetProperty("status").GetString(), status, StringComparison.Ordinal);
-                         },
-                         $"Run {runId} never reached {status} over the wire");
+            async () =>
+            {
+                using var run = await RunAsync(runId);
+                return string.Equals(run.RootElement.GetProperty("run").GetProperty("status").GetString(), status, StringComparison.Ordinal);
+            },
+            $"Run {runId} never reached {status} over the wire");
 
     /// <summary>Every named node succeeded, and finished no earlier than the one before it.</summary>
     private static void AssertSucceededInOrder(JsonDocument run, params string[] nodeKeys)

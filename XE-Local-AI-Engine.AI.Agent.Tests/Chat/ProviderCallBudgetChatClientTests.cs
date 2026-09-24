@@ -431,14 +431,14 @@ public sealed class ProviderCallBudgetChatClientTests
             services: null);
 
         _ = await agent.RunAsync([new ChatMessage(ChatRole.User, "hi")],
-                           session: null,
-                           new ChatClientAgentRunOptions
-                           {
-                               ChatOptions = new ChatOptions
-                               {
-                                   ModelId = ModelId
-                               }
-                           });
+            session: null,
+            new ChatClientAgentRunOptions
+            {
+                ChatOptions = new ChatOptions
+                {
+                    ModelId = ModelId
+                }
+            });
 
         AssertEx.Equal(ModelId, inner.ReceivedOptions.Single()?.ModelId);
     }
@@ -606,10 +606,10 @@ public sealed class ProviderCallBudgetChatClientTests
                }))
         {
             _ = await sut.GetResponseAsync(LongRound(),
-                             new ChatOptions
-                             {
-                                 ModelId = ModelId
-                             });
+                new ChatOptions
+                {
+                    ModelId = ModelId
+                });
         }
 
         return inner.ReceivedMessageSets.Single().Count;
@@ -670,7 +670,12 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens)
         {
-            Observations.Add(new ObservedUsageWrite { ModelName = modelName, EstimatedTokens = estimatedTokens, ObservedInputTokens = observedInputTokens });
+            Observations.Add(new ObservedUsageWrite
+            {
+                ModelName = modelName,
+                EstimatedTokens = estimatedTokens,
+                ObservedInputTokens = observedInputTokens
+            });
             _inner.RecordObservedUsage(modelName, estimatedTokens, observedInputTokens);
         }
 

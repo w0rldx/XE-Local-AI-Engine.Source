@@ -91,7 +91,13 @@ internal static class TrainingRuntimeTestInfrastructure
             CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            _invocations.Add(new Invocation { File = file, Args = [.. args], Environment = environment, WorkingDirectory = workingDirectory });
+            _invocations.Add(new Invocation
+            {
+                File = file,
+                Args = [.. args],
+                Environment = environment,
+                WorkingDirectory = workingDirectory
+            });
             return Task.FromResult(_handler(file, args, logSink));
         }
 
@@ -155,7 +161,15 @@ internal static class TrainingRuntimeTestInfrastructure
             return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
             {
                 CanInstall = true,
-                Items = [new TrainingRuntimePrerequisiteItem { Key = TrainingRuntimePrerequisiteKeys.Platform, Satisfied = true, Detail = "Running on Linux." }]
+                Items =
+                [
+                    new TrainingRuntimePrerequisiteItem
+                    {
+                        Key = TrainingRuntimePrerequisiteKeys.Platform,
+                        Satisfied = true,
+                        Detail = "Running on Linux."
+                    }
+                ]
             });
         }
 
@@ -164,7 +178,15 @@ internal static class TrainingRuntimeTestInfrastructure
             return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
             {
                 CanInstall = false,
-                Items = [new TrainingRuntimePrerequisiteItem { Key = key, Satisfied = false, Detail = "Not satisfied." }]
+                Items =
+                [
+                    new TrainingRuntimePrerequisiteItem
+                    {
+                        Key = key,
+                        Satisfied = false,
+                        Detail = "Not satisfied."
+                    }
+                ]
             });
         }
     }

@@ -65,6 +65,7 @@ public sealed class RequiredMemberSerializationTests
     ///     attribute would find nothing to forbid and pass in silence.
     /// </summary>
     private const int ConditionallyIgnoredFloor = 5;
+
     private const int RequiredPropertyFloor = 2000;
 
     [Test]

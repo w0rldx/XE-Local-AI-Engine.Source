@@ -16,8 +16,7 @@ public sealed class ExternalProviderStartupReconciler : IHostedService
     private readonly IExternalProviderRegistryCache _registryCache;
     private readonly ILogger<ExternalProviderStartupReconciler> _logger;
 
-    public ExternalProviderStartupReconciler(
-        IServiceScopeFactory scopeFactory,
+    public ExternalProviderStartupReconciler(IServiceScopeFactory scopeFactory,
         IExternalProviderRegistryCache registryCache,
         ILogger<ExternalProviderStartupReconciler> logger)
     {

@@ -110,8 +110,18 @@ public sealed class UserQuestionParserTests
     public void Answered_EmitsTheAnsweredEnvelopeWithAStableAnswerShape()
     {
         var json = UserQuestionResults.Answered([
-            new UserQuestionAnswer { Question = "Which auth method?", Selected = ["OAuth device flow", "API key"], Other = null },
-            new UserQuestionAnswer { Question = "Anything else?", Selected = [], Other = "use mTLS" }
+            new UserQuestionAnswer
+            {
+                Question = "Which auth method?",
+                Selected = ["OAuth device flow", "API key"],
+                Other = null
+            },
+            new UserQuestionAnswer
+            {
+                Question = "Anything else?",
+                Selected = [],
+                Other = "use mTLS"
+            }
         ]);
 
         var root = JsonDocument.Parse(json).RootElement;

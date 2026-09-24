@@ -21,7 +21,10 @@ public sealed class GraphWorkflowChatAgentTests
     {
         const string instructions = "chat-agent-still-running";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var definitionId = await harness.SeedDefinitionAsync(ChatAgentGraph(instructions));
         var conversationId = await CreateConversationAsync(harness.Services);
         var runId = await StartAsync(definitionId, conversationId);
@@ -49,7 +52,10 @@ public sealed class GraphWorkflowChatAgentTests
     {
         const string instructions = "chat-agent-publishes";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Text = "the analysis" });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Text = "the analysis"
+        });
         var definitionId = await harness.SeedDefinitionAsync(ChatAgentGraph(instructions));
         var conversationId = await CreateConversationAsync(harness.Services);
         var runId = await StartAsync(definitionId, conversationId);

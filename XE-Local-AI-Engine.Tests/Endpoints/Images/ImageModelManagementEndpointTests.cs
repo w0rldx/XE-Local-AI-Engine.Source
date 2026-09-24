@@ -481,7 +481,11 @@ public sealed class ImageModelManagementEndpointTests
         public ImageModelDownloadTicket Start(ImageModelRequest request)
         {
             LastRequest = request;
-            return new ImageModelDownloadTicket { ModelName = request.ModelName, AlreadyInFlight = AlreadyInFlight };
+            return new ImageModelDownloadTicket
+            {
+                ModelName = request.ModelName,
+                AlreadyInFlight = AlreadyInFlight
+            };
         }
 
         public bool Cancel(string modelName)

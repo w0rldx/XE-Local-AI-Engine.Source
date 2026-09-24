@@ -195,7 +195,13 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token);
 
             var tools = BuildRegisteredTools(discovered, slug, ResolveToolCategory(record), _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
-            return new ConnectResult(new ConnectedServer { Client = client, Version = record.Version, Slug = slug, Tools = tools }, Error: null);
+            return new ConnectResult(new ConnectedServer
+            {
+                Client = client,
+                Version = record.Version,
+                Slug = slug,
+                Tools = tools
+            }, Error: null);
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
@@ -235,7 +241,13 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         if (client is not null)
         {
-            await DisposeClientSafelyAsync(new ConnectedServer { Client = client, Version = version, Slug = slug, Tools = [] });
+            await DisposeClientSafelyAsync(new ConnectedServer
+            {
+                Client = client,
+                Version = version,
+                Slug = slug,
+                Tools = []
+            });
         }
     }
 
@@ -300,7 +312,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.
             AIFunction budgeted = new BudgetedToolResultAIFunction(validated, maxToolResultCharacters);
             AITool executable = new ApprovalRequiredAIFunction(budgeted);
-            registered.Add(new McpRegisteredTool { Name = qualifiedName, Executable = executable, Descriptor = descriptor });
+            registered.Add(new McpRegisteredTool
+            {
+                Name = qualifiedName,
+                Executable = executable,
+                Descriptor = descriptor
+            });
         }
 
         return registered;

@@ -3,14 +3,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
@@ -142,7 +143,9 @@ public sealed class CanvasWorkflowImportReadTests
         AssertEx.True(await probe.TableExistsAsync("canvas_workflows"));
         AssertEx.True(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
         AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflow_import_recovery"));
-        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflows AS source JOIN canvas_workflow_import_recovery AS recovery ON source.id = recovery.id WHERE source.graph_json = recovery.graph_json"));
+        AssertEx.Equal(2L,
+            await probe.ScalarAsync(
+                "SELECT COUNT(*) FROM canvas_workflows AS source JOIN canvas_workflow_import_recovery AS recovery ON source.id = recovery.id WHERE source.graph_json = recovery.graph_json"));
     }
 
     /// <summary>
@@ -216,7 +219,7 @@ public sealed class CanvasWorkflowImportReadTests
         _ = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1);
         // A schema collision makes SQLite refuse the durable copy before destructive migrations can run.
         await probe.ExecuteAsync("CREATE VIEW canvas_workflow_import_recovery AS SELECT * FROM canvas_workflows");
-        _ = await AssertEx.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () => { _ = await ReadAsync(probe); });
+        _ = await AssertEx.ThrowsAsync<SqliteException>(async () => { _ = await ReadAsync(probe); });
         AssertEx.True(await probe.TableExistsAsync("canvas_workflows"));
         AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflows"));
     }

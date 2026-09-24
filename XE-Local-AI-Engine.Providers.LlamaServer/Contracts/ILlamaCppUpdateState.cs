@@ -31,7 +31,15 @@ public sealed class LlamaCppUpdateSnapshot
 
     /// <summary>The empty pre-check snapshot: nothing resolved yet, no update advertised, not flagged offline.</summary>
     public static LlamaCppUpdateSnapshot Empty { get; } =
-        new() { InstalledTag = null, RecommendedTag = null, UpstreamLatestTag = null, UpdateAvailable = false, IsOffline = false, CheckedAtUtc = null };
+        new()
+        {
+            InstalledTag = null,
+            RecommendedTag = null,
+            UpstreamLatestTag = null,
+            UpdateAvailable = false,
+            IsOffline = false,
+            CheckedAtUtc = null
+        };
 }
 
 /// <summary>

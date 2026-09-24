@@ -148,7 +148,16 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         // makes the row's age controllable without touching raw SQL.
         var dbContext = scopeProvider.GetRequiredService<NodeChatDbContext>();
         var store = new AgentExecutionLogStore(dbContext, new FixedTimeProvider(createdAtUtc));
-        var added = await store.AddAsync(new AgentExecutionLogInput { AgentDefinitionId = agentId, ConversationId = null, MessageId = null, ModelName = "llama", ConfigHash = "h", LatencyMs = 1L, Success = true });
+        var added = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama",
+            ConfigHash = "h",
+            LatencyMs = 1L,
+            Success = true
+        });
         return added.Id;
     }
 

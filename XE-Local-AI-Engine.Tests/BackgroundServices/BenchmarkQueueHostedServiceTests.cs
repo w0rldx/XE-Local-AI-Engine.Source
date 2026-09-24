@@ -306,7 +306,15 @@ public sealed class BenchmarkQueueHostedServiceTests
     private static BenchmarkClaimedWork Work(BenchmarkWorkKind kind)
     {
         var runId = Guid.NewGuid();
-        return new BenchmarkClaimedWork { QueueSequence = 1, RunId = runId, Kind = kind, Attempt = 1, Version = 1, Run = Run(runId) };
+        return new BenchmarkClaimedWork
+        {
+            QueueSequence = 1,
+            RunId = runId,
+            Kind = kind,
+            Attempt = 1,
+            Version = 1,
+            Run = Run(runId)
+        };
     }
 
     private static BenchmarkRunRecord Run(Guid runId) =>

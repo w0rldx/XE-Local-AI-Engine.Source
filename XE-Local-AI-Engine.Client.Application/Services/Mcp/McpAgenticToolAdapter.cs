@@ -10,8 +10,7 @@ internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
     private readonly IMcpAgenticApprovalAuditRecorder _auditRecorder;
     private readonly ILogger<McpAgenticToolAdapter> _logger;
 
-    public McpAgenticToolAdapter(
-        IMcpAgenticApprovalAuditRecorder auditRecorder,
+    public McpAgenticToolAdapter(IMcpAgenticApprovalAuditRecorder auditRecorder,
         ILogger<McpAgenticToolAdapter> logger)
     {
         ArgumentNullException.ThrowIfNull(auditRecorder);
@@ -48,8 +47,7 @@ internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
         private readonly IMcpAgenticApprovalAuditRecorder _auditRecorder;
         private readonly ILogger _logger;
 
-        public AutoApprovedFunction(
-            ApprovalRequiredAIFunction approvalRequired,
+        public AutoApprovedFunction(ApprovalRequiredAIFunction approvalRequired,
             ToolCategory category,
             string keyPrefix,
             Guid requestId,

@@ -101,13 +101,13 @@ internal sealed class IntegrationApiHandler
         }
 
         await context.Response.WriteAsJsonAsync(new IntegrationSessionStatusResponse
-        {
-            SessionId = session.Id,
-            TriggerName = session.TriggerName,
-            Status = SessionStatusName(session.Status),
-            ExecutionCount = session.ExecutionCount,
-            LastActivityUtc = session.LastActivityUtc
-        },
+            {
+                SessionId = session.Id,
+                TriggerName = session.TriggerName,
+                Status = SessionStatusName(session.Status),
+                ExecutionCount = session.ExecutionCount,
+                LastActivityUtc = session.LastActivityUtc
+            },
             context.RequestAborted);
     }
 
@@ -213,16 +213,16 @@ internal sealed class IntegrationApiHandler
 
         var triggerName = context.Request.RouteValues.TryGetValue("triggerName", out var routeValue) ? routeValue as string : null;
         var result = await _invocations.AcceptAsync(new IntegrationAcceptRequest
-        {
-            TriggerName = triggerName ?? string.Empty,
-            PrincipalId = caller.PrincipalId,
-            KeyPrefix = caller.KeyPrefix,
-            RequestId = requestId,
-            SessionId = parsed.SessionId,
-            Inputs = inputs,
-            RawBody = body
-        },
-                                           context.RequestAborted);
+            {
+                TriggerName = triggerName ?? string.Empty,
+                PrincipalId = caller.PrincipalId,
+                KeyPrefix = caller.KeyPrefix,
+                RequestId = requestId,
+                SessionId = parsed.SessionId,
+                Inputs = inputs,
+                RawBody = body
+            },
+            context.RequestAborted);
 
         // The stream is offered only for an admitted execution, and a refusal here is NOT the accept's answer: fall through to the
         // ordinary accept body, which names the execution and the events route to attach to instead. See this method's remarks.
@@ -278,9 +278,9 @@ internal sealed class IntegrationApiHandler
         // The persisted rows: the same route, the same masking, the database rather than the ring. It is where a caller answered
         // 410 on the stream goes next, so it never answers 410 itself — after a restart the ring is empty and the rows are not.
         var rows = await _executions.ListEventsAsync(executionId,
-                                        Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
-                                        IntegrationEventPage.ClampLimit(ReadLimit(context)),
-                                        context.RequestAborted);
+            Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
+            IntegrationEventPage.ClampLimit(ReadLimit(context)),
+            context.RequestAborted);
 
         await context.Response.WriteAsJsonAsync(rows.Select(IntegrationMapper.ToEventDto).ToArray(), context.RequestAborted);
     }
@@ -307,8 +307,8 @@ internal sealed class IntegrationApiHandler
         {
             case IntegrationSseWriteOutcome.Gone:
                 await WriteMessageAsync(context,
-                        StatusCodes.Status410Gone,
-                        $"The live stream no longer holds this position. Read the committed events from {EventsPath(executionId)} and the status from {SelfPath(executionId)}.");
+                    StatusCodes.Status410Gone,
+                    $"The live stream no longer holds this position. Read the committed events from {EventsPath(executionId)} and the status from {SelfPath(executionId)}.");
                 return;
             case IntegrationSseWriteOutcome.Busy:
                 context.Response.Headers.RetryAfter = "5";
@@ -364,18 +364,18 @@ internal sealed class IntegrationApiHandler
         }
 
         await context.Response.WriteAsJsonAsync(new IntegrationExecutionStatusResponse
-        {
-            ExecutionId = execution.Id,
-            SessionId = execution.SessionId,
-            Status = StatusName(execution.Status),
-            FailureCategory = execution.FailureCategory,
-            FailureSummary = execution.FailureSummary,
-            ReceivedAtUnixMs = execution.ReceivedAtUtc,
-            StartedAtUnixMs = execution.StartedAtUtc,
-            EndedAtUnixMs = execution.EndedAtUtc,
-            OutputCount = execution.OutputCount,
-            Links = Links(execution.Id)
-        },
+            {
+                ExecutionId = execution.Id,
+                SessionId = execution.SessionId,
+                Status = StatusName(execution.Status),
+                FailureCategory = execution.FailureCategory,
+                FailureSummary = execution.FailureSummary,
+                ReceivedAtUnixMs = execution.ReceivedAtUtc,
+                StartedAtUnixMs = execution.StartedAtUtc,
+                EndedAtUnixMs = execution.EndedAtUtc,
+                OutputCount = execution.OutputCount,
+                Links = Links(execution.Id)
+            },
             context.RequestAborted);
     }
 
@@ -459,12 +459,12 @@ internal sealed class IntegrationApiHandler
             case IntegrationAcceptOutcome.Duplicate:
                 context.Response.StatusCode = StatusCodes.Status202Accepted;
                 await context.Response.WriteAsJsonAsync(new IntegrationAcceptResponse
-                {
-                    ExecutionId = result.ExecutionId!.Value,
-                    SessionId = result.SessionId!.Value,
-                    Status = StatusName(result.Status ?? IntegrationExecutionStatus.Accepted),
-                    Links = Links(result.ExecutionId.Value)
-                },
+                    {
+                        ExecutionId = result.ExecutionId!.Value,
+                        SessionId = result.SessionId!.Value,
+                        Status = StatusName(result.Status ?? IntegrationExecutionStatus.Accepted),
+                        Links = Links(result.ExecutionId.Value)
+                    },
                     context.RequestAborted);
                 return;
             case IntegrationAcceptOutcome.TriggerNotFound:
@@ -551,12 +551,24 @@ internal sealed class IntegrationApiHandler
         {
             if (string.Equals(input.Type, "text", StringComparison.OrdinalIgnoreCase))
             {
-                mapped.Add(new IntegrationInputDto { Kind = IntegrationInputKinds.Text, Text = input.Text, Label = input.Label, Json = null });
+                mapped.Add(new IntegrationInputDto
+                {
+                    Kind = IntegrationInputKinds.Text,
+                    Text = input.Text,
+                    Label = input.Label,
+                    Json = null
+                });
             }
             else if (string.Equals(input.Type, "json", StringComparison.OrdinalIgnoreCase))
             {
                 // The RAW text the caller sent, never a re-serialisation: the seed must carry what was received.
-                mapped.Add(new IntegrationInputDto { Kind = IntegrationInputKinds.Json, Text = null, Label = input.Label, Json = input.Json?.GetRawText() });
+                mapped.Add(new IntegrationInputDto
+                {
+                    Kind = IntegrationInputKinds.Json,
+                    Text = null,
+                    Label = input.Label,
+                    Json = input.Json?.GetRawText()
+                });
             }
             else
             {
@@ -578,7 +590,11 @@ internal sealed class IntegrationApiHandler
     }
 
     private static IntegrationExecutionLinks Links(Guid executionId) =>
-        new() { Self = SelfPath(executionId), Events = EventsPath(executionId) };
+        new()
+        {
+            Self = SelfPath(executionId),
+            Events = EventsPath(executionId)
+        };
 
     private static string SelfPath(Guid executionId) =>
         Path(LocalApiRoutes.IntegrationApi.ExecutionById, executionId);

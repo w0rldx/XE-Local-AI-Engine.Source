@@ -764,7 +764,13 @@ public sealed class DevWorkflowRunEndpointTests
             ToolCalls = 1,
             ProviderCalls = 2
         };
-        await using var factory = EnabledFactory(store, RunService(new DevWorkflowRunDetail { Run = RunSnapshot(), NodeRuns = [research, gate], PendingDecisionCount = 1, BlockingGateNodeRunId = GateNodeRunId }));
+        await using var factory = EnabledFactory(store, RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot(),
+            NodeRuns = [research, gate],
+            PendingDecisionCount = 1,
+            BlockingGateNodeRunId = GateNodeRunId
+        }));
 
         using var response = await SendAsync(factory, "GET", Run);
         var body = await response.Content.ReadAsStringAsync();
@@ -885,7 +891,11 @@ public sealed class DevWorkflowRunEndpointTests
         store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType, sizeBytes: bytes.Length));
         var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
         blobs.ReadAsync(RunId, ArtifactId, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowArtifactBlobReadResult { Status = DevWorkflowArtifactReadStatus.Found, Content = bytes });
+             .Returns(new DevWorkflowArtifactBlobReadResult
+             {
+                 Status = DevWorkflowArtifactReadStatus.Found,
+                 Content = bytes
+             });
         await using var factory = EnabledFactory(store, RunService(), blobs: blobs);
 
         using var response = await SendAsync(factory, "GET", ArtifactContent);
@@ -903,7 +913,11 @@ public sealed class DevWorkflowRunEndpointTests
         var store = Store();
         var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
         blobs.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowArtifactBlobReadResult { Status = DevWorkflowArtifactReadStatus.HashMismatch, Content = ReadOnlyMemory<byte>.Empty });
+             .Returns(new DevWorkflowArtifactBlobReadResult
+             {
+                 Status = DevWorkflowArtifactReadStatus.HashMismatch,
+                 Content = ReadOnlyMemory<byte>.Empty
+             });
         await using var factory = EnabledFactory(store, RunService(), blobs: blobs);
 
         using var response = await SendAsync(factory, "GET", ArtifactContent);
@@ -951,9 +965,9 @@ public sealed class DevWorkflowRunEndpointTests
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory,
-                "POST",
-                $"{NodeRun}/decision",
-                $$"""{"operationId":"{{OperationId}}","decision":"Approve","comment":"Looks right.","payloadJson":"{\"edited\":true}"}""");
+            "POST",
+            $"{NodeRun}/decision",
+            $$"""{"operationId":"{{OperationId}}","decision":"Approve","comment":"Looks right.","payloadJson":"{\"edited\":true}"}""");
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -1023,9 +1037,9 @@ public sealed class DevWorkflowRunEndpointTests
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory,
-                "POST",
-                $"{NodeRun}/decision",
-                $$"""{"operationId":"{{Guid.NewGuid()}}","decision":"Approve"}""");
+            "POST",
+            $"{NodeRun}/decision",
+            $$"""{"operationId":"{{Guid.NewGuid()}}","decision":"Approve"}""");
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -1244,7 +1258,8 @@ public sealed class DevWorkflowRunEndpointTests
             {
                 GraphJson = SkipGraph
             },
-            NodeRuns = [
+            NodeRuns =
+            [
                 WorkNodeRun(1, "survey", DevWorkflowNodeRunStatus.Succeeded),
                 WorkNodeRun(2, "excused", DevWorkflowNodeRunStatus.Skipped),
                 WorkNodeRun(3, "broken", DevWorkflowNodeRunStatus.Failed),
@@ -1558,7 +1573,13 @@ public sealed class DevWorkflowRunEndpointTests
         };
 
         var waiting = gateStatus is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked;
-        return new DevWorkflowRunDetail { Run = RunSnapshot(), NodeRuns = [research, gate], PendingDecisionCount = waiting ? 1 : 0, BlockingGateNodeRunId = waiting ? GateNodeRunId : null };
+        return new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot(),
+            NodeRuns = [research, gate],
+            PendingDecisionCount = waiting ? 1 : 0,
+            BlockingGateNodeRunId = waiting ? GateNodeRunId : null
+        };
     }
 
     private static DevWorkflowRunSnapshot RunSnapshot() =>
@@ -1669,7 +1690,18 @@ public sealed class DevWorkflowRunEndpointTests
         };
 
     private static DevWorkflowRunEventSnapshot Event(long sequence) =>
-        new() { Id = Guid.NewGuid(), RunId = RunId, NodeRunId = null, Sequence = sequence, EventType = "node.started", DetailJson = null, OperationId = null, Outcome = null, OccurredAtUtc = 100 };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeRunId = null,
+            Sequence = sequence,
+            EventType = "node.started",
+            DetailJson = null,
+            OperationId = null,
+            Outcome = null,
+            OccurredAtUtc = 100
+        };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

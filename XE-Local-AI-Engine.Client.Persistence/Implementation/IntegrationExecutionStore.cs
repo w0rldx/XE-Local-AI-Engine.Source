@@ -423,7 +423,11 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             return null;
         }
 
-        return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail { Category = failureCategory, Summary = failureSummary });
+        return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail
+        {
+            Category = failureCategory,
+            Summary = failureSummary
+        });
     }
 
     private static string? TextOrNull(byte[]? value) =>

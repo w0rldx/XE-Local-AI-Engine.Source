@@ -42,9 +42,18 @@ public sealed class BenchmarkExecutionPrimitivesTests
     {
         var runId = Guid.NewGuid();
         var buffer = Buffer(maxEvents: 2, maxBytes: 4096);
-        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "one" });
-        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "two" });
-        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "three" });
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "one"
+        });
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "two"
+        });
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "three"
+        });
 
         var reset = buffer.Replay(runId, afterSequence: 0, runVersion: 7);
         var retained = buffer.Replay(runId, afterSequence: 1, runVersion: 7);
@@ -64,7 +73,10 @@ public sealed class BenchmarkExecutionPrimitivesTests
         buffer.EventPublished += (_, _) => published++;
         var streamEvent = buffer.Reserve(runId,
             BenchmarkRunStreamEventKind.OutputDelta,
-            new BenchmarkRunStreamPayload { Content = "sensitive" });
+            new BenchmarkRunStreamPayload
+            {
+                Content = "sensitive"
+            });
 
         buffer.PublishReserved(streamEvent);
         buffer.PublishReserved(streamEvent);
@@ -82,16 +94,25 @@ public sealed class BenchmarkExecutionPrimitivesTests
     {
         var runId = Guid.NewGuid();
         var buffer = Buffer(maxEvents: 8, maxBytes: 4096);
-        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "primary" });
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "primary"
+        });
         var primaryTerminal = buffer.Append(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload { State = BenchmarkPrimaryStatus.Succeeded.ToString() });
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkPrimaryStatus.Succeeded.ToString()
+            });
         buffer.EvictPlaintext(runId);
 
         buffer.BeginActivePhase(runId, primaryTerminal.Sequence);
         var judgeRunning = buffer.Append(runId,
             BenchmarkRunStreamEventKind.JudgeState,
-            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Running.ToString() });
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkRunJudgeStates.Running.ToString()
+            });
 
         var current = buffer.Replay(runId, primaryTerminal.Sequence, runVersion: 3);
         var stale = buffer.Replay(runId, primaryTerminal.Sequence - 1, runVersion: 3);
@@ -102,7 +123,10 @@ public sealed class BenchmarkExecutionPrimitivesTests
 
         var judgeTerminal = buffer.Append(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Succeeded.ToString() });
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkRunJudgeStates.Succeeded.ToString()
+            });
         buffer.EvictPlaintext(runId);
         var terminalReplay = buffer.Replay(runId, judgeTerminal.Sequence, runVersion: 4);
         AssertEx.True(terminalReplay.ResetRequired);
@@ -118,7 +142,10 @@ public sealed class BenchmarkExecutionPrimitivesTests
 
         var streamEvent = buffer.Append(runId,
             BenchmarkRunStreamEventKind.OutputDelta,
-            new BenchmarkRunStreamPayload { Content = new string('\u20ac', 128) });
+            new BenchmarkRunStreamPayload
+            {
+                Content = new string('\u20ac', 128)
+            });
         var replay = buffer.Replay(runId, afterSequence: 0, runVersion: 1);
 
         AssertEx.True(replay.ResetRequired);
@@ -196,7 +223,10 @@ public sealed class BenchmarkExecutionPrimitivesTests
                      third
                  })
         {
-            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "out" });
+            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+            {
+                Content = "out"
+            });
             buffer.EvictPlaintext(runId);
         }
 
@@ -221,14 +251,23 @@ public sealed class BenchmarkExecutionPrimitivesTests
         // for a run that is streaming again would restart its sequence numbering under a live subscriber.
         var buffer = Buffer(maxEvents: 8, maxBytes: 4096, maxTerminalRuns: 1);
         var judged = Guid.NewGuid();
-        _ = buffer.Append(judged, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "answer" });
+        _ = buffer.Append(judged, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "answer"
+        });
         buffer.EvictPlaintext(judged);
         buffer.BeginActivePhase(judged, persistedSequence: 1);
-        var judging = buffer.Append(judged, BenchmarkRunStreamEventKind.JudgeState, new BenchmarkRunStreamPayload { State = "running" });
+        var judging = buffer.Append(judged, BenchmarkRunStreamEventKind.JudgeState, new BenchmarkRunStreamPayload
+        {
+            State = "running"
+        });
 
         // Another run terminalizes and pushes the cap.
         var other = Guid.NewGuid();
-        _ = buffer.Append(other, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "out" });
+        _ = buffer.Append(other, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "out"
+        });
         buffer.EvictPlaintext(other);
 
         AssertEx.Equal(expected: 2L, judging.Sequence, "The judge phase continues the run's sequence, it does not restart it.");
@@ -316,6 +355,20 @@ public sealed class BenchmarkExecutionPrimitivesTests
             PrimaryLaunchIntent = null,
             PrimaryLaunchEvidence = null,
             PrimaryStopReason = null,
-            Judge = new BenchmarkRunJudgeView { State = judgeState, AttemptId = null, Score = null, PolicyRevision = null, PolicyRevisionId = null, AttemptSequence = null, CohortGeneration = null, ExecutionKey = null, ErrorMessage = null, PolicyCurrent = false, ExecutionCurrent = false, RankExclusionReason = null }
+            Judge = new BenchmarkRunJudgeView
+            {
+                State = judgeState,
+                AttemptId = null,
+                Score = null,
+                PolicyRevision = null,
+                PolicyRevisionId = null,
+                AttemptSequence = null,
+                CohortGeneration = null,
+                ExecutionKey = null,
+                ErrorMessage = null,
+                PolicyCurrent = false,
+                ExecutionCurrent = false,
+                RankExclusionReason = null
+            }
         };
 }

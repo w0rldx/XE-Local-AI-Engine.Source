@@ -76,7 +76,13 @@ internal static partial class DeploymentPlanner
             services.Add(new ServiceDeployment(service.Name,
                 specification.Name,
                 specification,
-                [.. service.DependsOn.Select(static dependency => new ServiceDependency { Service = dependency.Service, RequiresHealthy = string.Equals(dependency.Condition, HealthyCondition, StringComparison.Ordinal) })],
+                [
+                    .. service.DependsOn.Select(static dependency => new ServiceDependency
+                    {
+                        Service = dependency.Service,
+                        RequiresHealthy = string.Equals(dependency.Condition, HealthyCondition, StringComparison.Ordinal)
+                    })
+                ],
                 [.. publications.Select(static publication => publication.ContainerPort)]));
         }
 

@@ -44,7 +44,15 @@ internal sealed class ToolApprovalAuditRecorder : IToolApprovalAuditRecorder
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-            await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput { InvocationId = invocationId, ToolName = toolName ?? string.Empty, Category = categoryLabel, Decision = decision, Source = source, LatencyMs = latencyMs },
+            await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput
+                {
+                    InvocationId = invocationId,
+                    ToolName = toolName ?? string.Empty,
+                    Category = categoryLabel,
+                    Decision = decision,
+                    Source = source,
+                    LatencyMs = latencyMs
+                },
                 cancellationToken);
         }
         catch (Exception exception)

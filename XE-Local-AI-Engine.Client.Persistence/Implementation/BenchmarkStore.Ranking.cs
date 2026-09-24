@@ -52,7 +52,13 @@ public sealed partial class BenchmarkStore
                                              .Where(project => project.Id == entity.ProjectId)
                                              .Select(static project => project.TaskItemSetHash)
                                              .FirstOrDefaultAsync(cancellationToken);
-        return new BenchmarkRunIdentity { TaskInputHash = entity.TaskInputHash, CurrentInputHash = currentInputHash, TaskItemSetHash = entity.TaskItemSetHash, CurrentItemSetHash = currentSetHash };
+        return new BenchmarkRunIdentity
+        {
+            TaskInputHash = entity.TaskInputHash,
+            CurrentInputHash = currentInputHash,
+            TaskItemSetHash = entity.TaskItemSetHash,
+            CurrentItemSetHash = currentSetHash
+        };
     }
 
     /// <summary>
@@ -134,7 +140,14 @@ public sealed partial class BenchmarkStore
                 _ = setRevised.Add(run.Id);
             }
 
-            runs[run.Id] = new BenchmarkRunRanking { Judge = judge, QualityScore = qualityScore, Source = source, Rank = null, CellQuality = null };
+            runs[run.Id] = new BenchmarkRunRanking
+            {
+                Judge = judge,
+                QualityScore = qualityScore,
+                Source = source,
+                Rank = null,
+                CellQuality = null
+            };
         }
 
         // Warm-ups are dropped BEFORE grouping: one sits at repeat index 0, so it forms a cell of its own that could only ever be complete if every leaf item also
@@ -148,7 +161,12 @@ public sealed partial class BenchmarkStore
             // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
             if (Array.Exists(members, member => setRevised.Contains(member.Id)))
             {
-                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonItemSetRevised, Countable = false };
+                cells[cell.Key] = new CellRanking
+                {
+                    Quality = null,
+                    Reason = BenchmarkRunJudgeStates.ReasonItemSetRevised,
+                    Countable = false
+                };
                 continue;
             }
 
@@ -171,7 +189,12 @@ public sealed partial class BenchmarkStore
             // is not a cell missing an item: "incomplete" would send the operator hunting a question never asked. The runs keep their own scores for the recall axis.
             if (scorableItemIds.Count == 0)
             {
-                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonNoScore, Countable = false };
+                cells[cell.Key] = new CellRanking
+                {
+                    Quality = null,
+                    Reason = BenchmarkRunJudgeStates.ReasonNoScore,
+                    Countable = false
+                };
                 continue;
             }
 
@@ -180,7 +203,12 @@ public sealed partial class BenchmarkStore
                            && Array.TrueForAll(contributing, member => rankable[member.Id]);
             if (!complete)
             {
-                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonItemIncomplete, Countable = false };
+                cells[cell.Key] = new CellRanking
+                {
+                    Quality = null,
+                    Reason = BenchmarkRunJudgeStates.ReasonItemIncomplete,
+                    Countable = false
+                };
                 continue;
             }
 
@@ -332,7 +360,13 @@ public sealed partial class BenchmarkStore
         public required string? CurrentItemSetHash { get; init; }
 
         /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
-        public static BenchmarkRunIdentity Unstamped { get; } = new() { TaskInputHash = null, CurrentInputHash = null, TaskItemSetHash = null, CurrentItemSetHash = null };
+        public static BenchmarkRunIdentity Unstamped { get; } = new()
+        {
+            TaskInputHash = null,
+            CurrentInputHash = null,
+            TaskItemSetHash = null,
+            CurrentItemSetHash = null
+        };
 
         public bool Revised => CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
 
@@ -430,17 +464,29 @@ public sealed partial class BenchmarkStore
         var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken);
         if (fit is null)
         {
-            return new PairwiseRanking { Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), ScopeReason = BenchmarkRunJudgeStates.ReasonPairwisePending };
+            return new PairwiseRanking
+            {
+                Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(),
+                ScopeReason = BenchmarkRunJudgeStates.ReasonPairwisePending
+            };
         }
 
         if (fit.ComparisonSetVersion != current.ComparisonSetVersion
             || !string.Equals(fit.JudgeExecutionKey, current.ReferenceExecutionKey ?? string.Empty, StringComparison.Ordinal))
         {
-            return new PairwiseRanking { Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), ScopeReason = BenchmarkRunJudgeStates.ReasonPairwiseStale };
+            return new PairwiseRanking
+            {
+                Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(),
+                ScopeReason = BenchmarkRunJudgeStates.ReasonPairwiseStale
+            };
         }
 
         var entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
-        return new PairwiseRanking { Scores = entries.ToDictionary(static entry => entry.RunId), ScopeReason = null };
+        return new PairwiseRanking
+        {
+            Scores = entries.ToDictionary(static entry => entry.RunId),
+            ScopeReason = null
+        };
     }
 
     private static BenchmarkPairwiseScoreEntry? PairwiseScoreFor(PairwiseRanking? pairwise, Guid runId) =>

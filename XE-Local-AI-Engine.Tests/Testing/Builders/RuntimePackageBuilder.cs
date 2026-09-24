@@ -113,7 +113,14 @@ public sealed class RuntimePackageBuilder
             Role = MessageRole.User,
             Content = content,
             SortOrder = sortOrder,
-            Images = [new ConversationImagePart { MediaType = mediaType, Data = data }]
+            Images =
+            [
+                new ConversationImagePart
+                {
+                    MediaType = mediaType,
+                    Data = data
+                }
+            ]
         });
 
         return this;

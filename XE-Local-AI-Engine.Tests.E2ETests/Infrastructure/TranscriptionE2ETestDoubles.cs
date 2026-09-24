@@ -136,7 +136,16 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
             ? new WhisperTranscriptionResult
             {
                 Text = JfkText,
-                Segments = [new WhisperTranscriptSegment { StartSeconds = 0, EndSeconds = durationSeconds, Text = JfkText, Confidence = 0.9 }],
+                Segments =
+                [
+                    new WhisperTranscriptSegment
+                    {
+                        StartSeconds = 0,
+                        EndSeconds = durationSeconds,
+                        Text = JfkText,
+                        Confidence = 0.9
+                    }
+                ],
                 DetectedLanguageCode = "en",
                 DetectedLanguageProbability = 0.99,
                 DurationSeconds = durationSeconds
@@ -148,7 +157,14 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static WhisperTranscriptionResult Rejected(double durationSeconds) =>
-        new() { Text = string.Empty, Segments = [], DetectedLanguageCode = null, DetectedLanguageProbability = null, DurationSeconds = durationSeconds };
+        new()
+        {
+            Text = string.Empty,
+            Segments = [],
+            DetectedLanguageCode = null,
+            DetectedLanguageProbability = null,
+            DurationSeconds = durationSeconds
+        };
 
     private static async Task<byte[]> ReadAndRewindAsync(Stream audio, CancellationToken ct)
     {

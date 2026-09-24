@@ -226,7 +226,10 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
                                                     + Encoding.UTF8.GetString(error.Bytes));
             }
 
-            return new ExactGitResult { StandardOutput = output.Bytes };
+            return new ExactGitResult
+            {
+                StandardOutput = output.Bytes
+            };
         }
         catch
         {
@@ -255,7 +258,12 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
                 path = tokens[index++];
             }
 
-            result.Add(new DevelopmentChangedFile { Path = path, ChangeType = ChangeType(code), PreviousPath = previousPath });
+            result.Add(new DevelopmentChangedFile
+            {
+                Path = path,
+                ChangeType = ChangeType(code),
+                PreviousPath = previousPath
+            });
         }
 
         return result.OrderBy(static item => item.Path, StringComparer.Ordinal).ToArray();
@@ -328,7 +336,11 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             truncated |= read > remaining;
         }
 
-        return new CappedBytes { Bytes = captured.ToArray(), Truncated = truncated };
+        return new CappedBytes
+        {
+            Bytes = captured.ToArray(),
+            Truncated = truncated
+        };
     }
 
     private static void CopyEnvironment(ProcessStartInfo startInfo, string name)

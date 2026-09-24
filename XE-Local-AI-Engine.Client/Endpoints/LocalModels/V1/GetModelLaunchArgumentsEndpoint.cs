@@ -13,8 +13,7 @@ public sealed class GetModelLaunchArgumentsEndpoint : Endpoint<GetModelLaunchArg
 {
     private readonly ModelLaunchArgumentsService _launchArguments;
 
-    public GetModelLaunchArgumentsEndpoint(
-        ModelLaunchArgumentsService launchArguments)
+    public GetModelLaunchArgumentsEndpoint(ModelLaunchArgumentsService launchArguments)
     {
         ArgumentNullException.ThrowIfNull(launchArguments);
         _launchArguments = launchArguments;

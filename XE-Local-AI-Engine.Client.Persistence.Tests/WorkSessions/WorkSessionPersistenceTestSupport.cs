@@ -54,7 +54,15 @@ internal sealed class WorkSessionTestFixture : IDisposable
         string title = "Seeded session",
         string objective = "Seeded objective",
         AgentWorkSessionKind kind = AgentWorkSessionKind.Research) =>
-        new() { SessionId = sessionId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid(), Kind = kind, Title = title, Objective = objective };
+        new()
+        {
+            SessionId = sessionId,
+            ConversationId = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Kind = kind,
+            Title = title,
+            Objective = objective
+        };
 
     /// <summary>Runs a scalar query straight against the file, for assertions the entity model would false-pass.</summary>
     public async Task<object?> RawScalarAsync(string sql, Action<SqliteCommand>? configure = null)
@@ -85,7 +93,7 @@ internal sealed class WorkSessionTestFixture : IDisposable
     public async Task<long> RawCountAsync(string table, string column, Guid value)
     {
         var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table} WHERE {column} = $value;",
-                command => command.Parameters.AddWithValue("$value", value));
+            command => command.Parameters.AddWithValue("$value", value));
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

@@ -50,8 +50,7 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
     private readonly TimeSpan _collectionTimeout;
     private readonly DevWorkflowNodeTelemetryCollectionPool _collections;
 
-    public PublishingDevWorkflowStore(
-        IDevWorkflowStore inner,
+    public PublishingDevWorkflowStore(IDevWorkflowStore inner,
         IDevWorkflowEventPublisher publisher,
         IServiceScopeFactory scopes,
         DevWorkflowGraphCache graphs,
@@ -195,9 +194,9 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         }
 
         return await PublishAsync(_inner.RouteRetryAsync(command with
-            {
-                Resets = resets
-            }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
+        {
+            Resets = resets
+        }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
     }
 
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default) =>

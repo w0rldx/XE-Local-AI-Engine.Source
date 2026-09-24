@@ -34,12 +34,21 @@ public sealed class DatasetGenerationExecutorTests
         _ = store.GetDefinitionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns(DefinitionRecord(Body("live-teacher.gguf", "LIVE INSTRUCTIONS", "live_tool")));
         _ = store.AppendSampleAsync(Arg.Any<TrainingSampleInput>(), Arg.Any<CancellationToken>())
-                 .Returns(new TrainingSampleAppendResult { Sample = null, Duplicate = false });
+                 .Returns(new TrainingSampleAppendResult
+                 {
+                     Sample = null,
+                     Duplicate = false
+                 });
 
         StructuredAgentRequest? request = null;
         var runner = Substitute.For<IStructuredAgentRunner>();
         _ = runner.RunAsync(Arg.Any<IChatClient>(), Arg.Do<StructuredAgentRequest>(value => request = value), Arg.Any<CancellationToken>())
-                  .Returns(new StructuredAgentResult { Success = true, Text = "{}", FailureReason = null });
+                  .Returns(new StructuredAgentResult
+                  {
+                      Success = true,
+                      Text = "{}",
+                      FailureReason = null
+                  });
 
         SampleValidationContext? validationContext = null;
         var pipeline = Substitute.For<ISampleValidationPipeline>();
@@ -180,7 +189,13 @@ public sealed class DatasetGenerationExecutorTests
     }
 
     private static DatasetGenerationClaimedWork Work(TrainingDatasetRecord dataset) =>
-        new() { QueueSequence = 1, DatasetId = dataset.Id, Version = dataset.Version, Dataset = dataset };
+        new()
+        {
+            QueueSequence = 1,
+            DatasetId = dataset.Id,
+            Version = dataset.Version,
+            Dataset = dataset
+        };
 
     private static TrainingDefinitionRecord DefinitionRecord(DatasetDefinitionBodyV1 body) =>
         new()

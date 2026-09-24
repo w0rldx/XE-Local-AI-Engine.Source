@@ -41,7 +41,14 @@ public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, S
         _ = KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId);
 
         var limit = req.Limit <= 0 ? DefaultLimit : Math.Clamp(req.Limit, MinLimit, MaxLimit);
-        var request = new KnowledgeSearchRequest { Query = normalizedQuery, Limit = limit, DocumentId = req.DocumentId, ExpandNeighbors = req.ExpandNeighbors, CollectionId = collectionId! };
+        var request = new KnowledgeSearchRequest
+        {
+            Query = normalizedQuery,
+            Limit = limit,
+            DocumentId = req.DocumentId,
+            ExpandNeighbors = req.ExpandNeighbors,
+            CollectionId = collectionId!
+        };
         var result = await _searchService.SearchAsync(request, ct);
 
         await Send.OkAsync(new SearchKnowledgeResponse

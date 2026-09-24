@@ -285,8 +285,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     /// <summary>The coordinator wired to the two fakes, disposed together.</summary>
     private sealed class Harness : IAsyncDisposable
     {
-        public Harness(
-            ProcessAudioCaptureCoordinator coordinator,
+        public Harness(ProcessAudioCaptureCoordinator coordinator,
             FakeProcessAudioCaptureSource source,
             RecordingLiveSessionRegistry registry)
         {
@@ -391,7 +390,11 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             OnAttaching?.Invoke();
             state.Producer = producer;
             _log?.Enqueue("attach");
-            return new LiveProducerRegistration { ProducerToken = state.Cancellation.Token, Detach = new Detach(state) };
+            return new LiveProducerRegistration
+            {
+                ProducerToken = state.Cancellation.Token,
+                Detach = new Detach(state)
+            };
         }
 
         public async Task PushAudioAsync(Guid sessionId, TranscriptChannel channel, ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken)
@@ -420,7 +423,8 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         public bool IsLive(Guid sessionId) =>
             Live;
 
-        public bool IsRegistered(Guid sessionId) => _sessions.ContainsKey(sessionId);
+        public bool IsRegistered(Guid sessionId) =>
+            _sessions.ContainsKey(sessionId);
 
         public Task StartLiveSessionAsync(Guid sessionId, LiveSessionOptions options, CancellationToken cancellationToken) =>
             throw new NotSupportedException("The capture coordinator never starts a live session.");

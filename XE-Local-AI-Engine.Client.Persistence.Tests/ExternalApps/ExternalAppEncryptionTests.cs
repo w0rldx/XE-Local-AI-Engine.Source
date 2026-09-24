@@ -26,7 +26,7 @@ public sealed class ExternalAppEncryptionTests
         _ = await new ExternalAppInstanceStore(context).CreateAsync(command);
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT variables_json FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
+            sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
 
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(Encoding.UTF8.GetBytes(ExternalAppTestFixture.SeedSecret)) >= 0,
             "An application's admin password must not survive as plaintext in the database file.");
@@ -66,16 +66,16 @@ public sealed class ExternalAppEncryptionTests
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT variables_json FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
+            sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
 
         // Copy one instance's sealed variables onto another's row. The AAD binds the row's own id in BOTH slots, so the
         // copy must fail authentication rather than hand the second instance the first one's credentials.
         await fixture.RawExecuteAsync("UPDATE external_app_instances SET variables_json = $payload WHERE id = $id;",
-                         sqlCommand =>
-                         {
-                             sqlCommand.Parameters.AddWithValue("$payload", stored!);
-                             sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
-                         });
+            sqlCommand =>
+            {
+                sqlCommand.Parameters.AddWithValue("$payload", stored!);
+                sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
+            });
 
         await using var attackContext = fixture.CreateContext();
         _ = AssertEx.Throws<CryptographicException>(() => _ = attackContext.ExternalAppInstances.AsNoTracking().SingleOrDefault(row => row.Id == attacker.Id),
@@ -91,7 +91,7 @@ public sealed class ExternalAppEncryptionTests
         _ = await new ExternalAppInstanceStore(context).CreateAsync(command);
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT bridge_token FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
+            sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
 
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(Encoding.UTF8.GetBytes(ExternalAppTestFixture.SeedBridgeSecret)) >= 0,
             "A live credential for this node's inference surface must not survive as plaintext in the database file.");
@@ -131,16 +131,16 @@ public sealed class ExternalAppEncryptionTests
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT bridge_token FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
+            sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
 
         // The AAD binds the row's own id in BOTH slots, so one instance's sealed token cannot be read back as
         // another's — which is what stops a row copy from turning into a grant of the first instance's bridge access.
         await fixture.RawExecuteAsync("UPDATE external_app_instances SET bridge_token = $payload WHERE id = $id;",
-                         sqlCommand =>
-                         {
-                             sqlCommand.Parameters.AddWithValue("$payload", stored!);
-                             sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
-                         });
+            sqlCommand =>
+            {
+                sqlCommand.Parameters.AddWithValue("$payload", stored!);
+                sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
+            });
 
         await using var attackContext = fixture.CreateContext();
         _ = AssertEx.Throws<CryptographicException>(() => _ = attackContext.ExternalAppInstances.AsNoTracking().SingleOrDefault(row => row.Id == attacker.Id),
@@ -181,7 +181,7 @@ public sealed class ExternalAppEncryptionTests
         _ = await store.CreateAsync(command);
 
         var stored = await fixture.RawScalarAsync("SELECT detail_json FROM external_app_instance_events WHERE instance_id = $id;",
-                                      sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id));
+            sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id));
 
         AssertEx.Equal("""{"acceptedPermissions":["internet"]}""", AssertEx.NotNull(stored as string), "detail_json is a TEXT column with no interceptor entry, by design.");
     }

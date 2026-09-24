@@ -78,10 +78,10 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
 
         // The dialog closes and the picker shows the newly registered alias only once the POST succeeded.
         await Expect(Page.GetByTestId("development-repository-select"))
-              .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
-              {
-                  Timeout = 10_000
-              });
+            .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
+            {
+                Timeout = 10_000
+            });
     }
 
     [Test]
@@ -333,13 +333,13 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         await RunGitAsync(repositoryRoot, "init", "--initial-branch=main");
         await RunGitAsync(repositoryRoot, "add", "README.md");
         await RunGitAsync(repositoryRoot,
-                "-c",
-                "user.name=Development E2E",
-                "-c",
-                "user.email=development-e2e@example.test",
-                "commit",
-                "-m",
-                "initial fixture");
+            "-c",
+            "user.name=Development E2E",
+            "-c",
+            "user.email=development-e2e@example.test",
+            "commit",
+            "-m",
+            "initial fixture");
     }
 
     /// <summary>
@@ -474,13 +474,13 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         await RunGitAsync(repositoryRoot, "init", "--initial-branch=main");
         await RunGitAsync(repositoryRoot, "add", "-A", "--", ".");
         await RunGitAsync(repositoryRoot,
-                "-c",
-                "user.name=Development E2E",
-                "-c",
-                "user.email=development-e2e@example.test",
-                "commit",
-                "-m",
-                "synthetic dotnet fixture");
+            "-c",
+            "user.name=Development E2E",
+            "-c",
+            "user.email=development-e2e@example.test",
+            "commit",
+            "-m",
+            "synthetic dotnet fixture");
     }
 
     /// <summary>

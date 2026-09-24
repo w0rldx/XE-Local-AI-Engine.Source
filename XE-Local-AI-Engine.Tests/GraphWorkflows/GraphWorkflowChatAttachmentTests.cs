@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Net;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -57,7 +58,8 @@ public sealed class GraphWorkflowChatAttachmentTests
         AssertEx.Contains(prompt, "## Attachments\n\n");
         AssertEx.False(prompt.Contains(new string('z', count: 1100), StringComparison.Ordinal), "the section is cut at the budget.");
         AssertInsideTheFence(prompt, "file: big.md", "zzzz");
-        AssertEx.True(prompt.EndsWith("[Attachment content was truncated to fit the context budget.]", StringComparison.Ordinal), "the body is cut before wrapping, so the closing marker survives and the notice follows it.");
+        AssertEx.True(prompt.EndsWith("[Attachment content was truncated to fit the context budget.]", StringComparison.Ordinal),
+            "the body is cut before wrapping, so the closing marker survives and the notice follows it.");
     }
 
     [Test]
@@ -167,7 +169,7 @@ public sealed class GraphWorkflowChatAttachmentTests
           """;
 
     private static Task<Guid> AddTextAsync(GraphWorkflowHarness harness, Guid conversationId, string name, string markdown) =>
-        AddAsync(harness, conversationId, name, "text/markdown", System.Text.Encoding.UTF8.GetBytes(markdown), DocumentExtractionStatus.Extracted, markdown);
+        AddAsync(harness, conversationId, name, "text/markdown", Encoding.UTF8.GetBytes(markdown), DocumentExtractionStatus.Extracted, markdown);
 
     private static Task<Guid> AddImageAsync(GraphWorkflowHarness harness, Guid conversationId, string name, byte[] bytes) =>
         AddAsync(harness, conversationId, name, "image/png", bytes, DocumentExtractionStatus.Image, markdown: null);

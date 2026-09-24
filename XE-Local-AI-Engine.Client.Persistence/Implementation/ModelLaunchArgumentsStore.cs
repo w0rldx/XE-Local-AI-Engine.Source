@@ -96,6 +96,11 @@ public sealed class ModelLaunchArgumentsStore : IModelLaunchArgumentsStore
 
     private static ModelLaunchArgumentsRecord ToRecord(ModelLaunchArguments entity)
     {
-        return new ModelLaunchArgumentsRecord { ModelName = entity.ModelName, RawArguments = entity.RawArguments, UpdatedAtUtc = entity.UpdatedAtUtc };
+        return new ModelLaunchArgumentsRecord
+        {
+            ModelName = entity.ModelName,
+            RawArguments = entity.RawArguments,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
     }
 }

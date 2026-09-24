@@ -87,13 +87,23 @@ internal sealed class HostGitRunner
         {
             if (!process.Start())
             {
-                return new HostGitResult { ExitCode = -1, StandardOutput = string.Empty, StandardError = "git could not be started." };
+                return new HostGitResult
+                {
+                    ExitCode = -1,
+                    StandardOutput = string.Empty,
+                    StandardError = "git could not be started."
+                };
             }
         }
         catch (Win32Exception exception)
         {
             // git is not installed / not on PATH.
-            return new HostGitResult { ExitCode = -1, StandardOutput = string.Empty, StandardError = exception.Message };
+            return new HostGitResult
+            {
+                ExitCode = -1,
+                StandardOutput = string.Empty,
+                StandardError = exception.Message
+            };
         }
 
         // The drains start BEFORE stdin is written, and that order is load-bearing on a large patch: both pipes are OS
@@ -157,14 +167,29 @@ internal sealed class HostGitRunner
         var standardError = await stderrTask;
         if (standardOutput.Truncated || standardError.Truncated)
         {
-            return new HostGitResult { ExitCode = -1, StandardOutput = standardOutput.Text, StandardError = "git produced more output than its configured bound." };
+            return new HostGitResult
+            {
+                ExitCode = -1,
+                StandardOutput = standardOutput.Text,
+                StandardError = "git produced more output than its configured bound."
+            };
         }
 
         // A git that stopped reading and then exited zero did not see the whole input, whatever its exit code claims.
         // One that exited non-zero has already said why, in its own words, which are better than the pipe's.
         return process.ExitCode == 0 && inputFailure is not null
-            ? new HostGitResult { ExitCode = -1, StandardOutput = standardOutput.Text, StandardError = $"git stopped reading its input: {inputFailure}" }
-            : new HostGitResult { ExitCode = process.ExitCode, StandardOutput = standardOutput.Text, StandardError = standardError.Text };
+            ? new HostGitResult
+            {
+                ExitCode = -1,
+                StandardOutput = standardOutput.Text,
+                StandardError = $"git stopped reading its input: {inputFailure}"
+            }
+            : new HostGitResult
+            {
+                ExitCode = process.ExitCode,
+                StandardOutput = standardOutput.Text,
+                StandardError = standardError.Text
+            };
     }
 
     /// <summary>

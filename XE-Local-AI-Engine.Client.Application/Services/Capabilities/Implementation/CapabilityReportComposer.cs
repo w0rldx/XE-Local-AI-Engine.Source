@@ -49,7 +49,12 @@ internal sealed class CapabilityReportComposer
         var ramMb = await DetectRamMbAsync(cancellationToken);
         var gpuInfo = await TryDetectGpuInfoAsync(cancellationToken);
         var cpuClass = await DetectCpuClassAsync(cancellationToken);
-        return new HardwareSnapshot { RamMb = ramMb, GpuInfo = gpuInfo, CpuClass = cpuClass };
+        return new HardwareSnapshot
+        {
+            RamMb = ramMb,
+            GpuInfo = gpuInfo,
+            CpuClass = cpuClass
+        };
     }
 
     /// <summary>
@@ -361,7 +366,12 @@ internal sealed class CapabilityReportComposer
             vramMb = parsedVramMb;
         }
 
-        return new GpuInfo { GpuName = parts[0], VramMb = vramMb, CudaAvailable = false };
+        return new GpuInfo
+        {
+            GpuName = parts[0],
+            VramMb = vramMb,
+            CudaAvailable = false
+        };
     }
 
     private static string? CalculateSystemScoreClass(long? ramMb, long? vramMb, bool cudaAvailable)

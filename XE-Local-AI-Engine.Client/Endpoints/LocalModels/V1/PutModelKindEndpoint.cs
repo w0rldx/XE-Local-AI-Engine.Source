@@ -10,8 +10,7 @@ public sealed class PutModelKindEndpoint : Endpoint<SetModelKindRequest, ModelKi
 {
     private readonly IModelClassificationService _classificationService;
 
-    public PutModelKindEndpoint(
-        IModelClassificationService classificationService)
+    public PutModelKindEndpoint(IModelClassificationService classificationService)
     {
         ArgumentNullException.ThrowIfNull(classificationService);
         _classificationService = classificationService;

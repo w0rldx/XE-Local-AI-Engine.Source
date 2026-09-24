@@ -26,8 +26,7 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
     private readonly IGgufAcquisitionPreflight _preflight;
     private readonly ITrainingRunStore _runStore;
 
-    public ArtifactPromotionService(
-        ITrainingRunStore runStore,
+    public ArtifactPromotionService(ITrainingRunStore runStore,
         ITrainingBaseArtifactStore baseArtifacts,
         IGgufModelStore models,
         IGgufAcquisitionPreflight preflight,
@@ -117,7 +116,10 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
             Lineage = lineage
         };
 
-        var prepared = await _importer.PrepareAsync(new GgufImportSource { AbsolutePath = artifact.Path }, destination, progress: null, cancellationToken);
+        var prepared = await _importer.PrepareAsync(new GgufImportSource
+        {
+            AbsolutePath = artifact.Path
+        }, destination, progress: null, cancellationToken);
         if (!string.Equals(prepared.RegistryEntry.Sha256, artifact.Sha256, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(prepared.RegistryEntry.Sha256, decision.ArtifactSha256, StringComparison.OrdinalIgnoreCase)
             || prepared.RegistryEntry.SizeBytes != artifact.SizeBytes)
@@ -168,7 +170,7 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         try
         {
             _ = await _runStore.SetArtifactCommittedNameAsync(artifact.Id, artifact.Version, receipt.RegistryEntry.ModelName,
-                                   CancellationToken.None);
+                CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -215,8 +217,13 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
     {
         try
         {
-            return await _preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent { OperationKind = GgufAcquisitionOperationKind.Import, ModelBaseName = modelName.Trim(), Quantization = quantization },
-                                       cancellationToken);
+            return await _preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent
+                {
+                    OperationKind = GgufAcquisitionOperationKind.Import,
+                    ModelBaseName = modelName.Trim(),
+                    Quantization = quantization
+                },
+                cancellationToken);
         }
         catch (ArgumentException exception)
         {

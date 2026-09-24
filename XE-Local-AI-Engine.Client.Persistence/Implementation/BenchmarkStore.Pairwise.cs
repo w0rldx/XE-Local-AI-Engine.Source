@@ -79,7 +79,16 @@ public sealed partial class BenchmarkStore
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
         {
-            return new BenchmarkPairwiseCohortState { PolicyRevisionId = null, CohortGeneration = 0, ComparisonSetVersion = 0, ReferenceExecutionKey = null, ProjectVersion = project.Version, Candidates = [], Comparisons = [] };
+            return new BenchmarkPairwiseCohortState
+            {
+                PolicyRevisionId = null,
+                CohortGeneration = 0,
+                ComparisonSetVersion = 0,
+                ReferenceExecutionKey = null,
+                ProjectVersion = project.Version,
+                Candidates = [],
+                Comparisons = []
+            };
         }
 
         var revision = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
@@ -109,13 +118,18 @@ public sealed partial class BenchmarkStore
                                    .ToArrayAsync(cancellationToken);
         var candidates = runs.Where(static run => !BenchmarkPrimaryStopReasons.IsTruncated(run.PrimaryStopReason)
                                                   && !BenchmarkPrimaryStopReasons.IsIncomplete(run.PrimaryStopReason))
-                             .Select(static run => new BenchmarkPairwiseCandidate { RunId = run.Id, TaskCaseId = null, TaskInputHash = string.Empty })
+                             .Select(static run => new BenchmarkPairwiseCandidate
+                             {
+                                 RunId = run.Id,
+                                 TaskCaseId = null,
+                                 TaskInputHash = string.Empty
+                             })
                              .ToArray();
         var comparisons = await ProjectComparisons(_dbContext.BenchmarkComparisons.AsNoTracking()
                                                              .Where(entity => entity.PolicyRevisionId == revisionId
                                                                               && entity.CohortGeneration == revision.CohortGeneration)
                                                              .OrderBy(entity => entity.Sequence))
-                                .ToArrayAsync(cancellationToken);
+            .ToArrayAsync(cancellationToken);
         return new BenchmarkPairwiseCohortState
         {
             PolicyRevisionId = revision.Id,
@@ -404,12 +418,12 @@ public sealed partial class BenchmarkStore
     public async Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         var durations = await (from attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking()
-                join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
-                where run.ProjectId == projectId
-                      && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                      && attempt.StartedAtUtc != null
-                      && attempt.CompletedAtUtc != null
-                select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken);
+            join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
+            where run.ProjectId == projectId
+                  && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                  && attempt.StartedAtUtc != null
+                  && attempt.CompletedAtUtc != null
+            select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken);
         if (durations.Length == 0)
         {
             return null;

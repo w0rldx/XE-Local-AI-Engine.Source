@@ -58,6 +58,12 @@ public sealed class DevelopmentCloudRoleRouteFactory
             new(ChatRole.User,
                 "Read the approved requirements, acceptance-criteria, policy, and only the listed excerpt resources needed for this bounded role attempt.")
         ];
-        return new DevelopmentCloudRoleRoute { ProviderName = bundle.ProviderName, ModelId = bundle.ModelId, Messages = Array.AsReadOnly(messages), Options = options };
+        return new DevelopmentCloudRoleRoute
+        {
+            ProviderName = bundle.ProviderName,
+            ModelId = bundle.ModelId,
+            Messages = Array.AsReadOnly(messages),
+            Options = options
+        };
     }
 }

@@ -37,8 +37,7 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
 
-    public DatasetDefinitionService(
-        ITrainingDatasetStore store,
+    public DatasetDefinitionService(ITrainingDatasetStore store,
         ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy)
     {

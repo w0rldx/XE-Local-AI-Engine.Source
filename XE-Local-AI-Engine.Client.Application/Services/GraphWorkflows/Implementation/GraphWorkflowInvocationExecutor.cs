@@ -16,14 +16,14 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
-using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -183,14 +183,14 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // Unreachable through the parser, which types a node's config by its kind. Refused rather than assumed,
             // because the alternative is a NullReferenceException inside a detached task nobody is watching.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailureClass.ValidationFailed,
-                    $"Node '{node.NodeKey}' has no settings for its {node.Kind} kind.",
-                    eventType: null,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailureClass.ValidationFailed,
+                $"Node '{node.NodeKey}' has no settings for its {node.Kind} kind.",
+                eventType: null,
+                cancellationToken);
         }
 
         string inputJson;
@@ -202,15 +202,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                TargetStatus = GraphWorkflowNodeRunStatus.Queued,
-                QueueReason = node.Kind == GraphWorkflowNodeKind.Agent ? AwaitingAgentSlot : AwaitingInvocationSlot,
-                InputJson = inputJson
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowNodeRunStatus.Queued,
+                    QueueReason = node.Kind == GraphWorkflowNodeKind.Agent ? AwaitingAgentSlot : AwaitingInvocationSlot,
+                    InputJson = inputJson
+                },
+                cancellationToken);
             written++;
         }
         else
@@ -224,19 +224,19 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         // minted it privately would leave the cancel path with nothing to call for the whole of its first tick.
         var invocationId = Guid.NewGuid();
         var flight = await _lane.TryStartAsync(nodeRun.Id,
-                                    nodeRun.Attempt,
-                                    invocationId,
-                                    (leaseAcquired, token) => RunTurnAsync(run.Id,
-                                        nodeRun.Id,
-                                        node,
-                                        node.Config,
-                                        invocationId,
-                                        inputJson,
-                                        graph.Kind == GraphWorkflowDefinitionKind.Chat,
-                                        SteeringSection(nodeRun),
-                                        leaseAcquired,
-                                        token),
-                                    cancellationToken);
+            nodeRun.Attempt,
+            invocationId,
+            (leaseAcquired, token) => RunTurnAsync(run.Id,
+                nodeRun.Id,
+                node,
+                node.Config,
+                invocationId,
+                inputJson,
+                graph.Kind == GraphWorkflowDefinitionKind.Chat,
+                SteeringSection(nodeRun),
+                leaseAcquired,
+                token),
+            cancellationToken);
         if (flight is null)
         {
             // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it
@@ -270,14 +270,14 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // Nothing on this node is driving this row and nothing will: the lane holds no memory across a restart, which is what the startup reconciler collapses
             // such rows for. Reaching here means it did not, so the row is judged rather than swept forever; never resumed, and re-attempting is the retry stage's call.
             return await FailAsync(store,
-                    graph,
-                    run,
-                    node,
-                    nodeRun,
-                    GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
-                    "The host stopped while this node run's model turn was in flight.",
-                    GraphWorkflowEventTypes.NodeInterrupted,
-                    cancellationToken);
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
+                "The host stopped while this node run's model turn was in flight.",
+                GraphWorkflowEventTypes.NodeInterrupted,
+                cancellationToken);
         }
 
         if (!flight.Work.IsCompleted)
@@ -473,13 +473,16 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
             // 8–10. The lease, the terminal capture, and the run.
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(),
-                    _invocationRunner,
-                    package,
-                    leaseAcquired,
-                    cancellationToken);
+                _invocationRunner,
+                package,
+                leaseAcquired,
+                cancellationToken);
 
             // 11. What the turn came to.
-            return Map(terminal, agentConfig.ResponseJsonSchema) with { AttachmentsSkipped = attachments.Skipped };
+            return Map(terminal, agentConfig.ResponseJsonSchema) with
+            {
+                AttachmentsSkipped = attachments.Skipped
+            };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -525,7 +528,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             var services = scope.ServiceProvider;
             var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
             var effectiveModel = config.Model ?? await services.GetRequiredService<ILocalDefaultChatModelResolver>()
-                                                       .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
+                                                               .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             if (string.IsNullOrWhiteSpace(effectiveModel))
             {
                 return Invalid($"No local chat model is available to run this {callName} node. Install a local chat model or pin one on the node.");
@@ -561,7 +564,14 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
             reservation = decision.Reservation;
             var prompt = WithSteering(WithSection(boundPrompt, attachments.Section), steering);
-            var seedTurn = new ConversationMessageDto { Id = Guid.NewGuid(), Role = MessageRole.User, Content = prompt, SortOrder = 0, Images = attachments.Images };
+            var seedTurn = new ConversationMessageDto
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = prompt,
+                SortOrder = 0,
+                Images = attachments.Images
+            };
             var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>().Build(new LocalChatRuntimePackageRequest
             {
                 InvocationId = invocationId,
@@ -573,7 +583,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 AgentDefinitionVersion = DefaultAgentDefinitionVersion,
                 ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
                 AllowedTools = [],
-                Timeouts = new TimeoutSettings { InvocationTimeoutSeconds = node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds },
+                Timeouts = new TimeoutSettings
+                {
+                    InvocationTimeoutSeconds = node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds
+                },
                 ReasoningEffort = config.ReasoningEffort,
                 SupportsThinking = capabilities.SupportsThinking,
                 SamplingOptions = config.SamplingOptions,
@@ -584,7 +597,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 RequireNodeManagedLlama = true
             });
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(), _invocationRunner, package, leaseAcquired, cancellationToken);
-            return Map(terminal, config.ResponseJsonSchema) with { AttachmentsSkipped = attachments.Skipped };
+            return Map(terminal, config.ResponseJsonSchema) with
+            {
+                AttachmentsSkipped = attachments.Skipped
+            };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -647,13 +663,13 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             Json = turn.Json,
             Usage = turn.Usage,
             Output = JsonSerializer.SerializeToElement(new DecisionOutputPayload
-            {
-                Choice = choice,
-                Confidence = decision.Confidence,
-                Probabilities = decision.Probabilities,
-                Provider = provider.Name,
-                Usage = turn.Usage
-            },
+                {
+                    Choice = choice,
+                    Confidence = decision.Confidence,
+                    Probabilities = decision.Probabilities,
+                    Provider = provider.Name,
+                    Usage = turn.Usage
+                },
                 JsonOptions)
         };
     }
@@ -925,7 +941,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
         if (responseJsonSchema is null)
         {
-            return new GraphWorkflowAgentTurn { Succeeded = true, FailureClass = GraphWorkflowFailureClass.None, SanitizedReason = null, Text = text, Json = null, Usage = usage };
+            return new GraphWorkflowAgentTurn
+            {
+                Succeeded = true,
+                FailureClass = GraphWorkflowFailureClass.None,
+                SanitizedReason = null,
+                Text = text,
+                Json = null,
+                Usage = usage
+            };
         }
 
         try
@@ -936,7 +960,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return SchemaFailure(terminal.FinishReason);
             }
 
-            return new GraphWorkflowAgentTurn { Succeeded = true, FailureClass = GraphWorkflowFailureClass.None, SanitizedReason = null, Text = text, Json = parsed.RootElement.Clone(), Usage = usage };
+            return new GraphWorkflowAgentTurn
+            {
+                Succeeded = true,
+                FailureClass = GraphWorkflowFailureClass.None,
+                SanitizedReason = null,
+                Text = text,
+                Json = parsed.RootElement.Clone(),
+                Usage = usage
+            };
         }
         catch (JsonException)
         {
@@ -960,7 +992,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         Failure(GraphWorkflowFailureClass.ValidationFailed, reason);
 
     private static GraphWorkflowAgentTurn Failure(GraphWorkflowFailureClass failureClass, string reason) =>
-        new() { Succeeded = false, FailureClass = failureClass, SanitizedReason = GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason), Text = string.Empty, Json = null, Usage = null };
+        new()
+        {
+            Succeeded = false,
+            FailureClass = failureClass,
+            SanitizedReason = GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason),
+            Text = string.Empty,
+            Json = null,
+            Usage = null
+        };
 
     /// <summary>
     ///     The seed user turn's content: the node's instructions, followed by the upstream documents when the node
@@ -1073,7 +1113,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             {
                 if (!supportsVision)
                 {
-                    return new TurnAttachments { Refusal = $"Node '{node.NodeKey}' was given the image '{reference.Name}', but its model '{effectiveModel}' cannot read images." };
+                    return new TurnAttachments
+                    {
+                        Refusal = $"Node '{node.NodeKey}' was given the image '{reference.Name}', but its model '{effectiveModel}' cannot read images."
+                    };
                 }
 
                 imageIds.Add(reference.FileId);
@@ -1091,7 +1134,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         // The budget is MaxRunInputBytes counted in characters, the composer's unit; the seed is server-keyed, so a document cannot forge the marker.
         var seed = $"{services.GetRequiredService<IUntrustedContentFenceSeedProvider>().DeriveSeed(conversationId)}:{runId:N}:{node.NodeKey}";
         var composed = ConversationAttachmentContextComposer.Compose(parts, _options.MaxRunInputBytes, seed);
-        return new TurnAttachments { Section = composed is null ? null : $"## Attachments\n\n{composed}", Images = images, Skipped = skipped.Count == 0 ? null : skipped };
+        return new TurnAttachments
+        {
+            Section = composed is null ? null : $"## Attachments\n\n{composed}",
+            Images = images,
+            Skipped = skipped.Count == 0 ? null : skipped
+        };
     }
 
     /// <summary>The chat-bound run's conversation and attachment references, or none when the run input carries no such thing.</summary>
@@ -1115,7 +1163,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 && id.ValueKind == JsonValueKind.String
                 && id.TryGetGuid(out var fileId))
             {
-                references.Add(new AttachmentReference { FileId = fileId, Name = StringMember(attachment, "name") ?? fileId.ToString(), Kind = StringMember(attachment, "kind") });
+                references.Add(new AttachmentReference
+                {
+                    FileId = fileId,
+                    Name = StringMember(attachment, "name") ?? fileId.ToString(),
+                    Kind = StringMember(attachment, "kind")
+                });
             }
         }
 
@@ -1202,15 +1255,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Running,
-            InputJson = inputJson,
-            InvocationId = invocationId
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Running,
+                InputJson = inputJson,
+                InvocationId = invocationId
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -1242,18 +1295,18 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, status, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = status,
-            OutputJson = document,
-            // Classified at the moment of the failing write, like every other failure this runtime records: the state
-            // machine has no Failed → Failed edge, so nothing can re-classify one afterwards.
-            FailureClass = turn.Succeeded ? null : GraphWorkflowFailures.Classify(turn.FailureClass, nodeRun.Attempt, node.MaxAttempts),
-            TerminalReason = turn.SanitizedReason
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = status,
+                OutputJson = document,
+                // Classified at the moment of the failing write, like every other failure this runtime records: the state
+                // machine has no Failed → Failed edge, so nothing can re-classify one afterwards.
+                FailureClass = turn.Succeeded ? null : GraphWorkflowFailures.Classify(turn.FailureClass, nodeRun.Attempt, node.MaxAttempts),
+                TerminalReason = turn.SanitizedReason
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -1266,15 +1319,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Cancelled,
-            FailureClass = GraphWorkflowFailureClass.Cancelled,
-            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Cancelled,
+                FailureClass = GraphWorkflowFailureClass.Cancelled,
+                TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -1297,13 +1350,13 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         {
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                TargetStatus = GraphWorkflowNodeRunStatus.Running
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowNodeRunStatus.Running
+                },
+                cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
@@ -1328,23 +1381,29 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Failed,
-            OutputJson = document,
-            FailureClass = failureClass,
-            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
-            EventType = eventType
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+                OutputJson = document,
+                FailureClass = failureClass,
+                TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
+                EventType = eventType
+            },
+            cancellationToken);
         return written + 1;
     }
 
     /// <summary>The Agent <c>output</c> shape, per the binding document contract.</summary>
     private static JsonElement Output(GraphWorkflowAgentTurn turn) =>
-        turn.Output ?? JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage, AttachmentsSkipped = turn.AttachmentsSkipped }, JsonOptions);
+        turn.Output ?? JsonSerializer.SerializeToElement(new AgentOutputPayload
+        {
+            Text = turn.Text,
+            Json = turn.Json,
+            Usage = turn.Usage,
+            AttachmentsSkipped = turn.AttachmentsSkipped
+        }, JsonOptions);
 
     /// <summary>Tells the runner to unwind a turn. A cancel for an invocation it no longer knows about is a no-op.</summary>
     private void CancelInvocation(Guid invocationId) =>

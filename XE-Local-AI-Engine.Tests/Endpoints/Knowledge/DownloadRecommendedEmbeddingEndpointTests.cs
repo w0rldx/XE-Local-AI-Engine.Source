@@ -351,7 +351,11 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
             }
 
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
-            return Task.FromResult(new GgufDownloadTicket { ModelName = modelName, AlreadyInFlight = _alreadyInFlight });
+            return Task.FromResult(new GgufDownloadTicket
+            {
+                ModelName = modelName,
+                AlreadyInFlight = _alreadyInFlight
+            });
         }
 
         public bool Cancel(string modelName)

@@ -17,8 +17,7 @@ internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
     private readonly IMcpAgentExecutionService _executionService;
     private readonly SpawnOptions _spawnOptions;
 
-    public McpAgentRunExecutor(
-        IMcpAgentExecutionService executionService,
+    public McpAgentRunExecutor(IMcpAgentExecutionService executionService,
         IOptions<SpawnOptions> spawnOptions)
     {
         ArgumentNullException.ThrowIfNull(executionService);
@@ -75,6 +74,10 @@ internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
             throw new InvalidDataException("The durable MCP run contains inconsistent captured agentic authority.");
         }
 
-        return new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = run.RequestingKeyPrefix };
+        return new McpInboundExecutionContext
+        {
+            Scope = McpServerApiKeyScope.Agentic,
+            KeyPrefix = run.RequestingKeyPrefix
+        };
     }
 }

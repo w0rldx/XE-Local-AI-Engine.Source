@@ -19,8 +19,7 @@ internal sealed class WhisperCppSourceBuildLifecycle : IHostedService
     private readonly IWhisperCppSourceBuildService _service;
     private readonly ILogger<WhisperCppSourceBuildLifecycle> _logger;
 
-    public WhisperCppSourceBuildLifecycle(
-        IWhisperCppSourceBuildService service,
+    public WhisperCppSourceBuildLifecycle(IWhisperCppSourceBuildService service,
         ILogger<WhisperCppSourceBuildLifecycle> logger)
     {
         _service = service;
@@ -55,7 +54,7 @@ internal sealed class WhisperCppSourceBuildLifecycle : IHostedService
             // The host's shutdown token means "stop being graceful", not "throw". ShutdownAsync awaits the start gate on this token, so an over-budget shutdown would otherwise surface as an unhandled
             // exception out of Host.StopAsync and kill the process instead of letting it exit cleanly. The abandoned build is reconciled on the next start, which is exactly what the journal is for.
             _logger.LogWarning("The managed whisper.cpp shutdown drain was cut short by the host shutdown budget; any "
-                              + "in-flight build is abandoned and will be reconciled on the next start.");
+                               + "in-flight build is abandoned and will be reconciled on the next start.");
         }
     }
 }

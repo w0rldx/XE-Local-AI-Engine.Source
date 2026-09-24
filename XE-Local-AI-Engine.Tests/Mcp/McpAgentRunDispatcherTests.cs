@@ -116,7 +116,11 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
+             .Returns(new McpAgentRunClaimResult
+             {
+                 Kind = McpAgentRunClaimKind.Claimed,
+                 Run = claimed
+             });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ =>
         {
             AssertEx.True(registry.Signal(claimed.RequestId, claimToken),
@@ -165,7 +169,11 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
+             .Returns(new McpAgentRunClaimResult
+             {
+                 Kind = McpAgentRunClaimKind.Claimed,
+                 Run = claimed
+             });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(claimed);
         executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(SpawnOutcome.Success("completed first"));
         store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
@@ -214,7 +222,11 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
+             .Returns(new McpAgentRunClaimResult
+             {
+                 Kind = McpAgentRunClaimKind.Claimed,
+                 Run = claimed
+             });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ => current);
         store.RequestStopAsync(Arg.Is<Guid>(requestId => requestId == claimed.RequestId),
                  Arg.Any<long>(),
@@ -229,7 +241,11 @@ public sealed class McpAgentRunDispatcherTests
                      StopReason = McpAgentRunStopReason.WatchdogExpired,
                      StopRequestedAtUtc = 30
                  };
-                 return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.Requested, Run = current };
+                 return new McpAgentRunStopResult
+                 {
+                     Kind = McpAgentRunStopKind.Requested,
+                     Run = current
+                 };
              });
         executor.ExecuteAsync(Arg.Any<McpAgentRunRecord>(), Arg.Any<CancellationToken>()).Returns(async callInfo =>
         {
@@ -403,8 +419,7 @@ public sealed class McpAgentRunDispatcherTests
             private TimeSpan _period;
             private bool _disposed;
 
-            public ManualTimer(
-                ManualTimeProvider owner,
+            public ManualTimer(ManualTimeProvider owner,
                 TimerCallback callback,
                 object? state,
                 TimeSpan dueTime,

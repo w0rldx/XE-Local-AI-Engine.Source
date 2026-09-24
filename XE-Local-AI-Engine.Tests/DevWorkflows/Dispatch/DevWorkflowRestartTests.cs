@@ -481,10 +481,10 @@ public sealed class DevWorkflowRestartTests
 
         // What the collector WOULD have found, had this path crossed it.
         await DevWorkflowNodeRunTelemetryTests
-              .AppendStepConsumptionAsync(harness,
-                  runId,
-                  "research",
-                  """{"providerCalls":2,"estimatedInputTokens":120,"toolCallsCompleted":1,"toolSchemaTokens":40}""");
+            .AppendStepConsumptionAsync(harness,
+                runId,
+                "research",
+                """{"providerCalls":2,"estimatedInputTokens":120,"toolCallsCompleted":1,"toolSchemaTokens":40}""");
 
         // From here every session read re-attempts the row, so recovery gives up on it and settles it for a human.
         harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research")).Id);
@@ -637,7 +637,7 @@ public sealed class DevWorkflowRestartTests
         await harness.RestartAsync();
 
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => harness.Agent.GetAsync(orphan),
-                              "a never-driven unreferenced session holds no transcript and nothing can ever reach it, so the restart cleans it up.");
+            "a never-driven unreferenced session holds no transcript and nothing can ever reach it, so the restart cleans it up.");
         _ = await harness.Agent.GetAsync(superseded);
         _ = await harness.Agent.GetAsync(owned);
     }
@@ -727,9 +727,9 @@ public sealed class DevWorkflowRestartTests
 
         var logger = new RecordingLogger<DevWorkflowStartupReconciler>();
         await new DevWorkflowStartupReconciler(ScopesServing(scope.ServiceProvider, store),
-                  harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                  logger)
-              .StartAsync(CancellationToken.None);
+                harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                logger)
+            .StartAsync(CancellationToken.None);
 
         return (logger, collapses);
     }

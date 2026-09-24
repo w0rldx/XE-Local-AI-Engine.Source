@@ -58,18 +58,18 @@ public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCp
                     return;
                 case WhisperCppSourceBuildStartOutcome.InsufficientDisk:
                     await BlockAsync("prerequisites",
-                            "There is not enough free disk space to build the transcription runtime.",
-                            result.Activity);
+                        "There is not enough free disk space to build the transcription runtime.",
+                        result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
-                            "One or more build prerequisites are missing; resolve the checklist before building.",
-                            result.Activity);
+                        "One or more build prerequisites are missing; resolve the checklist before building.",
+                        result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                            "Wait for active transcriptions and transcription-runtime processes to finish before starting the build.",
-                            result.Activity);
+                        "Wait for active transcriptions and transcription-runtime processes to finish before starting the build.",
+                        result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.Started:
                     break;

@@ -137,7 +137,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
                 if (_isRunning)
                 {
-                    return new StableDiffusionCppSourceBuildStartResult { Outcome = StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning };
+                    return new StableDiffusionCppSourceBuildStartResult
+                    {
+                        Outcome = StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning
+                    };
                 }
             }
 
@@ -149,7 +152,11 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 var outcome = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied)
                     ? StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk
                     : StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new StableDiffusionCppSourceBuildStartResult { Outcome = outcome, Prerequisites = prerequisites };
+                return new StableDiffusionCppSourceBuildStartResult
+                {
+                    Outcome = outcome,
+                    Prerequisites = prerequisites
+                };
             }
 
             var mutationReservation = _activityGate.TryAcquireMutationReservation();
@@ -232,7 +239,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
 
         startSignal.SetResult();
-        return new StableDiffusionCppSourceBuildStartResult { Outcome = StableDiffusionCppSourceBuildStartOutcome.Started };
+        return new StableDiffusionCppSourceBuildStartResult
+        {
+            Outcome = StableDiffusionCppSourceBuildStartOutcome.Started
+        };
     }
 
     public async Task<StableDiffusionCppSourceBuildRemoveResult> RemoveAsync(CancellationToken ct)
@@ -265,7 +275,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed is null)
             {
-                return new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled };
+                return new StableDiffusionCppSourceBuildRemoveResult
+                {
+                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled
+                };
             }
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Removing);
@@ -273,7 +286,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             await _runtimeStore.DeleteAsync(ct).ConfigureAwait(false);
             _managedSignal.Clear();
             SetTerminal(StableDiffusionCppSourceBuildPhase.Completed, error: null);
-            return new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.Removed };
+            return new StableDiffusionCppSourceBuildRemoveResult
+            {
+                Outcome = StableDiffusionCppSourceBuildRemoveOutcome.Removed
+            };
         }
         finally
         {
@@ -456,11 +472,19 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Adopting);
             await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
-            return new BuildCompletion { Phase = StableDiffusionCppSourceBuildPhase.Completed, Error = null };
+            return new BuildCompletion
+            {
+                Phase = StableDiffusionCppSourceBuildPhase.Completed,
+                Error = null
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new BuildCompletion { Phase = StableDiffusionCppSourceBuildPhase.Cancelled, Error = null };
+            return new BuildCompletion
+            {
+                Phase = StableDiffusionCppSourceBuildPhase.Cancelled,
+                Error = null
+            };
         }
         catch (TimeoutException exception)
         {

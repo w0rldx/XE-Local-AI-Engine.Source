@@ -29,6 +29,9 @@ public sealed class ListGraphWorkflowToolsEndpoint : EndpointWithoutRequest<List
     public override async Task HandleAsync(CancellationToken ct)
     {
         var invocable = await _tools.ListInvocableToolsAsync(ct);
-        await Send.OkAsync(new ListGraphWorkflowToolsResponse { Tools = [.. invocable.Select(GraphWorkflowToolMapper.ToResponse)] }, ct);
+        await Send.OkAsync(new ListGraphWorkflowToolsResponse
+        {
+            Tools = [.. invocable.Select(GraphWorkflowToolMapper.ToResponse)]
+        }, ct);
     }
 }

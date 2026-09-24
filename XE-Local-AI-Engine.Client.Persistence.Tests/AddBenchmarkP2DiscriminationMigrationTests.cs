@@ -115,13 +115,13 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         await InsertWorkItemAsync(probe, 4, "Comparison", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: null);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 5, "Comparison", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                              "A Comparison item with no comparison id names nothing to execute and must be rejected.");
+            "A Comparison item with no comparison id names nothing to execute and must be rejected.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 6, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                              "A Fidelity item with no attempt id names nothing to measure and must be rejected.");
+            "A Fidelity item with no attempt id names nothing to measure and must be rejected.");
 
         // Each arm names EVERY id column, so one item cannot claim to be two kinds of work at once.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 7, "Fidelity", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: Guid.NewGuid()),
-                              "A Fidelity item carrying a comparison id must be rejected.");
+            "A Fidelity item carrying a comparison id must be rejected.");
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
                                                                                  INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
                                                                                  VALUES (9, $run, 'Fidelity', NULL, 'Queued', 1, 1, 1);
                                                                                  """, command => command.Parameters.AddWithValue("$run", RunId)),
-                              "The restored two-kind CHECK must reject a Fidelity item again.");
+            "The restored two-kind CHECK must reject a Fidelity item again.");
     }
 
     [Test]
@@ -189,7 +189,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     private static async Task<string> IndexSqlAsync(MigrationSchemaProbe probe, string indexName)
     {
         var sql = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                                 command => command.Parameters.AddWithValue("$name", indexName));
+            command => command.Parameters.AddWithValue("$name", indexName));
         return AssertEx.NotNull(Convert.ToString(sql, CultureInfo.InvariantCulture), $"Index {indexName} must exist.");
     }
 

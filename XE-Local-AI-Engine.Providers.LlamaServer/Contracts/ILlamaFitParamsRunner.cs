@@ -23,13 +23,28 @@ internal sealed class LlamaFitParamsRunResult
     public required string? FailureReason { get; init; }
 
     public static LlamaFitParamsRunResult Success(IReadOnlyList<string> standardOutput) =>
-        new() { Status = LlamaFitParamsRunStatus.Succeeded, StandardOutput = standardOutput, FailureReason = null };
+        new()
+        {
+            Status = LlamaFitParamsRunStatus.Succeeded,
+            StandardOutput = standardOutput,
+            FailureReason = null
+        };
 
     public static LlamaFitParamsRunResult Missing() =>
-        new() { Status = LlamaFitParamsRunStatus.MissingCapability, StandardOutput = [], FailureReason = null };
+        new()
+        {
+            Status = LlamaFitParamsRunStatus.MissingCapability,
+            StandardOutput = [],
+            FailureReason = null
+        };
 
     public static LlamaFitParamsRunResult Failure(string reason) =>
-        new() { Status = LlamaFitParamsRunStatus.Failed, StandardOutput = [], FailureReason = reason };
+        new()
+        {
+            Status = LlamaFitParamsRunStatus.Failed,
+            StandardOutput = [],
+            FailureReason = reason
+        };
 }
 
 /// <summary>

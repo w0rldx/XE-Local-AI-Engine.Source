@@ -46,9 +46,9 @@ public sealed class ExternalAppStartupReconcilerTests
         // ONE harness: the row, the reconciler and the assertion have to share a database, or "the row was not
         // touched" is a statement about a database the pass never opened.
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with
-                                                                 {
-                                                                     Enabled = false
-                                                                 });
+        {
+            Enabled = false
+        });
         var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
 
         var summary = await harness.CreateReconciler().ReconcileAsync();
@@ -484,7 +484,7 @@ public sealed class ExternalAppStartupReconcilerTests
         // Same services and names, so the containers are still found; only the image lost its digest pin, which is
         // what ApplicationContainerPolicy refuses when the plan is rebuilt for verification.
         await harness.ReplaceManifestSnapshotAsync(harness.InstalledId,
-                         ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]));
+            ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]));
 
         var summary = await harness.CreateReconciler().ReconcileAsync();
 
@@ -605,11 +605,11 @@ public sealed class ExternalAppStartupReconcilerTests
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
         await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         harness.StopHost();
@@ -864,11 +864,11 @@ public sealed class ExternalAppStartupReconcilerTests
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;

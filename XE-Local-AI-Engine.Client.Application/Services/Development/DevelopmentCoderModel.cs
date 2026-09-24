@@ -49,8 +49,7 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<DevelopmentCoderModel> _logger;
 
-    public DevelopmentCoderModel(
-        IChatClient chatClient,
+    public DevelopmentCoderModel(IChatClient chatClient,
         IActiveCloudChatClientFactory cloudFactory,
         ILocalModelProviderResolver localProviderResolver,
         IModelTrustResolver modelTrustResolver,
@@ -218,9 +217,9 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
         return new DevelopmentCoderModelResult
         {
             Submission = gateway.Submission
-                                               ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
-                                                   "The Development coder stopped without calling submit_implementation, so the attempt produced no evidence to validate. "
-                                                   + "Any workspace changes it made are preserved; re-run the task, or use a model that reliably closes with a tool call."),
+                         ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
+                             "The Development coder stopped without calling submit_implementation, so the attempt produced no evidence to validate. "
+                             + "Any workspace changes it made are preserved; re-run the task, or use a model that reliably closes with a tool call."),
             InputTokens = inputTokens,
             OutputTokens = outputTokens
         };
@@ -257,8 +256,7 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
         private readonly DevelopmentAttemptLiveProgress? _liveProgress;
         private int _toolCalls;
 
-        public ToolGateway(
-            IDevelopmentWorkspaceTools tools,
+        public ToolGateway(IDevelopmentWorkspaceTools tools,
             int maxToolCalls,
             DevelopmentAttemptLiveProgress? liveProgress)
         {

@@ -40,13 +40,13 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "Kick-off call", "{\"translate\":false}", createdAtUtc: 1_000), CancellationToken.None));
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId,
-                    [
-                        NewSegment(seq: 1, startMs: 0, "Good morning."),
-                        NewSegment(seq: 2, startMs: 1_500, "Let us begin.", TranscriptChannel.Others, confidence: 0.87)
-                    ],
-                    updatedAtUtc: 2_000,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId,
+                [
+                    NewSegment(seq: 1, startMs: 0, "Good morning."),
+                    NewSegment(seq: 2, startMs: 1_500, "Let us begin.", TranscriptChannel.Others, confidence: 0.87)
+                ],
+                updatedAtUtc: 2_000,
+                CancellationToken.None));
 
         var detail = await QueryAsync(databasePath, store => store.GetWithSegmentsAsync(sessionId, CancellationToken.None));
 
@@ -87,13 +87,13 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         // Two rows on the newest session and none on the rest, so a count that came from the wrong row shows up.
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(newest,
-                    [
-                        NewSegment(seq: 1, startMs: 0, "one"),
-                        NewSegment(seq: 2, startMs: 1_000, "two")
-                    ],
-                    updatedAtUtc: 350,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(newest,
+                [
+                    NewSegment(seq: 1, startMs: 0, "one"),
+                    NewSegment(seq: 2, startMs: 1_000, "two")
+                ],
+                updatedAtUtc: 350,
+                CancellationToken.None));
 
         var firstPage = await QueryAsync(databasePath, store => store.ListAsync(limit: 2, offset: 0, CancellationToken.None));
         var secondPage = await QueryAsync(databasePath, store => store.ListAsync(limit: 2, offset: 2, CancellationToken.None));
@@ -170,13 +170,13 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         // Written out of order so the read path's ordering is what is being asserted, not the insertion order.
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId,
-                    [
-                        NewSegment(seq: 3, startMs: 4_000, "third"),
-                        NewSegment(seq: 1, startMs: 0, "first")
-                    ],
-                    updatedAtUtc: 200,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId,
+                [
+                    NewSegment(seq: 3, startMs: 4_000, "third"),
+                    NewSegment(seq: 1, startMs: 0, "first")
+                ],
+                updatedAtUtc: 200,
+                CancellationToken.None));
         await RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 2, startMs: 2_000, "second")], updatedAtUtc: 300, CancellationToken.None));
         var emptyAppend = await QueryAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [], updatedAtUtc: 400, CancellationToken.None));
 
@@ -207,8 +207,8 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         // The unique (session_id, seq) index is the guard, not a check in the store: two writers that both believe they
         // own sequence 1 must collide at the database rather than silently interleave.
         _ = await AssertEx.ThrowsAsync<DbUpdateException>(
-                              () => RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 9_000, "collision")], updatedAtUtc: 160, CancellationToken.None)),
-                              "A repeated sequence within one session must be rejected.");
+            () => RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 9_000, "collision")], updatedAtUtc: 160, CancellationToken.None)),
+            "A repeated sequence within one session must be rejected.");
 
         // The index is scoped to the session, so the same sequence in another session is perfectly legal.
         await RunAsync(databasePath, store => store.AppendSegmentsAsync(otherSessionId, [NewSegment(seq: 1, startMs: 0, "independent")], updatedAtUtc: 250, CancellationToken.None));
@@ -226,7 +226,7 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         // The segment's session reference would refuse the insert, but as a constraint exception rather than an answer:
         // the store's own existence check is what turns an unknown session into `false` before any write is attempted.
         var appended = await QueryAsync(databasePath,
-                store => store.AppendSegmentsAsync(unknownSessionId, [NewSegment(seq: 1, startMs: 0, "orphan")], updatedAtUtc: 100, CancellationToken.None));
+            store => store.AppendSegmentsAsync(unknownSessionId, [NewSegment(seq: 1, startMs: 0, "orphan")], updatedAtUtc: 100, CancellationToken.None));
 
         AssertEx.False(appended, "Appending to an unknown session reports false rather than writing orphans.");
 
@@ -302,19 +302,19 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         // Appended out of sequence order on purpose: the read orders by seq, not by insertion.
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId,
-                    [
-                        NewSegment(seq: 3, startMs: 2_000, "three"),
-                        NewSegment(seq: 1, startMs: 0, "one"),
-                        NewSegment(seq: 4, startMs: 3_000, "four", TranscriptChannel.Others),
-                        NewSegment(seq: 2, startMs: 1_000, "two")
-                    ],
-                    updatedAtUtc: 300,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId,
+                [
+                    NewSegment(seq: 3, startMs: 2_000, "three"),
+                    NewSegment(seq: 1, startMs: 0, "one"),
+                    NewSegment(seq: 4, startMs: 3_000, "four", TranscriptChannel.Others),
+                    NewSegment(seq: 2, startMs: 1_000, "two")
+                ],
+                updatedAtUtc: 300,
+                CancellationToken.None));
 
         // A row on a second session, to prove the read is keyed on the session and not on the sequence alone.
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(otherId, [NewSegment(seq: 1, startMs: 0, "not mine")], updatedAtUtc: 300, CancellationToken.None));
+            store => store.AppendSegmentsAsync(otherId, [NewSegment(seq: 1, startMs: 0, "not mine")], updatedAtUtc: 300, CancellationToken.None));
 
         var fromStart = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(sessionId, afterSeq: 0, limit: 2, CancellationToken.None));
         var afterTwo = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(sessionId, afterSeq: 2, limit: 10, CancellationToken.None));
@@ -384,10 +384,10 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "titled", "{\"translate\":true}", createdAtUtc: 100), CancellationToken.None));
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId,
-                    [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 2, startMs: 1_000, "two")],
-                    updatedAtUtc: 200,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId,
+                [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 2, startMs: 1_000, "two")],
+                updatedAtUtc: 200,
+                CancellationToken.None));
 
         var summary = AssertEx.NotNull(await QueryAsync(databasePath, store => store.GetSummaryAsync(sessionId, CancellationToken.None)), "The session is readable.");
         var unknown = await QueryAsync(databasePath, store => store.GetSummaryAsync(Guid.NewGuid(), CancellationToken.None));
@@ -410,10 +410,10 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         // A deliberate gap: two rows numbered 1 and 7. A count would answer 2 and re-allocate a sequence the unique
         // (session_id, seq) index already holds.
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId,
-                    [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 7, startMs: 6_000, "seven")],
-                    updatedAtUtc: 200,
-                    CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId,
+                [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 7, startMs: 6_000, "seven")],
+                updatedAtUtc: 200,
+                CancellationToken.None));
 
         var last = await QueryAsync(databasePath, store => store.GetLastSeqAsync(sessionId, CancellationToken.None));
         var unknown = await QueryAsync(databasePath, store => store.GetLastSeqAsync(Guid.NewGuid(), CancellationToken.None));

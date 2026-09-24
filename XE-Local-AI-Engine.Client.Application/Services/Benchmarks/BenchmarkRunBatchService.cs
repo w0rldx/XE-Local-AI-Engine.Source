@@ -94,7 +94,12 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
             }
         }
 
-        return new BenchmarkRunBatchResult { ProjectVersion = expectedVersion, Started = started, Rejected = rejected };
+        return new BenchmarkRunBatchResult
+        {
+            ProjectVersion = expectedVersion,
+            Started = started,
+            Rejected = rejected
+        };
     }
 
     private static bool IsWholeBatchFailure(Exception exception) =>
@@ -106,7 +111,14 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
             or NotSupportedException;
 
     private static BenchmarkRunBatchRejectedItem Reject(BenchmarkRunBatchItem item, Exception exception) =>
-        new() { ModelName = item.ModelName, KvCacheType = item.KvCacheType, Kind = BenchmarkRunBatchRejectionKind.Failure, Message = exception.Message, Failure = exception };
+        new()
+        {
+            ModelName = item.ModelName,
+            KvCacheType = item.KvCacheType,
+            Kind = BenchmarkRunBatchRejectionKind.Failure,
+            Message = exception.Message,
+            Failure = exception
+        };
 
     private static void AddRemainingRejections(IReadOnlyList<BenchmarkRunBatchItem> items,
         int startIndex,
@@ -117,7 +129,13 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
         for (var index = startIndex; index < items.Count; index++)
         {
             var item = items[index];
-            rejected.Add(new BenchmarkRunBatchRejectedItem { ModelName = item.ModelName, KvCacheType = item.KvCacheType, Kind = kind, Message = message });
+            rejected.Add(new BenchmarkRunBatchRejectedItem
+            {
+                ModelName = item.ModelName,
+                KvCacheType = item.KvCacheType,
+                Kind = kind,
+                Message = message
+            });
         }
     }
 }

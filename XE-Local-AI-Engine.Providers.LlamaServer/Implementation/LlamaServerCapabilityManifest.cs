@@ -268,7 +268,11 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
     public async Task<LlamaServerCapabilityManifest> GetManifestAsync(LlamaBinary binary, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(binary);
-        ExecutableIdentitySnapshot snapshot = new() { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
+        ExecutableIdentitySnapshot snapshot = new()
+        {
+            LengthBytes = 0,
+            LastWriteUtc = DateTimeOffset.UnixEpoch
+        };
         try
         {
             snapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
@@ -384,12 +388,24 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
         {
             var info = new FileInfo(executablePath);
             return info.Exists
-                ? new ExecutableIdentitySnapshot { LengthBytes = info.Length, LastWriteUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero) }
-                : new ExecutableIdentitySnapshot { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
+                ? new ExecutableIdentitySnapshot
+                {
+                    LengthBytes = info.Length,
+                    LastWriteUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
+                }
+                : new ExecutableIdentitySnapshot
+                {
+                    LengthBytes = 0,
+                    LastWriteUtc = DateTimeOffset.UnixEpoch
+                };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return new ExecutableIdentitySnapshot { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
+            return new ExecutableIdentitySnapshot
+            {
+                LengthBytes = 0,
+                LastWriteUtc = DateTimeOffset.UnixEpoch
+            };
         }
     }
 

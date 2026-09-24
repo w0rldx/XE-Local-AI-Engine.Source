@@ -34,7 +34,17 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
     public FakeDockerRuntimeClient(DockerDaemonEndpoint endpoint, DockerDaemonIdentity? identity = null)
     {
         Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-        Identity = identity ?? new DockerDaemonIdentity { DaemonId = "fake-daemon", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true };
+        Identity = identity ?? new DockerDaemonIdentity
+        {
+            DaemonId = "fake-daemon",
+            ServerVersion = "99.0.0",
+            ApiVersion = "1.99",
+            MinimumApiVersion = "1.40",
+            OperatingSystem = "linux",
+            Endpoint = endpoint,
+            IsRootless = false,
+            SupportsSeccomp = true
+        };
     }
 
     /// <summary>

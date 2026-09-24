@@ -422,7 +422,17 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     private sealed class ProvisioningDownloadTransaction : IGgufDownloadTransaction
     {
         private static readonly string Hash = new('a', 64);
-        public static GgufDownloadAcquisitionMetadata IntentMetadata { get; } = new() { RepoId = Repo, ResolvedRevision = "revision", SourceDisplayName = "model.gguf", DeclaredSizeBytes = 1, DeclaredSha256 = Hash, Role = GgufRole.Chat };
+
+        public static GgufDownloadAcquisitionMetadata IntentMetadata { get; } = new()
+        {
+            RepoId = Repo,
+            ResolvedRevision = "revision",
+            SourceDisplayName = "model.gguf",
+            DeclaredSizeBytes = 1,
+            DeclaredSha256 = Hash,
+            Role = GgufRole.Chat
+        };
+
         public bool FailDownload { get; init; }
         public Exception? UnexpectedFailure { get; init; }
         public bool BlockPrepare { get; init; }
@@ -530,7 +540,14 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         private static GgufModelRegistryEntry Entry(GgufDownloadDestination destination)
         {
             var fingerprint = GgufModelContentFingerprint.ComputeV1([
-                new GgufModelContentMember { RelativePath = destination.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight, SizeBytes = 1, Sha256 = Hash, OwningAliases = [destination.CanonicalModelName] }
+                new GgufModelContentMember
+                {
+                    RelativePath = destination.RelativeGgufPath,
+                    Role = InstalledModelPhysicalMemberRole.Weight,
+                    SizeBytes = 1,
+                    Sha256 = Hash,
+                    OwningAliases = [destination.CanonicalModelName]
+                }
             ]);
             return new GgufModelRegistryEntry
             {
@@ -669,7 +686,19 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             {
                 ModelName = _identity.CanonicalModelName,
                 Kind = InstalledModelMutationKind.Acquire,
-                IntendedMembers = [new() { RelativePath = _identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight }, new() { RelativePath = _identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }]
+                IntendedMembers =
+                [
+                    new()
+                    {
+                        RelativePath = _identity.RelativeGgufPath,
+                        Role = InstalledModelPhysicalMemberRole.Weight
+                    },
+                    new()
+                    {
+                        RelativePath = _identity.RelativeSidecarPath,
+                        Role = InstalledModelPhysicalMemberRole.Sidecar
+                    }
+                ]
             };
             var keys = new[]
             {

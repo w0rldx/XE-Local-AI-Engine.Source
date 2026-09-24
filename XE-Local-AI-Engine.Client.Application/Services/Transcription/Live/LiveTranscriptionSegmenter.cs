@@ -210,7 +210,12 @@ public sealed class LiveTranscriptionSegmenter
             remaining = remaining[takeBytes..];
         }
 
-        return new LiveTick { Partial = _partial, Commits = commits, DetectedLanguage = learnedLanguage };
+        return new LiveTick
+        {
+            Partial = _partial,
+            Commits = commits,
+            DetectedLanguage = learnedLanguage
+        };
     }
 
     /// <summary>Finalizes the lane: one last submission with the tail guard suspended, so the retained audio commits.</summary>
@@ -224,7 +229,12 @@ public sealed class LiveTranscriptionSegmenter
     {
         var commits = new List<LiveCommit>();
         var learnedLanguage = await SubmitAsync(atCap: false, flush: true, commits, cancellationToken);
-        return new LiveTick { Partial = _partial, Commits = commits, DetectedLanguage = learnedLanguage };
+        return new LiveTick
+        {
+            Partial = _partial,
+            Commits = commits,
+            DetectedLanguage = learnedLanguage
+        };
     }
 
     private async ValueTask<string?> SubmitAsync(bool atCap, bool flush, List<LiveCommit> commits, CancellationToken cancellationToken)
@@ -327,7 +337,14 @@ public sealed class LiveTranscriptionSegmenter
                 continue;
             }
 
-            commits.Add(new LiveCommit { Channel = _channel, StartMs = segment.StartMs, EndMs = segment.EndMs, Text = segment.Text, Confidence = segment.Confidence });
+            commits.Add(new LiveCommit
+            {
+                Channel = _channel,
+                StartMs = segment.StartMs,
+                EndMs = segment.EndMs,
+                Text = segment.Text,
+                Confidence = segment.Confidence
+            });
             watermarkMs = Math.Max(watermarkMs, segment.EndMs);
             committedEndMs = watermarkMs;
         }

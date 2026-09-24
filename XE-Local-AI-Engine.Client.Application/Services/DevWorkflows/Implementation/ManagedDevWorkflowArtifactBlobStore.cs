@@ -36,7 +36,12 @@ public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBl
         CancellationToken cancellationToken = default)
     {
         var written = await _blobs.WriteAsync(runId, artifactId, content, cancellationToken);
-        return new DevWorkflowArtifactBlobWriteResult { OpaqueReference = written.OpaqueReference, ContentHash = written.ContentHash, ByteCount = written.ByteCount };
+        return new DevWorkflowArtifactBlobWriteResult
+        {
+            OpaqueReference = written.OpaqueReference,
+            ContentHash = written.ContentHash,
+            ByteCount = written.ByteCount
+        };
     }
 
     public async Task<DevWorkflowArtifactBlobReadResult> ReadAsync(Guid runId,
@@ -46,7 +51,11 @@ public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBl
         CancellationToken cancellationToken = default)
     {
         var read = await _blobs.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken);
-        return new DevWorkflowArtifactBlobReadResult { Status = Map(read.Status), Content = read.Content };
+        return new DevWorkflowArtifactBlobReadResult
+        {
+            Status = Map(read.Status),
+            Content = read.Content
+        };
     }
 
     public void Delete(Guid runId, Guid artifactId)

@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -73,14 +73,14 @@ public sealed class GraphWorkflowGraphTests
     public void Parse_ReadsAnLlmCallAndItsSamplingOptions()
     {
         var graph = GraphWorkflowGraph.Parse(LlmCall("""
-                                                    { "prompt": "Summarize.", "systemPrompt": "", "model": " qwen ",
-                                                      "inputBindings": { "second": "input.output.second", "first": "run.input.first" },
-                                                      "reasoningEffort": "low",
-                                                      "samplingOptions": { "temperature": 0.2, "topP": 0.9, "topK": 40, "minP": 0.05,
-                                                                           "maxOutputTokens": 128, "seed": "42", "repeatPenalty": 1.1,
-                                                                           "repeatLastN": 64, "presencePenalty": 0.1, "frequencyPenalty": 0.2,
-                                                                           "stop": ["END"], "numCtx": 2048 } }
-                                                    """));
+                                                     { "prompt": "Summarize.", "systemPrompt": "", "model": " qwen ",
+                                                       "inputBindings": { "second": "input.output.second", "first": "run.input.first" },
+                                                       "reasoningEffort": "low",
+                                                       "samplingOptions": { "temperature": 0.2, "topP": 0.9, "topK": 40, "minP": 0.05,
+                                                                            "maxOutputTokens": 128, "seed": "42", "repeatPenalty": 1.1,
+                                                                            "repeatLastN": 64, "presencePenalty": 0.1, "frequencyPenalty": 0.2,
+                                                                            "stop": ["END"], "numCtx": 2048 } }
+                                                     """));
         var node = graph.Nodes["llm"];
         var config = AssertEx.NotNull(node.Config as GraphWorkflowLlmCallConfig);
 
@@ -95,9 +95,9 @@ public sealed class GraphWorkflowGraphTests
     public void BoundPrompt_OrdersNamesAndKeepsExplicitNull()
     {
         var config = AssertEx.NotNull(GraphWorkflowGraph.Parse(LlmCall("""
-                                                                      { "prompt": "Summarize.",
-                                                                        "inputBindings": { "zeta": "run.input.missingValue", "alpha": "run.input.value" } }
-                                                                      """)).Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
+                                                                       { "prompt": "Summarize.",
+                                                                         "inputBindings": { "zeta": "run.input.missingValue", "alpha": "run.input.value" } }
+                                                                       """)).Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
 
         AssertEx.True(GraphWorkflowInvocationExecutor.TryBuildBoundPrompt(config,
             """{"run":{"input":{"value":false,"missingValue":null}},"upstream":{},"input":null}""",
@@ -113,7 +113,7 @@ public sealed class GraphWorkflowGraphTests
     public void BoundPrompt_WhenAPathIsMissing_RefusesBeforeInference()
     {
         var config = AssertEx.NotNull(GraphWorkflowGraph.Parse(LlmCall("""{ "prompt": "Go.", "inputBindings": { "value": "run.input.absent" } }"""))
-                                                           .Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
+                                                        .Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
 
         AssertEx.False(GraphWorkflowInvocationExecutor.TryBuildBoundPrompt(config,
             """{"run":{"input":{}},"upstream":{},"input":null}""",
@@ -128,7 +128,7 @@ public sealed class GraphWorkflowGraphTests
     public void BoundPrompt_WhenTheCombinedRenderingExceedsTheLimit_RefusesIt()
     {
         var config = AssertEx.NotNull(GraphWorkflowGraph.Parse(LlmCall("""{ "prompt": "1234567890", "inputBindings": { "v": "run.input.v" } }"""))
-                                                           .Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
+                                                        .Nodes["llm"].Config as GraphWorkflowLlmCallConfig);
 
         AssertEx.False(GraphWorkflowInvocationExecutor.TryBuildBoundPrompt(config,
             """{"run":{"input":{"v":1}},"upstream":{},"input":null}""",

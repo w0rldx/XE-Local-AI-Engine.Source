@@ -59,7 +59,10 @@ public sealed class ConversationMaintenanceDispatcherTests
     public void Dispatch_WhenTheQueueIsFull_DropsTheNewestWithAWarningAndReleasesItsSlot()
     {
         var logger = new CapturingLogger<ConversationMaintenanceDispatcher>();
-        var dispatcher = new ConversationMaintenanceDispatcher(Options.Create(new ConversationCompactionOptions { MaintenanceQueueCapacity = 2 }), logger);
+        var dispatcher = new ConversationMaintenanceDispatcher(Options.Create(new ConversationCompactionOptions
+        {
+            MaintenanceQueueCapacity = 2
+        }), logger);
         var dropped = Guid.NewGuid();
 
         dispatcher.Dispatch(Job(Guid.NewGuid()));

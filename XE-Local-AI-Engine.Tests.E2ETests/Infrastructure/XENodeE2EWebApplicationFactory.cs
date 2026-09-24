@@ -688,9 +688,15 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         }
 
         public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct) =>
-            Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = 1, BaseAddress = new Uri("http://127.0.0.1:9/") });
+            Task.FromResult(new WhisperServerEndpoint
+            {
+                ModelId = modelId,
+                Generation = 1,
+                BaseAddress = new Uri("http://127.0.0.1:9/")
+            });
 
-        public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) => _inner.EvictAsync(ct);
+        public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
+            _inner.EvictAsync(ct);
 
         public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
             _inner.TryAcquireTranscriptionLease(modelId, generation);
@@ -698,7 +704,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
             _inner.ReportRequestFailureAsync(generation, cause, ct);
 
-        public WhisperRuntimeStatusSnapshot GetStatus() => _inner.GetStatus();
+        public WhisperRuntimeStatusSnapshot GetStatus() =>
+            _inner.GetStatus();
     }
 
     /// <summary>

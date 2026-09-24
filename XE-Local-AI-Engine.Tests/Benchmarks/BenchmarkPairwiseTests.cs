@@ -64,9 +64,24 @@ public sealed class BenchmarkPairwiseTests
         // questions. Grouping by case identity makes such a comparison unrepresentable rather than merely unlikely.
         BenchmarkPairwiseCandidate[] candidates =
         [
-            new() { RunId = RunA, TaskCaseId = null, TaskInputHash = "hash-one" },
-            new() { RunId = RunB, TaskCaseId = null, TaskInputHash = "hash-one" },
-            new() { RunId = RunC, TaskCaseId = null, TaskInputHash = "hash-two" }
+            new()
+            {
+                RunId = RunA,
+                TaskCaseId = null,
+                TaskInputHash = "hash-one"
+            },
+            new()
+            {
+                RunId = RunB,
+                TaskCaseId = null,
+                TaskInputHash = "hash-one"
+            },
+            new()
+            {
+                RunId = RunC,
+                TaskCaseId = null,
+                TaskInputHash = "hash-two"
+            }
         ];
 
         var plan = BenchmarkPairwisePlanner.Plan(candidates, BenchmarkPairwisePolicy.MaximumRuns);
@@ -250,7 +265,21 @@ public sealed class BenchmarkPairwiseTests
                  ComparisonSetVersion = 7,
                  ReferenceExecutionKey = referenceExecutionKey,
                  ProjectVersion = 1,
-                 Candidates = [new BenchmarkPairwiseCandidate { RunId = runA, TaskCaseId = null, TaskInputHash = string.Empty }, new BenchmarkPairwiseCandidate { RunId = runB, TaskCaseId = null, TaskInputHash = string.Empty }],
+                 Candidates =
+                 [
+                     new BenchmarkPairwiseCandidate
+                     {
+                         RunId = runA,
+                         TaskCaseId = null,
+                         TaskInputHash = string.Empty
+                     },
+                     new BenchmarkPairwiseCandidate
+                     {
+                         RunId = runB,
+                         TaskCaseId = null,
+                         TaskInputHash = string.Empty
+                     }
+                 ],
                  Comparisons = comparisons
              });
         store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
@@ -293,7 +322,14 @@ public sealed class BenchmarkPairwiseTests
         };
 
     private static BenchmarkPairwiseCandidate[] Candidates(params Guid[] runs) =>
-        [.. runs.Select(static run => new BenchmarkPairwiseCandidate { RunId = run, TaskCaseId = null, TaskInputHash = string.Empty })];
+    [
+        .. runs.Select(static run => new BenchmarkPairwiseCandidate
+        {
+            RunId = run,
+            TaskCaseId = null,
+            TaskInputHash = string.Empty
+        })
+    ];
 
     private static BenchmarkJudgePolicyV1 PairwisePolicy() =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('c', 64), ["v1:" + new string('b', 64)]),

@@ -51,7 +51,8 @@ public sealed class MemoryProposalSecretScannerTests
     [Arguments("Access key: AKIAIOSFODNN7EXAMPLE123", "[REDACTED:aws-access-key]")]
     [Arguments("Token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c was used.", "[REDACTED:jwt]")]
     [Arguments("Slack token: xoxb-123456789012-abcdefghijklmnop", "[REDACTED:slack-token]")]
-    [Arguments("Config: DefaultEndpointsProtocol=https;AccountName=devstore;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;EndpointSuffix=core.windows.net",
+    [Arguments(
+        "Config: DefaultEndpointsProtocol=https;AccountName=devstore;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;EndpointSuffix=core.windows.net",
         "[REDACTED:azure-connection-string]")]
     public void Scan_WhenContentCarriesARedactableToken_RedactsItAndKeepsTheRecord(string content, string expectedMarker)
     {

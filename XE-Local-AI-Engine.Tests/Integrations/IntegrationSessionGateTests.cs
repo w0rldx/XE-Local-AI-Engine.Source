@@ -193,7 +193,7 @@ public sealed class IntegrationSessionGateTests
         var session = harness.SeedSession(trigger.Id);
 
         var results = await Task.WhenAll(Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: session.Id)),
-                                    Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: session.Id)));
+            Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: session.Id)));
 
         AssertEx.Equal(expected: 1, results.Count(static result => result.Outcome == IntegrationAcceptOutcome.Accepted));
         AssertEx.Equal(expected: 1, results.Count(static result => result.Outcome == IntegrationAcceptOutcome.SessionBusy));
@@ -210,7 +210,7 @@ public sealed class IntegrationSessionGateTests
         var second = harness.SeedSession(trigger.Id);
 
         var results = await Task.WhenAll(Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: first.Id)),
-                                    Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: second.Id)));
+            Task.Run(() => harness.AcceptAsync(trigger.Name, sessionId: second.Id)));
 
         AssertEx.True(results.All(static result => result.Outcome == IntegrationAcceptOutcome.Accepted),
             "Two different caller-managed sessions do not contend.");

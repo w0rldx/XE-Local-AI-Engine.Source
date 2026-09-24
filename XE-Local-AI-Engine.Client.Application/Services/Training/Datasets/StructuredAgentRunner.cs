@@ -32,8 +32,7 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
 {
     private readonly TimeSpan _turnTimeout = TurnTimeout;
 
-    public StructuredAgentRunner(
-        IModelCapabilityResolver capabilityResolver,
+    public StructuredAgentRunner(IModelCapabilityResolver capabilityResolver,
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider)
     {
@@ -125,14 +124,24 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
         try
         {
             var response = await agent.RunAsync(seed, session: null, new ChatClientAgentRunOptions
-                                      {
-                                          ChatOptions = chatOptions
-                                      }, turnCancellation.Token);
+            {
+                ChatOptions = chatOptions
+            }, turnCancellation.Token);
             activity?.SetStatus(ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
-                ? new StructuredAgentResult { Success = false, Text = string.Empty, FailureReason = "The teacher returned an empty completion." }
-                : new StructuredAgentResult { Success = true, Text = text, FailureReason = null };
+                ? new StructuredAgentResult
+                {
+                    Success = false,
+                    Text = string.Empty,
+                    FailureReason = "The teacher returned an empty completion."
+                }
+                : new StructuredAgentResult
+                {
+                    Success = true,
+                    Text = text,
+                    FailureReason = null
+                };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -147,7 +156,12 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
         catch (Exception exception) when (exception is not OperationCanceledException and not TrainingValidationException)
         {
             // One turn's transport/model failure is a per-sample failure, never the run's.
-            return new StructuredAgentResult { Success = false, Text = string.Empty, FailureReason = TrainingAiClientPolicy.TranslateProviderFailure(activity, exception) };
+            return new StructuredAgentResult
+            {
+                Success = false,
+                Text = string.Empty,
+                FailureReason = TrainingAiClientPolicy.TranslateProviderFailure(activity, exception)
+            };
         }
     }
 

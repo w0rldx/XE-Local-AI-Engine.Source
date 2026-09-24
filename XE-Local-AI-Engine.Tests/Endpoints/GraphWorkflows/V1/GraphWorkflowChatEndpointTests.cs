@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.GraphWorkflows.GraphWorkflowChatTestSupport;
+using static Tests.GraphWorkflows.GraphWorkflowChatTestSupport;
 
 /// <summary>
 ///     The chat send's dispatch matrix, through the real routes, service, store and chat persistence. Ticks are driven by
@@ -470,7 +470,10 @@ public sealed class GraphWorkflowChatEndpointTests
     {
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal) { ["GraphWorkflows:Enabled"] = "false" }
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["GraphWorkflows:Enabled"] = "false"
+            }
         };
 
         using var response = await PostMessageAsync(factory, Guid.NewGuid(), Body(Guid.NewGuid(), "hello"));

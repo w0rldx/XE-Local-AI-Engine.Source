@@ -338,7 +338,11 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
             dataset.UpdatedAtUtc = now;
             await SaveAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new TrainingSampleAppendResult { Sample = null, Duplicate = true };
+            return new TrainingSampleAppendResult
+            {
+                Sample = null,
+                Duplicate = true
+            };
         }
 
         var nextSequence = await _dbContext.TrainingDatasetSamples
@@ -379,7 +383,11 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         dataset.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new TrainingSampleAppendResult { Sample = ToRecord(sample), Duplicate = false };
+        return new TrainingSampleAppendResult
+        {
+            Sample = ToRecord(sample),
+            Duplicate = false
+        };
     }
 
     public async Task RecordRejectedSampleAsync(Guid datasetId, CancellationToken cancellationToken = default)
@@ -420,7 +428,11 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
                                   .Skip((query.Page - 1) * query.PageSize)
                                   .Take(query.PageSize)
                                   .ToListAsync(cancellationToken);
-        return new TrainingSamplePage { Items = items.Select(ToRecord).ToArray(), TotalCount = total };
+        return new TrainingSamplePage
+        {
+            Items = items.Select(ToRecord).ToArray(),
+            TotalCount = total
+        };
     }
 
     public async Task<IReadOnlyList<TrainingSampleRecord>> ListAllSamplesAsync(Guid datasetId, CancellationToken cancellationToken = default)

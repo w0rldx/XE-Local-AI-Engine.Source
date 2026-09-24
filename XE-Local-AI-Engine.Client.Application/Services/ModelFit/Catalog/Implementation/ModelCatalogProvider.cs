@@ -40,7 +40,13 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _current = new ModelCatalogSnapshot { Document = ModelCatalogBundledLoader.Load(_logger), Source = ModelCatalogSource.Bundled, FetchedAtUtc = null, SourceUrl = null };
+        _current = new ModelCatalogSnapshot
+        {
+            Document = ModelCatalogBundledLoader.Load(_logger),
+            Source = ModelCatalogSource.Bundled,
+            FetchedAtUtc = null,
+            SourceUrl = null
+        };
     }
 
     public void Dispose()
@@ -114,7 +120,13 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
                 return await FallbackToLastGoodAsync(cancellationToken);
             }
 
-            var snapshot = new ModelCatalogSnapshot { Document = validation.Document!, Source = ModelCatalogSource.Remote, FetchedAtUtc = attemptAtUtc, SourceUrl = refreshUrl };
+            var snapshot = new ModelCatalogSnapshot
+            {
+                Document = validation.Document!,
+                Source = ModelCatalogSource.Remote,
+                FetchedAtUtc = attemptAtUtc,
+                SourceUrl = refreshUrl
+            };
             _current = snapshot;
 
             await _cacheStore.SaveAsync(new StoredModelCatalogCache(raw, attemptAtUtc, refreshUrl), cancellationToken);
@@ -149,7 +161,13 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
             return _current;
         }
 
-        var snapshot = new ModelCatalogSnapshot { Document = validation.Document!, Source = ModelCatalogSource.RemoteLastGood, FetchedAtUtc = stored.FetchedAtUtc, SourceUrl = stored.SourceUrl };
+        var snapshot = new ModelCatalogSnapshot
+        {
+            Document = validation.Document!,
+            Source = ModelCatalogSource.RemoteLastGood,
+            FetchedAtUtc = stored.FetchedAtUtc,
+            SourceUrl = stored.SourceUrl
+        };
         _current = snapshot;
         return snapshot;
     }

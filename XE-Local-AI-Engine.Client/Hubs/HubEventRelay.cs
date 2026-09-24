@@ -23,8 +23,7 @@ internal abstract class HubEventRelay<TEvent, THub> : BackgroundService
     private readonly Action<ILogger, TEvent> _logSaturated;
     private readonly string _method;
 
-    protected HubEventRelay(
-        IHubContext<THub> hubContext,
+    protected HubEventRelay(IHubContext<THub> hubContext,
         ILogger logger,
         int capacity,
         string method,
@@ -98,8 +97,7 @@ internal sealed class BenchmarkRunHubEventRelay : HubEventRelay<BenchmarkRunStre
 {
     private readonly IBenchmarkEventBuffer _events;
 
-    public BenchmarkRunHubEventRelay(
-        IBenchmarkEventBuffer events,
+    public BenchmarkRunHubEventRelay(IBenchmarkEventBuffer events,
         IHubContext<BenchmarkRunHub> hubContext,
         ILogger<BenchmarkRunHubEventRelay> logger) : base(hubContext,
         logger,
@@ -129,8 +127,7 @@ internal sealed class DatasetGenerationHubEventRelay : HubEventRelay<DatasetGene
 {
     private readonly IDatasetGenerationEventBuffer _events;
 
-    public DatasetGenerationHubEventRelay(
-        IDatasetGenerationEventBuffer events,
+    public DatasetGenerationHubEventRelay(IDatasetGenerationEventBuffer events,
         IHubContext<DatasetGenerationHub> hubContext,
         ILogger<DatasetGenerationHubEventRelay> logger) : base(hubContext,
         logger,
@@ -160,8 +157,7 @@ internal sealed class TrainingRunHubEventRelay : HubEventRelay<TrainingRunEvent,
 {
     private readonly ITrainingRunEventBuffer _events;
 
-    public TrainingRunHubEventRelay(
-        ITrainingRunEventBuffer events,
+    public TrainingRunHubEventRelay(ITrainingRunEventBuffer events,
         IHubContext<TrainingRunHub> hubContext,
         ILogger<TrainingRunHubEventRelay> logger) : base(hubContext,
         logger,

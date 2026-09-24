@@ -704,7 +704,14 @@ public sealed class EvaluationRunExecutorTests : IDisposable
     }
 
     private static TrainingWorkClaim Claim(Guid evaluationId) =>
-        new() { QueueSequence = 1, Kind = TrainingWorkKind.EvaluationRun, TargetId = evaluationId, Version = 1, Run = null };
+        new()
+        {
+            QueueSequence = 1,
+            Kind = TrainingWorkKind.EvaluationRun,
+            TargetId = evaluationId,
+            Version = 1,
+            Run = null
+        };
 
     private static ITransientLlamaServerEvaluationHarness EvaluationHarness(Exception? failure = null,
         ICollection<TransientLlamaServerEvaluationRequest>? requests = null,
@@ -728,8 +735,18 @@ public sealed class EvaluationRunExecutorTests : IDisposable
                        var model = await FileIdentityAsync(request.ModelFilePath, request.AdapterFilePath);
                        var launch = LaunchReceipt();
                        var binder = call.ArgAt<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(1);
-                       await binder(new TransientLlamaServerEvaluationProvenance { Model = model, Launch = launch }, CancellationToken.None);
-                       var session = new TransientLlamaServerEvaluationSession { BaseAddress = new Uri("http://127.0.0.1:18080/v1"), ModelId = model.ModelId, Model = model, Launch = launch };
+                       await binder(new TransientLlamaServerEvaluationProvenance
+                       {
+                           Model = model,
+                           Launch = launch
+                       }, CancellationToken.None);
+                       var session = new TransientLlamaServerEvaluationSession
+                       {
+                           BaseAddress = new Uri("http://127.0.0.1:18080/v1"),
+                           ModelId = model.ModelId,
+                           Model = model,
+                           Launch = launch
+                       };
                        var body = call.ArgAt<Func<TransientLlamaServerEvaluationSession, CancellationToken,
                            Task<TransientLlamaServerEvaluationSession>>>(2);
                        var value = await body(session, CancellationToken.None);
@@ -887,8 +904,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
 
     private sealed class FixedInstalledModelLease : ITrainingEvaluationInstalledModelLease
     {
-        public FixedInstalledModelLease(
-            string modelFilePath,
+        public FixedInstalledModelLease(string modelFilePath,
             string modelContentFingerprint,
             string modelSha256,
             long modelSizeBytes)

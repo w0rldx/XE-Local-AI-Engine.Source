@@ -52,7 +52,11 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
                                                && string.Equals(message.Status, NodeMessageStatus.Completed, StringComparison.Ordinal)
                                                && (string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase)
                                                    || string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase)))
-                             .Select(message => new HarvestTurn { Role = message.Role, Text = Encoding.UTF8.GetString(message.Content) })
+                             .Select(message => new HarvestTurn
+                             {
+                                 Role = message.Role,
+                                 Text = Encoding.UTF8.GetString(message.Content)
+                             })
                              .ToArray();
 
             sources.Add(new HarvestCandidateSource
@@ -94,7 +98,12 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
                 ? null
                 : (byte[])reader.GetValue(2);
             var titleText = _dbContext.DecryptConversationTitle(titleBytes, conversationId);
-            rows.Add(new ThumbsUpRow { MessageId = Guid.Parse(reader.GetString(0)), ConversationId = conversationId, Title = titleText });
+            rows.Add(new ThumbsUpRow
+            {
+                MessageId = Guid.Parse(reader.GetString(0)),
+                ConversationId = conversationId,
+                Title = titleText
+            });
         }
 
         return rows;

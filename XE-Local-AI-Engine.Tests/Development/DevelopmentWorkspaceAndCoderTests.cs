@@ -1059,7 +1059,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 var artifactId = call.ArgAt<Guid>(1);
                 var content = call.ArgAt<ReadOnlyMemory<byte>>(2);
                 contents[artifactId] = Encoding.UTF8.GetString(content.Span);
-                return new DevelopmentArtifactBlobWriteResult { OpaqueReference = $"{snapshot.ProjectId:N}/{artifactId:N}", ContentHash = "HASH-" + artifactId.ToString("N"), ByteCount = content.Length };
+                return new DevelopmentArtifactBlobWriteResult
+                {
+                    OpaqueReference = $"{snapshot.ProjectId:N}/{artifactId:N}",
+                    ContentHash = "HASH-" + artifactId.ToString("N"),
+                    ByteCount = content.Length
+                };
             });
 
         using var sandbox = CreateSandbox();
@@ -1287,8 +1292,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var second = new ScriptedCoderModel([("README.md", "base\n"), ("feature.txt", "implemented\n")], ["README.md", "feature.txt"]);
 
         await RunTwoAttemptsOnOneTaskAsync("carried-accept-data",
-                new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
-                second);
+            new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
+            second);
 
         AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
         AssertEx.Contains(second.Prompt, "README.md");
@@ -1308,8 +1313,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_CarriesBothEndsOfARenameAnEarlierAttemptMade()
     {
         await RunTwoAttemptsOnOneTaskAsync("carried-rename-data",
-                new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
-                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")));
+            new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
+            new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")));
     }
 
     /// <summary>A pure rename patch, which is what git emits for a move with no content change.</summary>
@@ -1321,9 +1326,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_StillRefusesAPathThatNeverDifferedFromTheBaseCommit()
     {
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
-                                          RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
-                                              new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                              new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])));
+            RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
+                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])));
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Submitted but not changed: README.md");
@@ -1334,9 +1339,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_StillRefusesAnAttemptThatOmitsAFileTheWorkspaceCarries()
     {
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
-                                          RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
-                                              new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                              new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])));
+            RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
+                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])));
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Changed but not submitted: feature.txt");
@@ -1430,7 +1435,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         // An ancestor that would otherwise be inherited, exactly as the live defect had it.
         await File.WriteAllTextAsync(Path.Combine(data, "Directory.Packages.props"),
-                      "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>");
+            "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>");
 
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         using var sandbox = CreateSandbox();
@@ -1550,7 +1555,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
-        return new CommandResult { ExitCode = process.ExitCode, StandardOutput = await stdout, StandardError = await stderr };
+        return new CommandResult
+        {
+            ExitCode = process.ExitCode,
+            StandardOutput = await stdout,
+            StandardError = await stderr
+        };
     }
 
     private static void EnsureSuccess(CommandResult result)
@@ -1600,7 +1610,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
         provider.When(runtime => runtime.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())).Do(_ => warmed = true);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo { EffectiveContextTokens = served } : null);
+                .Returns(_ => servedContextTokens is { } served && warmed
+                    ? new LocalModelRuntimeInfo
+                    {
+                        EffectiveContextTokens = served
+                    }
+                    : null);
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
@@ -1636,12 +1651,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             return new DevelopmentCoderModelResult
             {
                 Submission = new DevelopmentCoderSubmission
-            {
-                Summary = "Made the tests pass.",
-                ChangedFiles = ["tests/FeatureTests.cs"],
-                CommandIds = [],
-                Notes = null
-            },
+                {
+                    Summary = "Made the tests pass.",
+                    ChangedFiles = ["tests/FeatureTests.cs"],
+                    CommandIds = [],
+                    Notes = null
+                },
                 InputTokens = 10,
                 OutputTokens = 20
             };
@@ -1695,7 +1710,13 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
             return new DevelopmentCoderModelResult
             {
-                Submission = new DevelopmentCoderSubmission { Summary = "Scripted attempt.", ChangedFiles = _changedFiles, CommandIds = [], Notes = null },
+                Submission = new DevelopmentCoderSubmission
+                {
+                    Summary = "Scripted attempt.",
+                    ChangedFiles = _changedFiles,
+                    CommandIds = [],
+                    Notes = null
+                },
                 InputTokens = 10,
                 OutputTokens = 20
             };
@@ -1718,12 +1739,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             return new DevelopmentCoderModelResult
             {
                 Submission = new DevelopmentCoderSubmission
-            {
-                Summary = "Implemented bounded feature.",
-                ChangedFiles = ["feature.txt"],
-                CommandIds = [DevelopmentCommandIds.GitStatus],
-                Notes = null
-            },
+                {
+                    Summary = "Implemented bounded feature.",
+                    ChangedFiles = ["feature.txt"],
+                    CommandIds = [DevelopmentCommandIds.GitStatus],
+                    Notes = null
+                },
                 InputTokens = 10,
                 OutputTokens = 20
             };

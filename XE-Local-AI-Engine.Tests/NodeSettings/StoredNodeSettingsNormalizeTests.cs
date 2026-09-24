@@ -700,8 +700,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     public async Task Normalize_WhenUpdateChannelIsJunk_KeepsEveryOtherMember()
     {
         // Per-field normalization is the whole point: one corrupt field must not wipe the rest of the file.
-        await WriteSettingsJsonAsync(
-            "{ \"updateChannel\": \"nightly\", \"maxMessageRequestTimeoutSeconds\": 120, \"uiMode\": \"simple\" }");
+        await WriteSettingsJsonAsync("{ \"updateChannel\": \"nightly\", \"maxMessageRequestTimeoutSeconds\": 120, \"uiMode\": \"simple\" }");
         var loaded = await LoadAsync();
 
         AssertEx.Null(loaded.UpdateChannel);

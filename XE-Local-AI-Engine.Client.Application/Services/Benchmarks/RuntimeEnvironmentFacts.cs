@@ -97,8 +97,7 @@ public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsPr
     // instance would watch the same runtime directory twice for the same answers. Disposed by the container.
     private readonly LaunchPolicyFileHashCache _fileHashCache;
 
-    public RuntimeEnvironmentFactsProvider(
-        ILlamaCppBinaryManager binaryManager,
+    public RuntimeEnvironmentFactsProvider(ILlamaCppBinaryManager binaryManager,
         IInstalledRuntimeStore installedRuntimeStore,
         IHardwareProfiler hardwareProfiler,
         IRuntimeDeviceAudit deviceAudit,
@@ -127,36 +126,36 @@ public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsPr
         var missing = new List<string>();
         LlamaBinary? binary = null;
         var bundle = await CapturePartAsync(BundlePart,
-                async () =>
-                {
-                    binary = await _binaryManager.EnsureBinaryAsync(variant, ct);
-                    return await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
-                                                                    (path, token) => RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
-                                                                    ct);
-                },
-                missing,
-                ct);
+            async () =>
+            {
+                binary = await _binaryManager.EnsureBinaryAsync(variant, ct);
+                return await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
+                    (path, token) => RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
+                    ct);
+            },
+            missing,
+            ct);
 
         var llamaRuntime = await CapturePartAsync(LlamaRuntimePart,
-                async () => ToLlamaRuntimeFacts(await _installedRuntimeStore.ReadAsync(ct), binary),
-                missing,
-                ct);
+            async () => ToLlamaRuntimeFacts(await _installedRuntimeStore.ReadAsync(ct), binary),
+            missing,
+            ct);
 
         var hardware = await CapturePartAsync(HardwarePart,
-                async () =>
-                {
-                    var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
-                    var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct);
-                    return new BenchmarkHardwareFactsV1(RuntimeInformation.OSDescription,
-                        RuntimeInformation.OSArchitecture.ToString(),
-                        TryReadCpuModel(),
-                        profile.CpuCores,
-                        profile.TotalRamBytes,
-                        audit.Devices.Select(static device => new BenchmarkGpuFactsV1(device.Name, device.TotalBytes, DriverVersion: null)).ToArray(),
-                        audit.InferenceBackend);
-                },
-                missing,
-                ct);
+            async () =>
+            {
+                var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
+                var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct);
+                return new BenchmarkHardwareFactsV1(RuntimeInformation.OSDescription,
+                    RuntimeInformation.OSArchitecture.ToString(),
+                    TryReadCpuModel(),
+                    profile.CpuCores,
+                    profile.TotalRamBytes,
+                    audit.Devices.Select(static device => new BenchmarkGpuFactsV1(device.Name, device.TotalBytes, DriverVersion: null)).ToArray(),
+                    audit.InferenceBackend);
+            },
+            missing,
+            ct);
 
         return new RuntimeEnvironmentFactsV1(SchemaVersion,
             bundle,

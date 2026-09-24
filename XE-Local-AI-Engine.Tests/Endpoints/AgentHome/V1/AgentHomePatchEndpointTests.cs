@@ -158,7 +158,14 @@ public sealed class AgentHomePatchEndpointTests
                 CanApply = true,
                 Files = [],
                 Rejections = [],
-                DirtyTargets = [new PatchApplyDirtyEntry { Path = "repo-01/src/App.cs", State = "modified" }],
+                DirtyTargets =
+                [
+                    new PatchApplyDirtyEntry
+                    {
+                        Path = "repo-01/src/App.cs",
+                        State = "modified"
+                    }
+                ],
                 DirtyCheckUnavailable = true,
                 PatchSha256 = PatchHash
             }

@@ -25,17 +25,17 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task SelectedFolderHandler_AnswersEachTypeWithTheStatusItsOwnEndpointsUsedToSend()
     {
         var notFound = await HandleAsync(new SelectedFolderExceptionHandler(),
-                new SelectedFolderNotFoundException("No selected folder with that id is registered."));
+            new SelectedFolderNotFoundException("No selected folder with that id is registered."));
         AssertEx.Equal(expected: 404, notFound.StatusCode);
         AssertEx.Equal(expected: 0L, notFound.BodyLength, "the selected-folder 404 has always been bodyless.");
 
         var conflict = await HandleAsync(new SelectedFolderExceptionHandler(),
-                new SelectedFolderConflictException("That alias is already registered to another folder."));
+            new SelectedFolderConflictException("That alias is already registered to another folder."));
         AssertEx.Equal(expected: 409, conflict.StatusCode);
         AssertEx.Equal("That alias is already registered to another folder.", conflict.Detail);
 
         var validation = await HandleAsync(new SelectedFolderExceptionHandler(),
-                new SelectedFolderValidationException("The selected folder is not a Git repository root."));
+            new SelectedFolderValidationException("The selected folder is not a Git repository root."));
         AssertEx.Equal(expected: 400, validation.StatusCode);
         AssertEx.Equal("The selected folder is not a Git repository root.", validation.Detail);
     }
@@ -67,7 +67,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     {
         var context = NewContext();
         var handled = await new SelectedFolderExceptionHandler()
-                            .TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None);
+            .TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None);
 
         AssertEx.False(handled);
     }
@@ -87,7 +87,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     {
         var context = NewContext();
         var handled = await new GgufImportExceptionHandler()
-                            .TryHandleAsync(context, new GgufImportApplicationException(errorCode, "sanitized"), CancellationToken.None);
+            .TryHandleAsync(context, new GgufImportApplicationException(errorCode, "sanitized"), CancellationToken.None);
 
         AssertEx.True(handled, errorCode);
         AssertEx.Equal(expectedStatus, context.Response.StatusCode, errorCode);
@@ -98,7 +98,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     {
         var context = NewContext();
         var handled = await new GgufImportExceptionHandler()
-                            .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
+            .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
 
         AssertEx.False(handled, "the download family has its own handler; claiming it here would answer the wrong body.");
     }
@@ -108,7 +108,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     {
         var context = NewContext();
         var handled = await new GgufDownloadExceptionHandler()
-                            .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
+            .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
 
         AssertEx.True(handled);
         AssertEx.Equal(expected: 409, context.Response.StatusCode);
@@ -119,7 +119,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     {
         var context = NewContext();
         var handled = await new GgufDownloadExceptionHandler()
-                            .TryHandleAsync(context, new TimeoutException("the probe timed out"), CancellationToken.None);
+            .TryHandleAsync(context, new TimeoutException("the probe timed out"), CancellationToken.None);
 
         AssertEx.False(handled, "only the narrowed acquisition/Hugging Face family was ever mapped; the rest is a 500.");
     }
@@ -155,7 +155,12 @@ public sealed class PromotedEndpointSupportHandlerTests
             detail = document.RootElement.GetProperty("detail").GetString();
         }
 
-        return new HandledResponse { StatusCode = context.Response.StatusCode, BodyLength = length, Detail = detail };
+        return new HandledResponse
+        {
+            StatusCode = context.Response.StatusCode,
+            BodyLength = length,
+            Detail = detail
+        };
     }
 
     private sealed record HandledResponse

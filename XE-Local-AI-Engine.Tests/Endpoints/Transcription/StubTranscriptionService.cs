@@ -156,20 +156,21 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
 
         return Task.FromResult(new TranscriptionSessionPage
         {
-            Items = [
-            new TranscriptionSessionSummaryView
-            {
-                Id = Guid.NewGuid(),
-                Title = "one",
-                CreatedAtUtc = 1_700_000_000_000,
-                UpdatedAtUtc = 1_700_000_000_000,
-                Status = TranscriptionSessionStatus.Completed,
-                SourceKind = TranscriptionSourceKind.File,
-                ModelId = "ggml-tiny",
-                ConfigJson = "{\"languageMode\":\"auto\"}",
-                SegmentCount = 3
-            }
-        ],
+            Items =
+            [
+                new TranscriptionSessionSummaryView
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "one",
+                    CreatedAtUtc = 1_700_000_000_000,
+                    UpdatedAtUtc = 1_700_000_000_000,
+                    Status = TranscriptionSessionStatus.Completed,
+                    SourceKind = TranscriptionSourceKind.File,
+                    ModelId = "ggml-tiny",
+                    ConfigJson = "{\"languageMode\":\"auto\"}",
+                    SegmentCount = 3
+                }
+            ],
             TotalCount = TotalCount
         });
     }

@@ -141,7 +141,13 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         AssertEx.Equal("running",
             (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id)).FidelityStatus);
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Version,
+            FidelityAttemptId = attemptId,
+            PerplexityMean = 6.7983
+        });
 
         context.ChangeTracker.Clear();
         AssertEx.Equal("succeeded",
@@ -248,7 +254,13 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         });
         var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Version,
+            FidelityAttemptId = attemptId,
+            PerplexityMean = 6.7983
+        });
 
         await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id)).Version);
 
@@ -296,7 +308,13 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
         var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Version,
+            FidelityAttemptId = attemptId,
+            PerplexityMean = 6.7983
+        });
 
         // A requeue racing a completion must not start a second measurement of a cell that already has its number.
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.RequeueFidelityAsync(run.Id, claimed.Version, "too late"));
@@ -397,7 +415,13 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         });
         await context.SaveChangesAsync();
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = firstClaim.Version, FidelityAttemptId = first, PerplexityMean = 99.0 });
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = firstClaim.Version,
+            FidelityAttemptId = first,
+            PerplexityMean = 99.0
+        });
 
         context.ChangeTracker.Clear();
         var afterStaleSuccess = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
@@ -462,24 +486,24 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
 
         var groupId = Guid.NewGuid();
         _ = await store.StartRunsAsync([
-                               CreateRun(project) with
-                               {
-                                   RepeatGroupId = groupId,
-                                   RepeatIndex = 0,
-                                   IsWarmup = true
-                               },
-                               CreateRun(project) with
-                               {
-                                   RepeatGroupId = groupId,
-                                   RepeatIndex = 1
-                               },
-                               CreateRun(project) with
-                               {
-                                   RepeatGroupId = groupId,
-                                   RepeatIndex = 2
-                               }
-                           ],
-                           project.Version);
+                CreateRun(project) with
+                {
+                    RepeatGroupId = groupId,
+                    RepeatIndex = 0,
+                    IsWarmup = true
+                },
+                CreateRun(project) with
+                {
+                    RepeatGroupId = groupId,
+                    RepeatIndex = 1
+                },
+                CreateRun(project) with
+                {
+                    RepeatGroupId = groupId,
+                    RepeatIndex = 2
+                }
+            ],
+            project.Version);
 
         context.ChangeTracker.Clear();
         AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
@@ -656,7 +680,14 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     private static BenchmarkProjectInput CreateProject() =>
-        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Benchmark",
+            CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        };
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
         new()

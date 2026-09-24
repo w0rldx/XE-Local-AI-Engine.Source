@@ -158,24 +158,25 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
                      RepoId = "org/qwen-GGUF",
                      IsGated = false,
                      License = "apache-2.0",
-                     Files = [
-                     new GgufRepoFile
-                     {
-                         FileName = "qwen.Q4_K_M.gguf",
-                         Quant = "Q4_K_M",
-                         SizeBytes = 4 * Gb,
-                         Sha256 = null,
-                         Revision = "main",
-                         Architecture = "qwen2",
-                         QuantType = "Q4_K_M",
-                         ParamCount = 7_000_000_000L,
-                         BlockCount = 28,
-                         AttentionHeadCount = 28,
-                         AttentionHeadCountKV = 4,
-                         EmbeddingLength = 3584,
-                         ContextLength = 32768
-                     }
-                 ]
+                     Files =
+                     [
+                         new GgufRepoFile
+                         {
+                             FileName = "qwen.Q4_K_M.gguf",
+                             Quant = "Q4_K_M",
+                             SizeBytes = 4 * Gb,
+                             Sha256 = null,
+                             Revision = "main",
+                             Architecture = "qwen2",
+                             QuantType = "Q4_K_M",
+                             ParamCount = 7_000_000_000L,
+                             BlockCount = 28,
+                             AttentionHeadCount = 28,
+                             AttentionHeadCountKV = 4,
+                             EmbeddingLength = 3584,
+                             ContextLength = 32768
+                         }
+                     ]
                  }));
 
         var registry = Substitute.For<IGgufModelRegistry>();
@@ -254,6 +255,15 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
-        return new ScheduledJobRunEventRecord { Id = Guid.NewGuid(), RunId = input.RunId, Sequence = input.Sequence, Level = input.Level, Message = input.Message, DataJson = input.DataJson, OccurredAtUtc = 1L };
+        return new ScheduledJobRunEventRecord
+        {
+            Id = Guid.NewGuid(),
+            RunId = input.RunId,
+            Sequence = input.Sequence,
+            Level = input.Level,
+            Message = input.Message,
+            DataJson = input.DataJson,
+            OccurredAtUtc = 1L
+        };
     }
 }

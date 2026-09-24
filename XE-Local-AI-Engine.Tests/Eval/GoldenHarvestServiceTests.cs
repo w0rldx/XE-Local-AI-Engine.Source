@@ -53,7 +53,19 @@ public sealed class GoldenHarvestServiceTests
             MessageId = sourceMessageId,
             ConversationId = sourceConversationId,
             ConversationTitle = "Original Conversation",
-            PriorTurns = [new HarvestTurn { Role = "user", Text = "How do I reset?" }, new HarvestTurn { Role = "assistant", Text = "Use the reset button." }],
+            PriorTurns =
+            [
+                new HarvestTurn
+                {
+                    Role = "user",
+                    Text = "How do I reset?"
+                },
+                new HarvestTurn
+                {
+                    Role = "assistant",
+                    Text = "Use the reset button."
+                }
+            ],
             ApprovedAnswerText = "Hold the reset button for five seconds."
         };
         harness.WithSources(source);
@@ -101,7 +113,14 @@ public sealed class GoldenHarvestServiceTests
             MessageId = sourceMessageId,
             ConversationId = Guid.NewGuid(),
             ConversationTitle = "Conv",
-            PriorTurns = [new HarvestTurn { Role = "user", Text = "q" }],
+            PriorTurns =
+            [
+                new HarvestTurn
+                {
+                    Role = "user",
+                    Text = "q"
+                }
+            ],
             ApprovedAnswerText = "a"
         };
         harness.WithSources(source);
@@ -127,7 +146,14 @@ public sealed class GoldenHarvestServiceTests
             ConversationId = Guid.NewGuid(),
             ConversationTitle = "Conv",
             // Only an assistant prior turn (no lead-up user turn) → unusable as an input conversation.
-            PriorTurns = [new HarvestTurn { Role = "assistant", Text = "answer with no question" }],
+            PriorTurns =
+            [
+                new HarvestTurn
+                {
+                    Role = "assistant",
+                    Text = "answer with no question"
+                }
+            ],
             ApprovedAnswerText = "a"
         };
         harness.WithSources(source);
@@ -186,7 +212,14 @@ public sealed class GoldenHarvestServiceTests
             MessageId = Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
             ConversationTitle = "Conv",
-            PriorTurns = [new HarvestTurn { Role = "user", Text = question }],
+            PriorTurns =
+            [
+                new HarvestTurn
+                {
+                    Role = "user",
+                    Text = question
+                }
+            ],
             ApprovedAnswerText = "answer for " + question
         };
     }

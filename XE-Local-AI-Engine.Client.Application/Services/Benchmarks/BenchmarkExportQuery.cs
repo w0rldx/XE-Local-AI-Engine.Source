@@ -64,7 +64,14 @@ public sealed class BenchmarkExportRunFacts
 
     public required int? GpuLayers { get; init; }
 
-    public static BenchmarkExportRunFacts Empty { get; } = new() { BuildCommit = null, GpuInfo = null, ModelFilename = null, ModelSizeBytes = null, GpuLayers = null };
+    public static BenchmarkExportRunFacts Empty { get; } = new()
+    {
+        BuildCommit = null,
+        GpuInfo = null,
+        ModelFilename = null,
+        ModelSizeBytes = null,
+        GpuLayers = null
+    };
 }
 
 internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
@@ -72,8 +79,7 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
     private readonly IBenchmarkExportFactsResolver _factsResolver;
     private readonly IBenchmarkStore _store;
 
-    public BenchmarkExportQuery(
-        IBenchmarkStore store,
+    public BenchmarkExportQuery(IBenchmarkStore store,
         IBenchmarkExportFactsResolver factsResolver)
     {
         ArgumentNullException.ThrowIfNull(factsResolver);
@@ -102,7 +108,12 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
                 continue;
             }
 
-            runs.Add(new BenchmarkExportRunQueryItem { Summary = summary, Full = full, Verdict = await ReadVerdictAsync(full, ct) });
+            runs.Add(new BenchmarkExportRunQueryItem
+            {
+                Summary = summary,
+                Full = full,
+                Verdict = await ReadVerdictAsync(full, ct)
+            });
             if (firstOfMeasuredGroups.Contains(full.Id))
             {
                 facts[full.Id] = _factsResolver.ResolveRun(full);

@@ -157,7 +157,12 @@ public sealed class CapacityServiceTests
         };
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, PublishLaunchAdmission = false },
+        var decision = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                PublishLaunchAdmission = false
+            },
             CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
@@ -182,7 +187,12 @@ public sealed class CapacityServiceTests
 
         // The benchmark holds its reservation open for the whole exclusive spawn, which is when the supervisor asks
         // the registry whether it may launch. An ordinary Allow leaves an admission there and that ask fails.
-        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, PublishLaunchAdmission = false },
+        var decision = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                PublishLaunchAdmission = false
+            },
             CancellationToken.None);
         using var reservation = decision.Reservation;
 
@@ -204,7 +214,12 @@ public sealed class CapacityServiceTests
         };
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, RequiredContextTokens = 32768 }, CancellationToken.None);
+        var decision = await service.DecideAsync(new CapacityRequest
+        {
+            ModelName = Model,
+            Role = ModelRole.Chat,
+            RequiredContextTokens = 32768
+        }, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         _ = harness.FootprintProvider.Received(1)
@@ -223,8 +238,20 @@ public sealed class CapacityServiceTests
             MaxLoadedProcesses = 2,
             RunningLlama =
             [
-                new LlamaServerProcessHealth { ModelName = "running/a:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" },
-                new LlamaServerProcessHealth { ModelName = "running/b:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                },
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/b:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
             ]
         };
         var service = harness.Build();
@@ -324,7 +351,16 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = Model,
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
         };
         var service = harness.Build();
 
@@ -348,7 +384,17 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = false, Detail = "Process has exited.", HasExited = true }]
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = Model,
+                    Role = ModelRole.Chat,
+                    IsResponsive = false,
+                    Detail = "Process has exited.",
+                    HasExited = true
+                }
+            ]
         };
         var service = harness.Build();
 
@@ -366,7 +412,16 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = false, Detail = "Not responding to health probe." }]
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = Model,
+                    Role = ModelRole.Chat,
+                    IsResponsive = false,
+                    Detail = "Not responding to health probe."
+                }
+            ]
         };
         var service = harness.Build();
 
@@ -381,7 +436,16 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model.ToUpperInvariant(), Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = Model.ToUpperInvariant(),
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
         };
         var service = harness.Build();
 
@@ -471,7 +535,12 @@ public sealed class CapacityServiceTests
                });
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, RequiredContextTokens = 16384 },
+        var decision = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                RequiredContextTokens = 16384
+            },
             CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
@@ -521,7 +590,16 @@ public sealed class CapacityServiceTests
             Profile = CpuProfile(availableRam: 10 * Gb),
             Footprint = CpuFootprint(8 * Gb),
             MaxLoadedProcesses = 5,
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = "resident/big:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "resident/big:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
         };
         var service = harness.Build();
 
@@ -636,7 +714,16 @@ public sealed class CapacityServiceTests
                 GpuVendor = GpuVendor.Amd
             },
             Footprint = GpuFootprint(8 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth { ModelName = "resident/model", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }],
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "resident/model",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ],
             MaxLoadedProcesses = 5
         };
         var service = harness.Build();
@@ -764,7 +851,14 @@ public sealed class CapacityServiceTests
             Footprint = GpuFootprint(40 * Gb),
             RunningOllama =
             [
-                new RunningModelSnapshot { Name = "other-model", ModelName = "other-model", ExpiresAt = null, SizeBytes = 3 * Gb, SizeVramBytes = 3 * Gb }
+                new RunningModelSnapshot
+                {
+                    Name = "other-model",
+                    ModelName = "other-model",
+                    ExpiresAt = null,
+                    SizeBytes = 3 * Gb,
+                    SizeVramBytes = 3 * Gb
+                }
             ]
         };
         var service = harness.Build();

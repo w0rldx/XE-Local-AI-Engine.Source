@@ -111,11 +111,11 @@ public sealed class ExternalAppServiceLifecycleTests
         var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var detail = await harness.Service.ConfigureAsync(stopped.Id,
-                                      stopped.Version,
-                                      new Dictionary<string, string>(StringComparer.Ordinal)
-                                      {
-                                          ["LLM_HOST"] = "http://127.0.0.1:9999"
-                                      });
+            stopped.Version,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["LLM_HOST"] = "http://127.0.0.1:9999"
+            });
 
         AssertEx.True(detail.NeedsRecreate, "A configure records that the running containers no longer match the stored values.");
 
@@ -356,11 +356,11 @@ public sealed class ExternalAppServiceLifecycleTests
         };
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
@@ -444,8 +444,8 @@ public sealed class ExternalAppServiceLifecycleTests
         var installed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var failure = await AssertEx
-                            .ThrowsAsync<ExternalAppInvalidTransitionException>(() =>
-                                harness.Service.ConfigureAsync(installed.Id, installed.Version, new Dictionary<string, string>(StringComparer.Ordinal)));
+            .ThrowsAsync<ExternalAppInvalidTransitionException>(() =>
+                harness.Service.ConfigureAsync(installed.Id, installed.Version, new Dictionary<string, string>(StringComparer.Ordinal)));
 
         // The wording, not only the refusal: admission is every Operable status except Running, so a message that
         // said "while the application is stopped" described a rule the service stopped enforcing when Failed and
@@ -465,18 +465,18 @@ public sealed class ExternalAppServiceLifecycleTests
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
         await using var harness = await StoppedHarnessAsync(manifest,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["ADMIN_PASSWORD"] = "correct horse battery staple"
-                });
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ADMIN_PASSWORD"] = "correct horse battery staple"
+            });
         var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var detail = await harness.Service.ConfigureAsync(stopped.Id,
-                                      stopped.Version,
-                                      new Dictionary<string, string>(StringComparer.Ordinal)
-                                      {
-                                          ["ADMIN_PASSWORD"] = ExternalAppVariableMask.Value
-                                      });
+            stopped.Version,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ADMIN_PASSWORD"] = ExternalAppVariableMask.Value
+            });
 
         AssertEx.Equal(ExternalAppVariableMask.Value, detail.MaskedVariables["ADMIN_PASSWORD"]);
 
@@ -658,11 +658,11 @@ public sealed class ExternalAppServiceLifecycleTests
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        variables ?? new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            variables ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;

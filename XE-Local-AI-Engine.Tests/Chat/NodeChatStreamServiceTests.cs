@@ -744,7 +744,7 @@ public sealed class NodeChatStreamServiceTests
 
         // The early answer, taken while the definition is still narrow — the pre-session check the workflow lane makes.
         var early = await new WorkSessionWriteDeclarationGuard(resolver, offerProvider, CreateNodeSettingsStore(), CreateLocalDefaultChatModelResolver())
-                          .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None);
+            .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None);
         AssertEx.Null(early, "The definition carries nothing that writes when the early check reads it.");
 
         var refusal = await AssertEx.ThrowsAsync<WorkSessionUndeclaredWriteException>(async () =>
@@ -788,7 +788,7 @@ public sealed class NodeChatStreamServiceTests
 
         // Burn the narrow first answer so this send resolves the widened definition, exactly as the refusing test does.
         _ = await resolver.ResolveAsync(agentDefinitionId, WriteDeclarationModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false,
-                              activeModelIsCloud: false, CancellationToken.None);
+            activeModelIsCloud: false, CancellationToken.None);
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1342,7 +1342,20 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
+        [
+            new ConversationUploadedFileInfo
+            {
+                FileId = fileId,
+                ConversationId = conversationId,
+                OriginalFileName = "spec.txt",
+                MimeType = "text/plain",
+                Extension = ".txt",
+                SizeBytes = 128,
+                ExtractionStatus = DocumentExtractionStatus.Extracted,
+                ExtractedChars = 24,
+                CreatedAtUtc = 0
+            }
+        ];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -1691,7 +1704,20 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
+        [
+            new ConversationUploadedFileInfo
+            {
+                FileId = fileId,
+                ConversationId = conversationId,
+                OriginalFileName = "spec.txt",
+                MimeType = "text/plain",
+                Extension = ".txt",
+                SizeBytes = 128,
+                ExtractionStatus = DocumentExtractionStatus.Extracted,
+                ExtractedChars = 24,
+                CreatedAtUtc = 0
+            }
+        ];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -2020,7 +2046,12 @@ public sealed class NodeChatStreamServiceTests
         {
             if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
             {
-                AssertEx.True(cancellationRegistry.TryCancel(new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId }),
+                AssertEx.True(cancellationRegistry.TryCancel(new NodeChatMessageCorrelation
+                    {
+                        ConversationId = conversationId,
+                        MessageId = assistantMessageId,
+                        RequestId = requestId
+                    }),
                     "Expected the active stream to be registered for cancellation.");
             }
         }
@@ -2304,7 +2335,7 @@ public sealed class NodeChatStreamServiceTests
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2420,7 +2451,7 @@ public sealed class NodeChatStreamServiceTests
         // Retrieval still happens — the definition was resolved with the user turn as the relevance query, so existing
         // memory rides the resolved prompt.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>());
         // …but no NEW candidates are mined: extraction is never dispatched.
         extractionDispatcher.DidNotReceive().Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
     }
@@ -2582,8 +2613,8 @@ public sealed class NodeChatStreamServiceTests
         // An orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
         // only in a server log, so the operator saw an ordinary answer and no hint the team never ran.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
-                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
-                    "only 1 of its agents can call tools, and at least 2 are required"));
+            OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
+                "only 1 of its agents can call tools, and at least 2 are required"));
 
         AssertEx.ContainsSingle(events,
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded),
@@ -2599,7 +2630,7 @@ public sealed class NodeChatStreamServiceTests
         // A Single-kind agent never asked for orchestration, so it must stay silent even with an orchestration resolver
         // primed to degrade — the chat-turn resolver short-circuits before it is ever consulted.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Single,
-                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"));
+            OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"));
 
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded)),
             "a single-agent definition must never raise the orchestration-degraded notice");
@@ -2692,7 +2723,20 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
+        [
+            new ConversationUploadedFileInfo
+            {
+                FileId = fileId,
+                ConversationId = conversationId,
+                OriginalFileName = "spec.txt",
+                MimeType = "text/plain",
+                Extension = ".txt",
+                SizeBytes = 128,
+                ExtractionStatus = DocumentExtractionStatus.Extracted,
+                ExtractedChars = 24,
+                CreatedAtUtc = 0
+            }
+        ];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -3180,12 +3224,12 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(dropdownModel, terminalRequest!.Model);
         // The resolver was told to suppress the pin AND gate by the dropdown model.
         await resolver.Received().ResolveAsync(agentDefinitionId,
-                          Arg.Is<string?>(model => model == dropdownModel),
-                          Arg.Any<string?>(),
-                          Arg.Any<bool>(),
-                          Arg.Is<bool>(honor => !honor),
-                          Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>());
+            Arg.Is<string?>(model => model == dropdownModel),
+            Arg.Any<string?>(),
+            Arg.Any<bool>(),
+            Arg.Is<bool>(honor => !honor),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3254,12 +3298,12 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.NotNull(terminalRequest);
         AssertEx.Equal(pinnedModel, terminalRequest!.Model);
         await resolver.Received().ResolveAsync(agentDefinitionId,
-                          Arg.Any<string?>(),
-                          Arg.Any<string?>(),
-                          Arg.Any<bool>(),
-                          Arg.Is<bool>(honor => honor),
-                          Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>());
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<bool>(),
+            Arg.Is<bool>(honor => honor),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3924,13 +3968,28 @@ public sealed class NodeChatStreamServiceTests
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult { Results = hits });
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = hits
+                     });
         return CreateScopeFactory(searchService);
     }
 
     private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
     {
-        return new KnowledgeSearchHit { DocumentId = Guid.NewGuid(), ChunkId = Guid.NewGuid(), Title = title, Section = "Section", Content = content, Source = "knowledge-base", Score = score, ChunkIndex = 0, DocumentStatus = KnowledgeDocumentStatus.Indexed, ServingLastKnownGood = false };
+        return new KnowledgeSearchHit
+        {
+            DocumentId = Guid.NewGuid(),
+            ChunkId = Guid.NewGuid(),
+            Title = title,
+            Section = "Section",
+            Content = content,
+            Source = "knowledge-base",
+            Score = score,
+            ChunkIndex = 0,
+            DocumentStatus = KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = false
+        };
     }
 
     private static NodeChatStreamService CreateAgentHomeService(INodeChatPersistenceService persistence,
@@ -4085,7 +4144,11 @@ public sealed class NodeChatStreamServiceTests
 
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = _owner, NodeId = _node });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = _owner,
+                NodeId = _node
+            });
         }
     }
 
@@ -4183,7 +4246,14 @@ public sealed class NodeChatStreamServiceTests
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult { ModelName = modelName, Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = resolved, IsOverridden = false };
+                           map[modelName] = new ModelClassificationResult
+                           {
+                               ModelName = modelName,
+                               Kind = ModelKind.Chat,
+                               DetectedKind = ModelKind.Chat,
+                               Capabilities = resolved,
+                               IsOverridden = false
+                           };
                        }
                    }
 
@@ -4914,7 +4984,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class GatedCompletingInvocationRunner : IInvocationRunner
@@ -4967,7 +5036,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class ContextCapturingInvocationRunner : IInvocationRunner
@@ -5026,7 +5094,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class CompletingInvocationRunner : IInvocationRunner
@@ -5075,7 +5142,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class AwaitingCoderReadInvocationRunner : IInvocationRunner
@@ -5083,8 +5149,7 @@ public sealed class NodeChatStreamServiceTests
         private readonly RecordingWorkerEventDispatcher _dispatcher;
         private readonly ICoderWorkspaceReader _reader;
 
-        public AwaitingCoderReadInvocationRunner(
-            RecordingWorkerEventDispatcher dispatcher,
+        public AwaitingCoderReadInvocationRunner(RecordingWorkerEventDispatcher dispatcher,
             ICoderWorkspaceReader reader)
         {
             _dispatcher = dispatcher;
@@ -5099,10 +5164,10 @@ public sealed class NodeChatStreamServiceTests
         {
             await Task.Yield();
             ReadResult = await _reader.ReadFileAsync(new ReadFileToolRequest
-                                         {
-                                             Path = "src/a.txt"
-                                         },
-                                         cancellationToken);
+                {
+                    Path = "src/a.txt"
+                },
+                cancellationToken);
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult);
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId);
         }
@@ -5133,7 +5198,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class PackageCapturingInvocationRunner : IInvocationRunner
@@ -5200,7 +5264,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class ReasoningCapturingInvocationRunner : IInvocationRunner
@@ -5270,7 +5333,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class ToolEmittingInvocationRunner : IInvocationRunner
@@ -5336,7 +5398,6 @@ public sealed class NodeChatStreamServiceTests
         public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
-
     }
 
     private sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher

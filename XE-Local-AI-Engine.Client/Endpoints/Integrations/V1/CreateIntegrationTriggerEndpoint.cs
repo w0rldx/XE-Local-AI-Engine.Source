@@ -36,17 +36,17 @@ public sealed class CreateIntegrationTriggerEndpoint : Endpoint<CreateIntegratio
         var acceptedInputKinds = IntegrationMapper.FromWireInputKinds(req.AcceptedInputKinds).GetValueOrDefault();
 
         var result = await _triggerService.CreateAsync(new IntegrationTriggerCreateInput
-        {
-            Name = req.Name,
-            DisplayName = req.DisplayName,
-            Description = req.Description,
-            Enabled = req.Enabled,
-            TargetKind = req.TargetKind,
-            TargetAgentDefinitionId = req.TargetAgentDefinitionId,
-            SessionPolicy = req.SessionPolicy,
-            AcceptedInputKinds = acceptedInputKinds
-        },
-                                              ct);
+            {
+                Name = req.Name,
+                DisplayName = req.DisplayName,
+                Description = req.Description,
+                Enabled = req.Enabled,
+                TargetKind = req.TargetKind,
+                TargetAgentDefinitionId = req.TargetAgentDefinitionId,
+                SessionPolicy = req.SessionPolicy,
+                AcceptedInputKinds = acceptedInputKinds
+            },
+            ct);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {

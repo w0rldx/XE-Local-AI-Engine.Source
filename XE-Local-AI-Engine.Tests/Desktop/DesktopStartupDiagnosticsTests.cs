@@ -40,7 +40,13 @@ public sealed class DesktopStartupDiagnosticsTests
     {
         using var directory = new TempDirectory();
         AssertEx.Equal(Path.Combine(directory.Path, "logs"), DesktopStartupDiagnostics.ResolveLogDirectory(directory.Path));
-        foreach (var unusable in new[] { string.Empty, "   ", "relative/path", directory.Path + "\n" })
+        foreach (var unusable in new[]
+                 {
+                     string.Empty,
+                     "   ",
+                     "relative/path",
+                     directory.Path + "\n"
+                 })
         {
             AssertEx.Null(DesktopStartupDiagnostics.ResolveLogDirectory(unusable), unusable);
         }

@@ -154,7 +154,12 @@ public sealed class LocalRuntimeWarmerTests
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(effectiveContextTokens is { } effective ? new LocalModelRuntimeInfo { EffectiveContextTokens = effective } : null));
+                .Returns(Task.FromResult(effectiveContextTokens is { } effective
+                    ? new LocalModelRuntimeInfo
+                    {
+                        EffectiveContextTokens = effective
+                    }
+                    : null));
 
         return provider;
     }

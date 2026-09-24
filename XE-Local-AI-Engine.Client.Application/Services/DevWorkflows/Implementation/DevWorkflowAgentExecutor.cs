@@ -109,22 +109,19 @@ internal sealed class DevWorkflowAgentExecutor
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
-        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is
-            {
-                Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled
-            })
+        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is { Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled })
         {
             // The session landed and the host died before the poll wrote what it said. Nothing needs re-running: the row is settled off the session's own answer, exactly what that tick
             // would have written. A retry does not come through here — it releases its session first, precisely so it cannot.
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = DevWorkflowNodeRunStatus.Running
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Running
+                },
+                cancellationToken);
             return 1 + await PollAsync(store, graph, run, nodeRun with
             {
                 Status = DevWorkflowNodeRunStatus.Running
@@ -136,14 +133,14 @@ internal sealed class DevWorkflowAgentExecutor
         {
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = DevWorkflowNodeRunStatus.Queued,
-                QueueReason = DevWorkflowQueueReasons.AwaitingAgentSlot
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Queued,
+                    QueueReason = DevWorkflowQueueReasons.AwaitingAgentSlot
+                },
+                cancellationToken);
             written++;
         }
 
@@ -183,13 +180,13 @@ internal sealed class DevWorkflowAgentExecutor
 
         DevWorkflowStateMachine.EnsureLegal(DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Running
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Running
+            },
+            cancellationToken);
         return written + 1;
     }
 
@@ -215,22 +212,22 @@ internal sealed class DevWorkflowAgentExecutor
         if (nodeRun.WorkSessionId is not { } sessionId)
         {
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.Internal,
-                    "This node run is running without a work session, so nothing can report what it is doing.",
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.Internal,
+                "This node run is running without a work session, so nothing can report what it is doing.",
+                cancellationToken);
         }
 
         var session = await TryReadAsync(sessionId, cancellationToken);
         if (session is null)
         {
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.Configuration,
-                    "The work session this node run was driving no longer exists.",
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.Configuration,
+                "The work session this node run was driving no longer exists.",
+                cancellationToken);
         }
 
         switch (session.Status)
@@ -251,28 +248,28 @@ internal sealed class DevWorkflowAgentExecutor
                 // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is re-attempted depends on the node's cap, the run's budget and
                 // whether the node routes its failures upstream — none of which is the session's business.
                 return await _retries.SettleFailureAsync(store,
-                                         graph,
-                                         run,
-                                         nodeRun,
-                                         nodeRuns,
-                                         new DevWorkflowFailure
-                                         {
-                                             FailureClass = DevWorkflowFailureClasses.ProviderError,
-                                             SanitizedReason = "The agent's work session failed.",
-                                             OutputJson = FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)
-                                         },
-                                         cancellationToken);
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure
+                    {
+                        FailureClass = DevWorkflowFailureClasses.ProviderError,
+                        SanitizedReason = "The agent's work session failed.",
+                        OutputJson = FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)
+                    },
+                    cancellationToken);
 
             case AgentWorkSessionStatus.Cancelled:
                 return await SettleAsync(store,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowNodeRunStatus.Cancelled,
-                        DevWorkflowFailureClasses.Cancelled,
-                        "The agent's work session was cancelled.",
-                        FailureOutput(nodeRun, session, DevWorkflowFailureClasses.Cancelled),
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Cancelled,
+                    DevWorkflowFailureClasses.Cancelled,
+                    "The agent's work session was cancelled.",
+                    FailureOutput(nodeRun, session, DevWorkflowFailureClasses.Cancelled),
+                    cancellationToken);
 
             case AgentWorkSessionStatus.Draft or AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted:
 
@@ -338,14 +335,14 @@ internal sealed class DevWorkflowAgentExecutor
         try
         {
             _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                WorkSessionId = created.Id,
-                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    WorkSessionId = created.Id,
+                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")
+                },
+                cancellationToken);
         }
         catch
         {
@@ -428,7 +425,12 @@ internal sealed class DevWorkflowAgentExecutor
     /// </remarks>
     private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node)
     {
-        var runtime = new WorkSessionRuntimeOverride { ModelProfile = node?.ModelProfile, ReasoningEffort = node?.ReasoningEffort, RefuseUndeclaredWrites = DeclarationRequired(graph, node) };
+        var runtime = new WorkSessionRuntimeOverride
+        {
+            ModelProfile = node?.ModelProfile,
+            ReasoningEffort = node?.ReasoningEffort,
+            RefuseUndeclaredWrites = DeclarationRequired(graph, node)
+        };
         return runtime.IsEmpty ? null : runtime;
     }
 
@@ -801,17 +803,17 @@ internal sealed class DevWorkflowAgentExecutor
         var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
         var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
         var output = JsonSerializer.Serialize(new AgentOutput
-        {
-            Status = DevWorkflowNodeOutputStatuses.Succeeded,
-            Attempt = nodeRun.Attempt,
-            FailureClass = null,
-            SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
-            SessionResumes = nodeRun.SessionResumes,
-            ArtifactCount = promoted,
-            Findings = findings.Where(static finding => !finding.Superseded)
-                        .GroupBy(static finding => finding.Kind)
-                        .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)
-        },
+            {
+                Status = DevWorkflowNodeOutputStatuses.Succeeded,
+                Attempt = nodeRun.Attempt,
+                FailureClass = null,
+                SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
+                SessionResumes = nodeRun.SessionResumes,
+                ArtifactCount = promoted,
+                Findings = findings.Where(static finding => !finding.Superseded)
+                                   .GroupBy(static finding => finding.Kind)
+                                   .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)
+            },
             JsonOptions);
 
         return await SettleAsync(store, run, nodeRun, nodeRuns, DevWorkflowNodeRunStatus.Succeeded, failureClass: null, terminalReason: null, output, cancellationToken);
@@ -834,11 +836,11 @@ internal sealed class DevWorkflowAgentExecutor
         if (nodeRun.SessionResumes >= _options.MaxSessionResumesPerNodeRun)
         {
             return await BlockAsync(store,
-                    run,
-                    nodeRun,
-                    DevWorkflowFailureClasses.BudgetExhausted,
-                    $"This node run resumed its work session {nodeRun.SessionResumes} times without finishing, which is as many as this node allows.",
-                    cancellationToken);
+                run,
+                nodeRun,
+                DevWorkflowFailureClasses.BudgetExhausted,
+                $"This node run resumed its work session {nodeRun.SessionResumes} times without finishing, which is as many as this node allows.",
+                cancellationToken);
         }
 
         if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken))
@@ -850,15 +852,15 @@ internal sealed class DevWorkflowAgentExecutor
         // Recorded AFTER the resume landed, keyed by the resume index so a replayed tick cannot spend the budget twice. The attach event is also the per-attempt history the single-row
         // node-run schema does not keep.
         _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            WorkSessionId = session.Id,
-            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"resume-{nodeRun.SessionResumes}"),
-            CountsAsResume = true
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                WorkSessionId = session.Id,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"resume-{nodeRun.SessionResumes}"),
+                CountsAsResume = true
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -897,15 +899,15 @@ internal sealed class DevWorkflowAgentExecutor
 
     private static string FailureOutput(DevWorkflowNodeRunSnapshot nodeRun, WorkSessionDetail session, string failureClass) =>
         JsonSerializer.Serialize(new AgentOutput
-        {
-            Status = DevWorkflowNodeOutputStatuses.Failed,
-            Attempt = nodeRun.Attempt,
-            FailureClass = failureClass,
-            SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
-            SessionResumes = nodeRun.SessionResumes,
-            ArtifactCount = 0,
-            Findings = new Dictionary<string, int>(StringComparer.Ordinal)
-        },
+            {
+                Status = DevWorkflowNodeOutputStatuses.Failed,
+                Attempt = nodeRun.Attempt,
+                FailureClass = failureClass,
+                SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
+                SessionResumes = nodeRun.SessionResumes,
+                ArtifactCount = 0,
+                Findings = new Dictionary<string, int>(StringComparer.Ordinal)
+            },
             JsonOptions);
 
     private static async Task<int> SettleAsync(IDevWorkflowStore store,
@@ -920,17 +922,17 @@ internal sealed class DevWorkflowAgentExecutor
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = target,
-            OutputJson = outputJson,
-            FailureClass = failureClass,
-            TerminalReason = terminalReason,
-            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = target,
+                OutputJson = outputJson,
+                FailureClass = failureClass,
+                TerminalReason = terminalReason,
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -947,17 +949,17 @@ internal sealed class DevWorkflowAgentExecutor
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
-            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
-            FailureClass = failureClass,
-            TerminalReason = sanitizedReason,
-            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+                PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+                FailureClass = failureClass,
+                TerminalReason = sanitizedReason,
+                WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+            },
+            cancellationToken);
         return 1;
     }
 

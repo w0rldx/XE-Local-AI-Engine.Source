@@ -253,8 +253,16 @@ public sealed class FakeDockerContainerRouteTests
 
         var containerId = await box.Runtime.RunContainerAsync(Specification());
         var container = box.State.Containers[containerId];
-        container.Logs.Add(new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardOutput, Text = "listening on 8080\n" });
-        container.Logs.Add(new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardError, Text = "config warning\n" });
+        container.Logs.Add(new FakeDockerLogFrame
+        {
+            Stream = FakeDockerStreamKind.StandardOutput,
+            Text = "listening on 8080\n"
+        });
+        container.Logs.Add(new FakeDockerLogFrame
+        {
+            Stream = FakeDockerStreamKind.StandardError,
+            Text = "config warning\n"
+        });
 
         var snapshot = await box.Runtime.ReadLogsAsync(containerId, new ContainerLogRequest());
 

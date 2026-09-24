@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.GraphWorkflows.GraphWorkflowChatTestSupport;
+using static Tests.GraphWorkflows.GraphWorkflowChatTestSupport;
 
 /// <summary>
 ///     The steer route's contract over a running chat-bound Agent: 202 and the persisted user message, idempotency on
@@ -27,7 +27,10 @@ public sealed class GraphWorkflowSteerEndpointTests
     {
         const string instructions = "steer-endpoint-cap";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var (runId, conversationId) = await StartRunningAsync(harness, instructions);
         var first = Guid.NewGuid();
 
@@ -85,7 +88,10 @@ public sealed class GraphWorkflowSteerEndpointTests
     {
         const string instructions = "steer-endpoint-refusals";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var (runId, conversationId) = await StartRunningAsync(harness, instructions);
 
         using (var start = await PostSteerAsync(Host.Factory, runId, "start", Guid.NewGuid(), "steer the start"))
@@ -133,8 +139,14 @@ public sealed class GraphWorkflowSteerEndpointTests
         const string left = "steer-two-nodes-left";
         const string right = "steer-two-nodes-right";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(left, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
-        harness.Invocations.Script(right, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(left, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
+        harness.Invocations.Script(right, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var definitionId = await harness.SeedDefinitionAsync(TwoAgentGraph(left, right));
         var conversationId = await CreateConversationAsync(harness.Services);
         using var start = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "fan out"));
@@ -146,11 +158,11 @@ public sealed class GraphWorkflowSteerEndpointTests
         var operationId = Guid.NewGuid();
 
         using (var first = await PostSteerAsync(Host.Factory, runId, "left", operationId, "left, go deeper"))
-        using (var second = await PostSteerAsync(Host.Factory, runId, "right", operationId, "right, go wider"))
-        {
-            AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
-            AssertEx.Equal(HttpStatusCode.Accepted, second.StatusCode);
-        }
+            using (var second = await PostSteerAsync(Host.Factory, runId, "right", operationId, "right, go wider"))
+            {
+                AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
+                AssertEx.Equal(HttpStatusCode.Accepted, second.StatusCode);
+            }
 
         AssertEx.Equal(1, (await harness.ReadNodeRunAsync(runId, "left")).Steering.Count);
         AssertEx.Equal(1, (await harness.ReadNodeRunAsync(runId, "right")).Steering.Count);

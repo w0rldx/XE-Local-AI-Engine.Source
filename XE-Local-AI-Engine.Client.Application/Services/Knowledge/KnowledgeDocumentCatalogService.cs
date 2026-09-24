@@ -66,7 +66,11 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         // An unusable namespace holds no documents, but the embedding verdict is node-wide and still gates the upload.
         return KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId)
             ? await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken)
-            : new KnowledgeDocumentListing { Items = [], Embedding = await ResolveEmbeddingModelAsync(cancellationToken) };
+            : new KnowledgeDocumentListing
+            {
+                Items = [],
+                Embedding = await ResolveEmbeddingModelAsync(cancellationToken)
+            };
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
@@ -140,7 +144,11 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             });
         }
 
-        return new KnowledgeDocumentListing { Items = documents, Embedding = resolution };
+        return new KnowledgeDocumentListing
+        {
+            Items = documents,
+            Embedding = resolution
+        };
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)
@@ -430,7 +438,11 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
         catch (InvalidOperationException)
         {
-            return new EmbeddingModelResolution { Name = _options.EmbeddingModelName, IsConfident = false };
+            return new EmbeddingModelResolution
+            {
+                Name = _options.EmbeddingModelName,
+                IsConfident = false
+            };
         }
     }
 

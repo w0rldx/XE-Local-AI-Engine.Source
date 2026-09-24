@@ -175,7 +175,12 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         }
 
         using var watchdogCompleted = new CancellationTokenSource();
-        var watchdog = RunWatchdogAsync(new McpAgentRunCancellationHandle { RequestId = claimed.RequestId, ClaimToken = claimToken, Version = claimed.Version },
+        var watchdog = RunWatchdogAsync(new McpAgentRunCancellationHandle
+            {
+                RequestId = claimed.RequestId,
+                ClaimToken = claimToken,
+                Version = claimed.Version
+            },
             watchdogCompleted.Token);
 
         try
@@ -343,17 +348,17 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
             var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization
-            {
-                RequestId = claimed.RequestId,
-                ExpectedVersion = claimed.Version,
-                ClaimToken = claimToken,
-                Status = McpAgentRunStatus.Failed,
-                ExpectedStopReason = McpAgentRunStopReason.None,
-                FailureCode = InternalFailureCode,
-                Result = null,
-                DisplayMessage = "The run could not be started.",
-                CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-            },
+                {
+                    RequestId = claimed.RequestId,
+                    ExpectedVersion = claimed.Version,
+                    ClaimToken = claimToken,
+                    Status = McpAgentRunStatus.Failed,
+                    ExpectedStopReason = McpAgentRunStopReason.None,
+                    FailureCode = InternalFailureCode,
+                    Result = null,
+                    DisplayMessage = "The run could not be started.",
+                    CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+                },
                 CancellationToken.None);
             if (finalized)
             {
@@ -371,7 +376,12 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     {
         try
         {
-            var active = new McpAgentRunCancellationHandle { RequestId = claimed.RequestId, ClaimToken = claimToken, Version = claimed.Version };
+            var active = new McpAgentRunCancellationHandle
+            {
+                RequestId = claimed.RequestId,
+                ClaimToken = claimToken,
+                Version = claimed.Version
+            };
             await PersistStopThenSignalAsync(active,
                 McpAgentRunStopReason.HostShutdown,
                 "host",
@@ -407,17 +417,17 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         };
 
         var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization
-        {
-            RequestId = current.RequestId,
-            ExpectedVersion = current.Version,
-            ClaimToken = claimToken,
-            Status = status,
-            ExpectedStopReason = current.StopReason,
-            FailureCode = failureCode,
-            Result = null,
-            DisplayMessage = displayMessage,
-            CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-        },
+            {
+                RequestId = current.RequestId,
+                ExpectedVersion = current.Version,
+                ClaimToken = claimToken,
+                Status = status,
+                ExpectedStopReason = current.StopReason,
+                FailureCode = failureCode,
+                Result = null,
+                DisplayMessage = displayMessage,
+                CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
             CancellationToken.None);
         if (finalized)
         {

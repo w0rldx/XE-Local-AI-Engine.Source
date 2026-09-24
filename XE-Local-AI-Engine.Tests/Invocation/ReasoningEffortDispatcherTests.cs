@@ -498,7 +498,12 @@ public sealed class ReasoningEffortDispatcherTests
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: FastModel,
             fastModelLocality: ModelTrustLocality.Local,
-            capacityDecision: new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "no room", OllamaEvictionWarning = false });
+            capacityDecision: new CapacityDecision
+            {
+                Verdict = CapacityVerdict.RejectInsufficient,
+                Reason = "no room",
+                OllamaEvictionWarning = false
+            });
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
         AssertEx.Equal("low", decision.Effort);
@@ -535,7 +540,13 @@ public sealed class ReasoningEffortDispatcherTests
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: FastModel,
             fastModelLocality: ModelTrustLocality.Local,
-            capacityDecision: new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "ok", OllamaEvictionWarning = false, Reservation = reservation },
+            capacityDecision: new CapacityDecision
+            {
+                Verdict = CapacityVerdict.Allow,
+                Reason = "ok",
+                OllamaEvictionWarning = false,
+                Reservation = reservation
+            },
             fastModelCapabilities: new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: false, IsCloud: false)
             {
                 ReasoningBudgetEnforceable = false
@@ -677,7 +688,13 @@ public sealed class ReasoningEffortDispatcherTests
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: FastModel,
             fastModelLocality: ModelTrustLocality.Local,
-            capacityDecision: new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "ok", OllamaEvictionWarning = false, Reservation = reservation },
+            capacityDecision: new CapacityDecision
+            {
+                Verdict = CapacityVerdict.Allow,
+                Reason = "ok",
+                OllamaEvictionWarning = false,
+                Reservation = reservation
+            },
             capabilityResolver: capabilityResolver);
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
@@ -701,7 +718,13 @@ public sealed class ReasoningEffortDispatcherTests
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: FastModel,
             fastModelLocality: ModelTrustLocality.Local,
-            capacityDecision: new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "ok", OllamaEvictionWarning = false, Reservation = reservation },
+            capacityDecision: new CapacityDecision
+            {
+                Verdict = CapacityVerdict.Allow,
+                Reason = "ok",
+                OllamaEvictionWarning = false,
+                Reservation = reservation
+            },
             capabilityResolver: capabilityResolver));
 
         AssertEx.Equal(expected: 1, reservation.DisposeCount, "released exactly once — never leaked, never double-released");
@@ -798,7 +821,12 @@ public sealed class ReasoningEffortDispatcherTests
 
         var capacityService = Substitute.For<ICapacityService>();
         capacityService.DecideAsync(Arg.Any<CapacityRequest>(), Arg.Any<CancellationToken>())
-                       .Returns(Task.FromResult(capacityDecision ?? new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "ok", OllamaEvictionWarning = false }));
+                       .Returns(Task.FromResult(capacityDecision ?? new CapacityDecision
+                       {
+                           Verdict = CapacityVerdict.Allow,
+                           Reason = "ok",
+                           OllamaEvictionWarning = false
+                       }));
 
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
@@ -826,7 +854,12 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     private static CapacityDecision QueueSameModel() =>
-        new() { Verdict = CapacityVerdict.QueueSameModel, Reason = "already running", OllamaEvictionWarning = false };
+        new()
+        {
+            Verdict = CapacityVerdict.QueueSameModel,
+            Reason = "already running",
+            OllamaEvictionWarning = false
+        };
 
     private sealed class StubDisposable : IDisposable
     {

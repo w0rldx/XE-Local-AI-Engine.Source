@@ -89,7 +89,10 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     {
         // Through UpdateAsync so the mutation runs against the record the write lands on: a sibling writer's field
         // is never lost. The persist is the authority — a check under a policy that was not stored would lie.
-        await _settingsStore.UpdateAsync(current => current with { UpdateChannel = AppUpdateChannelNames.ToWire(channel) }, ct);
+        await _settingsStore.UpdateAsync(current => current with
+        {
+            UpdateChannel = AppUpdateChannelNames.ToWire(channel)
+        }, ct);
 
         // CheckForUpdatesAsync passes minInterval: null, i.e. NO rate floor: a check under a new policy is not a
         // duplicate. The startup check and the manual refresh keep passing their own floors, unchanged.

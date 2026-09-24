@@ -35,8 +35,19 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         await using var provider = await BuildProviderAsync("backfill-null-title.sqlite");
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Local chat", UserId = "node", CreatedAtUtc = 10 });
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "hello world", CreatedAtUtc = 11 });
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Local chat",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "hello world",
+            CreatedAtUtc = 11
+        });
 
         await using (var scope = provider.CreateAsyncScope())
         {
@@ -61,9 +72,20 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         await using var provider = await BuildProviderAsync("backfill-first-user-message.sqlite");
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Local chat", UserId = "node", CreatedAtUtc = 10 });
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Local chat",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = messageId, Content = "hello world", CreatedAtUtc = 11 });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = messageId,
+            Content = "hello world",
+            CreatedAtUtc = 11
+        });
 
         await using (var scope = provider.CreateAsyncScope())
         {

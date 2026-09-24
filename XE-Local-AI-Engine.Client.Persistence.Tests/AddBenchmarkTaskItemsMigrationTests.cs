@@ -110,10 +110,10 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId);
         await SeedProjectAndRunsAsync(probe);
         var beforeProject = await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;",
-                ProjectId);
+            ProjectId);
         var beforeRun = await ScalarStringAsync(probe,
-                "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
-                RunId);
+            "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
+            RunId);
 
         await probe.MigrateToAsync(targetMigration: null);
 
@@ -122,8 +122,8 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
             "The migration must not touch what the project asks, nor its version.");
         AssertEx.Equal(beforeRun,
             await ScalarStringAsync(probe,
-                    "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
-                    RunId),
+                "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
+                RunId),
             "A frozen run replays from bytes that this migration must leave alone.");
 
         var items = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_task_items;");
@@ -134,11 +134,11 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         AssertEx.True(unstamped[0] == 0, "A pre-suite run names no item; it is read as item 0 rather than claiming one.");
 
         var alone = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE cell_key = (SELECT cell_key FROM benchmark_runs WHERE id = $id);",
-                                   command => command.Parameters.AddWithValue("$id", RunId));
+            command => command.Parameters.AddWithValue("$id", RunId));
         AssertEx.True(alone[0] == 1, "A legacy run's cell holds exactly itself, so its cell mean is its own score.");
 
         AssertEx.Null(await probe.ScalarAsync("SELECT task_item_set_hash FROM benchmark_projects WHERE id = $id;",
-                                     command => command.Parameters.AddWithValue("$id", ProjectId)) as string,
+                command => command.Parameters.AddWithValue("$id", ProjectId)) as string,
             "The project's set hash stays null until its first item write.");
     }
 
@@ -182,9 +182,9 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         await InsertItemAsync(probe, index: 2, kind: "niahCase");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 3, kind: "whatever"),
-                              "A kind outside the vocabulary must be refused by the schema, not only by the store.");
+            "A kind outside the vocabulary must be refused by the schema, not only by the store.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 0, kind: "prompt"),
-                              "Two items of one project cannot share an index.");
+            "Two items of one project cannot share an index.");
     }
 
     [Test]

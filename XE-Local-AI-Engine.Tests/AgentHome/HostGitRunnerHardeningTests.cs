@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using System.ComponentModel;
+using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -13,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cannot close. Proved by planting a marker in a global configuration file; <c>[NotInParallel]</c> because the
 ///     probe must set <c>GIT_CONFIG_GLOBAL</c> on this process for the child to inherit it.
 /// </remarks>
-[Category(TestCategories.Integration)]
+[TUnit.Core.Category(TestCategories.Integration)]
 [NotInParallel]
 public sealed class HostGitRunnerHardeningTests : IDisposable
 {
@@ -111,7 +113,10 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
             var stillReading = true;
             try
             {
-                await writer.WriteAsync(new byte[] { 0x0A });
+                await writer.WriteAsync(new byte[]
+                {
+                    0x0A
+                });
                 await writer.FlushAsync();
             }
             catch (IOException)
@@ -131,7 +136,7 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
     /// </summary>
     private static async Task<bool> TryMakeFifoAsync(string path)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = "mkfifo",
             RedirectStandardError = true,
@@ -142,7 +147,7 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
 
         try
         {
-            using var process = new System.Diagnostics.Process
+            using var process = new Process
             {
                 StartInfo = startInfo
             };
@@ -151,7 +156,7 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
             await process.WaitForExitAsync();
             return process.ExitCode == 0 && File.Exists(path);
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (Win32Exception)
         {
             return false;
         }
@@ -163,7 +168,7 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
     /// </summary>
     private async Task<(int ExitCode, string StandardOutput, string StandardError)> RawGitAsync(string globalConfig)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = "git",
             RedirectStandardOutput = true,
@@ -177,7 +182,7 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
         startInfo.ArgumentList.Add(MarkerKey);
         startInfo.Environment["GIT_CONFIG_GLOBAL"] = globalConfig;
 
-        using var process = new System.Diagnostics.Process
+        using var process = new Process
         {
             StartInfo = startInfo
         };

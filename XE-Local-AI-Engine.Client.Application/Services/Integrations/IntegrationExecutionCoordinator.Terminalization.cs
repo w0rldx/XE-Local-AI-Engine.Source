@@ -38,9 +38,9 @@ internal sealed partial class IntegrationExecutionCoordinator
 
             var context = new ExecutionRunContext(store, row);
             await TerminalizeFromFaultAsync(context,
-                    IntegrationExecutionStatus.Failed,
-                    IntegrationFailureCategories.InternalFailure,
-                    "The execution could not be dispatched.");
+                IntegrationExecutionStatus.Failed,
+                IntegrationFailureCategories.InternalFailure,
+                "The execution could not be dispatched.");
         }
         catch (Exception exception)
         {
@@ -185,20 +185,20 @@ internal sealed partial class IntegrationExecutionCoordinator
         {
             // Terminal writes never carry the run's cancellation token: a shutdown must still be able to close the row.
             var won = await context.Store.TryTerminalizeAsync(new IntegrationTerminalizeCommand
-            {
-                ExecutionId = context.ExecutionId,
-                ExpectedVersion = context.Version,
-                ExpectedStatuses = expectedStatuses,
-                NewStatus = status,
-                Sequence = sequence,
-                EventType = eventType,
-                EndedAtUtc = endedAtUtc,
-                FailureCategory = failureCategory,
-                FailureSummary = failureSummary,
-                EventDetailJson = payload?.GetRawText(),
-                Audit = BuildAudit(context, status, endedAtUtc)
-            },
-                                       CancellationToken.None);
+                {
+                    ExecutionId = context.ExecutionId,
+                    ExpectedVersion = context.Version,
+                    ExpectedStatuses = expectedStatuses,
+                    NewStatus = status,
+                    Sequence = sequence,
+                    EventType = eventType,
+                    EndedAtUtc = endedAtUtc,
+                    FailureCategory = failureCategory,
+                    FailureSummary = failureSummary,
+                    EventDetailJson = payload?.GetRawText(),
+                    Audit = BuildAudit(context, status, endedAtUtc)
+                },
+                CancellationToken.None);
             if (!won)
             {
                 return false;

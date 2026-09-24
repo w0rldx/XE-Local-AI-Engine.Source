@@ -66,7 +66,7 @@ public sealed class RefreshRecommendationsEndpoint : Endpoint<RefreshRecommendat
         }
 
         await _modelFitRefreshTrigger
-              .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct);
+            .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct);
         await Send.OkAsync(new RefreshRecommendationsResponse
             {
                 ScheduledJobId = req.ScheduledJobId

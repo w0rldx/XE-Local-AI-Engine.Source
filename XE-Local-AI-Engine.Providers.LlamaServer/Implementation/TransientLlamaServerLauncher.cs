@@ -19,8 +19,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
     private readonly ILogger<TransientLlamaServerLauncher> _logger;
     private readonly IGpuVariantSelector _variantSelector;
 
-    public TransientLlamaServerLauncher(
-        ILlamaCppBinaryManager binaryManager,
+    public TransientLlamaServerLauncher(ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         ILlamaServerProcessLauncher launcher,
         ILlamaServerHealthProbe healthProbe,
@@ -75,7 +74,11 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         try
         {
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, request.ReadinessTimeout, ct).ConfigureAwait(false);
-            return await body(new TransientLlamaServerSession { BaseAddress = spec.BaseAddress, ModelId = modelId }, ct).ConfigureAwait(false);
+            return await body(new TransientLlamaServerSession
+            {
+                BaseAddress = spec.BaseAddress,
+                ModelId = modelId
+            }, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -200,7 +203,13 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 request.LaunchPolicy,
                 processId,
                 capabilityDecision.OmittedOptions).ConfigureAwait(false);
-            var session = new TransientLlamaServerEvaluationSession { BaseAddress = spec.BaseAddress, ModelId = endpointModelAlias, Model = model, Launch = receipt };
+            var session = new TransientLlamaServerEvaluationSession
+            {
+                BaseAddress = spec.BaseAddress,
+                ModelId = endpointModelAlias,
+                Model = model,
+                Launch = receipt
+            };
             await bindProvenance(session.Provenance, ct).ConfigureAwait(false);
             value = await body(session, ct).ConfigureAwait(false);
         }

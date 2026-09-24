@@ -55,7 +55,12 @@ public sealed class TrainingCapacityGate : ITrainingCapacityGate
             var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, cancellationToken);
             if (!profile.VramKnown)
             {
-                return new TrainingCapacityReservation { Granted = false, Reason = "No usable GPU was detected on this node.", Handle = null };
+                return new TrainingCapacityReservation
+                {
+                    Granted = false,
+                    Reason = "No usable GPU was detected on this node.",
+                    Handle = null
+                };
             }
 
             var reserved = _ledger.Reserved;
@@ -73,7 +78,12 @@ public sealed class TrainingCapacityGate : ITrainingCapacityGate
             var freeRam = profile.AvailableRamBytes - reserved.RamBytes;
             if (estimate.RamBytes > freeRam)
             {
-                return new TrainingCapacityReservation { Granted = false, Reason = "Not enough free system memory to start this run.", Handle = null };
+                return new TrainingCapacityReservation
+                {
+                    Granted = false,
+                    Reason = "Not enough free system memory to start this run.",
+                    Handle = null
+                };
             }
 
             return new TrainingCapacityReservation

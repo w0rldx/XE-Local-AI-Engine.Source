@@ -1429,7 +1429,16 @@ public sealed class AgentDefinitionResolverTests
 
     private static AgentSkillResourceRecord ResourceRecord(Guid skillId, string name, string description, string content)
     {
-        return new AgentSkillResourceRecord { Id = Guid.NewGuid(), SkillId = skillId, Name = name, Description = description, MediaType = "text/markdown", Content = content, SizeBytes = content.Length };
+        return new AgentSkillResourceRecord
+        {
+            Id = Guid.NewGuid(),
+            SkillId = skillId,
+            Name = name,
+            Description = description,
+            MediaType = "text/markdown",
+            Content = content,
+            SizeBytes = content.Length
+        };
     }
 
     // Builds a resolver over the REAL LocalToolOfferProvider so the locality-gate tests observe the actual knowledge-tool

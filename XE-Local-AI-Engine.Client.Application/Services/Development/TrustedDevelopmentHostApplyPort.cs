@@ -14,8 +14,7 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
     private readonly IDevelopmentArtifactBlobStore _blobStore;
     private readonly DevelopmentOptions _options;
 
-    public TrustedDevelopmentHostApplyPort(
-        IDevelopmentArtifactBlobStore blobStore,
+    public TrustedDevelopmentHostApplyPort(IDevelopmentArtifactBlobStore blobStore,
         IOptions<DevelopmentOptions> options)
     {
         ArgumentNullException.ThrowIfNull(blobStore);
@@ -69,7 +68,12 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
                 subject.RepositoryIdentityHash,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = ReadOnlyMemory<byte>.Empty };
+            return new ResolvedApplyState
+            {
+                State = DevelopmentHostApplyState.Ambiguous,
+                RepositoryRoot = canonicalRoot,
+                Patch = ReadOnlyMemory<byte>.Empty
+            };
         }
 
         var patch = await ReadArtifactAsync(subject.ProjectId,
@@ -95,7 +99,12 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             || !string.Equals(branch.StandardOutputText.Trim(), subject.BaseBranch, StringComparison.Ordinal)
             || !string.Equals(head.StandardOutputText.Trim(), subject.BaseCommit, StringComparison.OrdinalIgnoreCase))
         {
-            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = patch };
+            return new ResolvedApplyState
+            {
+                State = DevelopmentHostApplyState.Ambiguous,
+                RepositoryRoot = canonicalRoot,
+                Patch = patch
+            };
         }
 
         var resultTree = await RunGitAsync(canonicalRoot, ["write-tree"], null, cancellationToken);
@@ -111,14 +120,24 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             if (appliedPatch.ExitCode == 0
                 && string.Equals(Hash(appliedPatch.StandardOutput), subject.PatchHash, StringComparison.OrdinalIgnoreCase))
             {
-                return new ResolvedApplyState { State = DevelopmentHostApplyState.ExactApprovedResultPresent, RepositoryRoot = canonicalRoot, Patch = patch };
+                return new ResolvedApplyState
+                {
+                    State = DevelopmentHostApplyState.ExactApprovedResultPresent,
+                    RepositoryRoot = canonicalRoot,
+                    Patch = patch
+                };
             }
         }
 
         var status = await RunGitAsync(canonicalRoot, ["status", "--porcelain=v1", "--untracked-files=all"], null, cancellationToken);
         if (status.ExitCode != 0 || status.StandardOutput.Length != 0)
         {
-            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = patch };
+            return new ResolvedApplyState
+            {
+                State = DevelopmentHostApplyState.Ambiguous,
+                RepositoryRoot = canonicalRoot,
+                Patch = patch
+            };
         }
 
         var check = await RunGitAsync(canonicalRoot,

@@ -34,7 +34,7 @@ public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
                 return;
             case BaseArtifactDeleteOutcome.Downloading:
                 await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("downloading",
-                              "The base checkpoint is still downloading. Cancel the download before deleting it."));
+                    "The base checkpoint is still downloading. Cancel the download before deleting it."));
                 return;
             case BaseArtifactDeleteOutcome.Deleted:
                 await Send.NoContentAsync(ct);

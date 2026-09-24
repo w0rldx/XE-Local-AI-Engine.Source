@@ -168,7 +168,14 @@ internal sealed partial class ExternalAppService
                 throw new ExternalAppConcurrencyException("The instance changed while this command was being admitted.");
             }
 
-            var context = new LifecycleContext { InstanceId = instanceId, Version = cursor.Version, Sequence = cursor.Sequence, Status = admitted, Row = row };
+            var context = new LifecycleContext
+            {
+                InstanceId = instanceId,
+                Version = cursor.Version,
+                Sequence = cursor.Sequence,
+                Status = admitted,
+                Row = row
+            };
             if (!_runner.TryStart(instanceId, kind, lease, (provider, token) => pipeline(provider, context, token), out _))
             {
                 throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
@@ -271,16 +278,16 @@ internal sealed partial class ExternalAppService
             var published = await StartInstanceAsync(runtime, resolution.Daemon.IsRootless, context.Row, cancellationToken);
 
             _ = await ApplyAsync(services.Store,
-                    cursor,
-                    Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started) with
-                    {
-                        DesiredState = ExternalAppDesiredState.Running,
-                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                        StartedAtUtc = Now(),
-                        NeedsRecreate = false,
-                        ClearFailure = true
-                    },
-                    cancellationToken);
+                cursor,
+                Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started) with
+                {
+                    DesiredState = ExternalAppDesiredState.Running,
+                    PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                    StartedAtUtc = Now(),
+                    NeedsRecreate = false,
+                    ClearFailure = true
+                },
+                cancellationToken);
         }
         catch (Exception exception)
         {
@@ -304,14 +311,14 @@ internal sealed partial class ExternalAppService
             await StopInstanceAsync(runtime, context.Row, cancellationToken);
 
             _ = await ApplyAsync(services.Store,
-                    cursor,
-                    Transition(cursor, ExternalAppInstanceStatus.Stopped, ExternalAppInstanceEventKind.Stopped) with
-                    {
-                        DesiredState = ExternalAppDesiredState.Stopped,
-                        StoppedAtUtc = Now(),
-                        ClearFailure = true
-                    },
-                    cancellationToken);
+                cursor,
+                Transition(cursor, ExternalAppInstanceStatus.Stopped, ExternalAppInstanceEventKind.Stopped) with
+                {
+                    DesiredState = ExternalAppDesiredState.Stopped,
+                    StoppedAtUtc = Now(),
+                    ClearFailure = true
+                },
+                cancellationToken);
         }
         catch (Exception exception)
         {
@@ -339,16 +346,16 @@ internal sealed partial class ExternalAppService
             var published = await StartInstanceAsync(runtime, resolution.Daemon.IsRootless, context.Row, cancellationToken);
 
             _ = await ApplyAsync(services.Store,
-                    cursor,
-                    Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Restarted) with
-                    {
-                        DesiredState = ExternalAppDesiredState.Running,
-                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                        StartedAtUtc = Now(),
-                        NeedsRecreate = false,
-                        ClearFailure = true
-                    },
-                    cancellationToken);
+                cursor,
+                Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Restarted) with
+                {
+                    DesiredState = ExternalAppDesiredState.Running,
+                    PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                    StartedAtUtc = Now(),
+                    NeedsRecreate = false,
+                    ClearFailure = true
+                },
+                cancellationToken);
         }
         catch (Exception exception)
         {
@@ -384,13 +391,13 @@ internal sealed partial class ExternalAppService
 
             var manifest = DeserializeManifest(context.Row.ManifestSnapshotJson);
             var published = await RebuildAsync(runtime,
-                    resolution.Daemon.IsRootless,
-                    context.InstanceId,
-                    manifest,
-                    ParseVariables(context.Row.VariablesJson),
-                    BridgeGrantFor(context.Row.BridgeToken),
-                    commitBeforeStart: null,
-                    cancellationToken);
+                resolution.Daemon.IsRootless,
+                context.InstanceId,
+                manifest,
+                ParseVariables(context.Row.VariablesJson),
+                BridgeGrantFor(context.Row.BridgeToken),
+                commitBeforeStart: null,
+                cancellationToken);
 
             // The rebuild leaves everything running. An instance that was stopped before the reset is stopped again:
             // the desired state is the user's, and a reset is not a decision to start something.
@@ -401,17 +408,17 @@ internal sealed partial class ExternalAppService
             }
 
             _ = await ApplyAsync(services.Store,
-                    cursor,
-                    Transition(cursor,
-                            restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
-                            ExternalAppInstanceEventKind.Reset) with
-                        {
-                            DesiredState = context.Row.DesiredState,
-                            PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                            NeedsRecreate = false,
-                            ClearFailure = true
-                        },
-                    cancellationToken);
+                cursor,
+                Transition(cursor,
+                        restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
+                        ExternalAppInstanceEventKind.Reset) with
+                    {
+                        DesiredState = context.Row.DesiredState,
+                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                        NeedsRecreate = false,
+                        ClearFailure = true
+                    },
+                cancellationToken);
         }
         catch (Exception exception)
         {
@@ -465,9 +472,9 @@ internal sealed partial class ExternalAppService
             // Published after the rows are gone and never replayable, which is correct: there is nothing left to
             // replay it from, and a subscriber's only sensible response is to re-read and find the instance absent.
             await PublishAsync(context.InstanceId,
-                    cursor.Sequence + 1,
-                    ExternalAppInstanceEventKind.Uninstalled,
-                    ExternalAppInstanceStatus.Uninstalling);
+                cursor.Sequence + 1,
+                ExternalAppInstanceEventKind.Uninstalled,
+                ExternalAppInstanceStatus.Uninstalling);
 
             _gate.Forget(ExternalAppInstanceGate.InstanceKey(context.InstanceId));
         }
@@ -614,7 +621,12 @@ internal sealed partial class ExternalAppService
                 return null;
             }
 
-            hostPorts.Add(new ExternalAppHostPort { Service = serviceName, ContainerPort = containerPort, HostPort = match.HostPort });
+            hostPorts.Add(new ExternalAppHostPort
+            {
+                Service = serviceName,
+                ContainerPort = containerPort,
+                HostPort = match.HostPort
+            });
         }
 
         try

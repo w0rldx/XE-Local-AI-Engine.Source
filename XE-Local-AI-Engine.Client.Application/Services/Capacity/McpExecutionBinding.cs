@@ -114,8 +114,18 @@ public sealed class McpExecutionBindingResolution
     public bool IsSuccess => Binding is not null;
 
     public static McpExecutionBindingResolution Success(McpExecutionBinding binding) =>
-        new() { Binding = binding, FailureCode = null, DisplayMessage = string.Empty };
+        new()
+        {
+            Binding = binding,
+            FailureCode = null,
+            DisplayMessage = string.Empty
+        };
 
     public static McpExecutionBindingResolution Rejected(string failureCode, string displayMessage) =>
-        new() { Binding = null, FailureCode = failureCode, DisplayMessage = displayMessage };
+        new()
+        {
+            Binding = null,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage
+        };
 }

@@ -82,9 +82,24 @@ internal static class CoderToolDefinition
     /// </remarks>
     public static IReadOnlyList<CoderToolDescriptor> Descriptors { get; } =
     [
-        new CoderToolDescriptor { Name = ListFilesToolName, Description = ListFilesDescription, ParameterSchema = ListFilesParameterSchema },
-        new CoderToolDescriptor { Name = ReadFileToolName, Description = ReadFileDescription, ParameterSchema = ReadFileParameterSchema },
-        new CoderToolDescriptor { Name = SearchTextToolName, Description = SearchTextDescription, ParameterSchema = SearchTextParameterSchema }
+        new CoderToolDescriptor
+        {
+            Name = ListFilesToolName,
+            Description = ListFilesDescription,
+            ParameterSchema = ListFilesParameterSchema
+        },
+        new CoderToolDescriptor
+        {
+            Name = ReadFileToolName,
+            Description = ReadFileDescription,
+            ParameterSchema = ReadFileParameterSchema
+        },
+        new CoderToolDescriptor
+        {
+            Name = SearchTextToolName,
+            Description = SearchTextDescription,
+            ParameterSchema = SearchTextParameterSchema
+        }
     ];
 }
 

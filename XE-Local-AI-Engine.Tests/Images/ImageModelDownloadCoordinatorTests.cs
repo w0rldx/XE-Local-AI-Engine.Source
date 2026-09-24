@@ -45,8 +45,8 @@ public sealed class ImageModelDownloadCoordinatorTests
     private static async Task<ImageModelDownloadStatus> WaitForTerminalAsync(IImageModelDownloadCoordinator coordinator, string modelName)
     {
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus(modelName) is { Phase: not ImageModelDownloadPhase.Running },
-                          Timeout,
-                          $"The download for {modelName} never reached a terminal phase.");
+            Timeout,
+            $"The download for {modelName} never reached a terminal phase.");
 
         return AssertEx.NotNull(coordinator.GetStatus(modelName));
     }
@@ -179,8 +179,8 @@ public sealed class ImageModelDownloadCoordinatorTests
         var ticket = coordinator.Start(Request("qwen-image"));
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus(ticket.ModelName)?.PartIndex == 2,
-                          Timeout,
-                          "The part index never reached the status registry.");
+            Timeout,
+            "The part index never reached the status registry.");
 
         var status = AssertEx.NotNull(coordinator.GetStatus(ticket.ModelName));
         AssertEx.Equal(expected: 2, status.PartIndex ?? 0);
@@ -217,7 +217,13 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         protected static ImageModelHandle Handle(ImageModelRequest request)
         {
-            return new ImageModelHandle { ModelName = request.ModelName, Family = request.Family, Kind = request.Kind, Parts = [] };
+            return new ImageModelHandle
+            {
+                ModelName = request.ModelName,
+                Family = request.Family,
+                Kind = request.Kind,
+                Parts = []
+            };
         }
     }
 

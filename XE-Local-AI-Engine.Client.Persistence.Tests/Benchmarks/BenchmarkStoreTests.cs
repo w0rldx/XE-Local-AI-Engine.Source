@@ -226,7 +226,14 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var change = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
-            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = false,
+                FidelityChunks = null,
+                FidelityKldBaseModelName = null,
+                FidelityKldBaseFingerprint = null
+            },
             measureExisting: true);
 
         AssertEx.Equal(2, change.EnqueuedRunIds.Count, "Only the succeeded cells; the queued run gets its item at its own terminalization.");
@@ -237,7 +244,14 @@ public sealed class BenchmarkStoreTests : IDisposable
         // Idempotent: a second measureExisting write finds nothing left to measure rather than doubling the queue.
         var after = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var again = await store.UpdateProjectFidelityAsync(after.Id, after.Version,
-            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = false,
+                FidelityChunks = null,
+                FidelityKldBaseModelName = null,
+                FidelityKldBaseFingerprint = null
+            },
             measureExisting: true);
 
         AssertEx.Empty(again.EnqueuedRunIds);
@@ -269,7 +283,14 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         _ = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
-            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = false,
+                FidelityChunks = null,
+                FidelityKldBaseModelName = null,
+                FidelityKldBaseFingerprint = null
+            },
             measureExisting: true);
 
         // 'queued' and null are different facts — "a measurement is on its way" versus "fidelity was never asked for" —
@@ -289,7 +310,14 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
 
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateProjectFidelityAsync(project.Id, project.Version + 1,
-            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null }));
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = false,
+                FidelityChunks = null,
+                FidelityKldBaseModelName = null,
+                FidelityKldBaseFingerprint = null
+            }));
     }
 
     [Test]
@@ -756,7 +784,14 @@ public sealed class BenchmarkStoreTests : IDisposable
             });
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
             attemptId = judgeWork.JudgeAttemptId!.Value;
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand { RunId = run.Id, ExpectedWorkVersion = judgeWork.Version, JudgeResultJson = judge, LastStreamSequence = 5, Score = 61 });
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+            {
+                RunId = run.Id,
+                ExpectedWorkVersion = judgeWork.Version,
+                JudgeResultJson = judge,
+                LastStreamSequence = 5,
+                Score = 61
+            });
             projectId = project.Id;
             runId = run.Id;
             _ = primaryDone;
@@ -798,7 +833,16 @@ public sealed class BenchmarkStoreTests : IDisposable
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             created.Add((await store.StartRunAsync(CreateRun(project) with
             {
-                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "auto", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended", IntendedExecutableSha256 = "manifest-sha" }
+                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent
+                {
+                    Variant = "cuda",
+                    KvCacheType = "q8_0",
+                    KvCacheTypeSource = "auto",
+                    KvAutoReason = null,
+                    FlashAttentionMode = "on",
+                    IntendedLaunchIdentity = "intended",
+                    IntendedExecutableSha256 = "manifest-sha"
+                }
             })).Id);
         }
 
@@ -832,7 +876,16 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-primary", IntendedExecutableSha256 = "manifest-sha" }
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent
+            {
+                Variant = "cuda",
+                KvCacheType = "q8_0",
+                KvCacheTypeSource = "explicit",
+                KvAutoReason = null,
+                FlashAttentionMode = "on",
+                IntendedLaunchIdentity = "intended-primary",
+                IntendedExecutableSha256 = "manifest-sha"
+            }
         });
 
         var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
@@ -858,12 +911,31 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var stamped = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-stamped", IntendedExecutableSha256 = "manifest-sha", LaunchIdentityScheme = 2 }
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent
+            {
+                Variant = "cuda",
+                KvCacheType = "q8_0",
+                KvCacheTypeSource = "explicit",
+                KvAutoReason = null,
+                FlashAttentionMode = "on",
+                IntendedLaunchIdentity = "intended-stamped",
+                IntendedExecutableSha256 = "manifest-sha",
+                LaunchIdentityScheme = 2
+            }
         });
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var legacy = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-legacy", IntendedExecutableSha256 = "manifest-sha" }
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent
+            {
+                Variant = "cuda",
+                KvCacheType = "q8_0",
+                KvCacheTypeSource = "explicit",
+                KvAutoReason = null,
+                FlashAttentionMode = "on",
+                IntendedLaunchIdentity = "intended-legacy",
+                IntendedExecutableSha256 = "manifest-sha"
+            }
         });
 
         var reloadedStamped = AssertEx.NotNull(await store.GetRunAsync(stamped.Id));
@@ -1216,7 +1288,11 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     private static BenchmarkJudgeAttemptSeed JudgeSeed(BenchmarkJudgePolicyRevisionRecord revision) =>
-        new() { ExpectedJudgePolicyRevisionId = revision.Id, RuntimeJson = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}")) };
+        new()
+        {
+            ExpectedJudgePolicyRevisionId = revision.Id,
+            RuntimeJson = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}"))
+        };
 
     [Test]
     public async Task StartRuns_WithoutIdentityStamps_KeepsEveryRunItsOwnSingletonCell()
@@ -1334,7 +1410,14 @@ public sealed class BenchmarkStoreTests : IDisposable
         // And the sweep that measures existing runs must agree with the seed, or it re-adds what freeze excluded.
         var frozen = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var change = await store.UpdateProjectFidelityAsync(project.Id, frozen.Version,
-            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = false,
+                FidelityChunks = null,
+                FidelityKldBaseModelName = null,
+                FidelityKldBaseFingerprint = null
+            },
             measureExisting: true);
         AssertEx.Empty(change.EnqueuedRunIds, "The sweep re-expresses the same rule; the cell is already measured.");
     }
@@ -1372,7 +1455,14 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
-        new() { Id = id ?? Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
+        new()
+        {
+            Id = id ?? Guid.NewGuid(),
+            Name = "Benchmark",
+            CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        };
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
         new()

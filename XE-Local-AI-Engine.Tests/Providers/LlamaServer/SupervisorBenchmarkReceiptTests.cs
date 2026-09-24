@@ -394,7 +394,13 @@ public sealed class SupervisorBenchmarkReceiptTests
                             -ctv, --cache-type-v TYPE
                                 allowed values: f32, f16, q8_0, q4_0
                             """;
-        return LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b9692", Variant = GpuVariant.Cuda, IsPinnedFallback = true },
+        return LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary
+            {
+                ServerExecutablePath = "/fake/bin/llama-server",
+                Version = "b9692",
+                Variant = GpuVariant.Cuda,
+                IsPinnedFallback = true
+            },
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,
             new string('a', 64),

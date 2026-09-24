@@ -12,8 +12,7 @@ public sealed class ArchiveNodeChatConversationEndpoint : Endpoint<ArchiveNodeCh
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public ArchiveNodeChatConversationEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public ArchiveNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -37,7 +36,12 @@ public sealed class ArchiveNodeChatConversationEndpoint : Endpoint<ArchiveNodeCh
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = req.ConversationId, Archived = req.Archived, UpdatedAtUtc = updatedAtUtc }, ct);
+        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+        {
+            ConversationId = req.ConversationId,
+            Archived = req.Archived,
+            UpdatedAtUtc = updatedAtUtc
+        }, ct);
 
         if (updated is null)
         {

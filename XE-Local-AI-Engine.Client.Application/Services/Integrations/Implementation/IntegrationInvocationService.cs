@@ -86,7 +86,11 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
         // 2. The session gate, held from resolution through the accept transaction and the seed write; an accept naming no session takes none. Admission bounds
         //    the node and the principal but nothing per session, so two accepts reading "not busy" would seed one conversation and run on each other's input.
-        var caller = new IntegrationCallerIdentity { PrincipalId = key.PrincipalId, KeyPrefix = request.KeyPrefix };
+        var caller = new IntegrationCallerIdentity
+        {
+            PrincipalId = key.PrincipalId,
+            KeyPrefix = request.KeyPrefix
+        };
         var gateLease = request.SessionId is { } gatedSessionId
             ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken)
             : null;
@@ -169,7 +173,13 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             var command = new IntegrationAcceptCommand
             {
                 NewSession = existingSession is null
-                    ? new IntegrationSessionCreate { SessionId = sessionId, TriggerId = trigger.Id, ConversationId = conversationId, AgentDefinitionId = trigger.TargetAgentDefinitionId }
+                    ? new IntegrationSessionCreate
+                    {
+                        SessionId = sessionId,
+                        TriggerId = trigger.Id,
+                        ConversationId = conversationId,
+                        AgentDefinitionId = trigger.TargetAgentDefinitionId
+                    }
                     : null,
                 ExecutionId = executionId,
                 TriggerId = trigger.Id,
@@ -233,21 +243,27 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             if (existingSession is null)
             {
                 _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
-                {
-                    Title = trigger.DisplayName,
-                    UserId = null,
-                    CreatedAtUtc = receivedAtUtc,
-                    Origin = NodeChatOriginValues.Local,
-                    AgentDefinitionId = trigger.TargetAgentDefinitionId,
-                    Kind = NodeConversationKind.Integration,
-                    ConversationId = conversationId
-                },
-                                          CancellationToken.None);
+                    {
+                        Title = trigger.DisplayName,
+                        UserId = null,
+                        CreatedAtUtc = receivedAtUtc,
+                        Origin = NodeChatOriginValues.Local,
+                        AgentDefinitionId = trigger.TargetAgentDefinitionId,
+                        Kind = NodeConversationKind.Integration,
+                        ConversationId = conversationId
+                    },
+                    CancellationToken.None);
             }
 
             // The seed message id IS the execution id, so a continuation can address the seed turn with no lookup and
             // no extra column. One execution owns exactly one seed, so the ids cannot collide.
-            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = executionId, Content = seed, CreatedAtUtc = receivedAtUtc }, CancellationToken.None);
+            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = conversationId,
+                MessageId = executionId,
+                Content = seed,
+                CreatedAtUtc = receivedAtUtc
+            }, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -278,7 +294,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
         }
 
-        return new IntegrationAcceptResult { Outcome = IntegrationAcceptOutcome.Accepted, ExecutionId = executionId, SessionId = sessionId, Status = IntegrationExecutionStatus.Accepted, Message = "Accepted." };
+        return new IntegrationAcceptResult
+        {
+            Outcome = IntegrationAcceptOutcome.Accepted,
+            ExecutionId = executionId,
+            SessionId = sessionId,
+            Status = IntegrationExecutionStatus.Accepted,
+            Message = "Accepted."
+        };
     }
 
     /// <summary>The one place an accept terminalises its own row: the queue refused an admitted execution.</summary>
@@ -298,22 +321,22 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         try
         {
             var terminalized = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand
-            {
-                ExecutionId = executionId,
-                ExpectedVersion = 0,
-                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
-                                                        {
-                                                            IntegrationExecutionStatus.Accepted
-                                                        },
-                NewStatus = IntegrationExecutionStatus.Failed,
-                Sequence = sequence,
-                EventType = IntegrationStreamEventTypes.ExecutionFailed,
-                EndedAtUtc = endedAtUtc,
-                FailureCategory = IntegrationFailureCategories.QueueFull,
-                FailureSummary = QueueFullSummary,
-                EventDetailJson = payload.GetRawText()
-            },
-                                                    CancellationToken.None);
+                {
+                    ExecutionId = executionId,
+                    ExpectedVersion = 0,
+                    ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                    {
+                        IntegrationExecutionStatus.Accepted
+                    },
+                    NewStatus = IntegrationExecutionStatus.Failed,
+                    Sequence = sequence,
+                    EventType = IntegrationStreamEventTypes.ExecutionFailed,
+                    EndedAtUtc = endedAtUtc,
+                    FailureCategory = IntegrationFailureCategories.QueueFull,
+                    FailureSummary = QueueFullSummary,
+                    EventDetailJson = payload.GetRawText()
+                },
+                CancellationToken.None);
 
             if (terminalized)
             {
@@ -354,7 +377,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         }
 
         return CryptographicOperations.FixedTimeEquals(existing.RequestFingerprint.Span, fingerprint)
-            ? new IntegrationAcceptResult { Outcome = IntegrationAcceptOutcome.Duplicate, ExecutionId = existing.Id, SessionId = existing.SessionId, Status = existing.Status, Message = "Duplicate request." }
+            ? new IntegrationAcceptResult
+            {
+                Outcome = IntegrationAcceptOutcome.Duplicate,
+                ExecutionId = existing.Id,
+                SessionId = existing.SessionId,
+                Status = existing.Status,
+                Message = "Duplicate request."
+            }
             : Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
     }
 
@@ -399,5 +429,12 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     }
 
     private static IntegrationAcceptResult Rejected(IntegrationAcceptOutcome outcome, string message) =>
-        new() { Outcome = outcome, ExecutionId = null, SessionId = null, Status = null, Message = message };
+        new()
+        {
+            Outcome = outcome,
+            ExecutionId = null,
+            SessionId = null,
+            Status = null,
+            Message = message
+        };
 }

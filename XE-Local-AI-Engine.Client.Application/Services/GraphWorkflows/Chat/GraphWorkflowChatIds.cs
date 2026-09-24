@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,11 +20,11 @@ internal static class GraphWorkflowChatIds
     ///     operation id reused on another node or run is another steer and gets its own message.
     /// </summary>
     public static Guid SteerMessage(Guid operationId, Guid runId, string nodeKey) =>
-        NameBased(operationId, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"steer/{runId}/{nodeKey}"));
+        NameBased(operationId, string.Create(CultureInfo.InvariantCulture, $"steer/{runId}/{nodeKey}"));
 
     /// <summary>The chat message one succeeded attempt of a node publishes.</summary>
     public static Guid PublishedMessage(Guid runId, string nodeKey, int attempt) =>
-        NameBased(runId, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{nodeKey}/{attempt}"));
+        NameBased(runId, string.Create(CultureInfo.InvariantCulture, $"{nodeKey}/{attempt}"));
 
     /// <summary>SHA-1 of the namespace bytes (network order) and the UTF-8 name, stamped version 5 and the RFC variant.</summary>
     [SuppressMessage("Security", "CA5350:Do Not Use Weak Cryptographic Algorithms",

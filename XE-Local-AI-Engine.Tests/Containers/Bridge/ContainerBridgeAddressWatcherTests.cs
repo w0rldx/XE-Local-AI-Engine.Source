@@ -81,8 +81,8 @@ public sealed class ContainerBridgeAddressWatcherTests
         time.Advance(ContainerBridgeAddressWatcher.RefreshInterval);
 
         await AssertEx.EventuallyAsync(() => watcher.IsSameHost(IPAddress.Parse("172.18.0.1")),
-                          TestBudgets.Contended,
-                          "One interval elapsed and the watcher never re-read the host's addresses.");
+            TestBudgets.Contended,
+            "One interval elapsed and the watcher never re-read the host's addresses.");
 
         await watcher.StopAsync(CancellationToken.None);
     }

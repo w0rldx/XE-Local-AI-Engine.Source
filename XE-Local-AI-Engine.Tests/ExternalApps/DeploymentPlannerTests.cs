@@ -106,7 +106,14 @@ public sealed class DeploymentPlannerTests
             ExternalAppTestManifests.Service("ntfy-server", ports: [ExternalAppTestManifests.UiPort(80)], image: ExternalAppTestManifests.SecondImage)
         ]);
 
-        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), [new ExternalAppHostPort { Service = "ntfy-server", ContainerPort = 80, HostPort = 8091 }]);
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), [
+            new ExternalAppHostPort
+            {
+                Service = "ntfy-server",
+                ContainerPort = 80,
+                HostPort = 8091
+            }
+        ]);
 
         AssertEx.Equal("http://127.0.0.1:8091", plan.Services.Single(service => service.ServiceName == "app").Specification.Environment["NTFY_BASE_URL"]);
     }
@@ -459,10 +466,19 @@ public sealed class DeploymentPlannerTests
         ContainerBridgeGrant? bridgeGrant = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "xe-planner", InstanceId.ToString("N"));
-        var storage = new ExternalAppStoragePaths { InstanceRoot = root, VolumesRoot = Path.Combine(root, "volumes"), FilesRoot = Path.Combine(root, "files") };
+        var storage = new ExternalAppStoragePaths
+        {
+            InstanceRoot = root,
+            VolumesRoot = Path.Combine(root, "volumes"),
+            FilesRoot = Path.Combine(root, "files")
+        };
         var ports = uiHostPorts ?? DefaultPorts(manifest);
 
-        return DeploymentPlanner.Plan(manifest, InstanceId, InstallId, variables, new ResolvedContainerIdentity { UserId = 1234, GroupId = 5678 }, ports, storage, bridgeGrant);
+        return DeploymentPlanner.Plan(manifest, InstanceId, InstallId, variables, new ResolvedContainerIdentity
+        {
+            UserId = 1234,
+            GroupId = 5678
+        }, ports, storage, bridgeGrant);
     }
 
     private static IReadOnlyList<ExternalAppHostPort> DefaultPorts(ApplicationManifest manifest)
@@ -470,7 +486,12 @@ public sealed class DeploymentPlannerTests
         var next = 40000;
         return
         [
-            .. manifest.Services.SelectMany(service => service.Ports.Select(port => new ExternalAppHostPort { Service = service.Name, ContainerPort = port.ContainerPort, HostPort = next++ }))
+            .. manifest.Services.SelectMany(service => service.Ports.Select(port => new ExternalAppHostPort
+            {
+                Service = service.Name,
+                ContainerPort = port.ContainerPort,
+                HostPort = next++
+            }))
         ];
     }
 

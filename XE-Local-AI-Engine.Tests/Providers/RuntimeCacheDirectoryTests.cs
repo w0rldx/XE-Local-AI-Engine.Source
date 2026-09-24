@@ -115,11 +115,16 @@ public sealed class RuntimeCacheDirectoryTests
         AssertEx.Equal(imageState, await images.ReadAsync(CancellationToken.None));
         AssertEx.Equal(whisperState, await whisper.ReadAsync(CancellationToken.None));
         AssertEx.True(File.Exists(Path.Combine(root, "installed-runtime.json")));
-        foreach (var runtime in new[] { "stable-diffusion.cpp", "whisper.cpp" })
+        foreach (var runtime in new[]
+                 {
+                     "stable-diffusion.cpp",
+                     "whisper.cpp"
+                 })
         {
             AssertEx.True(File.Exists(Path.Combine(root, runtime, "installed-runtime.json")));
             AssertEx.True(File.Exists(Path.Combine(root, runtime, "desired-runtime.json")));
         }
+
         await llama.DeleteAsync(CancellationToken.None);
         await images.DeleteAsync(CancellationToken.None);
         await whisper.DeleteAsync(CancellationToken.None);
@@ -140,13 +145,19 @@ public sealed class RuntimeCacheDirectoryTests
         using var whisper = new WhisperCppSourceBuildService(Substitute.For<IWhisperCppSourceBuildPrerequisiteProbe>(),
             whisperStore, new WhisperManagedSourceBuildSignal(), new WhisperRuntimeActivityGate(),
             Substitute.For<IWhisperCppSourceBuildEventPublisher>(), NullLogger<WhisperCppSourceBuildService>.Instance, TimeProvider.System);
-        var workDirectories = new[] { "llama.cpp", "stable-diffusion.cpp", "whisper.cpp" }
-            .Select(runtime => Path.Combine(root, runtime, "source-build", ".work")).ToArray();
+        var workDirectories = new[]
+                              {
+                                  "llama.cpp",
+                                  "stable-diffusion.cpp",
+                                  "whisper.cpp"
+                              }
+                              .Select(runtime => Path.Combine(root, runtime, "source-build", ".work")).ToArray();
         foreach (var work in workDirectories)
         {
             Directory.CreateDirectory(work);
             await File.WriteAllTextAsync(Path.Combine(work, "interrupted.txt"), "scratch");
         }
+
         var staging = Path.Combine(root, "llama.cpp", "source-build", ".staging");
         Directory.CreateDirectory(staging);
         await llama.RecoverAsync(CancellationToken.None);
@@ -156,6 +167,7 @@ public sealed class RuntimeCacheDirectoryTests
         {
             AssertEx.False(Directory.Exists(work));
         }
+
         AssertEx.False(Directory.Exists(staging));
         await images.ShutdownAsync(CancellationToken.None);
         await whisper.ShutdownAsync(CancellationToken.None);

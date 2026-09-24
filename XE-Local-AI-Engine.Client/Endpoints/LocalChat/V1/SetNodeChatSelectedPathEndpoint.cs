@@ -19,8 +19,7 @@ public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelect
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public SetNodeChatSelectedPathEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public SetNodeChatSelectedPathEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -45,11 +44,11 @@ public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelect
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
-        {
-            ConversationId = req.ConversationId,
-            SelectedPath = req.SelectedPath,
-            UpdatedAtUtc = updatedAtUtc
-        },
+            {
+                ConversationId = req.ConversationId,
+                SelectedPath = req.SelectedPath,
+                UpdatedAtUtc = updatedAtUtc
+            },
             ct);
 
         await Send.OkAsync(new NodeChatSelectedPathResponse

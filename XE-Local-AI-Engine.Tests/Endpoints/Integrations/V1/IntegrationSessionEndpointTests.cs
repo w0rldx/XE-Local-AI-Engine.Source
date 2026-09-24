@@ -189,7 +189,13 @@ public sealed class IntegrationSessionEndpointTests
         var first = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 1_000);
         var second = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 2_000);
         _ = await AdmitAsync(store, Guid.NewGuid(), principalId, keyPrefix, receivedAtUtc: 3_000);
-        return new Seeded { TriggerId = trigger.Id, TriggerName = triggerName, PrincipalId = principalId, SessionIds = [first, second] };
+        return new Seeded
+        {
+            TriggerId = trigger.Id,
+            TriggerName = triggerName,
+            PrincipalId = principalId,
+            SessionIds = [first, second]
+        };
     }
 
     /// <summary>
@@ -201,21 +207,35 @@ public sealed class IntegrationSessionEndpointTests
         var executionId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var admitted = await store.AcceptAsync(new IntegrationAcceptCommand
-        {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
-            ExecutionId = executionId,
-            TriggerId = triggerId,
-            SessionId = sessionId,
-            PrincipalId = principalId,
-            RequestId = Guid.NewGuid(),
-            RequestFingerprint = new byte[]
+            {
+                NewSession = new IntegrationSessionCreate
+                {
+                    SessionId = sessionId,
+                    TriggerId = triggerId,
+                    ConversationId = Guid.NewGuid(),
+                    AgentDefinitionId = Guid.NewGuid()
+                },
+                ExecutionId = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = Guid.NewGuid(),
+                RequestFingerprint = new byte[]
                 {
                     7
                 },
-            KeyPrefix = keyPrefix,
-            ReceivedAtUtc = receivedAtUtc,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = receivedAtUtc }
-        },
+                KeyPrefix = keyPrefix,
+                ReceivedAtUtc = receivedAtUtc,
+                AcceptedEvent = new IntegrationEventAppend
+                {
+                    EventId = Guid.NewGuid(),
+                    ExecutionId = executionId,
+                    Sequence = 1,
+                    EventType = IntegrationStreamEventTypes.ExecutionAccepted,
+                    DetailJson = null,
+                    OccurredAtUtc = receivedAtUtc
+                }
+            },
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the session row must be admitted.");

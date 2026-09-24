@@ -45,7 +45,7 @@ public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<Train
             if (!await _runtime.RemoveAsync(ct))
             {
                 await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
-                              "A training runtime install is in progress. Cancel it before removing the runtime."));
+                    "A training runtime install is in progress. Cancel it before removing the runtime."));
                 return;
             }
         }

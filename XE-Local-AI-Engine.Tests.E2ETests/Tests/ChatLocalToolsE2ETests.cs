@@ -227,7 +227,7 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
         // Log ALL requests recorded so far (before clearing) for diagnostics.
         var allBefore = Factory.FakeOllamaState.RecordedRequests;
         await Console.Out.WriteLineAsync(
-                         $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}");
+            $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}");
         foreach (var req in allBefore)
         {
             await Console.Out.WriteLineAsync($"  {req.Path} | model={req.ModelName} | msgs={req.MessageCount}");

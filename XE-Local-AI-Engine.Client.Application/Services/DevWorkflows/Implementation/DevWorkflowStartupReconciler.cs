@@ -82,7 +82,11 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             // The last pass settles what it could not judge instead of walking away: nothing downstream picks those rows up, because the dispatcher admits Pending rows and follows
             // Running AGENT ones, so a stranded Tool row wedges its run for good. The settlement is decided against the live row inside that transaction, so drift cannot reach it.
             var unjudged = pass == RecoveryPasses
-                ? new DevWorkflowUnjudgedNodeRunBlock { FailureClass = DevWorkflowFailureClasses.Interrupted, SanitizedReason = UnjudgedReason }
+                ? new DevWorkflowUnjudgedNodeRunBlock
+                {
+                    FailureClass = DevWorkflowFailureClasses.Interrupted,
+                    SanitizedReason = UnjudgedReason
+                }
                 : null;
             try
             {
@@ -128,9 +132,9 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 
         // Unconditional, unlike everything above it: an orphan is a session no node run references, so there is no reconciled row that could lead to one.
         await SweepOrphanedWorkSessionsAsync(store,
-                sessions,
-                scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>(),
-                cancellationToken);
+            sessions,
+            scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>(),
+            cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>

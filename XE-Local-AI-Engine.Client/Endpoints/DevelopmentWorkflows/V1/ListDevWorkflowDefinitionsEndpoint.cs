@@ -28,6 +28,9 @@ public sealed class ListDevWorkflowDefinitionsEndpoint : Endpoint<ListDevWorkflo
         ArgumentNullException.ThrowIfNull(req);
 
         var definitions = await _authoring.ListDefinitionsAsync(req.IncludeArchived, ct);
-        await Send.OkAsync(new ListDevWorkflowDefinitionsResponse { Items = [.. definitions.Select(DevWorkflowContractMapper.ToResponse)] }, ct);
+        await Send.OkAsync(new ListDevWorkflowDefinitionsResponse
+        {
+            Items = [.. definitions.Select(DevWorkflowContractMapper.ToResponse)]
+        }, ct);
     }
 }

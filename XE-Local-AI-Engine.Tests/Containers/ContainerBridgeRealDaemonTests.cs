@@ -293,7 +293,10 @@ public sealed class ContainerBridgeRealDaemonTests
 
             var verifier = Substitute.For<IContainerBridgeTokenVerifier>();
             _ = verifier.VerifyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((ContainerBridgeCaller?)null);
-            _ = verifier.VerifyAsync(validToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller { InstanceId = instanceId });
+            _ = verifier.VerifyAsync(validToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller
+            {
+                InstanceId = instanceId
+            });
             builder.Services.AddSingleton(verifier);
             builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 
@@ -337,9 +340,9 @@ public sealed class ContainerBridgeRealDaemonTests
             await Runtime.StartContainerAsync(containerId);
 
             var finished = await PollAsync(async () => (await Runtime.InspectAsync(containerId)).State,
-                    static state => !state.Running,
-                    DaemonDeadline,
-                    "the fetching container to exit");
+                static state => !state.Running,
+                DaemonDeadline,
+                "the fetching container to exit");
 
             return finished.ExitCode;
         }

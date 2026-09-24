@@ -168,15 +168,15 @@ public sealed class EndpointExceptionMappingSourceGuardTests
             {
                 // Ten catches, unchanged in total: S7f-1 split the five plural files this list used to name
                 // one endpoint per file, so each count moved to the endpoint that already carried it.
-                ["V1/ApplyDevelopmentPatchEndpoint.cs"] = 1,           // was PatchDevelopmentEndpoints.cs = 2
-                ["V1/PreviewDevelopmentPatchEndpoint.cs"] = 1,         //   "
-                ["V1/CreateDevelopmentProjectEndpoint.cs"] = 1,        // was ProjectDevelopmentEndpoints.cs = 1
+                ["V1/ApplyDevelopmentPatchEndpoint.cs"] = 1, // was PatchDevelopmentEndpoints.cs = 2
+                ["V1/PreviewDevelopmentPatchEndpoint.cs"] = 1, //   "
+                ["V1/CreateDevelopmentProjectEndpoint.cs"] = 1, // was ProjectDevelopmentEndpoints.cs = 1
                 ["V1/DetectDevelopmentRepositoryProfileEndpoint.cs"] = 1, // was RepositoryDevelopmentEndpoints.cs = 4
-                ["V1/ReconnectDevelopmentRepositoryEndpoint.cs"] = 2,  //   "
-                ["V1/RegisterDevelopmentRepositoryEndpoint.cs"] = 1,   //   "
-                ["V1/StartDevelopmentNextActionEndpoint.cs"] = 1,      // was TaskDevelopmentEndpoints.cs = 1
+                ["V1/ReconnectDevelopmentRepositoryEndpoint.cs"] = 2, //   "
+                ["V1/RegisterDevelopmentRepositoryEndpoint.cs"] = 1, //   "
+                ["V1/StartDevelopmentNextActionEndpoint.cs"] = 1, // was TaskDevelopmentEndpoints.cs = 1
                 ["V1/CreateDevelopmentRepositoryFromTemplateEndpoint.cs"] = 1, // was TemplateDevelopmentEndpoints.cs = 2
-                ["V1/RegisterDevelopmentTemplateEndpoint.cs"] = 1      //   "
+                ["V1/RegisterDevelopmentTemplateEndpoint.cs"] = 1 //   "
             });
     }
 

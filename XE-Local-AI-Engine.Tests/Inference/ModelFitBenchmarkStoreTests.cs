@@ -105,15 +105,15 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         var nowMs = time.GetUtcNow().ToUnixTimeMilliseconds();
 
         var running = await snapshots.CreateRunningAsync(new ModelFitSnapshotInput
-        {
-            ApprovedImageId = Model,
-            Operation = ModelFitOperation.Benchmark,
-            UseCase = null,
-            ProviderName = Provider,
-            ModelName = Model,
-            Status = ModelFitRunStatus.Running,
-            StartedAtUtc = nowMs
-        },
+            {
+                ApprovedImageId = Model,
+                Operation = ModelFitOperation.Benchmark,
+                UseCase = null,
+                ProviderName = Provider,
+                ModelName = Model,
+                Status = ModelFitRunStatus.Running,
+                StartedAtUtc = nowMs
+            },
             CancellationToken.None);
 
         _ = await snapshots.MarkTerminalAsync(running.Id,

@@ -724,7 +724,12 @@ public sealed class DevWorkflowIntegrationApplyTests
         await using (var renaming = harness.Services.CreateAsyncScope())
         {
             _ = await renaming.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                              .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = 1, Name = "The team's feature flow" });
+                              .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+                              {
+                                  DefinitionId = definitionId,
+                                  ExpectedVersion = 1,
+                                  Name = "The team's feature flow"
+                              });
         }
 
         await SeedAsync(harness);
@@ -767,7 +772,13 @@ public sealed class DevWorkflowIntegrationApplyTests
         {
             var store = rewinding.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
             var current = await store.GetDefinitionAsync(definitionId);
-            _ = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = current.Version, GraphJson = OldSeedGraph, NodeCount = 11 });
+            _ = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+            {
+                DefinitionId = definitionId,
+                ExpectedVersion = current.Version,
+                GraphJson = OldSeedGraph,
+                NodeCount = 11
+            });
         }
 
         await SeedAsync(harness);
@@ -803,7 +814,14 @@ public sealed class DevWorkflowIntegrationApplyTests
         await using (var editing = harness.Services.CreateAsyncScope())
         {
             _ = await editing.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = 1, Name = "The operator's own", GraphJson = Edited, NodeCount = 1 });
+                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+                             {
+                                 DefinitionId = definitionId,
+                                 ExpectedVersion = 1,
+                                 Name = "The operator's own",
+                                 GraphJson = Edited,
+                                 NodeCount = 1
+                             });
         }
 
         await SeedAsync(harness);
@@ -839,7 +857,12 @@ public sealed class DevWorkflowIntegrationApplyTests
         });
         AssertEx.Equal(expected: 1, definition.Version, "the signal this whole path reads: a create writes version 1.");
 
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Seeded work item", Request = "Explain the inference path." });
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand
+        {
+            WorkItemId = Guid.NewGuid(),
+            Title = "Seeded work item",
+            Request = "Explain the inference path."
+        });
         var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
         {
             RunId = Guid.NewGuid(),

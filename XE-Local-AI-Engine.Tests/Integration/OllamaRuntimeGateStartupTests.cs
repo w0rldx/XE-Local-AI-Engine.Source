@@ -72,7 +72,7 @@ public sealed class OllamaRuntimeGateStartupTests
         // HttpRequestException with no StatusCode is exactly what a refused connection raises, and it is what
         // UnloadLocalModelEndpoint's `when (exception.StatusCode is null)` filter absorbs as "nothing was resident".
         var exception = await AssertEx.ThrowsAsync<HttpRequestException>(() => service.UnloadModelAsync("any-model", cancellationToken),
-                                          "Unloading against a disabled runtime must fail the way an absent daemon fails.");
+            "Unloading against a disabled runtime must fail the way an absent daemon fails.");
 
         AssertEx.Null(exception.StatusCode, "A transport failure carries no status code; a status would escape the endpoint's filter.");
         AssertEx.Contains(exception.Message, OllamaRuntimeGate.RuntimeEnabledConfigurationKey,

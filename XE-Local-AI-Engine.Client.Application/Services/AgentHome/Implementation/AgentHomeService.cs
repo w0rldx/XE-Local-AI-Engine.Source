@@ -223,7 +223,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 foldersToCopy =
                 [
                     .. resolvedFolders,
-                    new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = AttachmentsFolderAlias, HostPath = attachmentsSnapshot.HostPath, Mode = SelectedFolderMode.Copy }
+                    new ResolvedSelectedFolder
+                    {
+                        Id = Guid.NewGuid(),
+                        Alias = AttachmentsFolderAlias,
+                        HostPath = attachmentsSnapshot.HostPath,
+                        Mode = SelectedFolderMode.Copy
+                    }
                 ];
 
                 // Capture the workspace-relative staged paths before the snapshot is disposed, so the chat agent-mode
@@ -237,7 +243,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // Workspace copy: each resolved selected folder into the sandbox workspace, with exclusions, the symlink-escape
             // guard, the per-folder byte budget and the git baseline. Under the preparation timeout, not the command one.
             folderSnapshots = await _workspaceService
-                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, baselineCommands, prepareToken);
+                .PrepareSelectedFoldersAsync(handle, foldersToCopy, baselineCommands, prepareToken);
         }
         finally
         {

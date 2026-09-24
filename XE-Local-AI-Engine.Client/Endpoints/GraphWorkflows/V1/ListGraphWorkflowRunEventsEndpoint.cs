@@ -33,11 +33,11 @@ public sealed class ListGraphWorkflowRunEventsEndpoint : Endpoint<GraphWorkflowR
 
         var page = await _runs.ListEventsAsync(req.RunId, req.AfterSeq, ct);
         await Send.OkAsync(new ListGraphWorkflowRunEventsResponse
-        {
-            Events = [.. page.Events.Select(GraphWorkflowContractMapper.ToResponse)],
-            LastSeq = page.LastSeq,
-            ReplayTruncated = page.ReplayTruncated
-        },
+            {
+                Events = [.. page.Events.Select(GraphWorkflowContractMapper.ToResponse)],
+                LastSeq = page.LastSeq,
+                ReplayTruncated = page.ReplayTruncated
+            },
             ct);
     }
 }

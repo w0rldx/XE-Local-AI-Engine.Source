@@ -68,12 +68,12 @@ internal sealed class WorkSessionWriteDeclarationGuard
         // supportsTools: true rather than probed — a probe answering false makes the check inert where it is needed.
         // simplified: a full IAgentDefinitionResolver.ResolveAsync for tool categories; narrow to AllowedTools if it profiles.
         var resolved = await _runtimes.ResolveAsync(agentDefinitionId,
-                                          activeModel,
-                                          retrievalQuery: null,
-                                          supportsTools: true,
-                                          honorModelProfile: string.IsNullOrWhiteSpace(pinnedModelOverride),
-                                          activeModelIsCloud: false,
-                                          cancellationToken);
+            activeModel,
+            retrievalQuery: null,
+            supportsTools: true,
+            honorModelProfile: string.IsNullOrWhiteSpace(pinnedModelOverride),
+            activeModelIsCloud: false,
+            cancellationToken);
         // An unresolved binding keeps the DEFAULT PERSONA and its whole capability-gated offer, so that offer is the
         // honest question — judging the fallback, not assuming the worst.
         var projection = resolved?.AllowedTools

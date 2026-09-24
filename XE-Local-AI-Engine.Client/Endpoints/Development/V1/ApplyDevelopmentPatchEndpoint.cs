@@ -32,14 +32,14 @@ public sealed class ApplyDevelopmentPatchEndpoint : Endpoint<DevelopmentActionRe
             // driving. The 409 that refusal becomes is the same shape every other Development precondition uses.
             var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, onBehalfOfWorkflowRunId: null, ct);
             await Send.OkAsync(new DevelopmentApplyResponse
-            {
-                OperationId = result.OperationId,
-                Phase = result.Phase,
-                Outcome = result.Outcome,
-                Status = result.Status,
-                Version = result.Version,
-                Sequence = result.Sequence
-            },
+                {
+                    OperationId = result.OperationId,
+                    Phase = result.Phase,
+                    Outcome = result.Outcome,
+                    Status = result.Status,
+                    Version = result.Version,
+                    Sequence = result.Sequence
+                },
                 ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)

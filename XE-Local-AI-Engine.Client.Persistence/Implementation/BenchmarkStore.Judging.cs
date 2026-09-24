@@ -32,7 +32,12 @@ public sealed partial class BenchmarkStore
         // the cohort, or a no-op save would drop every ranked run out of the ranking.
         if (current is not null && string.Equals(current.PolicyHash, policyHash, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgePolicyActivation { Revision = ToRecord(current, includePayload: true), WasCreated = false, SucceededRunIds = [] };
+            return new BenchmarkJudgePolicyActivation
+            {
+                Revision = ToRecord(current, includePayload: true),
+                WasCreated = false,
+                SucceededRunIds = []
+            };
         }
 
         var now = Now();
@@ -42,7 +47,12 @@ public sealed partial class BenchmarkStore
         var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkJudgePolicyActivation { Revision = ToRecord(revision, includePayload: true), WasCreated = wasCreated, SucceededRunIds = runIds };
+        return new BenchmarkJudgePolicyActivation
+        {
+            Revision = ToRecord(revision, includePayload: true),
+            WasCreated = wasCreated,
+            SucceededRunIds = runIds
+        };
     }
 
     public async Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default)
@@ -86,7 +96,11 @@ public sealed partial class BenchmarkStore
             : [];
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkProjectFidelityChange { Project = ToRecord(project, frozen), EnqueuedRunIds = enqueued };
+        return new BenchmarkProjectFidelityChange
+        {
+            Project = ToRecord(project, frozen),
+            EnqueuedRunIds = enqueued
+        };
     }
 
     /// <summary>
@@ -212,12 +226,12 @@ public sealed partial class BenchmarkStore
 
         var now = Now();
         var attempt = await InsertJudgeAttemptAsync(run,
-                revision,
-                command.RuntimeJson,
-                command.RuntimeUnresolvedReason,
-                command.LaunchIntent,
-                now,
-                cancellationToken);
+            revision,
+            command.RuntimeJson,
+            command.RuntimeUnresolvedReason,
+            command.LaunchIntent,
+            now,
+            cancellationToken);
         run.Version++;
         run.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken);
@@ -257,7 +271,12 @@ public sealed partial class BenchmarkStore
         var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkJudgePolicyActivation { Revision = ToRecord(revision, includePayload: true), WasCreated = false, SucceededRunIds = runIds };
+        return new BenchmarkJudgePolicyActivation
+        {
+            Revision = ToRecord(revision, includePayload: true),
+            WasCreated = false,
+            SucceededRunIds = runIds
+        };
     }
 
     public async Task<bool> TryPromoteReferenceExecutionKeyAsync(Guid revisionId,

@@ -175,7 +175,14 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
-        var claim = new TrainingWorkClaim { QueueSequence = 1, Kind = TrainingWorkKind.TrainingRun, TargetId = Guid.NewGuid(), Version = 1, Run = null };
+        var claim = new TrainingWorkClaim
+        {
+            QueueSequence = 1,
+            Kind = TrainingWorkKind.TrainingRun,
+            TargetId = Guid.NewGuid(),
+            Version = 1,
+            Run = null
+        };
         var claims = 0;
         _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>())
                 .Returns(_ => Task.FromResult(Interlocked.Increment(ref claims) == 1 ? claim : null));

@@ -25,6 +25,9 @@ public sealed class ListDevelopmentArtifactsEndpoint : Endpoint<DevelopmentTaskR
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
         var artifacts = await _service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct);
-        await Send.OkAsync(new ListDevelopmentArtifactsResponse { Items = artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
+        await Send.OkAsync(new ListDevelopmentArtifactsResponse
+        {
+            Items = artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray()
+        }, ct);
     }
 }

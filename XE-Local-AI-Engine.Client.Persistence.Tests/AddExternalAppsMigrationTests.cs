@@ -43,10 +43,10 @@ public sealed class AddExternalAppsMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("external_app_instances", "ix_external_app_instances_application", unique: false, "application_id"));
         AssertEx.True(await probe.IndexExistsAsync("external_app_instances", "ix_external_app_instances_status", unique: false, "status", "installed_at_utc"));
         AssertEx.True(await probe.IndexExistsAsync("external_app_instance_events",
-                                     "ux_external_app_instance_events_instance_sequence",
-                                     unique: true,
-                                     "instance_id",
-                                     "sequence"));
+            "ux_external_app_instance_events_instance_sequence",
+            unique: true,
+            "instance_id",
+            "sequence"));
         AssertEx.True(await probe.ForeignKeyExistsAsync("external_app_instance_events", "instance_id", "external_app_instances"),
             "Declared for parity with integration_execution_events, and enforced at runtime: the node connection sets Foreign Keys=True and PRAGMA foreign_keys=ON.");
 
@@ -97,11 +97,11 @@ public sealed class AddExternalAppsMigrationTests
     private static async Task<string> ColumnTypeAsync(MigrationSchemaProbe probe, string tableName, string columnName)
     {
         var type = await probe.ScalarAsync("SELECT type FROM pragma_table_info($table) WHERE name = $column;",
-                                  command =>
-                                  {
-                                      _ = command.Parameters.AddWithValue("$table", tableName);
-                                      _ = command.Parameters.AddWithValue("$column", columnName);
-                                  });
+            command =>
+            {
+                _ = command.Parameters.AddWithValue("$table", tableName);
+                _ = command.Parameters.AddWithValue("$column", columnName);
+            });
         return AssertEx.NotNull(type as string, $"{tableName}.{columnName} does not exist.");
     }
 }

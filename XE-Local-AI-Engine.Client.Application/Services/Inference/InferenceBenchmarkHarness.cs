@@ -730,7 +730,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             timings = LlamaServerGenerationTimings.TryRead(update.RawRepresentation) ?? timings;
         }
 
-        return new StreamStageResult { TtftMs = firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, Text = builder.ToString(), Timings = timings };
+        return new StreamStageResult
+        {
+            TtftMs = firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds,
+            Text = builder.ToString(),
+            Timings = timings
+        };
     }
 
     private async Task<string?> ScrapeMetricsAsync(Uri metricsUri, CancellationToken ct)

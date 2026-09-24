@@ -123,7 +123,10 @@ public sealed class ChatCompactionTriggerTests
     [Test]
     public async Task Job_WhenAutoCompactIsDisabled_NeitherReadsNorCompacts()
     {
-        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions { AutoCompactEnabled = false });
+        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions
+        {
+            AutoCompactEnabled = false
+        });
 
         await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(Guid.NewGuid()), CancellationToken.None);
 

@@ -45,8 +45,7 @@ internal sealed class SeparateMountScratch : IDisposable
     ///     A required-bytes floor strictly between the two figures. A guard measuring the right mount answers
     ///     <see cref="ExpectedSatisfied" />; one measuring <c>/</c> answers its opposite.
     /// </summary>
-    public long ThresholdBetweenBytes =>
-        Math.Min(AvailableFreeBytes, RootAvailableFreeBytes) + (Math.Abs(AvailableFreeBytes - RootAvailableFreeBytes) / 2);
+    public long ThresholdBetweenBytes => Math.Min(AvailableFreeBytes, RootAvailableFreeBytes) + (Math.Abs(AvailableFreeBytes - RootAvailableFreeBytes) / 2);
 
     /// <summary>What a guard with a <see cref="ThresholdBetweenBytes" /> floor must report for <see cref="Path" />.</summary>
     public bool ExpectedSatisfied => AvailableFreeBytes >= ThresholdBetweenBytes;

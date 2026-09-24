@@ -42,23 +42,23 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint : Endpoint<StartS
             {
                 case StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning:
                     await BlockAsync("already-building",
-                            "A stable-diffusion.cpp source build is already in progress.",
-                            result.Activity ?? _imageRuntime.GetActivitySnapshot());
+                        "A stable-diffusion.cpp source build is already in progress.",
+                        result.Activity ?? _imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk:
                     await BlockAsync("prerequisites",
-                            "There is not enough free disk space to build the image runtime.",
-                            result.Activity ?? _imageRuntime.GetActivitySnapshot());
+                        "There is not enough free disk space to build the image runtime.",
+                        result.Activity ?? _imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
-                            "One or more build prerequisites are missing; resolve the checklist before building.",
-                            result.Activity ?? _imageRuntime.GetActivitySnapshot());
+                        "One or more build prerequisites are missing; resolve the checklist before building.",
+                        result.Activity ?? _imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                            "Wait for active image jobs and image-runtime processes to finish before starting the build.",
-                            result.Activity ?? _imageRuntime.GetActivitySnapshot());
+                        "Wait for active image jobs and image-runtime processes to finish before starting the build.",
+                        result.Activity ?? _imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.Started:
                     break;

@@ -99,11 +99,21 @@ public sealed class LocalModelsExternalMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary { Name = "qwen3:8b" }
+            new OllamaModelSummary
+            {
+                Name = "qwen3:8b"
+            }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = ["tools"], IsOverridden = false }
+            ["qwen3:8b"] = new()
+            {
+                ModelName = "qwen3:8b",
+                Kind = ModelKind.Chat,
+                DetectedKind = ModelKind.Chat,
+                Capabilities = ["tools"],
+                IsOverridden = false
+            }
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
         var external = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local)], selectedModelName: null);
@@ -170,8 +180,18 @@ public sealed class LocalModelsExternalMappingTests
         // against a process this node does not own.
         var running = new[]
         {
-            new RunningModelSnapshot { Name = "qwen3:8b", ModelName = "qwen3:8b", ExpiresAt = null },
-            new RunningModelSnapshot { Name = "ext:unsloth-box/qwen3-27b", ModelName = "ext:unsloth-box/qwen3-27b", ExpiresAt = null }
+            new RunningModelSnapshot
+            {
+                Name = "qwen3:8b",
+                ModelName = "qwen3:8b",
+                ExpiresAt = null
+            },
+            new RunningModelSnapshot
+            {
+                Name = "ext:unsloth-box/qwen3-27b",
+                ModelName = "ext:unsloth-box/qwen3-27b",
+                ExpiresAt = null
+            }
         };
 
         var response = LocalModelsMapper.ToRunningResponse(running, ollamaConfigured: true);

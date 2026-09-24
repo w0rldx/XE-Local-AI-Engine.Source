@@ -348,8 +348,20 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         var reasoning = binding.AgentDefinitionId is null
             ? null
-            : new ChildReasoning { ReasoningEffort = binding.ReasoningEffort, SupportsThinking = binding.SupportsThinking, ReasoningBudgetEnforceable = binding.ReasoningBudgetEnforceable };
-        return new ResolvedBinding { ModelName = binding.ModelId, Instructions = binding.Instructions, Tools = tools, Reasoning = reasoning, Skills = null };
+            : new ChildReasoning
+            {
+                ReasoningEffort = binding.ReasoningEffort,
+                SupportsThinking = binding.SupportsThinking,
+                ReasoningBudgetEnforceable = binding.ReasoningBudgetEnforceable
+            };
+        return new ResolvedBinding
+        {
+            ModelName = binding.ModelId,
+            Instructions = binding.Instructions,
+            Tools = tools,
+            Reasoning = reasoning,
+            Skills = null
+        };
     }
 
     private bool TryResolveDelegateMcpTools(IReadOnlyList<AllowedToolDto> allowedTools, out IList<AITool>? tools)

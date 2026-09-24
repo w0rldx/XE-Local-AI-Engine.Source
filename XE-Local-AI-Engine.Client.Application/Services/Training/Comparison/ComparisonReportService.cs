@@ -35,8 +35,7 @@ public sealed class ComparisonReportService : IComparisonReportService
     private readonly ITrainingEvaluationStore _evaluations;
     private readonly ITrainingRunStore _runs;
 
-    public ComparisonReportService(
-        ITrainingEvaluationStore evaluations,
+    public ComparisonReportService(ITrainingEvaluationStore evaluations,
         ITrainingRunStore runs,
         IBenchmarkStore benchmarks)
     {
@@ -70,16 +69,16 @@ public sealed class ComparisonReportService : IComparisonReportService
 
         var deltas = ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark, tunedBenchmark);
         return await _evaluations.CreateComparisonAsync(new TrainingComparisonInput
-        {
-            Name = command.Name.Trim(),
-            BaseEvaluationRunId = baseEvaluation.Id,
-            TunedEvaluationRunId = tunedEvaluation.Id,
-            DeltasJson = JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
-            BaseBenchmarkRunId = command.BaseBenchmarkRunId,
-            TunedBenchmarkRunId = command.TunedBenchmarkRunId,
-            TrainingRunId = trainingRunId
-        },
-                                     cancellationToken);
+            {
+                Name = command.Name.Trim(),
+                BaseEvaluationRunId = baseEvaluation.Id,
+                TunedEvaluationRunId = tunedEvaluation.Id,
+                DeltasJson = JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
+                BaseBenchmarkRunId = command.BaseBenchmarkRunId,
+                TunedBenchmarkRunId = command.TunedBenchmarkRunId,
+                TrainingRunId = trainingRunId
+            },
+            cancellationToken);
     }
 
     public Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default) =>

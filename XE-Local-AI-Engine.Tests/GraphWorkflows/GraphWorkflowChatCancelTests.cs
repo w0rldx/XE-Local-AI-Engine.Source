@@ -98,5 +98,9 @@ public sealed class GraphWorkflowChatCancelTests
     ];
 
     private static GraphWorkflowRunDetail Detail() =>
-        new() { Run = Listed(GraphWorkflowRunStatus.Cancelling)[0], NodeRuns = [] };
+        new()
+        {
+            Run = Listed(GraphWorkflowRunStatus.Cancelling)[0],
+            NodeRuns = []
+        };
 }

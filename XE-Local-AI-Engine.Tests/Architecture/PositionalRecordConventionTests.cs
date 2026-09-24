@@ -355,5 +355,6 @@ public sealed class PositionalRecordConventionTests
         (start == 0 || !IsWordCharacter(text[start - 1]))
         && (start + length >= text.Length || !IsWordCharacter(text[start + length]));
 
-    private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
+    private static bool IsWordCharacter(char character) =>
+        char.IsLetterOrDigit(character) || character == '_';
 }

@@ -30,7 +30,12 @@ public sealed class NodeSqliteOptions
     public NodeSqlitePragmaSettings ToSettings()
     {
         var busyTimeout = Math.Clamp(BusyTimeoutMilliseconds, min: 0, MaxBusyTimeoutMilliseconds);
-        return new NodeSqlitePragmaSettings { EnableWriteAheadLog = EnableWriteAheadLog, BusyTimeoutMilliseconds = busyTimeout, Synchronous = Synchronous };
+        return new NodeSqlitePragmaSettings
+        {
+            EnableWriteAheadLog = EnableWriteAheadLog,
+            BusyTimeoutMilliseconds = busyTimeout,
+            Synchronous = Synchronous
+        };
     }
 }
 
@@ -60,5 +65,10 @@ public sealed class NodeSqlitePragmaSettings
     public required NodeSqliteSynchronousMode Synchronous { get; init; }
 
     /// <summary>The built-in defaults, used until the composition root supplies configured values.</summary>
-    public static NodeSqlitePragmaSettings Default { get; } = new() { EnableWriteAheadLog = true, BusyTimeoutMilliseconds = 5000, Synchronous = NodeSqliteSynchronousMode.Normal };
+    public static NodeSqlitePragmaSettings Default { get; } = new()
+    {
+        EnableWriteAheadLog = true,
+        BusyTimeoutMilliseconds = 5000,
+        Synchronous = NodeSqliteSynchronousMode.Normal
+    };
 }

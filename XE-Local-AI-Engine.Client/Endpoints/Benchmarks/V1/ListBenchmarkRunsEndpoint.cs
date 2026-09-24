@@ -37,25 +37,25 @@ public sealed class ListBenchmarkRunsEndpoint : Endpoint<ListBenchmarkRunsReques
         var expectedKldDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project);
 
         var page = await _records.ListRunsAsync(req.ProjectId,
-                                   (req.Page - 1) * req.PageSize,
-                                   req.PageSize,
-                                   req.ModelContentFingerprint,
-                                   req.IncludeUnscored,
-                                   ct);
+            (req.Page - 1) * req.PageSize,
+            req.PageSize,
+            req.ModelContentFingerprint,
+            req.IncludeUnscored,
+            ct);
         await Send.OkAsync(new ListBenchmarkRunsResponse
-                  {
-                      Items = page.Items.Select(run => run.ToSummary(expectedKldDigest)).ToArray(),
-                      Page = req.Page,
-                      PageSize = req.PageSize,
-                      TotalCount = page.TotalCount,
-                      RankCohort = new BenchmarkRankCohortResponse
-                      {
-                          PolicyRevision = page.RankCohort?.PolicyRevision,
-                          ExecutionKey = page.RankCohort?.ExecutionKey,
-                          CohortGeneration = page.RankCohort?.CohortGeneration,
-                          RankedCount = page.RankCohort?.RankedCount ?? 0,
-                          TotalScored = page.RankCohort?.TotalScored ?? 0
-                      }
-                  }, ct);
+        {
+            Items = page.Items.Select(run => run.ToSummary(expectedKldDigest)).ToArray(),
+            Page = req.Page,
+            PageSize = req.PageSize,
+            TotalCount = page.TotalCount,
+            RankCohort = new BenchmarkRankCohortResponse
+            {
+                PolicyRevision = page.RankCohort?.PolicyRevision,
+                ExecutionKey = page.RankCohort?.ExecutionKey,
+                CohortGeneration = page.RankCohort?.CohortGeneration,
+                RankedCount = page.RankCohort?.RankedCount ?? 0,
+                TotalScored = page.RankCohort?.TotalScored ?? 0
+            }
+        }, ct);
     }
 }

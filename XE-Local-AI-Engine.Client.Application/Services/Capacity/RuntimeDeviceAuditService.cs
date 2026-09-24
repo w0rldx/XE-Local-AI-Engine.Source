@@ -187,7 +187,15 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             Reason = fallbackText?.Reason,
             Remediation = fallbackText?.Remediation,
             BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory.RuntimeMissing) : null,
-            Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice { Name = device.Name, TotalBytes = device.TotalBytes, FreeBytes = device.FreeBytes })]
+            Devices =
+            [
+                .. inventory.Devices.Select(static device => new RuntimeAuditDevice
+                {
+                    Name = device.Name,
+                    TotalBytes = device.TotalBytes,
+                    FreeBytes = device.FreeBytes
+                })
+            ]
         };
     }
 
@@ -266,7 +274,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             ? $"The {VariantName(variant)} llama.cpp runtime is selected but enumerated no GPU devices, so inference is silently running on the CPU."
             : $"The {VariantName(variant)} llama.cpp runtime is selected but enumerated no GPU devices (commonly a missing Vulkan ICD under WSL2), so inference is silently running on the CPU.";
 
-        return new FallbackText { Reason = reason, Remediation = isWindows ? WindowsRemediation : LinuxRemediation };
+        return new FallbackText
+        {
+            Reason = reason,
+            Remediation = isWindows ? WindowsRemediation : LinuxRemediation
+        };
     }
 
     private static string VendorName(GpuVendor vendor)

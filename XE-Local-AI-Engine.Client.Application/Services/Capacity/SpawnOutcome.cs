@@ -12,13 +12,31 @@ public sealed record SpawnOutcome
     public required string? Content { get; init; }
 
     public static SpawnOutcome Success(string content) =>
-        new() { Kind = SpawnOutcomeKind.Success, FailureCode = null, DisplayMessage = "Completed.", Content = content };
+        new()
+        {
+            Kind = SpawnOutcomeKind.Success,
+            FailureCode = null,
+            DisplayMessage = "Completed.",
+            Content = content
+        };
 
     public static SpawnOutcome Rejected(string failureCode, string displayMessage) =>
-        new() { Kind = SpawnOutcomeKind.Rejected, FailureCode = failureCode, DisplayMessage = displayMessage, Content = null };
+        new()
+        {
+            Kind = SpawnOutcomeKind.Rejected,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage,
+            Content = null
+        };
 
     public static SpawnOutcome Failed(string failureCode, string displayMessage) =>
-        new() { Kind = SpawnOutcomeKind.Failed, FailureCode = failureCode, DisplayMessage = displayMessage, Content = null };
+        new()
+        {
+            Kind = SpawnOutcomeKind.Failed,
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage,
+            Content = null
+        };
 
     /// <summary>Preserves the original synchronous <c>run_agent</c> string result contract.</summary>
     public string ToSynchronousResult() =>

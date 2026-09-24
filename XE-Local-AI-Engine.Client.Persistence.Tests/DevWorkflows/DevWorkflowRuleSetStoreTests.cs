@@ -89,17 +89,24 @@ public sealed class DevWorkflowRuleSetStoreTests
         await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
         var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store, body: "Original text.");
-        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand { RuleSetId = created.Id, ExpectedVersion = created.Version, Name = "Renamed", Body = "Second text.", ScopeJson = DevWorkflowTestFixture.MatchAllScope });
-
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
         {
             RuleSetId = created.Id,
             ExpectedVersion = created.Version,
-            Name = "Loser",
-            Body = "Third text.",
+            Name = "Renamed",
+            Body = "Second text.",
             ScopeJson = DevWorkflowTestFixture.MatchAllScope
-        }),
-                              "A second edit made against version 1 must be refused rather than silently overwrite the one that landed.");
+        });
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+            {
+                RuleSetId = created.Id,
+                ExpectedVersion = created.Version,
+                Name = "Loser",
+                Body = "Third text.",
+                ScopeJson = DevWorkflowTestFixture.MatchAllScope
+            }),
+            "A second edit made against version 1 must be refused rather than silently overwrite the one that landed.");
 
         var read = await store.GetRuleSetAsync(created.Id);
         AssertEx.Equal("Second text.", read.Body, "The refused edit must not have reached the row.");
@@ -118,7 +125,7 @@ public sealed class DevWorkflowRuleSetStoreTests
         AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync("dev_workflow_rule_sets"), "DELETE is a hard delete, not an archive flag.");
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => store.GetRuleSetAsync(created.Id));
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => store.DeleteRuleSetAsync(created.Id),
-                              "Deleting the same rule set twice must answer 404 rather than pretend it removed one.");
+            "Deleting the same rule set twice must answer 404 rather than pretend it removed one.");
     }
 
     [Test]

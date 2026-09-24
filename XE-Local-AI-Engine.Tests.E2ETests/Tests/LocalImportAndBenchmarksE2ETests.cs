@@ -21,10 +21,10 @@ public sealed class LocalImportAndBenchmarksE2ETests : XEPooledE2ETestBase
 
         await Expect(Page.GetByTestId("installed-models-table")).ToBeVisibleAsync();
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-              {
-                  Name = "Import model"
-              }))
-              .ToHaveCountAsync(0);
+            {
+                Name = "Import model"
+            }))
+            .ToHaveCountAsync(0);
     }
 
     [Test]
@@ -36,16 +36,16 @@ public sealed class LocalImportAndBenchmarksE2ETests : XEPooledE2ETestBase
         });
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
-              {
-                  Name = "Local model benchmarks"
-              }))
-              .ToBeVisibleAsync();
+            {
+                Name = "Local model benchmarks"
+            }))
+            .ToBeVisibleAsync();
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-              {
-                  Name = "New project"
-              }))
-              .ToBeVisibleAsync();
+            {
+                Name = "New project"
+            }))
+            .ToBeVisibleAsync();
         await Expect(Page.GetByText("Create a project to freeze one task and compare models."))
-              .ToBeVisibleAsync();
+            .ToBeVisibleAsync();
     }
 }

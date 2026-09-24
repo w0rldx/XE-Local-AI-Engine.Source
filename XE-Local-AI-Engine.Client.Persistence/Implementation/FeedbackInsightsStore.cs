@@ -48,7 +48,15 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
         var byTool = await ReadByToolAsync(connection, agentDefinitionId, cancellationToken);
         var exemplars = await ReadExemplarsAsync(connection, agentDefinitionId, exemplarCap, cancellationToken);
 
-        return new AgentFeedbackAggregate { AgentDefinitionId = agentDefinitionId, AgentName = agentName, UpCount = upCount, DownCount = downCount, ByTool = byTool, Exemplars = exemplars };
+        return new AgentFeedbackAggregate
+        {
+            AgentDefinitionId = agentDefinitionId,
+            AgentName = agentName,
+            UpCount = upCount,
+            DownCount = downCount,
+            ByTool = byTool,
+            Exemplars = exemplars
+        };
     }
 
     private static async Task<VoteCounts> ReadOverallAsync(DbConnection connection, Guid agentDefinitionId, CancellationToken cancellationToken)
@@ -112,7 +120,12 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
         }
 
         return byTool
-               .Select(static entry => new ToolFeedbackCount { ToolName = entry.Key, UpCount = entry.Value.UpCount, DownCount = entry.Value.DownCount })
+               .Select(static entry => new ToolFeedbackCount
+               {
+                   ToolName = entry.Key,
+                   UpCount = entry.Value.UpCount,
+                   DownCount = entry.Value.DownCount
+               })
                .OrderByDescending(static tool => tool.UpCount + tool.DownCount)
                .ThenBy(static tool => tool.ToolName, StringComparer.Ordinal)
                .ToArray();

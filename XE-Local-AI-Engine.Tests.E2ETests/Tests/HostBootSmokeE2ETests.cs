@@ -33,7 +33,11 @@ public sealed class HostBootSmokeE2ETests
                 return null;
             }
 
-            return new BoundHost { Factory = factory, Port = candidate };
+            return new BoundHost
+            {
+                Factory = factory,
+                Port = candidate
+            };
         });
 
         await using var factory = bound.Factory;

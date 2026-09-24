@@ -82,9 +82,9 @@ public sealed class ExternalAppServiceUpdateTests
         ExternalAppServiceHarness.Seed(harness.Catalog, target);
 
         _ = await AssertEx.ThrowsAsync<ExternalAppManifestChangedException>(() => harness.Service.UpdateAsync(row.Id, row.Version, Command(target) with
-                          {
-                              ManifestSha256 = new string('d', 64)
-                          }));
+        {
+            ManifestSha256 = new string('d', 64)
+        }));
     }
 
     /// <summary>
@@ -133,14 +133,14 @@ public sealed class ExternalAppServiceUpdateTests
         // The Settings tab is driven by the OLD snapshot and is disabled while running, so the command is the only
         // place a newly required value can come from.
         var admitted = await harness.Service.UpdateAsync(row.Id,
-                                        row.Version,
-                                        Command(target) with
-                                        {
-                                            Variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                            {
-                                                ["API_KEY"] = "supplied-now"
-                                            }
-                                        });
+            row.Version,
+            Command(target) with
+            {
+                Variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["API_KEY"] = "supplied-now"
+                }
+            });
 
         var updated = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         AssertEx.Equal(expected: 2, updated.ManifestVersion);
@@ -184,10 +184,10 @@ public sealed class ExternalAppServiceUpdateTests
             variables: [ExternalAppTestManifests.Variable("TOKEN", required: true, type: "secret")]);
 
         await using var harness = await InstalledAsync(installed,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["TOKEN"] = "the-old-secret"
-                });
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["TOKEN"] = "the-old-secret"
+            });
         var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var target = ExternalAppTestManifests.Manifest([
@@ -209,14 +209,14 @@ public sealed class ExternalAppServiceUpdateTests
         AssertEx.Contains(failure.Names, "TOKEN");
 
         var admitted = await harness.Service.UpdateAsync(row.Id,
-                                        row.Version,
-                                        Command(target) with
-                                        {
-                                            Variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                            {
-                                                ["TOKEN"] = "a-new-plain-value"
-                                            }
-                                        });
+            row.Version,
+            Command(target) with
+            {
+                Variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["TOKEN"] = "a-new-plain-value"
+                }
+            });
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
         var after = AssertEx.NotNull(await harness.ReadAsync(row.Id));
@@ -240,10 +240,10 @@ public sealed class ExternalAppServiceUpdateTests
             variables: [ExternalAppTestManifests.Variable("LLM_HOST")]);
 
         await using var harness = await InstalledAsync(installed,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["LLM_HOST"] = "stored-host"
-                });
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["LLM_HOST"] = "stored-host"
+            });
         var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var target = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")], manifestVersion: 2);
@@ -273,10 +273,10 @@ public sealed class ExternalAppServiceUpdateTests
             variables: [ExternalAppTestManifests.Variable("LLM_HOST", required: true)]);
 
         await using var harness = await InstalledAsync(installed,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["LLM_HOST"] = "stored-host"
-                });
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["LLM_HOST"] = "stored-host"
+            });
         var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         var target = ExternalAppTestManifests.Manifest([
@@ -290,14 +290,14 @@ public sealed class ExternalAppServiceUpdateTests
         ExternalAppServiceHarness.Seed(harness.Catalog, target);
 
         var admitted = await harness.Service.UpdateAsync(row.Id,
-                                        row.Version,
-                                        Command(target) with
-                                        {
-                                            Variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                            {
-                                                ["MODEL_HOST"] = "renamed-host"
-                                            }
-                                        });
+            row.Version,
+            Command(target) with
+            {
+                Variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["MODEL_HOST"] = "renamed-host"
+                }
+            });
         var after = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
         AssertEx.True(after.VariablesJson.Contains("renamed-host", StringComparison.Ordinal), "The submitted value is what the target asked for.");
@@ -735,11 +735,11 @@ public sealed class ExternalAppServiceUpdateTests
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        variables ?? new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            variables ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;

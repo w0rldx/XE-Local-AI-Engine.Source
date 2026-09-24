@@ -152,12 +152,12 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             // 5. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the active model
             //    keeps the resolver's model identical to the gated one, and the resolved prompt is threaded verbatim, never raw Instructions.
             var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
-                                                            effectiveModel,
-                                                            retrievalQuery: parameters.Prompt,
-                                                            supportsTools,
-                                                            honorModelProfile: true,
-                                                            effectiveModelIsCloud,
-                                                            cancellationToken);
+                effectiveModel,
+                retrievalQuery: parameters.Prompt,
+                supportsTools,
+                honorModelProfile: true,
+                effectiveModelIsCloud,
+                cancellationToken);
             if (resolved is null)
             {
                 // The definition existed at step 1 but was deleted before the resolve completed (rare race).
@@ -387,7 +387,12 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         }
 
         var reasoningEffort = string.IsNullOrWhiteSpace(dto.ReasoningEffort) ? null : dto.ReasoningEffort.Trim();
-        return new RunSavedAgentParameters { AgentDefinitionId = agentDefinitionId, Prompt = dto.Prompt.Trim(), ReasoningEffort = reasoningEffort };
+        return new RunSavedAgentParameters
+        {
+            AgentDefinitionId = agentDefinitionId,
+            Prompt = dto.Prompt.Trim(),
+            ReasoningEffort = reasoningEffort
+        };
     }
 
     /// <summary>Validated, code-facing parameters for one <c>run-agent</c> fire.</summary>

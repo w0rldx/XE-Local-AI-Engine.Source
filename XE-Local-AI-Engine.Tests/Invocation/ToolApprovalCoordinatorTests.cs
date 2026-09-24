@@ -120,7 +120,11 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.False(pending.IsCompleted, "the turn parks on the approval card");
 
         // The loopback resolve endpoint answers the card the local dispatch rendered, and the turn continues.
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = AssertEx.NotNull(dispatchedApproval).RequestId, Approved = true });
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = AssertEx.NotNull(dispatchedApproval).RequestId,
+            Approved = true
+        });
         AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
@@ -162,7 +166,11 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.True(registry.Calls.ContainsKey(freshRequestId), "a repeated sweep must not condemn a call it already spared");
         AssertEx.False(fresh.IsCompleted, "a repeated sweep must not release a call the operator has not answered");
 
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = freshRequestId, Approved = true });
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = freshRequestId,
+            Approved = true
+        });
         AssertEx.True(await fresh.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
@@ -204,7 +212,11 @@ public sealed class ToolApprovalCoordinatorTests
     {
         var pending = coordinator.RequestToolApprovalAsync(packageBuilder.Build(), SkillApprovalRequest(), static _ => { }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count > 0 && !pending.IsCompleted, TimeSpan.FromSeconds(5));
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = dispatcher.Approvals[^1].RequestId, Approved = true }, ApprovalScope.Session);
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = dispatcher.Approvals[^1].RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
         AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
@@ -344,8 +356,7 @@ public sealed class ToolApprovalCoordinatorTests
                                     .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", "Skill body.", version, IsImported: false));
     }
 
-    private static ToolApprovalCoordinator CreateCoordinator(
-        PendingToolCallRegistry? registry = null,
+    private static ToolApprovalCoordinator CreateCoordinator(PendingToolCallRegistry? registry = null,
         IToolApprovalAuditRecorder? auditRecorder = null,
         IWorkerEventDispatcher? dispatcher = null,
         TimeProvider? timeProvider = null)

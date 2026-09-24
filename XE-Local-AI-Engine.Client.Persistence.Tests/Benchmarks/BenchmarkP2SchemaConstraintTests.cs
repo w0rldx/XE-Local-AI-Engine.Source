@@ -27,10 +27,10 @@ public sealed class BenchmarkP2SchemaConstraintTests
 
         // Reversed, the SAME comparison would occupy a second slot no index could join to the first.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunB, RunA, order: 0, attemptSequence: 1, status: "Queued"),
-                              "run_a_id must be the smaller id — the canonical ordering is a database invariant, not a planner convention.");
+            "run_a_id must be the smaller id — the canonical ordering is a database invariant, not a planner convention.");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 2, attemptSequence: 1, status: "Queued"),
-                              "Only the two presentation orders exist; position swap is the whole point.");
+            "Only the two presentation orders exist; position swap is the whole point.");
     }
 
     [Test]
@@ -41,7 +41,7 @@ public sealed class BenchmarkP2SchemaConstraintTests
         await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Queued");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 2, status: "Queued"),
-                              "One live-or-successful comparison per slot: two would both be fitted and the pair would count twice.");
+            "One live-or-successful comparison per slot: two would both be fitted and the pair would count twice.");
     }
 
     /// <summary>
@@ -62,7 +62,7 @@ public sealed class BenchmarkP2SchemaConstraintTests
 
         // The per-attempt index still separates them, so the history of the slot survives the retries.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Failed"),
-                              "Re-using an attempt sequence would overwrite a slot's history.");
+            "Re-using an attempt sequence would overwrite a slot's history.");
     }
 
     [Test]
@@ -74,10 +74,10 @@ public sealed class BenchmarkP2SchemaConstraintTests
         await InsertFitAsync(probe, "v1:bbb", isActive: false);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertFitAsync(probe, "v1:ccc", isActive: true),
-                              "At most one active fit per (revision, generation, case) — a second one is a ranking that blends two fits.");
+            "At most one active fit per (revision, generation, case) — a second one is a ranking that blends two fits.");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertFitAsync(probe, "v1:aaa", isActive: false),
-                              "The fit key is unique, so a duplicate publication violates and no-ops rather than minting a second fit of the same thing.");
+            "The fit key is unique, so a duplicate publication violates and no-ops rather than minting a second fit of the same thing.");
     }
 
     private static async Task<MigrationSchemaProbe> SeedAsync(string fileName)

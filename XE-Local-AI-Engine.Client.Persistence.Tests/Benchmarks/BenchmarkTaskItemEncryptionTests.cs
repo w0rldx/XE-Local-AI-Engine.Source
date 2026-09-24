@@ -127,7 +127,7 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == SecondItemId),
-                              "One item's prompt must not read back as another item's.");
+            "One item's prompt must not read back as another item's.");
     }
 
     [Test]
@@ -145,7 +145,7 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == FirstItemId),
-                              "A verifier config presented as a prompt must fail the AEAD tag check.");
+            "A verifier config presented as a prompt must fail the AEAD tag check.");
     }
 
     private static async Task SeedAsync(string databasePath, INodeSqliteKeyHolder keyHolder)

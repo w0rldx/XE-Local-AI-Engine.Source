@@ -127,7 +127,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         try
         {
             _ = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
-                                  serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
+                serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
             AssertEx.Empty(Directory.EnumerateFileSystemEntries(outside),
                 "A symlinked backup directory must not redirect an export outside the node data root.");
         }
@@ -147,7 +147,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await cancellation.CancelAsync();
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token));
+            serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token));
 
         AssertEx.False(Directory.Exists(Path.Combine(_rootPath, "backups")),
             "Cancellation before work begins must not leave an export directory or partial artifact.");
@@ -161,7 +161,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_rootPath, "backups"), "collision");
 
         _ = await AssertEx.ThrowsAsync<IOException>(() =>
-                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
+            serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
     }
 
     private async Task<ServiceProvider> BuildMigratedServiceProviderAsync(string databasePath, TimeProvider? timeProvider = null)

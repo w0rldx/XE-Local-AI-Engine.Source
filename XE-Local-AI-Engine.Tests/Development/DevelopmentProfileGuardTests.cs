@@ -73,11 +73,11 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         var importDirectory = Path.Combine(session.HostWorktreePath, ".xe-dev");
         Directory.CreateDirectory(importDirectory);
         await File.WriteAllTextAsync(Path.Combine(importDirectory, "profile.json"),
-                      """{"profileId":"generic-git","buildTarget":null}""");
+            """{"profileId":"generic-git","buildTarget":null}""");
 
         var rejection = await AssertEx
-                              .ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
-                                  tools.RunCommandAsync(DevelopmentCommandIds.GitStatus));
+            .ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
+                tools.RunCommandAsync(DevelopmentCommandIds.GitStatus));
         AssertEx.Contains(rejection.Message, "command-profile import file", StringComparison.Ordinal);
     }
 
@@ -104,9 +104,22 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     {
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
-        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "modified" },
-                new DevelopmentChangedFile { Path = "tests/Probe/NewFeatureTests.cs", ChangeType = "added" },
-                new DevelopmentChangedFile { Path = "tests/Probe/CopiedTests.cs", ChangeType = "copied", PreviousPath = "tests/Probe/FeatureTests.cs" }),
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+                {
+                    Path = "src/Lib/Feature.cs",
+                    ChangeType = "modified"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "tests/Probe/NewFeatureTests.cs",
+                    ChangeType = "added"
+                },
+                new DevelopmentChangedFile
+                {
+                    Path = "tests/Probe/CopiedTests.cs",
+                    ChangeType = "copied",
+                    PreviousPath = "tests/Probe/FeatureTests.cs"
+                }),
             profile);
 
         foreach (var destructive in new[]
@@ -119,7 +132,11 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         {
             var rejected = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             {
-                DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "tests/Probe/FeatureTests.cs", ChangeType = destructive }), profile);
+                DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+                {
+                    Path = "tests/Probe/FeatureTests.cs",
+                    ChangeType = destructive
+                }), profile);
                 return Task.CompletedTask;
             });
             AssertEx.Contains(rejected.Message, "test that existed at the base commit", StringComparison.Ordinal);
@@ -129,13 +146,22 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         // PREVIOUS path has to be checked even though the new one looks innocuous.
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
         {
-            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "tests/Probe/Feature.txt", ChangeType = "renamed", PreviousPath = "tests/Probe/FeatureTests.cs" }),
+            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+                {
+                    Path = "tests/Probe/Feature.txt",
+                    ChangeType = "renamed",
+                    PreviousPath = "tests/Probe/FeatureTests.cs"
+                }),
                 profile);
             return Task.CompletedTask;
         });
 
         // A non-test file may be freely modified or deleted; the policy is about tests, not about change in general.
-        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "deleted" }), profile);
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile
+        {
+            Path = "src/Lib/Feature.cs",
+            ChangeType = "deleted"
+        }), profile);
     }
 
     private static DevelopmentPatchEvidence Evidence(params DevelopmentChangedFile[] changedFiles) =>
@@ -152,7 +178,14 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         };
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repositoryRoot, string identity) =>
-        new() { ProjectId = snapshot.ProjectId, SelectedFolderId = snapshot.SelectedFolderId ?? Guid.NewGuid(), Alias = "fixture", RepositoryRoot = repositoryRoot, RepositoryIdentityHash = identity };
+        new()
+        {
+            ProjectId = snapshot.ProjectId,
+            SelectedFolderId = snapshot.SelectedFolderId ?? Guid.NewGuid(),
+            Alias = "fixture",
+            RepositoryRoot = repositoryRoot,
+            RepositoryIdentityHash = identity
+        };
 
     private static DevelopmentExecutionSnapshot Snapshot(string identityHash) =>
         new()
@@ -185,8 +218,8 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
             // command, so this fixture warms nothing — which is what keeps this test about the import tamper check.
             // The tools below deliberately bind a DIFFERENT profile object; see the comment at that call site.
             CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
-                                                        .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
-                                                        .ToCanonicalUtf8())
+                                                         .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                                         .ToCanonicalUtf8())
         };
 
     private async Task<string> CreateRepositoryAsync()

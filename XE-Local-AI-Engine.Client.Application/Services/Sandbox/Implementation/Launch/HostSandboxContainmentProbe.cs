@@ -147,7 +147,11 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         {
             _logger.LogWarning(exception, "The sandbox filesystem-isolation probe failed; the filesystem boundary will not be advertised.");
 
-            return new SandboxFilesystemIsolationProbeResult { Isolation = null, Reason = $"the filesystem isolation probe threw: {exception.Message}" };
+            return new SandboxFilesystemIsolationProbeResult
+            {
+                Isolation = null,
+                Reason = $"the filesystem isolation probe threw: {exception.Message}"
+            };
         }
     }
 

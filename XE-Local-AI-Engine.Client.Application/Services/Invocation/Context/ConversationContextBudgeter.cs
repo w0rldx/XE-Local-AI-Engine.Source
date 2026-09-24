@@ -336,7 +336,11 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (pinned is null || union is null)
         {
-            return new ApprovalCorrelation { Pinned = null, Groups = [] };
+            return new ApprovalCorrelation
+            {
+                Pinned = null,
+                Groups = []
+            };
         }
 
         if (messageOfCallId is not null)
@@ -354,7 +358,11 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        return new ApprovalCorrelation { Pinned = pinned, Groups = union.CollectGroups(pinned, decided) };
+        return new ApprovalCorrelation
+        {
+            Pinned = pinned,
+            Groups = union.CollectGroups(pinned, decided)
+        };
     }
 
     /// <summary>
@@ -457,7 +465,14 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 }
             }
 
-            return [.. members.Select(entry => new ApprovalGroup { MessageIndices = entry.Value, Complete = complete.Contains(entry.Key) })];
+            return
+            [
+                .. members.Select(entry => new ApprovalGroup
+                {
+                    MessageIndices = entry.Value,
+                    Complete = complete.Contains(entry.Key)
+                })
+            ];
         }
 
         private int Find(int index)

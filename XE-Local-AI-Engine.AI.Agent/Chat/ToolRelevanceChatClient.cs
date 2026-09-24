@@ -184,7 +184,12 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         var candidates = new List<ToolRelevanceCandidate>(tools.Count);
         foreach (var tool in tools)
         {
-            candidates.Add(new ToolRelevanceCandidate { Name = tool.Name, Description = tool.Description, IsCore = IsCore(scope, tool.Name, instructionText) });
+            candidates.Add(new ToolRelevanceCandidate
+            {
+                Name = tool.Name,
+                Description = tool.Description,
+                IsCore = IsCore(scope, tool.Name, instructionText)
+            });
         }
 
         var selection = await _selector.SelectAsync(query, candidates, _options.Threshold, CancellationToken.None).ConfigureAwait(false);

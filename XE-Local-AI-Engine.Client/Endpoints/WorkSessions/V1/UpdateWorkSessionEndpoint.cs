@@ -32,8 +32,13 @@ public sealed class UpdateWorkSessionEndpoint : Endpoint<UpdateWorkSessionReques
         // An omitted member is forwarded as null, which the service reads as "leave it alone" — a PATCH that only
         // renames must not blank the objective it never mentioned.
         var updated = await _service.UpdateAsync(req.SessionId,
-                                        new UpdateWorkSessionRequestModel { Title = req.Title, Objective = req.Objective, AgentDefinitionId = req.AgentDefinitionId },
-                                        ct);
+            new UpdateWorkSessionRequestModel
+            {
+                Title = req.Title,
+                Objective = req.Objective,
+                AgentDefinitionId = req.AgentDefinitionId
+            },
+            ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

@@ -64,9 +64,8 @@ public sealed class TestCategoryConventionTests
     // This file holds the vocabulary above as data, so scanning it reports itself.
     private const string GuardFileName = "TestCategoryConventionTests.cs";
 
-    private static readonly Regex TopLevelDeclaration = NewRegex(
-        @"^(?:(?:public|internal|sealed|abstract|partial|static|file)\s+)*"
-        + @"(?:class|record\s+struct|record\s+class|record|struct|interface)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+    private static readonly Regex TopLevelDeclaration = NewRegex(@"^(?:(?:public|internal|sealed|abstract|partial|static|file)\s+)*"
+                                                                 + @"(?:class|record\s+struct|record\s+class|record|struct|interface)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline);
 
     // Anchoring on a bracket or a comma reads a combined list ([Test, Repeat(2)], [NotInParallel, Category(…)])

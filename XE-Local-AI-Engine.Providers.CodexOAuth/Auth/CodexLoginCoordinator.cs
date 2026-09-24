@@ -31,7 +31,11 @@ public sealed class CodexLoginStatus
     public required Uri? AuthorizeUrl { get; init; }
 
     /// <summary>Idle status used before any login has been attempted.</summary>
-    public static CodexLoginStatus None { get; } = new() { State = CodexLoginState.None, AuthorizeUrl = null };
+    public static CodexLoginStatus None { get; } = new()
+    {
+        State = CodexLoginState.None,
+        AuthorizeUrl = null
+    };
 }
 
 /// <summary>
@@ -106,7 +110,11 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
             // Only adopt this attempt's status if it is still the current one (not already superseded again).
             if (ReferenceEquals(_pendingCts, newCts))
             {
-                _status = new CodexLoginStatus { State = CodexLoginState.Pending, AuthorizeUrl = handle.AuthorizeUrl };
+                _status = new CodexLoginStatus
+                {
+                    State = CodexLoginState.Pending,
+                    AuthorizeUrl = handle.AuthorizeUrl
+                };
             }
         }
 
@@ -145,7 +153,11 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         try
         {
             await handle.Completion.ConfigureAwait(false);
-            if (UpdateStatusIfCurrent(cts, new CodexLoginStatus { State = CodexLoginState.Succeeded, AuthorizeUrl = null }))
+            if (UpdateStatusIfCurrent(cts, new CodexLoginStatus
+                {
+                    State = CodexLoginState.Succeeded,
+                    AuthorizeUrl = null
+                }))
             {
                 // Session persisted: notify the host so the active-cloud selector re-reads and routes the next
                 // send to Codex immediately (not after the snapshot TTL). Best-effort; never break login on it.
@@ -163,13 +175,21 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         {
             // Timed out or superseded — a superseding Start (if any) already set its own pending status,
             // and UpdateStatusIfCurrent ensures we do not clobber it.
-            UpdateStatusIfCurrent(cts, new CodexLoginStatus { State = CodexLoginState.Failed, AuthorizeUrl = null });
+            UpdateStatusIfCurrent(cts, new CodexLoginStatus
+            {
+                State = CodexLoginState.Failed,
+                AuthorizeUrl = null
+            });
         }
         catch (Exception exception)
         {
             // Never log token material; CodexAuthException messages are already redacted.
             _logger.LogWarning(exception, "Codex login did not complete successfully.");
-            UpdateStatusIfCurrent(cts, new CodexLoginStatus { State = CodexLoginState.Failed, AuthorizeUrl = null });
+            UpdateStatusIfCurrent(cts, new CodexLoginStatus
+            {
+                State = CodexLoginState.Failed,
+                AuthorizeUrl = null
+            });
         }
         finally
         {

@@ -71,4 +71,3 @@ public sealed class NodePasswordChangeResult
 
     public required IReadOnlyList<string> Errors { get; init; }
 }
-

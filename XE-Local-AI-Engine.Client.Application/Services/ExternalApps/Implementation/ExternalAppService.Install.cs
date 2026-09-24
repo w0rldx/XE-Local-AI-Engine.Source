@@ -96,14 +96,14 @@ internal sealed partial class ExternalAppService
 
             var createdAtUtc = Now();
             var version = await InsertInstanceAsync(services.Store,
-                    command,
-                    manifest,
-                    granted,
-                    variables,
-                    admission.Runtime.Provider,
-                    instanceId,
-                    createdAtUtc,
-                    cancellationToken);
+                command,
+                manifest,
+                granted,
+                variables,
+                admission.Runtime.Provider,
+                instanceId,
+                createdAtUtc,
+                cancellationToken);
 
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Install,
@@ -197,9 +197,9 @@ internal sealed partial class ExternalAppService
         }
 
         await PublishAsync(instanceId,
-                written.Sequence,
-                ExternalAppInstanceEventKind.PermissionAccepted,
-                ExternalAppInstanceStatus.Installing);
+            written.Sequence,
+            ExternalAppInstanceEventKind.PermissionAccepted,
+            ExternalAppInstanceStatus.Installing);
 
         return written.Version;
     }
@@ -221,15 +221,15 @@ internal sealed partial class ExternalAppService
             runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
 
             var published = await RebuildAsync(runtime,
-                    resolution.Daemon.IsRootless,
-                    instanceId,
-                    manifest,
-                    variables,
-                    // Read back rather than carried from admission: the mint happens
-                    // inside the row write, which is the only place it is durable.
-                    await ResolveBridgeGrantAsync(instanceId, cancellationToken),
-                    commitBeforeStart: null,
-                    cancellationToken);
+                resolution.Daemon.IsRootless,
+                instanceId,
+                manifest,
+                variables,
+                // Read back rather than carried from admission: the mint happens
+                // inside the row write, which is the only place it is durable.
+                await ResolveBridgeGrantAsync(instanceId, cancellationToken),
+                commitBeforeStart: null,
+                cancellationToken);
 
             // Two events and two sequences for one status: "this application is installed" and "it is running" are
             // different facts, and a history that merged them could not say which of the two a later failure undid.
@@ -245,9 +245,9 @@ internal sealed partial class ExternalAppService
             if (await ApplyAsync(services.Store, cursor, installed, cancellationToken))
             {
                 _ = await ApplyAsync(services.Store,
-                        cursor,
-                        Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started),
-                        cancellationToken);
+                    cursor,
+                    Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started),
+                    cancellationToken);
             }
         }
         catch (ExternalAppPipelineException failure)
@@ -267,9 +267,9 @@ internal sealed partial class ExternalAppService
 #pragma warning restore CA1031
         {
             await FailAsync(services.Store,
-                    runtime,
-                    cursor,
-                    ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception));
+                runtime,
+                cursor,
+                ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception));
         }
         finally
         {

@@ -424,7 +424,11 @@ public sealed class PlaybookEvalServiceTests
         // fingerprint value, only that one is recorded).
         var identityResolver = Substitute.For<IEvalModelIdentityResolver>();
         identityResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(new EvalModelIdentity { Token = "gguf-sha256:test-weights", IsVerified = true });
+                        .Returns(new EvalModelIdentity
+                        {
+                            Token = "gguf-sha256:test-weights",
+                            IsVerified = true
+                        });
 
         return new PlaybookEvalService(actionService,
             actionStore,

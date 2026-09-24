@@ -39,7 +39,7 @@ public sealed class DeleteExternalProviderConnectionEndpoint : Endpoint<DeleteEx
     public override async Task HandleAsync(DeleteExternalProviderConnectionRequest req, CancellationToken ct)
     {
         var result = await _administrationService
-                           .DeleteConnectionAsync(req.ConnectionId ?? string.Empty, req.ExpectedRevision, ct);
+            .DeleteConnectionAsync(req.ConnectionId ?? string.Empty, req.ExpectedRevision, ct);
 
         switch (result)
         {

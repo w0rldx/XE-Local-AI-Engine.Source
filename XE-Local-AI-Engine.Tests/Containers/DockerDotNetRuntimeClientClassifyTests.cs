@@ -20,9 +20,9 @@ public sealed class DockerDotNetRuntimeClientClassifyTests
         await using var client = ClientFor("unix:///xe-classify-tests.sock");
         Exception[] failures =
         [
-            new System.TimeoutException("The operation has timed out."),
-            new InvalidOperationException("transport failed", new System.TimeoutException("The operation has timed out.")),
-            new AggregateException(new System.TimeoutException("The operation has timed out."))
+            new TimeoutException("The operation has timed out."),
+            new InvalidOperationException("transport failed", new TimeoutException("The operation has timed out.")),
+            new AggregateException(new TimeoutException("The operation has timed out."))
         ];
 
         foreach (var failure in failures)
@@ -59,7 +59,11 @@ public sealed class DockerDotNetRuntimeClientClassifyTests
     private static DockerDotNetRuntimeClient ClientFor(string endpoint)
     {
         // DockerClientBuilder opens nothing at construction; only ProbeAsync touches the transport.
-        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = DockerDaemonEndpointSource.Configuration },
+        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint
+            {
+                Uri = new Uri(endpoint),
+                Source = DockerDaemonEndpointSource.Configuration
+            },
             TimeSpan.FromSeconds(1),
             TimeProvider.System);
     }

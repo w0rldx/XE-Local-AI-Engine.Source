@@ -105,7 +105,10 @@ public sealed class ChatTurnContextBuilderTests
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult { Results = [Hit("Runbook", "restart the service with the eject command")] });
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = [Hit("Runbook", "restart the service with the eject command")]
+                     });
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
         var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
@@ -206,7 +209,18 @@ public sealed class ChatTurnContextBuilderTests
         string extension,
         DocumentExtractionStatus status)
     {
-        return new ConversationUploadedFileInfo { FileId = Guid.NewGuid(), ConversationId = conversationId, OriginalFileName = fileName, MimeType = mimeType, Extension = extension, SizeBytes = 4, ExtractionStatus = status, ExtractedChars = null, CreatedAtUtc = 0 };
+        return new ConversationUploadedFileInfo
+        {
+            FileId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            OriginalFileName = fileName,
+            MimeType = mimeType,
+            Extension = extension,
+            SizeBytes = 4,
+            ExtractionStatus = status,
+            ExtractedChars = null,
+            CreatedAtUtc = 0
+        };
     }
 
     private static KnowledgeSearchHit Hit(string title, string content)

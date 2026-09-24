@@ -96,28 +96,28 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, model.Runtime?.ModelProfile, cancellationToken);
 
         var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
-        {
-            Title = title,
-            UserId = null,
-            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            Origin = NodeChatOriginValues.Local,
-            AgentDefinitionId = model.AgentDefinitionId,
-            Kind = NodeConversationKind.WorkSession
-        },
-                                                 cancellationToken);
+            {
+                Title = title,
+                UserId = null,
+                CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                Origin = NodeChatOriginValues.Local,
+                AgentDefinitionId = model.AgentDefinitionId,
+                Kind = NodeConversationKind.WorkSession
+            },
+            cancellationToken);
 
         try
         {
             var created = await _store.CreateAsync(new CreateWorkSessionCommand
-            {
-                SessionId = Guid.NewGuid(),
-                ConversationId = conversation.ConversationId,
-                AgentDefinitionId = model.AgentDefinitionId,
-                Kind = model.Kind,
-                Title = title,
-                Objective = objective
-            },
-                                          cancellationToken);
+                {
+                    SessionId = Guid.NewGuid(),
+                    ConversationId = conversation.ConversationId,
+                    AgentDefinitionId = model.AgentDefinitionId,
+                    Kind = model.Kind,
+                    Title = title,
+                    Objective = objective
+                },
+                cancellationToken);
             return ToDetail(created);
         }
         catch
@@ -149,7 +149,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             await EnsureNoCloudEgressAsync(session, effectiveModel, cancellationToken);
         }
 
-        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = sessionId, ExpectedVersion = session.Version, Title = title, Objective = objective, AgentDefinitionId = model.AgentDefinitionId }, cancellationToken);
+        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = session.Version,
+            Title = title,
+            Objective = objective,
+            AgentDefinitionId = model.AgentDefinitionId
+        }, cancellationToken);
         return ToDetail(updated);
     }
 
@@ -175,7 +182,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         Guid agentDefinitionId,
         WorkSessionRuntimeOverride? runtime,
         CancellationToken cancellationToken) =>
-        CreateAsync(new CreateWorkSessionRequestModel { Title = title, Objective = objective, Kind = AgentWorkSessionKind.Workflow, AgentDefinitionId = agentDefinitionId, Runtime = runtime }, cancellationToken);
+        CreateAsync(new CreateWorkSessionRequestModel
+        {
+            Title = title,
+            Objective = objective,
+            Kind = AgentWorkSessionKind.Workflow,
+            AgentDefinitionId = agentDefinitionId,
+            Runtime = runtime
+        }, cancellationToken);
 
     Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime, CancellationToken cancellationToken) =>
         BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, runtime, cancellationToken);
@@ -232,13 +246,13 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         var messageId = Guid.NewGuid();
         _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
-        {
-            ConversationId = session.ConversationId,
-            MessageId = messageId,
-            Content = text.Trim(),
-            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-        },
-                                  cancellationToken);
+            {
+                ConversationId = session.ConversationId,
+                MessageId = messageId,
+                Content = text.Trim(),
+                CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken);
 
         // A paused or interrupted session picks the follow-up up by resuming. A parked one does not: its live step
         // holds the slot and its prompt is answered through the chat card. A workflow-owned one resumes on its poll.
@@ -247,10 +261,10 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             try
             {
                 _ = await BeginAsync(sessionId,
-                        [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
-                        workflowOwned: false,
-                        runtime: null,
-                        cancellationToken);
+                    [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
+                    workflowOwned: false,
+                    runtime: null,
+                    cancellationToken);
             }
             catch (WorkSessionInvalidTransitionException exception)
             {
@@ -367,7 +381,12 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
-        return new WorkSessionArtifactContent { Artifact = ToDto(artifact), Content = content, IsBase64 = isBase64 };
+        return new WorkSessionArtifactContent
+        {
+            Artifact = ToDto(artifact),
+            Content = content,
+            IsBase64 = isBase64
+        };
     }
 
     /// <summary>
@@ -407,21 +426,26 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionInvalidTransitionException("The node is already running as many work sessions as it allows. Pause one first.");
         }
 
-        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running }, cancellationToken);
+        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = session.Version,
+            TargetStatus = AgentWorkSessionStatus.Running
+        }, cancellationToken);
         if (_supervisor.TryStart(sessionId, runtime))
         {
             return ToDetail(running);
         }
 
         var parked = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
-        {
-            SessionId = sessionId,
-            ExpectedVersion = WorkSessionVersions.Any,
-            TargetStatus = AgentWorkSessionStatus.Paused,
-            CurrentTaskId = null,
-            SanitizedReason = "The node could not admit the work session."
-        },
-                                     cancellationToken);
+            {
+                SessionId = sessionId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                TargetStatus = AgentWorkSessionStatus.Paused,
+                CurrentTaskId = null,
+                SanitizedReason = "The node could not admit the work session."
+            },
+            cancellationToken);
         _logger.LogWarning("Work session {SessionId} lost the admission race and was left Paused.", sessionId);
         _ = parked;
         throw new WorkSessionInvalidTransitionException("The node could not admit the work session just now. Try again in a moment.");
@@ -443,8 +467,15 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             return ToDetail(await _store.GetAsync(sessionId, cancellationToken));
         }
 
-        var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = target, CurrentTaskId = null, SanitizedReason = sanitizedReason },
-                                      cancellationToken);
+        var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = session.Version,
+                TargetStatus = target,
+                CurrentTaskId = null,
+                SanitizedReason = sanitizedReason
+            },
+            cancellationToken);
         return ToDetail(settled);
     }
 
@@ -518,12 +549,12 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         try
         {
             _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
-            {
-                ConversationId = conversationId,
-                DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                PurgeImmediately = true
-            },
-                                      CancellationToken.None);
+                {
+                    ConversationId = conversationId,
+                    DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                    PurgeImmediately = true
+                },
+                CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {

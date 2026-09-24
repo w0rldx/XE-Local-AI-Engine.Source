@@ -35,6 +35,6 @@ public sealed class RejudgeBenchmarkRunEndpoint : Endpoint<RejudgeBenchmarkRunRe
         var run = await _records.GetRunAsync(req.RunId, ct)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

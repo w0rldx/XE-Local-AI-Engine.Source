@@ -18,8 +18,7 @@ public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<NodeChatTitleEncryptionBackfillService> _logger;
 
-    public NodeChatTitleEncryptionBackfillService(
-        IServiceScopeFactory scopeFactory,
+    public NodeChatTitleEncryptionBackfillService(IServiceScopeFactory scopeFactory,
         ILogger<NodeChatTitleEncryptionBackfillService> logger)
     {
         _scopeFactory = scopeFactory;

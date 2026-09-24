@@ -86,7 +86,12 @@ public sealed class GraphWorkflowRunStoreTests
         await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
-        _ = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = definition.Id, ExpectedVersion = 1, Name = "Renamed" });
+        _ = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedVersion = 1,
+            Name = "Renamed"
+        });
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => store.StartRunAsync(StartCommand(definition, Guid.NewGuid())));
     }
@@ -100,7 +105,12 @@ public sealed class GraphWorkflowRunStoreTests
         var run = await StartAsync(store);
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
-                              store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = 99, TargetStatus = GraphWorkflowRunStatus.Running }));
+            store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = 99,
+                TargetStatus = GraphWorkflowRunStatus.Running
+            }));
     }
 
     /// <summary>
@@ -249,7 +259,13 @@ public sealed class GraphWorkflowRunStoreTests
         [
             // A Queued row was never dispatched, so its verdict repairs nothing: the collapse back to Pending IS the
             // whole of it, and it costs no attempt.
-            new GraphWorkflowNodeRunVerdict { NodeRunId = queued.Id, ObservedStatus = GraphWorkflowNodeRunStatus.Queued, ObservedAttempt = 1, Repairs = [] },
+            new GraphWorkflowNodeRunVerdict
+            {
+                NodeRunId = queued.Id,
+                ObservedStatus = GraphWorkflowNodeRunStatus.Queued,
+                ObservedAttempt = 1,
+                Repairs = []
+            },
 
             // The Running agent-shaped row is failed Interrupted rather than resumed: a provider turn has no durable
             // handle, so the reconciler never re-attempts it and the dispatcher's retry stage decides later.
@@ -258,7 +274,8 @@ public sealed class GraphWorkflowRunStoreTests
                 NodeRunId = running.Id,
                 ObservedStatus = GraphWorkflowNodeRunStatus.Running,
                 ObservedAttempt = 1,
-                Repairs = [
+                Repairs =
+                [
                     new TransitionGraphWorkflowNodeRunCommand
                     {
                         RunId = run.Id,
@@ -302,8 +319,12 @@ public sealed class GraphWorkflowRunStoreTests
         await MoveAsync(store, run.Id, "start", GraphWorkflowNodeRunStatus.Running);
 
         _ = await store.ReconcileNonTerminalNodeRunsAsync("the host restarted",
-                           [],
-                           new GraphWorkflowUnjudgedNodeRunSettlement { FailureClass = GraphWorkflowFailureClass.Interrupted, SanitizedReason = "nobody could judge this row" });
+            [],
+            new GraphWorkflowUnjudgedNodeRunSettlement
+            {
+                FailureClass = GraphWorkflowFailureClass.Interrupted,
+                SanitizedReason = "nobody could judge this row"
+            });
 
         var settled = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, settled.Status);
@@ -344,7 +365,12 @@ public sealed class GraphWorkflowRunStoreTests
                  })
         {
             var run = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()));
-            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = run.Version, TargetStatus = status });
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = run.Version,
+                TargetStatus = status
+            });
         }
 
         AssertEx.Equal(expected: 3, await store.CountActiveRunsAsync(probeLimit: 10));
@@ -365,7 +391,12 @@ public sealed class GraphWorkflowRunStoreTests
         var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
         _ = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()));
         var completed = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()));
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = completed.Id, ExpectedVersion = completed.Version, TargetStatus = GraphWorkflowRunStatus.Completed });
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = completed.Id,
+            ExpectedVersion = completed.Version,
+            TargetStatus = GraphWorkflowRunStatus.Completed
+        });
 
         AssertEx.Equal(expected: 0, await store.CountActiveRunsAsync(probeLimit: 10));
     }
@@ -428,7 +459,12 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var run = await StartAsync(store);
 
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = run.Version, TargetStatus = GraphWorkflowRunStatus.Running });
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = run.Version,
+            TargetStatus = GraphWorkflowRunStatus.Running
+        });
         var running = await store.GetRunAsync(run.Id);
         AssertEx.True(running.StartedAtUtc is not null);
 
@@ -536,10 +572,20 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var run = await StartAsync(store);
         await ParkAsync(store, run.Id, "start");
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelling });
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowRunStatus.Cancelling
+        });
         if (stopped == GraphWorkflowRunStatus.Cancelled)
         {
-            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelled });
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowRunStatus.Cancelled
+            });
         }
 
         var eventsBefore = (await store.ListEventsAsync(run.Id)).Count;
@@ -675,14 +721,25 @@ public sealed class GraphWorkflowRunStoreTests
     {
         if ((await store.GetRunAsync(runId)).Status == GraphWorkflowRunStatus.Pending)
         {
-            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Running });
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = runId,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowRunStatus.Running
+            });
         }
     }
 
     private static async Task MoveAsync(GraphWorkflowStore store, Guid runId, string nodeKey, GraphWorkflowNodeRunStatus target)
     {
         var nodeRun = await store.GetNodeRunAsync(runId, nodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand { RunId = runId, NodeRunId = nodeRun.Id, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = target });
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = runId,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = target
+        });
     }
 
     private static async Task<GraphWorkflowRunSnapshot> StartAsync(GraphWorkflowStore store,
@@ -703,6 +760,14 @@ public sealed class GraphWorkflowRunStoreTests
             GraphHash = definition.GraphHash,
             GraphJson = definition.GraphJson,
             InputJson = null,
-            NodeRuns = [.. (nodeKeys ?? ["start", "done"]).Select(static key => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = key, Kind = GraphWorkflowNodeKind.Agent })]
+            NodeRuns =
+            [
+                .. (nodeKeys ?? ["start", "done"]).Select(static key => new GraphWorkflowNodeRunSeed
+                {
+                    NodeRunId = Guid.NewGuid(),
+                    NodeKey = key,
+                    Kind = GraphWorkflowNodeKind.Agent
+                })
+            ]
         };
 }

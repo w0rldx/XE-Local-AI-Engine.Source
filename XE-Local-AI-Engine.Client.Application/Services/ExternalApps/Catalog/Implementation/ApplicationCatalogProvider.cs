@@ -103,7 +103,11 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         // force: true — an operator-triggered refresh must always attempt a fetch, never a silent TTL no-op just
         // because a previous refresh already succeeded within the TTL window.
         return _refreshUrl is null
-            ? Task.FromResult(new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null })
+            ? Task.FromResult(new ExternalAppCatalogRefreshResult
+            {
+                Snapshot = _current,
+                FailureMessage = null
+            })
             : RefreshCoreAsync(_refreshUrl, _options.Value, _timeProvider.GetUtcNow(), force: true, cancellationToken);
     }
 
@@ -191,7 +195,11 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             // waited. RefreshDebounce keeps a bundled-only start on a short backoff; force skips the debounce whole.
             if (!force && attemptAtUtc - _lastAttemptUtc < RefreshDebounce(options, _current.Source))
             {
-                return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null };
+                return new ExternalAppCatalogRefreshResult
+                {
+                    Snapshot = _current,
+                    FailureMessage = null
+                };
             }
 
             var previousAttemptUtc = _lastAttemptUtc;
@@ -217,8 +225,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                     if (outcome.NotModified)
                     {
                         return await ApplyLastGoodAsync(refreshUrl,
-                                "Catalog refresh failed: the origin answered 304 to an unconditional request and no cached copy is usable.",
-                                cancellationToken);
+                            "Catalog refresh failed: the origin answered 304 to an unconditional request and no cached copy is usable.",
+                            cancellationToken);
                     }
                 }
 
@@ -248,7 +256,11 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 _lastETag = outcome.ETag;
 
                 await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache(outcome.Raw!, attemptAtUtc, refreshUrl, outcome.ETag), cancellationToken);
-                return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null };
+                return new ExternalAppCatalogRefreshResult
+                {
+                    Snapshot = _current,
+                    FailureMessage = null
+                };
             }
             catch (OperationCanceledException)
             {
@@ -313,7 +325,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                return new FetchOutcome { Raw = null, ETag = null, NotModified = true, FailureMessage = null };
+                return new FetchOutcome
+                {
+                    Raw = null,
+                    ETag = null,
+                    NotModified = true,
+                    FailureMessage = null
+                };
             }
 
             if (!response.IsSuccessStatusCode)
@@ -354,7 +372,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 raw = raw[1..];
             }
 
-            return new FetchOutcome { Raw = raw, ETag = response.Headers.ETag?.ToString(), NotModified = false, FailureMessage = null };
+            return new FetchOutcome
+            {
+                Raw = raw,
+                ETag = response.Headers.ETag?.ToString(),
+                NotModified = false,
+                FailureMessage = null
+            };
         }
         // IOException covers the body: under ResponseHeadersRead the stream is still open, so a connection dying
         // mid-read surfaces as IOException (HttpIOException included) and must degrade like any transport failure.
@@ -407,7 +431,11 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             stored.FetchedAtUtc,
             stored.SourceUrl,
             failureMessage);
-        return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = failureMessage };
+        return new ExternalAppCatalogRefreshResult
+        {
+            Snapshot = _current,
+            FailureMessage = failureMessage
+        };
     }
 
     private ExternalAppCatalogRefreshResult Keep(string? failureMessage)
@@ -416,7 +444,11 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         {
             LastRefreshFailure = failureMessage
         };
-        return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = failureMessage };
+        return new ExternalAppCatalogRefreshResult
+        {
+            Snapshot = _current,
+            FailureMessage = failureMessage
+        };
     }
 
     /// <summary>One fetch attempt's outcome: a body, a <c>304</c>, or a failure message describing the cause.</summary>
@@ -432,7 +464,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
         public static FetchOutcome Failed(string failureMessage)
         {
-            return new FetchOutcome { Raw = null, ETag = null, NotModified = false, FailureMessage = failureMessage };
+            return new FetchOutcome
+            {
+                Raw = null,
+                ETag = null,
+                NotModified = false,
+                FailureMessage = failureMessage
+            };
         }
     }
 }

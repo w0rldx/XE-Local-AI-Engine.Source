@@ -43,11 +43,21 @@ public sealed class TrainingRunServiceTests : IDisposable
         var service = BuildService(context);
 
         var rejection = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(() =>
-            service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = false }));
+            service.CreateAsync(new CreateTrainingRunCommand
+            {
+                DatasetId = fixture.DatasetId,
+                ExpectedDatasetVersion = fixture.DatasetVersion,
+                BaseArtifactId = fixture.BaseArtifactId,
+                LicenseConfirmed = false
+            }));
 
         AssertEx.True(rejection.Message.Contains("licensing", StringComparison.OrdinalIgnoreCase), "The refusal has to name the licensing gate.");
         var runStore = new TrainingRunStore(context, TimeProvider.System);
-        AssertEx.Equal(expected: 0, (await runStore.ListAsync(new TrainingRunQuery { Page = 1, PageSize = 50 })).TotalCount,
+        AssertEx.Equal(expected: 0, (await runStore.ListAsync(new TrainingRunQuery
+            {
+                Page = 1,
+                PageSize = 50
+            })).TotalCount,
             "A refused creation must leave no run behind.");
         AssertEx.Null(await runStore.ClaimNextAsync(), "A refused creation must queue nothing for the consumer to pick up.");
         AssertEx.False(Directory.Exists(Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen")),
@@ -65,7 +75,13 @@ public sealed class TrainingRunServiceTests : IDisposable
 
         // The wizard's confirmation dialog was opened before somebody edited a sample.
         _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
-            service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion + 1, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true }));
+            service.CreateAsync(new CreateTrainingRunCommand
+            {
+                DatasetId = fixture.DatasetId,
+                ExpectedDatasetVersion = fixture.DatasetVersion + 1,
+                BaseArtifactId = fixture.BaseArtifactId,
+                LicenseConfirmed = true
+            }));
 
         var frozenDirectory = Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen");
         AssertEx.True(!Directory.Exists(frozenDirectory) || Directory.GetFiles(frozenDirectory).Length == 0,
@@ -82,7 +98,13 @@ public sealed class TrainingRunServiceTests : IDisposable
         var service = BuildService(context);
         var workspace = BuildWorkspace();
 
-        var run = await service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true });
+        var run = await service.CreateAsync(new CreateTrainingRunCommand
+        {
+            DatasetId = fixture.DatasetId,
+            ExpectedDatasetVersion = fixture.DatasetVersion,
+            BaseArtifactId = fixture.BaseArtifactId,
+            LicenseConfirmed = true
+        });
         var freeze = ReadFreeze(run);
         var frozenBytesBefore = await File.ReadAllBytesAsync(workspace.FrozenDatasetPath(fixture.DatasetId, freeze.FreezeId));
         var frozenPlaintext = await workspace.ReadFrozenDatasetAsync(fixture.DatasetId, freeze.FreezeId, CancellationToken.None);
@@ -95,7 +117,12 @@ public sealed class TrainingRunServiceTests : IDisposable
         // Reject a sample: an accepted review bumps the dataset revision and recomputes its content fingerprint.
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
         var sample = (await datasets.ListAllSamplesAsync(fixture.DatasetId))[0];
-        _ = await datasets.ReviewSampleAsync(new TrainingSampleReviewCommand { SampleId = sample.Id, Verb = TrainingSampleReviewVerb.Reject, Label = null });
+        _ = await datasets.ReviewSampleAsync(new TrainingSampleReviewCommand
+        {
+            SampleId = sample.Id,
+            Verb = TrainingSampleReviewVerb.Reject,
+            Label = null
+        });
         var moved = AssertEx.NotNull(await datasets.GetDatasetAsync(fixture.DatasetId), "The dataset still exists.");
 
         AssertEx.NotEqual(fixture.DatasetContentFingerprint, moved.ContentFingerprint!);
@@ -134,7 +161,13 @@ public sealed class TrainingRunServiceTests : IDisposable
         var fixture = await SeedAsync(context);
         var service = BuildService(context);
 
-        var run = await service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true });
+        var run = await service.CreateAsync(new CreateTrainingRunCommand
+        {
+            DatasetId = fixture.DatasetId,
+            ExpectedDatasetVersion = fixture.DatasetVersion,
+            BaseArtifactId = fixture.BaseArtifactId,
+            LicenseConfirmed = true
+        });
 
         AssertEx.True(run.LicenseConfirmationJson.HasValue, "A run records its confirmation.");
         var confirmation = ReadConfirmation(run);
@@ -209,7 +242,14 @@ public sealed class TrainingRunServiceTests : IDisposable
                     .Returns(new TrainingRunDefaults
                     {
                         Options = new TrainingRunOptionsV1(),
-                        Estimate = new TrainingFootprintEstimate { GpuBytes = 1, RamBytes = 1, ParameterCount = 1, TrainableParameterCount = 1, Experimental = false },
+                        Estimate = new TrainingFootprintEstimate
+                        {
+                            GpuBytes = 1,
+                            RamBytes = 1,
+                            ParameterCount = 1,
+                            TrainableParameterCount = 1,
+                            Experimental = false
+                        },
                         AvailableVramBytes = 1,
                         VramKnown = true,
                         Fits = true,
@@ -239,7 +279,12 @@ public sealed class TrainingRunServiceTests : IDisposable
             Kind = TrainingDatasetKind.ToolCalling,
             DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")
         });
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await datasets.ClaimNextAsync();
         for (var index = 0; index < 4; index++)
         {

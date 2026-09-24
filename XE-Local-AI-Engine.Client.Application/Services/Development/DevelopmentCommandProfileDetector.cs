@@ -62,15 +62,30 @@ internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandPro
                         .ToArray();
         if (solutions.Length > 0)
         {
-            return new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.DotnetSlnx, BuildTarget = solutions[0], Candidates = solutions };
+            return new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.DotnetSlnx,
+                BuildTarget = solutions[0],
+                Candidates = solutions
+            };
         }
 
         var projects = EnumerateRelative(canonical, "*.csproj", MaxProjectSearchDepth)
                        .Take(MaxCandidates)
                        .ToArray();
         return projects.Length > 0
-            ? new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.DotnetCsproj, BuildTarget = projects[0], Candidates = projects }
-            : new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.GenericGit, BuildTarget = null, Candidates = [] };
+            ? new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.DotnetCsproj,
+                BuildTarget = projects[0],
+                Candidates = projects
+            }
+            : new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.GenericGit,
+                BuildTarget = null,
+                Candidates = []
+            };
     }
 
     /// <summary>

@@ -158,7 +158,11 @@ namespace XE_Local_AI_Engine.Client
                     await standardError.WriteLineAsync(dataDirectoryException.SafeDiagnostic);
                 }
 
-                return new ProgramStartResult { App = null, ExitCode = 1 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 1
+                };
             }
         }
 
@@ -173,7 +177,11 @@ namespace XE_Local_AI_Engine.Client
             if (DesktopLaunch.HasHelpFlag(args))
             {
                 await WriteHelpAsync(standardOutput);
-                return new ProgramStartResult { App = null, ExitCode = 0 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 0
+                };
             }
 
             // Status is always a one-shot command, even when a serve flag is also present. It is intentionally handled
@@ -196,14 +204,22 @@ namespace XE_Local_AI_Engine.Client
             if (!DesktopLaunch.TryGetPort(args, out var requestedPort, out var portError))
             {
                 await standardError.WriteLineAsync(portError);
-                return new ProgramStartResult { App = null, ExitCode = 2 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 2
+                };
             }
 
             var setupRequested = DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError);
             if (setupRequested && setupError is not null)
             {
                 await standardError.WriteLineAsync(setupError);
-                return new ProgramStartResult { App = null, ExitCode = 2 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 2
+                };
             }
 
             if (setupCommand?.PasswordFromEnvironment == true)
@@ -215,7 +231,11 @@ namespace XE_Local_AI_Engine.Client
             if (mcpKeyRequested && mcpKeyError is not null)
             {
                 await standardError.WriteLineAsync(mcpKeyError);
-                return new ProgramStartResult { App = null, ExitCode = 3 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 3
+                };
             }
 
             commandContext?.SetStage(OneShotCommandStage.HostInitialization);
@@ -279,7 +299,11 @@ namespace XE_Local_AI_Engine.Client
                     }
 
                     await Log.CloseAndFlushAsync();
-                    return new ProgramStartResult { App = null, ExitCode = setupRequested || mcpKeyRequested ? 4 : 1 };
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = setupRequested || mcpKeyRequested ? 4 : 1
+                    };
                 }
 
                 // Re-bind the remembered loopback port while it is still free, so the browser origin stays stable and localStorage-backed prefs survive between
@@ -293,7 +317,11 @@ namespace XE_Local_AI_Engine.Client
                         Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
                         await Log.CloseAndFlushAsync();
                         instanceLease.Dispose();
-                        return new ProgramStartResult { App = null, ExitCode = 6 };
+                        return new ProgramStartResult
+                        {
+                            App = null,
+                            ExitCode = 6
+                        };
                     }
 
 #pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.
@@ -400,7 +428,11 @@ namespace XE_Local_AI_Engine.Client
             {
                 var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand);
                 instanceLease?.Dispose();
-                return new ProgramStartResult { App = null, ExitCode = downgradeExitCode };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = downgradeExitCode
+                };
             }
 
             // Loopback-only bind guard, defense-in-depth behind LocalApiSecurityMiddleware: shut down if the server bound a routable address without the
@@ -439,7 +471,11 @@ namespace XE_Local_AI_Engine.Client
             {
                 var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword);
                 instanceLease?.Dispose();
-                return new ProgramStartResult { App = null, ExitCode = resetExitCode };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = resetExitCode
+                };
             }
 
             if (setupRequested)
@@ -449,7 +485,11 @@ namespace XE_Local_AI_Engine.Client
                 if (setupExitCode != 0)
                 {
                     instanceLease?.Dispose();
-                    return new ProgramStartResult { App = null, ExitCode = setupExitCode };
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = setupExitCode
+                    };
                 }
             }
 
@@ -460,14 +500,22 @@ namespace XE_Local_AI_Engine.Client
                 if (mcpKeyExitCode != 0)
                 {
                     instanceLease?.Dispose();
-                    return new ProgramStartResult { App = null, ExitCode = mcpKeyExitCode };
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = mcpKeyExitCode
+                    };
                 }
             }
 
             if ((setupRequested || mcpKeyRequested) && !DesktopLaunch.HasExplicitLocalModeArgument(args))
             {
                 instanceLease?.Dispose();
-                return new ProgramStartResult { App = null, ExitCode = 0 };
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = 0
+                };
             }
 
             await RecoverInterruptedNodeChatMessagesAsync(app.Services);
@@ -848,7 +896,11 @@ namespace XE_Local_AI_Engine.Client
             }
 
 
-            return new ProgramStartResult { App = app, ExitCode = 0 };
+            return new ProgramStartResult
+            {
+                App = app,
+                ExitCode = 0
+            };
         }
 
         /// <summary>

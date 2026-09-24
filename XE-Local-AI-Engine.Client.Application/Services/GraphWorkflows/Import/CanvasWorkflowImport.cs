@@ -82,7 +82,11 @@ public static class CanvasWorkflowImport
         }
         else if (!tables.Contains("canvas_workflow_import_recovery", StringComparer.Ordinal))
         {
-            return new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 };
+            return new CanvasWorkflowImportSnapshot
+            {
+                Candidates = [],
+                FailedCount = 0
+            };
         }
 
         var rows = await dbContext.Database
@@ -104,7 +108,13 @@ public static class CanvasWorkflowImport
                 // Refuse malformed legacy content before allowing the migration to drop its source table.
                 JsonDocument.Parse(plaintext).Dispose();
 
-                candidates.Add(new CanvasWorkflowImportCandidate { Id = row.Id, Name = row.Name ?? string.Empty, GraphJson = plaintext, CreatedAtUtc = row.CreatedAtUtc });
+                candidates.Add(new CanvasWorkflowImportCandidate
+                {
+                    Id = row.Id,
+                    Name = row.Name ?? string.Empty,
+                    GraphJson = plaintext,
+                    CreatedAtUtc = row.CreatedAtUtc
+                });
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -121,7 +131,11 @@ public static class CanvasWorkflowImport
             throw new InvalidOperationException("Saved Open Canvas workflows could not all be read. Their encrypted source is retained; repair the data or restore a backup before restarting.");
         }
 
-        return new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = 0 };
+        return new CanvasWorkflowImportSnapshot
+        {
+            Candidates = candidates,
+            FailedCount = 0
+        };
     }
 
     /// <summary>
@@ -180,7 +194,8 @@ public static class CanvasWorkflowImport
 
         if (failed != 0)
         {
-            throw new InvalidOperationException("Saved Open Canvas workflows could not all be imported. No imported definitions were committed; encrypted recovery data is retained for the next startup.");
+            throw new InvalidOperationException(
+                "Saved Open Canvas workflows could not all be imported. No imported definitions were committed; encrypted recovery data is retained for the next startup.");
         }
 
         _ = await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS canvas_workflow_import_recovery", cancellationToken);
@@ -361,8 +376,15 @@ public static class CanvasWorkflowImport
 
         try
         {
-            var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = name, GraphJson = graphJson, NodeCount = nodeCount, Description = description },
-                                         cancellationToken);
+            var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+                {
+                    DefinitionId = Guid.NewGuid(),
+                    Name = name,
+                    GraphJson = graphJson,
+                    NodeCount = nodeCount,
+                    Description = description
+                },
+                cancellationToken);
 
             logger.LogWarning("Open Canvas workflow {CanvasWorkflowId} ('{CanvasWorkflowName}') was imported as graph workflow definition {DefinitionId} "
                               + "but will not run until it is edited: {Reason}",

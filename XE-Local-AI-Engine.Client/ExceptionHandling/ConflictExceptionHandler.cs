@@ -28,6 +28,7 @@ public class ConflictExceptionHandler : IExceptionHandler
 {
     /// <summary>Same string FastEndpoints' ResponseSerializer writes, so a 409 looks like every other problem body.</summary>
     private const string ProblemContentType = "application/problem+json; charset=utf-8";
+
     private readonly ILogger<ConflictExceptionHandler> _logger;
 
     public ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger)

@@ -32,5 +32,8 @@ public sealed class GetWorkSessionCapabilityEndpoint : EndpointWithoutRequest<Wo
     }
 
     public override Task HandleAsync(CancellationToken ct) =>
-        Send.OkAsync(new WorkSessionCapabilityResponse { Enabled = _options.Value.Enabled }, ct);
+        Send.OkAsync(new WorkSessionCapabilityResponse
+        {
+            Enabled = _options.Value.Enabled
+        }, ct);
 }

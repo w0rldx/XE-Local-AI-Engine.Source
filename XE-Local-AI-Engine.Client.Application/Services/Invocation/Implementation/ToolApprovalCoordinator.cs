@@ -168,7 +168,12 @@ public sealed class ToolApprovalCoordinator
 
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall { InvocationId = package.InvocationId, CreatedAt = _timeProvider.GetUtcNow(), ApprovalCompletion = approvalCompletion };
+        var pendingToolCall = new PendingToolCall
+        {
+            InvocationId = package.InvocationId,
+            CreatedAt = _timeProvider.GetUtcNow(),
+            ApprovalCompletion = approvalCompletion
+        };
         var dispatcher = _eventDispatcher.Value;
 
         if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))

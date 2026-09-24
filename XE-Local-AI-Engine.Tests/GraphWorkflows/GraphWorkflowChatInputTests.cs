@@ -68,7 +68,7 @@ public sealed class GraphWorkflowChatInputTests
         AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId)).Count(entry => entry.EventType == GraphWorkflowEventTypes.GateDecided));
 
         var second = await AssertEx.ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                         harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"other"}"""));
+            harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"other"}"""));
         AssertEx.Equal(GraphWorkflowDecisionKind.Answer, second.StandingDecision, "a second answer is told which one stands.");
     }
 
@@ -82,7 +82,7 @@ public sealed class GraphWorkflowChatInputTests
         _ = await harness.DecideAsync(runId, "ask", operationId, GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"postgres"}""");
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                          harness.DecideAsync(runId, "ask", operationId, GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"mysql"}"""));
+            harness.DecideAsync(runId, "ask", operationId, GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"mysql"}"""));
 
         AssertEx.Contains(refusal.Message, "different answer");
         using var output = JsonDocument.Parse(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "ask")).OutputJson));
@@ -111,7 +111,7 @@ public sealed class GraphWorkflowChatInputTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() =>
-                          harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"yes"}"""));
+            harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: """{"text":"yes"}"""));
 
         AssertEx.Contains(refusal.Message, "cannot be answered Answer");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "review")).Status);
@@ -129,7 +129,7 @@ public sealed class GraphWorkflowChatInputTests
         var runId = await ParkedRunAsync(harness);
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                          harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, comment, payloadJson));
+            harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, comment, payloadJson));
 
         AssertEx.Contains(refusal.Message, expected);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "ask")).Status, "a refused answer leaves the run waiting.");
@@ -144,10 +144,16 @@ public sealed class GraphWorkflowChatInputTests
         var runId = await ParkedRunAsync(harness);
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                          harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: JsonSerializer.Serialize(new { text = new string('x', 1025) })));
+            harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: JsonSerializer.Serialize(new
+            {
+                text = new string('x', 1025)
+            })));
 
         AssertEx.Contains(refusal.Message, "larger than the 1024 bytes");
-        _ = await harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: JsonSerializer.Serialize(new { text = new string('x', 1024) }));
+        _ = await harness.DecideAsync(runId, "ask", Guid.NewGuid(), GraphWorkflowDecisionKind.Answer, payloadJson: JsonSerializer.Serialize(new
+        {
+            text = new string('x', 1024)
+        }));
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "ask")).Status, "an answer AT the cap is accepted.");
     }
 
@@ -159,9 +165,9 @@ public sealed class GraphWorkflowChatInputTests
         var runId = await ParkedRunAsync(harness);
 
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                  Options.Create(harness.CurrentOptions()),
-                  harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None);
+                Options.Create(harness.CurrentOptions()),
+                harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
+            .StartAsync(CancellationToken.None);
         _ = harness.CreateReplacementDispatcher();
 
         var survived = await harness.ReadNodeRunAsync(runId, "ask");

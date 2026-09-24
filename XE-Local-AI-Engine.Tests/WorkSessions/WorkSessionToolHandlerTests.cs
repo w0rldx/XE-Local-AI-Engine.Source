@@ -197,7 +197,7 @@ public sealed class WorkSessionToolHandlerTests
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
             _ = await handler
-                      .ExecuteAsync($$"""{"operations":[{"op":"update","taskId":"{{approvalId}}","status":"Blocked","blockedReason":"No operator answered."}]}""");
+                .ExecuteAsync($$"""{"operations":[{"op":"update","taskId":"{{approvalId}}","status":"Blocked","blockedReason":"No operator answered."}]}""");
         }
 
         var blocked = (await ReadTasksAsync(factory, sessionId)).Single(task => task.Title == "Obtain approval");
@@ -509,7 +509,12 @@ public sealed class WorkSessionToolHandlerTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                           .TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Cancelled });
+                           .TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+                           {
+                               SessionId = sessionId,
+                               ExpectedVersion = session.Version,
+                               TargetStatus = AgentWorkSessionStatus.Cancelled
+                           });
         }
 
         using var ambient = AgentRunConversationContext.BeginScope(session.ConversationId);

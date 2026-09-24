@@ -108,11 +108,21 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
         };
 
     private static ResolvedSelectedFolder Folder() =>
-        new() { Id = Guid.NewGuid(), Alias = "project", HostPath = "/opaque/not/read", Mode = SelectedFolderMode.Copy };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Alias = "project",
+            HostPath = "/opaque/not/read",
+            Mode = SelectedFolderMode.Copy
+        };
 
     private sealed class IdentityProvider : IAgentHomeIdentityProvider
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
+            Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner",
+                NodeId = "node"
+            });
     }
 }

@@ -101,7 +101,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         {
             // A non-zero exit or an incomplete command means no patch could be produced: surface that distinctly, so it is
             // not read as a clean zero-change run, and write no artifacts. Real non-zero git exits need a real provider.
-            _logger.LogWarning("Patch export for run {RunId} aborted: stage exit {StageExit} (completed {StageCompleted}), patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
+            _logger.LogWarning(
+                "Patch export for run {RunId} aborted: stage exit {StageExit} (completed {StageCompleted}), patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
                 request.RunId,
                 stageResult.ExitCode,
                 stageResult.Completed,

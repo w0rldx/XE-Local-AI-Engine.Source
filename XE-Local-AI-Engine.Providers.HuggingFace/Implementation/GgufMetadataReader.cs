@@ -42,6 +42,13 @@ public sealed class GgufMetadataReader : IGgufMetadataReader
             header.QuantType,
             header.IsMoe);
 
-        return new GgufModelMetadata { ParamCount = header.ParamCount, QuantType = header.QuantType, ContextLength = header.ContextLength, ExpertCount = expertCount, IsMoe = header.IsMoe };
+        return new GgufModelMetadata
+        {
+            ParamCount = header.ParamCount,
+            QuantType = header.QuantType,
+            ContextLength = header.ContextLength,
+            ExpertCount = expertCount,
+            IsMoe = header.IsMoe
+        };
     }
 }

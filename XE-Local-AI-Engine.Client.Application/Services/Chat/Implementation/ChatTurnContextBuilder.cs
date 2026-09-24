@@ -16,8 +16,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
     private readonly ILogger<ChatTurnContextBuilder> _logger;
 
-    public ChatTurnContextBuilder(
-        IConversationUploadedFileStore uploadedFileStore,
+    public ChatTurnContextBuilder(IConversationUploadedFileStore uploadedFileStore,
         IUntrustedContentFenceSeedProvider fenceSeedProvider,
         IServiceScopeFactory scopeFactory,
         IOptions<LocalChatAgentOptions> localChatOptions,
@@ -137,7 +136,11 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             }
 
             totalBytes += data.Length;
-            (images ??= []).Add(new ConversationImagePart { MediaType = file.MimeType, Data = data });
+            (images ??= []).Add(new ConversationImagePart
+            {
+                MediaType = file.MimeType,
+                Data = data
+            });
         }
 
         if (dropped > 0)
@@ -173,7 +176,13 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         try
         {
             var limit = _localChatOptions.Value.KnowledgeChatTopK;
-            var searchRequest = new KnowledgeSearchRequest { Query = normalizedQuery, Limit = limit, DocumentId = null, ExpandNeighbors = false };
+            var searchRequest = new KnowledgeSearchRequest
+            {
+                Query = normalizedQuery,
+                Limit = limit,
+                DocumentId = null,
+                ExpandNeighbors = false
+            };
 
             // The hybrid search runs in a FRESH DI scope: IKnowledgeSearchService is scoped and drives a request-scoped
             // connection (mirrors SearchKnowledgeBaseToolHandler).
@@ -199,7 +208,11 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
                 Content = composed.Context,
                 SortOrder = 0
             };
-            return new KnowledgeChatGrounding { Message = message, Sources = composed.Sources };
+            return new KnowledgeChatGrounding
+            {
+                Message = message,
+                Sources = composed.Sources
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

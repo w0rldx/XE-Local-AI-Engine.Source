@@ -86,7 +86,11 @@ public sealed partial class McpToolsReferenceDriftTests
                 .Select(static method => (Method: method,
                     Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
                 .Where(static item => item.Attribute is not null)
-                .Select(item => new DocumentedTool { Name = item.Attribute!.Name ?? item.Method.Name, Scope = scope });
+                .Select(item => new DocumentedTool
+                {
+                    Name = item.Attribute!.Name ?? item.Method.Name,
+                    Scope = scope
+                });
 
     private static Dictionary<string, string> ParseDocumentedTools(string path)
     {

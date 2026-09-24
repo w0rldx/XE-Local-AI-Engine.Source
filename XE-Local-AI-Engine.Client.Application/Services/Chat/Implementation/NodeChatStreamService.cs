@@ -62,8 +62,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly ILogger<NodeChatStreamService> _logger;
 
-    public NodeChatStreamService(
-        INodeChatPersistenceService persistence,
+    public NodeChatStreamService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
         ChatTurnResolver turnResolver,
         INodeChatMutationGuard mutationGuard,
@@ -145,11 +144,22 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
         var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
         var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
-        var correlation = new NodeChatMessageCorrelation { ConversationId = request.ConversationId, MessageId = assistantMessageId, RequestId = requestId };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = request.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = requestId
+        };
         var sequence = new NodeChatStreamSequence();
         var startedAtUtc = NowUnixMilliseconds();
 
-        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = request.ConversationId, MessageId = userMessageId, Content = trimmedContent, CreatedAtUtc = startedAtUtc },
+        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = request.ConversationId,
+                MessageId = userMessageId,
+                Content = trimmedContent,
+                CreatedAtUtc = startedAtUtc
+            },
             cancellationToken);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
@@ -261,11 +271,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             cancellationToken);
 
         var package = await BuildRuntimePackageAsync(request,
-                resolution,
-                ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
-                allowedTools,
-                runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
-                requestId);
+            resolution,
+            ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
+            allowedTools,
+            runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+            requestId);
         var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
         // A work-session step is bounded by ConversationStepContextBound before it sends, so only a chat turn auto-compacts.
@@ -362,8 +372,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             }
 
             await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
-                                   invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
-                               cancellationToken);
+                    invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                cancellationToken);
 
             // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider call,
             // so the client sees an actionable "pull a model" terminal rather than the stale-id "Provider unreachable.".
@@ -435,7 +445,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                                         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
                .Concat([userMessage])
                .OrderBy(anchorSequence)
-               .Select(static message => new MemoryExtractionTurn { Content = message.Content })
+               .Select(static message => new MemoryExtractionTurn
+               {
+                   Content = message.Content
+               })
                .ToArray();
     }
 
@@ -453,13 +466,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
 
         await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                             {
-                                 InvocationId = requestId,
-                                 Kind = TurnNoticeKind.AttachmentsWithheld,
-                                 Message =
-                                     "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
-                                 Detail = effectiveModel
-                             });
+        {
+            InvocationId = requestId,
+            Kind = TurnNoticeKind.AttachmentsWithheld,
+            Message =
+                "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
+            Detail = effectiveModel
+        });
     }
 
     // Emits the KnowledgeWithheld notice when a plain-chat turn opted into grounding but a cloud effective model would
@@ -468,13 +481,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                             {
-                                 InvocationId = requestId,
-                                 Kind = TurnNoticeKind.KnowledgeWithheld,
-                                 Message =
-                                     "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
-                                 Detail = effectiveModel
-                             });
+        {
+            InvocationId = requestId,
+            Kind = TurnNoticeKind.KnowledgeWithheld,
+            Message =
+                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+            Detail = effectiveModel
+        });
     }
 
     /// <summary>
@@ -493,7 +506,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
 
         var persistedSelectedPath = request.SelectedPath is not null
-            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = request.ConversationId, SelectedPath = request.SelectedPath, UpdatedAtUtc = NowUnixMilliseconds() }, cancellationToken)
+            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+            {
+                ConversationId = request.ConversationId,
+                SelectedPath = request.SelectedPath,
+                UpdatedAtUtc = NowUnixMilliseconds()
+            }, cancellationToken)
             : null;
 
         // Turn-scoped read: the same message structure minus the content and metadata blobs this conversation's
@@ -501,7 +519,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var conversation = await _persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
-        return new ChatTurnLoad { Conversation = conversation, SelectedPath = persistedSelectedPath ?? conversation.SelectedPath };
+        return new ChatTurnLoad
+        {
+            Conversation = conversation,
+            SelectedPath = persistedSelectedPath ?? conversation.SelectedPath
+        };
     }
 
     // Mints the assistant row this turn streams into, stamped with the model that will actually run — never the raw
@@ -513,16 +535,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         CancellationToken cancellationToken)
     {
         return _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
-        {
-            ConversationId = request.ConversationId,
-            MessageId = assistantMessageId,
-            RequestId = requestId,
-            CreatedAtUtc = NowUnixMilliseconds(),
-            Model = resolution.EffectiveModel,
-            AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
-            AgentName = resolution.Resolved?.AgentName,
-            ReasoningEffort = EffectiveReasoningEffort(request, resolution.Resolved?.ReasoningEffort)
-        },
+            {
+                ConversationId = request.ConversationId,
+                MessageId = assistantMessageId,
+                RequestId = requestId,
+                CreatedAtUtc = NowUnixMilliseconds(),
+                Model = resolution.EffectiveModel,
+                AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
+                AgentName = resolution.Resolved?.AgentName,
+                ReasoningEffort = EffectiveReasoningEffort(request, resolution.Resolved?.ReasoningEffort)
+            },
             cancellationToken);
     }
 
@@ -554,24 +576,33 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
         if (!offerTools)
         {
-            return new ChatToolOffer { OfferTools = false, AllowedTools = null };
+            return new ChatToolOffer
+            {
+                OfferTools = false,
+                AllowedTools = null
+            };
         }
 
         if (resolution.Resolved?.AllowedTools is { } resolvedAllowedTools)
         {
-            return new ChatToolOffer { OfferTools = true, AllowedTools = resolvedAllowedTools };
+            return new ChatToolOffer
+            {
+                OfferTools = true,
+                AllowedTools = resolvedAllowedTools
+            };
         }
 
         var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
         return new ChatToolOffer
         {
             OfferTools = true,
-            AllowedTools = [
-            .. fallbackOffer.Select(tool => tool with
-            {
-                RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-            })
-        ]
+            AllowedTools =
+            [
+                .. fallbackOffer.Select(tool => tool with
+                {
+                    RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                })
+            ]
         };
     }
 
@@ -606,12 +637,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
         {
             await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                                 {
-                                     InvocationId = requestId,
-                                     Kind = TurnNoticeKind.OrchestrationDegraded,
-                                     Message = orchestrationDegradedMessage,
-                                     Detail = resolution.OrchestrationOutcome.Reason.ToString()
-                                 });
+            {
+                InvocationId = requestId,
+                Kind = TurnNoticeKind.OrchestrationDegraded,
+                Message = orchestrationDegradedMessage,
+                Detail = resolution.OrchestrationOutcome.Reason.ToString()
+            });
         }
 
         if (attachmentsAllowed)
@@ -662,7 +693,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             error = "The AgentHome workspace could not be prepared for this response.";
         }
 
-        return new SandboxStagingOutcome { Preparation = preparation, Error = error };
+        return new SandboxStagingOutcome
+        {
+            Preparation = preparation,
+            Error = error
+        };
     }
 
     // Terminalizes the assistant row Failed for a pre-run refusal, hence the zero-duration content-free envelope.
@@ -670,13 +705,17 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private Task<NodeChatPersistedMessageDto> TerminalizeAssistantFailureAsync(NodeChatMessageCorrelation correlation, string error)
     {
         return _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
-        {
-            Correlation = correlation,
-            Status = NodeChatMessageStatusValues.Failed,
-            UpdatedAtUtc = NowUnixMilliseconds(),
-            Error = error,
-            Envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L }
-        },
+            {
+                Correlation = correlation,
+                Status = NodeChatMessageStatusValues.Failed,
+                UpdatedAtUtc = NowUnixMilliseconds(),
+                Error = error,
+                Envelope = new AgentRunEnvelopeMetadata
+                {
+                    InvocationId = null,
+                    DurationMs = 0L
+                }
+            },
             CancellationToken.None);
     }
 
@@ -731,7 +770,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             imageContext = await _turnContextBuilder.BuildImageContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
         }
 
-        return new ChatTurnContext { Attachment = attachmentContext, Image = imageContext, Knowledge = knowledgeContext, KnowledgeSources = knowledgeSources };
+        return new ChatTurnContext
+        {
+            Attachment = attachmentContext,
+            Image = imageContext,
+            Knowledge = knowledgeContext,
+            KnowledgeSources = knowledgeSources
+        };
     }
 
     // Assembles the runtime package the invocation runs from; the active model, effective agent and orchestration spec

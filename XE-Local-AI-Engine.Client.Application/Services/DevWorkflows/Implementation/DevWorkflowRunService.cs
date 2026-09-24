@@ -75,16 +75,16 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
         var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand
-        {
-            RunId = operationId,
-            WorkItemId = workItemId,
-            DefinitionId = definitionId,
-            DefinitionVersion = definition.Version,
-            DefinitionGraphHash = definition.GraphHash,
-            GraphJson = definition.GraphJson,
-            NodeRuns = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)
-        },
-                                  cancellationToken);
+            {
+                RunId = operationId,
+                WorkItemId = workItemId,
+                DefinitionId = definitionId,
+                DefinitionVersion = definition.Version,
+                DefinitionGraphHash = definition.GraphHash,
+                GraphJson = definition.GraphJson,
+                NodeRuns = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)
+            },
+            cancellationToken);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken);
     }
@@ -177,7 +177,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
             // Comment and payload are deliberately NOT compared: they are the free text around the act rather than the
             // act itself, and a client re-sending its request with a trimmed comment has still taken one decision.
-            return new DevWorkflowDecisionResult { Detail = await ComposeAsync(run, cancellationToken), Decision = recorded };
+            return new DevWorkflowDecisionResult
+            {
+                Detail = await ComposeAsync(run, cancellationToken),
+                Decision = recorded
+            };
         }
 
         var nodeRun = await _store.GetNodeRunAsync(nodeRunId, cancellationToken);
@@ -217,28 +221,32 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         }
 
         _ = await _store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
-        {
-            RunId = runId,
-            DecisionId = Guid.NewGuid(),
-            NodeRunId = nodeRunId,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            OperationId = operationId,
-            Decision = decision,
-            Comment = comment,
-            PayloadJson = payloadJson,
-            DecidedBySubject = decidedBySubject,
-            MaxTotalAttempts = decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null,
-            // The row this answer was validated against. Everything above read `nodeRun` outside
-            // the recording transaction, so the write re-checks the pair rather than trusting it.
-            ExpectedAttempt = nodeRun.Attempt,
-            ExpectedStatus = nodeRun.Status
-        },
-                            cancellationToken);
+            {
+                RunId = runId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                OperationId = operationId,
+                Decision = decision,
+                Comment = comment,
+                PayloadJson = payloadJson,
+                DecidedBySubject = decidedBySubject,
+                MaxTotalAttempts = decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null,
+                // The row this answer was validated against. Everything above read `nodeRun` outside
+                // the recording transaction, so the write re-checks the pair rather than trusting it.
+                ExpectedAttempt = nodeRun.Attempt,
+                ExpectedStatus = nodeRun.Status
+            },
+            cancellationToken);
 
         var detail = await SignalAndComposeAsync(runId, cancellationToken);
         var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken)
                       ?? throw new DevWorkflowNotFoundException($"The decision recorded on run '{runId}' could not be read back.");
-        return new DevWorkflowDecisionResult { Detail = detail, Decision = settled };
+        return new DevWorkflowDecisionResult
+        {
+            Detail = detail,
+            Decision = settled
+        };
     }
 
     /// <summary>A lifecycle command: legal from where the run stands, keyed by its operation id, signalled on commit.</summary>
@@ -257,7 +265,13 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var run = await _store.GetRunAsync(runId, cancellationToken);
         DevWorkflowStateMachine.EnsureLegal(run.Status, target);
 
-        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = runId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = target, OperationId = operationId }, cancellationToken);
+        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = runId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = target,
+            OperationId = operationId
+        }, cancellationToken);
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
@@ -323,9 +337,9 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             // The store's list counters' own rule: the first node run in sequence order a human has to act on, a gate
             // or a Blocked node alike. A narrower reading would make the list and detail pages disagree on one run.
             BlockingGateNodeRunId = nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
-                    .OrderBy(static nodeRun => nodeRun.Sequence)
-                    .Select(static nodeRun => (Guid?)nodeRun.Id)
-                    .FirstOrDefault()
+                                            .OrderBy(static nodeRun => nodeRun.Sequence)
+                                            .Select(static nodeRun => (Guid?)nodeRun.Id)
+                                            .FirstOrDefault()
         };
     }
 

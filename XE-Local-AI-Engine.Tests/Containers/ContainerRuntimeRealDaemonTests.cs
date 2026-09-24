@@ -117,7 +117,13 @@ public sealed class ContainerRuntimeRealDaemonTests
         var bound = await LoopbackPort.BindWithRetryAsync(async candidate =>
             {
                 var created = await box.RunAsync(box.SpecificationOnPort(candidate));
-                return await box.TryStartAsync(created) ? new BoundContainer { ContainerId = created, HostPort = candidate } : null;
+                return await box.TryStartAsync(created)
+                    ? new BoundContainer
+                    {
+                        ContainerId = created,
+                        HostPort = candidate
+                    }
+                    : null;
             },
             maxAttempts: 2);
 

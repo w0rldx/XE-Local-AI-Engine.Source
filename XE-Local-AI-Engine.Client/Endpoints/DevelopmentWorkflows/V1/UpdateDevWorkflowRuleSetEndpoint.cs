@@ -39,16 +39,16 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint : Endpoint<UpdateDevWorkflo
         ArgumentNullException.ThrowIfNull(req);
 
         var updated = await _authoring.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
-        {
-            RuleSetId = req.RuleSetId,
-            ExpectedVersion = req.Version,
-            Name = req.Name,
-            Body = req.Body,
-            ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
-            Description = req.Description,
-            Enabled = req.Enabled
-        },
-                                      ct);
+            {
+                RuleSetId = req.RuleSetId,
+                ExpectedVersion = req.Version,
+                Name = req.Name,
+                Body = req.Body,
+                ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
+                Description = req.Description,
+                Enabled = req.Enabled
+            },
+            ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

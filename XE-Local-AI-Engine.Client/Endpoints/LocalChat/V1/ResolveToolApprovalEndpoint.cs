@@ -36,7 +36,11 @@ public sealed class ResolveToolApprovalEndpoint : Endpoint<ResolveToolApprovalRe
     {
         // DispatchApprovalResolvedAsync is safe when no approval is pending for this id (it logs a warning and no-ops), so a duplicate or stale decision never faults the
         // turn. The scope rides the Application-internal dispatcher parameter rather than ApprovalResolvedEvent, the shared AI.Contracts shape, which must not learn about a loopback-only concept.
-        await _eventDispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent { RequestId = req.RequestId, Approved = req.Approved },
+        await _eventDispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent
+            {
+                RequestId = req.RequestId,
+                Approved = req.Approved
+            },
             req.Scope ?? ApprovalScope.Once);
 
         await Send.OkAsync(new ResolveToolApprovalResponse

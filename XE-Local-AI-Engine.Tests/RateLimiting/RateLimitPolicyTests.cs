@@ -337,9 +337,8 @@ public sealed class RateLimitPolicyTests
             }
         }
 
-        throw new AssertionException(
-            $"auth/change-password was never throttled within {(ProductionAuthPermitLimit * 2) + 1} attempts — it does "
-            + $"not carry the {NodeAuthRateLimits.AuthPolicy} policy the auth endpoints beside it share.");
+        throw new AssertionException($"auth/change-password was never throttled within {(ProductionAuthPermitLimit * 2) + 1} attempts — it does "
+                                     + $"not carry the {NodeAuthRateLimits.AuthPolicy} policy the auth endpoints beside it share.");
     }
 
     private static Task<HttpResponseMessage> PostChangePasswordAsync(HttpClient client)

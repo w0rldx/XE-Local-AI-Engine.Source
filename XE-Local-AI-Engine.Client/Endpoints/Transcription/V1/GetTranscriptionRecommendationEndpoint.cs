@@ -15,8 +15,7 @@ public sealed class GetTranscriptionRecommendationEndpoint : EndpointWithoutRequ
     private readonly ITranscriptionRuntimeService _runtimeService;
     private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
 
-    public GetTranscriptionRecommendationEndpoint(
-        ITranscriptionRuntimeService runtimeService,
+    public GetTranscriptionRecommendationEndpoint(ITranscriptionRuntimeService runtimeService,
         WhisperRuntimeOrchestrationService whisperRuntime)
     {
         ArgumentNullException.ThrowIfNull(runtimeService);

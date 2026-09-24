@@ -182,8 +182,18 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         _ = keyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                       .Returns(call => call.Arg<string?>() switch
                       {
-                          ValidKey => new IntegrationApiKeyValidation { PrincipalId = PrincipalId, KeyPrefix = "xeint_aaaaaaaa", AllowedTriggerIds = null },
-                          RotatedKey => new IntegrationApiKeyValidation { PrincipalId = PrincipalId, KeyPrefix = "xeint_bbbbbbbb", AllowedTriggerIds = null },
+                          ValidKey => new IntegrationApiKeyValidation
+                          {
+                              PrincipalId = PrincipalId,
+                              KeyPrefix = "xeint_aaaaaaaa",
+                              AllowedTriggerIds = null
+                          },
+                          RotatedKey => new IntegrationApiKeyValidation
+                          {
+                              PrincipalId = PrincipalId,
+                              KeyPrefix = "xeint_bbbbbbbb",
+                              AllowedTriggerIds = null
+                          },
                           _ => null
                       });
 

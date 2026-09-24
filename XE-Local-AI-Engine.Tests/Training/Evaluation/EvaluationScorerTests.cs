@@ -19,7 +19,13 @@ public sealed class EvaluationScorerTests
     public void Score_WhenTheCallMatches_Passes()
     {
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin","days":3}"""),
-            [new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"city":"Berlin","days":3}""" }]);
+        [
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"city":"Berlin","days":3}"""
+            }
+        ]);
 
         AssertEx.True(entry.Passed, "A matching call is the passing case.");
         AssertEx.Equal("deterministic", entry.ScoredBy, "v1 writes only the deterministic provenance; 'judge' is reserved.");
@@ -31,7 +37,13 @@ public sealed class EvaluationScorerTests
     {
         // Property order is formatting, not meaning: the same call with its keys the other way round must still pass.
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin","days":3}"""),
-            [new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"days":3,"city":"Berlin"}""" }]);
+        [
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"days":3,"city":"Berlin"}"""
+            }
+        ]);
 
         AssertEx.True(entry.Passed, "Argument order is not meaning.");
     }
@@ -52,7 +64,13 @@ public sealed class EvaluationScorerTests
     public void Score_WhenTheToolNameDiffers_Fails()
     {
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin"}"""),
-            [new EvaluationToolCall { ToolName = "get_time", ArgumentsJson = """{"city":"Berlin"}""" }]);
+        [
+            new EvaluationToolCall
+            {
+                ToolName = "get_time",
+                ArgumentsJson = """{"city":"Berlin"}"""
+            }
+        ]);
 
         AssertEx.False(entry.Passed);
         AssertEx.True(entry.Reason!.Contains("get_time", StringComparison.Ordinal), "The verdict names what the model actually called.");
@@ -62,7 +80,13 @@ public sealed class EvaluationScorerTests
     public void Score_WhenTheArgumentValuesDiffer_Fails()
     {
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin"}"""),
-            [new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"city":"Paris"}""" }]);
+        [
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"city":"Paris"}"""
+            }
+        ]);
 
         AssertEx.False(entry.Passed, "Same tool, different argument value, is a different call.");
     }
@@ -73,7 +97,13 @@ public sealed class EvaluationScorerTests
         // The required property is missing — caught by the same validator the generation pipeline's argument layer
         // uses, so "valid arguments" means one thing across the module.
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin"}"""),
-            [new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"days":3}""" }]);
+        [
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"days":3}"""
+            }
+        ]);
 
         AssertEx.False(entry.Passed);
     }
@@ -90,12 +120,23 @@ public sealed class EvaluationScorerTests
     [Test]
     public void Score_OnANoToolSample_PassesOnlyWhenNothingIsCalled()
     {
-        var expectation = new EvaluationExpectation { ToolName = null, ArgumentsJson = null, ParameterSchema = null };
+        var expectation = new EvaluationExpectation
+        {
+            ToolName = null,
+            ArgumentsJson = null,
+            ParameterSchema = null
+        };
 
         AssertEx.True(EvaluationScorer.Score(SampleId, "no-tool", expectation, []).Passed,
             "A no-tool sample passes by the model NOT calling anything.");
 
-        var extra = EvaluationScorer.Score(SampleId, "no-tool", expectation, [new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = "{}" }]);
+        var extra = EvaluationScorer.Score(SampleId, "no-tool", expectation, [
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = "{}"
+            }
+        ]);
         AssertEx.False(extra.Passed, "An unnecessary tool call on a no-tool sample is the failure that kind exists to catch.");
         AssertEx.True(extra.Reason!.Contains("get_weather", StringComparison.Ordinal));
     }
@@ -105,8 +146,16 @@ public sealed class EvaluationScorerTests
     {
         var entry = EvaluationScorer.Score(SampleId, "tool-call", Expected("""{"city":"Berlin"}"""),
         [
-            new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"city":"Berlin"}""" },
-            new EvaluationToolCall { ToolName = "get_weather", ArgumentsJson = """{"city":"Paris"}""" }
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"city":"Berlin"}"""
+            },
+            new EvaluationToolCall
+            {
+                ToolName = "get_weather",
+                ArgumentsJson = """{"city":"Paris"}"""
+            }
         ]);
 
         AssertEx.False(entry.Passed, "One expected call means exactly one call.");
@@ -193,7 +242,12 @@ public sealed class EvaluationScorerTests
     private static Guid SampleId => new("6f9619ff-8b86-d011-b42d-00c04fc964ff");
 
     private static EvaluationExpectation Expected(string argumentsJson) =>
-        new() { ToolName = "get_weather", ArgumentsJson = argumentsJson, ParameterSchema = WeatherSchema };
+        new()
+        {
+            ToolName = "get_weather",
+            ArgumentsJson = argumentsJson,
+            ParameterSchema = WeatherSchema
+        };
 
     private static DatasetToolSnapshotV1 Snapshot() =>
         new("get_weather", "Looks up the weather.", WeatherSchema, RequiresApproval: false, ToolCategory.ReadLocal);

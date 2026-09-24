@@ -43,8 +43,7 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
     private readonly ITrainingEvaluationStore _store;
     private readonly TrainingRunWorkspace _workspace;
 
-    public EvaluationRunExecutor(
-        ITrainingEvaluationStore store,
+    public EvaluationRunExecutor(ITrainingEvaluationStore store,
         ITrainingRunStore runs,
         ITrainingDatasetStore datasets,
         TrainingRunWorkspace workspace,
@@ -143,8 +142,8 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
             {
                 var validated = ValidateLaunchEvidence(provisional.Model, provisional.Launch, target);
                 await _store.BindExecutionProvenanceAsync(running.Id,
-                                JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
-                                CancellationToken.None);
+                    JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
+                    CancellationToken.None);
             },
             async (session, token) =>
             {
@@ -510,7 +509,11 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var calls = response.Messages
                             .SelectMany(message => message.Contents)
                             .OfType<FunctionCallContent>()
-                            .Select(call => new EvaluationToolCall { ToolName = call.Name, ArgumentsJson = SerializeArguments(call.Arguments) })
+                            .Select(call => new EvaluationToolCall
+                            {
+                                ToolName = call.Name,
+                                ArgumentsJson = SerializeArguments(call.Arguments)
+                            })
                             .ToArray();
         return EvaluationScorer.Score(sampleId, sample.Kind, expectation, calls);
     }
@@ -571,7 +574,14 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var offers = definition.Tools
                                .Select(tool => (AITool)new DeclaredOnlyAIFunction(tool.Name, tool.Description, tool.ParameterSchema))
                                .ToList();
-        return new EvaluationContext { Samples = byId, Tools = definition.Tools, Offers = offers, SystemInstructions = definition.SystemInstructions, Seed = definition.BaseSeed };
+        return new EvaluationContext
+        {
+            Samples = byId,
+            Tools = definition.Tools,
+            Offers = offers,
+            SystemInstructions = definition.SystemInstructions,
+            Seed = definition.BaseSeed
+        };
     }
 
     private async Task TerminalizeAsync(TrainingEvaluationRecord evaluation, TrainingWorkStatus status, string? message)

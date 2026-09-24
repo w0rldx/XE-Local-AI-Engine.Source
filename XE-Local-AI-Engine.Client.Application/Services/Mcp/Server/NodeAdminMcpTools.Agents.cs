@@ -20,7 +20,11 @@ public sealed partial class NodeAdminMcpTools
             var record = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken);
             return record is null
                 ? AgentNotFound()
-                : new McpAgentResponse { Status = "ok", Agent = McpAgentDefinition.FromRecord(record) };
+                : new McpAgentResponse
+                {
+                    Status = "ok",
+                    Agent = McpAgentDefinition.FromRecord(record)
+                };
         }, static response => response.FailureCode is not null);
     }
 
@@ -156,13 +160,26 @@ public sealed partial class NodeAdminMcpTools
             var existing = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken);
             if (existing is null)
             {
-                return new McpAgentDeleteResponse { Deleted = false, FailureCode = McpAdminToolFailureCodes.AgentNotFound, DisplayMessage = "Agent not found." };
+                return new McpAgentDeleteResponse
+                {
+                    Deleted = false,
+                    FailureCode = McpAdminToolFailureCodes.AgentNotFound,
+                    DisplayMessage = "Agent not found."
+                };
             }
 
             var deleted = await _agentDefinitionService.DeleteAsync(existing.Id, cancellationToken);
             return deleted
-                ? new McpAgentDeleteResponse { Deleted = true }
-                : new McpAgentDeleteResponse { Deleted = false, FailureCode = McpAdminToolFailureCodes.AgentNotFound, DisplayMessage = "Agent not found." };
+                ? new McpAgentDeleteResponse
+                {
+                    Deleted = true
+                }
+                : new McpAgentDeleteResponse
+                {
+                    Deleted = false,
+                    FailureCode = McpAdminToolFailureCodes.AgentNotFound,
+                    DisplayMessage = "Agent not found."
+                };
         }, static response => !response.Deleted);
     }
 }

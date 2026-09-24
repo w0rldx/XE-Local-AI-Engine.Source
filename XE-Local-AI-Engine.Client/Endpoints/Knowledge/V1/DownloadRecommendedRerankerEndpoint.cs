@@ -24,8 +24,7 @@ public sealed class DownloadRecommendedRerankerEndpoint : EndpointWithoutRequest
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _modelStore;
 
-    public DownloadRecommendedRerankerEndpoint(
-        IGgufDownloadCoordinator downloadCoordinator,
+    public DownloadRecommendedRerankerEndpoint(IGgufDownloadCoordinator downloadCoordinator,
         IGgufModelStore modelStore)
     {
         ArgumentNullException.ThrowIfNull(downloadCoordinator);

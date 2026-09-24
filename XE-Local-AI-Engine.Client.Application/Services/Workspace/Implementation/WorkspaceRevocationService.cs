@@ -8,8 +8,7 @@ internal sealed class WorkspaceRevocationService : IWorkspaceRevocationService
     private readonly IWorkspaceRevocationPreparation _preparation;
     private readonly INodeSelectedFolderStore _store;
 
-    public WorkspaceRevocationService(
-        INodeSelectedFolderStore store,
+    public WorkspaceRevocationService(INodeSelectedFolderStore store,
         IWorkspaceRevocationPreparation preparation,
         ILogger<WorkspaceRevocationService> logger)
     {
@@ -36,7 +35,13 @@ internal sealed class WorkspaceRevocationService : IWorkspaceRevocationService
             return;
         }
 
-        var resolved = new ResolvedSelectedFolder { Id = record.Id, Alias = record.Alias, HostPath = record.HostPath, Mode = record.Mode };
+        var resolved = new ResolvedSelectedFolder
+        {
+            Id = record.Id,
+            Alias = record.Alias,
+            HostPath = record.HostPath,
+            Mode = record.Mode
+        };
         await using var session = await _preparation.PrepareAsync(resolved, cancellationToken)
                                   ?? throw new InvalidOperationException("Workspace revocation preparation returned no lease-bearing session.");
 

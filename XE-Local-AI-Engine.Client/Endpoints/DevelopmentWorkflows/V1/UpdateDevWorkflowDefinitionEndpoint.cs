@@ -53,7 +53,14 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint : Endpoint<UpdateDevWork
             nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         }
 
-        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = req.DefinitionId, ExpectedVersion = req.Version, Name = req.Name, GraphJson = graphJson, NodeCount = nodeCount }, ct);
+        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = req.DefinitionId,
+            ExpectedVersion = req.Version,
+            Name = req.Name,
+            GraphJson = graphJson,
+            NodeCount = nodeCount
+        }, ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

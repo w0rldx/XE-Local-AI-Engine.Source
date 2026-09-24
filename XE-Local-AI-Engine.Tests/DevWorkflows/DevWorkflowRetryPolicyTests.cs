@@ -46,7 +46,14 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>())
                  .Returns(_ => ++attempts == 1
                      ? throw new DevWorkflowConcurrencyException("A concurrent writer won the race before the route committed.")
-                     : new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+                     : new DevWorkflowMutationResult
+                     {
+                         RunId = RunId,
+                         Sequence = 7,
+                         Version = 3,
+                         Status = DevWorkflowRunStatus.Running,
+                         GraphRevision = 0
+                     });
 
         var written = await RouteAsync(store);
 
@@ -96,7 +103,14 @@ public sealed class DevWorkflowRetryPolicyTests
     {
         var store = Store();
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+                 .Returns(new DevWorkflowMutationResult
+                 {
+                     RunId = RunId,
+                     Sequence = 7,
+                     Version = 3,
+                     Status = DevWorkflowRunStatus.Running,
+                     GraphRevision = 0
+                 });
 
         var implement = NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running) with
         {
@@ -138,7 +152,14 @@ public sealed class DevWorkflowRetryPolicyTests
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
                                                                        + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+                 .Returns(new DevWorkflowMutationResult
+                 {
+                     RunId = RunId,
+                     Sequence = 7,
+                     Version = 3,
+                     Status = DevWorkflowRunStatus.Running,
+                     GraphRevision = 0
+                 });
 
         var written = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
 
@@ -165,7 +186,14 @@ public sealed class DevWorkflowRetryPolicyTests
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
                                                                        + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+                 .Returns(new DevWorkflowMutationResult
+                 {
+                     RunId = RunId,
+                     Sequence = 7,
+                     Version = 3,
+                     Status = DevWorkflowRunStatus.Running,
+                     GraphRevision = 0
+                 });
 
         var written = await RouteAsync(store);
 
@@ -210,10 +238,24 @@ public sealed class DevWorkflowRetryPolicyTests
 
                      slots--;
                      admitted.Add((TransitionDevWorkflowNodeRunCommand)call[0]!);
-                     return new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 };
+                     return new DevWorkflowMutationResult
+                     {
+                         RunId = RunId,
+                         Sequence = 7,
+                         Version = 3,
+                         Status = DevWorkflowRunStatus.Running,
+                         GraphRevision = 0
+                     };
                  });
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 8, Version = 4, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
+                 .Returns(new DevWorkflowMutationResult
+                 {
+                     RunId = RunId,
+                     Sequence = 8,
+                     Version = 4,
+                     Status = DevWorkflowRunStatus.Running,
+                     GraphRevision = 0
+                 });
 
         _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
         _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
@@ -243,8 +285,8 @@ public sealed class DevWorkflowRetryPolicyTests
                      throw new DevWorkflowInvalidTransitionException("Node run 'implement' is Succeeded and cannot move to Pending."));
 
         var thrown = await AssertEx
-                           .ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                               SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)));
+            .ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)));
 
         AssertEx.False(thrown is DevWorkflowRetryBudgetExceededException, "An illegal move is not an accounting refusal.");
         AssertEx.Empty(Transitioned(store).Where(static command => command.TargetStatus == DevWorkflowNodeRunStatus.Blocked),
@@ -263,7 +305,12 @@ public sealed class DevWorkflowRetryPolicyTests
             Run(),
             implement,
             [implement],
-            new DevWorkflowFailure { FailureClass = DevWorkflowFailureClasses.ProviderError, SanitizedReason = "The coder attempt could not reach its model.", OutputJson = """{"failureClass":"ProviderError"}""" },
+            new DevWorkflowFailure
+            {
+                FailureClass = DevWorkflowFailureClasses.ProviderError,
+                SanitizedReason = "The coder attempt could not reach its model.",
+                OutputJson = """{"failureClass":"ProviderError"}"""
+            },
             CancellationToken.None);
     }
 
@@ -291,7 +338,12 @@ public sealed class DevWorkflowRetryPolicyTests
             Run(),
             validate,
             [implement, validate],
-            new DevWorkflowFailure { FailureClass = DevWorkflowFailureClasses.ToolCommandFailed, SanitizedReason = "The release test command reported failing tests.", OutputJson = "{}" },
+            new DevWorkflowFailure
+            {
+                FailureClass = DevWorkflowFailureClasses.ToolCommandFailed,
+                SanitizedReason = "The release test command reported failing tests.",
+                OutputJson = "{}"
+            },
             CancellationToken.None);
     }
 

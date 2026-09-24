@@ -30,8 +30,19 @@ internal sealed class GtkDocumentGate
         }
     }
 
-    internal long Generation { get { lock (_sync) { return _generation; } } }
-    internal bool IsCurrent(long generation) { lock (_sync) { return !_closed && _armed && generation == _generation; } }
+    internal long Generation
+    {
+        get
+        {
+            lock (_sync) { return _generation; }
+        }
+    }
+
+    internal bool IsCurrent(long generation)
+    {
+        lock (_sync) { return !_closed && _armed && generation == _generation; }
+    }
+
     internal bool ExecuteIfCurrent(long generation, Action action)
     {
         lock (_sync)
@@ -46,5 +57,13 @@ internal sealed class GtkDocumentGate
         }
     }
 
-    internal void Close() { lock (_sync) { _closed = true; _armed = false; _generation++; } }
+    internal void Close()
+    {
+        lock (_sync)
+        {
+            _closed = true;
+            _armed = false;
+            _generation++;
+        }
+    }
 }

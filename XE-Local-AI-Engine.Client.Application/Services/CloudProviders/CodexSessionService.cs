@@ -40,8 +40,7 @@ public sealed class CodexSessionService
     private readonly TimeProvider _timeProvider;
     private readonly ICodexTokenStore _tokenStore;
 
-    public CodexSessionService(
-        ICodexTokenStore tokenStore,
+    public CodexSessionService(ICodexTokenStore tokenStore,
         ICodexLoginCoordinator loginCoordinator,
         IActiveCloudChatClientFactory activeCloudFactory,
         IOptions<CodexOptions> codexOptions,
@@ -74,7 +73,13 @@ public sealed class CodexSessionService
         var loginPending = _loginCoordinator.GetStatus().State == CodexLoginState.Pending;
 
         return session is null
-            ? new CodexSessionStatus { SignedIn = false, AccountId = null, ExpiresAtUtc = null, LoginPending = loginPending }
+            ? new CodexSessionStatus
+            {
+                SignedIn = false,
+                AccountId = null,
+                ExpiresAtUtc = null,
+                LoginPending = loginPending
+            }
             // Signed-in iff the access token is still valid (skew-adjusted); an expired session reports
             // SignedIn=false while keeping AccountId/ExpiresAtUtc so the UI can prompt re-authentication.
             : new CodexSessionStatus

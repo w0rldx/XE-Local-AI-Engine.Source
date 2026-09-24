@@ -282,7 +282,12 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             }
         };
 
-        return new PoisonedWorkspace { Session = session, FilterSentinel = filterSentinel, FsmonitorSentinel = fsmonitorSentinel };
+        return new PoisonedWorkspace
+        {
+            Session = session,
+            FilterSentinel = filterSentinel,
+            FsmonitorSentinel = fsmonitorSentinel
+        };
     }
 
     private static async Task<string> ReadHeadAsync(string workspace)

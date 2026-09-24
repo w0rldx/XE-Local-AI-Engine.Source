@@ -127,8 +127,23 @@ internal static class KnowledgeToolCatalog
 {
     public static IReadOnlyList<KnowledgeToolDescriptor> Descriptors { get; } =
     [
-        new KnowledgeToolDescriptor { Name = SearchKnowledgeBaseToolDefinition.ToolName, Description = SearchKnowledgeBaseToolDefinition.Description, ParameterSchema = SearchKnowledgeBaseToolDefinition.ParameterSchema },
-        new KnowledgeToolDescriptor { Name = ReadDocumentToolDefinition.ToolName, Description = ReadDocumentToolDefinition.Description, ParameterSchema = ReadDocumentToolDefinition.ParameterSchema },
-        new KnowledgeToolDescriptor { Name = ReadSurroundingChunksToolDefinition.ToolName, Description = ReadSurroundingChunksToolDefinition.Description, ParameterSchema = ReadSurroundingChunksToolDefinition.ParameterSchema }
+        new KnowledgeToolDescriptor
+        {
+            Name = SearchKnowledgeBaseToolDefinition.ToolName,
+            Description = SearchKnowledgeBaseToolDefinition.Description,
+            ParameterSchema = SearchKnowledgeBaseToolDefinition.ParameterSchema
+        },
+        new KnowledgeToolDescriptor
+        {
+            Name = ReadDocumentToolDefinition.ToolName,
+            Description = ReadDocumentToolDefinition.Description,
+            ParameterSchema = ReadDocumentToolDefinition.ParameterSchema
+        },
+        new KnowledgeToolDescriptor
+        {
+            Name = ReadSurroundingChunksToolDefinition.ToolName,
+            Description = ReadSurroundingChunksToolDefinition.Description,
+            ParameterSchema = ReadSurroundingChunksToolDefinition.ParameterSchema
+        }
     ];
 }

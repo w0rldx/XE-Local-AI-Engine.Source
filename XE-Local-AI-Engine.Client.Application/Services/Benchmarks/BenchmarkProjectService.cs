@@ -56,8 +56,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     private readonly IBenchmarkQueueSignal? _queueSignal;
     private readonly IBenchmarkPairwisePlanner? _pairwisePlanner;
 
-    public BenchmarkProjectService(
-        IBenchmarkStore benchmarkStore,
+    public BenchmarkProjectService(IBenchmarkStore benchmarkStore,
         IAgentDefinitionStore agentDefinitionStore,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
@@ -86,9 +85,14 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with judging off — or with no question to ask — that the
         // operator could only retry into a duplicate. Every project created from here therefore has its items already; the lazy backfill is left for older rows only.
         return await _benchmarkStore.CreateProjectAsync(input,
-                                        ToPolicyChange(policy),
-                                        [new BenchmarkTaskItemInput { PromptJson = input.CoreTaskJson }],
-                                        cancellationToken);
+            ToPolicyChange(policy),
+            [
+                new BenchmarkTaskItemInput
+                {
+                    PromptJson = input.CoreTaskJson
+                }
+            ],
+            cancellationToken);
     }
 
     public async Task<BenchmarkProjectRecord> UpdateAsync(Guid projectId,
@@ -110,10 +114,10 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         // An unfrozen project edits its judge exactly the way a frozen one does — get-or-create plus repoint, never an in-place edit of a revision — minus the re-judge,
         // because it has no runs to re-judge. Both halves commit together: an edit that lost its judge change would leave the project judging under the replaced policy.
         return await _benchmarkStore.UpdateProjectAsync(projectId,
-                                        expectedVersion,
-                                        input,
-                                        ToPolicyChange(policy) ?? BenchmarkJudgePolicyChangeInput.Disabled,
-                                        cancellationToken);
+            expectedVersion,
+            input,
+            ToPolicyChange(policy) ?? BenchmarkJudgePolicyChangeInput.Disabled,
+            cancellationToken);
     }
 
     public async Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
@@ -125,17 +129,17 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         ArgumentNullException.ThrowIfNull(settings);
         var baseModelName = NormalizeModelName(settings.KldBaseModelName);
         var change = await _benchmarkStore.UpdateProjectFidelityAsync(projectId,
-                                              expectedVersion,
-                                              new BenchmarkProjectFidelityInput
-                                              {
-                                                  FidelityEnabled = settings.Enabled,
-                                                  FidelityKldEnabled = settings.KldEnabled,
-                                                  FidelityChunks = settings.Chunks,
-                                                  FidelityKldBaseModelName = baseModelName,
-                                                  FidelityKldBaseFingerprint = await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
-                                              },
-                                              measureExisting,
-                                              cancellationToken);
+            expectedVersion,
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = settings.Enabled,
+                FidelityKldEnabled = settings.KldEnabled,
+                FidelityChunks = settings.Chunks,
+                FidelityKldBaseModelName = baseModelName,
+                FidelityKldBaseFingerprint = await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
+            },
+            measureExisting,
+            cancellationToken);
         if (change.EnqueuedRunIds.Count > 0)
         {
             _queueSignal?.Wake();
@@ -164,7 +168,12 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         {
             if (MatchesCurrentPolicy(draft, current))
             {
-                return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = current!.CohortGeneration };
+                return new BenchmarkJudgePolicyChange
+                {
+                    Project = project,
+                    EnqueuedRunIds = [],
+                    CohortGeneration = current!.CohortGeneration
+                };
             }
 
             throw new BenchmarkConflictException("RejudgeRequired");
@@ -175,26 +184,41 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         {
             if (current is null)
             {
-                return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = null };
+                return new BenchmarkJudgePolicyChange
+                {
+                    Project = project,
+                    EnqueuedRunIds = [],
+                    CohortGeneration = null
+                };
             }
 
             await _benchmarkStore.DisableJudgePolicyAsync(projectId, expectedVersion, cancellationToken);
-            return new BenchmarkJudgePolicyChange { Project = await RequireProjectAsync(projectId, cancellationToken), EnqueuedRunIds = [], CohortGeneration = null };
+            return new BenchmarkJudgePolicyChange
+            {
+                Project = await RequireProjectAsync(projectId, cancellationToken),
+                EnqueuedRunIds = [],
+                CohortGeneration = null
+            };
         }
 
         var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy);
         if (current is not null && string.Equals(current.PolicyHash, hash, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = current.CohortGeneration };
+            return new BenchmarkJudgePolicyChange
+            {
+                Project = project,
+                EnqueuedRunIds = [],
+                CohortGeneration = current.CohortGeneration
+            };
         }
 
         await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken);
         var activation = await _benchmarkStore.ActivateJudgePolicyAsync(projectId,
-                                                  expectedVersion,
-                                                  new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
-                                                  hash,
-                                                  await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken),
-                                                  cancellationToken);
+            expectedVersion,
+            new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
+            hash,
+            await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken),
+            cancellationToken);
         return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken), activation, cancellationToken);
     }
 
@@ -233,9 +257,9 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                        ?? throw new BenchmarkConflictException("JudgeDisabled");
         var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
         var activation = await _benchmarkStore.BeginProjectRejudgeAsync(projectId,
-                                                  expectedProjectVersion,
-                                                  await BuildCohortSeedAsync(policy, revision.Id, cancellationToken),
-                                                  cancellationToken);
+            expectedProjectVersion,
+            await BuildCohortSeedAsync(policy, revision.Id, cancellationToken),
+            cancellationToken);
         return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken), activation, cancellationToken);
     }
 
@@ -268,11 +292,21 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     {
         if (string.Equals(BenchmarkJudgePolicyModes.Normalize(policy.Mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = expectedRevisionId, SeedPointwiseAttempts = false };
+            return new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = expectedRevisionId,
+                SeedPointwiseAttempts = false
+            };
         }
 
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken);
-        return new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = expectedRevisionId, RuntimeJson = resolved.RuntimeJson, RuntimeUnresolvedReason = resolved.UnresolvedReason, LaunchIntent = resolved.Intent };
+        return new BenchmarkJudgeAttemptSeed
+        {
+            ExpectedJudgePolicyRevisionId = expectedRevisionId,
+            RuntimeJson = resolved.RuntimeJson,
+            RuntimeUnresolvedReason = resolved.UnresolvedReason,
+            LaunchIntent = resolved.Intent
+        };
     }
 
     /// <summary>Wakes the queue for the attempts the store just enqueued and reports them to the caller.</summary>
@@ -292,7 +326,12 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             _queueSignal?.Wake();
         }
 
-        return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = activation.SucceededRunIds, CohortGeneration = activation.Revision.CohortGeneration };
+        return new BenchmarkJudgePolicyChange
+        {
+            Project = project,
+            EnqueuedRunIds = activation.SucceededRunIds,
+            CohortGeneration = activation.Revision.CohortGeneration
+        };
     }
 
     private static BenchmarkJudgePolicyChangeInput? ToPolicyChange(BenchmarkJudgePolicyV1? policy) =>
@@ -325,7 +364,12 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                                               or BenchmarkSnapshotException
                                               or KeyNotFoundException)
         {
-            return new ResolvedJudgeRuntime { RuntimeJson = null, UnresolvedReason = exception.Message, Intent = null };
+            return new ResolvedJudgeRuntime
+            {
+                RuntimeJson = null,
+                UnresolvedReason = exception.Message,
+                Intent = null
+            };
         }
     }
 
@@ -353,26 +397,26 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         }
 
         var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft.FidelityKldEnabled,
-                draft.FidelityChunks,
-                NormalizeModelName(draft.FidelityKldBaseModelName),
-                cancellationToken);
+            draft.FidelityChunks,
+            NormalizeModelName(draft.FidelityKldBaseModelName),
+            cancellationToken);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken);
         return (new BenchmarkProjectInput
-        {
-            Id = draft.Id,
-            Name = draft.Name.Trim(),
-            CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
-            ContextTokens = draft.ContextTokens,
-            AgentDefinitionId = draft.AgentDefinitionId,
-            MaxOutputTokens = draft.MaxOutputTokens,
-            InvocationTimeoutSeconds = draft.InvocationTimeoutSeconds,
-            ReasoningBudgetTokens = draft.ReasoningBudgetTokens,
-            FidelityEnabled = draft.FidelityEnabled,
-            FidelityKldEnabled = draft.FidelityKldEnabled,
-            FidelityChunks = draft.FidelityChunks,
-            FidelityKldBaseModelName = NormalizeModelName(draft.FidelityKldBaseModelName),
-            FidelityKldBaseFingerprint = baseFingerprint
-        },
+            {
+                Id = draft.Id,
+                Name = draft.Name.Trim(),
+                CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
+                ContextTokens = draft.ContextTokens,
+                AgentDefinitionId = draft.AgentDefinitionId,
+                MaxOutputTokens = draft.MaxOutputTokens,
+                InvocationTimeoutSeconds = draft.InvocationTimeoutSeconds,
+                ReasoningBudgetTokens = draft.ReasoningBudgetTokens,
+                FidelityEnabled = draft.FidelityEnabled,
+                FidelityKldEnabled = draft.FidelityKldEnabled,
+                FidelityChunks = draft.FidelityChunks,
+                FidelityKldBaseModelName = NormalizeModelName(draft.FidelityKldBaseModelName),
+                FidelityKldBaseFingerprint = baseFingerprint
+            },
             policy);
     }
 

@@ -131,16 +131,32 @@ internal static class DesktopPortStore
             await using var stream = File.OpenRead(path);
             var parsed = await JsonSerializer.DeserializeAsync<ReadyInfo>(stream, JsonSerializerOptions.Web, cancellationToken);
             return TryValidateReadyInfo(parsed, dataDirectory, out var validated)
-                ? new ReadyEvidence { State = ReadyEvidenceState.Valid, Info = validated }
-                : new ReadyEvidence { State = ReadyEvidenceState.Invalid, Info = null };
+                ? new ReadyEvidence
+                {
+                    State = ReadyEvidenceState.Valid,
+                    Info = validated
+                }
+                : new ReadyEvidence
+                {
+                    State = ReadyEvidenceState.Invalid,
+                    Info = null
+                };
         }
         catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
-            return new ReadyEvidence { State = ReadyEvidenceState.Absent, Info = null };
+            return new ReadyEvidence
+            {
+                State = ReadyEvidenceState.Absent,
+                Info = null
+            };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new ReadyEvidence { State = ReadyEvidenceState.Invalid, Info = null };
+            return new ReadyEvidence
+            {
+                State = ReadyEvidenceState.Invalid,
+                Info = null
+            };
         }
     }
 

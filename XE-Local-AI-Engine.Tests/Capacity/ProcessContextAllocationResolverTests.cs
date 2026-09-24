@@ -432,7 +432,12 @@ public sealed class ProcessContextAllocationResolverTests
                 AvailableRamBytes = UsableRamBudget(profile.TotalRamBytes)
             },
             kvCacheQuantized: false,
-            moeFacts: new MoeFacts { ActiveParamCount = null, ExpertCount = null, ExpertUsedCount = null },
+            moeFacts: new MoeFacts
+            {
+                ActiveParamCount = null,
+                ExpertCount = null,
+                ExpertUsedCount = null
+            },
             attention: new GgufAttentionShape
             {
                 KeyLength = null,
@@ -478,7 +483,12 @@ public sealed class ProcessContextAllocationResolverTests
         var expected = estimator.Estimate("Q4_K_M", paramCount: 1_000_000_000, fileSizeBytes: 2 * Gb, blockCount: 4,
             attentionHeadCountKV: 2, embeddingLength: 16, attentionHeadCount: 4, ctxTarget: 2048, budgeted,
             kvCacheQuantized: false,
-            moeFacts: new MoeFacts { ActiveParamCount = null, ExpertCount = null, ExpertUsedCount = null },
+            moeFacts: new MoeFacts
+            {
+                ActiveParamCount = null,
+                ExpertCount = null,
+                ExpertUsedCount = null
+            },
             attention: new GgufAttentionShape
             {
                 KeyLength = null,
@@ -492,8 +502,19 @@ public sealed class ProcessContextAllocationResolverTests
         var withoutMla = estimator.Estimate("Q4_K_M", paramCount: 1_000_000_000, fileSizeBytes: 2 * Gb, blockCount: 4,
             attentionHeadCountKV: 2, embeddingLength: 16, attentionHeadCount: 4, ctxTarget: 2048, budgeted,
             kvCacheQuantized: false,
-            moeFacts: new MoeFacts { ActiveParamCount = null, ExpertCount = null, ExpertUsedCount = null },
-            attention: new GgufAttentionShape { KeyLength = null, ValueLength = null, SlidingWindow = null, SlidingWindowPattern = null },
+            moeFacts: new MoeFacts
+            {
+                ActiveParamCount = null,
+                ExpertCount = null,
+                ExpertUsedCount = null
+            },
+            attention: new GgufAttentionShape
+            {
+                KeyLength = null,
+                ValueLength = null,
+                SlidingWindow = null,
+                SlidingWindowPattern = null
+            },
             nativeQuantFormat: false);
 
         AssertEx.Equal(expected.EstimatedBytes, allocation.Footprint.RamBytes);

@@ -119,7 +119,14 @@ public sealed class DevWorkflowPurgeCoverageTests
                 SizeBytes = 10,
                 ManagedReference = "reference-1"
             });
-            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = consumerId, ExpectedVersion = appended.Version, OperationId = Guid.NewGuid(), ArtifactIds = [artifactId] });
+            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand
+            {
+                RunId = seed.RunId,
+                NodeRunId = consumerId,
+                ExpectedVersion = appended.Version,
+                OperationId = Guid.NewGuid(),
+                ArtifactIds = [artifactId]
+            });
             _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
             {
                 RunId = seed.RunId,
@@ -131,8 +138,13 @@ public sealed class DevWorkflowPurgeCoverageTests
             });
 
             _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.DeleteWorkItemAsync(workItemId),
-                                  "A work item whose run is still live must not be deleted out from under the executor driving it.");
-            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Cancelled });
+                "A work item whose run is still live must not be deleted out from under the executor driving it.");
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowRunStatus.Cancelled
+            });
 
             var removed = await store.DeleteWorkItemAsync(workItemId);
             AssertEx.True(removed.RemovedRows > 0, "The delete must report the rows it removed.");

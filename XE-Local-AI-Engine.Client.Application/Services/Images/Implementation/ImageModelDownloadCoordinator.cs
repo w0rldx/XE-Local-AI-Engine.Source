@@ -42,17 +42,32 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         if (!_inFlight.TryAdd(modelName, cts))
         {
             cts.Dispose();
-            return new ImageModelDownloadTicket { ModelName = modelName, AlreadyInFlight = true };
+            return new ImageModelDownloadTicket
+            {
+                ModelName = modelName,
+                AlreadyInFlight = true
+            };
         }
 
         // Publish Running before the transfer starts so a poll landing between accept and the first byte callback sees
         // the download rather than an empty registry.
-        _status[modelName] = new ImageModelDownloadStatus { ModelName = modelName, Phase = ImageModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null };
+        _status[modelName] = new ImageModelDownloadStatus
+        {
+            ModelName = modelName,
+            Phase = ImageModelDownloadPhase.Running,
+            CompletedBytes = null,
+            TotalBytes = null,
+            SanitizedError = null
+        };
 
         // Hand the detached run the TOKEN, not the source. The source stays owned by the _inFlight entry (Cancel reads it there, the run disposes it from there),
         // which keeps a disposable out of an unawaited task's arguments — the shape CA2025 rejects, because the caller's `using` would otherwise dispose it mid-flight.
         _ = RunDownloadAsync(modelName, request, cts.Token);
-        return new ImageModelDownloadTicket { ModelName = modelName, AlreadyInFlight = false };
+        return new ImageModelDownloadTicket
+        {
+            ModelName = modelName,
+            AlreadyInFlight = false
+        };
     }
 
     /// <inheritdoc />
@@ -150,7 +165,16 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
     private void ReportRunningProgress(string modelName, PullProgress update)
     {
         _ = _status.AddOrUpdate(modelName,
-            key => new ImageModelDownloadStatus { ModelName = key, Phase = ImageModelDownloadPhase.Running, CompletedBytes = update.CompletedBytes, TotalBytes = update.TotalBytes, SanitizedError = null, PartIndex = update.PartIndex, PartCount = update.PartCount },
+            key => new ImageModelDownloadStatus
+            {
+                ModelName = key,
+                Phase = ImageModelDownloadPhase.Running,
+                CompletedBytes = update.CompletedBytes,
+                TotalBytes = update.TotalBytes,
+                SanitizedError = null,
+                PartIndex = update.PartIndex,
+                PartCount = update.PartCount
+            },
             (_, existing) => existing.Phase != ImageModelDownloadPhase.Running
                 ? existing
                 : existing with
@@ -164,6 +188,13 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
 
     private void SetTerminal(string modelName, ImageModelDownloadPhase phase, string? sanitizedError)
     {
-        _status[modelName] = new ImageModelDownloadStatus { ModelName = modelName, Phase = phase, CompletedBytes = null, TotalBytes = null, SanitizedError = sanitizedError };
+        _status[modelName] = new ImageModelDownloadStatus
+        {
+            ModelName = modelName,
+            Phase = phase,
+            CompletedBytes = null,
+            TotalBytes = null,
+            SanitizedError = sanitizedError
+        };
     }
 }

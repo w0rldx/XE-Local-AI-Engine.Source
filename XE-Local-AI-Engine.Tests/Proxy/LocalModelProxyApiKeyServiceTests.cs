@@ -219,7 +219,13 @@ public sealed class LocalModelProxyApiKeyServiceTests
 
         public Task<LocalModelProxyApiKeyRecord> SetAsync(string prefix, ReadOnlyMemory<byte> keyHash, CancellationToken cancellationToken = default)
         {
-            _record = new LocalModelProxyApiKeyRecord { Prefix = prefix, KeyHash = keyHash, CreatedAtUtc = 1, LastUsedAtUtc = null };
+            _record = new LocalModelProxyApiKeyRecord
+            {
+                Prefix = prefix,
+                KeyHash = keyHash,
+                CreatedAtUtc = 1,
+                LastUsedAtUtc = null
+            };
             return Task.FromResult(_record);
         }
 

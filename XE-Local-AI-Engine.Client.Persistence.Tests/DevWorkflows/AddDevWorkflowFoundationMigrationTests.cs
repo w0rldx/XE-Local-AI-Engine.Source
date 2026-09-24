@@ -126,12 +126,12 @@ public sealed class AddDevWorkflowFoundationMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("dev_workflow_artifacts", "ux_dev_workflow_artifacts_lineage_version", unique: true, "lineage_id", "version"),
             "The lineage is the version key.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("dev_workflow_artifacts", "ix_dev_workflow_artifacts_run_node_name", unique: false, "run_id", "producing_node_key", "name"),
+                .IndexExistsAsync("dev_workflow_artifacts", "ix_dev_workflow_artifacts_run_node_name", unique: false, "run_id", "producing_node_key", "name"),
             "Lineage resolution is (run, producing node key, name), and it must be one indexed read.");
         AssertEx.True(await probe.IndexExistsAsync("dev_workflow_decisions", "ux_dev_workflow_decisions_node_run_attempt", unique: true, "node_run_id", "attempt"),
             "One decision per node-run ATTEMPT, not per node run.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("dev_workflow_artifact_uses", "ux_dev_workflow_artifact_uses_node_artifact", unique: true, "node_run_id", "artifact_id"),
+                .IndexExistsAsync("dev_workflow_artifact_uses", "ux_dev_workflow_artifact_uses_node_artifact", unique: true, "node_run_id", "artifact_id"),
             "A consumed-by edge is captured idempotently.");
     }
 

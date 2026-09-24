@@ -11,8 +11,7 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
     private readonly IInferenceProfileResolver _profileResolver;
     private readonly IGpuVariantSelector _variantSelector;
 
-    public ModelFootprintProvider(
-        IGpuVariantSelector variantSelector,
+    public ModelFootprintProvider(IGpuVariantSelector variantSelector,
         IInferenceProfileResolver profileResolver,
         IProcessContextAllocationResolver allocationResolver)
     {

@@ -30,19 +30,22 @@ public sealed class CanvasWorkflowImportRunTests
     public async Task AnImportedPause_StillHandsTheNodeAfterItTheAnswerItIsApproving()
     {
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(DrafterInstructions, new GraphWorkflowScriptedTurn { Text = DraftedAnswer });
+        harness.Invocations.Script(DrafterInstructions, new GraphWorkflowScriptedTurn
+        {
+            Text = DraftedAnswer
+        });
 
         var graphJson = CanvasWorkflowImport.MapGraph(CanvasGraphs.AgentAcrossPause).Document.ToJsonString();
         var runId = await harness.StartRunAsync(graphJson);
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.WaitingForApproval,
-                         "the imported run never reached its pause");
+            async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.WaitingForApproval,
+            "the imported run never reached its pause");
 
         _ = await harness.DecideAsync(runId, "pause-1", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve);
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadNodeRunAsync(runId, "agent-2")).InputJson is not null,
-                         "the second agent never ran after the approval");
+            async () => (await harness.ReadNodeRunAsync(runId, "agent-2")).InputJson is not null,
+            "the second agent never ran after the approval");
 
         var input = JsonDocument.Parse(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "agent-2")).InputJson,
             "an agent that ran wrote the document it read.")).RootElement;

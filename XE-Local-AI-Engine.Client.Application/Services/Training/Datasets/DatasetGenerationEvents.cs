@@ -109,7 +109,13 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(datasetId);
-            generationEvent = new DatasetGenerationEvent { DatasetId = datasetId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
+            generationEvent = new DatasetGenerationEvent
+            {
+                DatasetId = datasetId,
+                Sequence = ++state.LatestSequence,
+                Kind = kind,
+                Payload = payload
+            };
             state.Events.AddLast(generationEvent);
             while (state.Events.Count > _maxEventCount)
             {
@@ -128,7 +134,12 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
         {
             if (!_datasets.TryGetValue(datasetId, out var state))
             {
-                return new DatasetGenerationReplay { Events = [], ResetRequired = false, LatestSequence = 0 };
+                return new DatasetGenerationReplay
+                {
+                    Events = [],
+                    ResetRequired = false,
+                    LatestSequence = 0
+                };
             }
 
             var firstRetained = state.Events.First?.Value.Sequence;
@@ -136,7 +147,12 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
                         || (firstRetained is { } first && afterSequence < first - 1)
                         || (firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence);
             return reset
-                ? new DatasetGenerationReplay { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence }
+                ? new DatasetGenerationReplay
+                {
+                    Events = [],
+                    ResetRequired = true,
+                    LatestSequence = state.LatestSequence
+                }
                 : new DatasetGenerationReplay
                 {
                     Events = state.Events.Where(item => item.Sequence > afterSequence).ToArray(),

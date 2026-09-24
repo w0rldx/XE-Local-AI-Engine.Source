@@ -20,8 +20,7 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IModelClassificationStore _modelClassificationStore;
 
-    public LocalDefaultChatModelResolver(
-        IGgufModelStore ggufModelStore,
+    public LocalDefaultChatModelResolver(IGgufModelStore ggufModelStore,
         IModelClassificationStore modelClassificationStore)
     {
         ArgumentNullException.ThrowIfNull(ggufModelStore);

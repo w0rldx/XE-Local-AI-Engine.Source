@@ -861,19 +861,43 @@ public sealed class BenchmarkRunFreezeServiceTests
         public List<BenchmarkRuntimeSnapshotInput> SnapshotInputs { get; } = [];
 
         public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            (await _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version, KvCacheType = kvCacheType }))[0];
+            (await _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version,
+                KvCacheType = kvCacheType
+            }))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
-            _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version, KvCacheType = null, RepeatCount = repeatCount, Warmup = warmup });
+            _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version,
+                KvCacheType = null,
+                RepeatCount = repeatCount,
+                Warmup = warmup
+            });
 
         public Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkFreezeScope scope) =>
-            _service.FreezeAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version }, scope);
+            _service.FreezeAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version
+            }, scope);
 
         public Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans) =>
             _service.CommitAsync(plans);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
-            _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version }, scope);
+            _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version
+            }, scope);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, double? temperature = null) =>
             _service.StartAsync(new BenchmarkRunStartRequest
@@ -965,7 +989,22 @@ public sealed class BenchmarkRunFreezeServiceTests
             };
 
         private static AgentDefinitionRecord Definition(Guid id) =>
-            new() { Id = id, Name = "Agent", Description = null, Instructions = "instructions", ModelProfile = null, ReasoningEffort = null, Kind = AgentDefinitionKind.Single, AllowedToolNames = [], ToolApprovals = new Dictionary<string, bool>(), OrchestrationTopologyJson = null, Version = 3, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
+            new()
+            {
+                Id = id,
+                Name = "Agent",
+                Description = null,
+                Instructions = "instructions",
+                ModelProfile = null,
+                ReasoningEffort = null,
+                Kind = AgentDefinitionKind.Single,
+                AllowedToolNames = [],
+                ToolApprovals = new Dictionary<string, bool>(),
+                OrchestrationTopologyJson = null,
+                Version = 3,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
 
         private static ResolvedAgentRuntime Runtime(Guid id) =>
             new("prompt", [], null, null, 3, id, "Agent", Kind: AgentDefinitionKind.Single);
@@ -1055,7 +1094,16 @@ public sealed class BenchmarkRunFreezeServiceTests
                 };
             var inspector = Substitute.For<ILlamaServerLaunchCapabilityInspector>();
             inspector.InspectAsync(Arg.Any<CancellationToken>())
-                     .Returns(new LlamaServerLaunchCapabilities { Variant = variant, ProbeSucceeded = probeSucceeded, ExecutableVersion = "b10201", ManifestSha256 = "manifest-sha", CacheTypesK = cacheTypes, CacheTypesV = cacheTypes, FlashAttentionModes = flashAttention });
+                     .Returns(new LlamaServerLaunchCapabilities
+                     {
+                         Variant = variant,
+                         ProbeSucceeded = probeSucceeded,
+                         ExecutableVersion = "b10201",
+                         ManifestSha256 = "manifest-sha",
+                         CacheTypesK = cacheTypes,
+                         CacheTypesV = cacheTypes,
+                         FlashAttentionModes = flashAttention
+                     });
             return inspector;
         }
 

@@ -137,9 +137,9 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
         _ = await store.ActivateJudgePolicyAsync(project.Id,
-                           await CurrentVersionAsync(store, project.Id),
-                           Encoding.UTF8.GetBytes("""{"rubric":"b"}"""),
-                           "0000000000000000000000000000000000000000000000000000000000000002");
+            await CurrentVersionAsync(store, project.Id),
+            Encoding.UTF8.GetBytes("""{"rubric":"b"}"""),
+            "0000000000000000000000000000000000000000000000000000000000000002");
 
         var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
@@ -229,7 +229,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a");
         var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 95, executionKey: "key-a",
-                stopReason: BenchmarkPrimaryStopReasons.Incomplete);
+            stopReason: BenchmarkPrimaryStopReasons.Incomplete);
 
         var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
@@ -395,7 +395,11 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
         {
             PrimaryStopReason = stopReason,
-            JudgeAttempt = new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = revision.Id, RuntimeJson = new ReadOnlyMemory<byte>(JudgeRuntime) }
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = revision.Id,
+                RuntimeJson = new ReadOnlyMemory<byte>(JudgeRuntime)
+            }
         });
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         if (executionKey is not null)
@@ -490,13 +494,30 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         };
 
     private static BenchmarkPrimarySuccessCommand PrimarySuccess(Guid runId, long expectedWorkVersion) =>
-        new() { RunId = runId, ExpectedWorkVersion = expectedWorkVersion, OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), LastStreamSequence = 1, EffectiveContextTokens = 4096, DurationMs = 10, TotalTokens = 12, TokensPerSecond = 120 };
+        new()
+        {
+            RunId = runId,
+            ExpectedWorkVersion = expectedWorkVersion,
+            OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        };
 
     private static string Fingerprint(char value) =>
         "v1:" + new string(value, count: 64);
 
     private static BenchmarkProjectInput NewProject() =>
-        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Benchmark",
+            CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        };
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
         new()

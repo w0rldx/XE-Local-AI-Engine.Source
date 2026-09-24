@@ -36,12 +36,12 @@ public sealed class CommitSkillImportEndpoint : Endpoint<SkillImportCommitEndpoi
     public override async Task HandleAsync(SkillImportCommitEndpointRequest req, CancellationToken ct)
     {
         var result = await _importService.CommitAsync(new SkillImportCommitRequest
-        {
-            Token = req.Token,
-            SkillNames = req.SkillNames ?? [],
-            ConflictResolution = req.ConflictResolution,
-            Acknowledged = req.Acknowledged
-        },
+            {
+                Token = req.Token,
+                SkillNames = req.SkillNames ?? [],
+                ConflictResolution = req.ConflictResolution,
+                Acknowledged = req.Acknowledged
+            },
             ct);
 
         await Send.OkAsync(result.ToResponse(), ct);

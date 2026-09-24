@@ -19,8 +19,7 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public BranchNodeChatConversationEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public BranchNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -48,7 +47,13 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         // A selected-revision entry that fails integrity validation (not a conversation member, or the wrong group) throws NodeChatInvalidBranchSelectionException, which
         // the global DomainValidationExceptionHandler answers with a 400: fail closed rather than branching a path the caller did not actually specify.
-        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest { ConversationId = req.ConversationId, MessageId = req.MessageId, CreatedAtUtc = createdAtUtc, SelectedRevisions = req.SelectedRevisions },
+        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest
+            {
+                ConversationId = req.ConversationId,
+                MessageId = req.MessageId,
+                CreatedAtUtc = createdAtUtc,
+                SelectedRevisions = req.SelectedRevisions
+            },
             ct);
 
         if (branched is null)

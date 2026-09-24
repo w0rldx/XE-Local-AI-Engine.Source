@@ -50,25 +50,25 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Running
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Running
+            },
+            cancellationToken);
 
         GraphWorkflowStateMachine.EnsureLegal(GraphWorkflowNodeRunStatus.Running, GraphWorkflowNodeRunStatus.WaitingForApproval, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.WaitingForApproval,
-            // Named from the kind: Approve for a pause, Answer for a chat input — which is how a reader tells a gate from a question without the graph.
-            PendingDecisionKind = GraphWorkflowStateMachine.PendingDecisionFor(node.Kind)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.WaitingForApproval,
+                // Named from the kind: Approve for a pause, Answer for a chat input — which is how a reader tells a gate from a question without the graph.
+                PendingDecisionKind = GraphWorkflowStateMachine.PendingDecisionFor(node.Kind)
+            },
+            cancellationToken);
         return 2;
     }
 

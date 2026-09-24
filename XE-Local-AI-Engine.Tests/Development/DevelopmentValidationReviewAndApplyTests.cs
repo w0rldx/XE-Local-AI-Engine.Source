@@ -308,7 +308,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     {
         var repository = await CreateRepositoryAsync();
         await using var provider = await BuildProviderAsync(new WritingCoderModel("<Project />\n", "Directory.Packages.props"),
-                new ApprovingReviewerModel());
+            new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -700,10 +700,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         using var multiRoundChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
         var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
         var accepted = await multiRound.RunAsync("reviewer-local",
-                                           "review exact subject",
-                                           new NullWorkspaceTools(),
-                                           maxOutputTokens: 64,
-                                           maxToolCalls: 8);
+            "review exact subject",
+            new NullWorkspaceTools(),
+            maxOutputTokens: 64,
+            maxToolCalls: 8);
         AssertEx.Equal<long?>(65, accepted.OutputTokens);
 
         // maxToolCalls 8 => at most 9 provider calls => a whole-attempt ceiling of 9 x 64.
@@ -711,10 +711,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: Ceiling + 1);
         var over = new DevelopmentReviewerModel(overChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
         var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("reviewer-local",
-                                        "review exact subject",
-                                        new NullWorkspaceTools(),
-                                        maxOutputTokens: 64,
-                                        maxToolCalls: 8));
+            "review exact subject",
+            new NullWorkspaceTools(),
+            maxOutputTokens: 64,
+            maxToolCalls: 8));
         AssertEx.Equal(DevelopmentAttemptFailureCodes.OutputTokenBudgetExceeded, failure.FailureCode);
     }
 
@@ -882,8 +882,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     public async Task Validation_WhenTheRegisteredRepositoryHasNoTests_FailsWithItsOwnReasonRatherThanPassing()
     {
         var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(),
-                DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
-                includeTests: false);
+            DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
+            includeTests: false);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
@@ -1256,8 +1256,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // here at all — they are carried by each profile command. The synthetic solution restores, builds and tests
         // in a couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
         await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
-                new ApprovingReviewerModel(),
-                maxAttemptDurationSeconds: 600);
+            new ApprovingReviewerModel(),
+            maxAttemptDurationSeconds: 600);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -1565,7 +1565,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
-        return new CommandResult { ExitCode = process.ExitCode, StandardOutput = await output, StandardError = await error };
+        return new CommandResult
+        {
+            ExitCode = process.ExitCode,
+            StandardOutput = await output,
+            StandardError = await error
+        };
     }
 
     private static void EnsureSuccess(CommandResult result) =>
@@ -1590,7 +1595,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
         provider.When(runtime => runtime.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())).Do(_ => warmed = true);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo { EffectiveContextTokens = served } : null);
+                .Returns(_ => servedContextTokens is { } served && warmed
+                    ? new LocalModelRuntimeInfo
+                    {
+                        EffectiveContextTokens = served
+                    }
+                    : null);
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
@@ -1686,12 +1696,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             return new DevelopmentCoderModelResult
             {
                 Submission = new DevelopmentCoderSubmission
-            {
-                Summary = "Implemented feature file.",
-                ChangedFiles = [_path],
-                CommandIds = [],
-                Notes = null
-            },
+                {
+                    Summary = "Implemented feature file.",
+                    ChangedFiles = [_path],
+                    CommandIds = [],
+                    Notes = null
+                },
                 InputTokens = 10,
                 OutputTokens = 10
             };
@@ -1711,11 +1721,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Task.FromResult(new DevelopmentReviewerModelResult
             {
                 Submission = new DevelopmentReviewerSubmission
-            {
-                Disposition = DevelopmentReviewDisposition.Approved,
-                Summary = "The exact validated subject satisfies the acceptance criterion.",
-                Findings = []
-            },
+                {
+                    Disposition = DevelopmentReviewDisposition.Approved,
+                    Summary = "The exact validated subject satisfies the acceptance criterion.",
+                    Findings = []
+                },
                 InputTokens = 10,
                 OutputTokens = 10
             });
@@ -1734,11 +1744,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Task.FromResult(new DevelopmentReviewerModelResult
             {
                 Submission = new DevelopmentReviewerSubmission
-            {
-                Disposition = DevelopmentReviewDisposition.ChangesRequested,
-                Summary = "The implementation needs a correction.",
-                Findings = [new DevelopmentReviewFinding("correctness", "The fixture reviewer requested a deterministic change.")]
-            },
+                {
+                    Disposition = DevelopmentReviewDisposition.ChangesRequested,
+                    Summary = "The implementation needs a correction.",
+                    Findings = [new DevelopmentReviewFinding("correctness", "The fixture reviewer requested a deterministic change.")]
+                },
                 InputTokens = 10,
                 OutputTokens = 10
             });
@@ -1757,11 +1767,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Task.FromResult(new DevelopmentReviewerModelResult
             {
                 Submission = new DevelopmentReviewerSubmission
-            {
-                Disposition = DevelopmentReviewDisposition.Approved,
-                Summary = "password=!Sensitive12345678",
-                Findings = []
-            },
+                {
+                    Disposition = DevelopmentReviewDisposition.Approved,
+                    Summary = "password=!Sensitive12345678",
+                    Findings = []
+                },
                 InputTokens = 10,
                 OutputTokens = 10
             });

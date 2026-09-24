@@ -36,9 +36,9 @@ public sealed class GetIntegrationExecutionEventsEndpoint : Endpoint<ListIntegra
         ArgumentNullException.ThrowIfNull(req);
 
         var rows = await _executions.ListEventsAsync(Route<Guid>("executionId"),
-                                        Math.Max(req.SinceSeq ?? 0, val2: 0),
-                                        IntegrationEventPage.ClampLimit(req.Limit),
-                                        ct);
+            Math.Max(req.SinceSeq ?? 0, val2: 0),
+            IntegrationEventPage.ClampLimit(req.Limit),
+            ct);
 
         await Send.OkAsync(new ListIntegrationExecutionEventsResponse
             {

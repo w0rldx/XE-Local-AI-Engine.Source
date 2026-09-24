@@ -26,6 +26,9 @@ public sealed class ListGraphWorkflowDefinitionsEndpoint : EndpointWithoutReques
     public override async Task HandleAsync(CancellationToken ct)
     {
         var summaries = await _definitions.ListAsync(ct);
-        await Send.OkAsync(new ListGraphWorkflowDefinitionsResponse { Definitions = [.. summaries.Select(GraphWorkflowContractMapper.ToResponse)] }, ct);
+        await Send.OkAsync(new ListGraphWorkflowDefinitionsResponse
+        {
+            Definitions = [.. summaries.Select(GraphWorkflowContractMapper.ToResponse)]
+        }, ct);
     }
 }

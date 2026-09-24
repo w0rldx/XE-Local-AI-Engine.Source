@@ -15,8 +15,7 @@ internal sealed record RecordFindingRequest(string? Kind, string? Text, string? 
 /// </remarks>
 internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFindingRequest>
 {
-    public RecordFindingToolHandler(
-        IServiceScopeFactory scopeFactory,
+    public RecordFindingToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
         IWorkSessionEventPublisher publisher,
         ILogger<RecordFindingToolHandler> logger) : base(scopeFactory, options, publisher, logger)
@@ -63,7 +62,10 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         {
             if (!TryParseId(request.TaskId, out var parsedTask))
             {
-                return new WorkSessionToolOutcome { Message = $"{ToolName} could not read '{request.TaskId}' as a task id. Use the ids from the work session state block." };
+                return new WorkSessionToolOutcome
+                {
+                    Message = $"{ToolName} could not read '{request.TaskId}' as a task id. Use the ids from the work session state block."
+                };
             }
 
             taskId = parsedTask;
@@ -74,7 +76,10 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         {
             if (!TryParseId(request.SupersedesId, out var parsedSupersedes))
             {
-                return new WorkSessionToolOutcome { Message = $"{ToolName} could not read '{request.SupersedesId}' as a finding id." };
+                return new WorkSessionToolOutcome
+                {
+                    Message = $"{ToolName} could not read '{request.SupersedesId}' as a finding id."
+                };
             }
 
             supersedesId = parsedSupersedes;
@@ -82,19 +87,24 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
 
         var findingId = Guid.NewGuid();
         var result = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
-        {
-            SessionId = session.Id,
-            FindingId = findingId,
-            ExpectedVersion = session.Version,
-            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
-            Kind = Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
-            Text = request.Text!,
-            TaskId = taskId,
-            SourceRef = string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
-            SupersedesFindingId = supersedesId
-        },
-                                    cancellationToken);
+            {
+                SessionId = session.Id,
+                FindingId = findingId,
+                ExpectedVersion = session.Version,
+                OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
+                Kind = Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
+                Text = request.Text!,
+                TaskId = taskId,
+                SourceRef = string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
+                SupersedesFindingId = supersedesId
+            },
+            cancellationToken);
 
-        return new WorkSessionToolOutcome { Message = $"Recorded a {request.Kind} on this work session.", Sequence = result.Sequence, Kind = WorkSessionChangeKind.Finding };
+        return new WorkSessionToolOutcome
+        {
+            Message = $"Recorded a {request.Kind} on this work session.",
+            Sequence = result.Sequence,
+            Kind = WorkSessionChangeKind.Finding
+        };
     }
 }

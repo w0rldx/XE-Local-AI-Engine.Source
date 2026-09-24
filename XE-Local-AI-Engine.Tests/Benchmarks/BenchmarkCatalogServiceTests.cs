@@ -170,9 +170,30 @@ public sealed class BenchmarkCatalogServiceTests
         ]);
         var provider = new FactsProvider(new Dictionary<string, InstalledModelFacts>(StringComparer.OrdinalIgnoreCase)
             {
-                ["chat"] = new() { ModelName = "chat", ProviderName = "llamacpp", Role = GgufRole.Chat, Origin = LocalModelOrigin.HuggingFace, ModelContentFingerprint = recorded },
-                ["embedding"] = new() { ModelName = "embedding", ProviderName = "llamacpp", Role = GgufRole.Embedding, Origin = LocalModelOrigin.HuggingFace, ModelContentFingerprint = recorded },
-                ["legacy"] = new() { ModelName = "legacy", ProviderName = "llamacpp", Role = GgufRole.Chat, Origin = null, ModelContentFingerprint = null }
+                ["chat"] = new()
+                {
+                    ModelName = "chat",
+                    ProviderName = "llamacpp",
+                    Role = GgufRole.Chat,
+                    Origin = LocalModelOrigin.HuggingFace,
+                    ModelContentFingerprint = recorded
+                },
+                ["embedding"] = new()
+                {
+                    ModelName = "embedding",
+                    ProviderName = "llamacpp",
+                    Role = GgufRole.Embedding,
+                    Origin = LocalModelOrigin.HuggingFace,
+                    ModelContentFingerprint = recorded
+                },
+                ["legacy"] = new()
+                {
+                    ModelName = "legacy",
+                    ProviderName = "llamacpp",
+                    Role = GgufRole.Chat,
+                    Origin = null,
+                    ModelContentFingerprint = null
+                }
             },
             new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
             {
@@ -218,7 +239,22 @@ public sealed class BenchmarkCatalogServiceTests
         };
 
     private static AgentDefinitionRecord Definition(Guid id, string name, AgentDefinitionKind kind) =>
-        new() { Id = id, Name = name, Description = null, Instructions = "instructions", ModelProfile = null, ReasoningEffort = null, Kind = kind, AllowedToolNames = [], ToolApprovals = new Dictionary<string, bool>(), OrchestrationTopologyJson = null, Version = 7, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
+        new()
+        {
+            Id = id,
+            Name = name,
+            Description = null,
+            Instructions = "instructions",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = kind,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 7,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 
     private static InstalledModelSnapshot CreateSnapshot(string name,
         LocalModelOrigin? origin,
@@ -287,8 +323,7 @@ public sealed class BenchmarkCatalogServiceTests
         private readonly IReadOnlyDictionary<string, InstalledModelFacts> _facts;
         private readonly IReadOnlyDictionary<string, InstalledModelSnapshot> _snapshots;
 
-        public FactsProvider(
-            IReadOnlyDictionary<string, InstalledModelFacts> facts,
+        public FactsProvider(IReadOnlyDictionary<string, InstalledModelFacts> facts,
             IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots)
         {
             _facts = facts;

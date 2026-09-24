@@ -168,13 +168,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
-                    new DevWorkflowLanes
-                    {
-                        Agent = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
-                        DevTasks = scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
-                    },
-                    runId,
-                    cancellationToken);
+                new DevWorkflowLanes
+                {
+                    Agent = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
+                    DevTasks = scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
+                },
+                runId,
+                cancellationToken);
         }
         finally
         {
@@ -233,14 +233,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // the drain like every other terminal, so live siblings settle and release what they hold instead of being orphaned.
             DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Cancelling);
             _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
-            {
-                RunId = run.Id,
-                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
-                TargetStatus = DevWorkflowRunStatus.Cancelling,
-                FailureClass = DevWorkflowFailureClasses.GateRejected,
-                SanitizedReason = rejection
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                    TargetStatus = DevWorkflowRunStatus.Cancelling,
+                    FailureClass = DevWorkflowFailureClasses.GateRejected,
+                    SanitizedReason = rejection
+                },
+                cancellationToken);
             return written + 1;
         }
 
@@ -253,10 +253,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // A settled decomposition grows the graph and the tick ENDS there: what follows judges node runs against the graph this call just replaced, so the next tick re-parses and admits
         // the expansion. A parse-count assertion pins that, the failure being silent. Rows are re-read only if a decision moved one — the decomposition must be Succeeded to count.
         var materialized = await _materializer.MaterializeAsync(store,
-                                                  graph,
-                                                  run,
-                                                  settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken) : nodeRuns,
-                                                  cancellationToken);
+            graph,
+            run,
+            settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken) : nodeRuns,
+            cancellationToken);
         if (materialized > 0)
         {
             return written + materialized;
@@ -369,19 +369,24 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         return await _retries.SettleFailureAsync(store,
-                                 graph,
-                                 run,
-                                 nodeRun,
-                                 nodeRuns,
-                                 new DevWorkflowFailure
-                                 {
-                                     FailureClass = DevWorkflowFailureClasses.Timeout,
-                                     SanitizedReason = $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
-                                     OutputJson = JsonSerializer.Serialize(new TimedOutOutput { Status = DevWorkflowNodeOutputStatuses.Failed, Attempt = nodeRun.Attempt, FailureClass = DevWorkflowFailureClasses.Timeout },
-                                         JsonOptions),
-                                     Outcome = DevWorkflowOutcomes.Timeout
-                                 },
-                                 cancellationToken);
+            graph,
+            run,
+            nodeRun,
+            nodeRuns,
+            new DevWorkflowFailure
+            {
+                FailureClass = DevWorkflowFailureClasses.Timeout,
+                SanitizedReason = $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
+                OutputJson = JsonSerializer.Serialize(new TimedOutOutput
+                    {
+                        Status = DevWorkflowNodeOutputStatuses.Failed,
+                        Attempt = nodeRun.Attempt,
+                        FailureClass = DevWorkflowFailureClasses.Timeout
+                    },
+                    JsonOptions),
+                Outcome = DevWorkflowOutcomes.Timeout
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -433,15 +438,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
-            TargetStatus = DevWorkflowRunStatus.Failed,
-            FailureClass = DevWorkflowFailureClasses.Configuration,
-            SanitizedReason = exception.Message,
-            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                TargetStatus = DevWorkflowRunStatus.Failed,
+                FailureClass = DevWorkflowFailureClasses.Configuration,
+                SanitizedReason = exception.Message,
+                WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+            },
+            cancellationToken);
         Forget(run.Id);
         return 1;
     }
@@ -482,13 +487,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Running);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
-            TargetStatus = DevWorkflowRunStatus.Running,
-            WorkItemStatus = DevWorkflowWorkItemStatus.Active
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                TargetStatus = DevWorkflowRunStatus.Running,
+                WorkItemStatus = DevWorkflowWorkItemStatus.Active
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -565,15 +570,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 // Already Blocked: there is no status left to move it to, so only the note is new. Keyed by operation
                 // id, which the store resolves query-first — so it is written once and not on every tick thereafter.
                 _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
-                {
-                    RunId = run.Id,
-                    ExpectedVersion = DevWorkflowVersions.Any,
-                    EventType = DevWorkflowEventTypes.NodeInterventionRequired,
-                    NodeRunId = nodeRun.Id,
-                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "decision-not-applicable"),
-                    DetailJson = JsonSerializer.Serialize(new ReasonDetail(reason), JsonOptions)
-                },
-                                   cancellationToken);
+                    {
+                        RunId = run.Id,
+                        ExpectedVersion = DevWorkflowVersions.Any,
+                        EventType = DevWorkflowEventTypes.NodeInterventionRequired,
+                        NodeRunId = nodeRun.Id,
+                        OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "decision-not-applicable"),
+                        DetailJson = JsonSerializer.Serialize(new ReasonDetail(reason), JsonOptions)
+                    },
+                    cancellationToken);
                 continue;
             }
 
@@ -595,28 +600,28 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             var retryInput = incrementAttempt ? DevWorkflowNodeInputs.Merge(nodeRun.InputJson, writeRetryMembers) : null;
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = target,
-                OutputJson = outputJson,
-                InputJson = retryInput,
-                FailureClass = target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
-                TerminalReason = DecidedReason(target, settled.Comment),
-                IncrementAttempt = incrementAttempt,
-                // EVERY Retry widens the cap by one, not only one at the cap — the ruling as written. The attempt it buys carries the operator's reason; the automatic ones it enables
-                // do not. The run-wide MaxTotalAttempts budget still bounds everything, counting both alike, and no widening touches it. Nothing else sets this flag.
-                WidenMaxAttempts = incrementAttempt,
-                // A retry gets a NEW session: resuming the one that just failed resumes the context that failed with it. Releasing it here also stops the fresh attempt being
-                // settled straight back off the old session's answer.
-                ClearWorkSession = incrementAttempt,
-                Outcome = outcome,
-                // An answered node run may be the last thing the work item was blocked on, and the run status often does not move when it settles, so the release travels with the
-                // answer for the same reason blocking it does.
-                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = target,
+                    OutputJson = outputJson,
+                    InputJson = retryInput,
+                    FailureClass = target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
+                    TerminalReason = DecidedReason(target, settled.Comment),
+                    IncrementAttempt = incrementAttempt,
+                    // EVERY Retry widens the cap by one, not only one at the cap — the ruling as written. The attempt it buys carries the operator's reason; the automatic ones it enables
+                    // do not. The run-wide MaxTotalAttempts budget still bounds everything, counting both alike, and no widening touches it. Nothing else sets this flag.
+                    WidenMaxAttempts = incrementAttempt,
+                    // A retry gets a NEW session: resuming the one that just failed resumes the context that failed with it. Releasing it here also stops the fresh attempt being
+                    // settled straight back off the old session's answer.
+                    ClearWorkSession = incrementAttempt,
+                    Outcome = outcome,
+                    // An answered node run may be the last thing the work item was blocked on, and the run status often does not move when it settles, so the release travels with the
+                    // answer for the same reason blocking it does.
+                    WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)
+                },
+                cancellationToken);
             settledSoFar =
             [
                 .. settledSoFar.Select(entry => entry.Id == nodeRun.Id
@@ -704,13 +709,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var settledStatus = run.Status == DevWorkflowRunStatus.Pausing ? DevWorkflowRunStatus.Paused : DevWorkflowRunStatus.Cancelled;
         DevWorkflowStateMachine.EnsureLegal(run.Status, settledStatus);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
-        {
-            RunId = run.Id,
-            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
-            TargetStatus = settledStatus,
-            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                TargetStatus = settledStatus,
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)
+            },
+            cancellationToken);
 
         // A PAUSED run keeps its promised re-attempts: it is coming back, and a resume that skipped every cushion a definition asked for would be the pause spending them.
         if (DevWorkflowStateMachine.IsTerminal(settledStatus))
@@ -771,13 +776,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             }
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = DevWorkflowNodeRunStatus.Pending
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Pending
+                },
+                cancellationToken);
             return 1;
         }
 
@@ -791,15 +796,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Cancelled,
-            FailureClass = DevWorkflowFailureClasses.Cancelled,
-            TerminalReason = "The run was cancelled."
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Cancelled,
+                FailureClass = DevWorkflowFailureClasses.Cancelled,
+                TerminalReason = "The run was cancelled."
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -832,11 +837,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             {
                 // The run's pinned graph no longer declares this node. Nothing can route it, and nothing should guess.
                 written += await BlockAsync(store,
-                        run,
-                        nodeRun,
-                        $"The run's graph no longer declares node '{nodeRun.NodeKey}'.",
-                        DevWorkflowFailureClasses.Configuration,
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    $"The run's graph no longer declares node '{nodeRun.NodeKey}'.",
+                    DevWorkflowFailureClasses.Configuration,
+                    cancellationToken);
                 continue;
             }
 
@@ -859,14 +864,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 // Named, not bare. A cascade writes as many Skipped rows as it reaches, and without the cause on each
                 // one an operator reading the tail cannot tell which row was the decision and which followed it.
                 _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-                {
-                    RunId = run.Id,
-                    NodeRunId = nodeRun.Id,
-                    ExpectedVersion = DevWorkflowVersions.Any,
-                    TargetStatus = DevWorkflowNodeRunStatus.Skipped,
-                    TerminalReason = DevWorkflowStateMachine.SkipReason(node, graph, byKey)
-                },
-                                   cancellationToken);
+                    {
+                        RunId = run.Id,
+                        NodeRunId = nodeRun.Id,
+                        ExpectedVersion = DevWorkflowVersions.Any,
+                        TargetStatus = DevWorkflowNodeRunStatus.Skipped,
+                        TerminalReason = DevWorkflowStateMachine.SkipReason(node, graph, byKey)
+                    },
+                    cancellationToken);
                 written++;
                 continue;
             }
@@ -909,12 +914,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 // GRAPH-C4-3's runtime half, BEFORE the consumption record below: a blocked apply must not first record that it consumed inputs it never read. Policy rather than
                 // a failure — nothing broke, and the answer is a person's.
                 return await BlockAsync(store,
-                        run,
-                        nodeRun,
-                        $"Node '{node.NodeKey}' applies approved patches, and no validation node succeeded on the path this run took. "
-                        + "Nothing has judged what is about to be applied (invariant GRAPH-C4-3).",
-                        DevWorkflowFailureClasses.Policy,
-                        cancellationToken);
+                    run,
+                    nodeRun,
+                    $"Node '{node.NodeKey}' applies approved patches, and no validation node succeeded on the path this run took. "
+                    + "Nothing has judged what is about to be applied (invariant GRAPH-C4-3).",
+                    DevWorkflowFailureClasses.Policy,
+                    cancellationToken);
             }
 
             if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
@@ -935,13 +940,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // No Queued hop: an inline node waits for no slot, and the three queue-reason tokens all name something real to wait for. A Queued row with none of them would be lying.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Running
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Running
+            },
+            cancellationToken);
 
         if (node.NodeType == DevWorkflowNodeType.HumanGate)
         {
@@ -950,30 +955,35 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                TargetStatus = DevWorkflowNodeRunStatus.WaitingForApproval,
-                PendingDecisionKind = DevWorkflowDecisionKind.Approve
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.WaitingForApproval,
+                    PendingDecisionKind = DevWorkflowDecisionKind.Approve
+                },
+                cancellationToken);
             return 2;
         }
 
         var outputJson = node.NodeType == DevWorkflowNodeType.Gate
             ? ComposeGateOutput(node, graph, byKey, nodeRun.Attempt)
-            : JsonSerializer.Serialize(new InlineOutput { Status = DevWorkflowNodeOutputStatuses.Succeeded, Attempt = nodeRun.Attempt, Branch = null }, JsonOptions);
+            : JsonSerializer.Serialize(new InlineOutput
+            {
+                Status = DevWorkflowNodeOutputStatuses.Succeeded,
+                Attempt = nodeRun.Attempt,
+                Branch = null
+            }, JsonOptions);
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
-            OutputJson = outputJson
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+                OutputJson = outputJson
+            },
+            cancellationToken);
         return 2;
     }
 
@@ -1129,17 +1139,17 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = DevWorkflowVersions.Any,
-            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
-            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
-            FailureClass = failureClass,
-            TerminalReason = sanitizedReason,
-            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+                PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+                FailureClass = failureClass,
+                TerminalReason = sanitizedReason,
+                WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+            },
+            cancellationToken);
         return 1;
     }
 
@@ -1162,19 +1172,19 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         DevWorkflowStateMachine.EnsureLegal(current.Status, outcome.Status);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
-        {
-            RunId = run.Id,
-            // The version this decision was made against. Any would let a status move overwrite a lifecycle command that landed between the read and this write — a cancel silently
-            // becoming a Running again — and the run service is the second writer that makes it real.
-            ExpectedVersion = current.Version,
-            TargetStatus = outcome.Status,
-            // Both are null for Completed and Failed: a failing node run already carries the class that explains it, and a second, coarser copy on the run would be a worse answer to
-            // the same question. A run that reached no end is the one case with no such node run — nothing failed — so there the outcome carries the whole account itself.
-            FailureClass = outcome.FailureClass,
-            SanitizedReason = outcome.TerminalReason,
-            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                // The version this decision was made against. Any would let a status move overwrite a lifecycle command that landed between the read and this write — a cancel silently
+                // becoming a Running again — and the run service is the second writer that makes it real.
+                ExpectedVersion = current.Version,
+                TargetStatus = outcome.Status,
+                // Both are null for Completed and Failed: a failing node run already carries the class that explains it, and a second, coarser copy on the run would be a worse answer to
+                // the same question. A run that reached no end is the one case with no such node run — nothing failed — so there the outcome carries the whole account itself.
+                FailureClass = outcome.FailureClass,
+                SanitizedReason = outcome.TerminalReason,
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)
+            },
+            cancellationToken);
 
         if (DevWorkflowStateMachine.IsTerminal(outcome.Status))
         {

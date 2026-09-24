@@ -26,8 +26,7 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
     private readonly ISelectedFolderResolver _selectedFolders;
     private readonly IDevelopmentStore _store;
 
-    public DevelopmentRepositoryBindingService(
-        ISelectedFolderResolver selectedFolders,
+    public DevelopmentRepositoryBindingService(ISelectedFolderResolver selectedFolders,
         IDevelopmentStore store,
         IOptions<DevelopmentOptions> options)
     {
@@ -44,8 +43,18 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
     {
         var canonicalRoot = ResolveCanonicalRoot(hostPath);
         await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken);
-        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration { Alias = displayAlias, HostPath = canonicalRoot, Mode = SelectedFolderMode.Copy }, cancellationToken);
-        return new DevelopmentRepositoryReference { Id = reference.Id, Alias = reference.Alias, Availability = "Available" };
+        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration
+        {
+            Alias = displayAlias,
+            HostPath = canonicalRoot,
+            Mode = SelectedFolderMode.Copy
+        }, cancellationToken);
+        return new DevelopmentRepositoryReference
+        {
+            Id = reference.Id,
+            Alias = reference.Alias,
+            Availability = "Available"
+        };
     }
 
     public async Task<IReadOnlyList<DevelopmentRepositoryReference>> ListAsync(CancellationToken cancellationToken = default)
@@ -66,7 +75,12 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
                 availability = "Unavailable";
             }
 
-            result.Add(new DevelopmentRepositoryReference { Id = reference.Id, Alias = reference.Alias, Availability = availability });
+            result.Add(new DevelopmentRepositoryReference
+            {
+                Id = reference.Id,
+                Alias = reference.Alias,
+                Availability = availability
+            });
         }
 
         return result;

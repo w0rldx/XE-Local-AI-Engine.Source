@@ -15,8 +15,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
-    public StableDiffusionCppRuntimeAdoption(
-        string cacheRoot,
+    public StableDiffusionCppRuntimeAdoption(string cacheRoot,
         IStableDiffusionInstalledRuntimeStore runtimeStore,
         IStableDiffusionManagedSourceBuildSignal managedSignal,
         TimeProvider timeProvider,
@@ -264,7 +263,14 @@ internal sealed class StableDiffusionCppRuntimeAdoption
             }
         }
 
-        return new AdoptionPaths { Destination = destination, Backup = backup, Failed = failed, PreviousInstallRoot = previousInstallRoot, RetiredPrevious = retiredPrevious };
+        return new AdoptionPaths
+        {
+            Destination = destination,
+            Backup = backup,
+            Failed = failed,
+            PreviousInstallRoot = previousInstallRoot,
+            RetiredPrevious = retiredPrevious
+        };
     }
 
     private void CleanupCommitted(AdoptionPaths paths)

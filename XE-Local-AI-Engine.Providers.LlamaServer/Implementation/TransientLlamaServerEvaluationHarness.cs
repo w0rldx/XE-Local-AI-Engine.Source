@@ -14,8 +14,7 @@ internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaSer
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly IGpuVariantSelector _variantSelector;
 
-    public TransientLlamaServerEvaluationHarness(
-        ILlamaServerProcessSupervisor supervisor,
+    public TransientLlamaServerEvaluationHarness(ILlamaServerProcessSupervisor supervisor,
         ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         ILlamaServerCapabilityManifestProbe capabilityManifestProbe,

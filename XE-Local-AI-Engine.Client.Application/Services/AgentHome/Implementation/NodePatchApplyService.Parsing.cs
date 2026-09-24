@@ -215,7 +215,12 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected(UnwritableNameRejection, Describe(alias, relative));
             }
 
-            allAliasResults.Add(new BodyAliasPath { Prefix = prefix, Alias = alias, Relative = relative });
+            allAliasResults.Add(new BodyAliasPath
+            {
+                Prefix = prefix,
+                Alias = alias,
+                Relative = relative
+            });
         }
 
         // All paths in the block must belong to the same alias (cross-alias rename/copy is a path-escape vector).

@@ -144,7 +144,12 @@ public sealed class RunSavedAgentHandlerTests
         using var harness = new Harness();
         harness.Capacity
                .DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-               .Returns(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning = false });
+               .Returns(new CapacityDecision
+               {
+                   Verdict = CapacityVerdict.RejectInsufficient,
+                   Reason = "Insufficient capacity: not enough free memory for another model.",
+                   OllamaEvictionWarning = false
+               });
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
 
@@ -233,7 +238,7 @@ public sealed class RunSavedAgentHandlerTests
             new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
         var agentHome = (await offerProvider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false))
-                        .Single(tool => tool.Name == AgentHomeToolDefinition.ToolName);
+            .Single(tool => tool.Name == AgentHomeToolDefinition.ToolName);
 
         harness.Resolver
                .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -368,7 +373,13 @@ public sealed class RunSavedAgentHandlerTests
             Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             Capacity
                 .DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = _reservation });
+                .Returns(new CapacityDecision
+                {
+                    Verdict = CapacityVerdict.Allow,
+                    Reason = "Capacity available.",
+                    OllamaEvictionWarning = false,
+                    Reservation = _reservation
+                });
             Resolver
                 .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [], null, "medium", 7, AgentId, "Log Summarizer", []));

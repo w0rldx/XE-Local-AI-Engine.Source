@@ -185,7 +185,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public void SourceRequest_OfficialNormalizationIsIdempotentAndPinsCanonicalProvenance()
     {
-        var request = new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cuda, Source = StableDiffusionCppSourceSelection.Official };
+        var request = new StableDiffusionCppSourceBuildRequest
+        {
+            Backend = SdGpuBackend.Cuda,
+            Source = StableDiffusionCppSourceSelection.Official
+        };
 
         var once = StableDiffusionCppSourceBuildRequestValidation.Normalize(request);
         var twice = StableDiffusionCppSourceBuildRequestValidation.Normalize(once);
@@ -215,7 +219,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var runner = new BlockingRunner();
         using var service = CreateService(temp.Path, store, gate, runner);
 
-        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cpu, Source = StableDiffusionCppSourceSelection.Official },
+        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
+            {
+                Backend = SdGpuBackend.Cpu,
+                Source = StableDiffusionCppSourceSelection.Official
+            },
             CancellationToken.None);
 
         AssertEx.Equal(StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy, result.Outcome);
@@ -230,7 +238,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var gate = new ImageRuntimeActivityGate();
         var runner = new BlockingRunner();
         using var service = CreateService(temp.Path, store, gate, runner);
-        var request = new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cpu, Source = StableDiffusionCppSourceSelection.Official };
+        var request = new StableDiffusionCppSourceBuildRequest
+        {
+            Backend = SdGpuBackend.Cpu,
+            Source = StableDiffusionCppSourceSelection.Official
+        };
 
         var first = await service.StartAsync(request, CancellationToken.None);
         await runner.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -252,7 +264,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var runner = new SuccessfulRunner();
         using var service = CreateService(temp.Path, store, gate, runner);
 
-        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cuda, Source = StableDiffusionCppSourceSelection.Official },
+        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
+            {
+                Backend = SdGpuBackend.Cuda,
+                Source = StableDiffusionCppSourceSelection.Official
+            },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
 
@@ -308,13 +324,13 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         using var service = CreateService(temp.Path, store, new ImageRuntimeActivityGate(), runner);
 
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
-        {
-            Backend = SdGpuBackend.Cpu,
-            Source = StableDiffusionCppSourceSelection.Custom,
-            Repository = "https://github.com/example/stable-diffusion.cpp",
-            Commit = customCommit,
-            AcknowledgeCustomSourceRisk = true
-        },
+            {
+                Backend = SdGpuBackend.Cpu,
+                Source = StableDiffusionCppSourceSelection.Custom,
+                Repository = "https://github.com/example/stable-diffusion.cpp",
+                Commit = customCommit,
+                AcknowledgeCustomSourceRisk = true
+            },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
 
@@ -357,7 +373,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var failingStore = new FailingWriteStore(innerStore);
         using var service = CreateService(temp.Path, failingStore, new ImageRuntimeActivityGate(), new SuccessfulRunner());
 
-        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cuda, Source = StableDiffusionCppSourceSelection.Official },
+        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
+            {
+                Backend = SdGpuBackend.Cuda,
+                Source = StableDiffusionCppSourceSelection.Official
+            },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
 
@@ -390,7 +410,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         await store.WriteAsync(previous, CancellationToken.None);
         using var service = CreateService(temp.Path, store, new ImageRuntimeActivityGate(), new SuccessfulRunner());
 
-        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest { Backend = SdGpuBackend.Cuda, Source = StableDiffusionCppSourceSelection.Official },
+        var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
+            {
+                Backend = SdGpuBackend.Cuda,
+                Source = StableDiffusionCppSourceSelection.Official
+            },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
 
@@ -871,7 +895,11 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     {
         var prerequisites = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
         prerequisites.ProbeAsync(Arg.Any<SdGpuBackend>(), Arg.Any<CancellationToken>())
-                     .Returns(new StableDiffusionCppSourceBuildPrerequisiteReport { CanBuild = true, Items = [] });
+                     .Returns(new StableDiffusionCppSourceBuildPrerequisiteReport
+                     {
+                         CanBuild = true,
+                         Items = []
+                     });
         return new StableDiffusionCppSourceBuildService(prerequisites,
             store,
             new StableDiffusionManagedSourceBuildSignal(),
@@ -1020,7 +1048,12 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             CallCount++;
             Started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-            return new StableDiffusionSourceCommandResult { ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
+            return new StableDiffusionSourceCommandResult
+            {
+                ExitCode = 0,
+                StandardOutput = string.Empty,
+                StandardError = string.Empty
+            };
         }
     }
 
@@ -1091,7 +1124,12 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
                 }
             }
 
-            return new StableDiffusionSourceCommandResult { ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
+            return new StableDiffusionSourceCommandResult
+            {
+                ExitCode = 0,
+                StandardOutput = string.Empty,
+                StandardError = string.Empty
+            };
         }
     }
 

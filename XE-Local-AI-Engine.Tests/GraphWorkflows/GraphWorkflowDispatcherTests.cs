@@ -210,13 +210,13 @@ public sealed class GraphWorkflowDispatcherTests
         await using var harness = new GraphWorkflowHarness(Host);
         var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
         var runId = await harness.StartRunThroughTheStoreAsync(definitionId,
-                                     GraphWorkflowGraphs.InlineLinear,
-                                     [
-                                         ("start", GraphWorkflowNodeKind.Start),
-                                         ("middle", GraphWorkflowNodeKind.Parallel),
-                                         ("done", GraphWorkflowNodeKind.End),
-                                         ("phantom", GraphWorkflowNodeKind.Parallel)
-                                     ]);
+            GraphWorkflowGraphs.InlineLinear,
+            [
+                ("start", GraphWorkflowNodeKind.Start),
+                ("middle", GraphWorkflowNodeKind.Parallel),
+                ("done", GraphWorkflowNodeKind.End),
+                ("phantom", GraphWorkflowNodeKind.Parallel)
+            ]);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 

@@ -20,8 +20,7 @@ public sealed class GetModelCatalogInfoEndpoint : EndpointWithoutRequest<ModelCa
     private readonly IModelCatalogProvider _catalogProvider;
     private readonly IOptions<ModelCatalogOptions> _options;
 
-    public GetModelCatalogInfoEndpoint(
-        IModelCatalogProvider catalogProvider,
+    public GetModelCatalogInfoEndpoint(IModelCatalogProvider catalogProvider,
         IOptions<ModelCatalogOptions> options)
     {
         ArgumentNullException.ThrowIfNull(catalogProvider);

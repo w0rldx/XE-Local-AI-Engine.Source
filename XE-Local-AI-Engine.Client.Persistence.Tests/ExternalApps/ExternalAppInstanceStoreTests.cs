@@ -73,9 +73,9 @@ public sealed class ExternalAppInstanceStoreTests
         _ = await store.CreateAsync(command);
 
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                    expectedVersion: 7,
-                                    ExternalAppInstanceStatus.Running,
-                                    ExternalAppInstanceStatus.Installing));
+            expectedVersion: 7,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceStatus.Installing));
 
         AssertEx.False(result.Applied, "A stale version loses the compare-and-swap.");
         var snapshot = AssertEx.NotNull(await store.GetAsync(command.Id));
@@ -105,9 +105,9 @@ public sealed class ExternalAppInstanceStoreTests
         await using var occupied = await context.Database.BeginTransactionAsync();
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                              expectedVersion: 0,
-                              ExternalAppInstanceStatus.Running,
-                              ExternalAppInstanceStatus.Installing)));
+            expectedVersion: 0,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceStatus.Installing)));
 
         // Not "no entries": the create this test seeded with leaves its own rows tracked, and a saved entity is
         // Unchanged. What must not be here is a PENDING change — the mutated row and the queued event.
@@ -136,15 +136,15 @@ public sealed class ExternalAppInstanceStoreTests
         // shape the provider stores a Guid in.
         await fixture.RawExecuteAsync("INSERT INTO external_app_instance_events (id, instance_id, sequence, kind, detail_json, occurred_at_utc) "
                                       + "SELECT $id, id, 2, 'Started', NULL, 2000 FROM external_app_instances;",
-                         raw => raw.Parameters.AddWithValue("$id", Guid.NewGuid().ToString()));
+            raw => raw.Parameters.AddWithValue("$id", Guid.NewGuid().ToString()));
 
         AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("external_app_instance_events"),
             "The winner's event must actually be in the file, or nothing collides and this test proves nothing.");
 
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                    expectedVersion: 0,
-                                    ExternalAppInstanceStatus.Running,
-                                    ExternalAppInstanceStatus.Installing));
+            expectedVersion: 0,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceStatus.Installing));
 
         AssertEx.False(result.Applied, "A sequence another writer already took means this writer lost; it is not a fault to raise.");
 
@@ -167,10 +167,10 @@ public sealed class ExternalAppInstanceStoreTests
         // The version is current; only the expected status is wrong — a Stop admitted against a row that is still
         // installing, which the transition table refuses.
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                    expectedVersion: 0,
-                                    ExternalAppInstanceStatus.Stopped,
-                                    ExternalAppInstanceStatus.Running,
-                                    ExternalAppInstanceEventKind.Stopped));
+            expectedVersion: 0,
+            ExternalAppInstanceStatus.Stopped,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceEventKind.Stopped));
 
         AssertEx.False(result.Applied);
         var snapshot = AssertEx.NotNull(await store.GetAsync(command.Id));
@@ -239,15 +239,15 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Equal(expected: 0L, tracked.Version);
 
         var winner = await fastStore.UpdateStatusAsync(ExternalAppTestFixture.Transition(instanceId,
-                                        expectedVersion: 0,
-                                        ExternalAppInstanceStatus.Running,
-                                        ExternalAppInstanceStatus.Installing,
-                                        ExternalAppInstanceEventKind.Installed));
+            expectedVersion: 0,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceStatus.Installing,
+            ExternalAppInstanceEventKind.Installed));
         var loser = await slowStore.UpdateStatusAsync(ExternalAppTestFixture.Transition(instanceId,
-                                       expectedVersion: 0,
-                                       ExternalAppInstanceStatus.Failed,
-                                       ExternalAppInstanceStatus.Installing,
-                                       ExternalAppInstanceEventKind.Failed));
+            expectedVersion: 0,
+            ExternalAppInstanceStatus.Failed,
+            ExternalAppInstanceStatus.Installing,
+            ExternalAppInstanceEventKind.Failed));
 
         AssertEx.True(winner.Applied);
         AssertEx.False(loser.Applied, "A lost CAS is a false, never an exception: the service decides whether that means 409 or 'ignore me'.");
@@ -274,9 +274,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = created.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                    {
-                                        ExternalAppInstanceStatus.Installing
-                                    },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Running,
             EventKind = ExternalAppInstanceEventKind.Installed,
             EventDetailJson = null,
@@ -293,11 +293,11 @@ public sealed class ExternalAppInstanceStoreTests
         // Everything optional is null this time: a stop that only moves the status must not blank the ports the start
         // wrote, nor the provider, nor the started stamp.
         var second = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                    seeded.Version,
-                                    ExternalAppInstanceStatus.Stopping,
-                                    ExternalAppInstanceStatus.Running,
-                                    ExternalAppInstanceEventKind.StopRequested,
-                                    occurredAtUtc: 3_000));
+            seeded.Version,
+            ExternalAppInstanceStatus.Stopping,
+            ExternalAppInstanceStatus.Running,
+            ExternalAppInstanceEventKind.StopRequested,
+            occurredAtUtc: 3_000));
         AssertEx.True(second.Applied);
 
         var snapshot = AssertEx.NotNull(await store.GetAsync(command.Id));
@@ -323,9 +323,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = created.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                    {
-                                        ExternalAppInstanceStatus.Installing
-                                    },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Failed,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = null,
@@ -343,9 +343,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = failed.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                       {
-                                           ExternalAppInstanceStatus.Failed
-                                       },
+            {
+                ExternalAppInstanceStatus.Failed
+            },
             NewStatus = ExternalAppInstanceStatus.Starting,
             EventKind = ExternalAppInstanceEventKind.StartRequested,
             EventDetailJson = null,
@@ -415,9 +415,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                     {
-                                         ExternalAppInstanceStatus.Installing
-                                     },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Running,
             EventKind = ExternalAppInstanceEventKind.Started,
             EventDetailJson = null,
@@ -474,13 +474,13 @@ public sealed class ExternalAppInstanceStoreTests
 
         var minted = ExternalAppTestFixture.BridgeTokenFor(command.Id);
         var result = await store.CommitUpdateAsync(command.Id,
-                                    created.Version,
-                                    """{"applicationId":"odysseus","manifestVersion":2}""",
-                                    ExternalAppTestFixture.SeedVariablesJson,
-                                    """{"web":{"7000":41999}}""",
-                                    manifestVersion: 2,
-                                    updatedAtUtc: 6_000,
-                                    minted);
+            created.Version,
+            """{"applicationId":"odysseus","manifestVersion":2}""",
+            ExternalAppTestFixture.SeedVariablesJson,
+            """{"web":{"7000":41999}}""",
+            manifestVersion: 2,
+            updatedAtUtc: 6_000,
+            minted);
 
         AssertEx.True(result.Applied);
         AssertEx.Equal(minted, AssertEx.NotNull(await store.GetAsync(command.Id)).BridgeToken,
@@ -501,12 +501,12 @@ public sealed class ExternalAppInstanceStoreTests
         var created = await store.CreateAsync(command);
 
         var result = await store.CommitUpdateAsync(command.Id,
-                                    created.Version,
-                                    """{"applicationId":"odysseus","manifestVersion":2}""",
-                                    ExternalAppTestFixture.SeedVariablesJson,
-                                    """{"web":{"7000":41999}}""",
-                                    manifestVersion: 2,
-                                    updatedAtUtc: 6_000);
+            created.Version,
+            """{"applicationId":"odysseus","manifestVersion":2}""",
+            ExternalAppTestFixture.SeedVariablesJson,
+            """{"web":{"7000":41999}}""",
+            manifestVersion: 2,
+            updatedAtUtc: 6_000);
 
         AssertEx.True(result.Applied);
         AssertEx.Equal(ExternalAppTestFixture.BridgeTokenFor(command.Id),
@@ -523,12 +523,12 @@ public sealed class ExternalAppInstanceStoreTests
         _ = await store.CreateAsync(command);
 
         var result = await store.CommitUpdateAsync(command.Id,
-                                    expectedVersion: 11,
-                                    """{"applicationId":"odysseus","manifestVersion":2}""",
-                                    """{"ODYSSEUS_ADMIN_PASSWORD":"stale"}""",
-                                    """{"web":{"7000":41999}}""",
-                                    manifestVersion: 2,
-                                    updatedAtUtc: 6_000);
+            expectedVersion: 11,
+            """{"applicationId":"odysseus","manifestVersion":2}""",
+            """{"ODYSSEUS_ADMIN_PASSWORD":"stale"}""",
+            """{"web":{"7000":41999}}""",
+            manifestVersion: 2,
+            updatedAtUtc: 6_000);
 
         AssertEx.False(result.Applied, "A lost commit aborts the update BEFORE any replacement container is started.");
         var snapshot = AssertEx.NotNull(await store.GetAsync(command.Id));
@@ -548,19 +548,19 @@ public sealed class ExternalAppInstanceStoreTests
         var command = ExternalAppTestFixture.Create();
         var created = await store.CreateAsync(command);
         var updating = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                      created.Version,
-                                      ExternalAppInstanceStatus.Updating,
-                                      ExternalAppInstanceStatus.Installing,
-                                      ExternalAppInstanceEventKind.UpdateRequested));
+            created.Version,
+            ExternalAppInstanceStatus.Updating,
+            ExternalAppInstanceStatus.Installing,
+            ExternalAppInstanceEventKind.UpdateRequested));
         AssertEx.True(updating.Applied);
 
         var result = await store.CommitUpdateAsync(command.Id,
-                                    updating.Version,
-                                    """{"applicationId":"odysseus","manifestVersion":2}""",
-                                    ExternalAppTestFixture.SeedVariablesJson,
-                                    """{"web":{"7000":41999}}""",
-                                    manifestVersion: 2,
-                                    updatedAtUtc: 6_000);
+            updating.Version,
+            """{"applicationId":"odysseus","manifestVersion":2}""",
+            ExternalAppTestFixture.SeedVariablesJson,
+            """{"web":{"7000":41999}}""",
+            manifestVersion: 2,
+            updatedAtUtc: 6_000);
 
         AssertEx.True(result.Applied);
         AssertEx.Equal(updating.Sequence, result.Sequence, "The commit mints no sequence; it reports the watermark as it stands.");
@@ -584,15 +584,15 @@ public sealed class ExternalAppInstanceStoreTests
         var created = await store.CreateAsync(doomed);
         _ = await store.CreateAsync(survivor);
         _ = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(doomed.Id,
-                           created.Version,
-                           ExternalAppInstanceStatus.Uninstalling,
-                           ExternalAppInstanceStatus.Installing,
-                           ExternalAppInstanceEventKind.UninstallRequested));
+            created.Version,
+            ExternalAppInstanceStatus.Uninstalling,
+            ExternalAppInstanceStatus.Installing,
+            ExternalAppInstanceEventKind.UninstallRequested));
         var version = AssertEx.NotNull(await store.GetAsync(doomed.Id)).Version;
 
         AssertEx.Equal(version,
             Convert.ToInt64(await fixture.RawScalarAsync("SELECT version FROM external_app_instances WHERE id = $id;",
-                                             sqlCommand => sqlCommand.Parameters.AddWithValue("$id", doomed.Id)),
+                    sqlCommand => sqlCommand.Parameters.AddWithValue("$id", doomed.Id)),
                 CultureInfo.InvariantCulture),
             "The CAS compares against the number the file holds, not the one the change tracker remembers.");
 
@@ -605,7 +605,7 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Null(await store.GetAsync(doomed.Id));
         AssertEx.Equal(expected: 0L,
             Convert.ToInt64(await fixture.RawScalarAsync("SELECT COUNT(*) FROM external_app_instance_events WHERE instance_id = $id;",
-                                             sqlCommand => sqlCommand.Parameters.AddWithValue("$id", doomed.Id)),
+                    sqlCommand => sqlCommand.Parameters.AddWithValue("$id", doomed.Id)),
                 CultureInfo.InvariantCulture),
             "Cascades never fire on this connection, so the events must be deleted explicitly or they are orphaned forever.");
 
@@ -646,7 +646,7 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Empty(await store.ListEventsAsync(command.Id, secondPage[^1].Sequence, limit: 2));
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => store.ListEventsAsync(command.Id, afterSequence: 0, limit: 0),
-                              "A non-positive limit is a caller bug, not an empty page.");
+            "A non-positive limit is a caller bug, not an empty page.");
     }
 
     [Test]
@@ -664,9 +664,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = created.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            ExternalAppInstanceStatus.Installing
-                                        },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Failed,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = oversized,
@@ -687,9 +687,9 @@ public sealed class ExternalAppInstanceStoreTests
             InstanceId = command.Id,
             ExpectedVersion = created.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            ExternalAppInstanceStatus.Installing
-                                        },
+            {
+                ExternalAppInstanceStatus.Installing
+            },
             NewStatus = ExternalAppInstanceStatus.Failed,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = new string('x', count: 4096),

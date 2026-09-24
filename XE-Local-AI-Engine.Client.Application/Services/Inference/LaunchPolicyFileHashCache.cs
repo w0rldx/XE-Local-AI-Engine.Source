@@ -58,7 +58,11 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
                     continue;
                 }
 
-                _entries[normalizedPath] = new CacheEntry { Stamp = after, Sha256 = sha256 };
+                _entries[normalizedPath] = new CacheEntry
+                {
+                    Stamp = after,
+                    Sha256 = sha256
+                };
                 return sha256;
             }
         }

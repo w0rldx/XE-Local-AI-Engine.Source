@@ -40,22 +40,22 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint : Endpoint<UpdateBenc
     {
         ArgumentNullException.ThrowIfNull(req);
         var change = await _projects.UpdateFidelityAsync(req.ProjectId,
-                                        req.ExpectedVersion,
-                                        new BenchmarkProjectFidelitySettings
-                                        {
-                                            Enabled = req.FidelityEnabled,
-                                            KldEnabled = req.FidelityKldEnabled,
-                                            Chunks = req.FidelityChunks,
-                                            KldBaseModelName = req.FidelityKldBaseModelName
-                                        },
-                                        req.MeasureExisting,
-                                        ct);
+            req.ExpectedVersion,
+            new BenchmarkProjectFidelitySettings
+            {
+                Enabled = req.FidelityEnabled,
+                KldEnabled = req.FidelityKldEnabled,
+                Chunks = req.FidelityChunks,
+                KldBaseModelName = req.FidelityKldBaseModelName
+            },
+            req.MeasureExisting,
+            ct);
         var runCount = await _records.CountRunsAsync(req.ProjectId, ct);
         await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
-                  {
-                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct),
-                      EnqueuedRunIds = change.EnqueuedRunIds,
-                      EnqueuedCount = change.EnqueuedRunIds.Count
-                  }, ct);
+        {
+            Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct),
+            EnqueuedRunIds = change.EnqueuedRunIds,
+            EnqueuedCount = change.EnqueuedRunIds.Count
+        }, ct);
     }
 }

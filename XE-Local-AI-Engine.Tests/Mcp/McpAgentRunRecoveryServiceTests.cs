@@ -97,9 +97,19 @@ public sealed class McpAgentRunRecoveryServiceTests
         public Harness()
         {
             _ = Store.VerifyLedgerAsync(Arg.Any<CancellationToken>())
-                     .Returns(new McpAgentRunLedgerVerification { IsConsistent = true, Persisted = Counters, Reconstructed = Counters });
+                     .Returns(new McpAgentRunLedgerVerification
+                     {
+                         IsConsistent = true,
+                         Persisted = Counters,
+                         Reconstructed = Counters
+                     });
             _ = Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
-                     .Returns(new McpAgentRunLedgerSnapshot { QueueDepth = 0, RunningCount = 0, Counters = Counters });
+                     .Returns(new McpAgentRunLedgerSnapshot
+                     {
+                         QueueDepth = 0,
+                         RunningCount = 0,
+                         Counters = Counters
+                     });
             _ = Store.ReconcileInterruptedRunsAsync(Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(0);
 
             var services = new ServiceCollection();

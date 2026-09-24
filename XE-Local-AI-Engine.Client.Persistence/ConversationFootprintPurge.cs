@@ -66,8 +66,8 @@ public static class ConversationFootprintPurge
         // A work session owns its conversation, so purging it takes the session and its whole subtree. Only agent_work_sessions carries conversation_id, so the five
         // child tables resolve through a subselect on it and must go FIRST. Why, and what the caller still owes: docs/wiki/08-data-and-persistence.md.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_events WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
-                           [conversationId],
-                           cancellationToken);
+            [conversationId],
+            cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM agent_work_session_checkpoints WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
@@ -81,8 +81,8 @@ public static class ConversationFootprintPurge
                            [conversationId],
                            cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_tasks WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
-                           [conversationId],
-                           cancellationToken);
+            [conversationId],
+            cancellationToken);
 
         // An integration session owns its conversation on the same terms, so the two descendant tables resolve through a subselect on integration_sessions and must
         // go FIRST. integration_triggers and integration_api_keys are node-scoped and are correctly untouched by a conversation purge.

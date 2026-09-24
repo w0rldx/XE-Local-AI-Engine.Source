@@ -93,7 +93,13 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         var normalizedExtension = NormalizeExtension(extension);
         if (!_readersByExtension.TryGetValue(normalizedExtension, out var reader))
         {
-            return new DocumentExtractionResult { Status = DocumentExtractionStatus.Unsupported, Markdown = null, ExtractedChars = null, Error = null };
+            return new DocumentExtractionResult
+            {
+                Status = DocumentExtractionStatus.Unsupported,
+                Markdown = null,
+                ExtractedChars = null,
+                Error = null
+            };
         }
 
         try
@@ -107,11 +113,23 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             if (expansionReason is not null)
             {
                 _logger.LogWarning("Document extraction rejected a {Extension} upload: {Reason}", normalizedExtension, expansionReason);
-                return new DocumentExtractionResult { Status = DocumentExtractionStatus.Failed, Markdown = null, ExtractedChars = null, Error = expansionReason };
+                return new DocumentExtractionResult
+                {
+                    Status = DocumentExtractionStatus.Failed,
+                    Markdown = null,
+                    ExtractedChars = null,
+                    Error = expansionReason
+                };
             }
 
             var markdown = Truncate(serialized);
-            return new DocumentExtractionResult { Status = DocumentExtractionStatus.Extracted, Markdown = markdown, ExtractedChars = markdown.Length, Error = null };
+            return new DocumentExtractionResult
+            {
+                Status = DocumentExtractionStatus.Extracted,
+                Markdown = markdown,
+                ExtractedChars = markdown.Length,
+                Error = null
+            };
         }
         catch (OperationCanceledException)
         {
@@ -121,7 +139,13 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         {
             // Rejected up front by the pre-parse preflight; the message is content-free and safe to surface.
             _logger.LogWarning("Document extraction rejected a {Extension} upload at preflight: {Reason}", normalizedExtension, rejected.Message);
-            return new DocumentExtractionResult { Status = DocumentExtractionStatus.Failed, Markdown = null, ExtractedChars = null, Error = rejected.Message };
+            return new DocumentExtractionResult
+            {
+                Status = DocumentExtractionStatus.Failed,
+                Markdown = null,
+                ExtractedChars = null,
+                Error = rejected.Message
+            };
         }
         catch (Exception exception)
         {
@@ -144,7 +168,12 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         var normalizedExtension = NormalizeExtension(extension);
         if (!_readersByExtension.TryGetValue(normalizedExtension, out var reader))
         {
-            return new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Unsupported, Document = null, Error = null };
+            return new DocumentStructuredExtractionResult
+            {
+                Status = DocumentExtractionStatus.Unsupported,
+                Document = null,
+                Error = null
+            };
         }
 
         try
@@ -158,10 +187,20 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             if (boundsReason is not null)
             {
                 _logger.LogWarning("Structured document extraction rejected a {Extension} upload: {Reason}", normalizedExtension, boundsReason);
-                return new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Failed, Document = null, Error = boundsReason };
+                return new DocumentStructuredExtractionResult
+                {
+                    Status = DocumentExtractionStatus.Failed,
+                    Document = null,
+                    Error = boundsReason
+                };
             }
 
-            return new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Extracted, Document = document, Error = null };
+            return new DocumentStructuredExtractionResult
+            {
+                Status = DocumentExtractionStatus.Extracted,
+                Document = document,
+                Error = null
+            };
         }
         catch (OperationCanceledException)
         {
@@ -171,7 +210,12 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         {
             // Rejected up front by the pre-parse preflight; the message is content-free and safe to surface.
             _logger.LogWarning("Structured document extraction rejected a {Extension} upload at preflight: {Reason}", normalizedExtension, rejected.Message);
-            return new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Failed, Document = null, Error = rejected.Message };
+            return new DocumentStructuredExtractionResult
+            {
+                Status = DocumentExtractionStatus.Failed,
+                Document = null,
+                Error = rejected.Message
+            };
         }
         catch (Exception exception)
         {

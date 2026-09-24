@@ -58,8 +58,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
     private readonly IStructuredAgentRunner _runner;
     private readonly ITrainingDatasetStore _store;
 
-    public DatasetGenerationExecutor(
-        ITrainingDatasetStore store,
+    public DatasetGenerationExecutor(ITrainingDatasetStore store,
         IStructuredAgentRunner runner,
         ISampleValidationPipeline pipeline,
         ILocalModelProviderResolver providerResolver,
@@ -92,7 +91,10 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         try
         {
             await GenerateAsync(work, generationToken);
-            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Ready) });
+            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+            {
+                State = nameof(TrainingDatasetStatus.Ready)
+            });
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken);
         }
         catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
@@ -111,7 +113,11 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             _logger.LogError(exception, "Dataset generation failed for dataset {DatasetId}.", work.DatasetId);
             var reason = exception is TrainingStoreException ? exception.Message : "Dataset generation failed.";
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
-                new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Failed), Reason = reason });
+                new DatasetGenerationPayload
+                {
+                    State = nameof(TrainingDatasetStatus.Failed),
+                    Reason = reason
+                });
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None);
         }
         finally
@@ -142,7 +148,10 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         using var criticClient = await CreateCriticClientAsync(definition, cancellationToken);
 
         var systemInstructions = ComposeSystemInstructions(definition);
-        _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Generating) });
+        _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+        {
+            State = nameof(TrainingDatasetStatus.Generating)
+        });
 
         for (var index = 0; index < plan.Count; index++)
         {
@@ -169,8 +178,15 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             }
 
             var outcome = await _pipeline.ValidateAsync(completion.Text,
-                                             new SampleValidationContext { Definition = definition, Kind = target.Kind, RequestedLabel = target.Label, RecordSchema = RecordSchema, CriticChatClient = criticClient },
-                                             cancellationToken);
+                new SampleValidationContext
+                {
+                    Definition = definition,
+                    Kind = target.Kind,
+                    RequestedLabel = target.Label,
+                    RecordSchema = RecordSchema,
+                    CriticChatClient = criticClient
+                },
+                cancellationToken);
             if (!outcome.Accepted || outcome.Content is null)
             {
                 await RejectAsync(work.DatasetId, outcome.RejectionReason, cancellationToken);
@@ -179,16 +195,16 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 
             var contentJson = JsonSerializer.SerializeToUtf8Bytes(outcome.Content, TrainingJson.Options);
             var append = await _store.AppendSampleAsync(new TrainingSampleInput
-            {
-                DatasetId = work.DatasetId,
-                Kind = target.Kind,
-                Label = outcome.Label,
-                ContentJson = contentJson,
-                ValidationJson = JsonSerializer.SerializeToUtf8Bytes(outcome.Validation, TrainingJson.Options),
-                Provenance = TrainingSampleProvenance.Generated,
-                SourceHash = SourceHash(contentJson)
-            },
-                                         cancellationToken);
+                {
+                    DatasetId = work.DatasetId,
+                    Kind = target.Kind,
+                    Label = outcome.Label,
+                    ContentJson = contentJson,
+                    ValidationJson = JsonSerializer.SerializeToUtf8Bytes(outcome.Validation, TrainingJson.Options),
+                    Provenance = TrainingSampleProvenance.Generated,
+                    SourceHash = SourceHash(contentJson)
+                },
+                cancellationToken);
 
             _ = _events.Append(work.DatasetId,
                 append.Duplicate ? DatasetGenerationEventKind.Rejected : DatasetGenerationEventKind.SampleAdded,
@@ -206,7 +222,10 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
     private async Task RejectAsync(Guid datasetId, string? reason, CancellationToken cancellationToken)
     {
         await _store.RecordRejectedSampleAsync(datasetId, cancellationToken);
-        _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload { Reason = reason });
+        _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload
+        {
+            Reason = reason
+        });
         // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would not, so
         // log it (invariant: fail-visible, never fail-silent). Reasons are validator/transport messages, never sample content.
         _logger.LogInformation("Dataset {DatasetId} rejected a generated sample: {Reason}", datasetId, reason ?? "(no reason recorded)");

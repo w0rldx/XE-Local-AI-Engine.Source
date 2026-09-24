@@ -55,7 +55,13 @@ public sealed class CreateDevWorkflowDefinitionEndpoint : Endpoint<CreateDevWork
 
         var graphJson = DevWorkflowContractMapper.ToGraphJson(req.Graph);
         var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
-        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = req.Name, GraphJson = graphJson, NodeCount = nodeCount }, ct);
+        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = req.Name,
+            GraphJson = graphJson,
+            NodeCount = nodeCount
+        }, ct);
         await Send.CreatedAtAsync<GetDevWorkflowDefinitionEndpoint>(new
             {
                 definitionId = created.Id

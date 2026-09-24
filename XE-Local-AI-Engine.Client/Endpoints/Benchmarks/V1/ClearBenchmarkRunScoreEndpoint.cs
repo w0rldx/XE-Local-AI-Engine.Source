@@ -29,6 +29,6 @@ public sealed class ClearBenchmarkRunScoreEndpoint : Endpoint<ClearBenchmarkRunS
     {
         var run = await _records.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

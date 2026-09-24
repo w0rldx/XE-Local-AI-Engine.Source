@@ -22,5 +22,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 internal sealed class E2EAlwaysAdmitCapacityService : ICapacityService
 {
     public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
-        Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false });
+        Task.FromResult(new CapacityDecision
+        {
+            Verdict = CapacityVerdict.Allow,
+            Reason = "Capacity available.",
+            OllamaEvictionWarning = false
+        });
 }

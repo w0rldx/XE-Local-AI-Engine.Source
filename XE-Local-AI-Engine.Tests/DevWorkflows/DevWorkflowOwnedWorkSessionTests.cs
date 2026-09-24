@@ -59,7 +59,11 @@ public sealed class DevWorkflowOwnedWorkSessionTests
         // Forces the singleton factory to run: nothing has sent a turn yet, so the field is still null.
         _ = factory.Services.GetRequiredService<INodeChatStreamService>();
         var fake = AssertEx.NotNull(stream, "the fake stream service must be resolved before the loop takes a step.");
-        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => DeclareCompleteAsync(services, sessionId) });
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (services, _) => DeclareCompleteAsync(services, sessionId)
+        });
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -90,13 +94,13 @@ public sealed class DevWorkflowOwnedWorkSessionTests
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() => verb switch
-                                    {
-                                        "start" => service.StartAsync(sessionId),
-                                        "pause" => service.PauseAsync(sessionId),
-                                        "resume" => service.ResumeAsync(sessionId),
-                                        "cancel" => service.CancelAsync(sessionId),
-                                        _ => service.DeleteAsync(sessionId)
-                                    });
+        {
+            "start" => service.StartAsync(sessionId),
+            "pause" => service.PauseAsync(sessionId),
+            "resume" => service.ResumeAsync(sessionId),
+            "cancel" => service.CancelAsync(sessionId),
+            _ => service.DeleteAsync(sessionId)
+        });
 
         AssertEx.Contains(refusal.Message, "development workflow run");
 
@@ -114,7 +118,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                                        scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId));
+            scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId));
 
         AssertEx.Contains(refusal.Message, "belongs to no development workflow run");
     }

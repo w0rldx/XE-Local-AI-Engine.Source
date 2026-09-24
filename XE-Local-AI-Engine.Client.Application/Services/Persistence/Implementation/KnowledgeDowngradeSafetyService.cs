@@ -42,7 +42,15 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         await connection.OpenAsync(cancellationToken);
         if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
-            return new KnowledgeDowngradePreflightResult { CollectionMigrationApplied = false, IsCompatible = true, ConflictGroupCount = 0, ConflictingDocumentCount = 0, MinimumDocumentsToRemove = 0, Conflicts = [] };
+            return new KnowledgeDowngradePreflightResult
+            {
+                CollectionMigrationApplied = false,
+                IsCompatible = true,
+                ConflictGroupCount = 0,
+                ConflictingDocumentCount = 0,
+                MinimumDocumentsToRemove = 0,
+                Conflicts = []
+            };
         }
 
         return await ReadConflictsAsync(connection, cancellationToken);
@@ -73,7 +81,13 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
             var preflight = await PreflightArtifactAsync(destinationPath, cancellationToken);
             var bytes = new FileInfo(destinationPath).Length;
             var sha256 = await HashFileAsync(destinationPath, cancellationToken);
-            return new KnowledgeDowngradeExportResult { ArtifactPath = destinationPath, ArtifactBytes = bytes, ArtifactSha256 = sha256, Preflight = preflight };
+            return new KnowledgeDowngradeExportResult
+            {
+                ArtifactPath = destinationPath,
+                ArtifactBytes = bytes,
+                ArtifactSha256 = sha256,
+                Preflight = preflight
+            };
         }
         catch
         {
@@ -89,7 +103,15 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         await connection.OpenAsync(cancellationToken);
         if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
-            return new KnowledgeDowngradePreflightResult { CollectionMigrationApplied = false, IsCompatible = true, ConflictGroupCount = 0, ConflictingDocumentCount = 0, MinimumDocumentsToRemove = 0, Conflicts = [] };
+            return new KnowledgeDowngradePreflightResult
+            {
+                CollectionMigrationApplied = false,
+                IsCompatible = true,
+                ConflictGroupCount = 0,
+                ConflictingDocumentCount = 0,
+                MinimumDocumentsToRemove = 0,
+                Conflicts = []
+            };
         }
 
         return await ReadConflictsAsync(connection, cancellationToken);
@@ -166,7 +188,11 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
     private static void AddConflict(List<KnowledgeDowngradeConflict> groups, IReadOnlyList<string> documentIdentifiers)
     {
         var conflictId = string.Create(CultureInfo.InvariantCulture, $"conflict-{groups.Count + 1:D6}");
-        groups.Add(new KnowledgeDowngradeConflict { ConflictId = conflictId, DocumentIdentifiers = documentIdentifiers });
+        groups.Add(new KnowledgeDowngradeConflict
+        {
+            ConflictId = conflictId,
+            DocumentIdentifiers = documentIdentifiers
+        });
     }
 
     private static string ToOpaqueDocumentIdentifier(string documentId)

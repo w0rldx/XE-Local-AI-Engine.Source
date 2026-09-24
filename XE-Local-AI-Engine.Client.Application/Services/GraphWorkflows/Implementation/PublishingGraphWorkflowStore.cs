@@ -17,8 +17,7 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     private readonly ILogger<PublishingGraphWorkflowStore> _logger;
     private readonly IGraphWorkflowEventPublisher _publisher;
 
-    public PublishingGraphWorkflowStore(
-        IGraphWorkflowStore inner,
+    public PublishingGraphWorkflowStore(IGraphWorkflowStore inner,
         IGraphWorkflowEventPublisher publisher,
         ILogger<PublishingGraphWorkflowStore> logger)
     {

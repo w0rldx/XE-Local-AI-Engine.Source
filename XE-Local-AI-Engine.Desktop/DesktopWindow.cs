@@ -66,11 +66,11 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private async void OnAdapterCreated(object? sender, WebViewAdapterEventArgs args)
     {
         if (!OperatingSystem.IsLinux() || _disposed) { return; }
+
         try
         {
             _linuxInitialization = GtkDesktopBridge.CreateAsync(args.TryGetPlatformHandle(), _options.Origin, _webView, this);
             _linux = await _linuxInitialization;
-
         }
         catch (Exception exception) { _ready.TrySetException(exception); }
     }
@@ -80,6 +80,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (_disposed) { return; }
+
         _disposed = true;
         var linux = _linux;
         if (linux is null && _linuxInitialization is not null)
@@ -100,10 +101,11 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     internal async Task<string?> ReadLanguageAsync(CancellationToken cancellationToken)
     {
         if (_disposed) { return null; }
+
         try
         {
             return await _webView.InvokeScript("localStorage.getItem('i18nextLng')")
-                .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
+                                 .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
         }
         catch (Exception) { return null; }
     }
@@ -123,6 +125,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
             try { await _linux.RevokeForBlockedNavigationAsync(); }
             catch (Exception exception) { _ready.TrySetException(exception); }
         }
+
         if (disposition == NavigationDisposition.External)
         {
             await OpenExternalAsync(args.Request!);
@@ -138,12 +141,14 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         }
 
         if (DesktopLaunchOptions.ClassifyNavigation(_options.Origin, args.Request) != NavigationDisposition.SameOrigin || _disposed) { return; }
+
         try
         {
             if (OperatingSystem.IsLinux())
             {
                 var linux = _linux ?? (_linuxInitialization is null ? null : await _linuxInitialization);
                 if (linux is null) { throw new PlatformNotSupportedException("The GTK adapter is required."); }
+
                 await linux.ArmAsync();
             }
 

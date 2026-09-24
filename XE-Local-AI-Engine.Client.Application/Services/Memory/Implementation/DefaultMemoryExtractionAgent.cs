@@ -25,8 +25,7 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public DefaultMemoryExtractionAgent(
-        ILocalModelProviderResolver providerResolver,
+    public DefaultMemoryExtractionAgent(ILocalModelProviderResolver providerResolver,
         IOptions<MemoryExtractionOptions> options,
         ILogger<DefaultMemoryExtractionAgent> logger)
     {
@@ -72,7 +71,7 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         };
 
         var response = await chatClient
-                             .GetResponseAsync<ExtractionEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
+            .GetResponseAsync<ExtractionEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var envelope) || envelope?.Memories is null)
         {

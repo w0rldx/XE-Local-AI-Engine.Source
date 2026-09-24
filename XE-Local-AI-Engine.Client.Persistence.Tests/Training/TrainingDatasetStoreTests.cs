@@ -43,7 +43,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
         var store = new TrainingDatasetStore(context, TimeProvider.System);
         var definition = await store.CreateDefinitionAsync(Definition("pinned"));
 
-        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         AssertEx.Equal(BodyOf("pinned"), PinnedBody(dataset), "A new dataset pins its definition body.");
 
         // The edit bumps DefinitionVersion; the dataset keeps both the version it claims AND the body that version named.
@@ -70,7 +75,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
         {
             var store = new TrainingDatasetStore(setup, TimeProvider.System);
             var definition = await store.CreateDefinitionAsync(Definition("queue"));
-            var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+            var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+            {
+                DefinitionId = definition.Id,
+                ExpectedDefinitionVersion = definition.Version,
+                Name = "dataset"
+            });
             datasetId = dataset.Id;
 
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync(), "The queued work item should be claimable.");
@@ -101,7 +111,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
         await using var context = await CreateDatabaseAsync("delete-guard.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
         var definition = await store.CreateDefinitionAsync(Definition("guard"));
-        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
 
         var queued = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.DeleteDatasetAsync(dataset.Id, dataset.Version));
         AssertEx.Equal("GenerationActive", queued.Code);
@@ -124,7 +139,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
         {
             var store = new TrainingDatasetStore(setup, TimeProvider.System);
             var definition = await store.CreateDefinitionAsync(Definition("delete"));
-            var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+            var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+            {
+                DefinitionId = definition.Id,
+                ExpectedDefinitionVersion = definition.Version,
+                Name = "dataset"
+            });
             datasetId = dataset.Id;
             _ = AssertEx.NotNull(await store.ClaimNextAsync());
             _ = await store.AppendSampleAsync(Sample(datasetId, "hash-a"));
@@ -171,7 +191,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
         AssertEx.True(fingerprint.StartsWith("v1:", StringComparison.Ordinal), "The fingerprint carries its algorithm tag.");
         AssertEx.Equal(expected: 64, fingerprint["v1:".Length..].Length);
 
-        var relabelled = await store.ReviewSampleAsync(new TrainingSampleReviewCommand { SampleId = appended.Id, Verb = TrainingSampleReviewVerb.Relabel, Label = TrainingSampleLabel.Bad });
+        var relabelled = await store.ReviewSampleAsync(new TrainingSampleReviewCommand
+        {
+            SampleId = appended.Id,
+            Verb = TrainingSampleReviewVerb.Relabel,
+            Label = TrainingSampleLabel.Bad
+        });
         AssertEx.Equal(TrainingSampleLabel.Bad, relabelled.Label);
 
         var mutated = AssertEx.NotNull(await store.GetDatasetAsync(datasetId));
@@ -187,7 +212,12 @@ public sealed class TrainingDatasetStoreTests : IDisposable
     {
         await using var context = await CreateDatabaseAsync("mock.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
-        var mock = await store.CreateMockAsync(new ToolMockInput { ToolName = "read_file", MockJson = Encoding.UTF8.GetBytes("{}"), Enabled = true });
+        var mock = await store.CreateMockAsync(new ToolMockInput
+        {
+            ToolName = "read_file",
+            MockJson = Encoding.UTF8.GetBytes("{}"),
+            Enabled = true
+        });
         AssertEx.Equal(ToolMockVerificationState.Unverified, mock.VerificationState);
         AssertEx.Empty(await store.ListUsableMocksAsync("read_file"));
 
@@ -204,13 +234,23 @@ public sealed class TrainingDatasetStoreTests : IDisposable
     private static async Task<Guid> StartDatasetAsync(TrainingDatasetStore store)
     {
         var definition = await store.CreateDefinitionAsync(Definition("dataset"));
-        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await store.ClaimNextAsync();
         return dataset.Id;
     }
 
     private static TrainingDefinitionInput Definition(string name) =>
-        new() { Name = name, Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes(BodyOf(name)) };
+        new()
+        {
+            Name = name,
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes(BodyOf(name))
+        };
 
     private static string PinnedBody(TrainingDatasetRecord dataset)
     {

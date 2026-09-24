@@ -41,7 +41,12 @@ public sealed class DevelopmentProfileSummary
         try
         {
             var profile = DevelopmentCommandProfile.FromCanonicalJson(storedCommandProfileJson);
-            return new DevelopmentProfileSummary { ProfileId = profile.ProfileId, BuildTarget = profile.BuildTarget, Digest = profile.ComputeDigest() };
+            return new DevelopmentProfileSummary
+            {
+                ProfileId = profile.ProfileId,
+                BuildTarget = profile.BuildTarget,
+                Digest = profile.ComputeDigest()
+            };
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
                                               or JsonException

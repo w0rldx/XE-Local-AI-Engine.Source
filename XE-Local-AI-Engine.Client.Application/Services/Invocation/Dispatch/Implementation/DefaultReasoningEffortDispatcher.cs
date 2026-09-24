@@ -45,8 +45,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
     private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly ILlamaServerProcessSupervisor _processSupervisor;
 
-    public DefaultReasoningEffortDispatcher(
-        IModelTrustResolver modelTrustResolver,
+    public DefaultReasoningEffortDispatcher(IModelTrustResolver modelTrustResolver,
         INodeRuntimeSettings nodeRuntimeSettings,
         ILocalModelProviderResolver localModelProviderResolver,
         ICapacityService capacityService,
@@ -234,12 +233,16 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
             // Enforcement point 2 of the node-locality gate, the SAME predicate the save ran, re-run because a model
             // can be uninstalled or re-declared since. An uninstalled fast model degrades HERE, by name, not at warm.
             if (!await NodeLocalModelGate
-                       .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
+                    .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelNotLocal);
             }
 
-            var capacity = await _capacityService.DecideAsync(new CapacityRequest { ModelName = fastModel, Role = ModelRole.Chat }, cancellationToken);
+            var capacity = await _capacityService.DecideAsync(new CapacityRequest
+            {
+                ModelName = fastModel,
+                Role = ModelRole.Chat
+            }, cancellationToken);
             return capacity.Verdict switch
             {
                 // A fresh launch was admitted, so no process for the fast key exists to be profiling-owned. The

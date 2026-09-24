@@ -167,7 +167,12 @@ public sealed class TrainingRunStoreTests : IDisposable
         var store = new TrainingRunStore(context, TimeProvider.System);
         var run = await store.CreateAndEnqueueAsync(Command(fixture));
 
-        var staged = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = run.Id, Kind = TrainingArtifactKind.AdapterGguf, Path = "adapter.gguf" });
+        var staged = await store.CreateArtifactAsync(new TrainingArtifactInput
+        {
+            RunId = run.Id,
+            Kind = TrainingArtifactKind.AdapterGguf,
+            Path = "adapter.gguf"
+        });
         AssertEx.Equal(TrainingArtifactSmokeState.Pending, staged.SmokeState);
         AssertEx.Null(staged.Sha256, "A freshly staged artifact has not been hashed yet.");
 
@@ -205,8 +210,18 @@ public sealed class TrainingRunStoreTests : IDisposable
 
             _ = AssertEx.NotNull(await store.ClaimNextAsync());
             // A second artifact stays staged, so the run delete has a child to remove explicitly.
-            _ = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = TrainingArtifactKind.HfAdapterDir, Path = "adapter/" });
-            var staged = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = TrainingArtifactKind.MergedGguf, Path = "merged.gguf" });
+            _ = await store.CreateArtifactAsync(new TrainingArtifactInput
+            {
+                RunId = runId,
+                Kind = TrainingArtifactKind.HfAdapterDir,
+                Path = "adapter/"
+            });
+            var staged = await store.CreateArtifactAsync(new TrainingArtifactInput
+            {
+                RunId = runId,
+                Kind = TrainingArtifactKind.MergedGguf,
+                Path = "merged.gguf"
+            });
             var passed = await store.SetArtifactSmokeStateAsync(staged.Id, staged.Version, TrainingArtifactSmokeState.Passed, reason: null);
             var promoted = await store.SetArtifactCommittedNameAsync(passed.Id, passed.Version, "merged-model");
             var done = await store.CompleteRunAsync(runId, TrainingWorkStatus.Succeeded, errorMessage: null);
@@ -265,8 +280,18 @@ public sealed class TrainingRunStoreTests : IDisposable
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
-        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
+        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")
+        });
+        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = "dataset"
+        });
         _ = await datasetStore.ClaimNextAsync();
         _ = await datasetStore.AppendSampleAsync(new TrainingSampleInput
         {

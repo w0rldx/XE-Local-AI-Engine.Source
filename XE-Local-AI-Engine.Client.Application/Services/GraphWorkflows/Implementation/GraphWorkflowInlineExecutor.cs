@@ -58,14 +58,14 @@ internal sealed class GraphWorkflowInlineExecutor
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Running,
-            InputJson = inputJson
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Running,
+                InputJson = inputJson
+            },
+            cancellationToken);
 
         string document;
         try
@@ -82,27 +82,27 @@ internal sealed class GraphWorkflowInlineExecutor
             // Not retryable, and deliberately: the same rows compose the same bytes next time. A pass-through chain is
             // where this earns its keep — every hop re-measures the document it is carrying forward.
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-            {
-                RunId = run.Id,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = GraphWorkflowVersions.Any,
-                TargetStatus = GraphWorkflowNodeRunStatus.Failed,
-                FailureClass = GraphWorkflowFailureClass.OutputTooLarge,
-                TerminalReason = exception.Message
-            },
-                               cancellationToken);
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+                    FailureClass = GraphWorkflowFailureClass.OutputTooLarge,
+                    TerminalReason = exception.Message
+                },
+                cancellationToken);
             return 2;
         }
 
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
-        {
-            RunId = run.Id,
-            NodeRunId = nodeRun.Id,
-            ExpectedVersion = GraphWorkflowVersions.Any,
-            TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
-            OutputJson = document
-        },
-                           cancellationToken);
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
+                OutputJson = document
+            },
+            cancellationToken);
         return 2;
     }
 
@@ -172,6 +172,10 @@ internal sealed class GraphWorkflowInlineExecutor
                 .Order(StringComparer.Ordinal)
                 // A satisfied edge means a succeeded source, so the document is there; the fallback is what an
                 // executor that wrote no output would leave, and the composer reads an empty string as a JSON null.
-                .Select(key => new GraphWorkflowUpstreamDocument { NodeKey = key, OutputDocumentJson = byKey[key].OutputJson ?? string.Empty })
+                .Select(key => new GraphWorkflowUpstreamDocument
+                {
+                    NodeKey = key,
+                    OutputDocumentJson = byKey[key].OutputJson ?? string.Empty
+                })
     ];
 }

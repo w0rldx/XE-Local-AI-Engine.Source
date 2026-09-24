@@ -56,7 +56,12 @@ public sealed class SampleValidationPipelineTests
     {
         var pipeline = Create(out var executor);
         _ = executor.ExecuteAsync("read_file", Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                    .Returns(new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Executed, Result = "# Title", Reason = "read-local" });
+                    .Returns(new HeadlessToolOutcome
+                    {
+                        Kind = HeadlessToolOutcomeKind.Executed,
+                        Result = "# Title",
+                        Reason = "read-local"
+                    });
 
         var outcome = await pipeline.ValidateAsync("""{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
             Context());
@@ -79,7 +84,12 @@ public sealed class SampleValidationPipelineTests
     {
         var pipeline = Create(out var executor);
         _ = executor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                    .Returns(new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.ValidationOnly, Result = null, Reason = "not-read-local; no mock matched" });
+                    .Returns(new HeadlessToolOutcome
+                    {
+                        Kind = HeadlessToolOutcomeKind.ValidationOnly,
+                        Result = null,
+                        Reason = "not-read-local; no mock matched"
+                    });
 
         var outcome = await pipeline.ValidateAsync("""{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
             Context());
@@ -158,7 +168,12 @@ public sealed class SampleValidationPipelineTests
     {
         executor = Substitute.For<IHeadlessToolExecutor>();
         _ = executor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                    .Returns(new HeadlessToolOutcome { Kind = HeadlessToolOutcomeKind.Executed, Result = "ok", Reason = "read-local" });
+                    .Returns(new HeadlessToolOutcome
+                    {
+                        Kind = HeadlessToolOutcomeKind.Executed,
+                        Result = "ok",
+                        Reason = "read-local"
+                    });
         return new SampleValidationPipeline(executor, Substitute.For<IStructuredAgentRunner>());
     }
 
@@ -166,12 +181,12 @@ public sealed class SampleValidationPipelineTests
         new()
         {
             Definition = new DatasetDefinitionBodyV1
-        {
-            TeacherModelName = "teacher.gguf",
-            TeacherOutputMode = TeacherOutputMode.ValidateAfter,
-            SystemInstructions = "produce examples",
-            Tools = [new DatasetToolSnapshotV1("read_file", "Reads a file.", ToolSchema, RequiresApproval: false, ToolCategory.ReadLocal)]
-        },
+            {
+                TeacherModelName = "teacher.gguf",
+                TeacherOutputMode = TeacherOutputMode.ValidateAfter,
+                SystemInstructions = "produce examples",
+                Tools = [new DatasetToolSnapshotV1("read_file", "Reads a file.", ToolSchema, RequiresApproval: false, ToolCategory.ReadLocal)]
+            },
             Kind = "tool-call",
             RequestedLabel = TrainingSampleLabel.Good,
             RecordSchema = RecordSchema,

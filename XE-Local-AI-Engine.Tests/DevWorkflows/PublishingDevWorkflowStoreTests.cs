@@ -88,13 +88,23 @@ public sealed class PublishingDevWorkflowStoreTests
         {
             Method = nameof(IDevWorkflowStore.TransitionRunAsync),
             Kind = DevWorkflowChangeKind.Run,
-            Invoke = store => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Running })
+            Invoke = store => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+            {
+                RunId = RunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowRunStatus.Running
+            })
         },
         new()
         {
             Method = nameof(IDevWorkflowStore.AppendEventAsync),
             Kind = DevWorkflowChangeKind.Run,
-            Invoke = store => store.AppendEventAsync(new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeInterrupted })
+            Invoke = store => store.AppendEventAsync(new AppendDevWorkflowEventCommand
+            {
+                RunId = RunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.NodeInterrupted
+            })
         },
         new()
         {
@@ -105,7 +115,15 @@ public sealed class PublishingDevWorkflowStoreTests
                 RunId = RunId,
                 ExpectedVersion = DevWorkflowVersions.Any,
                 OperationId = Guid.NewGuid(),
-                NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = NodeRunId, NodeKey = "research", NodeType = DevWorkflowNodeType.Agent }]
+                NodeRuns =
+                [
+                    new DevWorkflowNodeRunSeed
+                    {
+                        NodeRunId = NodeRunId,
+                        NodeKey = "research",
+                        NodeType = DevWorkflowNodeType.Agent
+                    }
+                ]
             })
         },
         new()
@@ -132,7 +150,13 @@ public sealed class PublishingDevWorkflowStoreTests
             Kind = DevWorkflowChangeKind.Node,
             Invoke = store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand
             {
-                Route = new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeRetryRouted, NodeRunId = NodeRunId },
+                Route = new AppendDevWorkflowEventCommand
+                {
+                    RunId = RunId,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                    NodeRunId = NodeRunId
+                },
                 Resets = [NodeRunTransition(DevWorkflowNodeRunStatus.Pending)]
             })
         },
@@ -140,7 +164,13 @@ public sealed class PublishingDevWorkflowStoreTests
         {
             Method = nameof(IDevWorkflowStore.AttachWorkSessionAsync),
             Kind = DevWorkflowChangeKind.Node,
-            Invoke = store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = DevWorkflowVersions.Any, WorkSessionId = Guid.NewGuid() })
+            Invoke = store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+            {
+                RunId = RunId,
+                NodeRunId = NodeRunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                WorkSessionId = Guid.NewGuid()
+            })
         },
         new()
         {
@@ -178,7 +208,13 @@ public sealed class PublishingDevWorkflowStoreTests
         {
             Method = nameof(IDevWorkflowStore.MarkDependentsStaleAsync),
             Kind = DevWorkflowChangeKind.Artifact,
-            Invoke = store => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = RunId, SupersededArtifactId = Guid.NewGuid(), SupersedingArtifactId = Guid.NewGuid(), ExpectedVersion = DevWorkflowVersions.Any })
+            Invoke = store => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
+            {
+                RunId = RunId,
+                SupersededArtifactId = Guid.NewGuid(),
+                SupersedingArtifactId = Guid.NewGuid(),
+                ExpectedVersion = DevWorkflowVersions.Any
+            })
         },
         new()
         {
@@ -219,7 +255,13 @@ public sealed class PublishingDevWorkflowStoreTests
         const int resets = 10;
         var route = new RouteDevWorkflowRetryCommand
         {
-            Route = new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeRetryRouted, NodeRunId = NodeRunId },
+            Route = new AppendDevWorkflowEventCommand
+            {
+                RunId = RunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                NodeRunId = NodeRunId
+            },
             Resets = [.. Enumerable.Range(0, resets).Select(static _ => ReAttempt())]
         };
 
@@ -286,7 +328,10 @@ public sealed class PublishingDevWorkflowStoreTests
         var telemetry = new StubDevWorkflowNodeTelemetrySource
         {
             IgnoresCancellationUntil = gate,
-            Answer = new DevWorkflowNodeTelemetry { InputTokens = 5 },
+            Answer = new DevWorkflowNodeTelemetry
+            {
+                InputTokens = 5
+            },
             ExpectedEntries = 1
         };
         var harness = CreateHarness(telemetry, budget, collectionSlots: 1);
@@ -358,7 +403,10 @@ public sealed class PublishingDevWorkflowStoreTests
         var telemetry = new StubDevWorkflowNodeTelemetrySource
         {
             IgnoresCancellationUntil = gate,
-            Answer = new DevWorkflowNodeTelemetry { InputTokens = 5 }
+            Answer = new DevWorkflowNodeTelemetry
+            {
+                InputTokens = 5
+            }
         };
         var harness = CreateHarness(telemetry, budget);
 
@@ -374,8 +422,8 @@ public sealed class PublishingDevWorkflowStoreTests
                          .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
                              Arg.Any<CancellationToken>());
         await AssertEx.EventuallyAsync(() => harness.Scopes.Created == 1,
-                          Hang,
-                          "The collection reads on a scope it owns, not on the one the mutation is about to write through.");
+            Hang,
+            "The collection reads on a scope it owns, not on the one the mutation is about to write through.");
         AssertEx.Equal(expected: 0, harness.Scopes.Disposed, "And it still holds it: the settle abandoned the wait, not the collection's resources.");
 
         // The late arm: the collection finishes long after the transition it would have enriched, and writes nothing.
@@ -395,12 +443,21 @@ public sealed class PublishingDevWorkflowStoreTests
         var telemetry = new StubDevWorkflowNodeTelemetrySource
         {
             IgnoresCancellationUntil = gate,
-            Answer = new DevWorkflowNodeTelemetry { InputTokens = 5 }
+            Answer = new DevWorkflowNodeTelemetry
+            {
+                InputTokens = 5
+            }
         };
         var harness = CreateHarness(telemetry, budget);
         var route = new RouteDevWorkflowRetryCommand
         {
-            Route = new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeRetryRouted, NodeRunId = NodeRunId },
+            Route = new AppendDevWorkflowEventCommand
+            {
+                RunId = RunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                EventType = DevWorkflowEventTypes.NodeRetryRouted,
+                NodeRunId = NodeRunId
+            },
             Resets = [ReAttempt()]
         };
 
@@ -423,7 +480,13 @@ public sealed class PublishingDevWorkflowStoreTests
     }
 
     private static TransitionDevWorkflowNodeRunCommand NodeRunTransition(DevWorkflowNodeRunStatus target) =>
-        new() { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = target };
+        new()
+        {
+            RunId = RunId,
+            NodeRunId = NodeRunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = target
+        };
 
     /// <summary>The shape both re-attempt write paths build: a Pending reset that spends an attempt and carries a detail to merge into.</summary>
     private static TransitionDevWorkflowNodeRunCommand ReAttempt() =>
@@ -455,7 +518,14 @@ public sealed class PublishingDevWorkflowStoreTests
         int collectionSlots = 4)
     {
         var inner = Substitute.For<IDevWorkflowStore>();
-        var result = new DevWorkflowMutationResult { RunId = RunId, Sequence = Sequence, Version = 2, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 };
+        var result = new DevWorkflowMutationResult
+        {
+            RunId = RunId,
+            Sequence = Sequence,
+            Version = 2,
+            Status = DevWorkflowRunStatus.Running,
+            GraphRevision = 0
+        };
         inner.TransitionRunAsync(Arg.Any<TransitionDevWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendEventAsync(Arg.Any<AppendDevWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.MaterializeNodeRunsAsync(Arg.Any<MaterializeDevWorkflowNodesCommand>(), Arg.Any<CancellationToken>()).Returns(result);

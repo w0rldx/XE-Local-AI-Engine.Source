@@ -24,7 +24,10 @@ public sealed class BenchmarkRunHubTests
         var runId = Guid.NewGuid();
         var retained = events.Append(runId,
             BenchmarkRunStreamEventKind.OutputDelta,
-            new BenchmarkRunStreamPayload { Content = "safe output" });
+            new BenchmarkRunStreamPayload
+            {
+                Content = "safe output"
+            });
         store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: 0));
         using var fixture = CreateHub(store, events);
 
@@ -64,13 +67,26 @@ public sealed class BenchmarkRunHubTests
         var store = Substitute.For<IBenchmarkStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
-        var reasoning = events.Append(runId, BenchmarkRunStreamEventKind.ReasoningDelta, new BenchmarkRunStreamPayload { Content = "thinking..." });
+        var reasoning = events.Append(runId, BenchmarkRunStreamEventKind.ReasoningDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "thinking..."
+        });
         var toolCall = events.Append(runId,
             BenchmarkRunStreamEventKind.ToolCall,
-            new BenchmarkRunStreamPayload { ToolCallId = "call-1", ToolName = "search", Arguments = "{}" });
+            new BenchmarkRunStreamPayload
+            {
+                ToolCallId = "call-1",
+                ToolName = "search",
+                Arguments = "{}"
+            });
         var toolResult = events.Append(runId,
             BenchmarkRunStreamEventKind.ToolResult,
-            new BenchmarkRunStreamPayload { ToolCallId = "call-1", Result = "ok", IsError = false });
+            new BenchmarkRunStreamPayload
+            {
+                ToolCallId = "call-1",
+                Result = "ok",
+                IsError = false
+            });
         store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: 0));
         using var fixture = CreateHub(store, events);
 
@@ -96,7 +112,10 @@ public sealed class BenchmarkRunHubTests
         var store = Substitute.For<IBenchmarkStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
-        var retained = events.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "sensitive output" });
+        var retained = events.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "sensitive output"
+        });
         events.EvictPlaintext(runId);
         store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: retained.Sequence));
         using var fixture = CreateHub(store, events);

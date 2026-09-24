@@ -205,7 +205,7 @@ internal sealed class LocalModelProxyForwarder
         try
         {
             upstreamResponse = await httpClient
-                                     .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+                .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {

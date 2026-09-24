@@ -168,14 +168,14 @@ public sealed class InferenceProfileService : IInferenceProfileService
         }
 
         var input = await BuildExploreInputAsync(machineKey,
-                modelName,
-                role,
-                backend,
-                build,
-                filePath,
-                metadata,
-                draft,
-                ct);
+            modelName,
+            role,
+            backend,
+            build,
+            filePath,
+            metadata,
+            draft,
+            ct);
         var record = await _profileStore.CreateOrUpdateExploredAsync(input, ct);
         return ExploreResult.Ok(ToView(record));
     }
@@ -225,15 +225,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         var startedAtUtc = NowUnixMs();
         var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput
-        {
-            ApprovedImageId = profile.ModelName,
-            Operation = ModelFitOperation.Benchmark,
-            UseCase = null,
-            ProviderName = ProviderName,
-            ModelName = profile.ModelName,
-            Status = ModelFitRunStatus.Running,
-            StartedAtUtc = startedAtUtc
-        },
+            {
+                ApprovedImageId = profile.ModelName,
+                Operation = ModelFitOperation.Benchmark,
+                UseCase = null,
+                ProviderName = ProviderName,
+                ModelName = profile.ModelName,
+                Status = ModelFitRunStatus.Running,
+                StartedAtUtc = startedAtUtc
+            },
             ct);
 
         var spec = InferenceBenchmarkSpec.Golden(profile.Backend, profile.CtxSize, _benchmarkVramAdmission) with
@@ -263,28 +263,28 @@ public sealed class InferenceProfileService : IInferenceProfileService
             // as cancelled (no run happened) and the caller is told this was skipped, not that the benchmark failed.
             _logger.LogInformation("Benchmark skipped for profile {ProfileId}: {Reason}", profileId, exception.Message);
             await _snapshotStore.MarkTerminalAsync(snapshot.Id,
-                                    ModelFitRunStatus.Cancelled,
-                                    exitCode: null,
-                                    durationMs: NowUnixMs() - startedAtUtc,
-                                    rawJson: null,
-                                    stderrExcerpt: exception.Message,
-                                    diagnosticsJson: null,
-                                    completedAtUtc: NowUnixMs(),
-                                    ct);
+                ModelFitRunStatus.Cancelled,
+                exitCode: null,
+                durationMs: NowUnixMs() - startedAtUtc,
+                rawJson: null,
+                stderrExcerpt: exception.Message,
+                diagnosticsJson: null,
+                completedAtUtc: NowUnixMs(),
+                ct);
             return BenchmarkResult.SkippedInUse(exception.Message, snapshot.Id);
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Benchmark spawn failed for profile {ProfileId}.", profileId);
             await _snapshotStore.MarkTerminalAsync(snapshot.Id,
-                                    ModelFitRunStatus.Failed,
-                                    exitCode: null,
-                                    durationMs: NowUnixMs() - startedAtUtc,
-                                    rawJson: null,
-                                    stderrExcerpt: $"Benchmark spawn error: {exception.GetType().Name}.",
-                                    diagnosticsJson: null,
-                                    completedAtUtc: NowUnixMs(),
-                                    ct);
+                ModelFitRunStatus.Failed,
+                exitCode: null,
+                durationMs: NowUnixMs() - startedAtUtc,
+                rawJson: null,
+                stderrExcerpt: $"Benchmark spawn error: {exception.GetType().Name}.",
+                diagnosticsJson: null,
+                completedAtUtc: NowUnixMs(),
+                ct);
             return BenchmarkResult.Fail($"Benchmark spawn failed: {exception.GetType().Name}.", snapshot.Id);
         }
 
@@ -294,14 +294,14 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         var terminalStatus = metrics.Success ? ModelFitRunStatus.Succeeded : ModelFitRunStatus.Failed;
         await _snapshotStore.MarkTerminalAsync(snapshot.Id,
-                                terminalStatus,
-                                exitCode: metrics.Success ? 0 : 1,
-                                durationMs: completedAtUtc - startedAtUtc,
-                                rawJson: metrics.RawJson,
-                                stderrExcerpt: metrics.Success ? null : metrics.FailureReason,
-                                diagnosticsJson: null,
-                                completedAtUtc: completedAtUtc,
-                                ct);
+            terminalStatus,
+            exitCode: metrics.Success ? 0 : 1,
+            durationMs: completedAtUtc - startedAtUtc,
+            rawJson: metrics.RawJson,
+            stderrExcerpt: metrics.Success ? null : metrics.FailureReason,
+            diagnosticsJson: null,
+            completedAtUtc: completedAtUtc,
+            ct);
 
         return new BenchmarkResult
         {
@@ -383,12 +383,20 @@ public sealed class InferenceProfileService : IInferenceProfileService
     {
         if (string.Equals(backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
-            return new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = null, ProcessBudgetBytes = null };
+            return new LlamaServerProfilingVramSnapshot
+            {
+                GlobalFreeBytes = null,
+                ProcessBudgetBytes = null
+            };
         }
 
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
         var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
-        return new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = hardware.AvailableVramBytes, ProcessBudgetBytes = processBudget };
+        return new LlamaServerProfilingVramSnapshot
+        {
+            GlobalFreeBytes = hardware.AvailableVramBytes,
+            ProcessBudgetBytes = processBudget
+        };
     }
 
     /// <inheritdoc />
@@ -423,19 +431,19 @@ public sealed class InferenceProfileService : IInferenceProfileService
         var quant = string.IsNullOrWhiteSpace(metadata.QuantType) ? UnknownQuant : metadata.QuantType;
         var ctxSize = draft?.CtxSize ?? ClampToInt(metadata.ContextLength) ?? DefaultExploreCtxSize;
         var fingerprint = await _launchPolicyFingerprintProvider.CaptureAsync(new InferenceProfileFingerprintInput
-        {
-            ModelName = modelName,
-            Role = (int)role,
-            Backend = backend,
-            ModelFilePath = modelFilePath,
-            CtxSize = ctxSize,
-            NGpuLayers = draft?.NGpuLayers,
-            TensorSplit = draft?.TensorSplit,
-            OverrideTensor = draft?.OverrideTensor,
-            KvTypeK = draft?.KvTypeK,
-            KvTypeV = draft?.KvTypeV,
-            FlashAttn = draft?.FlashAttn ?? false
-        },
+            {
+                ModelName = modelName,
+                Role = (int)role,
+                Backend = backend,
+                ModelFilePath = modelFilePath,
+                CtxSize = ctxSize,
+                NGpuLayers = draft?.NGpuLayers,
+                TensorSplit = draft?.TensorSplit,
+                OverrideTensor = draft?.OverrideTensor,
+                KvTypeK = draft?.KvTypeK,
+                KvTypeV = draft?.KvTypeV,
+                FlashAttn = draft?.FlashAttn ?? false
+            },
             ct);
 
         return new InferenceProfileInput

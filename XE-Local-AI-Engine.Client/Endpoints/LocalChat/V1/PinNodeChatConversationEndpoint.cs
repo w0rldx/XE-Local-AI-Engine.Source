@@ -12,8 +12,7 @@ public sealed class PinNodeChatConversationEndpoint : Endpoint<PinNodeChatConver
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
-    public PinNodeChatConversationEndpoint(
-        INodeChatPersistenceService chatPersistence,
+    public PinNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
         INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
@@ -37,7 +36,12 @@ public sealed class PinNodeChatConversationEndpoint : Endpoint<PinNodeChatConver
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = req.ConversationId, IsPinned = req.IsPinned, UpdatedAtUtc = updatedAtUtc }, ct);
+        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest
+        {
+            ConversationId = req.ConversationId,
+            IsPinned = req.IsPinned,
+            UpdatedAtUtc = updatedAtUtc
+        }, ct);
 
         if (updated is null)
         {

@@ -101,7 +101,14 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         // The box is the lane's to make and the work's to flip: it is the only thing the poll can read about a turn
         // that has started but does not yet hold the node-wide slot it is waiting for.
         var leaseAcquired = new StrongBox<bool>(value: false);
-        var flight = new GraphWorkflowInFlight<TResult> { Cancellation = cancellation, Work = RunAsync(work, leaseAcquired, cancellation.Token), Attempt = attempt, InvocationId = invocationId, LeaseAcquired = leaseAcquired };
+        var flight = new GraphWorkflowInFlight<TResult>
+        {
+            Cancellation = cancellation,
+            Work = RunAsync(work, leaseAcquired, cancellation.Token),
+            Attempt = attempt,
+            InvocationId = invocationId,
+            LeaseAcquired = leaseAcquired
+        };
         if (_inflight.TryAdd(nodeRunId, flight))
         {
             return flight;

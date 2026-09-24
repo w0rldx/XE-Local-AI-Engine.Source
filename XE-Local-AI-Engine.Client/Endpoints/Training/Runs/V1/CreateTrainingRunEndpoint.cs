@@ -36,15 +36,15 @@ public sealed class CreateTrainingRunEndpoint : Endpoint<CreateTrainingRunReques
         // TrainingRunRejectedException reaches the global DomainValidationExceptionHandler as a 400, its rejections being operator-facing by construction. The store's own
         // refusals are a different family: VersionConflict (ExpectedDatasetVersion catches it), DatasetNotReady and BaseArtifactNotReady leave via TrainingExceptionHandler as a 409.
         var run = await _runs.CreateAsync(new CreateTrainingRunCommand
-        {
-            DatasetId = req.DatasetId,
-            ExpectedDatasetVersion = req.ExpectedDatasetVersion,
-            BaseArtifactId = req.BaseArtifactId,
-            LicenseConfirmed = req.LicenseConfirmed,
-            Options = req.Options?.ToDomain(),
-            LinkedModelName = req.LinkedModelName
-        },
-                                 ct);
+            {
+                DatasetId = req.DatasetId,
+                ExpectedDatasetVersion = req.ExpectedDatasetVersion,
+                BaseArtifactId = req.BaseArtifactId,
+                LicenseConfirmed = req.LicenseConfirmed,
+                Options = req.Options?.ToDomain(),
+                LinkedModelName = req.LinkedModelName
+            },
+            ct);
         await Send.OkAsync(run.ToResponse(), ct);
     }
 }

@@ -27,8 +27,14 @@ public sealed class GraphWorkflowChatSteerTests
         const string instructions = "steer-mid-agent";
         await using var harness = new GraphWorkflowHarness(Host);
         harness.Invocations.ScriptSequence(instructions,
-            new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks },
-            new GraphWorkflowScriptedTurn { Text = "the steered analysis" });
+            new GraphWorkflowScriptedTurn
+            {
+                Outcome = GraphWorkflowTurnOutcome.Parks
+            },
+            new GraphWorkflowScriptedTurn
+            {
+                Text = "the steered analysis"
+            });
         var (runId, conversationId) = await StartRunningAsync(harness, instructions);
         var superseded = (await harness.ReadNodeRunAsync(runId, "analyze")).InvocationId
                          ?? throw new AssertionException("a running Agent row carries its invocation id.");
@@ -67,7 +73,10 @@ public sealed class GraphWorkflowChatSteerTests
     {
         const string instructions = "steer-after-settle";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var (runId, _) = await StartRunningAsync(harness, instructions);
         using var steered = await PostSteerAsync(Host.Factory, runId, "analyze", Guid.NewGuid(), "too late");
         AssertEx.Equal(HttpStatusCode.Accepted, steered.StatusCode);
@@ -95,7 +104,10 @@ public sealed class GraphWorkflowChatSteerTests
     {
         const string instructions = "steer-after-run-ended";
         await using var harness = new GraphWorkflowHarness(Host);
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Parks });
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Outcome = GraphWorkflowTurnOutcome.Parks
+        });
         var (runId, _) = await StartRunningAsync(harness, instructions);
         var invocationId = (await harness.ReadNodeRunAsync(runId, "analyze")).InvocationId
                            ?? throw new AssertionException("a running Agent row carries its invocation id.");
@@ -107,7 +119,12 @@ public sealed class GraphWorkflowChatSteerTests
         await using (var scope = harness.Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>()
-                           .TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Completed });
+                           .TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+                           {
+                               RunId = runId,
+                               ExpectedVersion = GraphWorkflowVersions.Any,
+                               TargetStatus = GraphWorkflowRunStatus.Completed
+                           });
         }
 
         AssertEx.Equal(1, await harness.AdvanceAsync(runId), "the terminal tick judged the one steer.");

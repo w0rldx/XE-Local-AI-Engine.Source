@@ -108,7 +108,20 @@ public sealed class BenchmarkBradleyTerryTests
         // One pair, one verdict each way: the position swap cancelled out. Because the resampling unit is the PAIR,
         // every replicate redraws that 1-1 split whole and the interval collapses onto 50. Resampling individual
         // verdicts would draw 2-0 replicates and report a wide interval — the position bias back in the CI.
-        var fit = BenchmarkBradleyTerry.Fit([new BenchmarkPairwiseVerdict { RunAId = RunA, RunBId = RunB, Verdict = "a" }, new BenchmarkPairwiseVerdict { RunAId = RunA, RunBId = RunB, Verdict = "b" }]);
+        var fit = BenchmarkBradleyTerry.Fit([
+            new BenchmarkPairwiseVerdict
+            {
+                RunAId = RunA,
+                RunBId = RunB,
+                Verdict = "a"
+            },
+            new BenchmarkPairwiseVerdict
+            {
+                RunAId = RunA,
+                RunBId = RunB,
+                Verdict = "b"
+            }
+        ]);
 
         var run = fit.Scores.Single(score => score.RunId == RunA);
         AssertEx.Equal(50, run.Score);
@@ -141,7 +154,14 @@ public sealed class BenchmarkBradleyTerryTests
     [Test]
     public void Fit_RunWithASingleVerdict_ReportsInsufficientRatherThanAStrength()
     {
-        var fit = BenchmarkBradleyTerry.Fit([.. Sweep(RunA, RunB), new BenchmarkPairwiseVerdict { RunAId = RunA, RunBId = RunC, Verdict = "a" }], replicates: 0);
+        var fit = BenchmarkBradleyTerry.Fit([
+            .. Sweep(RunA, RunB), new BenchmarkPairwiseVerdict
+            {
+                RunAId = RunA,
+                RunBId = RunC,
+                Verdict = "a"
+            }
+        ], replicates: 0);
 
         var thin = fit.Scores.Single(score => score.RunId == RunC);
         AssertEx.Equal(BenchmarkBradleyTerry.ReasonInsufficient, thin.Reason);
@@ -154,9 +174,50 @@ public sealed class BenchmarkBradleyTerryTests
     /// <summary>Both presentation orders of one pair, both won by the first run.</summary>
     private static BenchmarkPairwiseVerdict[] Sweep(Guid winner, Guid loser) =>
         winner.CompareTo(loser) < 0
-            ? [new BenchmarkPairwiseVerdict { RunAId = winner, RunBId = loser, Verdict = "a" }, new BenchmarkPairwiseVerdict { RunAId = winner, RunBId = loser, Verdict = "a" }]
-            : [new BenchmarkPairwiseVerdict { RunAId = loser, RunBId = winner, Verdict = "b" }, new BenchmarkPairwiseVerdict { RunAId = loser, RunBId = winner, Verdict = "b" }];
+            ?
+            [
+                new BenchmarkPairwiseVerdict
+                {
+                    RunAId = winner,
+                    RunBId = loser,
+                    Verdict = "a"
+                },
+                new BenchmarkPairwiseVerdict
+                {
+                    RunAId = winner,
+                    RunBId = loser,
+                    Verdict = "a"
+                }
+            ]
+            :
+            [
+                new BenchmarkPairwiseVerdict
+                {
+                    RunAId = loser,
+                    RunBId = winner,
+                    Verdict = "b"
+                },
+                new BenchmarkPairwiseVerdict
+                {
+                    RunAId = loser,
+                    RunBId = winner,
+                    Verdict = "b"
+                }
+            ];
 
     private static BenchmarkPairwiseVerdict[] Tied(Guid first, Guid second) =>
-        [new BenchmarkPairwiseVerdict { RunAId = first, RunBId = second, Verdict = "tie" }, new BenchmarkPairwiseVerdict { RunAId = first, RunBId = second, Verdict = "tie" }];
+    [
+        new BenchmarkPairwiseVerdict
+        {
+            RunAId = first,
+            RunBId = second,
+            Verdict = "tie"
+        },
+        new BenchmarkPairwiseVerdict
+        {
+            RunAId = first,
+            RunBId = second,
+            Verdict = "tie"
+        }
+    ];
 }

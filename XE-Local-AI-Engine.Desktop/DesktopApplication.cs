@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
+using XE_Local_AI_Engine.Desktop.Linux;
 
 internal sealed class DesktopApplication : Application, IAsyncDisposable
 {
@@ -34,7 +35,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _options = options;
     }
 
-    public override void Initialize() => Styles.Add(new FluentTheme());
+    public override void Initialize() =>
+        Styles.Add(new FluentTheme());
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -42,10 +44,30 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             _desktop = desktop;
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _window = new Window { Title = "XE AI-Engine", Width = 560, Height = 220 };
-            var starting = new StackPanel { Margin = new Thickness(24), Spacing = 16, VerticalAlignment = VerticalAlignment.Center };
-            starting.Children.Add(new TextBlock { Text = DesktopText.Starting, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center });
-            starting.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 320, HorizontalAlignment = HorizontalAlignment.Center });
+            _window = new Window
+            {
+                Title = "XE AI-Engine",
+                Width = 560,
+                Height = 220
+            };
+            var starting = new StackPanel
+            {
+                Margin = new Thickness(24),
+                Spacing = 16,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            starting.Children.Add(new TextBlock
+            {
+                Text = DesktopText.Starting,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            starting.Children.Add(new ProgressBar
+            {
+                IsIndeterminate = true,
+                Width = 320,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
             _window.Content = starting;
             _window.Closing += OnClosing;
             _window.Opened += (_, _) => _initialization = InitializeDesktopAsync();
@@ -79,7 +101,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
                 if (_options.Port is not null)
                 {
                     var existing = await DesktopEngineSession.DiscoverAsync(_options.DataDirectory, _stopping.Token)
-                        ?? throw new InvalidOperationException("The existing engine is not ready.");
+                                   ?? throw new InvalidOperationException("The existing engine is not ready.");
                     DesktopEngineSession.ValidateRequestedPort(existing, _options.Port);
                 }
 
@@ -119,7 +141,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopStartupDiagnostics.Record($"Desktop startup failed ({exception.GetType().Name}). {exception.Message}");
             await Console.Error.WriteLineAsync("Desktop startup failed; inspect the engine log and installed prerequisites.");
             if (_window is DesktopWindow failedWindow) { await failedWindow.DisposeAsync(); }
-            var reason = OperatingSystem.IsLinux() && _window is DesktopWindow ? Linux.GtkDesktopBridge.FailureText : DesktopText.StartupFailed;
+
+            var reason = OperatingSystem.IsLinux() && _window is DesktopWindow ? GtkDesktopBridge.FailureText : DesktopText.StartupFailed;
             // The engine's own last words (a missing shared runtime, a port conflict) are the only actionable part.
             ShowFailure($"{reason}{Environment.NewLine}{Environment.NewLine}{exception.Message}",
                 includeWebViewLink: OperatingSystem.IsWindows());
@@ -136,7 +159,12 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
         var icon = new WindowIcon(iconStream);
         _window!.Icon = icon;
-        _tray = new TrayIcon { Icon = icon, ToolTipText = "XE AI-Engine", IsVisible = true };
+        _tray = new TrayIcon
+        {
+            Icon = icon,
+            ToolTipText = "XE AI-Engine",
+            IsVisible = true
+        };
         var menu = new NativeMenu();
         _trayOpen = new NativeMenuItem(DesktopText.Open);
         _trayOpen.Click += (_, _) => ShowWindow();
@@ -316,8 +344,11 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
         // The Win32 tray rebuilds its flyout from these items on every open, so a header change is enough.
         if (_trayOpen is not null) { _trayOpen.Header = DesktopText.Open; }
+
         if (_traySettings is not null) { _traySettings.Header = DesktopText.Settings; }
+
         if (_trayQuit is not null) { _trayQuit.Header = DesktopText.Quit; }
+
         try
         {
             await DesktopPreferences.WriteLanguageAsync(_options.DataDirectory, DesktopText.Language, _stopping.Token);
@@ -341,9 +372,14 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             await _stopping.CancelAsync();
             if (_window is DesktopWindow nativeWindow) { await nativeWindow.DisposeAsync(); }
+
             if (_window is not null)
             {
-                _window.Content = new TextBlock { Text = DesktopText.Closing, Margin = new Thickness(24) };
+                _window.Content = new TextBlock
+                {
+                    Text = DesktopText.Closing,
+                    Margin = new Thickness(24)
+                };
             }
 
             await DisposeAsync();
@@ -391,16 +427,30 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             return;
         }
 
-        var panel = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
-        panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 12
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap
+        });
         if (includeWebViewLink)
         {
-            var link = new Button { Content = DesktopText.WebViewDownload };
+            var link = new Button
+            {
+                Content = DesktopText.WebViewDownload
+            };
             link.Click += async (_, _) =>
             {
                 try
                 {
-                    await _window.Launcher.LaunchUriAsync(new UriBuilder(Uri.UriSchemeHttps, "developer.microsoft.com") { Path = "microsoft-edge/webview2/" }.Uri);
+                    await _window.Launcher.LaunchUriAsync(new UriBuilder(Uri.UriSchemeHttps, "developer.microsoft.com")
+                    {
+                        Path = "microsoft-edge/webview2/"
+                    }.Uri);
                 }
                 catch (Exception)
                 {
@@ -410,21 +460,47 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             panel.Children.Add(link);
         }
 
-        var quit = new Button { Content = DesktopText.Quit, HorizontalAlignment = HorizontalAlignment.Left };
+        var quit = new Button
+        {
+            Content = DesktopText.Quit,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
         quit.Click += (_, _) => _ = QuitAsync();
         panel.Children.Add(quit);
         // The engine's error tail can outgrow the startup window, and an unreachable Quit button is a hang.
-        _window.Content = new ScrollViewer { Content = panel };
+        _window.Content = new ScrollViewer
+        {
+            Content = panel
+        };
         _window.Show();
         _window.Activate();
     }
 
     private async Task ShowNoticeAsync(string message)
     {
-        var dialog = new Window { Title = "XE AI-Engine", Width = 440, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        var panel = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
-        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
-        var close = new Button { Content = "OK", IsDefault = true, IsCancel = true };
+        var dialog = new Window
+        {
+            Title = "XE AI-Engine",
+            Width = 440,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 12
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = message,
+            TextWrapping = TextWrapping.Wrap
+        });
+        var close = new Button
+        {
+            Content = "OK",
+            IsDefault = true,
+            IsCancel = true
+        };
         close.Click += (_, _) => dialog.Close();
         panel.Children.Add(close);
         dialog.Content = panel;

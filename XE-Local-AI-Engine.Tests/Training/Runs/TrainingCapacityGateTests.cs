@@ -84,7 +84,14 @@ public sealed class TrainingCapacityGateTests
     }
 
     private static TrainingFootprintEstimate Estimate(long gpuBytes) =>
-        new() { GpuBytes = gpuBytes, RamBytes = 4 * OneGigabyte, ParameterCount = 8_000_000_000, TrainableParameterCount = 45_000_000, Experimental = false };
+        new()
+        {
+            GpuBytes = gpuBytes,
+            RamBytes = 4 * OneGigabyte,
+            ParameterCount = 8_000_000_000,
+            TrainableParameterCount = 45_000_000,
+            Experimental = false
+        };
 
     private static IRuntimeDeviceAudit Audit(long? vramBytes, long availableRamBytes = 32 * OneGigabyte)
     {

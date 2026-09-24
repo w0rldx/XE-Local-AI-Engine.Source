@@ -28,8 +28,7 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private bool _waitingForLease;
 
-    public TrainingRunQueueHostedService(
-        IServiceScopeFactory scopeFactory,
+    public TrainingRunQueueHostedService(IServiceScopeFactory scopeFactory,
         ITrainingRunQueueSignal signal,
         ITrainingRunEventBuffer events,
         IGpuWorkGate gpuWorkGate,

@@ -494,7 +494,11 @@ public sealed class LocalModelEndpointTests
         // Ollama branch (default-stubbed resolver): the decoded canonical name is the one probed via /api/show.
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(new OllamaModelDetails { MaxContextTokens = 4096, Capabilities = [] });
+                    .Returns(new OllamaModelDetails
+                    {
+                        MaxContextTokens = 4096,
+                        Capabilities = []
+                    });
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
@@ -706,7 +710,13 @@ public sealed class LocalModelEndpointTests
             GgufRegistryAliasSetHash.ComputeV1([]),
             GgufPhysicalMemberSetHash.ComputeV1([]));
         coordinator.CommitDeleteAsync(modelName, Arg.Any<CancellationToken>())
-                   .Returns(new CommittedModelDeletion { OperationId = receipt.OperationId, RequestedModelName = modelName, RemovedModelNames = [modelName], StageReceipt = receipt });
+                   .Returns(new CommittedModelDeletion
+                   {
+                       OperationId = receipt.OperationId,
+                       RequestedModelName = modelName,
+                       RemovedModelNames = [modelName],
+                       StageReceipt = receipt
+                   });
         return coordinator;
     }
 

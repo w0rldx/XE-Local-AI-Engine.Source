@@ -57,7 +57,10 @@ public sealed class StartGraphWorkflowRunEndpoint : Endpoint<StartGraphWorkflowR
             // `input` member, not the request that carried it.
             var input = req.Input is { } payload ? JsonSerializer.Serialize(payload) : null;
             var detail = await _runs.StartAsync(req.DefinitionId, req.RequestId, input, req.DefinitionVersion, ct);
-            await Send.ResultAsync(Results.Accepted(value: new StartGraphWorkflowRunResponse { RunId = detail.Run.Id }));
+            await Send.ResultAsync(Results.Accepted(value: new StartGraphWorkflowRunResponse
+            {
+                RunId = detail.Run.Id
+            }));
         }
         catch (GraphWorkflowValidationException exception)
         {

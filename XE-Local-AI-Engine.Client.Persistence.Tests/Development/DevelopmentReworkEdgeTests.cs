@@ -65,13 +65,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
         // Completion is still the apply port's alone: widening AwaitingApply must not have opened a generic route to it.
         _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
-                              store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-                              {
-                                  TaskId = seed.TaskId,
-                                  OperationId = Guid.NewGuid(),
-                                  TargetStatus = DevelopmentTaskStatus.Completed,
-                                  ExpectedTaskVersion = moved.Version
-                              }));
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.Completed,
+                ExpectedTaskVersion = moved.Version
+            }));
     }
 
     /// <summary>
@@ -159,7 +159,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                      DevelopmentTaskStatus.InReview
                  })
         {
-            asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = status, ExpectedTaskVersion = asked.Version });
+            asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = status,
+                ExpectedTaskVersion = asked.Version
+            });
         }
 
         var attemptId = Guid.NewGuid();
@@ -377,15 +383,15 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         AssertEx.Equal(expected: 3, (await store.GetTaskAsync(seed.TaskId)).MaxReviewRounds);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
-                              store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-                              {
-                                  TaskId = seed.TaskId,
-                                  OperationId = Guid.NewGuid(),
-                                  TargetStatus = DevelopmentTaskStatus.ChangesRequested,
-                                  ExpectedTaskVersion = blocked.Version,
-                                  Reason = OperatorReason,
-                                  OperatorDirected = true
-                              }));
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = blocked.Version,
+                Reason = OperatorReason,
+                OperatorDirected = true
+            }));
 
         var widened = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
         {
@@ -436,16 +442,16 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         });
 
         _ = await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() =>
-                              store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-                              {
-                                  TaskId = seed.TaskId,
-                                  OperationId = Guid.NewGuid(),
-                                  TargetStatus = DevelopmentTaskStatus.ChangesRequested,
-                                  ExpectedTaskVersion = blocked.Version - 1,
-                                  Reason = OperatorReason,
-                                  OperatorDirected = true,
-                                  WidenReviewRounds = true
-                              }));
+            store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = blocked.Version - 1,
+                Reason = OperatorReason,
+                OperatorDirected = true,
+                WidenReviewRounds = true
+            }));
 
         var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status);
@@ -576,7 +582,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
             "one row, whatever the replay was handed.");
 
         // The round the policy governs: a coder attempt only starts once the task is back where one runs.
-        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.ChangesRequested, ExpectedTaskVersion = version });
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+            ExpectedTaskVersion = version
+        });
         var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
         {
             TaskId = seed.TaskId,
@@ -620,7 +632,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
             new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
         };
 
-        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.ChangesRequested, ExpectedTaskVersion = version });
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+            ExpectedTaskVersion = version
+        });
         var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
         {
             TaskId = seed.TaskId,
@@ -658,9 +676,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
             "a workflow that resolved no policy must not leave the previous one governing.");
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, ruleSets),
-                              "a clear that named rule sets would be claiming an injection it is not making.");
+            "a clear that named rule sets would be claiming an injection it is not making.");
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, []),
-                              "and an injection still has to name what composed it.");
+            "and an injection still has to name what composed it.");
     }
 
     /// <summary>
@@ -774,18 +792,18 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
         {
             Artifact = new DevelopmentAttachArtifactCommand
-        {
-            ArtifactId = Guid.NewGuid(),
-            ProjectId = seed.ProjectId,
-            TaskId = seed.TaskId,
-            AttemptId = attemptId,
-            OperationId = Guid.NewGuid(),
-            Kind = DevelopmentArtifactKind.ValidationReport,
-            SchemaVersion = 1,
-            ContentHash = "content-hash",
-            ByteCount = 2,
-            ContentJson = Encoding.UTF8.GetBytes("{}")
-        },
+            {
+                ArtifactId = Guid.NewGuid(),
+                ProjectId = seed.ProjectId,
+                TaskId = seed.TaskId,
+                AttemptId = attemptId,
+                OperationId = Guid.NewGuid(),
+                Kind = DevelopmentArtifactKind.ValidationReport,
+                SchemaVersion = 1,
+                ContentHash = "content-hash",
+                ByteCount = 2,
+                ContentJson = Encoding.UTF8.GetBytes("{}")
+            },
             OperationId = Guid.NewGuid(),
             ExpectedTaskVersion = await VersionAsync(),
             TargetStatus = DevelopmentTaskStatus.ChangesRequested,
@@ -947,15 +965,15 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         var (seed, attemptId) = await SeedTaskInValidationAsync(store);
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() =>
-                              store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
-                              {
-                                  Artifact = ValidationArtifact(Guid.NewGuid(), seed, attemptId),
-                                  OperationId = Guid.NewGuid(),
-                                  // Any value: the argument guard fires before EnsureVersion ever reads it.
-                                  ExpectedTaskVersion = 0,
-                                  TargetStatus = DevelopmentTaskStatus.InProgress,
-                                  SanitizedReason = GateReason
-                              }));
+            store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+            {
+                Artifact = ValidationArtifact(Guid.NewGuid(), seed, attemptId),
+                OperationId = Guid.NewGuid(),
+                // Any value: the argument guard fires before EnsureVersion ever reads it.
+                ExpectedTaskVersion = 0,
+                TargetStatus = DevelopmentTaskStatus.InProgress,
+                SanitizedReason = GateReason
+            }));
     }
 
     /// <summary>

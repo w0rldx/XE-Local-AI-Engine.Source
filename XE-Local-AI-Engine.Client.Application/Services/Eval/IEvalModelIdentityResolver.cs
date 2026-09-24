@@ -53,5 +53,9 @@ public sealed class EvalModelIdentity
     public const string UnverifiedToken = "unverified";
 
     /// <summary>The shared unverified identity (the <see cref="UnverifiedToken" /> sentinel, not verified).</summary>
-    public static EvalModelIdentity Unverified { get; } = new() { Token = UnverifiedToken, IsVerified = false };
+    public static EvalModelIdentity Unverified { get; } = new()
+    {
+        Token = UnverifiedToken,
+        IsVerified = false
+    };
 }

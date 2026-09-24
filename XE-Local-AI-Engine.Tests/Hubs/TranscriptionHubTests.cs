@@ -277,8 +277,8 @@ public sealed class TranscriptionHubTests
         using var fixture = CreateHub(Sessions(), live);
 
         var error = await AssertEx
-                          .ThrowsAsync<HubException>(() =>
-                              fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes + 2]));
+            .ThrowsAsync<HubException>(() =>
+                fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes + 2]));
 
         AssertEx.Equal(TranscriptionHubErrors.FrameTooLarge, error.Message);
         await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
@@ -516,7 +516,11 @@ public sealed class TranscriptionHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture { Hub = hub, Groups = groups };
+        return new HubFixture
+        {
+            Hub = hub,
+            Groups = groups
+        };
     }
 
     private sealed record HubFixture : IDisposable

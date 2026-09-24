@@ -26,14 +26,13 @@ public sealed class AllowConcurrentRefreshSessionsMigrationTests
     public async Task WhenRolledBack_WithTwoLiveSessions_RevokesThemAndRestoresTheUniqueIndex()
     {
         await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("concurrent-refresh-sessions-down.sqlite");
-        await probe.ExecuteAsync(
-            """
-            INSERT INTO AspNetUsers (Id, AccessFailedCount, EmailConfirmed, LockoutEnabled, PhoneNumberConfirmed, TwoFactorEnabled, setup_completed, created_at_utc)
-            VALUES ('u1', 0, 0, 0, 0, 0, 1, '2026-09-23 00:00:00');
-            INSERT INTO node_refresh_tokens (id, user_id, token_hash, expires_at_utc, created_at_utc)
-            VALUES ('t1', 'u1', 'h1', '2099-01-01 00:00:00', '2026-09-23 00:00:00'),
-                   ('t2', 'u1', 'h2', '2099-01-01 00:00:00', '2026-09-23 00:00:00');
-            """);
+        await probe.ExecuteAsync("""
+                                 INSERT INTO AspNetUsers (Id, AccessFailedCount, EmailConfirmed, LockoutEnabled, PhoneNumberConfirmed, TwoFactorEnabled, setup_completed, created_at_utc)
+                                 VALUES ('u1', 0, 0, 0, 0, 0, 1, '2026-09-23 00:00:00');
+                                 INSERT INTO node_refresh_tokens (id, user_id, token_hash, expires_at_utc, created_at_utc)
+                                 VALUES ('t1', 'u1', 'h1', '2099-01-01 00:00:00', '2026-09-23 00:00:00'),
+                                        ('t2', 'u1', 'h2', '2099-01-01 00:00:00', '2026-09-23 00:00:00');
+                                 """);
 
         await probe.MigrateIdentityToAsync("20260624184036_AddTutorialState");
 

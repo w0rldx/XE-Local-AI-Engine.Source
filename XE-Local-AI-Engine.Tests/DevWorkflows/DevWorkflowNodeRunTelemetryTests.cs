@@ -380,7 +380,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             .Returns([Envelope(conversationId, new string('m', 300))]);
 
         var collected = await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                              .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None);
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None);
 
         var served = AssertEx.NotNull(AssertEx.NotNull(collected).ServedModelName);
         AssertEx.Equal(expected: 256, served.Length, "served_model_name is declared at 256 characters, so the collector may not hand the column more.");
@@ -411,7 +411,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             ]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 238_000L, collected.AgentTurnMs, "The whole-turn clock is unchanged: it still sums every envelope's own duration.");
         AssertEx.Equal(expected: 179_776L, collected.ModelReadinessMs, "The warm phases of the turns that had one sum; a turn that warmed nothing adds nothing.");
@@ -438,7 +438,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             ]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 2_000L, collected.AgentTurnMs, "The turns still happened and still took time.");
         AssertEx.Null(collected.ModelReadinessMs, "None of them warmed a local runtime, which is not the same as warming one in no time.");
@@ -466,7 +466,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("some-other-model", globalFree: 11, admitted: 22));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The reading belongs to the model the envelopes say actually served.");
         AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
@@ -493,7 +493,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("llama-3.1", globalFree: 7_340_032_000, admitted: 5_368_709_120));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Null(collected.VramFreeAtLoadBytes, "Another model's load says nothing about the one that served this run.");
         AssertEx.Null(collected.VramAdmittedBytes);
@@ -514,7 +514,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             .Returns([Envelope(conversationId, "llama-3.1", durationMs: 900)]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Null(collected.VramFreeAtLoadBytes);
         AssertEx.Null(collected.VramAdmittedBytes);
@@ -543,7 +543,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
+            .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal("qwen3-1.7b-gguf:q8_0", collected.ServedModelName);
         AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The served name is the load key, compared the way every other (model, role) key is.");

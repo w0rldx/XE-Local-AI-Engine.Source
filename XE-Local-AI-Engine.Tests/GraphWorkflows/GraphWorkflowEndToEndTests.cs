@@ -33,7 +33,10 @@ public sealed class GraphWorkflowEndToEndTests
         // A host of this test's own: both tests here drive the SAME graph, so they script the same prompt, and a
         // shared fake would hand one of them the other's answer.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn { Text = """{"requiresReview":true,"summary":"worth a look"}""" });
+        harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"requiresReview":true,"summary":"worth a look"}"""
+        });
 
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"the overnight logs"}""");
         var run = await AdvanceUntilRunTerminalAsync(harness, runId);
@@ -68,7 +71,10 @@ public sealed class GraphWorkflowEndToEndTests
         // A host of this test's own: both tests here drive the SAME graph, so they script the same prompt, and a
         // shared fake would hand one of them the other's answer.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn { Text = """{"requiresReview":false,"summary":"nothing to see"}""" });
+        harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"requiresReview":false,"summary":"nothing to see"}"""
+        });
 
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"a quiet night"}""");
         _ = await AdvanceUntilRunTerminalAsync(harness, runId);

@@ -52,14 +52,23 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.PartialUpdated,
-                       new TranscriptPartialUpdatedPush { SessionId = sessionId, Channel = TranscriptionMapper.ToWireChannel(channel), Text = text },
+                       new TranscriptPartialUpdatedPush
+                       {
+                           SessionId = sessionId,
+                           Channel = TranscriptionMapper.ToWireChannel(channel),
+                           Text = text
+                       },
                        cancellationToken);
 
     public Task PublishStatusAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.SessionStatusChanged,
-                       new TranscriptionSessionStatusPush { SessionId = sessionId, Status = ToWireStatus(reason) },
+                       new TranscriptionSessionStatusPush
+                       {
+                           SessionId = sessionId,
+                           Status = ToWireStatus(reason)
+                       },
                        cancellationToken);
 
     /// <summary>

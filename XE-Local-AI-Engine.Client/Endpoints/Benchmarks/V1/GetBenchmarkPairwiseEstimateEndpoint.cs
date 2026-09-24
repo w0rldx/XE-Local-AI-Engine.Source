@@ -41,14 +41,14 @@ public sealed class GetBenchmarkPairwiseEstimateEndpoint : Endpoint<GetBenchmark
 
         var estimate = await _planner.EstimateAsync(req.ProjectId, ct);
         await Send.OkAsync(new GetBenchmarkPairwiseEstimateResponse
-                  {
-                      EligibleRuns = estimate.EligibleRuns,
-                      PairedRuns = estimate.PairedRuns,
-                      CappedRuns = estimate.CappedRuns,
-                      JudgeCalls = estimate.JudgeCalls,
-                      EstimatedSeconds = estimate.EstimatedSeconds,
-                      Warn = estimate.Warn,
-                      MaximumRuns = BenchmarkPairwisePolicy.MaximumRuns
-                  }, ct);
+        {
+            EligibleRuns = estimate.EligibleRuns,
+            PairedRuns = estimate.PairedRuns,
+            CappedRuns = estimate.CappedRuns,
+            JudgeCalls = estimate.JudgeCalls,
+            EstimatedSeconds = estimate.EstimatedSeconds,
+            Warn = estimate.Warn,
+            MaximumRuns = BenchmarkPairwisePolicy.MaximumRuns
+        }, ct);
     }
 }

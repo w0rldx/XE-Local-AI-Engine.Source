@@ -54,7 +54,12 @@ public sealed class DecideGraphWorkflowNodeRunEndpoint : Endpoint<DecideGraphWor
         try
         {
             var result = await _runs.DecideAsync(req.RunId, req.NodeKey, req.OperationId, decision, req.Comment, payload, subject, ct);
-            await Send.OkAsync(new GraphWorkflowDecisionResultResponse { Decision = result.Decision.ToString(), RunStatus = result.RunStatus.ToString(), NodeRunStatus = result.NodeRunStatus.ToString() }, ct);
+            await Send.OkAsync(new GraphWorkflowDecisionResultResponse
+            {
+                Decision = result.Decision.ToString(),
+                RunStatus = result.RunStatus.ToString(),
+                NodeRunStatus = result.NodeRunStatus.ToString()
+            }, ct);
         }
         catch (GraphWorkflowValidationException exception)
         {

@@ -36,7 +36,12 @@ public sealed class GgufAcquisitionStateProbe
         var disposition = lease.Snapshot is null && HasDestinationCollision(identity)
             ? GgufAcquisitionDisposition.Conflict
             : GetDisposition(intent, identity, lease.Snapshot, mapDisposition);
-        return Task.FromResult(new GgufAcquisitionState { Disposition = disposition, ProviderMapDisposition = mapDisposition, ConflictingProvider = mapping?.ProviderName });
+        return Task.FromResult(new GgufAcquisitionState
+        {
+            Disposition = disposition,
+            ProviderMapDisposition = mapDisposition,
+            ConflictingProvider = mapping?.ProviderName
+        });
     }
 
     private bool HasDestinationCollision(ResolvedGgufAcquisitionIdentity identity)
@@ -154,13 +159,13 @@ public sealed class GgufAcquisitionStateProbe
         }
 
         var expectedMembers = weight.Select(member => new GgufModelContentMember
-        {
-            RelativePath = member.RelativePath,
-            Role = member.Role,
-            SizeBytes = download.DeclaredSizeBytes,
-            Sha256 = download.DeclaredSha256,
-            OwningAliases = member.OwningAliases
-        })
+                                    {
+                                        RelativePath = member.RelativePath,
+                                        Role = member.Role,
+                                        SizeBytes = download.DeclaredSizeBytes,
+                                        Sha256 = download.DeclaredSha256,
+                                        OwningAliases = member.OwningAliases
+                                    })
                                     .Concat(projectors.Select(member => new GgufModelContentMember
                                     {
                                         RelativePath = member.RelativePath,

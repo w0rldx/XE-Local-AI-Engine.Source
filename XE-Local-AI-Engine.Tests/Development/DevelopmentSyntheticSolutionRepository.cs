@@ -343,8 +343,7 @@ internal static class DevelopmentSyntheticSolutionRepository
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException(
-                $"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput}{await standardError}");
+            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput}{await standardError}");
         }
     }
 }

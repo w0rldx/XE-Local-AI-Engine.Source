@@ -112,7 +112,15 @@ public sealed class TranscriptionCaptureEndpointTests
         var source = new StubProcessAudioCaptureSource
         {
             IsSupported = true,
-            Candidates = [new ProcessAudioCaptureCandidate { ProcessId = 1234, Name = "chrome", HasAudio = true }]
+            Candidates =
+            [
+                new ProcessAudioCaptureCandidate
+                {
+                    ProcessId = 1234,
+                    Name = "chrome",
+                    HasAudio = true
+                }
+            ]
         };
         await using var factory = FactoryWith(source);
         using var client = factory.CreateClient();
@@ -220,8 +228,23 @@ public sealed class TranscriptionCaptureEndpointTests
             Runtime = new TranscriptionRuntimeView
             {
                 Enabled = true,
-                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
-                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
+                Runtime = new WhisperRuntimeStatusSnapshot
+                {
+                    State = WhisperRuntimeState.Stopped,
+                    LoadedModelId = null,
+                    Backend = null,
+                    BinaryVersion = null,
+                    BinarySource = null,
+                    SupportsTranscode = true
+                },
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 0,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                },
                 ManagedRuntime = null,
                 SelectedModelId = null,
                 RecommendedModelId = "base",
@@ -331,15 +354,15 @@ public sealed class TranscriptionCaptureEndpointTests
         var registry = factory.Services.GetRequiredService<ILiveTranscriptionSessionRegistry>();
         var sessionId = Guid.NewGuid();
         await registry.StartLiveSessionAsync(sessionId,
-                          new LiveSessionOptions
-                          {
-                              ModelId = "base",
-                              Settings = new LiveSegmenterSettings(),
-                              Channels = [TranscriptChannel.Others],
-                              SourceKind = TranscriptionSourceKind.ApplicationProcess,
-                              Persist = false
-                          },
-                          CancellationToken.None);
+            new LiveSessionOptions
+            {
+                ModelId = "base",
+                Settings = new LiveSegmenterSettings(),
+                Channels = [TranscriptChannel.Others],
+                SourceKind = TranscriptionSourceKind.ApplicationProcess,
+                Persist = false
+            },
+            CancellationToken.None);
         return sessionId;
     }
 

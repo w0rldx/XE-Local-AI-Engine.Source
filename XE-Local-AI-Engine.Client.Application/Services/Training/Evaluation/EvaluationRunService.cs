@@ -43,8 +43,7 @@ public sealed class EvaluationRunService : IEvaluationRunService
     private readonly ITrainingRunStore _runs;
     private readonly ITrainingRunQueueSignal _signal;
 
-    public EvaluationRunService(
-        ITrainingEvaluationStore evaluations,
+    public EvaluationRunService(ITrainingEvaluationStore evaluations,
         ITrainingRunStore runs,
         ITrainingDatasetStore datasets,
         IGgufModelStore models,
@@ -92,18 +91,18 @@ public sealed class EvaluationRunService : IEvaluationRunService
             HoldoutSampleIds = freeze.HoldoutSampleIds
         };
         var created = await _evaluations.CreateAndEnqueueAsync(new TrainingEvaluationEnqueueCommand
-        {
-            TrainingRunId = run.Id,
-            ModelName = target.ModelName,
-            ModelContentFingerprint = target.Fingerprint,
-            DatasetId = run.DatasetId,
-            DatasetContentFingerprint = run.DatasetContentFingerprint,
-            MembershipJson = JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
-            TotalCount = freeze.HoldoutSampleIds.Count,
-            TargetKind = target.Kind,
-            SourceArtifactId = target.ArtifactId
-        },
-                                            cancellationToken);
+            {
+                TrainingRunId = run.Id,
+                ModelName = target.ModelName,
+                ModelContentFingerprint = target.Fingerprint,
+                DatasetId = run.DatasetId,
+                DatasetContentFingerprint = run.DatasetContentFingerprint,
+                MembershipJson = JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
+                TotalCount = freeze.HoldoutSampleIds.Count,
+                TargetKind = target.Kind,
+                SourceArtifactId = target.ArtifactId
+            },
+            cancellationToken);
         _signal.Wake();
         return created;
     }

@@ -41,7 +41,11 @@ public sealed class AppUpdateServiceTests
     [Test]
     public void Constructor_ConfiguredDesktop_PrimesImmediateStatusWithoutCheckingTheNetwork()
     {
-        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null
+        });
         manager.CurrentVersion.Returns("0.1.0-rc.5.2");
         var factory = FactoryReturning(manager);
         var state = new AppUpdateState();
@@ -81,7 +85,11 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_PublicConfiguredBuild_CreatesAnonymousManagerWithoutTokenLookup()
     {
-        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null
+        });
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true);
 
@@ -130,7 +138,11 @@ public sealed class AppUpdateServiceTests
             startupTask = startup.CheckOnceAsync(CancellationToken.None);
         }
 
-        releaseCheck.SetResult(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
+        releaseCheck.SetResult(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null
+        });
 
         await startupTask;
         var manualSnapshot = await manualTask;
@@ -155,7 +167,11 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenUpdateAvailable_RecordsAvailableVersion()
     {
-        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = "0.2.0" });
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpdateAvailable,
+            AvailableVersion = "0.2.0"
+        });
         manager.CurrentVersion.Returns("0.1.0");
         using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
@@ -168,7 +184,11 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenFeedIsOffline_RecordsOfflineGracefully()
     {
-        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.Offline, AvailableVersion = null });
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.Offline,
+            AvailableVersion = null
+        });
         using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -536,7 +556,11 @@ public sealed class AppUpdateServiceTests
         var manager = Substitute.For<IVelopackUpdateManager>();
         manager.CurrentVersion.Returns("0.1.0");
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = "0.2.0" });
+               .Returns(new VelopackCheckResult
+               {
+                   Outcome = VelopackCheckOutcome.UpdateAvailable,
+                   AvailableVersion = "0.2.0"
+               });
         return manager;
     }
 
@@ -560,8 +584,7 @@ public sealed class AppUpdateServiceTests
     [Arguments("1.0.0-rc.3", "1.0.0-rc.2.dev.20260922.1", "1.0.0-rc.3", AppUpdateChannel.Preview)]
     [Arguments("1.0.0-rc.2", "1.0.0-rc.2.dev.20260922.1", "1.0.0-rc.2.dev.20260922.1", AppUpdateChannel.Development)]
     [Arguments("1.0.0", null, "1.0.0", AppUpdateChannel.Stable)]
-    public async Task CheckForUpdates_ForDevelopment_OffersTheStrictlyHighestVersionAcrossBothFeeds(
-        string mainVersion, string? devVersion, string expectedVersion, AppUpdateChannel expectedChannel)
+    public async Task CheckForUpdates_ForDevelopment_OffersTheStrictlyHighestVersionAcrossBothFeeds(string mainVersion, string? devVersion, string expectedVersion, AppUpdateChannel expectedChannel)
     {
         var factory = DevelopmentFactory(Offering(mainVersion), devVersion is null ? UpToDate() : Offering(devVersion));
         using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
@@ -722,7 +745,10 @@ public sealed class AppUpdateServiceTests
             return UpToDate();
         });
         using var service = CreateService(factory, isDesktop: true,
-            settingsStore: new FakeNodeSettingsStore(new StoredNodeSettings { UpdateChannel = null }),
+            settingsStore: new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                UpdateChannel = null
+            }),
             defaultChannel: bakedDefault);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -820,8 +846,7 @@ public sealed class AppUpdateServiceTests
              .Returns<Task<StoredNodeSettings>>(_ => throw new IOException("node-settings.json is read-only"));
         using var service = CreateService(factory, isDesktop: true, settingsStore: store);
 
-        await AssertEx.ThrowsAsync<IOException>(
-            () => service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None));
+        await AssertEx.ThrowsAsync<IOException>(() => service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None));
 
         await manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
     }
@@ -855,7 +880,10 @@ public sealed class AppUpdateServiceTests
         AssertEx.True(offered.UpdateAvailable);
         AssertEx.Equal(AppUpdateChannel.Development, offered.AvailableChannel);
 
-        await store.SaveAsync(new StoredNodeSettings { UpdateChannel = AppUpdateChannelNames.Stable });
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            UpdateChannel = AppUpdateChannelNames.Stable
+        });
         var snapshot = await service.GetStatusAsync(CancellationToken.None);
 
         AssertEx.Equal(AppUpdateChannel.Stable, snapshot.SelectedChannel);
@@ -877,7 +905,10 @@ public sealed class AppUpdateServiceTests
         var offered = await service.CheckForUpdatesAsync(CancellationToken.None);
         AssertEx.Equal(AppUpdateChannel.Development, offered.AvailableChannel);
 
-        await store.SaveAsync(new StoredNodeSettings { UpdateChannel = AppUpdateChannelNames.Stable });
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            UpdateChannel = AppUpdateChannelNames.Stable
+        });
         var refreshed = await service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
 
         // Well inside the floor: the check above stamped LastCheckedUtc with the real clock a moment ago.
@@ -917,7 +948,10 @@ public sealed class AppUpdateServiceTests
     /// <summary>A store holding one channel literal, so the service resolves it rather than the baked default.</summary>
     private static FakeNodeSettingsStore StoreWith(string channel)
     {
-        return new FakeNodeSettingsStore(new StoredNodeSettings { UpdateChannel = channel });
+        return new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            UpdateChannel = channel
+        });
     }
 
     /// <summary>A manager reporting an available version, and optionally a newest-stable one from its own feed.</summary>
@@ -938,7 +972,11 @@ public sealed class AppUpdateServiceTests
     {
         var manager = NewManager();
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
+               .Returns(new VelopackCheckResult
+               {
+                   Outcome = VelopackCheckOutcome.UpToDate,
+                   AvailableVersion = null
+               });
         return manager;
     }
 

@@ -169,7 +169,11 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 folder.Alias);
         }
 
-        return new PlannedFolderCopy { Folder = folder, CopyPlan = BuildCopyPlan(root, folder.Alias, cancellationToken) };
+        return new PlannedFolderCopy
+        {
+            Folder = folder,
+            CopyPlan = BuildCopyPlan(root, folder.Alias, cancellationToken)
+        };
     }
 
     private CopyPlan BuildCopyPlan(string root, string alias, CancellationToken cancellationToken)
@@ -233,12 +237,23 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 }
 
                 var relative = Path.GetRelativePath(root, file.FullName).Replace(oldChar: '\\', newChar: '/');
-                files.Add(new CopyFile { HostPath = file.FullName, RelativePosixPath = relative, Length = file.Length });
+                files.Add(new CopyFile
+                {
+                    HostPath = file.FullName,
+                    RelativePosixPath = relative,
+                    Length = file.Length
+                });
                 totalBytes += file.Length;
             }
         }
 
-        return new CopyPlan { Files = files, TotalBytes = totalBytes, ExcludedFileCount = excludedFiles, ExcludedDirectoryCount = excludedDirectories };
+        return new CopyPlan
+        {
+            Files = files,
+            TotalBytes = totalBytes,
+            ExcludedFileCount = excludedFiles,
+            ExcludedDirectoryCount = excludedDirectories
+        };
     }
 
     private static void HandleReparseEntry(FileSystemInfo info, string root, string alias)

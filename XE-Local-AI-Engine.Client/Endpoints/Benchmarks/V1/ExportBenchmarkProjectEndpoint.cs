@@ -49,35 +49,35 @@ public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRo
 
         HttpContext.Response.Headers.ContentDisposition = BenchmarkExportProjection.Attachment(export.Project.Name, now, "json");
         await Send.OkAsync(new BenchmarkExportResponse
-                  {
-                      TaskItems = [.. export.TaskItems.Select(BenchmarkEndpointMapper.ToResponse)],
-                      Cells = export.Cells.ToResponse().Cells,
-                      ScorableItemCount = export.Cells.ScorableItemCount,
-                      ExportedAtUtc = now.ToUnixTimeMilliseconds(),
-                      Project = new BenchmarkExportProjectResponse
-                      {
-                          Id = export.Project.Id,
-                          Name = export.Project.Name,
-                          CoreTask = JsonSerializer.Deserialize<string>(export.Project.CoreTaskJson.Span) ?? string.Empty,
-                          ContextTokens = export.Project.ContextTokens,
-                          MaxOutputTokens = export.Project.MaxOutputTokens,
-                          ReasoningBudgetTokens = export.Project.ReasoningBudgetTokens,
-                          InvocationTimeoutSeconds = export.Project.InvocationTimeoutSeconds,
-                          Agent = export.Summaries.Count == 0
-                              ? null
-                              : new BenchmarkExportAgentResponse
-                              {
-                                  Name = export.Summaries[0].AgentName,
-                                  Version = export.Summaries[0].AgentVersion
-                              },
-                          Judge = ToJudgePolicy(export.JudgePolicyRevision)
-                      },
-                      RankCohort = BenchmarkExportProjection.ToResponse(export.RankCohort),
-                      Runs = runs,
-                      RepeatGroups = groups,
-                      LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
-                      PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
-                  }, ct);
+        {
+            TaskItems = [.. export.TaskItems.Select(BenchmarkEndpointMapper.ToResponse)],
+            Cells = export.Cells.ToResponse().Cells,
+            ScorableItemCount = export.Cells.ScorableItemCount,
+            ExportedAtUtc = now.ToUnixTimeMilliseconds(),
+            Project = new BenchmarkExportProjectResponse
+            {
+                Id = export.Project.Id,
+                Name = export.Project.Name,
+                CoreTask = JsonSerializer.Deserialize<string>(export.Project.CoreTaskJson.Span) ?? string.Empty,
+                ContextTokens = export.Project.ContextTokens,
+                MaxOutputTokens = export.Project.MaxOutputTokens,
+                ReasoningBudgetTokens = export.Project.ReasoningBudgetTokens,
+                InvocationTimeoutSeconds = export.Project.InvocationTimeoutSeconds,
+                Agent = export.Summaries.Count == 0
+                    ? null
+                    : new BenchmarkExportAgentResponse
+                    {
+                        Name = export.Summaries[0].AgentName,
+                        Version = export.Summaries[0].AgentVersion
+                    },
+                Judge = ToJudgePolicy(export.JudgePolicyRevision)
+            },
+            RankCohort = BenchmarkExportProjection.ToResponse(export.RankCohort),
+            Runs = runs,
+            RepeatGroups = groups,
+            LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
+            PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
+        }, ct);
     }
 
     private static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision)

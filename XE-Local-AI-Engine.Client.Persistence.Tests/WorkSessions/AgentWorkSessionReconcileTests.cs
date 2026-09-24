@@ -71,7 +71,12 @@ public sealed class AgentWorkSessionReconcileTests
         _ = await store.ReconcileRunningSessionsAsync(Reason);
 
         var interrupted = await store.GetAsync(sessionId);
-        var resumed = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = interrupted.Version, TargetStatus = AgentWorkSessionStatus.Running });
+        var resumed = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = interrupted.Version,
+            TargetStatus = AgentWorkSessionStatus.Running
+        });
         AssertEx.Equal(AgentWorkSessionStatus.Running, resumed.Status);
     }
 
@@ -84,10 +89,20 @@ public sealed class AgentWorkSessionReconcileTests
             return sessionId;
         }
 
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = created.Version, TargetStatus = AgentWorkSessionStatus.Running });
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            TargetStatus = AgentWorkSessionStatus.Running
+        });
         if (status != AgentWorkSessionStatus.Running)
         {
-            _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = running.Version, TargetStatus = status });
+            _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = running.Version,
+                TargetStatus = status
+            });
         }
 
         return sessionId;

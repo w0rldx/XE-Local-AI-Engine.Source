@@ -1,7 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Reflection;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -68,6 +73,7 @@ public sealed class HostServiceResolutionTests
     ///     an empty scan.
     /// </summary>
     private const int FileFloor = 500;
+
     private const int ResolutionFloor = 5;
 
     [Test]
@@ -365,7 +371,8 @@ public sealed class HostServiceResolutionTests
     private static int Line(string text, int index) =>
         text.AsSpan(0, index).Count('\n') + 1;
 
-    private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
+    private static bool IsWordCharacter(char character) =>
+        char.IsLetterOrDigit(character) || character == '_';
 
     // ---------------------------------------------------------------- classification
 
@@ -378,15 +385,15 @@ public sealed class HostServiceResolutionTests
         .. new[]
            {
                typeof(LocalApiRoutes).Assembly,
-               typeof(XE_Local_AI_Engine.Client.Services.ModelFit.LlamaCppRuntimeOrchestrationService).Assembly,
-               typeof(XE_Local_AI_Engine.Client.Persistence.NodeChatDbContext).Assembly,
-               typeof(XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore).Assembly,
-               typeof(XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IInstalledRuntimeStore).Assembly,
-               typeof(Microsoft.EntityFrameworkCore.DbContext).Assembly
+               typeof(LlamaCppRuntimeOrchestrationService).Assembly,
+               typeof(NodeChatDbContext).Assembly,
+               typeof(IGgufModelStore).Assembly,
+               typeof(IInstalledRuntimeStore).Assembly,
+               typeof(DbContext).Assembly
            }
            .Concat(AppDomain.CurrentDomain.GetAssemblies()
                             .Where(assembly => (assembly.GetName().Name ?? string.Empty)
-                                       .StartsWith("XE-Local-AI-Engine", StringComparison.Ordinal)))
+                                .StartsWith("XE-Local-AI-Engine", StringComparison.Ordinal)))
            .Distinct()
     ];
 

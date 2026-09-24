@@ -10,7 +10,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class McpAgenticToolAdapterTests
 {
-    private static readonly McpInboundExecutionContext Agentic = new() { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" };
+    private static readonly McpInboundExecutionContext Agentic = new()
+    {
+        Scope = McpServerApiKeyScope.Agentic,
+        KeyPrefix = "xemcp_abc123"
+    };
 
     [Test]
     public async Task InvokeAsync_AuditsBeforeInvokingInner_ExactlyOnce()

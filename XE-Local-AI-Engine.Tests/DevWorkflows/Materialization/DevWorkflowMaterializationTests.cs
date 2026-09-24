@@ -149,8 +149,8 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
-                """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
-                DevWorkflowGraphs.DecompositionIntoDevTasks);
+            """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+            DevWorkflowGraphs.DecompositionIntoDevTasks);
 
         // Two quiescent passes, as every other refusal here: the first hands the complaint back to the node, the second
         // — after the re-attempt saves nothing new — stands it down.
@@ -177,8 +177,8 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
-                """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
-                DevWorkflowGraphs.DecompositionIntoDevTasks);
+            """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
+            DevWorkflowGraphs.DecompositionIntoDevTasks);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         await harness.SettleAgentAsync(runId, "decompose");
@@ -199,13 +199,13 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
-                """
-                [
-                  { "id": "alpha", "title": "Add Square", "goal": "Add a Square method.", "changes": ["src/Calc/Calculator.cs", "tests/CalculatorSquareTests.cs"] },
-                  { "id": "beta", "title": "Add Cube", "goal": "Add a Cube method.", "changes": ["src/Calc/Calculator.cs"] }
-                ]
-                """,
-                DevWorkflowGraphs.DecompositionIntoDevTasks);
+            """
+            [
+              { "id": "alpha", "title": "Add Square", "goal": "Add a Square method.", "changes": ["src/Calc/Calculator.cs", "tests/CalculatorSquareTests.cs"] },
+              { "id": "beta", "title": "Add Cube", "goal": "Add a Cube method.", "changes": ["src/Calc/Calculator.cs"] }
+            ]
+            """,
+            DevWorkflowGraphs.DecompositionIntoDevTasks);
 
         _ = await harness.AdvanceAsync(runId);
 
@@ -228,8 +228,8 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
-                """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
-                DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask);
+            """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+            DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
         await harness.SettleAgentAsync(runId, "decompose");
@@ -247,8 +247,8 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
-                """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
-                DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask);
+            """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
+            DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask);
 
         _ = await harness.AdvanceAsync(runId);
 

@@ -35,8 +35,7 @@ public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<De
     private readonly ISandboxContainmentProbe _containmentProbe;
     private readonly IDockerDaemonPreflightService _dockerDaemonPreflight;
 
-    public GetDevelopmentCapabilityEndpoint(
-        IOptions<DevelopmentOptions> options,
+    public GetDevelopmentCapabilityEndpoint(IOptions<DevelopmentOptions> options,
         IOptions<SandboxOptions> agentSandboxOptions,
         IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,
         IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
@@ -76,13 +75,25 @@ public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<De
         var isolation = BuildIsolationSummary();
         if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
-            await Send.OkAsync(new DevelopmentCapabilityResponse { Enabled = enabled, SandboxProvider = providerName, ContainerRuntime = null, Isolation = isolation }, ct);
+            await Send.OkAsync(new DevelopmentCapabilityResponse
+            {
+                Enabled = enabled,
+                SandboxProvider = providerName,
+                ContainerRuntime = null,
+                Isolation = isolation
+            }, ct);
             return;
         }
 
         var preflight = await _dockerDaemonPreflight.InspectAsync(ct);
 
-        await Send.OkAsync(new DevelopmentCapabilityResponse { Enabled = enabled, SandboxProvider = providerName, ContainerRuntime = preflight.ToResponse(), Isolation = isolation }, ct);
+        await Send.OkAsync(new DevelopmentCapabilityResponse
+        {
+            Enabled = enabled,
+            SandboxProvider = providerName,
+            ContainerRuntime = preflight.ToResponse(),
+            Isolation = isolation
+        }, ct);
     }
 
     // Reaches no daemon: the role providers are DI singletons and the container preflight above is the one call that talks to anything (it caches its attestation).

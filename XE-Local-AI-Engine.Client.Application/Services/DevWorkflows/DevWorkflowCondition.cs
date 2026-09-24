@@ -187,7 +187,12 @@ internal sealed record DevWorkflowCondition
         var value = element.TryGetProperty("value", out var valueElement) ? valueElement.Clone() : default;
         if (op is DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists)
         {
-            return new DevWorkflowCondition { Path = path, Operator = op, Value = value };
+            return new DevWorkflowCondition
+            {
+                Path = path,
+                Operator = op,
+                Value = value
+            };
         }
 
         if (value.ValueKind == JsonValueKind.Undefined)
@@ -212,6 +217,11 @@ internal sealed record DevWorkflowCondition
                                                      + "Booleans compare for equality only, so this edge could never fire.");
         }
 
-        return new DevWorkflowCondition { Path = path, Operator = op, Value = value };
+        return new DevWorkflowCondition
+        {
+            Path = path,
+            Operator = op,
+            Value = value
+        };
     }
 }

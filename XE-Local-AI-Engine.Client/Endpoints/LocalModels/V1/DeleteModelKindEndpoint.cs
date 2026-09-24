@@ -10,8 +10,7 @@ public sealed class DeleteModelKindEndpoint : Endpoint<ResetModelKindRequest, Mo
 {
     private readonly IModelClassificationService _classificationService;
 
-    public DeleteModelKindEndpoint(
-        IModelClassificationService classificationService)
+    public DeleteModelKindEndpoint(IModelClassificationService classificationService)
     {
         ArgumentNullException.ThrowIfNull(classificationService);
         _classificationService = classificationService;

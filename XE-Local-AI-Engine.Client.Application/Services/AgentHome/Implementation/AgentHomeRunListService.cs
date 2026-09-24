@@ -65,7 +65,11 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot);
         if (!Directory.Exists(runsRoot))
         {
-            return new AgentHomeRunPage { Items = [], TotalCount = 0 };
+            return new AgentHomeRunPage
+            {
+                Items = [],
+                TotalCount = 0
+            };
         }
 
         var runs = new List<AgentHomeRunLocation>();
@@ -89,7 +93,11 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
             items.Add(await SummarizeAsync(path, runId, startedAt, cancellationToken));
         }
 
-        return new AgentHomeRunPage { Items = items, TotalCount = runs.Count };
+        return new AgentHomeRunPage
+        {
+            Items = items,
+            TotalCount = runs.Count
+        };
     }
 
     /// <inheritdoc />
@@ -103,7 +111,11 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         // The same two windows the page is built from: an operator reading a run wants its opening and its end, and
         // the middle of a multi-gigabyte log is neither.
         var (lines, truncated) = await ReadBoundedLinesAsync(Path.Combine(run.Path, "logs", "events.jsonl"), cancellationToken);
-        return new AgentHomeRunText { Text = string.Join('\n', lines), Truncated = truncated };
+        return new AgentHomeRunText
+        {
+            Text = string.Join('\n', lines),
+            Truncated = truncated
+        };
     }
 
     /// <inheritdoc />
@@ -134,7 +146,11 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         await using var stream = TryOpenRunFile(path, long.MaxValue);
         if (stream is null)
         {
-            return new AgentHomeRunText { Text = string.Empty, Truncated = false };
+            return new AgentHomeRunText
+            {
+                Text = string.Empty,
+                Truncated = false
+            };
         }
 
         try
@@ -147,11 +163,19 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
                 text = lastBreak < 0 ? string.Empty : text[..(lastBreak + 1)];
             }
 
-            return new AgentHomeRunText { Text = text, Truncated = truncated };
+            return new AgentHomeRunText
+            {
+                Text = text,
+                Truncated = truncated
+            };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return new AgentHomeRunText { Text = string.Empty, Truncated = false };
+            return new AgentHomeRunText
+            {
+                Text = string.Empty,
+                Truncated = false
+            };
         }
     }
 
@@ -215,15 +239,30 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         switch (eventName)
         {
             case "started":
-                return summary with { ConversationId = ReadConversationId(root) };
+                return summary with
+                {
+                    ConversationId = ReadConversationId(root)
+                };
             case "cancelled":
-                return summary with { Outcome = AgentHomeRunOutcomes.Cancelled };
+                return summary with
+                {
+                    Outcome = AgentHomeRunOutcomes.Cancelled
+                };
             case "run_completed":
-                return summary with { Outcome = ReadStatus(root) };
+                return summary with
+                {
+                    Outcome = ReadStatus(root)
+                };
             case "patch_applied":
-                return summary with { ApplyState = AgentHomeRunApplyStates.Applied };
+                return summary with
+                {
+                    ApplyState = AgentHomeRunApplyStates.Applied
+                };
             case "patch_apply_rejected":
-                return summary with { ApplyState = AgentHomeRunApplyStates.Rejected };
+                return summary with
+                {
+                    ApplyState = AgentHomeRunApplyStates.Rejected
+                };
             default:
                 return summary;
         }
@@ -367,10 +406,10 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         // Each window drops the edge line it cannot have in full: the head ends mid-line when it hit its cap, and a
         // tail taken at all starts mid-line.
         return
-        ([
-            .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
-            .. SplitLines(tail, dropFirst: true, dropLast: false)
-        ], tail.Length > 0);
+            ([
+                .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
+                .. SplitLines(tail, dropFirst: true, dropLast: false)
+            ], tail.Length > 0);
     }
 
     private static async Task<byte[]> ReadSegmentAsync(FileStream stream, long offset, int count, CancellationToken cancellationToken)

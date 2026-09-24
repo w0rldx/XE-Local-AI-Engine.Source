@@ -68,13 +68,13 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         // The original flush fault propagates so the caller learns of it and cancels the run.
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                          eventSink,
-                          correlation,
-                          "model-x",
-                          sequence,
-                          new NodeChatPartAccumulator(),
-                          onTerminal: null,
-                          CancellationToken.None));
+            eventSink,
+            correlation,
+            "model-x",
+            sequence,
+            new NodeChatPartAccumulator(),
+            onTerminal: null,
+            CancellationToken.None));
 
         await collector;
 
@@ -132,13 +132,13 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         });
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await pump.PumpAsync(stateChannel.Reader,
-                          eventSink,
-                          correlation,
-                          "model-x",
-                          sequence,
-                          new NodeChatPartAccumulator(),
-                          onTerminal: null,
-                          CancellationToken.None));
+            eventSink,
+            correlation,
+            "model-x",
+            sequence,
+            new NodeChatPartAccumulator(),
+            onTerminal: null,
+            CancellationToken.None));
 
         await collector;
 
@@ -155,13 +155,38 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
     private static async Task<(NodeChatMessageCorrelation Correlation, Guid AssistantMessageId)> SeedStreamingRowAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
-        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest { ConversationId = conversationId, Title = "Pump fault", UserId = "node", CreatedAtUtc = 10, Origin = NodeChatOriginValues.Local });
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "hello", CreatedAtUtc = 11 });
+        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = conversationId,
+            Title = "Pump fault",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            Origin = NodeChatOriginValues.Local
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "hello",
+            CreatedAtUtc = 11
+        });
 
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId };
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId, CreatedAtUtc = 12, Model = "model-x" });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = assistantMessageId,
+            RequestId = requestId
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = assistantMessageId,
+            RequestId = requestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.MarkAssistantQueuedAsync(correlation, NowMs());
         await persistence.MarkAssistantStreamingAsync(correlation, NowMs());
         return (correlation, assistantMessageId);

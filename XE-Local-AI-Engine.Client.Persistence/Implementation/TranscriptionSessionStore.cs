@@ -68,7 +68,11 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
                                    .ThenByDescending(session => session.Id)
                                    .Skip(skip)
                                    .Take(take)
-                                   .Select(session => new SessionCountRow { Session = session, SegmentCount = session.Segments.Count })
+                                   .Select(session => new SessionCountRow
+                                   {
+                                       Session = session,
+                                       SegmentCount = session.Segments.Count
+                                   })
                                    .ToListAsync(cancellationToken);
 
         return rows.Select(static row => ToSummaryView(row.Session, row.SegmentCount)).ToArray();
@@ -141,7 +145,11 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
         var row = await _dbContext.TranscriptionSessions
                                   .AsNoTracking()
                                   .Where(session => session.Id == sessionId)
-                                  .Select(session => new SessionCountRow { Session = session, SegmentCount = session.Segments.Count })
+                                  .Select(session => new SessionCountRow
+                                  {
+                                      Session = session,
+                                      SegmentCount = session.Segments.Count
+                                  })
                                   .FirstOrDefaultAsync(cancellationToken);
 
         return row is null ? null : ToSummaryView(row.Session, row.SegmentCount);

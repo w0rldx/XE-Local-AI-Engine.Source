@@ -88,7 +88,14 @@ internal static class GraphWorkflowStateMachine
     ///     matters.
     /// </remarks>
     public static string PauseOutputJson(GraphWorkflowDecisionKind decision) =>
-        JsonSerializer.Serialize(new PauseOutput { Status = GraphWorkflowNodeOutputStatuses.Succeeded, Output = new PauseDecision { Decision = decision.ToString() } }, JsonOptions);
+        JsonSerializer.Serialize(new PauseOutput
+        {
+            Status = GraphWorkflowNodeOutputStatuses.Succeeded,
+            Output = new PauseDecision
+            {
+                Decision = decision.ToString()
+            }
+        }, JsonOptions);
 
     /// <summary>Every answer a parked node SUCCEEDS on — the ones that part company in the graph rather than on the row.</summary>
     /// <remarks>

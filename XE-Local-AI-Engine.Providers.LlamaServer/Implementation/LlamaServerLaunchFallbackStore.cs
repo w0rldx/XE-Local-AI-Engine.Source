@@ -297,7 +297,6 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             // Best-effort cleanup of a temp write; ignore.
         }
     }
-
 }
 
 /// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the launch configs proven unable to reach readiness.</summary>

@@ -67,7 +67,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from Transcription:IdleTimeoutMinutes when no operator value is
             // stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout), so the bare default would report 15 while the reaper fires at the configured value.
             IdleTimeoutMinutes = settings.TranscriptionIdleTimeoutMinutes
-            ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
+                                 ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
             VadInstalled = _pathResolver.IsVadInstalled(),
             // Named, because two adjacent booleans swapped positionally would report the VAD state as the capture capability, with no mapper test able to catch it.
             // The capability, not the operating system: false on Windows below the documented process-loopback build too, and computed here so the two projecting routes cannot disagree.
@@ -141,7 +141,12 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
                                         })
                                         .ToArray();
 
-        return new TranscriptionModelCatalogView { Models = models, SelectedModelId = selectedModelId, RecommendedModelId = recommendedModelId };
+        return new TranscriptionModelCatalogView
+        {
+            Models = models,
+            SelectedModelId = selectedModelId,
+            RecommendedModelId = recommendedModelId
+        };
     }
 
     private async Task<StoredNodeSettings> LoadSettingsAsync(CancellationToken ct) =>

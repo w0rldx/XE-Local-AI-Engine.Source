@@ -39,7 +39,13 @@ public sealed class IntegrationCallerIdentity
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(prefixes[0]) ? null : new IntegrationCallerIdentity { PrincipalId = principalId, KeyPrefix = prefixes[0] };
+        return string.IsNullOrWhiteSpace(prefixes[0])
+            ? null
+            : new IntegrationCallerIdentity
+            {
+                PrincipalId = principalId,
+                KeyPrefix = prefixes[0]
+            };
     }
 }
 
@@ -99,7 +105,12 @@ public sealed class IntegrationExternalAccess
         var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return execution is not null && execution.PrincipalId == caller.PrincipalId && allowed
-            ? new IntegrationAccessResult { Outcome = IntegrationAccessOutcome.Allowed, Execution = execution, Session = null }
+            ? new IntegrationAccessResult
+            {
+                Outcome = IntegrationAccessOutcome.Allowed,
+                Execution = execution,
+                Session = null
+            }
             : Masked;
     }
 
@@ -118,12 +129,23 @@ public sealed class IntegrationExternalAccess
         var allowed = await AllowsAsync(caller, session?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return session is not null && allowed
-            ? new IntegrationAccessResult { Outcome = IntegrationAccessOutcome.Allowed, Execution = null, Session = session }
+            ? new IntegrationAccessResult
+            {
+                Outcome = IntegrationAccessOutcome.Allowed,
+                Execution = null,
+                Session = session
+            }
             : Masked;
     }
 
     /// <summary>Unknown, foreign, revoked and out-of-allowlist are indistinguishable, on purpose.</summary>
-    private static IntegrationAccessResult Masked => new() { Outcome = IntegrationAccessOutcome.Masked, Execution = null, Session = null };
+    private static IntegrationAccessResult Masked =>
+        new()
+        {
+            Outcome = IntegrationAccessOutcome.Masked,
+            Execution = null,
+            Session = null
+        };
 
     private async Task<bool> AllowsAsync(IntegrationCallerIdentity caller, Guid triggerId, CancellationToken cancellationToken)
     {

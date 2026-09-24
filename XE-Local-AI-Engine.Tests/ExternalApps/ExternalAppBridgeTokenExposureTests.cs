@@ -44,11 +44,11 @@ public sealed class ExternalAppBridgeTokenExposureTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(AppId,
-                                        DisplayName: null,
-                                        manifest.ManifestVersion,
-                                        manifest.ManifestSha256,
-                                        new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true));
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true));
         await harness.WaitUntilIdleAsync(admitted.Id);
 
         var token = AssertEx.NotNull(AssertEx.NotNull(await harness.ReadAsync(admitted.Id)).BridgeToken);

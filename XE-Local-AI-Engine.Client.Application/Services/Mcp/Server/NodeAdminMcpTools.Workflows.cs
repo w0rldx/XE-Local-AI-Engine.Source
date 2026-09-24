@@ -76,7 +76,13 @@ public sealed partial class NodeAdminMcpTools
                                         item.LatestRunNodes.Total,
                                         item.LatestRunNodes.PendingDecisionCount))
                                     .ToArray();
-                return new McpWorkflowRunListResponse { Status = "ok", Runs = runs, Count = runs.Length, Limit = boundedLimit };
+                return new McpWorkflowRunListResponse
+                {
+                    Status = "ok",
+                    Runs = runs,
+                    Count = runs.Length,
+                    Limit = boundedLimit
+                };
             }, static response => response.FailureCode is not null);
 
     [McpServerTool(Name = "get_workflow_run")]
@@ -118,7 +124,13 @@ public sealed partial class NodeAdminMcpTools
                 }
                 catch (DevWorkflowNotFoundException)
                 {
-                    return new McpWorkflowRunGetResponse { Status = "not_found", Run = null, FailureCode = McpAdminToolFailureCodes.RunNotFound, DisplayMessage = "Run not found." };
+                    return new McpWorkflowRunGetResponse
+                    {
+                        Status = "not_found",
+                        Run = null,
+                        FailureCode = McpAdminToolFailureCodes.RunNotFound,
+                        DisplayMessage = "Run not found."
+                    };
                 }
 
                 // Names only, over the summary projection that never decrypts a graph blob — the same read the run

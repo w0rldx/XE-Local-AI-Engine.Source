@@ -167,10 +167,20 @@ internal sealed class IntegrationInvokeHarness
             executionCount);
 
     public IntegrationCallerIdentity Caller(string keyPrefix = KeyPrefix) =>
-        new() { PrincipalId = PrincipalId, KeyPrefix = keyPrefix };
+        new()
+        {
+            PrincipalId = PrincipalId,
+            KeyPrefix = keyPrefix
+        };
 
     public static IntegrationInputDto Text(string text) =>
-        new() { Kind = IntegrationInputKinds.Text, Text = text, Label = null, Json = null };
+        new()
+        {
+            Kind = IntegrationInputKinds.Text,
+            Text = text,
+            Label = null,
+            Json = null
+        };
 
     public IReadOnlyList<NodeChatCreateConversationRequest> CapturedConversations() =>
     [

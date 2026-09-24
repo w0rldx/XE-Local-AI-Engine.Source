@@ -446,7 +446,11 @@ public sealed class DockerSandboxHardeningTests
         // Guards the direction the per-guarantee cases cannot: that the specification the provider actually sends is
         // itself conformant, rather than merely being checked against conformant-looking test data.
         var specification = DockerSandboxHardening.BuildSpecification(Options(),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-test",
             "sandbox-1",
             "install-1",
@@ -480,7 +484,11 @@ public sealed class DockerSandboxHardeningTests
             {
                 TempSizeMb = 64
             },
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-test",
             "sandbox-1",
             "install-1",
@@ -520,7 +528,11 @@ public sealed class DockerSandboxHardeningTests
     public void BuildSpecification_WhenUnrestrictedEgressIsAskedFor_UsesTheDefaultBridgeRatherThanNone()
     {
         var specification = DockerSandboxHardening.BuildSpecification(Options(),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-test",
             "sandbox-1",
             "install-1",
@@ -541,7 +553,11 @@ public sealed class DockerSandboxHardeningTests
         // The read-back must follow what was asked for. Pinning it to "none" would fail every legitimate Unrestricted
         // create; leaving it unchecked would let a daemon silently substitute one policy for another.
         var bridge = DockerSandboxHardening.BuildSpecification(Options(),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-test",
             "sandbox-1",
             "install-1",
@@ -682,7 +698,11 @@ public sealed class DockerSandboxHardeningTests
     internal static DockerContainerSpecification Specification()
     {
         return DockerSandboxHardening.BuildSpecification(Options(),
-            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
+            new ResolvedContainerIdentity
+            {
+                UserId = 1000,
+                GroupId = 1000
+            },
             "xe-dev-test",
             "sandbox-1",
             "install-1",

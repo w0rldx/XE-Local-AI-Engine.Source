@@ -81,7 +81,11 @@ internal static class BenchmarkPythonTestsHarness
         // Upper-case hex, because the analyzer is right that lower-casing is the culture-sensitive direction and the
         // nonce is compared byte-for-byte against what the harness prints, never parsed or displayed.
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        var configBase64 = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new HarnessConfig { CallTimeoutSeconds = callTimeoutSeconds, Exports = exports }, VerdictOptions));
+        var configBase64 = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new HarnessConfig
+        {
+            CallTimeoutSeconds = callTimeoutSeconds,
+            Exports = exports
+        }, VerdictOptions));
         var testsBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(testCode));
         var candidateBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(candidateSource));
 
@@ -100,11 +104,16 @@ internal static class BenchmarkPythonTestsHarness
                 Program = null,
                 Nonce = nonce,
                 Refusal = $"The extracted solution is {candidateSource.Length} characters, more than the "
-                + $"{Math.Max(0, (ComputeToolDefinition.CodeMaxLength - overhead) * 3 / 4)} the execution harness can carry alongside this criterion's test code."
+                          + $"{Math.Max(0, (ComputeToolDefinition.CodeMaxLength - overhead) * 3 / 4)} the execution harness can carry alongside this criterion's test code."
             };
         }
 
-        return new Composition { Program = program, Nonce = nonce, Refusal = null };
+        return new Composition
+        {
+            Program = program,
+            Nonce = nonce,
+            Refusal = null
+        };
     }
 
     /// <summary>Reads the sandbox's stdout for this invocation's marker.</summary>

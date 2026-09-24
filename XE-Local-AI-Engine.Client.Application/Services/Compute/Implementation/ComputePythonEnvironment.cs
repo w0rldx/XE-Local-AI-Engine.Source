@@ -226,7 +226,11 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     /// </remarks>
     private ComputePythonRuntime BuildRuntime(string interpreter, string venvRoot)
     {
-        return new ComputePythonRuntime { InterpreterPath = interpreter, ReadOnlyTrees = [venvRoot, Path.Combine(_cacheRoot, ManagedPythonDirectoryName)] };
+        return new ComputePythonRuntime
+        {
+            InterpreterPath = interpreter,
+            ReadOnlyTrees = [venvRoot, Path.Combine(_cacheRoot, ManagedPythonDirectoryName)]
+        };
     }
 
     /// <summary>

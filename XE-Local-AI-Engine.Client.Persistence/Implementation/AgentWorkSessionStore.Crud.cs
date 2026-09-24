@@ -81,29 +81,34 @@ public sealed partial class AgentWorkSessionStore
 
         AgentWorkSession? updated = null;
         _ = await ExecuteMutationAsync(command.SessionId,
-                command.ExpectedVersion,
-                operationId: null,
-                session =>
+            command.ExpectedVersion,
+            operationId: null,
+            session =>
+            {
+                if (command.Title is not null)
                 {
-                    if (command.Title is not null)
-                    {
-                        session.Title = command.Title;
-                    }
+                    session.Title = command.Title;
+                }
 
-                    if (command.Objective is not null)
-                    {
-                        session.Objective = Utf8(command.Objective);
-                    }
+                if (command.Objective is not null)
+                {
+                    session.Objective = Utf8(command.Objective);
+                }
 
-                    if (command.AgentDefinitionId is { } agentDefinitionId)
-                    {
-                        session.AgentDefinitionId = agentDefinitionId;
-                    }
+                if (command.AgentDefinitionId is { } agentDefinitionId)
+                {
+                    session.AgentDefinitionId = agentDefinitionId;
+                }
 
-                    updated = session;
-                    return Task.FromResult(new MutationOutcome { EventType = "SessionUpdated", Outcome = session.Status.ToString(), DetailJson = null });
-                },
-                cancellationToken);
+                updated = session;
+                return Task.FromResult(new MutationOutcome
+                {
+                    EventType = "SessionUpdated",
+                    Outcome = session.Status.ToString(),
+                    DetailJson = null
+                });
+            },
+            cancellationToken);
         return Snapshot(updated!);
     }
 
@@ -112,22 +117,27 @@ public sealed partial class AgentWorkSessionStore
         ArgumentNullException.ThrowIfNull(command);
         AgentWorkSession? updated = null;
         _ = await ExecuteMutationAsync(command.SessionId,
-                command.ExpectedVersion,
-                operationId: null,
-                session =>
+            command.ExpectedVersion,
+            operationId: null,
+            session =>
+            {
+                if (command.TargetStatus == AgentWorkSessionStatus.Interrupted)
                 {
-                    if (command.TargetStatus == AgentWorkSessionStatus.Interrupted)
-                    {
-                        // Only the startup reconcile writes Interrupted: it is the record of a host that died, which no
-                        // live caller is in a position to assert.
-                        throw new WorkSessionInvalidTransitionException("Interrupted is written only by the startup reconciliation.");
-                    }
+                    // Only the startup reconcile writes Interrupted: it is the record of a host that died, which no
+                    // live caller is in a position to assert.
+                    throw new WorkSessionInvalidTransitionException("Interrupted is written only by the startup reconciliation.");
+                }
 
-                    ApplyStatus(session, command.TargetStatus, command.CurrentTaskId);
-                    updated = session;
-                    return Task.FromResult(new MutationOutcome { EventType = "SessionStatusChanged", Outcome = command.TargetStatus.ToString(), DetailJson = ReasonDetail(command.SanitizedReason) });
-                },
-                cancellationToken);
+                ApplyStatus(session, command.TargetStatus, command.CurrentTaskId);
+                updated = session;
+                return Task.FromResult(new MutationOutcome
+                {
+                    EventType = "SessionStatusChanged",
+                    Outcome = command.TargetStatus.ToString(),
+                    DetailJson = ReasonDetail(command.SanitizedReason)
+                });
+            },
+            cancellationToken);
         return Snapshot(updated!);
     }
 

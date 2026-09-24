@@ -189,6 +189,16 @@ internal sealed class GgufImportInspector : IGgufImportInspector
     // its inert TRUE default (the rejection is what the caller acts on).
     private static GgufImportInspection Rejected(string displayName, long size, GgufImportRejectionCode code)
     {
-        return new GgufImportInspection { SizeBytes = size, GgufVersion = null, Architecture = null, Workload = null, DetectedQuantization = null, SourceDisplayName = displayName, Rejections = [code], Warnings = [] };
+        return new GgufImportInspection
+        {
+            SizeBytes = size,
+            GgufVersion = null,
+            Architecture = null,
+            Workload = null,
+            DetectedQuantization = null,
+            SourceDisplayName = displayName,
+            Rejections = [code],
+            Warnings = []
+        };
     }
 }

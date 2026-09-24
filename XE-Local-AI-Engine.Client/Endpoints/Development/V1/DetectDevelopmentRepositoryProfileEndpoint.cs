@@ -29,7 +29,12 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint : Endpoint<Develo
         try
         {
             var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct);
-            await Send.OkAsync(new DevelopmentProfileDetectionResponse { ProfileId = detection.ProfileId, BuildTarget = detection.BuildTarget, Candidates = detection.Candidates }, ct);
+            await Send.OkAsync(new DevelopmentProfileDetectionResponse
+            {
+                ProfileId = detection.ProfileId,
+                BuildTarget = detection.BuildTarget,
+                Candidates = detection.Candidates
+            }, ct);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DirectoryNotFoundException)
         {

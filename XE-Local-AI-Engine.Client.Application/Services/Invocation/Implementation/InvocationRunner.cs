@@ -216,10 +216,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
                 await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
-                                    stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
-                                    stream?.UsageSnapshot is { } turnUsage
-                                        ? new TurnUsageTotals { InputTokens = turnUsage.InputTokens, OutputTokens = turnUsage.OutputTokens, TotalTokens = turnUsage.TotalTokens, ReasoningTokens = turnUsage.ReasoningTokens }
-                                        : null);
+                    stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
+                    stream?.UsageSnapshot is { } turnUsage
+                        ? new TurnUsageTotals
+                        {
+                            InputTokens = turnUsage.InputTokens,
+                            OutputTokens = turnUsage.OutputTokens,
+                            TotalTokens = turnUsage.TotalTokens,
+                            ReasoningTokens = turnUsage.ReasoningTokens
+                        }
+                        : null);
             }
             catch (Exception exception)
             {
@@ -329,8 +335,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
             if (dispatchDecision is { } announced && announced.Tier != ReasoningTier.Normal && !modelWasSwapped)
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                                   BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
-                                   announced.ReasonCode);
+                    BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
+                    announced.ReasonCode);
             }
 
             // Seed the per-root spawn context (Depth 0) so spawn_subagent enforces the fan-out and cloud-spawn caps against ONE shared root. It flows as an
@@ -340,7 +346,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // BOTH models, not just the dispatched one: the send-boundary retry switches `resolvedModel` back to the original inside this scope, and a pin it
             // never resolved drops that fallback send onto the transport's weaker unpinned check. Identical ids de-duplicate, so the pin set is unchanged.
             var turnPins = await ExternalProviderInvocationPin
-                                 .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken);
+                .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken);
 
             // Pin the binding this turn is authorized against once, up front: the provider re-reads configuration on every send, so an operator edit landing
             // mid-tool-loop would redirect the later ones. Opened here, not in the resolver — an AsyncLocal write never reaches its caller; no external model, no pin.
@@ -407,8 +413,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         // attribution both read it there, so a swapped turn that does not correct it is measured against a model that never saw it.
                         await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel);
                         await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                                           BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
-                                           served.ReasonCode);
+                            BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
+                            served.ReasonCode);
                     }
                 }
                 // The fast model went away between the capacity probe and the send — profiled away, ejected, uninstalled, or it would not fit — and nothing has
@@ -434,8 +440,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, retryPolicy.ContextCapacityTokens, retryPolicy.ReservedOutputTokens);
 
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                                       BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
-                                       ReasoningDispatchReasons.FastModelUnavailable);
+                        BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
+                        ReasoningDispatchReasons.FastModelUnavailable);
 
                     // Exactly once. A second failure is a real failure and fails the turn normally.
                     await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken);
@@ -447,8 +453,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Names the model that actually served. No served-model report: the turn produced no answer to attribute and the fast model may have died
                     // before its first token, so the seeded (authorised) model stays on the failed row. The FAILURE is the outer handler's, as for any other turn.
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                                       BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
-                                       failedSwap.ReasonCode);
+                        BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
+                        failedSwap.ReasonCode);
                     throw;
                 }
             }
@@ -925,7 +931,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 if (hiddenToolCount > 0)
                 {
                     await transport.EmitNoticeAsync(TurnNoticeKind.ToolsFiltered,
-                                       BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)));
+                        BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)));
                 }
             }
 
@@ -981,9 +987,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // A participant runs on its OWN model, which the turn-level pin does not cover, so its sends would fall to the transport's weaker unpinned check while
         // the workflow carries node-local tool results between participants. One scope for all of them: the workflow interleaves participants in this single async flow.
         var resolvedParticipantPins = await ExternalProviderInvocationPin
-                                            .ResolveAsync(_externalProviderRegistry,
-                                                definition.Participants.Select(participant => participant.ModelId),
-                                                invocationToken);
+            .ResolveAsync(_externalProviderRegistry,
+                definition.Participants.Select(participant => participant.ModelId),
+                invocationToken);
         using var participantPins = ExternalProviderBindingPinScope.Begin(resolvedParticipantPins);
 
         // The workflow seed is budgeted exactly the way the single-agent path budgets its initial assembly (see TurnPolicy), so a long

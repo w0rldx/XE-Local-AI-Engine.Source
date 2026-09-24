@@ -244,8 +244,8 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     private static async Task<HostGitResult> DiffCheckAsync(string repository)
     {
         return await NewGit().RunAsync(repository,
-                                 AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", "."),
-                                 CancellationToken.None);
+            AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", "."),
+            CancellationToken.None);
     }
 
     private static async Task RunGitAsync(string workingDirectory, params string[] arguments)

@@ -243,7 +243,11 @@ public sealed class WorkspaceEndpointTests
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(call => string.Equals(call.Arg<string?>(), McpKey, StringComparison.Ordinal)
-                         ? new McpServerApiKeyValidation { Scope = McpServerApiKeyScope.Delegate, Prefix = "xemcp_workspace" }
+                         ? new McpServerApiKeyValidation
+                         {
+                             Scope = McpServerApiKeyScope.Delegate,
+                             Prefix = "xemcp_workspace"
+                         }
                          : null);
 
         return new TestServerWebAppFactory

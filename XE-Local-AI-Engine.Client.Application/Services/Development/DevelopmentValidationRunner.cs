@@ -57,12 +57,12 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         ArgumentNullException.ThrowIfNull(repository);
         var task = await _store.GetTaskAsync(taskId, cancellationToken);
         var transition = await _store.StartValidationAsync(new DevelopmentStartValidationCommand
-        {
-            TaskId = taskId,
-            OperationId = Guid.NewGuid(),
-            ExpectedTaskVersion = task.Version
-        },
-                                         cancellationToken);
+            {
+                TaskId = taskId,
+                OperationId = Guid.NewGuid(),
+                ExpectedTaskVersion = task.Version
+            },
+            cancellationToken);
         var coderAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken))
             .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                              && attempt.Status == DevelopmentAttemptStatus.Succeeded);
@@ -125,15 +125,21 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
             var target = TargetFor(passed);
             _ = await _store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand
+                {
+                    Artifact = prepared.Attachment,
+                    OperationId = Guid.NewGuid(),
+                    ExpectedTaskVersion = transition.Version,
+                    TargetStatus = target,
+                    SanitizedReason = passed ? null : BuildFailureReason(verdict)
+                },
+                cancellationToken);
+            return new DevelopmentValidationResult
             {
-                Artifact = prepared.Attachment,
-                OperationId = Guid.NewGuid(),
-                ExpectedTaskVersion = transition.Version,
-                TargetStatus = target,
-                SanitizedReason = passed ? null : BuildFailureReason(verdict)
-            },
-                                cancellationToken);
-            return new DevelopmentValidationResult { ArtifactId = prepared.ArtifactId, Passed = passed, TaskStatus = target, SubjectHash = evidence.Current.SubjectHash };
+                ArtifactId = prepared.ArtifactId,
+                Passed = passed,
+                TaskStatus = target,
+                SubjectHash = evidence.Current.SubjectHash
+            };
         }
         catch (Exception exception)
         {
@@ -143,20 +149,20 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 // as "implemented, validate it", and a workflow tick re-derives the same operation id every time.
                 var recovery = RecoveryOperationId(coderAttempt.Id);
                 var alreadyRecovered = await _store.FindOperationAsync(task.ProjectId,
-                                                       recovery,
-                                                       DevelopmentOperationPhases.Completed,
-                                                       CancellationToken.None) is not null;
+                    recovery,
+                    DevelopmentOperationPhases.Completed,
+                    CancellationToken.None) is not null;
                 _ = await _store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
-                {
-                    TaskId = taskId,
-                    OperationId = alreadyRecovered ? Guid.NewGuid() : recovery,
-                    TargetStatus = alreadyRecovered ? DevelopmentTaskStatus.Blocked : DevelopmentTaskStatus.InProgress,
-                    ExpectedTaskVersion = transition.Version,
-                    Reason = alreadyRecovered
-                                            ? BuildRecoveryExhaustedReason(exception)
-                                            : "Deterministic validation did not produce usable evidence."
-                },
-                                    CancellationToken.None);
+                    {
+                        TaskId = taskId,
+                        OperationId = alreadyRecovered ? Guid.NewGuid() : recovery,
+                        TargetStatus = alreadyRecovered ? DevelopmentTaskStatus.Blocked : DevelopmentTaskStatus.InProgress,
+                        ExpectedTaskVersion = transition.Version,
+                        Reason = alreadyRecovered
+                            ? BuildRecoveryExhaustedReason(exception)
+                            : "Deterministic validation did not produce usable evidence."
+                    },
+                    CancellationToken.None);
             }
             catch (Exception recoveryException) when (recoveryException is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
             {

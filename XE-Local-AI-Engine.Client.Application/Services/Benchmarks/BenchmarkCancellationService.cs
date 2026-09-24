@@ -16,8 +16,7 @@ public sealed class BenchmarkCancellationService : IBenchmarkCancellationService
     private readonly IBenchmarkStore _store;
     private readonly IBenchmarkCancellationRegistry _registry;
 
-    public BenchmarkCancellationService(
-        IBenchmarkStore store,
+    public BenchmarkCancellationService(IBenchmarkStore store,
         IBenchmarkCancellationRegistry registry)
     {
         _store = store;

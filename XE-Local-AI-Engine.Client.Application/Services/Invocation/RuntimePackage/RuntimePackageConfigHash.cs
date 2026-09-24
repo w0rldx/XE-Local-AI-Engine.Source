@@ -65,6 +65,7 @@ public static class RuntimePackageConfigHash
         {
             throw new ArgumentException("Resolved system prompt must be blank exactly when it is explicitly omitted.", nameof(resolvedSystemPrompt));
         }
+
         ArgumentNullException.ThrowIfNull(allowedTools);
         ArgumentNullException.ThrowIfNull(timeouts);
 

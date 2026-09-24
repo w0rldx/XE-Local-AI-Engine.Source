@@ -24,8 +24,7 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
     private readonly IOllamaModelService _modelService;
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public LocalModelDetailsResolver(
-        IOllamaModelService modelService,
+    public LocalModelDetailsResolver(IOllamaModelService modelService,
         ILocalModelProviderResolver providerResolver,
         IGgufModelStore ggufModelStore,
         ICloudModelResolver cloudModelResolver,

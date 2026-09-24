@@ -44,10 +44,20 @@ internal static class DevelopmentContractMapper
     }
 
     public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value) =>
-        new() { Id = value.Id, Alias = value.Alias, Availability = value.Availability };
+        new()
+        {
+            Id = value.Id,
+            Alias = value.Alias,
+            Availability = value.Availability
+        };
 
     public static DevelopmentTemplateResponse ToResponse(this DevelopmentTemplateReference value) =>
-        new() { Id = value.Id, Alias = value.Alias, Availability = value.Availability };
+        new()
+        {
+            Id = value.Id,
+            Alias = value.Alias,
+            Availability = value.Availability
+        };
 
     /// <summary>
     ///     The task's own row says nothing about workflows, so the run driving it travels beside it — from the

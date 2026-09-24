@@ -127,10 +127,10 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         var target = ParseP95Target();
         return await RetrievalCapacityBenchmark.RunAsync(Path.Combine(_rootPath, $"capacity-{profile.Name}.sqlite"),
-                                                   _keyHolder,
-                                                   profile,
-                                                   target,
-                                                   CancellationToken.None);
+            _keyHolder,
+            profile,
+            target,
+            CancellationToken.None);
     }
 
     private static double ParseP95Target()

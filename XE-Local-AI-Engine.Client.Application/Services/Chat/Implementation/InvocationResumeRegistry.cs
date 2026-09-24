@@ -134,7 +134,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // resets to zero. timestampMs is the FRAME's send time and stays on the registry's own clock.
         ChatStreamEvent PhaseEventFor(InvocationState phaseState, InvocationRuntimePhase phase, long phaseSequence)
         {
-            return ChatStreamEventMapper.PhaseEvent(new NodeChatMessageCorrelation { ConversationId = phaseState.ConversationId, MessageId = phaseState.InvocationId, RequestId = phaseState.InvocationId },
+            return ChatStreamEventMapper.PhaseEvent(new NodeChatMessageCorrelation
+                {
+                    ConversationId = phaseState.ConversationId,
+                    MessageId = phaseState.InvocationId,
+                    RequestId = phaseState.InvocationId
+                },
                 phase,
                 _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 phaseSequence,
@@ -214,7 +219,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     lastContent = state.StreamedContent;
                     lastReasoning = state.StreamedThinkingContent;
 
-                    yield return ChatStreamEventMapper.DeltaEvent(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = state.InvocationId, RequestId = state.InvocationId },
+                    yield return ChatStreamEventMapper.DeltaEvent(new NodeChatMessageCorrelation
+                        {
+                            ConversationId = state.ConversationId,
+                            MessageId = state.InvocationId,
+                            RequestId = state.InvocationId
+                        },
                         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                         sequence++,
                         contentDelta,
@@ -263,7 +273,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     {
         NodeMetrics.ChatStreamReconcileTotal.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
-        return ChatStreamEventMapper.ReconcileEvent(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = state.InvocationId, RequestId = state.InvocationId },
+        return ChatStreamEventMapper.ReconcileEvent(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = state.InvocationId,
+                RequestId = state.InvocationId
+            },
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             sequence);
     }

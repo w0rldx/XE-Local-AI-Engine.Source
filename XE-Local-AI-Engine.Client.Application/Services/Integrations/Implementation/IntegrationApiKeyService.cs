@@ -54,18 +54,22 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         // A supplied principal is a ROTATION: the new credential inherits every session and in-flight execution the old one owned. It is deliberately not
         // validated against an existing row — a principal is an opaque grouping id, not an entity with a lifecycle.
         var snapshot = await _store.CreateAsync(new IntegrationApiKeyCreateCommand
-        {
-            KeyId = Guid.NewGuid(),
-            PrincipalId = principalId ?? Guid.NewGuid(),
-            KeyPrefix = prefix,
-            KeyHash = HashKey(key),
-            Label = label.Trim(),
-            AllowedTriggerIdsJson = SerializeAllowList(allowedTriggerIds)
-        },
-                                       cancellationToken);
+            {
+                KeyId = Guid.NewGuid(),
+                PrincipalId = principalId ?? Guid.NewGuid(),
+                KeyPrefix = prefix,
+                KeyHash = HashKey(key),
+                Label = label.Trim(),
+                AllowedTriggerIdsJson = SerializeAllowList(allowedTriggerIds)
+            },
+            cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedIntegrationApiKey { Key = key, View = ToView(snapshot) };
+        return new GeneratedIntegrationApiKey
+        {
+            Key = key,
+            View = ToView(snapshot)
+        };
     }
 
     public async Task<IReadOnlyList<IntegrationApiKeyView>> ListAsync(CancellationToken cancellationToken = default)
@@ -109,7 +113,12 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
         _ = await _store.TouchLastUsedAsync(snapshot.Id, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
 
-        return new IntegrationApiKeyValidation { PrincipalId = snapshot.PrincipalId, KeyPrefix = snapshot.KeyPrefix, AllowedTriggerIds = DeserializeAllowList(snapshot.AllowedTriggerIdsJson) };
+        return new IntegrationApiKeyValidation
+        {
+            PrincipalId = snapshot.PrincipalId,
+            KeyPrefix = snapshot.KeyPrefix,
+            AllowedTriggerIds = DeserializeAllowList(snapshot.AllowedTriggerIdsJson)
+        };
     }
 
     /// <summary>

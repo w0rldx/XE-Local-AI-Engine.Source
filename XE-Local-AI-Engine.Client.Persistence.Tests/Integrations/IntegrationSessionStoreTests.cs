@@ -30,7 +30,13 @@ public sealed class IntegrationSessionStoreTests
         var executionId = Guid.NewGuid();
         var accept = new IntegrationAcceptCommand
         {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = conversationId, AgentDefinitionId = seed.AgentDefinitionId },
+            NewSession = new IntegrationSessionCreate
+            {
+                SessionId = sessionId,
+                TriggerId = seed.TriggerId,
+                ConversationId = conversationId,
+                AgentDefinitionId = seed.AgentDefinitionId
+            },
             ExecutionId = executionId,
             TriggerId = seed.TriggerId,
             SessionId = sessionId,
@@ -39,7 +45,15 @@ public sealed class IntegrationSessionStoreTests
             RequestFingerprint = new byte[32],
             KeyPrefix = seed.KeyPrefix,
             ReceivedAtUtc = 3_000,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+            AcceptedEvent = new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = executionId,
+                Sequence = 1,
+                EventType = "execution.accepted",
+                DetailJson = null,
+                OccurredAtUtc = 3_000
+            }
         };
 
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
@@ -86,7 +100,15 @@ public sealed class IntegrationSessionStoreTests
         var (sessionId, executionId) = await AcceptWithIdsAsync(context, seed);
 
         // Writer one. There is no TouchAsync to test, and there never will be: this is the method that replaces it.
-        await executionStore.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 3, EventType = "tool.started", DetailJson = null, OccurredAtUtc = 5_000 });
+        await executionStore.AppendEventAsync(new IntegrationEventAppend
+        {
+            EventId = Guid.NewGuid(),
+            ExecutionId = executionId,
+            Sequence = 3,
+            EventType = "tool.started",
+            DetailJson = null,
+            OccurredAtUtc = 5_000
+        });
         var afterAppend = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId));
         AssertEx.Equal(expected: 3L, afterAppend.LastSequence);
         AssertEx.Equal(expected: 5_000L, afterAppend.LastActivityUtc);
@@ -141,7 +163,13 @@ public sealed class IntegrationSessionStoreTests
         var executionId = Guid.NewGuid();
         var accept = new IntegrationAcceptCommand
         {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = conversationId, AgentDefinitionId = seed.AgentDefinitionId },
+            NewSession = new IntegrationSessionCreate
+            {
+                SessionId = sessionId,
+                TriggerId = seed.TriggerId,
+                ConversationId = conversationId,
+                AgentDefinitionId = seed.AgentDefinitionId
+            },
             ExecutionId = executionId,
             TriggerId = seed.TriggerId,
             SessionId = sessionId,
@@ -150,7 +178,15 @@ public sealed class IntegrationSessionStoreTests
             RequestFingerprint = new byte[32],
             KeyPrefix = seed.KeyPrefix,
             ReceivedAtUtc = 3_000,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+            AcceptedEvent = new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = executionId,
+                Sequence = 1,
+                EventType = "execution.accepted",
+                DetailJson = null,
+                OccurredAtUtc = 3_000
+            }
         };
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
 
@@ -265,7 +301,13 @@ public sealed class IntegrationSessionStoreTests
         var executionId = Guid.NewGuid();
         var accept = new IntegrationAcceptCommand
         {
-            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = seed.AgentDefinitionId },
+            NewSession = new IntegrationSessionCreate
+            {
+                SessionId = sessionId,
+                TriggerId = seed.TriggerId,
+                ConversationId = Guid.NewGuid(),
+                AgentDefinitionId = seed.AgentDefinitionId
+            },
             ExecutionId = executionId,
             TriggerId = seed.TriggerId,
             SessionId = sessionId,
@@ -274,7 +316,15 @@ public sealed class IntegrationSessionStoreTests
             RequestFingerprint = new byte[32],
             KeyPrefix = seed.KeyPrefix,
             ReceivedAtUtc = 3_000,
-            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+            AcceptedEvent = new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = executionId,
+                Sequence = 1,
+                EventType = "execution.accepted",
+                DetailJson = null,
+                OccurredAtUtc = 3_000
+            }
         };
 
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
@@ -289,7 +339,13 @@ public sealed class IntegrationSessionStoreTests
         _ = context.IntegrationTriggers.Add(trigger);
         _ = context.IntegrationApiKeys.Add(key);
         _ = await context.SaveChangesAsync();
-        return new SeedState { TriggerId = trigger.Id, AgentDefinitionId = trigger.TargetAgentDefinitionId, PrincipalId = key.PrincipalId, KeyPrefix = key.KeyPrefix };
+        return new SeedState
+        {
+            TriggerId = trigger.Id,
+            AgentDefinitionId = trigger.TargetAgentDefinitionId,
+            PrincipalId = key.PrincipalId,
+            KeyPrefix = key.KeyPrefix
+        };
     }
 
     private sealed record SeedState

@@ -22,7 +22,13 @@ public sealed class DetachedInvocationReaperTests
     {
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);
-        var tracker = new StubTracker([new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = Start }]);
+        var tracker = new StubTracker([
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = Start
+            }
+        ]);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 300);
 
@@ -38,7 +44,13 @@ public sealed class DetachedInvocationReaperTests
     {
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);
-        var tracker = new StubTracker([new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = Start }]);
+        var tracker = new StubTracker([
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = Start
+            }
+        ]);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 300);
 
@@ -70,7 +82,13 @@ public sealed class DetachedInvocationReaperTests
         // watchdog. It must hold no matter how long the run has been abandoned.
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);
-        var tracker = new StubTracker([new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = Start }]);
+        var tracker = new StubTracker([
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = Start
+            }
+        ]);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 0);
 
@@ -87,7 +105,13 @@ public sealed class DetachedInvocationReaperTests
         // required a node restart before an operator edit applied; the reaper must re-read the grace on EVERY tick.
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);
-        var tracker = new StubTracker([new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = Start }]);
+        var tracker = new StubTracker([
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = Start
+            }
+        ]);
         var runner = Substitute.For<IInvocationRunner>();
         var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
         runtimeSettings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(0);
@@ -111,7 +135,13 @@ public sealed class DetachedInvocationReaperTests
         // abandoned a second time is still reapable rather than permanently immune.
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);
-        var tracker = new StubTracker([new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = Start }]);
+        var tracker = new StubTracker([
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = Start
+            }
+        ]);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 300);
 
@@ -122,7 +152,14 @@ public sealed class DetachedInvocationReaperTests
         tracker.Detached = [];
         await reaper.ReapAsync(CancellationToken.None);
         var secondDetachAt = time.GetUtcNow();
-        tracker.Detached = [new DetachedInvocation { InvocationId = invocationId, DetachedAtUtc = secondDetachAt }];
+        tracker.Detached =
+        [
+            new DetachedInvocation
+            {
+                InvocationId = invocationId,
+                DetachedAtUtc = secondDetachAt
+            }
+        ];
 
         time.Advance(TimeSpan.FromSeconds(301));
         await reaper.ReapAsync(CancellationToken.None);
@@ -137,8 +174,16 @@ public sealed class DetachedInvocationReaperTests
         var fresh = Guid.NewGuid();
         var time = new FakeClock(Start);
         var tracker = new StubTracker([
-            new DetachedInvocation { InvocationId = expired, DetachedAtUtc = Start },
-            new DetachedInvocation { InvocationId = fresh, DetachedAtUtc = Start.AddSeconds(200) }
+            new DetachedInvocation
+            {
+                InvocationId = expired,
+                DetachedAtUtc = Start
+            },
+            new DetachedInvocation
+            {
+                InvocationId = fresh,
+                DetachedAtUtc = Start.AddSeconds(200)
+            }
         ]);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 300);

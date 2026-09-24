@@ -11,8 +11,7 @@ public sealed class GetInvocationMonitorEndpoint : EndpointWithoutRequest<Invoca
     private readonly IWorkerEventDispatcher _eventDispatcher;
     private readonly IInvocationHistory _invocationHistory;
 
-    public GetInvocationMonitorEndpoint(
-        IWorkerEventDispatcher eventDispatcher,
+    public GetInvocationMonitorEndpoint(IWorkerEventDispatcher eventDispatcher,
         IInvocationHistory invocationHistory)
     {
         ArgumentNullException.ThrowIfNull(eventDispatcher);

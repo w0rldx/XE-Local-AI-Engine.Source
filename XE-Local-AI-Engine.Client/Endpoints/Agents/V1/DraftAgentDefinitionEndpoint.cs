@@ -36,16 +36,16 @@ public sealed class DraftAgentDefinitionEndpoint : Endpoint<DraftAgentDefinition
         ArgumentNullException.ThrowIfNull(req);
 
         var result = await _configDraftService
-                           .DraftAgentDefinitionAsync(new ConfigDraftRequest
-                           {
-                               Mode = req.Mode,
-                               ModelName = req.ModelName!,
-                               Brief = req.Brief!,
-                               ExistingName = req.ExistingName,
-                               ExistingDescription = req.ExistingDescription,
-                               ExistingContent = req.ExistingContent
-                           },
-                               ct);
+            .DraftAgentDefinitionAsync(new ConfigDraftRequest
+                {
+                    Mode = req.Mode,
+                    ModelName = req.ModelName!,
+                    Brief = req.Brief!,
+                    ExistingName = req.ExistingName,
+                    ExistingDescription = req.ExistingDescription,
+                    ExistingContent = req.ExistingContent
+                },
+                ct);
 
         if (result.Draft is not { } draft)
         {

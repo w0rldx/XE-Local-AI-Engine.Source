@@ -22,8 +22,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
     private readonly ILogger<DevelopmentAttemptExecutionSupervisor> _logger;
     private int _disposed;
 
-    public DevelopmentAttemptExecutionSupervisor(
-        IServiceScopeFactory scopeFactory,
+    public DevelopmentAttemptExecutionSupervisor(IServiceScopeFactory scopeFactory,
         IDevelopmentAttemptLiveBroker liveBroker,
         IDevelopmentAttemptLiveEventPublisher livePublisher,
         ILogger<DevelopmentAttemptExecutionSupervisor> logger)

@@ -52,7 +52,13 @@ public sealed class LlamaServerLaunchCapabilityInspectorTests
     {
         // "The probe failed" and "the binary rejects q8_0" are different facts and a caller must be able to tell them
         // apart — one is a broken runtime, the other a legitimate 422.
-        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cuda,
+            IsPinnedFallback = true
+        };
         var failed = LlamaServerCapabilityManifest.Failed(binary, executableLengthBytes: 1, DateTimeOffset.UnixEpoch);
         var inspector = new LlamaServerLaunchCapabilityInspector(new FakeVariantSelector(GpuVariant.Cuda),
             new FakeBinaryManager(),
@@ -84,7 +90,13 @@ public sealed class LlamaServerLaunchCapabilityInspectorTests
 
     private static LlamaServerLaunchCapabilityInspector NewInspector(GpuVariant variant, string help)
     {
-        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = variant, IsPinnedFallback = true };
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = variant,
+            IsPinnedFallback = true
+        };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,

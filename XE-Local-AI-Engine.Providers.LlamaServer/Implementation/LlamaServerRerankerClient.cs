@@ -150,7 +150,11 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
             timeoutCts.CancelAfter(requestTimeout);
 
             using var response = await _httpClient
-                                       .PostAsJsonAsync(requestUri, new RerankRequest { Query = query, Documents = documents }, SerializerOptions, timeoutCts.Token)
+                                       .PostAsJsonAsync(requestUri, new RerankRequest
+                                       {
+                                           Query = query,
+                                           Documents = documents
+                                       }, SerializerOptions, timeoutCts.Token)
                                        .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)

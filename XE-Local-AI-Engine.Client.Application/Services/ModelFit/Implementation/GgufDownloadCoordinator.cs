@@ -68,7 +68,12 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             if (activeSource == source)
             {
-                return new GgufDownloadTicket { ModelName = active.ModelName, AlreadyInFlight = true, OperationId = active.OperationId };
+                return new GgufDownloadTicket
+                {
+                    ModelName = active.ModelName,
+                    AlreadyInFlight = true,
+                    OperationId = active.OperationId
+                };
             }
 
             throw new GgufAcquisitionConflictException();
@@ -91,13 +96,23 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                     reservation.Lease,
                     ct);
                 BroadcastStatus(completed, isInitialOrTerminal: true);
-                return new GgufDownloadTicket { ModelName = completed.ModelName, AlreadyInFlight = false, OperationId = completed.OperationId };
+                return new GgufDownloadTicket
+                {
+                    ModelName = completed.ModelName,
+                    AlreadyInFlight = false,
+                    OperationId = completed.OperationId
+                };
             }
 
             var registration = _operations.Start(AcquisitionKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
             if (registration.AlreadyInFlight)
             {
-                return new GgufDownloadTicket { ModelName = registration.Status.ModelName, AlreadyInFlight = true, OperationId = registration.Status.OperationId };
+                return new GgufDownloadTicket
+                {
+                    ModelName = registration.Status.ModelName,
+                    AlreadyInFlight = true,
+                    OperationId = registration.Status.OperationId
+                };
             }
 
             var lease = reservation.TransferLease();
@@ -108,7 +123,12 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 source,
                 lease,
                 registration.CancellationToken);
-            return new GgufDownloadTicket { ModelName = registration.Status.ModelName, AlreadyInFlight = false, OperationId = registration.Status.OperationId };
+            return new GgufDownloadTicket
+            {
+                ModelName = registration.Status.ModelName,
+                AlreadyInFlight = false,
+                OperationId = registration.Status.OperationId
+            };
         }
     }
 

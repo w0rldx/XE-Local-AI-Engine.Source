@@ -37,12 +37,12 @@ public sealed class InstallExternalAppEndpoint : Endpoint<InstallExternalAppRequ
         ArgumentNullException.ThrowIfNull(req);
 
         var summary = await _apps.InstallAsync(new InstallCommand(req.ApplicationId,
-                                         req.DisplayName,
-                                         req.ManifestVersion,
-                                         req.ManifestSha256,
-                                         req.Variables,
-                                         req.AcceptPermissions),
-                                     ct);
+                req.DisplayName,
+                req.ManifestVersion,
+                req.ManifestSha256,
+                req.Variables,
+                req.AcceptPermissions),
+            ct);
 
         await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary)));
     }

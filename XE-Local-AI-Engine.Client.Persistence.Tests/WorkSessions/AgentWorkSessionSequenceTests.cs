@@ -24,7 +24,15 @@ public sealed class AgentWorkSessionSequenceTests
             ExpectedVersion = created.Version,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [new WorkPlanTaskChange { TaskId = taskId, Operation = WorkPlanTaskOperation.Add, Title = "Only task" }]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = taskId,
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "Only task"
+                }
+            ]
         });
         var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
         {
@@ -76,10 +84,21 @@ public sealed class AgentWorkSessionSequenceTests
             ExpectedVersion = created.Version,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [
-                                         new WorkPlanTaskChange { TaskId = firstTask, Operation = WorkPlanTaskOperation.Add, Title = "First" },
-                                         new WorkPlanTaskChange { TaskId = secondTask, Operation = WorkPlanTaskOperation.Add, Title = "Second" }
-                                     ]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = firstTask,
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "First"
+                },
+                new WorkPlanTaskChange
+                {
+                    TaskId = secondTask,
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "Second"
+                }
+            ]
         });
 
         var beforeUpdate = await store.ListTasksAsync(sessionId);
@@ -92,7 +111,15 @@ public sealed class AgentWorkSessionSequenceTests
             ExpectedVersion = planned.Version,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [new WorkPlanTaskChange { TaskId = firstTask, Operation = WorkPlanTaskOperation.Update, Status = AgentWorkSessionTaskStatus.Active }]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = firstTask,
+                    Operation = WorkPlanTaskOperation.Update,
+                    Status = AgentWorkSessionTaskStatus.Active
+                }
+            ]
         });
 
         // The re-stamp is what makes ?sinceSeq= replay updates, not only inserts.
@@ -115,9 +142,24 @@ public sealed class AgentWorkSessionSequenceTests
         var sessionId = Guid.NewGuid();
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var first = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = created.Version, EventType = "First" });
-        var second = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = first.Version, EventType = "Second" });
-        var third = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = second.Version, EventType = "Third" });
+        var first = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            EventType = "First"
+        });
+        var second = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = first.Version,
+            EventType = "Second"
+        });
+        var third = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = second.Version,
+            EventType = "Third"
+        });
 
         var tail = await store.ListEventsAsync(sessionId, first.Sequence);
         AssertEx.True(tail.Select(entry => entry.EventType).SequenceEqual(["Second", "Third"]), "The tail must be exactly the events after the watermark.");
@@ -162,7 +204,12 @@ public sealed class AgentWorkSessionSequenceTests
 
         // Insert-then-catch would leave the rejected row Added in the tracker and break the next write in this scope.
         AssertEx.Empty(context.ChangeTracker.Entries().Where(entry => entry.State == EntityState.Added));
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = replay.Version, EventType = "StillUsable" });
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = replay.Version,
+            EventType = "StillUsable"
+        });
     }
 
     [Test]

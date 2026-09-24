@@ -31,9 +31,9 @@ public sealed class CreateBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectMu
     {
         var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct);
         await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
-                      {
-                          projectId = project.Id
-                      }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct),
-                      cancellation: ct);
+            {
+                projectId = project.Id
+            }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct),
+            cancellation: ct);
     }
 }

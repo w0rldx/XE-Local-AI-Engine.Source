@@ -26,8 +26,7 @@ public sealed class GetAgentUsageSummaryEndpoint : Endpoint<AgentUsageSummaryReq
     private readonly IUsageRateResolver _rateResolver;
     private readonly IOptions<AgentExecutionLogRetentionOptions> _retentionOptions;
 
-    public GetAgentUsageSummaryEndpoint(
-        AgentExecutionLogQueryService executionLogs,
+    public GetAgentUsageSummaryEndpoint(AgentExecutionLogQueryService executionLogs,
         IUsageRateResolver rateResolver,
         IOptions<AgentExecutionLogRetentionOptions> retentionOptions)
     {

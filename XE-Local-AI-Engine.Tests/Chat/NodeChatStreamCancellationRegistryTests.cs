@@ -11,7 +11,12 @@ public sealed class NodeChatStreamCancellationRegistryTests
     public async Task Dispose_WhenCancelAlreadyLookedUp_DoesNotCompleteUntilTheMatchingCallbackFinishes()
     {
         var registry = new NodeChatStreamCancellationRegistry();
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
         var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var registration = registry.Register(correlation, () =>
@@ -25,7 +30,7 @@ public sealed class NodeChatStreamCancellationRegistryTests
         var disposeTask = Task.Run(registration.Dispose);
 
         await AssertEx.StaysIncompleteAsync(disposeTask,
-                          "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.");
+            "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.");
 
         releaseCallback.SetResult();
         AssertEx.True(await cancelTask);

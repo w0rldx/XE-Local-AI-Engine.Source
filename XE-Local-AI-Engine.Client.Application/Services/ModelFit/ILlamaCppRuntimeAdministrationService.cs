@@ -42,12 +42,27 @@ public sealed class LlamaCppRuntimeMutationResult
     public int RunningProcessCount { get; init; }
 
     public static LlamaCppRuntimeMutationResult Success(LlamaCppRuntimeBinaryView binary, string recommendedTag) =>
-        new() { Succeeded = true, Binary = binary, RecommendedTag = recommendedTag, Failure = LlamaCppRuntimeAdministrationFailure.None, DisplayMessage = null };
+        new()
+        {
+            Succeeded = true,
+            Binary = binary,
+            RecommendedTag = recommendedTag,
+            Failure = LlamaCppRuntimeAdministrationFailure.None,
+            DisplayMessage = null
+        };
 
     public static LlamaCppRuntimeMutationResult Rejected(LlamaCppRuntimeAdministrationFailure failure,
         string message,
         int runningProcessCount = 0) =>
-        new() { Succeeded = false, Binary = null, RecommendedTag = null, Failure = failure, DisplayMessage = message, RunningProcessCount = runningProcessCount };
+        new()
+        {
+            Succeeded = false,
+            Binary = null,
+            RecommendedTag = null,
+            Failure = failure,
+            DisplayMessage = message,
+            RunningProcessCount = runningProcessCount
+        };
 }
 
 public sealed class LlamaCppRuntimeAcquisitionStartResult

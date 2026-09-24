@@ -627,19 +627,47 @@ public sealed class DockerDaemonProbeTests
 
     private static (FakeDockerRuntimeClient Client, InMemoryDaemonAttestationStore Store) Doubles()
     {
-        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(ConfiguredEndpoint), Source = DockerDaemonEndpointSource.Configuration };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(ConfiguredEndpoint),
+            Source = DockerDaemonEndpointSource.Configuration
+        };
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity { DaemonId = "daemon-alpha", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true });
+            new DockerDaemonIdentity
+            {
+                DaemonId = "daemon-alpha",
+                ServerVersion = "99.0.0",
+                ApiVersion = "1.99",
+                MinimumApiVersion = "1.40",
+                OperatingSystem = "linux",
+                Endpoint = endpoint,
+                IsRootless = false,
+                SupportsSeccomp = true
+            });
 
         return (client, new InMemoryDaemonAttestationStore());
     }
 
     private static FakeDockerRuntimeClient ClientFor(string daemonId)
     {
-        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(ConfiguredEndpoint), Source = DockerDaemonEndpointSource.Configuration };
+        var endpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri(ConfiguredEndpoint),
+            Source = DockerDaemonEndpointSource.Configuration
+        };
 
         return new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity { DaemonId = daemonId, ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true });
+            new DockerDaemonIdentity
+            {
+                DaemonId = daemonId,
+                ServerVersion = "99.0.0",
+                ApiVersion = "1.99",
+                MinimumApiVersion = "1.40",
+                OperatingSystem = "linux",
+                Endpoint = endpoint,
+                IsRootless = false,
+                SupportsSeccomp = true
+            });
     }
 
     /// <summary>

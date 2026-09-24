@@ -23,8 +23,7 @@ public sealed class WhisperRuntimeOrchestrationService
     private readonly IWhisperCppSourceBuildService _buildService;
     private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
 
-    public WhisperRuntimeOrchestrationService(
-        IWhisperCppSourceBuildService buildService,
+    public WhisperRuntimeOrchestrationService(IWhisperCppSourceBuildService buildService,
         IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         IWhisperRuntimeActivityGate activityGate,
         IWhisperBackendSelector backendSelector)

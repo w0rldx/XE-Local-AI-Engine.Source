@@ -181,9 +181,9 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             InstanceId = instanceId,
             ExpectedVersion = row.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                     {
-                                         row.Status
-                                     },
+            {
+                row.Status
+            },
             NewStatus = status,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = null,
@@ -339,21 +339,21 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
 
         var created = await store.CreateAsync(new ExternalAppInstanceCreate(instanceId,
-                                     manifest.Id,
-                                     manifest.ManifestVersion,
-                                     JsonSerializer.Serialize(manifest, ExternalAppJson.Options),
-                                     manifest.DisplayName,
-                                     "{}",
-                                     Path.Combine(RootPath, "external-apps", "instances", instanceId.ToString("N")),
-                                     "docker",
-                                     RuntimeOverride: null,
-                                     CreatedAtUtc: 1,
-                                     ExternalAppInstanceEventKind.PermissionAccepted,
-                                     FirstEventDetailJson: null,
-                                     // Seeded rows carry a bridge token because real installs do; a row without
-                                     // one models an instance installed before the bridge existed, which is a
-                                     // different case and is seeded deliberately where it is wanted.
-                                     withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null));
+            manifest.Id,
+            manifest.ManifestVersion,
+            JsonSerializer.Serialize(manifest, ExternalAppJson.Options),
+            manifest.DisplayName,
+            "{}",
+            Path.Combine(RootPath, "external-apps", "instances", instanceId.ToString("N")),
+            "docker",
+            RuntimeOverride: null,
+            CreatedAtUtc: 1,
+            ExternalAppInstanceEventKind.PermissionAccepted,
+            FirstEventDetailJson: null,
+            // Seeded rows carry a bridge token because real installs do; a row without
+            // one models an instance installed before the bridge existed, which is a
+            // different case and is seeded deliberately where it is wanted.
+            withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null));
 
         var version = created.Version;
         var currentStatus = ExternalAppInstanceStatus.Installing;
@@ -364,9 +364,9 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                 InstanceId = instanceId,
                 ExpectedVersion = version,
                 ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                         {
-                                             currentStatus
-                                         },
+                {
+                    currentStatus
+                },
                 NewStatus = status,
                 EventKind = ExternalAppInstanceEventKind.Installed,
                 EventDetailJson = null,
@@ -401,9 +401,9 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             InstanceId = instanceId,
             ExpectedVersion = row.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                     {
-                                         row.Status
-                                     },
+            {
+                row.Status
+            },
             NewStatus = row.Status,
             EventKind = ExternalAppInstanceEventKind.Installed,
             EventDetailJson = null,
@@ -428,9 +428,9 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             InstanceId = instanceId,
             ExpectedVersion = row.Version,
             ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
-                                     {
-                                         row.Status
-                                     },
+            {
+                row.Status
+            },
             NewStatus = row.Status,
             EventKind = ExternalAppInstanceEventKind.Failed,
             EventDetailJson = null,

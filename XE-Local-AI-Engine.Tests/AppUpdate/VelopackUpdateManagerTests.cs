@@ -101,8 +101,8 @@ public sealed class VelopackUpdateManagerTests
     private static string FeedJson(string version)
     {
         return "{\"Assets\":[{\"PackageId\":\"XE-Local-AI-Engine\",\"Version\":\"" + version
-               + "\",\"Type\":\"Full\",\"FileName\":\"XE-Local-AI-Engine-" + version
-               + "-full.nupkg\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":1}]}";
+                                                                                   + "\",\"Type\":\"Full\",\"FileName\":\"XE-Local-AI-Engine-" + version
+                                                                                   + "-full.nupkg\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":1}]}";
     }
 
     private static string ReleasesJson(params string[] versions)

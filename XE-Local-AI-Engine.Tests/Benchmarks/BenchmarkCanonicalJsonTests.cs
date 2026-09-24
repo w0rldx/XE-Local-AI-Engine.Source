@@ -11,18 +11,58 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Serialize_MembersDeclaredInDifferentOrders_ProducesTheSameDocument()
     {
-        var first = BenchmarkCanonicalJson.Serialize(new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } });
-        var second = BenchmarkCanonicalJson.Serialize(new DescendingOrder { Nested = new Nested { KvType = "q8_0", Layers = 32 }, Ctx = 8192, Backend = "cuda" });
+        var first = BenchmarkCanonicalJson.Serialize(new AscendingOrder
+        {
+            Backend = "cuda",
+            Ctx = 8192,
+            Nested = new Nested
+            {
+                KvType = "q8_0",
+                Layers = 32
+            }
+        });
+        var second = BenchmarkCanonicalJson.Serialize(new DescendingOrder
+        {
+            Nested = new Nested
+            {
+                KvType = "q8_0",
+                Layers = 32
+            },
+            Ctx = 8192,
+            Backend = "cuda"
+        });
 
         AssertEx.Equal(first, second, "reordering a receipt's properties must not change its canonical form");
-        AssertEx.Equal(BenchmarkCanonicalJson.HashOf(new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } }),
-            BenchmarkCanonicalJson.HashOf(new DescendingOrder { Nested = new Nested { KvType = "q8_0", Layers = 32 }, Ctx = 8192, Backend = "cuda" }));
+        AssertEx.Equal(BenchmarkCanonicalJson.HashOf(new AscendingOrder
+            {
+                Backend = "cuda",
+                Ctx = 8192,
+                Nested = new Nested
+                {
+                    KvType = "q8_0",
+                    Layers = 32
+                }
+            }),
+            BenchmarkCanonicalJson.HashOf(new DescendingOrder
+            {
+                Nested = new Nested
+                {
+                    KvType = "q8_0",
+                    Layers = 32
+                },
+                Ctx = 8192,
+                Backend = "cuda"
+            }));
     }
 
     [Test]
     public void Serialize_KeepsNullMembersAndEmitsNoWhitespace()
     {
-        var json = BenchmarkCanonicalJson.Serialize(new Nested { KvType = null, Layers = 32 });
+        var json = BenchmarkCanonicalJson.Serialize(new Nested
+        {
+            KvType = null,
+            Layers = 32
+        });
 
         AssertEx.Equal("{\"kvType\":null,\"layers\":32}", json);
     }
@@ -30,10 +70,23 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Hash_IsStableForEqualValuesAndDiffersOnAnyChange()
     {
-        var baseline = new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } };
+        var baseline = new AscendingOrder
+        {
+            Backend = "cuda",
+            Ctx = 8192,
+            Nested = new Nested
+            {
+                KvType = "q8_0",
+                Layers = 32
+            }
+        };
         var changed = baseline with
         {
-            Nested = new Nested { KvType = "q4_0", Layers = 32 }
+            Nested = new Nested
+            {
+                KvType = "q4_0",
+                Layers = 32
+            }
         };
 
         AssertEx.Equal(BenchmarkCanonicalJson.HashOf(baseline), BenchmarkCanonicalJson.HashOf(baseline));
@@ -44,7 +97,11 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Hash_MatchesTheHashOfTheCanonicalText()
     {
-        var value = new Nested { KvType = "q8_0", Layers = 32 };
+        var value = new Nested
+        {
+            KvType = "q8_0",
+            Layers = 32
+        };
 
         AssertEx.Equal(BenchmarkCanonicalJson.Hash(BenchmarkCanonicalJson.Serialize(value)), BenchmarkCanonicalJson.HashOf(value));
     }

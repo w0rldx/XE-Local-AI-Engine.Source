@@ -70,20 +70,20 @@ internal sealed class DevWorkflowArtifactPromotion
             var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"artifact:{artifact.Name}");
             var write = await _runBlobs.WriteAsync(run.Id, artifactId, read.Content, cancellationToken);
             var result = await _store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
-            {
-                RunId = run.Id,
-                ArtifactId = artifactId,
-                NodeRunId = nodeRun.Id,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"promote:{artifact.Name}"),
-                Kind = MapKind(artifact.Kind, declaredKind),
-                Name = artifact.Name,
-                MediaType = artifact.MediaType,
-                ContentSha256 = write.ContentHash,
-                SizeBytes = write.ByteCount,
-                ManagedReference = write.OpaqueReference
-            },
-                                         cancellationToken);
+                {
+                    RunId = run.Id,
+                    ArtifactId = artifactId,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"promote:{artifact.Name}"),
+                    Kind = MapKind(artifact.Kind, declaredKind),
+                    Name = artifact.Name,
+                    MediaType = artifact.MediaType,
+                    ContentSha256 = write.ContentHash,
+                    SizeBytes = write.ByteCount,
+                    ManagedReference = write.OpaqueReference
+                },
+                cancellationToken);
             promoted++;
 
             if (result.SupersededArtifactId is not { } superseded)
@@ -94,14 +94,14 @@ internal sealed class DevWorkflowArtifactPromotion
             // Mark-only propagation: a node run that consumed the version this one just replaced is flagged and a human decides what to do. Nothing is regenerated, and the
             // superseded bytes stay — versioning is the point.
             _ = await _store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
-            {
-                RunId = run.Id,
-                SupersededArtifactId = superseded,
-                SupersedingArtifactId = artifactId,
-                ExpectedVersion = DevWorkflowVersions.Any,
-                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"stale:{artifact.Name}")
-            },
-                                cancellationToken);
+                {
+                    RunId = run.Id,
+                    SupersededArtifactId = superseded,
+                    SupersedingArtifactId = artifactId,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"stale:{artifact.Name}")
+                },
+                cancellationToken);
         }
 
         return promoted;

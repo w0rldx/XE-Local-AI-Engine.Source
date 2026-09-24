@@ -43,9 +43,21 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         // An N-way sweep, not pairwise calls: two targets need one comparison and three need three, and adding a fourth by hand is how a
         // pair gets missed. FindOverlap is shared with the provider's mount broker, which sweeps an unbounded generated list.
         if (FindOverlap([
-                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget), Path = options.WorkspaceMountTarget },
-                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.ScratchMountTarget), Path = options.ScratchMountTarget },
-                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.TempMountTarget), Path = options.TempMountTarget }
+                new ContainerMountTarget
+                {
+                    Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget),
+                    Path = options.WorkspaceMountTarget
+                },
+                new ContainerMountTarget
+                {
+                    Name = nameof(ContainerSandboxOptions.ScratchMountTarget),
+                    Path = options.ScratchMountTarget
+                },
+                new ContainerMountTarget
+                {
+                    Name = nameof(ContainerSandboxOptions.TempMountTarget),
+                    Path = options.TempMountTarget
+                }
             ]) is { } collision)
         {
             failures.Add($"'{collision.Second.Name}' ('{collision.Second.Path}') and '{collision.First.Name}' ('{collision.First.Path}') must not "
@@ -137,7 +149,11 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
             {
                 if (Overlaps(targets[outer].Path, targets[inner].Path))
                 {
-                    return new ContainerMountOverlap { First = targets[outer], Second = targets[inner] };
+                    return new ContainerMountOverlap
+                    {
+                        First = targets[outer],
+                        Second = targets[inner]
+                    };
                 }
             }
         }

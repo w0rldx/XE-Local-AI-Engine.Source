@@ -31,8 +31,7 @@ public sealed class ToolMockService : IToolMockService
     private readonly ITrainingDatasetStore _store;
     private readonly IToolMockStaticVerifier _verifier;
 
-    public ToolMockService(
-        ITrainingDatasetStore store,
+    public ToolMockService(ITrainingDatasetStore store,
         IToolMockStaticVerifier verifier,
         ILocalToolOfferProvider offerProvider)
     {
@@ -68,11 +67,15 @@ public sealed class ToolMockService : IToolMockService
             : new ToolMockVerificationV1(SchemaVersion: 1, Passed: false, [parseError ?? "The mock body is unreadable."]);
 
         var updated = await _store.SetMockVerificationAsync(mockId,
-                                      expectedVersion,
-                                      verification.Passed ? ToolMockVerificationState.Verified : ToolMockVerificationState.Rejected,
-                                      JsonSerializer.SerializeToUtf8Bytes(verification, TrainingJson.Options),
-                                      cancellationToken);
-        return new ToolMockVerifyResult { Mock = updated, Verification = verification };
+            expectedVersion,
+            verification.Passed ? ToolMockVerificationState.Verified : ToolMockVerificationState.Rejected,
+            JsonSerializer.SerializeToUtf8Bytes(verification, TrainingJson.Options),
+            cancellationToken);
+        return new ToolMockVerifyResult
+        {
+            Mock = updated,
+            Verification = verification
+        };
     }
 
     private async Task<string?> FindSchemaAsync(string toolName, CancellationToken cancellationToken)
@@ -96,6 +99,11 @@ public sealed class ToolMockService : IToolMockService
             throw new TrainingValidationException("A tool mock requires the tool name it stands in for.");
         }
 
-        return new ToolMockInput { ToolName = draft.ToolName, MockJson = JsonSerializer.SerializeToUtf8Bytes(draft.Body, TrainingJson.Options), Enabled = draft.Enabled };
+        return new ToolMockInput
+        {
+            ToolName = draft.ToolName,
+            MockJson = JsonSerializer.SerializeToUtf8Bytes(draft.Body, TrainingJson.Options),
+            Enabled = draft.Enabled
+        };
     }
 }

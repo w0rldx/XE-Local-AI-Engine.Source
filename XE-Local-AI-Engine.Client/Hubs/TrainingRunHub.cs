@@ -63,8 +63,13 @@ public sealed class TrainingRunHub : Hub
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(TrainingRunHubEvents.ReplayReset,
-                             new TrainingRunReplayReset { RunId = runId, LatestSequence = replay.LatestSequence, RunVersion = run.Version },
-                             cancellationToken);
+                new TrainingRunReplayReset
+                {
+                    RunId = runId,
+                    LatestSequence = replay.LatestSequence,
+                    RunVersion = run.Version
+                },
+                cancellationToken);
             return;
         }
 

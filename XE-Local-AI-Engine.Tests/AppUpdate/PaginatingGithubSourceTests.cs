@@ -78,8 +78,7 @@ public sealed class PaginatingGithubSourceTests
         // their feed documents, and none of their versions may reach the assets.
         var downloader = new FakeVelopackFileDownloader(new Dictionary<string, string>
         {
-            [PageUrl(1)] = Releases(
-            [
+            [PageUrl(1)] = Releases([
                 Release("2.0.0-dev.1", "win-dev", IsoDate(day: 9)),
                 Release("1.0.0", "win", IsoDate(day: 8)),
                 Release("2.0.0-dev.2", "win-dev", IsoDate(day: 7))
@@ -118,8 +117,7 @@ public sealed class PaginatingGithubSourceTests
         // a feed of nothing but release candidates, and recommendedVersion null for the two channels it serves.
         var downloader = new FakeVelopackFileDownloader(new Dictionary<string, string>
         {
-            [PageUrl(1)] = Releases(
-            [
+            [PageUrl(1)] = Releases([
                 Release("1.0.0-rc.3", "win", IsoDate(day: 9), prerelease: true),
                 Release("1.0.0-rc.2", "win", IsoDate(day: 8), prerelease: true),
                 Release("1.0.0-rc.1", "win", IsoDate(day: 7), prerelease: true),
@@ -161,8 +159,7 @@ public sealed class PaginatingGithubSourceTests
     {
         var downloader = new FakeVelopackFileDownloader(new Dictionary<string, string>
         {
-            [PageUrl(1)] = Releases(
-            [
+            [PageUrl(1)] = Releases([
                 Release("2.0.0-rc.1", "win", IsoDate(day: 9), prerelease: true),
                 Release("1.0.0", "win", IsoDate(day: 8))
             ])

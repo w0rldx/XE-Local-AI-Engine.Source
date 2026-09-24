@@ -1064,7 +1064,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     /// </summary>
     [Test]
     [Arguments("destination", "diff --git a/repo-01/.git/config b/repo-01/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.git/config\n@@ -0,0 +1 @@\n+[core]\n")]
-    [Arguments("source", "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\ndeleted file mode 100755\n--- a/repo-01/.git/hooks/pre-commit\n+++ /dev/null\n@@ -1 +0,0 @@\n-#!/bin/sh\n")]
+    [Arguments("source",
+        "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\ndeleted file mode 100755\n--- a/repo-01/.git/hooks/pre-commit\n+++ /dev/null\n@@ -1 +0,0 @@\n-#!/bin/sh\n")]
     [Arguments("rename to", "diff --git a/repo-01/safe.txt b/repo-01/.git/config\nsimilarity index 100%\nrename from repo-01/safe.txt\nrename to repo-01/.git/config\n")]
     [Arguments("rename from", "diff --git a/repo-01/.git/config b/repo-01/safe.txt\nsimilarity index 100%\nrename from repo-01/.git/config\nrename to repo-01/safe.txt\n")]
     [Arguments("copy to", "diff --git a/repo-01/safe.txt b/repo-01/.git/config\nsimilarity index 100%\ncopy from repo-01/safe.txt\ncopy to repo-01/.git/config\n")]
@@ -1307,8 +1308,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     ///     so it is refused by name.
     /// </summary>
     [Test]
-    [Arguments("added", "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
-    [Arguments("removed", "diff --git a/repo-01/vendor b/repo-01/vendor\ndeleted file mode 160000\nindex 1111111..0000000\n--- a/repo-01/vendor\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("added",
+        "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("removed",
+        "diff --git a/repo-01/vendor b/repo-01/vendor\ndeleted file mode 160000\nindex 1111111..0000000\n--- a/repo-01/vendor\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 1111111111111111111111111111111111111111\n")]
     [Arguments("mode-only", "diff --git a/repo-01/vendor b/repo-01/vendor\nold mode 100644\nnew mode 160000\n")]
     // The everyday one: an existing submodule bumped to a new commit. No mode line at all — the mode is stated on
     // the index header because it did not change — so this used to read as an ordinary modified file in the preview.
@@ -1342,7 +1345,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     ///     because it validates the link's own path.
     /// </summary>
     [Test]
-    [Arguments("created", "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n\\ No newline at end of file\n")]
+    [Arguments("created",
+        "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n\\ No newline at end of file\n")]
     [Arguments("deleted", "diff --git a/repo-01/evil b/repo-01/evil\ndeleted file mode 120000\nindex 1111111..0000000\n--- a/repo-01/evil\n+++ /dev/null\n@@ -1 +0,0 @@\n-/etc/passwd\n")]
     // A regular file turned into a link, and the reverse: git states both as a mode pair, with no `new file` line.
     [Arguments("file-to-link", "diff --git a/repo-01/notes.txt b/repo-01/notes.txt\nold mode 100644\nnew mode 120000\n")]
@@ -1689,9 +1693,12 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     /// </summary>
     [Test]
     [Arguments("symlink", "repo-01/evil", "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n")]
-    [Arguments("gitlink", "repo-01/vendor", "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
-    [Arguments("git directory", "repo-01/.git/config", "diff --git a/repo-01/.git/config b/repo-01/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.git/config\n@@ -0,0 +1 @@\n+[core]\n")]
-    [Arguments("traversal", "repo-01/../escape.txt", "diff --git a/repo-01/../escape.txt b/repo-01/../escape.txt\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/../escape.txt\n@@ -0,0 +1 @@\n+pwned\n")]
+    [Arguments("gitlink", "repo-01/vendor",
+        "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("git directory", "repo-01/.git/config",
+        "diff --git a/repo-01/.git/config b/repo-01/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.git/config\n@@ -0,0 +1 @@\n+[core]\n")]
+    [Arguments("traversal", "repo-01/../escape.txt",
+        "diff --git a/repo-01/../escape.txt b/repo-01/../escape.txt\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/../escape.txt\n@@ -0,0 +1 @@\n+pwned\n")]
     [Arguments("mode-only git directory", "repo-01/.git/hooks/pre-commit", "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\nold mode 100644\nnew mode 100755\n")]
     public async Task PreviewAsync_WhenAnEntryIsRefused_NamesItFolderRelative(string shape, string expectedPath, string patch)
     {
@@ -2015,7 +2022,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>Renders rejections for an assertion message, entry name included where the service supplied one.</summary>
-
     /// <summary>
     ///     A whole-patch refusal has no entry to name, and must not borrow one. The hash binding is the clearest
     ///     example: nothing about a single file failed.
@@ -2283,7 +2289,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     ///     flight, so the only thing that can refuse a delete in these tests is the apply guard.
     /// </remarks>
     private static AgentHomeRunDeleteService DeleteService(TestHarness harness) =>
-        new(Options.Create(new AgentHomeOptions { RootPath = harness.StateRoot }),
+        new(Options.Create(new AgentHomeOptions
+            {
+                RootPath = harness.StateRoot
+            }),
             new FakeNodeDataDirectory(harness.StateRoot),
             new AgentHomeRunExecutionRegistry(),
             harness.ApplyGuard,
@@ -2459,7 +2468,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                 }
 
                 IReadOnlyList<SelectedFolderReference> references =
-                    _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
+                    _folders.Values.Select(folder => new SelectedFolderReference
+                    {
+                        Id = folder.Id.ToString(),
+                        Alias = folder.Alias
+                    }).ToList();
                 return references;
             }
             finally
@@ -2483,7 +2496,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         public void Add(Guid id, string alias, string hostPath)
         {
-            _folders[id] = new ResolvedSelectedFolder { Id = id, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
+            _folders[id] = new ResolvedSelectedFolder
+            {
+                Id = id,
+                Alias = alias,
+                HostPath = hostPath,
+                Mode = SelectedFolderMode.Copy
+            };
         }
     }
 
@@ -2491,7 +2510,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-a", NodeId = "node-1" });
+            return Task.FromResult(new AgentHomeOwnerIdentity
+            {
+                OwnerUserId = "owner-a",
+                NodeId = "node-1"
+            });
         }
     }
 }

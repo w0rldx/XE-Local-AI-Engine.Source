@@ -20,8 +20,7 @@ public sealed class InspectImageRepositoryEndpoint : Endpoint<InspectImageReposi
     private readonly IImageModelDiscovery _discovery;
     private readonly ILogger<InspectImageRepositoryEndpoint> _logger;
 
-    public InspectImageRepositoryEndpoint(
-        IImageModelDiscovery discovery,
+    public InspectImageRepositoryEndpoint(IImageModelDiscovery discovery,
         ILogger<InspectImageRepositoryEndpoint> logger)
     {
         ArgumentNullException.ThrowIfNull(discovery);

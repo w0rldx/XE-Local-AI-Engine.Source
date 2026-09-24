@@ -106,7 +106,11 @@ public sealed class SkillImportServiceTests
         var preview = await harness.Service.PreviewMarkdownAsync(SkillImportFixtures.SkillMarkdown("pdf-tools"));
 
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
-            harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"] }));
+            harness.Service.CommitAsync(new SkillImportCommitRequest
+            {
+                Token = preview.Token,
+                SkillNames = ["pdf-tools"]
+            }));
 
         await harness.Store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
@@ -122,7 +126,12 @@ public sealed class SkillImportServiceTests
         });
         var preview = await harness.Service.PreviewArchiveAsync(archive);
 
-        var result = await harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"], Acknowledged = true });
+        var result = await harness.Service.CommitAsync(new SkillImportCommitRequest
+        {
+            Token = preview.Token,
+            SkillNames = ["pdf-tools"],
+            Acknowledged = true
+        });
 
         AssertEx.Equal(SkillImportStatus.Imported, result.Outcomes.Single().Status);
 
@@ -149,7 +158,12 @@ public sealed class SkillImportServiceTests
         using var harness = new SkillImportHarness(handler);
 
         var preview = await harness.Service.PreviewGitHubRepositoryAsync("acme", "skills");
-        await harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"], Acknowledged = true });
+        await harness.Service.CommitAsync(new SkillImportCommitRequest
+        {
+            Token = preview.Token,
+            SkillNames = ["pdf-tools"],
+            Acknowledged = true
+        });
 
         // github.com → codeload.github.com is a normal hop and must be followed, one host revalidation per hop.
         AssertEx.Equal(expected: 2, handler.RequestedUris.Count);
@@ -202,7 +216,12 @@ public sealed class SkillImportServiceTests
         var preview = await harness.Service.PreviewMarkdownAsync(SkillImportFixtures.SkillMarkdown("pdf-tools"));
         AssertEx.True(preview.Skills.Single().ConflictsWithExistingSkill);
 
-        var skipped = await harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"], Acknowledged = true });
+        var skipped = await harness.Service.CommitAsync(new SkillImportCommitRequest
+        {
+            Token = preview.Token,
+            SkillNames = ["pdf-tools"],
+            Acknowledged = true
+        });
         AssertEx.Equal(SkillImportStatus.Skipped, skipped.Outcomes.Single().Status);
         await harness.Store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
 
@@ -225,10 +244,20 @@ public sealed class SkillImportServiceTests
         using var harness = new SkillImportHarness();
         var preview = await harness.Service.PreviewMarkdownAsync(SkillImportFixtures.SkillMarkdown("pdf-tools"));
 
-        await harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"], Acknowledged = true });
+        await harness.Service.CommitAsync(new SkillImportCommitRequest
+        {
+            Token = preview.Token,
+            SkillNames = ["pdf-tools"],
+            Acknowledged = true
+        });
 
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
-            harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools"], Acknowledged = true }));
+            harness.Service.CommitAsync(new SkillImportCommitRequest
+            {
+                Token = preview.Token,
+                SkillNames = ["pdf-tools"],
+                Acknowledged = true
+            }));
 
         await harness.Store.Received(1).CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
@@ -242,7 +271,12 @@ public sealed class SkillImportServiceTests
         // Phase 2 replays the materialised payload only. A name the operator never saw cannot be smuggled in, and the
         // whole commit is refused before anything is written rather than partially applied.
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
-            harness.Service.CommitAsync(new SkillImportCommitRequest { Token = preview.Token, SkillNames = ["pdf-tools", "other-skill"], Acknowledged = true }));
+            harness.Service.CommitAsync(new SkillImportCommitRequest
+            {
+                Token = preview.Token,
+                SkillNames = ["pdf-tools", "other-skill"],
+                Acknowledged = true
+            }));
 
         await harness.Store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
@@ -253,7 +287,12 @@ public sealed class SkillImportServiceTests
         using var harness = new SkillImportHarness();
 
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
-            harness.Service.CommitAsync(new SkillImportCommitRequest { Token = Guid.NewGuid(), SkillNames = ["pdf-tools"], Acknowledged = true }));
+            harness.Service.CommitAsync(new SkillImportCommitRequest
+            {
+                Token = Guid.NewGuid(),
+                SkillNames = ["pdf-tools"],
+                Acknowledged = true
+            }));
 
         await harness.Store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }

@@ -22,8 +22,7 @@ public sealed class ModelFitQueryService : IModelFitQueryService
     private readonly IModelFitRecommendationStore _recommendationStore;
     private readonly IModelFitSnapshotStore _snapshotStore;
 
-    public ModelFitQueryService(
-        IModelFitSnapshotStore snapshotStore,
+    public ModelFitQueryService(IModelFitSnapshotStore snapshotStore,
         IModelFitRecommendationStore recommendationStore,
         IOllamaModelService ollamaModelService,
         ILogger<ModelFitQueryService> logger)
@@ -47,10 +46,10 @@ public sealed class ModelFitQueryService : IModelFitQueryService
         // Cache-only: the latest successful recommendation snapshot for this key. A recommendation snapshot has a null
         // model-name (the latest-successful key matches on null), so model-name is fixed to null here.
         var summary = await _snapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend,
-                                              useCase,
-                                              providerName,
-                                              modelName: null,
-                                              cancellationToken);
+            useCase,
+            providerName,
+            modelName: null,
+            cancellationToken);
 
         if (summary is null)
         {

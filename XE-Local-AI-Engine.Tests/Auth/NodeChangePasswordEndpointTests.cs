@@ -202,7 +202,11 @@ public sealed class NodeChangePasswordEndpointTests
         using var response = await LoginAsync(client, password);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var token = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<AccessTokenBody>());
-        return new Session { AccessToken = token.AccessToken, RefreshCookie = GetRefreshCookie(response) };
+        return new Session
+        {
+            AccessToken = token.AccessToken,
+            RefreshCookie = GetRefreshCookie(response)
+        };
     }
 
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client)

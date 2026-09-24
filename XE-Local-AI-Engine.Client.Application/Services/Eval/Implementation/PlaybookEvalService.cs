@@ -43,8 +43,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly TimeProvider _timeProvider;
 
-    public PlaybookEvalService(
-        IPlaybookActionService playbookActionService,
+    public PlaybookEvalService(IPlaybookActionService playbookActionService,
         IPlaybookActionStore playbookActionStore,
         IAgentDefinitionStore agentDefinitionStore,
         IGoldenConversationStore goldenConversationStore,
@@ -86,13 +85,21 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         var suggested = await _playbookActionService.LoadPendingSuggestionAsync(agentId, actionId, cancellationToken);
         if (suggested is null)
         {
-            return new PlaybookEvalOutcome { ActionFound = false, Result = null };
+            return new PlaybookEvalOutcome
+            {
+                ActionFound = false,
+                Result = null
+            };
         }
 
         var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
         if (agent is null)
         {
-            return new PlaybookEvalOutcome { ActionFound = false, Result = null };
+            return new PlaybookEvalOutcome
+            {
+                ActionFound = false,
+                Result = null
+            };
         }
 
         // Baseline = the agent's current resolved prompt (Instructions + Enabled actions). Candidate = baseline + the
@@ -240,6 +247,11 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         // Recording persists the JSON on the action under the ownership guard and yields the updated record, which we
         // thread out via the outcome so the endpoint maps the response directly with no second, unscoped fetch.
         var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken);
-        return new PlaybookEvalOutcome { ActionFound = true, Result = result, Action = updated };
+        return new PlaybookEvalOutcome
+        {
+            ActionFound = true,
+            Result = result,
+            Action = updated
+        };
     }
 }

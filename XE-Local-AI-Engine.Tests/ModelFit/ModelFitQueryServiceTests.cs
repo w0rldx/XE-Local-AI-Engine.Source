@@ -390,7 +390,10 @@ public sealed class ModelFitQueryServiceTests
                 throw new InvalidOperationException("Ollama unreachable (test).");
             }
 
-            return Task.FromResult(_installed.Select(static name => new OllamaModelSummary { Name = name }));
+            return Task.FromResult(_installed.Select(static name => new OllamaModelSummary
+            {
+                Name = name
+            }));
         }
 
         public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)

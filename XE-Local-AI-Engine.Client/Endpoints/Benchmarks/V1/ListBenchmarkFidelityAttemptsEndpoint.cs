@@ -35,32 +35,32 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint : Endpoint<ListBenchma
 
         var attempts = await _records.ListFidelityAttemptsAsync(req.RunId, ct);
         await Send.OkAsync(new ListBenchmarkFidelityAttemptsResponse
-                  {
-                      Items =
-                      [
-                          .. attempts.Select(static attempt => new BenchmarkFidelityAttemptResponse
-                          {
-                              Id = attempt.Id,
-                              Sequence = attempt.Sequence,
-                              Kind = attempt.Kind,
-                              Status = attempt.Status.ToString(),
-                              PerplexityMean = attempt.PerplexityMean,
-                              PerplexityStdErr = attempt.PerplexityStdErr,
-                              PerplexityChunks = attempt.PerplexityChunks,
-                              PerplexityContextTokens = attempt.PerplexityContextTokens,
-                              CorpusId = attempt.CorpusId,
-                              KldMean = attempt.KldMean,
-                              KldP99 = attempt.KldP99,
-                              TopTokenAgreement = attempt.TopTokenAgreement,
-                              BaseModelName = attempt.BaseModelName,
-                              BaseModelContentFingerprint = attempt.BaseModelContentFingerprint,
-                              BaseLogitsDigest = attempt.BaseLogitsDigest,
-                              ErrorMessage = attempt.ErrorMessage,
-                              EnqueuedAtUtc = attempt.EnqueuedAtUtc,
-                              StartedAtUtc = attempt.StartedAtUtc,
-                              CompletedAtUtc = attempt.CompletedAtUtc
-                          })
-                      ]
-                  }, ct);
+        {
+            Items =
+            [
+                .. attempts.Select(static attempt => new BenchmarkFidelityAttemptResponse
+                {
+                    Id = attempt.Id,
+                    Sequence = attempt.Sequence,
+                    Kind = attempt.Kind,
+                    Status = attempt.Status.ToString(),
+                    PerplexityMean = attempt.PerplexityMean,
+                    PerplexityStdErr = attempt.PerplexityStdErr,
+                    PerplexityChunks = attempt.PerplexityChunks,
+                    PerplexityContextTokens = attempt.PerplexityContextTokens,
+                    CorpusId = attempt.CorpusId,
+                    KldMean = attempt.KldMean,
+                    KldP99 = attempt.KldP99,
+                    TopTokenAgreement = attempt.TopTokenAgreement,
+                    BaseModelName = attempt.BaseModelName,
+                    BaseModelContentFingerprint = attempt.BaseModelContentFingerprint,
+                    BaseLogitsDigest = attempt.BaseLogitsDigest,
+                    ErrorMessage = attempt.ErrorMessage,
+                    EnqueuedAtUtc = attempt.EnqueuedAtUtc,
+                    StartedAtUtc = attempt.StartedAtUtc,
+                    CompletedAtUtc = attempt.CompletedAtUtc
+                })
+            ]
+        }, ct);
     }
 }

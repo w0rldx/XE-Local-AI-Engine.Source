@@ -19,8 +19,7 @@ internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIndexingNotifier> _logger;
 
-    public KnowledgeIndexingNotifier(
-        IHubContext<KnowledgeBaseHub> hubContext,
+    public KnowledgeIndexingNotifier(IHubContext<KnowledgeBaseHub> hubContext,
         TimeProvider timeProvider,
         ILogger<KnowledgeIndexingNotifier> logger)
     {

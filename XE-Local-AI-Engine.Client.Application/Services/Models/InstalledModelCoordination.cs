@@ -91,8 +91,7 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
     private readonly IInstalledGgufSnapshotStore _snapshotStore;
     private readonly ICoordinatedModelProviderMapStore _providerMapStore;
 
-    public InstalledModelSnapshotCoordinator(
-        KeyedCompositeLockDomain lockDomain,
+    public InstalledModelSnapshotCoordinator(KeyedCompositeLockDomain lockDomain,
         IInstalledGgufSnapshotStore snapshotStore,
         ICoordinatedModelProviderMapStore providerMapStore)
     {
@@ -331,8 +330,8 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
             _inner = inner;
             MapKeys = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
             ModelKeys = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal))
-                        .Select(static key => key["2:provider-map:".Length..])
-                        .ToArray();
+                             .Select(static key => key["2:provider-map:".Length..])
+                             .ToArray();
             IsMutation = isMutation;
         }
 

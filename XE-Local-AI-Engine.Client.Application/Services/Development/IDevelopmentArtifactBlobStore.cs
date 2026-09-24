@@ -25,7 +25,11 @@ public sealed class DevelopmentArtifactBlobReadResult
     public required ReadOnlyMemory<byte> Content { get; init; }
 
     public static DevelopmentArtifactBlobReadResult Failure(DevelopmentArtifactReadStatus status) =>
-        new() { Status = status, Content = ReadOnlyMemory<byte>.Empty };
+        new()
+        {
+            Status = status,
+            Content = ReadOnlyMemory<byte>.Empty
+        };
 }
 
 public interface IDevelopmentArtifactBlobStore

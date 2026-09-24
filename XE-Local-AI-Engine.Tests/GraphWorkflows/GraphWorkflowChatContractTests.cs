@@ -28,7 +28,11 @@ public sealed class GraphWorkflowChatContractTests
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.ChatInputAnswer);
 
         AssertEx.Equal(GraphWorkflowDefinitionKind.Chat, graph.Kind);
-        AssertEx.Equal(new GraphWorkflowChatSettings { AcceptsAttachments = false, RequireRerunConfirmation = true }, graph.Chat);
+        AssertEx.Equal(new GraphWorkflowChatSettings
+        {
+            AcceptsAttachments = false,
+            RequireRerunConfirmation = true
+        }, graph.Chat);
         AssertEx.True(AssertEx.NotNull(graph.Nodes["done"].Config as GraphWorkflowEndConfig).PublishToChat, "an End of a Chat graph publishes unless told not to.");
         AssertEx.Equal("Which database?", AssertEx.NotNull(graph.Nodes["ask"].Config as GraphWorkflowChatInputConfig).Prompt);
         AssertEx.Equal(expected: 1, graph.Nodes["ask"].MaxAttempts, "a wait gets one try, like a pause.");
@@ -180,7 +184,8 @@ public sealed class GraphWorkflowChatContractTests
         AssertEx.Contains(Refusal(DecisionModel($$"""{ "question": "Q?", "labels": [{{many}}] }""")), "declares 33 label(s)");
 
         var most = string.Join(", ", Enumerable.Range(0, 32).Select(static index => $"\"l{index}\""));
-        AssertEx.Equal(expected: 32, AssertEx.NotNull(GraphWorkflowGraph.Parse(DecisionModel($$"""{ "question": "Q?", "labels": [{{most}}] }""")).Nodes["decide"].Config as GraphWorkflowDecisionModelConfig).Labels.Count);
+        AssertEx.Equal(expected: 32,
+            AssertEx.NotNull(GraphWorkflowGraph.Parse(DecisionModel($$"""{ "question": "Q?", "labels": [{{most}}] }""")).Nodes["decide"].Config as GraphWorkflowDecisionModelConfig).Labels.Count);
     }
 
     /// <summary>

@@ -56,8 +56,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly ILogger<NodeChatRegenerationService> _logger;
 
-    public NodeChatRegenerationService(
-        INodeChatPersistenceService persistence,
+    public NodeChatRegenerationService(INodeChatPersistenceService persistence,
         ChatInvocationStatePump invocationStatePump,
         ChatTurnResolver turnResolver,
         INodeChatMutationGuard mutationGuard,
@@ -147,7 +146,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         var resolution = await ResolveTurnAsync(conversation, original, cancellationToken);
 
         var placeholder = await MintVariantAsync(conversationId, originalMessageId, newMessageId, requestId, startedAtUtc, resolution, reasoningEffort, cancellationToken);
-        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = placeholder.MessageId, RequestId = requestId };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = placeholder.MessageId,
+            RequestId = requestId
+        };
         var sequence = new NodeChatStreamSequence();
 
         // The variant is Pending but run ownership (pump, runner, their finally) is not wired yet, so a disconnect in
@@ -228,12 +232,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
             {
                 await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                                     {
-                                         InvocationId = requestId,
-                                         Kind = TurnNoticeKind.OrchestrationDegraded,
-                                         Message = orchestrationDegradedMessage,
-                                         Detail = resolution.OrchestrationOutcome.Reason.ToString()
-                                     });
+                {
+                    InvocationId = requestId,
+                    Kind = TurnNoticeKind.OrchestrationDegraded,
+                    Message = orchestrationDegradedMessage,
+                    Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                });
             }
 
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
@@ -351,7 +355,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // A request-supplied selection is persisted BEFORE the read, because that write also CLEARS the stored
         // compaction synopsis: reading first would splice a stale summary in and drop the messages it claims to cover.
         var persistedSelectedPath = requestedSelectedPath is not null
-            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = conversationId, SelectedPath = requestedSelectedPath, UpdatedAtUtc = NowUnixMilliseconds() }, cancellationToken)
+            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+            {
+                ConversationId = conversationId,
+                SelectedPath = requestedSelectedPath,
+                UpdatedAtUtc = NowUnixMilliseconds()
+            }, cancellationToken)
             : null;
 
         var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken)
@@ -362,7 +371,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
         // already-persisted conversation selection drives the pre-cutoff context.
-        return new RegenerationTurnLoad { Conversation = conversation, SelectedPath = persistedSelectedPath ?? conversation.SelectedPath, Original = original };
+        return new RegenerationTurnLoad
+        {
+            Conversation = conversation,
+            SelectedPath = persistedSelectedPath ?? conversation.SelectedPath,
+            Original = original
+        };
     }
 
     // Reuses the backend mint for the sibling placeholder (pending, shared variant_group_id, parent copied from the
@@ -377,21 +391,21 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         CancellationToken cancellationToken)
     {
         var variant = await _persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
-        {
-            ConversationId = conversationId,
-            OriginalMessageId = originalMessageId,
-            NewMessageId = newMessageId,
-            RequestId = requestId,
-            CreatedAtUtc = startedAtUtc,
-            // Stamped with the model that will actually rerun, not the raw original model, so the
-            // variant's attribution matches the rerun.
-            Model = resolution.EffectiveModel,
-            AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
-            AgentName = resolution.Resolved?.AgentName,
-            // The effort that actually drives this variant: an agent's pin wins over the request's
-            // selection, the same precedence as the rerun's package, and it survives reload.
-            ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
-        },
+                          {
+                              ConversationId = conversationId,
+                              OriginalMessageId = originalMessageId,
+                              NewMessageId = newMessageId,
+                              RequestId = requestId,
+                              CreatedAtUtc = startedAtUtc,
+                              // Stamped with the model that will actually rerun, not the raw original model, so the
+                              // variant's attribution matches the rerun.
+                              Model = resolution.EffectiveModel,
+                              AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
+                              AgentName = resolution.Resolved?.AgentName,
+                              // The effort that actually drives this variant: an agent's pin wins over the request's
+                              // selection, the same precedence as the rerun's package, and it survives reload.
+                              ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
+                          },
                           cancellationToken)
                       ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
@@ -522,8 +536,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             }
 
             await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
-                                   invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
-                               cancellationToken);
+                    invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                cancellationToken);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
@@ -687,7 +701,10 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     {
         return BuildRegenerationContext(conversation, original, selectedPath, knowledgeContext: null, applyCompaction: false)
                .Where(static message => message.Role == MessageRole.User && !string.IsNullOrWhiteSpace(message.Content))
-               .Select(static message => new MemoryExtractionTurn { Content = message.Content })
+               .Select(static message => new MemoryExtractionTurn
+               {
+                   Content = message.Content
+               })
                .ToArray();
     }
 
@@ -782,13 +799,13 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                             {
-                                 InvocationId = requestId,
-                                 Kind = TurnNoticeKind.KnowledgeWithheld,
-                                 Message =
-                                     "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
-                                 Detail = effectiveModel
-                             });
+        {
+            InvocationId = requestId,
+            Kind = TurnNoticeKind.KnowledgeWithheld,
+            Message =
+                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+            Detail = effectiveModel
+        });
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

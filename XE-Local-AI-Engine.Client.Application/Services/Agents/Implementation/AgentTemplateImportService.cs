@@ -51,7 +51,12 @@ internal sealed class AgentTemplateImportService : IAgentTemplateImportService
             imported.Add(slug);
         }
 
-        return new AgentTemplateImportResult { Imported = imported, SkippedExisting = skippedExisting, Unknown = unknown };
+        return new AgentTemplateImportResult
+        {
+            Imported = imported,
+            SkippedExisting = skippedExisting,
+            Unknown = unknown
+        };
     }
 
     private static AgentDefinitionInput ToInput(AgentTemplate template)

@@ -453,7 +453,12 @@ public sealed partial class LlamaServerProcessSupervisor
                         handle.ProcessId,
                         capabilityDecision.OmittedOptions).ConfigureAwait(false);
 
-                var endpoint = new LlamaServerEndpoint { ModelName = key.ModelName, Role = key.Role, BaseAddress = spec.BaseAddress };
+                var endpoint = new LlamaServerEndpoint
+                {
+                    ModelName = key.ModelName,
+                    Role = key.Role,
+                    BaseAddress = spec.BaseAddress
+                };
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
                     EffectiveContextTokens = effectiveContext,

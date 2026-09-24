@@ -33,7 +33,15 @@ public sealed class ListTrainingSamplesEndpoint : Endpoint<ListTrainingSamplesRe
             return;
         }
 
-        var page = await _datasets.ListSamplesAsync(new TrainingSampleQuery { DatasetId = req.DatasetId, Page = req.Page, PageSize = req.PageSize, Label = req.Label, ReviewState = req.ReviewState, Kind = req.Kind }, ct);
+        var page = await _datasets.ListSamplesAsync(new TrainingSampleQuery
+        {
+            DatasetId = req.DatasetId,
+            Page = req.Page,
+            PageSize = req.PageSize,
+            Label = req.Label,
+            ReviewState = req.ReviewState,
+            Kind = req.Kind
+        }, ct);
         await Send.OkAsync(new ListTrainingSamplesResponse
         {
             Items = page.Items.Select(item => item.ToResponse()).ToArray(),

@@ -206,7 +206,11 @@ public sealed class ContainerRuntimeResolverTests
         // The refusal must happen before a client exists, not merely before a container is created: nothing about this
         // node — not a socket path, not a label, not a probe — may be transmitted to a daemon on another host. Both
         // sources are covered because DOCKER_HOST is the one an operator sets without touching engine configuration.
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = source });
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint
+        {
+            Uri = new Uri(endpoint),
+            Source = source
+        });
 
         var resolution = await harness.Resolver.ResolveAsync();
 
@@ -237,7 +241,11 @@ public sealed class ContainerRuntimeResolverTests
         // this refusal a query string on it would reach a READY resolution and be rendered on the runtime card.
         const string Sentinel = "sekrit-9f3a";
         var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable });
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint
+        {
+            Uri = new Uri(raw),
+            Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+        });
 
         var resolution = await harness.Resolver.ResolveAsync();
         var failure = await AssertEx.ThrowsAsync<ContainerRuntimeUnavailableException>(() => harness.Resolver.CreateRuntimeAsync());
@@ -270,7 +278,11 @@ public sealed class ContainerRuntimeResolverTests
     [Arguments("npipe://./pipe/docker_engine", DockerDaemonEndpointSource.WindowsNamedPipe)]
     public async Task AUnixOrNamedPipeEndpoint_IsAccepted(string endpoint, DockerDaemonEndpointSource source)
     {
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = source });
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint
+        {
+            Uri = new Uri(endpoint),
+            Source = source
+        });
 
         var resolution = await harness.Resolver.ResolveAsync();
 
@@ -407,8 +419,11 @@ public sealed class ContainerRuntimeResolverTests
     {
         // The Windows tester's stopped Docker Desktop: the npipe transport's TimeoutException, classified by the real
         // client, must compose into the "nothing answered" prose rather than the catch-all "could not be used".
-        await using var production = new DockerDotNetRuntimeClient(
-            new DockerDaemonEndpoint { Uri = new Uri("npipe://./pipe/docker_engine"), Source = DockerDaemonEndpointSource.WindowsNamedPipe },
+        await using var production = new DockerDotNetRuntimeClient(new DockerDaemonEndpoint
+            {
+                Uri = new Uri("npipe://./pipe/docker_engine"),
+                Source = DockerDaemonEndpointSource.WindowsNamedPipe
+            },
             TimeSpan.FromSeconds(1),
             TimeProvider.System);
         var harness = new Harness();
@@ -549,9 +564,23 @@ public sealed class ContainerRuntimeResolverTests
             DockerDaemonEndpoint? endpoint = null,
             int resolutionCacheSeconds = 30)
         {
-            Endpoint = endpoint ?? new DockerDaemonEndpoint { Uri = new Uri(LocalEndpoint), Source = DockerDaemonEndpointSource.Configuration };
+            Endpoint = endpoint ?? new DockerDaemonEndpoint
+            {
+                Uri = new Uri(LocalEndpoint),
+                Source = DockerDaemonEndpointSource.Configuration
+            };
             Client = new FakeDockerRuntimeClient(Endpoint,
-                new DockerDaemonIdentity { DaemonId = "daemon-alpha", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = Endpoint, IsRootless = true, SupportsSeccomp = true });
+                new DockerDaemonIdentity
+                {
+                    DaemonId = "daemon-alpha",
+                    ServerVersion = "99.0.0",
+                    ApiVersion = "1.99",
+                    MinimumApiVersion = "1.40",
+                    OperatingSystem = "linux",
+                    Endpoint = Endpoint,
+                    IsRootless = true,
+                    SupportsSeccomp = true
+                });
             Factory = new RecordingContainerRuntimeFactory(Client);
             AttestationStore = new InMemoryDaemonAttestationStore();
 

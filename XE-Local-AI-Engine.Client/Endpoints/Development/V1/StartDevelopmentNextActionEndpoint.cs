@@ -30,14 +30,14 @@ public sealed class StartDevelopmentNextActionEndpoint : Endpoint<DevelopmentAct
         {
             var result = await _service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct);
             await Send.OkAsync(new DevelopmentNextActionResponse
-            {
-                Action = result.Action,
-                ProjectId = result.ProjectId,
-                TaskId = result.TaskId,
-                AttemptId = result.AttemptId,
-                TaskStatus = result.TaskStatus.ToString(),
-                Role = result.Role?.ToString()
-            },
+                {
+                    Action = result.Action,
+                    ProjectId = result.ProjectId,
+                    TaskId = result.TaskId,
+                    AttemptId = result.AttemptId,
+                    TaskStatus = result.TaskStatus.ToString(),
+                    Role = result.Role?.ToString()
+                },
                 ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)

@@ -60,6 +60,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     ///     entry; a null-bearing result is cached too, so a header that carries no estimator inputs is read at most once.
     /// </remarks>
     private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFootprintInputs> _footprintFactsCache = new();
+
     private readonly GgufHeaderReader _headerReader;
     private readonly ILogger<HuggingFaceGgufStore> _logger;
     private readonly HuggingFaceOptions _options;
@@ -141,7 +142,12 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             throw new GgufAdapterBaseModelMissingException("The base model this adapter applies to is not installed. Reinstall the base model or delete the adapter.");
         }
 
-        return new GgufAdapterLaunch { BaseModelFilePath = baseEntry.LocalPath, AdapterFilePath = entry.LocalPath, AdapterSizeBytes = entry.AdapterSizeBytes ?? entry.SizeBytes };
+        return new GgufAdapterLaunch
+        {
+            BaseModelFilePath = baseEntry.LocalPath,
+            AdapterFilePath = entry.LocalPath,
+            AdapterSizeBytes = entry.AdapterSizeBytes ?? entry.SizeBytes
+        };
     }
 
     /// <inheritdoc />
@@ -266,7 +272,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var weightRelativePath = GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, result.LocalPath);
             var contentMembers = new List<GgufModelContentMember>
             {
-                new() { RelativePath = weightRelativePath, Role = InstalledModelPhysicalMemberRole.Weight, SizeBytes = result.SizeBytes, Sha256 = weightHash, OwningAliases = [modelName] }
+                new()
+                {
+                    RelativePath = weightRelativePath,
+                    Role = InstalledModelPhysicalMemberRole.Weight,
+                    SizeBytes = result.SizeBytes,
+                    Sha256 = weightHash,
+                    OwningAliases = [modelName]
+                }
             };
             if (projector.LocalPath is not null)
             {
@@ -665,7 +678,17 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
         public required string? MemberFingerprint { get; init; }
 
-        public static ProjectorDownloadResult None { get; } = new() { SourceDisplayName = null, RelativePath = null, LocalPath = null, SizeBytes = null, ContentSha256 = null, SourceSha256 = null, SourceSizeBytes = null, MemberFingerprint = null };
+        public static ProjectorDownloadResult None { get; } = new()
+        {
+            SourceDisplayName = null,
+            RelativePath = null,
+            LocalPath = null,
+            SizeBytes = null,
+            ContentSha256 = null,
+            SourceSha256 = null,
+            SourceSizeBytes = null,
+            MemberFingerprint = null
+        };
     }
 
     // The per-file header facts surfaced onto the descriptor, derived from one tolerant header read.

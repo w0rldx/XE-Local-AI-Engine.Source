@@ -90,7 +90,15 @@ public sealed class AgentWorkSessionDeleteTests
             ExpectedVersion = created.Version,
             OperationId = Guid.NewGuid(),
             Origin = AgentWorkSessionTaskOrigin.Agent,
-            Changes = [new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, Title = "Task" }]
+            Changes =
+            [
+                new WorkPlanTaskChange
+                {
+                    TaskId = Guid.NewGuid(),
+                    Operation = WorkPlanTaskOperation.Add,
+                    Title = "Task"
+                }
+            ]
         });
         var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
         {

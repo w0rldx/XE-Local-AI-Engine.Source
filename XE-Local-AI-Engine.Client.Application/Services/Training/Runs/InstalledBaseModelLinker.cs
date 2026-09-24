@@ -52,7 +52,12 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
                .Where(entry => string.IsNullOrEmpty(entry.BaseModelName))
                .OrderBy(entry => string.Equals(entry.RepoId, baseRepoId, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                .ThenBy(entry => entry.ModelName, StringComparer.Ordinal)
-               .Select(entry => new InstalledBaseModelLink { ModelName = entry.ModelName, RepoId = entry.RepoId, ContentFingerprint = entry.ModelContentFingerprint })
+               .Select(entry => new InstalledBaseModelLink
+               {
+                   ModelName = entry.ModelName,
+                   RepoId = entry.RepoId,
+                   ContentFingerprint = entry.ModelContentFingerprint
+               })
                .ToArray();
     }
 
@@ -62,7 +67,12 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
         {
             var entry = await _registry.FindAsync(explicitModelName, cancellationToken)
                         ?? throw new TrainingRunRejectedException($"'{explicitModelName}' is not an installed model.");
-            return new InstalledBaseModelLink { ModelName = entry.ModelName, RepoId = entry.RepoId, ContentFingerprint = entry.ModelContentFingerprint };
+            return new InstalledBaseModelLink
+            {
+                ModelName = entry.ModelName,
+                RepoId = entry.RepoId,
+                ContentFingerprint = entry.ModelContentFingerprint
+            };
         }
 
         var suggestions = await SuggestAsync(baseRepoId, cancellationToken);

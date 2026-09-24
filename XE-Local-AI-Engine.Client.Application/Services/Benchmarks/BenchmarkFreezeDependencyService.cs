@@ -24,8 +24,7 @@ public sealed class BenchmarkFreezeDependencyService : IBenchmarkFreezeDependenc
     private readonly ICustomToolStore _customTools;
     private readonly IInferenceProfileStore _inferenceProfiles;
 
-    public BenchmarkFreezeDependencyService(
-        IAgentDefinitionStore agentDefinitions,
+    public BenchmarkFreezeDependencyService(IAgentDefinitionStore agentDefinitions,
         IPlaybookActionStore playbooks,
         IAgentSkillStore skills,
         ICustomToolStore customTools,

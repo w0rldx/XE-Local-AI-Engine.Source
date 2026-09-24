@@ -21,8 +21,7 @@ internal sealed class FakeNodeSettingsStore : INodeSettingsStore
 {
     private readonly Func<StoredNodeSettings, StoredNodeSettings>? _siblingWriteBeforeTheUpdate;
 
-    public FakeNodeSettingsStore(
-        StoredNodeSettings initial,
+    public FakeNodeSettingsStore(StoredNodeSettings initial,
         Func<StoredNodeSettings, StoredNodeSettings>? siblingWriteBeforeTheUpdate = null)
     {
         _siblingWriteBeforeTheUpdate = siblingWriteBeforeTheUpdate;

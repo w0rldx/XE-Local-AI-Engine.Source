@@ -31,7 +31,13 @@ public sealed class SupervisorSpawnArgsTests
                                            --jinja
                                            --cache-ram N
                                            """;
-        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cpu, IsPinnedFallback = true };
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cpu,
+            IsPinnedFallback = true
+        };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,

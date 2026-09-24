@@ -25,7 +25,7 @@ public sealed class GgufRegistryMutationManifestTests
     [Arguments(MissingRequiredMember)]
     public async Task RemoveAliasSet_OnAnUnreadableManifest_FailsAndLeavesItUntouched(string manifestContent)
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         using var registry = Infra.Registry(Infra.Options(dir.Path));
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");
@@ -44,7 +44,7 @@ public sealed class GgufRegistryMutationManifestTests
     [Arguments(MissingRequiredMember)]
     public async Task RestoreAliasSet_OnAnUnreadableManifest_FailsAndLeavesItUntouched(string manifestContent)
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         using var registry = Infra.Registry(Infra.Options(dir.Path));
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");
@@ -62,7 +62,7 @@ public sealed class GgufRegistryMutationManifestTests
     {
         // The absent-manifest case stays a normal "nothing matched" answer: there is no row to lose, so the caller's
         // superseded path is the right outcome, and this is the negative control for the three failures above.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         using var registry = Infra.Registry(Infra.Options(dir.Path));
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");

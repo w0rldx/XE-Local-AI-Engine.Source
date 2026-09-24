@@ -146,7 +146,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         if (cachedServer is not null)
         {
             EnsureExecutable(cachedServer);
-            return new WhisperBinary { ServerExecutablePath = cachedServer, Version = _activeTag, Backend = backend, IsPinnedFallback = true };
+            return new WhisperBinary
+            {
+                ServerExecutablePath = cachedServer,
+                Version = _activeTag,
+                Backend = backend,
+                IsPinnedFallback = true
+            };
         }
 
         await DownloadVerifyExtractAsync(WhisperCppReleasePins.DownloadUri(_activeTag, pin.AssetName),
@@ -160,7 +166,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                          ?? throw new WhisperRuntimeException("The downloaded whisper.cpp runtime did not contain the expected server executable.");
 
         EnsureExecutable(serverPath);
-        return new WhisperBinary { ServerExecutablePath = serverPath, Version = _activeTag, Backend = backend, IsPinnedFallback = true };
+        return new WhisperBinary
+        {
+            ServerExecutablePath = serverPath,
+            Version = _activeTag,
+            Backend = backend,
+            IsPinnedFallback = true
+        };
     }
 
     /// <summary>
@@ -194,7 +206,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             }
 
             _managedSourceSignal?.SetActive(state.DesiredBackend);
-            return new WhisperBinary { ServerExecutablePath = serverPath, Version = state.SourceCommit, Backend = state.DesiredBackend, IsPinnedFallback = false };
+            return new WhisperBinary
+            {
+                ServerExecutablePath = serverPath,
+                Version = state.SourceCommit,
+                Backend = state.DesiredBackend,
+                IsPinnedFallback = false
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -295,7 +313,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             throw new WhisperRuntimeException("The configured bring-your-own whisper.cpp server path is not executable.");
         }
 
-        return new WhisperBinary { ServerExecutablePath = fullPath, Version = "byo", Backend = overrideOptions.Backend, IsPinnedFallback = false };
+        return new WhisperBinary
+        {
+            ServerExecutablePath = fullPath,
+            Version = "byo",
+            Backend = overrideOptions.Backend,
+            IsPinnedFallback = false
+        };
     }
 
     /// <summary>

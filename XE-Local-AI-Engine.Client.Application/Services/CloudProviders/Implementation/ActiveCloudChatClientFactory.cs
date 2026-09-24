@@ -51,6 +51,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
     ///     up the transport.
     /// </remarks>
     private readonly Lazy<ICodexOAuthChatClientFactory> _codexFactory;
+
     private readonly CodexOptions _codexOptions;
 
     private readonly ICodexTokenStore _codexTokenStore;
@@ -112,7 +113,11 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
         var built = selection.Build();
 
         // Overwrite WITHOUT disposing the old value — see the class remarks (concurrency-safe; GC reclaims it).
-        _clientCache[selection.CacheKey] = new CachedClient { Fingerprint = selection.Fingerprint, Client = built };
+        _clientCache[selection.CacheKey] = new CachedClient
+        {
+            Fingerprint = selection.Fingerprint,
+            Client = built
+        };
 
         client = built;
         return true;
@@ -182,7 +187,12 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
         var config = _credentialStore.LoadConfigAsync().GetAwaiter().GetResult();
         var nodeSettings = _nodeSettingsStore.LoadAsync().GetAwaiter().GetResult();
 #pragma warning restore MA0045, MA0032
-        var snapshot = new StoreSnapshot { Session = session, Connection = config?.AzureFoundry, NodeSettings = nodeSettings };
+        var snapshot = new StoreSnapshot
+        {
+            Session = session,
+            Connection = config?.AzureFoundry,
+            NodeSettings = nodeSettings
+        };
 
         lock (_cacheGate)
         {
@@ -269,7 +279,13 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             $"|{connection.EntraTokenScope}|{connection.EntraSignInMethod}");
         var cacheKey = string.Create(CultureInfo.InvariantCulture, $"{AzureFingerprintPrefix}|{matchedDeployment}");
 
-        return new CloudSelection { CacheKey = cacheKey, Fingerprint = fingerprint, ProviderName = AzureFingerprintPrefix, Build = () => _azureFactory.Create(connection, matchedDeployment) };
+        return new CloudSelection
+        {
+            CacheKey = cacheKey,
+            Fingerprint = fingerprint,
+            ProviderName = AzureFingerprintPrefix,
+            Build = () => _azureFactory.Create(connection, matchedDeployment)
+        };
     }
 
     /// <summary>Builds a Codex selection for the given session and the (already-resolved) model id to build it with.</summary>
@@ -281,7 +297,13 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             $"{CodexFingerprintPrefix}|{session.AccountId}|{session.ExpiresUtc.UtcTicks}|{modelId}");
         var cacheKey = string.Create(CultureInfo.InvariantCulture, $"{CodexFingerprintPrefix}|{modelId}");
 
-        return new CloudSelection { CacheKey = cacheKey, Fingerprint = fingerprint, ProviderName = CodexFingerprintPrefix, Build = () => _codexFactory.Value.Create(modelId) };
+        return new CloudSelection
+        {
+            CacheKey = cacheKey,
+            Fingerprint = fingerprint,
+            ProviderName = CodexFingerprintPrefix,
+            Build = () => _codexFactory.Value.Create(modelId)
+        };
     }
 
     /// <summary>

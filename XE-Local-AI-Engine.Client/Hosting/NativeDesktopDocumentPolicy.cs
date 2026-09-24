@@ -45,6 +45,7 @@ internal sealed class NativeDesktopDocumentPolicy
         {
             response.Headers["Permissions-Policy"] = PermissionsPolicy;
         }
+
         response.Headers.CacheControl = "no-store";
     }
 }

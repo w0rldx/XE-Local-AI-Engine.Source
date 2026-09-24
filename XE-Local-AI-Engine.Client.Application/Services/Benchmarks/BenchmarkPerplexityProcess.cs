@@ -89,7 +89,11 @@ public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
         await process.WaitForExitAsync(CancellationToken.None);
         lock (sink)
         {
-            return new BenchmarkPerplexityProcessResult { ExitCode = process.ExitCode, Output = output.ToString() };
+            return new BenchmarkPerplexityProcessResult
+            {
+                ExitCode = process.ExitCode,
+                Output = output.ToString()
+            };
         }
     }
 
@@ -203,7 +207,12 @@ public static partial class BenchmarkPerplexityOutputParser
         }
 
         var agreement = Value(SameTopTokenPattern, output);
-        return new BenchmarkKldReading { Mean = mean, P99 = Value(KldP99Pattern, output), TopTokenAgreement = agreement is { } percent ? percent / 100.0 : null };
+        return new BenchmarkKldReading
+        {
+            Mean = mean,
+            P99 = Value(KldP99Pattern, output),
+            TopTokenAgreement = agreement is { } percent ? percent / 100.0 : null
+        };
     }
 
     /// <summary>The last <paramref name="characters" /> of the child's output, for an operator-safe failure reason.</summary>
@@ -221,7 +230,11 @@ public static partial class BenchmarkPerplexityOutputParser
         }
 
         return TryParseInvariant(match.Groups["mean"].Value) is { } mean && TryParseInvariant(match.Groups["error"].Value) is { } standardError
-            ? new BenchmarkPerplexityReading { Mean = mean, StandardError = standardError }
+            ? new BenchmarkPerplexityReading
+            {
+                Mean = mean,
+                StandardError = standardError
+            }
             : null;
     }
 

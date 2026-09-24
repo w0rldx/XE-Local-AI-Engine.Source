@@ -35,6 +35,6 @@ public sealed class GetBenchmarkRunEndpoint : Endpoint<BenchmarkRunRouteRequest,
 
         // A detail response is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
+            BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

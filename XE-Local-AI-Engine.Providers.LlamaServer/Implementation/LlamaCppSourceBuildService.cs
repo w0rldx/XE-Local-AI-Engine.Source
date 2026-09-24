@@ -173,7 +173,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 if (_isRunning)
                 {
-                    return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.AlreadyRunning };
+                    return new LlamaCppSourceBuildStartResult
+                    {
+                        Outcome = LlamaCppSourceBuildStartOutcome.AlreadyRunning
+                    };
                 }
             }
 
@@ -187,7 +190,11 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                     string.Equals(item.Key, "free-disk", StringComparison.Ordinal) && !item.Satisfied)
                     ? LlamaCppSourceBuildStartOutcome.InsufficientDisk
                     : LlamaCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new LlamaCppSourceBuildStartResult { Outcome = outcome, Prerequisites = report };
+                return new LlamaCppSourceBuildStartResult
+                {
+                    Outcome = outcome,
+                    Prerequisites = report
+                };
             }
 
             var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
@@ -195,15 +202,25 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 var processCount = _supervisor.CountRunningProcesses();
                 return processCount > 0
-                    ? new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.ProcessesRunning, RunningProcessCount = processCount }
-                    : new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy };
+                    ? new LlamaCppSourceBuildStartResult
+                    {
+                        Outcome = LlamaCppSourceBuildStartOutcome.ProcessesRunning,
+                        RunningProcessCount = processCount
+                    }
+                    : new LlamaCppSourceBuildStartResult
+                    {
+                        Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy
+                    };
             }
 
             await using (mutationLease.ConfigureAwait(false))
             {
                 if (!_buildActivity.TryReserve(descriptor.BuildId))
                 {
-                    return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy };
+                    return new LlamaCppSourceBuildStartResult
+                    {
+                        Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy
+                    };
                 }
 
                 try
@@ -250,7 +267,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         // Release the start transaction before allowing the detached build to touch its work tree.
         startSignal.SetResult();
-        return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.Started };
+        return new LlamaCppSourceBuildStartResult
+        {
+            Outcome = LlamaCppSourceBuildStartOutcome.Started
+        };
     }
 
     /// <inheritdoc />

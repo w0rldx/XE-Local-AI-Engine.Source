@@ -25,10 +25,15 @@ public sealed class CreateToolMockEndpoint : Endpoint<CreateToolMockRequest, Too
 
     public override async Task HandleAsync(CreateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.CreateAsync(new ToolMockDraft { ToolName = req.ToolName, Body = req.Body, Enabled = req.Enabled }, ct);
+        var record = await _mocks.CreateAsync(new ToolMockDraft
+        {
+            ToolName = req.ToolName,
+            Body = req.Body,
+            Enabled = req.Enabled
+        }, ct);
         await Send.CreatedAtAsync<GetToolMockEndpoint>(new
-                  {
-                      mockId = record.Id
-                  }, record.ToResponse(), cancellation: ct);
+        {
+            mockId = record.Id
+        }, record.ToResponse(), cancellation: ct);
     }
 }

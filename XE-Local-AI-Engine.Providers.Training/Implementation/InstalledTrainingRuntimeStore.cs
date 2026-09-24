@@ -20,6 +20,7 @@ internal sealed class InstalledTrainingRuntimeStore
     {
         WriteIndented = true
     };
+
     private readonly string _statePath;
 
     public InstalledTrainingRuntimeStore(string statePath)

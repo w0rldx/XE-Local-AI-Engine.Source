@@ -439,7 +439,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // Simulate the namespace-move regression: rewrite the persisted JOB_CLASS_NAME to a type that no longer exists,
         // exactly as an install upgraded across the dispatch-job move would have on disk.
         await CorruptJobClassNameAsync(dbPath, record.Id,
-                "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
+            "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
         // Before the heal, Quartz cannot materialize the job detail because its stored type does not resolve.
         _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
@@ -473,7 +473,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         await CorruptJobClassNameAsync(dbPath, record.Id,
-                "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
+            "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
         // Stale detail does not resolve before reconciliation.
         _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
@@ -856,10 +856,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None);
 
         var derived = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                       displayName: "Derived ceiling"));
+            displayName: "Derived ceiling"));
         var explicitCeiling = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                               displayName: "Operator ceiling",
-                                               maxRuntimeSeconds: 90));
+            displayName: "Operator ceiling",
+            maxRuntimeSeconds: 90));
 
         var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("3900000",
@@ -890,8 +890,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None);
 
         var legacy = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                      displayName: "Legacy ceiling",
-                                      maxRuntimeSeconds: 600));
+            displayName: "Legacy ceiling",
+            maxRuntimeSeconds: 600));
         // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
         var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600));
 

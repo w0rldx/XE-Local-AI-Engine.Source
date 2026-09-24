@@ -17,8 +17,7 @@ public sealed class ReindexCorpusEndpoint : EndpointWithoutRequest<ReindexCorpus
     private readonly IKnowledgeDocumentCatalogService _catalogService;
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
 
-    public ReindexCorpusEndpoint(
-        IKnowledgeDocumentCatalogService catalogService,
+    public ReindexCorpusEndpoint(IKnowledgeDocumentCatalogService catalogService,
         IKnowledgeIngestionDispatcher ingestionDispatcher)
     {
         ArgumentNullException.ThrowIfNull(catalogService);

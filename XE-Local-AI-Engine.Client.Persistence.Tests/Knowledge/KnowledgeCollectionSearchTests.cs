@@ -133,7 +133,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var hits = await new FtsSearch(context)
-                         .SearchAsync("ExactNeedle", limit: 10, documentId: null, CollectionA, CancellationToken.None);
+            .SearchAsync("ExactNeedle", limit: 10, documentId: null, CollectionA, CancellationToken.None);
 
         AssertEx.Equal(expected: 4, hits.Count);
         AssertEx.Equal(symbolChunk, hits[0].ChunkId, "Symbol matches carry the largest configured BM25 weight.");
@@ -174,7 +174,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateLexicalSearchService(context);
-        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "needle", Limit = 10, CollectionId = "project-a" }, CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "needle",
+            Limit = 10,
+            CollectionId = "project-a"
+        }, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.Results.Count);
         var hit = result.Results[0];

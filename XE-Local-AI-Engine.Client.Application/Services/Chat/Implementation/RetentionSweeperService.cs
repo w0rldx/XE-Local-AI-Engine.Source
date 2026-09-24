@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;

@@ -21,8 +21,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider : ITrainingE
     private readonly IInstalledModelSnapshotCoordinator _coordinator;
     private readonly IGgufModelStore _models;
 
-    public TrainingEvaluationInstalledModelLeaseProvider(
-        IInstalledModelSnapshotCoordinator coordinator,
+    public TrainingEvaluationInstalledModelLeaseProvider(IInstalledModelSnapshotCoordinator coordinator,
         IGgufModelStore models)
     {
         ArgumentNullException.ThrowIfNull(coordinator);
@@ -60,8 +59,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider : ITrainingE
     {
         private readonly InstalledModelReadLease _inner;
 
-        public EvaluationLease(
-            InstalledModelReadLease inner,
+        public EvaluationLease(InstalledModelReadLease inner,
             string modelFilePath,
             string modelContentFingerprint,
             string modelSha256,
