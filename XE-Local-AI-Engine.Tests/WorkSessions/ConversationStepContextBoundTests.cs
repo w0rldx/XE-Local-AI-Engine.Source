@@ -268,6 +268,33 @@ public sealed class ConversationStepContextBoundTests
     }
 
     [Test]
+    public void Project_CountsTheUnansweredNoticeAndNotAFailedTurnsPartialText()
+    {
+        // Mirrors ConversationContextBuilder.Build: the failed request carries the notice, and a failed turn kept for its
+        // tool exchanges sends those exchanges without its partial text or reasoning.
+        var estimator = new HeuristicTokenEstimator();
+        var toolPart = new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 0, Text: null, "call-1", "save_artifact", NodeChatToolPartStates.Received, Args: "{}", "ok");
+        var failed = Message(sequence: 1, "assistant", new string('b', 4_000), new string('c', 4_000)) with
+        {
+            Status = NodeChatMessageStatusValues.Failed,
+            Parts = [toolPart]
+        };
+        // Hand-built as the send path sends it; Completed so this baseline is not marked a second time.
+        var asSent = Message(sequence: 1, "assistant", string.Empty) with
+        {
+            Parts = [toolPart]
+        };
+
+        var projected = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", "save it"), failed]), estimator, includeToolHistory: true);
+        var expected = ConversationStepContextBound.Project(
+            Conversation([Message(sequence: 0, "user", $"save it\n\n{ConversationContextBuilder.UnansweredNotice}"), asSent]),
+            estimator,
+            includeToolHistory: true);
+
+        AssertEx.Equal(expected, projected);
+    }
+
+    [Test]
     public void Project_CountsReasoningAndIgnoresWhatTheSynopsisAlreadyCovers()
     {
         var estimator = new HeuristicTokenEstimator();

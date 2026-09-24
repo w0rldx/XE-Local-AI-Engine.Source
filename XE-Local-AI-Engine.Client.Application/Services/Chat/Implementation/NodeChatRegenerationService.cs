@@ -116,7 +116,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // deeper in the invocation mapping. A null sampling block always parses, keeping the no-override path intact.
         if (!SeedValue.TryParse(samplingOptions?.Seed, out _, out var seedError))
         {
-            throw new ArgumentException(seedError, nameof(samplingOptions));
+            throw new NodeChatInvalidRequestException(seedError);
         }
 
         return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken);
@@ -592,8 +592,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     ///     the context is everything strictly before the earliest group member.
     /// </remarks>
     /// <param name="applyCompaction">
-    ///     False only for memory extraction, which mines REAL user turns: it keeps the turns a synopsis covers and
-    ///     never mines the synopsis itself.
+    ///     False only for memory extraction, which mines REAL user turns: no synopsis, no prompt-only unanswered notice.
     /// </param>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
@@ -609,6 +608,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // A prior turn before the cutoff may itself have variants, collapsed here to the selected path. The group
         // being regenerated already sorts at or after the cutoff, so the sequence filter excludes it either way.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
+        // Earlier failed requests are marked like the send path marks them. The turn at the cutoff is the one this
+        // rerun answers, so it never is, even when the answer being replaced is the one that failed.
+        var unanswered = applyCompaction
+            ? ConversationContextBuilder.FindUnansweredUserTurns(selected.Where(message => anchorSequence(message) < cutoffSequence), anchorSequence)
+            : [];
 
         // The synthetic context messages — knowledge grounding, then the compaction synopsis — take the first slots so
         // the model reads them before the history, which shifts down by their count. Empty on a plain rerun.
@@ -638,7 +642,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                        {
                            Id = message.MessageId,
                            Role = string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                           Content = message.Content,
+                           Content = ConversationContextBuilder.WithUnansweredNotice(message, unanswered),
                            Thinking = message.Reasoning,
                            ModelUsed = message.Model,
                            SortOrder = index + leadingContext.Count

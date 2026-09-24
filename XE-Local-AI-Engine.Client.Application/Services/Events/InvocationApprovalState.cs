@@ -21,6 +21,9 @@ public sealed record InvocationApprovalState
     /// <summary>The tool awaiting approval, when known. Null for a platform-hub approval.</summary>
     public string? ToolName { get; init; }
 
+    /// <summary>The call's arguments as JSON, when known, so a replayed prompt shows what is being approved.</summary>
+    public string? Arguments { get; init; }
+
     /// <summary>
     ///     Whether the node can REMEMBER an "approve for this session" decision for this exact request, as the runner
     ///     resolved it.

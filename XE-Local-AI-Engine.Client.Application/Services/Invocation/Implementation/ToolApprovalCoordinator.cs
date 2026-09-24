@@ -172,7 +172,8 @@ public sealed class ToolApprovalCoordinator
         {
             InvocationId = package.InvocationId,
             CreatedAt = _timeProvider.GetUtcNow(),
-            ApprovalCompletion = approvalCompletion
+            ApprovalCompletion = approvalCompletion,
+            ToolName = approvalToolName
         };
         var dispatcher = _eventDispatcher.Value;
 
@@ -210,13 +211,20 @@ public sealed class ToolApprovalCoordinator
                 CallId = approvalCallId,
                 ToolName = string.IsNullOrEmpty(approvalToolName) ? approvalCallId : approvalToolName,
                 Description = approvalPayload.Description,
+                // The operator approves WHAT runs, and the tool-call-requested card carrying the arguments only arrives after the decision, so the
+                // prompt carries them itself, serialized exactly as that lifecycle event serializes them.
+                Arguments = approvalRequest.ToolCall is FunctionCallContent { Arguments: { } approvalArguments }
+                    ? JsonSerializer.Serialize(approvalArguments)
+                    : null,
                 // The coordinator already resolved whether this exact call can be memoized, so it is the authority on whether the card may offer "Approve for
                 // this session". The node tool catalog carries no MAF skill tool, so falling back to it would offer the button where the click degrades to "Once".
                 SessionScopeEligible = sessionApprovalKey is not null
             });
 
-            using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+            // The age runs on the injected clock, so the expiry is testable; linking keeps an invocation cancel distinguishable in the catch below.
+            using var approvalAgeCancellationTokenSource = new CancellationTokenSource(_maxPendingToolCallAge, _timeProvider);
+            using var approvalTimeoutCancellationTokenSource =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, approvalAgeCancellationTokenSource.Token);
 
             bool approved;
             setInvocationDeadline(true);
@@ -239,13 +247,13 @@ public sealed class ToolApprovalCoordinator
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // The linked CTS fired on the pending-tool-call age WITHOUT the invocation being cancelled: a genuine approval TIMEOUT, since an operator cancel trips
-            // cancellationToken and skips this filter, propagating as a cancel. Audit it, then rethrow so the turn fails as it otherwise would — the audit never alters flow.
+            // cancellationToken and skips this filter, propagating as a cancel. Audit it, then fail the turn naming the tool, the same failure the stale sweep raises.
             await RecordApprovalDecisionAuditAsync(package,
                 approvalToolName,
                 ApprovalDecisions.Timeout,
                 approvalRequestedTimestamp,
                 cancellationToken);
-            throw;
+            throw new ApprovalExpiredException(approvalToolName);
         }
         finally
         {

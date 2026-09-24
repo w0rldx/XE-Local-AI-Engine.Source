@@ -34,6 +34,16 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
+    public Task<bool> WaitForProcessExitAsync(string modelName, ModelRole role, TimeSpan timeout, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        return _processes.TryGetValue(new ProcessKey(modelName, role), out var running)
+            ? running.Handle.WaitForExitAsync(timeout, ct)
+            : Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
     public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);

@@ -122,14 +122,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Content))
         {
-            throw new ArgumentException("Message content must be provided.", nameof(request));
+            throw new NodeChatInvalidRequestException("Message content must be provided.");
         }
 
         // The per-send sampling seed rides the wire as a string (precision-safe). Reject a malformed value here, before
         // any streaming begins, rather than silently dropping the override deeper in the invocation mapping.
         if (!SeedValue.TryParse(request.SamplingOptions?.Seed, out _, out var seedError))
         {
-            throw new ArgumentException(seedError, nameof(request));
+            throw new NodeChatInvalidRequestException(seedError);
         }
 
         return SendMessageCoreAsync(request, cancellationToken);

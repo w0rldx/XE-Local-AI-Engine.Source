@@ -315,6 +315,7 @@ internal static class ChatStreamEventMapper
             OccurredAtUtc = timestampMs,
             ToolCallId = NullIfBlank(payload.CallId),
             ToolName = NullIfBlank(payload.ToolName),
+            Arguments = payload.Arguments,
             ApprovalRequestId = payload.RequestId,
             SessionScopeEligible = payload.SessionScopeEligible
         };

@@ -252,24 +252,24 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        // Fold the runner's session-scope answer onto the pending-approval slot ReportApprovalRequestedAsync recorded; it cannot ride that
-        // call, because ApprovalRequestPayload is the platform-hub contract. Without it the replay falls back to the tool catalog.
-        if (payload.SessionScopeEligible is { } sessionScopeEligible)
-        {
-            UpdateInvocation(payload.InvocationId,
-                state =>
+        // Fold the call identity, arguments and session-scope answer onto the pending-approval slot ReportApprovalRequestedAsync recorded; they
+        // cannot ride that call, because ApprovalRequestPayload is the platform-hub contract. Without them a reconnect replay loses what is being approved.
+        UpdateInvocation(payload.InvocationId,
+            state =>
+            {
+                if (state.PendingApproval is { } approval && string.Equals(approval.RequestId, payload.RequestId, StringComparison.Ordinal))
                 {
-                    if (state.PendingApproval is { } approval && string.Equals(approval.RequestId, payload.RequestId, StringComparison.Ordinal))
+                    state.PendingApproval = approval with
                     {
-                        state.PendingApproval = approval with
-                        {
-                            SessionScopeEligible = sessionScopeEligible
-                        };
-                    }
+                        CallId = payload.CallId,
+                        ToolName = payload.ToolName,
+                        Arguments = payload.Arguments,
+                        SessionScopeEligible = payload.SessionScopeEligible ?? approval.SessionScopeEligible
+                    };
+                }
 
-                    return state;
-                });
-        }
+                return state;
+            });
 
         ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
 

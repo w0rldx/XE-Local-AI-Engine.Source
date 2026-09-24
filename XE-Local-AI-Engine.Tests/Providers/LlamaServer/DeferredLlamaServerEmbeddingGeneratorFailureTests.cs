@@ -122,6 +122,8 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         // The process behind the cached endpoint goes away.
         original.Dispose();
         await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+        AssertEx.Equal(expected: 1, supervisor.ExitWaits.Count, "A server-gone failure must wait for the supervisor to observe the exit.");
+        AssertEx.Equal((ModelRole.Embedding, 1), supervisor.ExitWaits[0]);
 
         // That failure must have dropped the adapter, so this call re-ensures and lands on the replacement.
         AssertEx.Equal(expected: 2, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length);
@@ -149,6 +151,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         // a success here would mean the 500 had wrongly invalidated it.
         supervisor.EnsureEndpoint = healthy.BaseAddress;
         await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+        AssertEx.Empty(supervisor.ExitWaits);
     }
 
     [Test]

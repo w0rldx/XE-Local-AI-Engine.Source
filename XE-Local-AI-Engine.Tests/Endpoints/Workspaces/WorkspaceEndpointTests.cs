@@ -27,7 +27,7 @@ public sealed class WorkspaceEndpointTests
         using var post = await client.PostAsJsonAsync(Route, new
         {
             alias = "repo",
-            hostPath = HostPath("trusted", "repo")
+            hostPath = ExistingHostPath
         });
         using var get = await client.GetAsync(Route);
         using var delete = await client.DeleteAsync($"{Route}/{Guid.NewGuid()}");
@@ -47,7 +47,7 @@ public sealed class WorkspaceEndpointTests
             Content = JsonContent.Create(new
             {
                 alias = "repo",
-                hostPath = HostPath("trusted", "repo")
+                hostPath = ExistingHostPath
             })
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", McpKey);
@@ -66,7 +66,7 @@ public sealed class WorkspaceEndpointTests
     {
         await using var factory = CreateFactory(out _);
         using var client = factory.CreateClient();
-        var secretPath = HostPath("secret", "operator", Guid.NewGuid().ToString("N"));
+        var secretPath = ExistingHostPath;
 
         using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
         {
@@ -103,7 +103,7 @@ public sealed class WorkspaceEndpointTests
         using var firstRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
         {
             alias = "repo-one",
-            hostPath = HostPath("trusted", "repo")
+            hostPath = ExistingHostPath
         });
         using var first = await client.SendAsync(firstRequest);
 
@@ -111,7 +111,7 @@ public sealed class WorkspaceEndpointTests
         using var duplicateRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
         {
             alias = "Repo One",
-            hostPath = HostPath("trusted", "other")
+            hostPath = OtherExistingHostPath
         });
         using var duplicate = await client.SendAsync(duplicateRequest);
 
@@ -138,6 +138,35 @@ public sealed class WorkspaceEndpointTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Create_WhenHostPathIsNotAnExistingDirectory_ReturnsBadRequestAndRegistersNothing(bool pointAtFile)
+    {
+        await using var factory = CreateFactory(out _);
+        using var client = factory.CreateClient();
+        var hostPath = pointAtFile
+            ? typeof(WorkspaceEndpointTests).Assembly.Location
+            : Path.Combine(ExistingHostPath, Guid.NewGuid().ToString("N"));
+        using var request = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "repo-one",
+            hostPath
+        });
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "does not exist or is not a directory", StringComparison.Ordinal);
+        AssertEx.False(body.Contains(hostPath, StringComparison.Ordinal), "The rejection must never echo the host path.");
+
+        using var listRequest = OperatorRequest(factory, HttpMethod.Get, Route);
+        using var listResponse = await client.SendAsync(listRequest);
+        var list = AssertEx.NotNull(await listResponse.Content.ReadFromJsonAsync<WorkspaceListBody>(JsonOptions));
+        AssertEx.Equal(expected: 0, list.Items.Count);
+    }
+
+    [Test]
     public async Task Delete_WhenWorkspaceIdIsMalformed_ReturnsBadRequest()
     {
         await using var factory = CreateFactory(out _);
@@ -157,7 +186,7 @@ public sealed class WorkspaceEndpointTests
         using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
         {
             alias = "repo",
-            hostPath = HostPath("trusted", "repo")
+            hostPath = ExistingHostPath
         });
         using var createResponse = await client.SendAsync(createRequest);
         var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions));
@@ -191,7 +220,7 @@ public sealed class WorkspaceEndpointTests
         using var createRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
         {
             alias = "repo",
-            hostPath = HostPath("trusted", "repo")
+            hostPath = ExistingHostPath
         });
         using var createResponse = await client.SendAsync(createRequest);
         var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions));
@@ -280,10 +309,10 @@ public sealed class WorkspaceEndpointTests
         return request;
     }
 
-    private static string HostPath(params string[] segments) =>
-        OperatingSystem.IsWindows()
-            ? string.Concat(@"C:\", string.Join('\\', segments))
-            : string.Concat("/", string.Join('/', segments));
+    // Registration requires a directory that exists, so the tests register two that always do.
+    private static string ExistingHostPath => Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+
+    private static string OtherExistingHostPath => Path.TrimEndingDirectorySeparator(Path.GetTempPath());
 
     private sealed record WorkspaceBody(string WorkspaceId, string Alias, string Mode);
 

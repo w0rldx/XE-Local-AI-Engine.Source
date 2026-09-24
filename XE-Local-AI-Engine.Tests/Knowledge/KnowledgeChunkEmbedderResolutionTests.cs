@@ -132,11 +132,11 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
-    public async Task EmbedAsync_WhenProviderIsUnreachable_StillReportsMissingModel()
+    public async Task EmbedAsync_WhenNothingInstalledAndProviderIsUnreachable_ReportsMissingModel()
     {
-        // The counterpart: no status means the server never answered, so "install / start an embedding model" IS the
-        // correct remediation. This pins that the split above did not swallow the original case.
-        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        // No installed model matched, so "install an embedding model" IS the correct remediation, and there is no
+        // process worth retrying: the generator is called exactly once.
+        var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"))
         {
             ThrowOnGenerate = true
         };
@@ -146,7 +146,47 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
         AssertEx.True(exception.Reason.Contains("No embedding model is installed", StringComparison.Ordinal),
-            $"An unreachable provider should still report the missing-model remediation, got: {exception.Reason}");
+            $"A missing model should report the install remediation, got: {exception.Reason}");
+        AssertEx.Equal(1, provider.GenerateCalls);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenInstalledModelProcessStaysUnreachable_ReportsDeadProcess_NotMissingModel()
+    {
+        // REGRESSION (live QA F-18): a killed embedding llama-server mid-document reported "No embedding model is installed"
+        // although it was installed and respawned. A confidently-resolved model gets one retry, then a reason naming the process.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            ThrowOnGenerate = true
+        };
+        var embedder = CreateEmbedder(provider);
+
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
+            embedder.EmbedAsync(["chunk one"], CancellationToken.None));
+
+        AssertEx.True(exception.Reason.Contains("process stopped or became unreachable", StringComparison.Ordinal),
+            $"An installed model's dead process should be named, got: {exception.Reason}");
+        AssertEx.False(exception.Reason.Contains("No embedding model is installed", StringComparison.Ordinal),
+            "An installed model must NOT be reported as missing.");
+        AssertEx.NotNull(exception.InnerException);
+        AssertEx.Equal(2, provider.GenerateCalls);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenInstalledModelProcessDiesOnceMidDocument_RetriesTheBatchAndSucceeds()
+    {
+        // The llama.cpp generator drops its dead endpoint on a transport failure and re-ensures (respawns) the process on
+        // its next call, so the failed batch is re-issued once and the document indexes with every chunk embedded.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            TransientFailures = 1
+        };
+        var embedder = CreateEmbedder(provider, maxBatchSize: 1);
+
+        var result = await embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None);
+
+        AssertEx.Equal(2, result.Vectors.Count);
+        AssertEx.Equal(3, provider.GenerateCalls);
     }
 
     [Test]
@@ -184,11 +224,12 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         AssertEx.Null(window);
     }
 
-    private static KnowledgeChunkEmbedder CreateEmbedder(ILocalModelProvider provider)
+    private static KnowledgeChunkEmbedder CreateEmbedder(ILocalModelProvider provider, int maxBatchSize = 64)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
-            EmbeddingModelName = ConfiguredName
+            EmbeddingModelName = ConfiguredName,
+            MaxEmbeddingBatchSize = maxBatchSize
         });
 
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
@@ -229,6 +270,12 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public bool ThrowOnGenerate { get; init; }
 
+        /// <summary>How many leading <c>GenerateAsync</c> calls fail as an unreachable process before generation succeeds.</summary>
+        public int TransientFailures { get; init; }
+
+        /// <summary>Total <c>GenerateAsync</c> calls across every generator this provider created.</summary>
+        public int GenerateCalls { get; private set; }
+
         /// <summary>
         ///     When set, <c>GenerateAsync</c> throws a status-carrying <see cref="HttpRequestException" /> — the shape the
         ///     llama.cpp provider translates a llama-server non-2xx into. Distinct from <see cref="ThrowOnGenerate" />,
@@ -246,7 +293,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             LastSelectedModelName = selection.ModelName;
-            return new FixedEmbeddingGenerator(ThrowOnGenerate, VectorDimensions, GenerateFailureStatus);
+            return new FixedEmbeddingGenerator(this, VectorDimensions, GenerateFailureStatus);
         }
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
@@ -274,15 +321,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         private sealed class FixedEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
-            private readonly bool _throwOnGenerate;
+            private readonly CapturingProvider _owner;
             private readonly IReadOnlyList<int> _dimensions;
             private readonly HttpStatusCode? _failureStatus;
 
-            public FixedEmbeddingGenerator(bool throwOnGenerate,
+            public FixedEmbeddingGenerator(CapturingProvider owner,
                 IReadOnlyList<int> dimensions,
                 HttpStatusCode? failureStatus = null)
             {
-                _throwOnGenerate = throwOnGenerate;
+                _owner = owner;
                 _dimensions = dimensions;
                 _failureStatus = failureStatus;
             }
@@ -291,6 +338,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                _owner.GenerateCalls++;
                 if (_failureStatus is { } status)
                 {
                     throw new HttpRequestException("The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",
@@ -298,7 +346,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
                         status);
                 }
 
-                if (_throwOnGenerate)
+                if (_owner.ThrowOnGenerate || _owner.GenerateCalls <= _owner.TransientFailures)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
                 }

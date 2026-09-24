@@ -401,6 +401,15 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>The roles <see cref="TryAcquireInferenceLease" /> was asked for, in order.</summary>
     public List<ModelRole> LeasedRoles { get; }
 
+    /// <summary>The roles <see cref="WaitForProcessExitAsync" /> was asked about, in order, with the ensure count at that moment.</summary>
+    public List<(ModelRole Role, int EnsureCallsSoFar)> ExitWaits { get; } = [];
+
+    public Task<bool> WaitForProcessExitAsync(string modelName, ModelRole role, TimeSpan timeout, CancellationToken ct)
+    {
+        ExitWaits.Add((role, EnsureCalls));
+        return Task.FromResult(true);
+    }
+
     public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         EnsureCalls++;

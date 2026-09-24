@@ -527,6 +527,26 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_ApprovalExpiredThrows_ClassifiesTimeoutNamingTheTool()
+    {
+        // An expired approval must not collapse into the generic "The operation timed out.": the operator needs to know
+        // WHICH approval ran out, and the message is our own fixed shape carrying only the tool name.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new ApprovalExpiredException("run_in_agent_home")));
+
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "The approval for tool 'run_in_agent_home' expired before anyone answered it.",
+            FailureCategory.Timeout);
+    }
+
+    [Test]
     public async Task RunAsync_NoChatModelInstalledThrows_ClassifiesModelNotInstalled()
     {
         // MapFailure must classify NoChatModelInstalledException as ModelNotInstalled with the actionable, path-free
@@ -1956,8 +1976,8 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         AssertEx.Equal(expected: 0, registry.Calls.Count, "a completed turn must sweep the calls nothing will ever answer");
-        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => stale);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+        var exception = await AssertEx.ThrowsAsync<ApprovalExpiredException>(() => stale);
+        AssertEx.Contains(exception.Message, "expired", StringComparison.Ordinal);
     }
 
     [Test]
@@ -1974,8 +1994,8 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         AssertEx.Equal(expected: 0, registry.Calls.Count, "a failed turn must sweep the calls nothing will ever answer");
-        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => stale);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+        var exception = await AssertEx.ThrowsAsync<ApprovalExpiredException>(() => stale);
+        AssertEx.Contains(exception.Message, "expired", StringComparison.Ordinal);
     }
 
     [Test]

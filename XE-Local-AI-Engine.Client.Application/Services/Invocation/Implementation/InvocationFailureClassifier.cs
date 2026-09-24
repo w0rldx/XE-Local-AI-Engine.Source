@@ -89,6 +89,8 @@ internal static class InvocationFailureClassifier
             // The inter-chunk stall carries the watchdog's own fixed, path-free message naming which timeout fired, so it is surfaced
             // verbatim. Matches BEFORE the generic TimeoutException arm it derives from.
             StreamIdleTimeoutException streamIdleTimeout => new FailureClassification(FailureCategory.Timeout, streamIdleTimeout.Message),
+            // An unanswered tool approval names the tool it waited on; its message is our own fixed shape, so it is surfaced verbatim.
+            ApprovalExpiredException approvalExpired => new FailureClassification(FailureCategory.Timeout, approvalExpired.Message),
             // Any other TimeoutException — the invocation-level cancel-after, or an HTTP client timeout surfacing as a bare one — carries an
             // unbounded framework message that can name hosts, paths and internals, so it collapses to a fixed, path-free constant.
             TimeoutException => new FailureClassification(FailureCategory.Timeout, TimedOutMessage),

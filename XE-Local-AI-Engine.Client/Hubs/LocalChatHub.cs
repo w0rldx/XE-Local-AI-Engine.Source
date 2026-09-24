@@ -55,7 +55,7 @@ public sealed class LocalChatHub : Hub
             };
         }
 
-        return TrackAttachment(_streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
+        return TrackAttachment(RejectInvalidRequest(() => _streamService.SendMessageAsync(request, cancellationToken)), cancellationToken);
     }
 
     /// <summary>
@@ -110,7 +110,7 @@ public sealed class LocalChatHub : Hub
         CancellationToken cancellationToken)
     {
         return TrackAttachment(
-            _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken),
+            RejectInvalidRequest(() => _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken)),
             cancellationToken);
     }
 
@@ -188,6 +188,23 @@ public sealed class LocalChatHub : Hub
         finally
         {
             attachment?.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Re-throws a send/regenerate the caller got wrong as a <see cref="HubException" />. These are validated EAGERLY,
+    ///     before the stream exists, so <see cref="TranslateDomainRejections" /> (which only sees lazy throws) cannot
+    ///     catch them. Typed for the same reason: every other fault stays opaque.
+    /// </summary>
+    private static IAsyncEnumerable<ChatStreamEvent> RejectInvalidRequest(Func<IAsyncEnumerable<ChatStreamEvent>> start)
+    {
+        try
+        {
+            return start();
+        }
+        catch (NodeChatInvalidRequestException exception)
+        {
+            throw new HubException(exception.Message, exception);
         }
     }
 

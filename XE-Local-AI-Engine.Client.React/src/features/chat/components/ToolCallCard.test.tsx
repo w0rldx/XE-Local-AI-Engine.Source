@@ -157,6 +157,30 @@ describe("ToolCallCard", () => {
 		expect(screen.queryByTestId("chat-tool-call-no-output-get_time")).toBeNull();
 	});
 
+	it("shows the arguments of a pending approval without the operator expanding the card", () => {
+		// F-24: the operator approves WHAT runs, so the collapsed body opens while the prompt is pending.
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({
+					state: "waiting",
+					requiresApproval: true,
+					pendingApprovalRequestId: "approval-42",
+					args: '{"cmd":"rm -rf build"}',
+				})}
+			/>,
+		);
+
+		const argsBody = screen.getByText("Arguments").closest("[aria-hidden]");
+		expect(argsBody?.getAttribute("aria-hidden")).toBe("false");
+		expect(argsBody?.textContent).toContain("rm -rf build");
+	});
+
+	it("keeps the arguments collapsed on a settled card until the operator expands it", () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", args: '{"cmd":"ls"}' })} />);
+
+		expect(screen.getByText("Arguments").closest("[aria-hidden]")?.getAttribute("aria-hidden")).toBe("true");
+	});
+
 	it("renders Approve/Deny controls while awaiting an approval decision", () => {
 		renderWithProviders(
 			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,

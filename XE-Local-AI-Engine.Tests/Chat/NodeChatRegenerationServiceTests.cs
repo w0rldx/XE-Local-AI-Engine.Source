@@ -1589,6 +1589,121 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(userMessageId, contextForVariant[0].Id);
     }
 
+    [Test]
+    public async Task RegenerateAsync_MarksAnEarlierFailedRequestButNeverTheOneItAnswers()
+    {
+        // F-16: a failed turn's user request stays in the history, and unmarked the model answers IT instead of the
+        // message after it. Marked in every rerun that sits after it; never in the rerun OF that failed turn.
+        await using var provider = await BuildProviderAsync("regeneration-failed-turn-context.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Regen",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            AgentDefinitionId = agentDefinitionId
+        });
+
+        async Task<(Guid UserId, Guid AssistantId)> TurnAsync(string question, string status, string answer, long at)
+        {
+            var userId = Guid.NewGuid();
+            await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = userId,
+                Content = question,
+                CreatedAtUtc = at
+            });
+            var correlation = new NodeChatMessageCorrelation
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            };
+            await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+            {
+                ConversationId = conversation.ConversationId,
+                MessageId = correlation.MessageId,
+                RequestId = correlation.RequestId,
+                CreatedAtUtc = at + 1,
+                Model = "model-x"
+            });
+            await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+            {
+                Correlation = correlation,
+                Status = status,
+                UpdatedAtUtc = at + 2,
+                Content = answer,
+                Model = "model-x"
+            });
+            return (userId, correlation.MessageId);
+        }
+
+        var (failedUserId, failedAssistantId) = await TurnAsync("write an essay about rivers", NodeChatMessageStatusValues.Failed, "Rivers are", at: 11);
+        var (_, laterAssistantId) = await TurnAsync("Say only: ok", NodeChatMessageStatusValues.Completed, "ok", at: 21);
+
+        // A bound agent that mines memory, so the extraction turns are observable: the notice is prompt-only.
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true,
+                    MemoryExtractionEnabled: true));
+        var extractionRuns = new List<MemoryExtractionRunInput>();
+        var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
+        extractionDispatcher.Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Do<MemoryExtractionRunInput>(extractionRuns.Add));
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            extractionDispatcher,
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, laterAssistantId))
+        {
+            // Drained so the runner sees the context.
+        }
+
+        var laterContext = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.Equal(expected: 2, laterContext.Count, "The failed partial answer is never sent.");
+        AssertEx.Equal(failedUserId, laterContext[0].Id);
+        AssertEx.Equal($"write an essay about rivers\n\n{ConversationContextBuilder.UnansweredNotice}", laterContext[0].Content);
+        AssertEx.Equal("Say only: ok", laterContext[1].Content);
+        var mined = AssertEx.NotNull(extractionRuns.LastOrDefault()).UserTurns.Select(static turn => turn.Content).ToArray();
+        AssertEx.True(mined.Contains("write an essay about rivers"), "The failed request is still a real user turn to mine.");
+        AssertEx.True(mined.All(static content => !content.Contains(ConversationContextBuilder.UnansweredNotice, StringComparison.Ordinal)),
+            "Memory extraction mines what the user wrote, never the prompt-only notice.");
+
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, failedAssistantId))
+        {
+            // Drained so the runner sees the context.
+        }
+
+        var rerunContext = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.Equal(expected: 1, rerunContext.Count);
+        AssertEx.Equal("write an essay about rivers", rerunContext[0].Content, "The request a rerun answers is not unanswered.");
+    }
+
     /// <summary>
     ///     Regenerating an EARLY turn AFTER later turns exist mints a sibling whose PHYSICAL sequence lands past those
     ///     later turns. Selecting it and then regenerating a LATER turn must keep that answer in context at the early

@@ -291,7 +291,8 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 				{patchDialogOpen && patchRunId !== null ? (
 					<AgentHomePatchApplyDialog runId={patchRunId} onClose={() => setPatchDialogOpen(false)} />
 				) : null}
-				<Collapse expanded={expanded} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
+				{/* Open while an approval is pending: the operator must see the arguments of what they are approving. */}
+				<Collapse expanded={expanded || awaitingApproval} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
 					<Stack gap={6} className={classes["tool-body"]}>
 						{formattedArgs ? (
 							<Stack gap={2}>

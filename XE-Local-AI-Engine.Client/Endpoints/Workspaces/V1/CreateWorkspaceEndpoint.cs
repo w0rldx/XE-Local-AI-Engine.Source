@@ -29,6 +29,13 @@ public sealed class CreateWorkspaceEndpoint : Endpoint<CreateWorkspaceRequest, W
 
     public override async Task HandleAsync(CreateWorkspaceRequest req, CancellationToken ct)
     {
+        // A relative path is left to the resolver's own traversal-free check; an absolute one must name a directory that exists
+        // now, or the operator only learns of the mistake inside a later agent run. The path itself is never echoed back.
+        if (Path.IsPathFullyQualified(req.HostPath ?? string.Empty) && !Directory.Exists(req.HostPath))
+        {
+            throw new SelectedFolderValidationException("The host path does not exist or is not a directory.");
+        }
+
         var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration
             {
                 Alias = req.Alias ?? string.Empty,

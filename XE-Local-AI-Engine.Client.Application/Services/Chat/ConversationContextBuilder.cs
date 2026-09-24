@@ -16,6 +16,12 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 /// </remarks>
 internal static class ConversationContextBuilder
 {
+    /// <summary>
+    ///     Appended to a user turn whose answer failed or was interrupted. Without it the model reads that request as
+    ///     still open and answers IT instead of the short message that follows (live QA F-16).
+    /// </summary>
+    public const string UnansweredNotice = "[This request failed and was not answered. Answer only the latest message unless the user asks for this again.]";
+
     public static IReadOnlyList<ConversationMessageDto> Build(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
@@ -29,6 +35,8 @@ internal static class ConversationContextBuilder
         // below runs in ANCHOR space, never a sibling's own sequence, which would break user/assistant alternation.
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
+        // Read BEFORE compaction drops anything, so each user turn is still next to the answer that failed.
+        var unanswered = FindUnansweredUserTurns(selected, anchorSequence);
 
         // The synthetic context messages are plain-chat only and take the first slots, so the history shifts down by
         // their count: attachments, then knowledge, then the synopsis, which sits nearest the verbatim turns.
@@ -92,12 +100,13 @@ internal static class ConversationContextBuilder
                       .Select((message, index) =>
                       {
                           var isAssistant = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase);
-                          var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true;
+                          // A failed turn kept for its tool exchanges carries none of its partial text.
+                          var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true || (isAssistant && IsFailedAnswer(message));
                           return new ConversationMessageDto
                           {
                               Id = message.MessageId,
                               Role = isAssistant ? MessageRole.Assistant : MessageRole.User,
-                              Content = exchangeOnly ? string.Empty : message.Content,
+                              Content = exchangeOnly ? string.Empty : WithUnansweredNotice(message, unanswered),
                               Thinking = exchangeOnly ? null : message.Reasoning,
                               ModelUsed = message.Model,
                               SortOrder = index + leadingContext.Count,
@@ -107,6 +116,39 @@ internal static class ConversationContextBuilder
 
         return leadingContext.Count == 0 ? history.ToList() : leadingContext.Concat(history).ToList();
     }
+
+    /// <summary>
+    ///     The user turns, on the selected path, whose answer failed or was interrupted. Persisted rows are untouched:
+    ///     this only shapes what is SENT, for both the send and the regenerate builders.
+    /// </summary>
+    internal static HashSet<Guid> FindUnansweredUserTurns(IEnumerable<NodeChatPersistedMessageDto> selected,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence)
+    {
+        var unanswered = new HashSet<Guid>();
+        NodeChatPersistedMessageDto? previous = null;
+        foreach (var message in selected.OrderBy(anchorSequence))
+        {
+            if (previous is not null
+                && !string.Equals(previous.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+                && IsFailedAnswer(message))
+            {
+                _ = unanswered.Add(previous.MessageId);
+            }
+
+            previous = message;
+        }
+
+        return unanswered;
+    }
+
+    internal static string WithUnansweredNotice(NodeChatPersistedMessageDto message, HashSet<Guid> unanswered) =>
+        unanswered.Contains(message.MessageId) ? $"{message.Content}\n\n{UnansweredNotice}" : message.Content;
+
+    /// <summary>Failed, or cut off by a restart. A user Stop (cancelled) is the user's own choice and stays unmarked.</summary>
+    internal static bool IsFailedAnswer(NodeChatPersistedMessageDto message) =>
+        string.Equals(message.Status, NodeChatMessageStatusValues.Failed, StringComparison.Ordinal)
+        || string.Equals(message.Status, NodeChatMessageStatusValues.Interrupted, StringComparison.Ordinal);
 
     /// <summary>
     ///     The send filter: a completed, content-bearing turn. It is its own predicate so the tool-history branch

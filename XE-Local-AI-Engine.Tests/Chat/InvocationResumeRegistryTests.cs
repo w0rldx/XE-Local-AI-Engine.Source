@@ -383,6 +383,7 @@ public sealed class InvocationResumeRegistryTests
             RequestedAt = DateTimeOffset.UtcNow,
             CallId = "call-7",
             ToolName = "run_command",
+            Arguments = "{\"command\":\"ls\"}",
             SessionScopeEligible = true
         };
         RaiseState(dispatcher, parked);
@@ -404,6 +405,8 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal("approval-1", replayed.ApprovalRequestId);
         AssertEx.Equal("call-7", replayed.ToolCallId);
         AssertEx.Equal("run_command", replayed.ToolName);
+        // A reload mid-approval must still show WHAT is being approved (live QA F-22).
+        AssertEx.Equal("{\"command\":\"ls\"}", replayed.Arguments);
         // The runner's session-scope answer survives the reload, so the re-rendered card offers the same controls.
         AssertEx.Equal(expected: true, replayed.SessionScopeEligible);
     }

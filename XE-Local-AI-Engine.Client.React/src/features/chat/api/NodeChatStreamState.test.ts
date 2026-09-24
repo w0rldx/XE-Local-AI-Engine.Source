@@ -617,6 +617,67 @@ describe("node chat stream state", () => {
 		expect(approval.streamingMessage.isActive).toBe(true);
 	});
 
+	it("carries an approval event's arguments onto the waiting tool card", () => {
+		// F-24/F-22: the live prompt and its reload replay both carry the arguments the operator is approving.
+		const approval = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-9",
+				toolName: "run_in_agent_home",
+				approvalRequestId: "approval-9",
+				arguments: '{"command":"rm -rf build"}',
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(approval.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({
+			id: "call-9",
+			state: "waiting",
+			args: '{"command":"rm -rf build"}',
+		});
+	});
+
+	it("keeps a tool card's arguments when an approval replay carries none", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"list it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const requested = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-10",
+				toolName: "run_in_agent_home",
+				arguments: '{"command":"ls"}',
+				content: null,
+				delta: null,
+			}),
+		);
+		const replay = applyNodeChatStreamEvent(
+			requested.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-10",
+				toolName: "run_in_agent_home",
+				approvalRequestId: "approval-10",
+				arguments: null,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(replay.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({
+			id: "call-10",
+			state: "waiting",
+			pendingApprovalRequestId: "approval-10",
+			args: '{"command":"ls"}',
+		});
+	});
+
 	it("creates a waiting tool card from an approval event even when no tool-call-requested card exists yet", () => {
 		const approval = applyNodeChatStreamEvent(
 			conversation,

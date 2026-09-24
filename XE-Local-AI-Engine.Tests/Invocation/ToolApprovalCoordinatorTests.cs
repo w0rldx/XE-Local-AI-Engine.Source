@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -7,6 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -129,6 +131,60 @@ public sealed class ToolApprovalCoordinatorTests
     }
 
     [Test]
+    public async Task RequestToolApprovalAsync_WhenNobodyAnswersWithinTheAge_ExpiresNamingTheToolAndAuditsTimeout()
+    {
+        // The waiter's own age cap, on the injected clock: the coordinator is built with a five-minute age.
+        var timeProvider = new ManualTimeProvider();
+        var registry = new PendingToolCallRegistry();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var dispatcher = new RecordingApprovalDispatcher();
+        var coordinator = CreateCoordinator(registry, auditRecorder, dispatcher, timeProvider);
+
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1 && timeProvider.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
+        var requestId = dispatcher.Approvals[0].RequestId;
+
+        timeProvider.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        var exception = await AssertEx.ThrowsAsync<ApprovalExpiredException>(() => pending);
+        AssertEx.Contains(exception.Message, "approval for tool 'GetCurrentTime' expired", StringComparison.Ordinal);
+        AssertEx.False(registry.Calls.ContainsKey(requestId), "an expired approval must leave the registry");
+        await auditRecorder.Received(1)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               "GetCurrentTime",
+                               Arg.Any<ToolCategory>(),
+                               ApprovalDecisions.Timeout,
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RequestToolApprovalAsync_CarriesTheSerializedCallArgumentsOnTheApprovalPrompt()
+    {
+        // The operator approves WHAT runs; the tool-call card carrying the arguments only arrives after the decision.
+        ApprovalLifecyclePayload? dispatchedLifecycle = null;
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(payload => dispatchedLifecycle = payload)).Returns(Task.CompletedTask);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
+        var arguments = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["command"] = "echo hello"
+        };
+        var request = new ToolApprovalRequestContent("approval-args", new FunctionCallContent("call-args", "run_in_agent_home", arguments));
+
+        using var cancellation = new CancellationTokenSource();
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, cancellation.Token);
+        await AssertEx.EventuallyAsync(() => dispatchedLifecycle is not null, TimeSpan.FromSeconds(5));
+        await cancellation.CancelAsync();
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending);
+
+        var lifecycle = AssertEx.NotNull(dispatchedLifecycle);
+        AssertEx.Equal("run_in_agent_home", lifecycle.ToolName);
+        AssertEx.Equal(JsonSerializer.Serialize(arguments), lifecycle.Arguments);
+    }
+
+    [Test]
     public async Task CleanupStaleToolCalls_FaultsTheApprovalNobodyAnswered_AndLeavesAFreshOneResolvable()
     {
         // The stale sweep runs every ToolCallCleanupService tick against the registry the APPROVAL round-trip
@@ -157,8 +213,9 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.False(registry.Calls.ContainsKey(abandonedRequestId), "the sweep must remove the call nothing will ever answer");
         AssertEx.True(registry.Calls.ContainsKey(freshRequestId), "a call younger than the cutoff must survive the sweep");
 
-        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => abandoned);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+        // The expiry names the tool that waited, so the failed turn says which approval ran out rather than "timed out".
+        var exception = await AssertEx.ThrowsAsync<ApprovalExpiredException>(() => abandoned);
+        AssertEx.Contains(exception.Message, "approval for tool 'GetCurrentTime' expired", StringComparison.Ordinal);
 
         // A second sweep at the same instant is a no-op: nothing else is condemned and the survivor still resolves
         // normally through the operator's card.

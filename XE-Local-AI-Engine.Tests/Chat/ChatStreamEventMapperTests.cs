@@ -292,6 +292,7 @@ public sealed class ChatStreamEventMapperTests
             RequestId = "approval-abc",
             CallId = "call-9",
             ToolName = "search_web",
+            Arguments = "{\"query\":\"tides\"}",
             Description = "A tool call (call-9) requires approval before it runs."
         };
 
@@ -308,6 +309,8 @@ public sealed class ChatStreamEventMapperTests
         // matching card, while the approval request id rides on its own field apart from the turn correlation id.
         AssertEx.Equal("call-9", mapped.ToolCallId);
         AssertEx.Equal("search_web", mapped.ToolName);
+        // The operator approves WHAT runs (live QA F-24), so the prompt carries the call's arguments itself.
+        AssertEx.Equal("{\"query\":\"tides\"}", mapped.Arguments);
         AssertEx.Equal("approval-abc", mapped.ApprovalRequestId);
         // A pending approval carries no answer content and is not a completed tool result.
         AssertEx.Null(mapped.Result);

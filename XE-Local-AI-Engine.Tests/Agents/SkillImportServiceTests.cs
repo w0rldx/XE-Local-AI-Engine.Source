@@ -78,6 +78,22 @@ public sealed class SkillImportServiceTests
     }
 
     [Test]
+    public async Task Preview_RootSkillWithYamlAnchors_IsNamedAndCarriesTheReaderRejection()
+    {
+        using var harness = new SkillImportHarness();
+        var archive = SkillImportFixtures.Zip(zip =>
+            zip.AddText("SKILL.md", "---\nname: &a bad-skill\ndescription: *a\n---\nbody\n"));
+
+        var preview = await harness.Service.PreviewArchiveAsync(archive);
+        var skill = preview.Skills.Single();
+
+        // The reader refuses anchors by design; the report must say so on a labelled row, not show a blank one.
+        AssertEx.Equal("SKILL.md", skill.Name);
+        AssertEx.False(skill.CanImport);
+        AssertEx.Contains(skill.Problems.Single(), "anchors", StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task PreviewMarkdown_ImportsAPastedSkillInstructionsOnly()
     {
         using var harness = new SkillImportHarness();

@@ -43,8 +43,7 @@ public sealed class ApiToolCallBridge
 
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
-                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
+                removedPendingToolCall.ApprovalCompletion.TrySetException(new ApprovalExpiredException(removedPendingToolCall.ToolName));
             }
         }
     }

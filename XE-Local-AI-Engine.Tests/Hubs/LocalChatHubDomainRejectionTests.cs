@@ -134,6 +134,62 @@ public sealed class LocalChatHubDomainRejectionTests
     }
 
     [Test]
+    public async Task SendMessage_WhenTheRequestIsInvalid_SurfacesTheSentenceInsteadOfSignalRsGenericError()
+    {
+        // Validated EAGERLY, before the service hands back its enumerable, so the lazy translation never saw it and an
+        // empty message reached the browser as "An unexpected error occurred invoking 'SendMessage' on the server."
+        var streamService = Substitute.For<INodeChatStreamService>();
+        streamService.SendMessageAsync(Arg.Any<NodeChatStreamRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(_ => throw new NodeChatInvalidRequestException("Message content must be provided."));
+
+        using var hub = CreateHub(streamService, Substitute.For<INodeChatRegenerationService>());
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), ""), CancellationToken.None))
+            {
+                // The request is rejected before a stream exists, so the body never runs.
+            }
+        });
+
+        AssertEx.Equal("Message content must be provided.", exception.Message);
+    }
+
+    [Test]
+    public async Task RegenerateMessage_WhenTheRequestIsInvalid_SurfacesTheSentenceInsteadOfSignalRsGenericError()
+    {
+        var regenerationService = Substitute.For<INodeChatRegenerationService>();
+        regenerationService.RegenerateAsync(Arg.Any<Guid>(),
+                               Arg.Any<Guid>(),
+                               Arg.Any<string?>(),
+                               Arg.Any<bool>(),
+                               Arg.Any<bool>(),
+                               Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
+                               Arg.Any<SamplingOptions?>(),
+                               Arg.Any<CancellationToken>())
+                           .Returns(_ => throw new NodeChatInvalidRequestException("bad seed"));
+
+        using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), regenerationService);
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in hub.RegenerateMessage(Guid.NewGuid(),
+                               Guid.NewGuid(),
+                               reasoningEffort: null,
+                               useLocalTools: false,
+                               useKnowledgeBase: false,
+                               selectedPath: null,
+                               samplingOptions: null,
+                               CancellationToken.None))
+            {
+                // The request is rejected before a stream exists, so the body never runs.
+            }
+        });
+
+        AssertEx.Equal("bad seed", exception.Message);
+    }
+
+    [Test]
     public async Task SendMessage_WhenTheStreamFailsForAnyOtherReason_LeavesTheExceptionAlone()
     {
         // The conversion must be narrow: turning every fault into a HubException would forward internal detail to the

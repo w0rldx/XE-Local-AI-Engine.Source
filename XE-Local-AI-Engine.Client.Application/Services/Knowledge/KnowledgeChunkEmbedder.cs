@@ -35,6 +35,11 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     private const string EmbeddingRejectedReason =
         "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.";
 
+    // An INSTALLED model whose process died or stopped answering (killed, crashed, respawning) is not a missing model:
+    // "install a model" would send the operator to re-download weights they have, so the confident resolution separates it.
+    private const string EmbeddingUnreachableReason =
+        "The embedding model is installed but its process stopped or became unreachable. Check the node logs, then retry the document.";
+
     private readonly KnowledgeBaseOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
@@ -91,6 +96,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // honored; every later vector is checked against it, and a mismatch is a broken or mixed model that fails the document.
         var dimension = -1;
         string? vectorIdentity = null;
+        var retried = false;
 
         for (var offset = 0; offset < chunkContents.Count; offset += batchSize)
         {
@@ -102,22 +108,31 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 batch.Add(_prefixer.ForDocument(chunkContents[offset + index]));
             }
 
-            IReadOnlyList<Embedding<float>> generated;
-            try
+            IReadOnlyList<Embedding<float>>? generated = null;
+            while (generated is null)
             {
-                generated = await generator.GenerateAsync(batch, options: null, cancellationToken);
-            }
-            catch (HttpRequestException exception) when (exception.StatusCode is not null)
-            {
-                // The server ANSWERED with a non-2xx: it is reachable and the model is loaded, so "install a model" is the
-                // wrong remediation. Carry the exception so KnowledgeIngestionService can log the server's own diagnostic.
-                throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
-            {
-                // Mirror the ranker's caught set: model not pulled / provider process down / transport error / unregistered
-                // provider name. None of the exception's text is surfaced — only a fixed, content-free reason.
-                throw new KnowledgeIngestionException(EmbeddingUnavailableReason, exception);
+                try
+                {
+                    generated = await generator.GenerateAsync(batch, options: null, cancellationToken);
+                }
+                catch (HttpRequestException exception) when (exception.StatusCode is not null)
+                {
+                    // The server ANSWERED with a non-2xx: it is reachable and the model is loaded, so "install a model" is the
+                    // wrong remediation. Carry the exception so KnowledgeIngestionService can log the server's own diagnostic.
+                    throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
+                }
+                catch (Exception exception) when (!retried && resolution.IsConfident && exception is HttpRequestException or IOException or OllamaUnavailableException)
+                {
+                    // An installed model's process went away mid-document. The generator drops its dead endpoint on this failure
+                    // and its next call re-ensures (respawns and waits for) the process, so re-issue this batch ONCE before failing.
+                    retried = true;
+                }
+                catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+                {
+                    // Mirror the ranker's caught set: model not pulled / provider process down / transport error / unregistered
+                    // provider name. None of the exception's text is surfaced — only a fixed, content-free reason.
+                    throw new KnowledgeIngestionException(resolution.IsConfident ? EmbeddingUnreachableReason : EmbeddingUnavailableReason, exception);
+                }
             }
 
             if (generated.Count != batch.Count)

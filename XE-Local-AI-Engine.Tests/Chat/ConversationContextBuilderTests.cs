@@ -98,7 +98,8 @@ public sealed class ConversationContextBuilderTests
             attachmentContext: null);
 
         AssertEx.Equal(expected: 2, context.Count);
-        AssertEx.Equal("kept", context[0].Content);
+        // Its answer failed, so the request is sent marked as unanswered (F-16).
+        AssertEx.Equal($"kept\n\n{ConversationContextBuilder.UnansweredNotice}", context[0].Content);
         AssertEx.Equal("now", context[1].Content);
     }
 
@@ -336,6 +337,79 @@ public sealed class ConversationContextBuilderTests
         var replayed = AssertEx.NotNull(AssertEx.NotNull(context[0].ToolExchanges).Single().Result);
         AssertEx.True(replayed.StartsWith(new string('r', count: 20), StringComparison.Ordinal));
         AssertEx.Contains(replayed, "100 chars omitted");
+    }
+
+    [Test]
+    public void Build_AfterAFailedTurn_MarksTheRequestUnansweredAndDropsThePartialAnswer()
+    {
+        // F-16: unmarked, the failed request reads as still open and the model answers it instead of the next message.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "write an essay about rivers"),
+            Message(conversationId, sequence: 1, "assistant", "Rivers are", status: NodeChatMessageStatusValues.Failed),
+            Message(conversationId, sequence: 2, "user", "tell a mountain story"),
+            Message(conversationId, sequence: 3, "assistant", "Once", status: NodeChatMessageStatusValues.Interrupted)
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 4, "user", "Say only: ok"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.Equal(expected: 3, context.Count);
+        AssertEx.Equal($"write an essay about rivers\n\n{ConversationContextBuilder.UnansweredNotice}", context[0].Content);
+        AssertEx.Equal($"tell a mountain story\n\n{ConversationContextBuilder.UnansweredNotice}", context[1].Content);
+        AssertEx.Equal("Say only: ok", context[2].Content, "The turn being sent is never marked.");
+        AssertEx.True(context.All(static message => message.Role == MessageRole.User));
+    }
+
+    [Test]
+    public void Build_AfterACancelledTurn_LeavesTheRequestUnmarked()
+    {
+        // A Stop is the user's own choice, not a failure; only failed and interrupted answers mark their request.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "write an essay"),
+            Message(conversationId, sequence: 1, "assistant", "Rivers", status: NodeChatMessageStatusValues.Cancelled)
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 2, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.Equal("write an essay", context[0].Content);
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_KeepsAFailedTurnsExchangesButNotItsPartialText()
+    {
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "Saved, and now", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Reasoning = "half a thought",
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 2, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        AssertEx.Equal(expected: 3, context.Count);
+        AssertEx.Equal($"save it\n\n{ConversationContextBuilder.UnansweredNotice}", context[0].Content);
+        AssertEx.Equal(string.Empty, context[1].Content);
+        AssertEx.Null(context[1].Thinking);
+        AssertEx.Equal("call-1", AssertEx.NotNull(context[1].ToolExchanges).Single().CallId);
     }
 
     [Test]

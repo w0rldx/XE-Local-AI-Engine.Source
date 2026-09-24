@@ -29,6 +29,9 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     /// </summary>
     private const int MaxProfilingReEnsures = 3;
 
+    /// <summary>How long a server-gone failure waits for the supervisor to observe the process exit before rethrowing.</summary>
+    private static readonly TimeSpan ServerGoneExitWait = TimeSpan.FromSeconds(2);
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
@@ -63,6 +66,9 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             if (!cancellationToken.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(exception))
             {
                 InvalidateInner();
+
+                // A killed process's sockets close before the supervisor sees it exit; without this wait the caller's retry re-ensures onto the dead endpoint.
+                await _supervisor.WaitForProcessExitAsync(_modelName, ModelRole.Embedding, ServerGoneExitWait, cancellationToken).ConfigureAwait(false);
             }
 
             // The MEAI OpenAI adapter reports a non-2xx as System.ClientModel's ClientResultException, which is in NOBODY's catch set upstream, so translate it at

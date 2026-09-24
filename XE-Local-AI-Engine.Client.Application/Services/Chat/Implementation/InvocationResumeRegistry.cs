@@ -438,6 +438,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     RequestId = approval.RequestId,
                     CallId = approval.CallId ?? string.Empty,
                     ToolName = approval.ToolName ?? string.Empty,
+                    Arguments = approval.Arguments,
                     Description = approval.Description,
                     // Fail CLOSED on a slot that never recorded the runner's answer: a replayed card must not offer a
                     // session scope the node cannot honor, and a one-off approval still works.

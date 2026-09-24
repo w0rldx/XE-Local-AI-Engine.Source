@@ -26,6 +26,9 @@ public sealed record ApprovalLifecyclePayload
     /// <summary>Sanitized, user-facing description of what is being requested. Never carries a stack trace or file path.</summary>
     public required string Description { get; init; }
 
+    /// <summary>The call's arguments as JSON, serialized as the <c>tool-call-requested</c> event serializes them; null when the call has none.</summary>
+    public string? Arguments { get; init; }
+
     /// <summary>
     ///     Whether the node can actually REMEMBER an "approve for this session" decision for THIS request — the
     ///     runner's own answer, so the card offers the button only where the click means something.

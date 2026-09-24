@@ -40,6 +40,19 @@ public interface ILlamaServerProcessSupervisor
     /// </exception>
     Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct);
 
+    /// <summary>
+    ///     Waits up to <paramref name="timeout" /> until the <c>(model, role)</c> process is observed exited. True when it
+    ///     exited or none is registered, so the next <see cref="EnsureRunningAsync" /> respawns instead of reusing it.
+    /// </summary>
+    /// <remarks>
+    ///     A caller whose socket to the process was refused calls this before re-ensuring: the kernel closes a killed
+    ///     process's sockets before its parent is notified, so an immediate ensure can still hand back the dead endpoint.
+    /// </remarks>
+    Task<bool> WaitForProcessExitAsync(string modelName, ModelRole role, TimeSpan timeout, CancellationToken ct)
+    {
+        return Task.FromResult(false);
+    }
+
     /// <summary>Evicts (tree-kills) the <c>(model, role)</c> process if running and releases its port. Idempotent.</summary>
     /// <remarks>
     ///     This is the <strong>immediate</strong> teardown used internally (idle-reaper simulation in tests, profiling

@@ -113,8 +113,8 @@ internal sealed class ConversationStepContextBound
     ///     content-bearing message the synopsis does not already cover.
     /// </summary>
     /// <remarks>
-    ///     Mirrors <c>ConversationContextBuilder.Build</c> — same selected-path collapse, anchor space and
-    ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> and calibration the
+    ///     Mirrors <c>ConversationContextBuilder.Build</c> — same selected-path collapse, anchor space,
+    ///     completed/non-empty filter, unanswered notice and blanked failed turn — and measures with the same <see cref="ITokenEstimator" /> and calibration the
     ///     context budgeters use, so projection and verdict are one arithmetic. The coming step's state block is not
     ///     counted: it is bounded by construction and is what the budget protects. Reasoning always is, even where the
     ///     provider drops it — docs/wiki/04-agent-mode.md ("The transcript bound at the step boundary").
@@ -133,6 +133,8 @@ internal sealed class ConversationStepContextBound
 
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
+        // The send path marks a request whose answer failed, read before compaction drops anything, so count it too.
+        var unanswered = ConversationContextBuilder.FindUnansweredUserTurns(selected, anchorSequence);
 
         var messages = new List<ChatMessage>(selected.Count + 1);
 
@@ -170,7 +172,9 @@ internal sealed class ConversationStepContextBound
                 ? ConversationContextBuilder.ProjectSendableToolExchanges(message, toolResultExcerptChars)
                 : null;
 
-            var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true;
+            // The send path also blanks a failed turn it keeps for its exchanges: its partial text is never sent.
+            var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true
+                               || (string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) && ConversationContextBuilder.IsFailedAnswer(message));
             var sendable = !string.IsNullOrWhiteSpace(message.Content)
                            && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
             if (!sendable && exchanges is null)
@@ -191,7 +195,7 @@ internal sealed class ConversationStepContextBound
 
             if (!exchangeOnly && !string.IsNullOrEmpty(message.Content))
             {
-                contents.Add(new TextContent(message.Content));
+                contents.Add(new TextContent(ConversationContextBuilder.WithUnansweredNotice(message, unanswered)));
             }
 
             if (contents.Count == 0)

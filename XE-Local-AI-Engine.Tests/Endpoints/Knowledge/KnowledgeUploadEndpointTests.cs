@@ -66,6 +66,52 @@ public sealed class KnowledgeUploadEndpointTests
         AssertEx.NotNull(response.Headers.RetryAfter, "A queue-full upload must advertise Retry-After so the client retries.");
     }
 
+    [Test]
+    public async Task Upload_InvalidCollectionIdOnDedupeHit_Returns400AndNeverReachesTheStore()
+    {
+        // REGRESSION (live QA F-19): "bad collection!" answered 200 deduplicated:true because the bytes already existed in
+        // DEFAULT. The blob store answers a dedupe hit here, so a 200 would prove the id bypassed validation.
+        var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
+        await using var factory = CreateFactory(dispatcher, wasInserted: false, status: KnowledgeDocumentStatus.Indexed, Guid.NewGuid());
+        using var client = factory.CreateClient();
+
+        using var response = await PostFileAsync(factory, client, collectionId: "bad collection!");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var blobStore = factory.Services.GetRequiredService<IKnowledgeDocumentBlobStore>();
+        await blobStore.DidNotReceive().AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Upload_InvalidCollectionIdInQueryString_Returns400AndNeverReachesTheStore()
+    {
+        // The same id sent as a query parameter must not be ignored and silently deduped into DEFAULT either.
+        var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
+        await using var factory = CreateFactory(dispatcher, wasInserted: false, status: KnowledgeDocumentStatus.Indexed, Guid.NewGuid());
+        using var client = factory.CreateClient();
+
+        using var response = await PostFileAsync(factory, client, query: "?collectionId=bad%20collection!");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var blobStore = factory.Services.GetRequiredService<IKnowledgeDocumentBlobStore>();
+        await blobStore.DidNotReceive().AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Upload_ValidCollectionIdFormField_ReachesTheStoreNormalized()
+    {
+        // The multipart form field must bind: an unbound field silently falls back to DEFAULT and dedupes there.
+        var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
+        await using var factory = CreateFactory(dispatcher, wasInserted: true, status: KnowledgeDocumentStatus.Pending, Guid.NewGuid());
+        using var client = factory.CreateClient();
+
+        using var response = await PostFileAsync(factory, client, collectionId: "project-a");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var blobStore = factory.Services.GetRequiredService<IKnowledgeDocumentBlobStore>();
+        await blobStore.Received(1).AddAsync(Arg.Is<KnowledgeDocumentInput>(input => input.CollectionId == "PROJECT-A"), Arg.Any<CancellationToken>());
+    }
+
     private static TestServerWebAppFactory CreateFactory(IKnowledgeIngestionDispatcher dispatcher,
         bool wasInserted,
         KnowledgeDocumentStatus status,
@@ -99,7 +145,7 @@ public sealed class KnowledgeUploadEndpointTests
         };
     }
 
-    private static async Task<HttpResponseMessage> PostFileAsync(TestServerWebAppFactory factory, HttpClient client)
+    private static async Task<HttpResponseMessage> PostFileAsync(TestServerWebAppFactory factory, HttpClient client, string? collectionId = null, string query = "")
     {
 #pragma warning disable CA2000 // MultipartFormDataContent owns the part content and disposes it when the `using content` scope ends.
         using var content = new MultipartFormDataContent
@@ -108,9 +154,13 @@ public sealed class KnowledgeUploadEndpointTests
                 new ByteArrayContent(Encoding.UTF8.GetBytes("hello knowledge base")), "file", "doc.txt"
             }
         };
+        if (collectionId is not null)
+        {
+            content.Add(new StringContent(collectionId), "collectionId");
+        }
 #pragma warning restore CA2000
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, UploadRoute)
+        using var request = new HttpRequestMessage(HttpMethod.Post, UploadRoute + query)
         {
             Content = content
         };

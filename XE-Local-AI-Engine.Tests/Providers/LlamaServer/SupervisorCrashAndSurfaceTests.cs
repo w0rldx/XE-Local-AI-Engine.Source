@@ -14,6 +14,43 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorCrashAndSurfaceTests
 {
     [Test]
+    public async Task EnsureRunning_KilledButExitNotYetObserved_ReusesTheDeadEndpoint_UntilWaitForProcessExitSeesTheExit()
+    {
+        // REGRESSION (live QA F-18): a SIGKILLed server's sockets close before the parent reaps it, so an immediate
+        // re-ensure reuses the dead endpoint. WaitForProcessExitAsync is the barrier that lets the retry respawn.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        var first = await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);
+        var handle = launcher.Handles.Single();
+
+        var racing = await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);
+        AssertEx.Equal(first.BaseAddress, racing.BaseAddress);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+
+        // real-timer: an upper bound only; the wait completes on SimulateExit, the signal the test controls.
+        var wait = supervisor.WaitForProcessExitAsync("model-a", ModelRole.Embedding, TimeSpan.FromSeconds(30), CancellationToken.None);
+        AssertEx.False(wait.IsCompleted, "The wait must not complete before the exit is observed.");
+        handle.SimulateExit();
+        AssertEx.True(await wait);
+
+        _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task WaitForProcessExit_LiveProcess_TimesOutFalse_AndNoProcess_ReturnsTrue()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        AssertEx.True(await supervisor.WaitForProcessExitAsync("model-a", ModelRole.Embedding, TimeSpan.Zero, CancellationToken.None));
+
+        _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);
+
+        AssertEx.False(await supervisor.WaitForProcessExitAsync("model-a", ModelRole.Embedding, TimeSpan.Zero, CancellationToken.None));
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "Waiting must never tear down a live process.");
+    }
+
+    [Test]
     public async Task EnsureRunning_SpawnAlwaysFails_RetriesToCap_ThenSurfacesSanitized()
     {
         var attempts = 0;

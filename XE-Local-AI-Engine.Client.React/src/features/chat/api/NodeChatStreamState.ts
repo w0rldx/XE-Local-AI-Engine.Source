@@ -297,7 +297,7 @@ function mergePendingPromptIntoToolEntries(
 	callId: string | undefined,
 	toolName: string | undefined,
 	sequence: number,
-	prompt: Pick<ToolEntryInput, "pendingApprovalRequestId" | "pendingApprovalSessionScopeEligible" | "pendingQuestion">,
+	prompt: Pick<ToolEntryInput, "args" | "pendingApprovalRequestId" | "pendingApprovalSessionScopeEligible" | "pendingQuestion">,
 ): ToolEntryInput[] {
 	const normalizedCallId = callId?.trim() || undefined;
 	const normalizedToolName = toolName?.trim() || undefined;
@@ -361,6 +361,8 @@ function mergePendingPromptIntoToolEntries(
 					state: "waiting",
 					requiresApproval: true,
 					...prompt,
+					// A replay without arguments (an older node, a metadata-poor resume) keeps the args the card has.
+					args: prompt.args ?? entry.args,
 				}
 			: entry,
 	);
@@ -616,6 +618,8 @@ export function applyNodeChatStreamEvent(
 			event.type === nodeChatStreamEventTypes.questionRequested
 				? { pendingQuestion: parsePendingUserQuestion(event) }
 				: {
+						// The operator approves WHAT runs, so the prompt carries the call's arguments itself (F-24/F-22).
+						args: event.arguments || undefined,
 						pendingApprovalRequestId: event.approvalRequestId ?? undefined,
 						pendingApprovalSessionScopeEligible: event.sessionScopeEligible ?? undefined,
 					},
