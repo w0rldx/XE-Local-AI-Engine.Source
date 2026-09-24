@@ -41,6 +41,9 @@ internal static class WorkSessionEventTypes
     /// </summary>
     public const string CompletionRequested = "CompletionRequested";
 
+    /// <summary>Written by the store when a step advances; the boundary between one step number and the next.</summary>
+    public const string StepAdvanced = "StepAdvanced";
+
     /// <summary>A park outlived <c>MaxParkedSeconds</c> and the step was cancelled to free the node's invocation slot.</summary>
     public const string ParkTimedOut = "ParkTimedOut";
 

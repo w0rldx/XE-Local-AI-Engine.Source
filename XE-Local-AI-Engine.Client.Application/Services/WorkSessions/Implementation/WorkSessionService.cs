@@ -28,6 +28,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     private readonly INodeChatPersistenceService _persistence;
     private readonly SecurityOptions _securityOptions;
     private readonly IAgentWorkSessionStore _store;
+    private readonly IWorkSessionEventPublisher _publisher;
     private readonly IWorkSessionExecutionSupervisor _supervisor;
     private readonly TimeProvider _timeProvider;
     private readonly WorkSessionToolGate _toolGate;
@@ -38,6 +39,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         WorkSessionToolGate toolGate,
         IModelCapabilityResolver capabilityResolver,
         IWorkSessionExecutionSupervisor supervisor,
+        IWorkSessionEventPublisher publisher,
         IOptions<WorkSessionOptions> options,
         IOptions<SecurityOptions> securityOptions,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
@@ -53,6 +55,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         _toolGate = toolGate ?? throw new ArgumentNullException(nameof(toolGate));
         _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
@@ -434,6 +437,9 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         }, cancellationToken);
         if (_supervisor.TryStart(sessionId, runtime))
         {
+            // The Running transition is the detail page's cue to (re-)attach to the conversation; the supervisor announces
+            // every later status itself.
+            await _publisher.PublishAsync(sessionId, running.LastSequence, WorkSessionChangeKind.Status, cancellationToken);
             return ToDetail(running);
         }
 

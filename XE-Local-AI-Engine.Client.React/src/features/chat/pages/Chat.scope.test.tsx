@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
 import type { ChatConversationModel, ChatScope } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
@@ -275,6 +276,42 @@ describe("Chat scope seam", () => {
 		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(1));
 		rerender({ conversationId: "session-conversation", resumeNonce: 1, embedded: true });
 		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(2));
+	});
+
+	it("keeps a live re-attach when resumeNonce bumps, and still aborts it on a conversation switch (F-30)", async () => {
+		const signals: AbortSignal[] = [];
+		adapter.resumeConversation.mockImplementation((conversationId, signal) => {
+			signals.push(signal);
+			return {
+				async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+					yield {
+						type: nodeChatStreamEventTypes.assistantStreaming,
+						conversationId,
+						messageId: "invocation-1",
+						requestId: "invocation-1",
+						status: "streaming",
+						sequence: 1,
+						occurredAtUtc: 1_700_000_000_000,
+						delta: "working",
+						content: "working",
+					};
+					await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+				},
+			};
+		});
+		adapter.cancelMessage.mockResolvedValue(undefined);
+		const { rerender } = renderChat({ conversationId: "session-conversation", resumeNonce: 0, embedded: true });
+		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(1));
+
+		// A status push while attached: a no-op (resumeActiveTurn returns early), never an abort of the live stream.
+		rerender({ conversationId: "session-conversation", resumeNonce: 1, embedded: true });
+		await waitFor(() => expect(screen.getByTestId("chat-send-button").getAttribute("aria-label")).toBe("Stop"));
+		expect(signals[0]?.aborted).toBe(false);
+		expect(adapter.resumeConversation).toHaveBeenCalledTimes(1);
+
+		// Switching the conversation still tears the attach down.
+		rerender({ conversationId: "chat-1", resumeNonce: 1, embedded: true });
+		await waitFor(() => expect(signals[0]?.aborted).toBe(true));
 	});
 
 	// A deep link from another surface (an agent run) hands its conversation over through the core store; `/chat`

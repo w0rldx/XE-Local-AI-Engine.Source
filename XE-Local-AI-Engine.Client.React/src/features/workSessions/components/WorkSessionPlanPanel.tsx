@@ -23,6 +23,8 @@ export interface WorkSessionPlanPanelProps {
 	readonly latestCheckpointStep?: number;
 	/** `outcome` of the newest event, shown beside a `Failed` badge. */
 	readonly lastFailureOutcome?: string;
+	/** The agent completed the session but declared its objective not met (`objectiveMet:false`). */
+	readonly objectiveNotMet?: boolean;
 	/** True while the live hub is down and the page is polling instead. Informational, never blocking. */
 	readonly liveUpdatesUnavailable: boolean;
 	readonly isCommandPending: boolean;
@@ -91,6 +93,7 @@ export function WorkSessionPlanPanel({
 	isLoadingTasks,
 	latestCheckpointStep,
 	lastFailureOutcome,
+	objectiveNotMet = false,
 	liveUpdatesUnavailable,
 	isCommandPending,
 	onStart,
@@ -149,6 +152,11 @@ export function WorkSessionPlanPanel({
 				) : null}
 				{status === "Failed" && lastFailureOutcome ? (
 					<InlineErrorAlert message={lastFailureOutcome} variant="light" data-testid="work-session-failed-alert" />
+				) : null}
+				{status === "Completed" && objectiveNotMet ? (
+					<Text size="xs" c="orange" data-testid="work-session-objective-not-met">
+						{t("pages.workSessions.plan.objectiveNotMet", "Completed, but the agent reported that the objective was not met.")}
+					</Text>
 				) : null}
 				{status === "WaitingForApproval" ? (
 					<Text size="xs" c="orange" data-testid="work-session-waiting-approval-hint">

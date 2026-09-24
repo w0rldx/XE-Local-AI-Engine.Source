@@ -417,6 +417,37 @@ public sealed class WorkSessionServiceTests
     }
 
     [Test]
+    public async Task Start_PublishesTheRunningStatusChange_SoTheDetailPageAttaches()
+    {
+        // The Running transition is the detail page's cue to attach to the conversation (live QA F-30/F-31); before this
+        // only the supervisor's later statuses were announced, so a page open at start never re-armed.
+        var publisher = new RecordingWorkSessionEventPublisher();
+        var sessionId = Guid.NewGuid();
+        await using var factory = NewFactory(configureExtra: services =>
+            {
+                services.RemoveAll<INodeChatStreamService>();
+                services.AddSingleton<INodeChatStreamService>(provider =>
+                    new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, sessionId));
+                services.RemoveAll<IWorkSessionEventPublisher>();
+                services.AddSingleton<IWorkSessionEventPublisher>(publisher);
+            },
+            configuration: ("WorkSessions:MaxStepsPerRun", "1"));
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+
+        WorkSessionDetail started;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            started = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().StartAsync(sessionId);
+        }
+
+        AssertEx.Equal(AgentWorkSessionStatus.Running, started.Status);
+        AssertEx.Contains(publisher.Published,
+            published => published.SessionId == sessionId && published.Kind == WorkSessionChangeKind.Status,
+            "Start must announce the Running transition itself; the supervisor only announces the statuses it settles.");
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+    }
+
+    [Test]
     public async Task PostFollowUp_WhileTheSessionIsParked_PersistsTheTurnButDoesNotResume()
     {
         // A parked step already owns the node's one invocation slot and its prompt is answered through the chat card, so

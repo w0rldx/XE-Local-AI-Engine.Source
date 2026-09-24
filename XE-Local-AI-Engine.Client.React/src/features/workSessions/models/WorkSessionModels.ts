@@ -138,3 +138,27 @@ export interface StepConsumption {
 	/** How many invocations ran under the step's cap scope. Absent on rows written before the field existed; read as 1. */
 	readonly attachedBudgets: number;
 }
+
+/**
+ * True when the newest `CompletionRequested` event says the agent closed the session WITHOUT meeting its objective
+ * (`complete_work_session {objectiveMet:false}`). The server serializes the detail with default (PascalCase) options;
+ * camelCase is accepted too. A missing flag (events recorded before the argument existed) or bad JSON reads as met.
+ */
+export function isObjectiveNotMet(events: readonly WorkSessionEventResponse[]): boolean {
+	// Deliberately reads only the loaded events page; a session past the page size shows no hint until more are loaded.
+	const completion = events
+		.filter((event) => event.eventType === "CompletionRequested")
+		.reduce<WorkSessionEventResponse | undefined>(
+			(newest, event) => (newest && newest.sequence > event.sequence ? newest : event),
+			undefined,
+		);
+	if (!completion?.detailJson) {
+		return false;
+	}
+	try {
+		const detail = JSON.parse(completion.detailJson) as Record<string, unknown>;
+		return (detail["ObjectiveMet"] ?? detail["objectiveMet"]) === false;
+	} catch {
+		return false;
+	}
+}

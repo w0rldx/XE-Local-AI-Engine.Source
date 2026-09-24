@@ -16,10 +16,9 @@ public enum WorkSessionChangeKind
 ///     <c>sequence</c>, so a subscriber replaying from the watermark can never miss the row it names.
 /// </summary>
 /// <remarks>
-///     Two callers publish: the supervisor (<see cref="WorkSessionChangeKind.Status" />,
-///     <see cref="WorkSessionChangeKind.Step" />, <see cref="WorkSessionChangeKind.Checkpoint" />) and the four state
-///     tool handlers from inside the invocation loop (<see cref="WorkSessionChangeKind.Task" />,
-///     <see cref="WorkSessionChangeKind.Finding" />, <see cref="WorkSessionChangeKind.Artifact" />).
+///     Three callers publish: the session service (Status on start and resume), the supervisor (Status, Step,
+///     Checkpoint, and Finding for a park timeout's open question) and the four state tool handlers from inside the
+///     invocation loop (Task, Finding, Artifact).
 /// </remarks>
 public interface IWorkSessionEventPublisher
 {

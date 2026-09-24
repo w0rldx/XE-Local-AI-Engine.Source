@@ -19,6 +19,7 @@ import { WorkSessionsDisabledAlert } from "@/features/workSessions/components/Wo
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";
 import {
+	isObjectiveNotMet,
 	isTerminalWorkSessionStatus,
 	toWorkSessionKind,
 	toWorkSessionStatus,
@@ -232,6 +233,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 			isLoadingTasks={tasksQuery.isPending}
 			latestCheckpointStep={latestCheckpointStep}
 			lastFailureOutcome={lastFailureOutcome ?? undefined}
+			objectiveNotMet={isObjectiveNotMet(events)}
 			liveUpdatesUnavailable={live.connectionState === "unavailable"}
 			isCommandPending={
 				lifecycle.start.isPending || lifecycle.pause.isPending || lifecycle.resume.isPending || lifecycle.cancel.isPending

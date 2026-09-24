@@ -77,10 +77,10 @@ public sealed class WorkSessionStepLoopTests
     }
 
     [Test]
-    public async Task Loop_PublishesTheStepBeforeItSends_SoAClientCanAttachToTheLiveTurn()
+    public async Task Loop_PublishesTheStepOnlyOnceTheTurnIsLive_SoAClientResumingOnThePushAttaches()
     {
-        // Ordering, not merely occurrence: by the time a step terminalizes, the invocation resume registry has dropped
-        // its entry, so a client told about the step only afterwards re-attaches to an empty stream.
+        // F-30. The page re-attaches on this push, and the resume registry holds the turn only from AssistantStreaming
+        // on; an earlier push sends the client to an empty stream, so the turn never appears live.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
@@ -94,15 +94,144 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
+        var stepPushedBefore = new List<(string EventType, bool Pushed)>();
+        fake.Enqueue(new StepScript
+        {
+            EventTypes =
+            [
+                ChatStreamEventTypes.UserMessagePersisted,
+                ChatStreamEventTypes.AssistantPending,
+                ChatStreamEventTypes.AssistantQueued,
+                ChatStreamEventTypes.AssistantNotice,
+                ChatStreamEventTypes.AssistantStreaming,
+                ChatStreamEventTypes.AssistantCompleted
+            ],
+            BeforeEachEvent = eventType => stepPushedBefore.Add((eventType, publisher.Published.Any(published => published.Kind == WorkSessionChangeKind.Step)))
+        });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
-        // The publisher and the stream both record into their own lists; the event rows give the shared order.
+        // A pre-run AssistantNotice (orchestration degraded, content withheld) is emitted before the slot is taken.
+        AssertEx.Equal(expected: 6, stepPushedBefore.Count);
+        AssertEx.False(stepPushedBefore.Take(5).Any(entry => entry.Pushed),
+            "No Step push may go out before the turn has streamed: the resume registry has nothing to serve yet.");
+        AssertEx.True(stepPushedBefore[5].Pushed, "The Step push goes out as soon as the turn is streaming, before it ends.");
+
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
-        var stepStarted = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == "StepStarted"), "The loop records a StepStarted before it sends.");
+        var stepStarted = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepStarted), "The loop records a StepStarted before it sends.");
         AssertEx.Contains(publisher.Published, published => published.Sequence == stepStarted.Sequence && published.Kind == WorkSessionChangeKind.Step);
-        AssertEx.Equal(expected: 1, fake.Requests.Count);
+    }
+
+    [Test]
+    public async Task Loop_WhenTheFirstAttemptRecordedACompletionBeforeParking_TheReRunStillCloses()
+    {
+        // F-38 regression pin (Codex review of batch 3): the completion tool dedups per step NUMBER, so a re-run attempt
+        // cannot record it again; the settle must honour the completion the first attempt recorded before it parked.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+
+        // Attempt 1: the agent declares completion, then parks on a question nobody answers.
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [],
+            DuringTurn = DeclareCompleteAsync,
+            Park = true
+        });
+        AssertEx.True(supervisor.TryStart(sessionId));
+        await AssertEx.EventuallyAsync(() => !supervisor.IsRunning(sessionId), TestBudgets.Contended, "The park timeout has to land the run.");
+        var parked = await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId);
+        AssertEx.Equal(expected: AgentWorkSessionStatus.Paused, parked.Status);
+
+        // Attempt 2 of the same step ends normally without calling the tool again (it would dedup anyway).
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted]
+        });
+        AssertEx.True(supervisor.TryStart(sessionId));
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
+        AssertEx.Equal(expected: AgentWorkSessionStatus.Completed, settled.Status);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        AssertEx.Equal(expected: 1, events.Count(entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "The completion was recorded once, by the first attempt.");
+        AssertEx.Equal(expected: 2, events.Count(entry => entry.EventType == WorkSessionEventTypes.StepStarted), "Both attempts recorded their own start.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepIsReRunAfterAParkTimeout_RecordsItsOwnStepStartedAndParkTimedOut()
+    {
+        // F-31. A park timeout keeps StepCount, so the re-run reuses the step index. Its rows must not dedup onto the
+        // first attempt's, and its Step push must carry the fresh sequence, or the client drops it as already seen.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            fake.Enqueue(new StepScript
+            {
+                EventTypes = [],
+                Park = true
+            });
+            // Wait on the run landing, not on the status: the second attempt starts from Paused, so a status wait would
+            // pass before the loop had even moved it to Running.
+            AssertEx.True(supervisor.TryStart(sessionId), "Each attempt starts once the previous run has landed.");
+            await AssertEx.EventuallyAsync(() => !supervisor.IsRunning(sessionId), TestBudgets.Contended, "The park timeout has to land the run.");
+            var settled = await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId);
+            AssertEx.Equal(expected: AgentWorkSessionStatus.Paused, settled.Status);
+            AssertEx.Equal(expected: 0, settled.StepCount, "A park timeout does not advance the step, so the re-run keeps the index.");
+        }
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        var started = events.Where(entry => entry.EventType == WorkSessionEventTypes.StepStarted).ToList();
+        var timedOut = events.Where(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut).ToList();
+        AssertEx.Equal(expected: 2, started.Count, "The re-run records its own StepStarted.");
+        AssertEx.Equal(expected: 2, timedOut.Count, "The re-run records its own ParkTimedOut.");
+        AssertEx.True(started[0].Sequence < timedOut[0].Sequence && timedOut[0].Sequence < started[1].Sequence && started[1].Sequence < timedOut[1].Sequence,
+            "Each attempt's rows land in order, after the previous attempt's.");
+        AssertEx.True(started.All(entry => entry.Outcome == "1"), "Both attempts are step 1.");
+        AssertEx.Contains(publisher.Published,
+            published => published.Kind == WorkSessionChangeKind.Step && published.Sequence == started[1].Sequence,
+            "The re-run's Step push carries its fresh sequence, not the first attempt's.");
+        AssertEx.Equal(expected: 2, publisher.Published.Count(published => published.Kind == WorkSessionChangeKind.Finding),
+            "Each timeout's open question is pushed, so a watching page shows it without a reload.");
+    }
+
+    [Test]
+    public void OperationId_DedupsWithinAnAttemptAndSeparatesAttempts()
+    {
+        // The idempotency the id exists for: a duplicate write inside ONE attempt collapses; a re-run does not.
+        var sessionId = Guid.NewGuid();
+
+        AssertEx.Equal(WorkSessionOperationId.For(sessionId, step: 1, WorkSessionStepPhases.Started, attempt: 7),
+            WorkSessionOperationId.For(sessionId, step: 1, WorkSessionStepPhases.Started, attempt: 7));
+        AssertEx.NotEqual(WorkSessionOperationId.For(sessionId, step: 1, WorkSessionStepPhases.Started, attempt: 7),
+            WorkSessionOperationId.For(sessionId, step: 1, WorkSessionStepPhases.Started, attempt: 9));
+        AssertEx.Equal(WorkSessionOperationId.For(sessionId, step: 1, "completion"),
+            WorkSessionOperationId.For(sessionId, step: 1, "completion", attempt: 0),
+            "The tool handlers' per-step ids are unchanged.");
     }
 
     [Test]

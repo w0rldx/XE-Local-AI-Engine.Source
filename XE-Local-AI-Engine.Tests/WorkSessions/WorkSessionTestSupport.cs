@@ -107,6 +107,9 @@ internal sealed class StepScript
 
     public Func<IServiceProvider, Guid, Task>? DuringTurn { get; init; }
 
+    /// <summary>Runs just before each scripted event is yielded, so a test can see what the consumer had done by then.</summary>
+    public Action<string>? BeforeEachEvent { get; init; }
+
     public bool Park { get; init; }
 
     public bool ParkThenContinue { get; init; }
@@ -240,6 +243,7 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
 
         foreach (var eventType in script.EventTypes)
         {
+            script.BeforeEachEvent?.Invoke(eventType);
             yield return Event(correlation, eventType, error: script.TerminalError);
         }
     }

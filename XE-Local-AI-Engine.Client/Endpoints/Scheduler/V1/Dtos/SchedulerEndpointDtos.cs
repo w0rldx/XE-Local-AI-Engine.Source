@@ -80,7 +80,8 @@ public sealed class CreateScheduledJobRequest
 
     public string TimeZoneId { get; init; } = "UTC";
 
-    public SchedulerMisfirePolicy MisfirePolicy { get; init; } = SchedulerMisfirePolicy.Smart;
+    /// <summary>Omitted, the template's <c>defaultMisfirePolicy</c> applies.</summary>
+    public SchedulerMisfirePolicy? MisfirePolicy { get; init; }
 
     public bool PreventOverlap { get; init; }
 
@@ -122,7 +123,8 @@ public sealed class UpdateScheduledJobRequest
 
     public string TimeZoneId { get; init; } = "UTC";
 
-    public SchedulerMisfirePolicy MisfirePolicy { get; init; } = SchedulerMisfirePolicy.Smart;
+    /// <summary>Omitted, the template's <c>defaultMisfirePolicy</c> applies (a PUT replaces the stored value, it does not keep it).</summary>
+    public SchedulerMisfirePolicy? MisfirePolicy { get; init; }
 
     public bool PreventOverlap { get; init; }
 

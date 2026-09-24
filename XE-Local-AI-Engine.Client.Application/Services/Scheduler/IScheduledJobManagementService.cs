@@ -39,20 +39,20 @@ public interface IScheduledJobManagementService
     /// </summary>
     /// <remarks>
     ///     The enabling state is preserved: toggling it is the dedicated <see cref="SetEnabledAsync" /> action. Returns
-    ///     the updated record, or <c>null</c> when no definition has that id.
+    ///     the updated record, or <c>null</c> when no live (non-deleted) definition has that id.
     /// </remarks>
     Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Enables or disables the definition with <paramref name="id" />: enabling schedules its job/trigger, disabling
     ///     unschedules it; the store stamps/clears <c>DisabledAtUtc</c>. Returns the updated record, or <c>null</c> when no
-    ///     definition has that id.
+    ///     live definition has it.
     /// </summary>
     Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Soft-deletes the definition with <paramref name="id" /> (preserving its run history) and unschedules its Quartz
-    ///     job. Idempotent: returns <c>true</c> when a row was soft-deleted, <c>false</c> when none matched.
+    ///     job. Idempotent: returns <c>true</c> when the row is (or already was) soft-deleted, <c>false</c> when none matched.
     /// </summary>
     Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -137,7 +137,8 @@ public sealed class ScheduledJobManagementInput
 
     public required string TimeZoneId { get; init; }
 
-    public required SchedulerMisfirePolicy MisfirePolicy { get; init; }
+    /// <summary>Null resolves to the template's <see cref="ScheduledJobTemplateDescriptor.DefaultMisfirePolicy" />.</summary>
+    public required SchedulerMisfirePolicy? MisfirePolicy { get; init; }
 
     public required bool PreventOverlap { get; init; }
 

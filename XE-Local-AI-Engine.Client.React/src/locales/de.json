@@ -855,6 +855,7 @@
 				"user": "Benutzer",
 				"assistant": "Assistent",
 				"tool": "Tool",
+				"you": "Du",
 				"unknown": "Rolle {{role}}"
 			},
 			"clientSelector": {
@@ -3351,7 +3352,7 @@
 		},
 		"scheduler": {
 			"title": "Planer",
-			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
+			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Neue Aufgaben sind sofort aktiviert (deaktiviere eine, um sie anzuhalten), und Parameter werden verschlüsselt gespeichert.",
 			"createButton": "Aufgabe erstellen",
 			"list": {
 				"loading": "Geplante Aufgaben werden geladen…",
@@ -5267,6 +5268,7 @@
 				"interrupted": "Die Engine wurde mitten im Lauf neu gestartet. Setze fort, um beim letzten Checkpoint weiterzumachen.",
 				"waitingForApproval": "Wartet auf deine Freigabe in der Unterhaltung — die Sitzung belegt so lange das Modell dieses Knotens.",
 				"waitingForInput": "Der Agent hat dir eine Frage in der Unterhaltung gestellt — die Sitzung belegt so lange das Modell dieses Knotens.",
+				"objectiveNotMet": "Abgeschlossen, aber der Agent hat gemeldet, dass das Ziel nicht erreicht wurde.",
 				"pausedAtCheckpoint": "Pausiert bei Checkpoint {{step}}",
 				"liveUnavailable": "Abfrage",
 				"liveUnavailableHint": "Live-Aktualisierungen sind nicht verfügbar; diese Seite fragt stattdessen regelmäßig ab."

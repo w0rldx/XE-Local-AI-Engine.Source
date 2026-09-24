@@ -4714,7 +4714,7 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest =
 	startAtUtc?: number | null;
 	endAtUtc?: number | null;
 	timeZoneId?: string;
-	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy | null;
 	preventOverlap?: boolean;
 	maxRuntimeSeconds?: number | null;
 	parameters?: string | null;
@@ -4840,7 +4840,7 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest =
 	startAtUtc?: number | null;
 	endAtUtc?: number | null;
 	timeZoneId?: string;
-	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy;
+	misfirePolicy?: XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy | null;
 	preventOverlap?: boolean;
 	maxRuntimeSeconds?: number | null;
 	parameters?: string | null;

@@ -53,6 +53,45 @@ describe("CreateWorkSessionDialog", () => {
 		await waitFor(() => expect(submit.disabled).toBe(false));
 	});
 
+	it("lets a keyboard-only user pick the agent inside the modal and returns focus to the trigger (F-28)", async () => {
+		const onClose = vi.fn();
+		renderWithProviders(
+			<CreateWorkSessionDialog
+				opened={true}
+				agentOptions={agentOptions}
+				isSubmitting={false}
+				onClose={onClose}
+				onSubmit={vi.fn()}
+			/>,
+		);
+		const trigger = screen.getByTestId("chat-agent-selector-trigger");
+		trigger.focus();
+		fireEvent.click(trigger);
+
+		// The portalled dropdown traps focus: the first row gets it, ArrowDown moves to the agent row.
+		const off = await screen.findByTestId("chat-agent-selector-option-off");
+		await waitFor(() => expect(document.activeElement).toBe(off));
+		fireEvent.keyDown(off, { key: "ArrowDown" });
+		const option = screen.getByTestId(`chat-agent-selector-option-${agentId}`);
+		expect(document.activeElement).toBe(option);
+		expect(option.getAttribute("role")).toBe("menuitemradio");
+
+		// jsdom does not synthesize Enter -> click on a focused <button>; the browser does.
+		expect(option.tagName).toBe("BUTTON");
+		fireEvent.click(option);
+
+		await waitFor(() => expect(document.activeElement).toBe(trigger));
+		expect(trigger.textContent).toContain("Work Session — Research");
+
+		// Escape closes the reopened picker only, never the dialog around it.
+		fireEvent.click(trigger);
+		const reopened = await screen.findByTestId("chat-agent-selector-option-off");
+		await waitFor(() => expect(document.activeElement).toBe(reopened));
+		fireEvent.keyDown(reopened, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByTestId("chat-agent-selector-option-off")).toBeNull());
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
 	it("defaults the kind to General and submits the trimmed values", async () => {
 		const onSubmit = render();
 

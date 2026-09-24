@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
@@ -156,6 +157,62 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Contains(exception.Message, "Insufficient capacity");
         AssertEx.Equal(expected: 0, harness.RunCount);
         AssertEx.False(harness.ReservationDisposed, "a reject carries no reservation to dispose.");
+    }
+
+    // F-32: capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold
+    // model see the first fire's footprint reservation and be refused; now it queues on the slot and reuses the resident model.
+    [Test]
+    public async Task ExecuteAsync_TwoConcurrentFiresForTheSameColdModel_BothCompleteAndTheSecondQueues()
+    {
+        var ledger = new FootprintLedger();
+        using var harness = new Harness(RealDispatcher());
+        ledger.Wire(harness);
+        var firstRunGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.FirstRunGate = firstRunGate;
+
+        var first = harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+        var second = harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.False(second.IsCompleted, "the second fire must wait on the invocation slot, not be refused while the first loads the model");
+        firstRunGate.SetResult();
+        await Task.WhenAll(first, second);
+
+        AssertEx.Equal(expected: 2, harness.RunCount);
+        AssertEx.Equal(expected: 0, ledger.HeldReservations, "every footprint reservation must be released");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_QueuedFireForASecondModelThatDoesNotFit_IsStillRefused()
+    {
+        var ledger = new FootprintLedger();
+        using var harness = new Harness(RealDispatcher());
+        ledger.Wire(harness);
+        var otherAgentId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        harness.Store.GetByIdAsync(otherAgentId, Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "other-local-model"));
+        var firstRunGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.FirstRunGate = firstRunGate;
+
+        var first = harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+        var second = harness.Handler.ExecuteAsync(Context($$"""{ "agentDefinitionId": "{{otherAgentId}}", "prompt": "{{Prompt}}" }"""), CancellationToken.None);
+        firstRunGate.SetResult();
+        await first;
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => second);
+        AssertEx.Contains(exception.Message, "Insufficient capacity");
+        AssertEx.Equal(expected: 1, harness.RunCount);
+        AssertEx.Equal(expected: 0, ledger.HeldReservations);
+        // The refusal happened under the slot, after Assigned was published: the invocation must not linger as a phantom.
+        var current = harness.Dispatcher.CurrentInvocation;
+        AssertEx.True(current is null || current.Status is InvocationStatus.Completed or InvocationStatus.Failed or InvocationStatus.Cancelled,
+            $"the refused fire must report a terminal state, not stay {current?.Status}");
+    }
+
+    private static WorkerEventDispatcher RealDispatcher()
+    {
+        return new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
     }
 
     [Test]
@@ -365,8 +422,9 @@ public sealed class RunSavedAgentHandlerTests
 
     private sealed class Harness : IDisposable
     {
-        public Harness()
+        public Harness(IWorkerEventDispatcher? dispatcher = null)
         {
+            Dispatcher = dispatcher ?? Substitute.For<IWorkerEventDispatcher>();
             NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
             LocalDefault.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EffectiveLocalModel);
             Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: null));
@@ -383,15 +441,19 @@ public sealed class RunSavedAgentHandlerTests
             Resolver
                 .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [], null, "medium", 7, AgentId, "Log Summarizer", []));
-            Dispatcher
-                .ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-                .Returns(Substitute.For<IAsyncDisposable>());
+            if (dispatcher is null)
+            {
+                Dispatcher
+                    .ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
+                    .Returns(Substitute.For<IAsyncDisposable>());
+            }
             Runner
-                .When(runner => runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()))
-                .Do(callInfo =>
+                .RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
                 {
                     CapturedPackage = callInfo.Arg<InvocationExecutionContext>().Package;
                     RunCount++;
+                    return RunCount == 1 ? FirstRunGate.Task : Task.CompletedTask;
                 });
 
             var services = new ServiceCollection();
@@ -425,7 +487,7 @@ public sealed class RunSavedAgentHandlerTests
 
         public IInvocationRunner Runner { get; } = Substitute.For<IInvocationRunner>();
 
-        public IWorkerEventDispatcher Dispatcher { get; } = Substitute.For<IWorkerEventDispatcher>();
+        public IWorkerEventDispatcher Dispatcher { get; }
 
         public RunSavedAgentHandler Handler { get; }
 
@@ -433,11 +495,85 @@ public sealed class RunSavedAgentHandlerTests
 
         public int RunCount { get; private set; }
 
+        /// <summary>Holds the FIRST run open until completed; already completed unless a test replaces it.</summary>
+        public TaskCompletionSource FirstRunGate { get; set; } = CompletedGate();
+
+        private static TaskCompletionSource CompletedGate()
+        {
+            var gate = new TaskCompletionSource();
+            gate.SetResult();
+            return gate;
+        }
+
         public bool ReservationDisposed => _reservation.Disposed;
 
         public void Dispose()
         {
             _reservation.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     A one-model-fits node: a cold model books a footprint while its run warms it (not yet resident), becomes
+    ///     resident once that run releases the booking, and any other model is refused while one is booked or resident.
+    /// </summary>
+    private sealed class FootprintLedger
+    {
+        private readonly HashSet<string> _resident = new(StringComparer.Ordinal);
+
+        public int HeldReservations { get; private set; }
+
+        public void Wire(Harness harness)
+        {
+            harness.Capacity
+                   .DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+                   .Returns(call => Decide(call.Arg<string>()));
+        }
+
+        private CapacityDecision Decide(string model)
+        {
+            if (_resident.Contains(model))
+            {
+                return new CapacityDecision { Verdict = CapacityVerdict.QueueSameModel, Reason = "Resident.", OllamaEvictionWarning = false };
+            }
+
+            if (HeldReservations > 0 || _resident.Count > 0)
+            {
+                return new CapacityDecision
+                {
+                    Verdict = CapacityVerdict.RejectInsufficient,
+                    Reason = "Insufficient capacity: not enough free memory for another model.",
+                    OllamaEvictionWarning = false
+                };
+            }
+
+            HeldReservations++;
+            return new CapacityDecision
+            {
+                Verdict = CapacityVerdict.Allow,
+                Reason = "Capacity available.",
+                OllamaEvictionWarning = false,
+                Reservation = new ReleaseOnDispose(() =>
+                {
+                    HeldReservations--;
+                    _resident.Add(model);
+                })
+            };
+        }
+    }
+
+    private sealed class ReleaseOnDispose : IDisposable
+    {
+        private readonly Action _release;
+
+        public ReleaseOnDispose(Action release)
+        {
+            _release = release;
+        }
+
+        public void Dispose()
+        {
+            _release();
         }
     }
 

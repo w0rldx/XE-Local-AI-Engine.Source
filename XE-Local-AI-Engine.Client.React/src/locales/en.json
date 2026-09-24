@@ -855,6 +855,7 @@
 				"user": "User",
 				"assistant": "Assistant",
 				"tool": "Tool",
+				"you": "You",
 				"unknown": "Role {{role}}"
 			},
 			"clientSelector": {
@@ -3351,7 +3352,7 @@
 		},
 		"scheduler": {
 			"title": "Scheduler",
-			"subtitle": "Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
+			"subtitle": "Schedule recurring and one-off jobs on this node. New jobs are enabled immediately (disable one to pause it), and parameters are stored encrypted.",
 			"createButton": "Create job",
 			"list": {
 				"loading": "Loading scheduled jobs…",
@@ -5267,6 +5268,7 @@
 				"interrupted": "The engine restarted mid-run. Resume to continue from the last checkpoint.",
 				"waitingForApproval": "Waiting for your approval in the conversation — the session is holding this node's model while it waits.",
 				"waitingForInput": "The agent asked you a question in the conversation — the session is holding this node's model while it waits.",
+				"objectiveNotMet": "Completed, but the agent reported that the objective was not met.",
 				"pausedAtCheckpoint": "Paused at checkpoint {{step}}",
 				"liveUnavailable": "Polling",
 				"liveUnavailableHint": "Live updates are unavailable; this page is polling instead."

@@ -45,7 +45,11 @@ export interface WorkSessionLiveState {
 	readonly currentTaskId?: string | null;
 	/** Highest event sequence seen. Passed as `afterSeq` on every (re)subscribe. */
 	readonly watermark: number;
-	/** Bumped on every `step` push so the embedded `Chat` re-arms its re-attach for the new server-side turn. */
+	/**
+	 * Bumped on every `step` AND `status` push so the embedded `Chat` re-arms its re-attach for the server-side turn. A
+	 * `step` push can land before the server has registered the turn (the resume then completes empty), so the later
+	 * `status` push (Running / WaitingForInput) is the retry; re-arming while already attached is a no-op (F-30).
+	 */
 	readonly resumeNonce: number;
 	/** Polling cadence for the page's queries while the hub is down; `undefined` while it is live. */
 	readonly pollIntervalMs?: number;
@@ -108,16 +112,21 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 			}
 		};
 
-		// Both call sites gate on `change.seq > watermark` first, and `watermark` is bumped here before the next one
-		// is read, so the sequence itself is the dedupe — a separate seen-set would only grow for the hook's life.
+		// `watermark` is bumped here before the next change is read, so the sequence itself is the dedupe — a separate
+		// seen-set would only grow for the hook's life. The one exception is the attach trigger: a `step`/`status` push
+		// is honoured even with a stale seq (a re-run step can carry its ORIGINAL event's seq, F-31), without moving
+		// the watermark; re-invalidating and re-arming the attach twice is harmless.
 		const apply = (change: WorkSessionChanged): void => {
-			if (change.sessionId !== sessionId || change.seq <= watermark) {
+			const kind = isChangeKind(change.kind) ? change.kind : undefined;
+			const stale = change.seq <= watermark;
+			if (change.sessionId !== sessionId || (stale && kind !== "step" && kind !== "status")) {
 				return;
 			}
-			watermark = change.seq;
+			if (!stale) {
+				watermark = change.seq;
+			}
 			// Every kind moves the append-only event feed.
 			invalidate(workSessionInvalidationKey(workSessionQueryIds.events, sessionId));
-			const kind = isChangeKind(change.kind) ? change.kind : undefined;
 			switch (kind) {
 				case "status":
 					invalidate(workSessionInvalidationKey(workSessionQueryIds.get, sessionId));
@@ -151,7 +160,7 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 				watermark,
 				// The step push is published at step start, while the invocation is still resumable — this is what
 				// makes the embedded conversation stream live instead of back-filling a beat later.
-				resumeNonce: kind === "step" ? current.resumeNonce + 1 : current.resumeNonce,
+				resumeNonce: kind === "step" || kind === "status" ? current.resumeNonce + 1 : current.resumeNonce,
 			}));
 		};
 
@@ -160,9 +169,7 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 				buffered.push(change);
 				return;
 			}
-			if (change.seq > watermark) {
-				apply(change);
-			}
+			apply(change);
 		};
 
 		const subscribe = async (reconnecting: boolean): Promise<void> => {

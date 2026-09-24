@@ -205,14 +205,32 @@ describe("useWorkSessionHub", () => {
 		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
 
-		emit({ sessionId, seq: 4, kind: "step" });
+		emit({ sessionId, seq: 4, kind: "task" });
 		invalidate.mockClear();
-		emit({ sessionId, seq: 4, kind: "step" });
+		emit({ sessionId, seq: 4, kind: "task" });
+		emit({ sessionId, seq: 3, kind: "finding" });
 		emit({ sessionId: "33333333-3333-4333-8333-333333333333", seq: 5, kind: "step" });
 
 		expect(invalidate).not.toHaveBeenCalled();
 		expect(result.current.watermark).toBe(4);
-		expect(result.current.resumeNonce).toBe(1);
+		expect(result.current.resumeNonce).toBe(0);
+	});
+
+	it("re-arms the attach on status pushes and on stale-seq step/status pushes without moving the watermark (F-30, F-31)", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 10 }));
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useWorkSessionHub(sessionId, conversationId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+
+		// A re-run step carries its ORIGINAL event's seq, far below the watermark: it must still trigger an attach.
+		emit({ sessionId, seq: 3, kind: "step" });
+		await waitFor(() => expect(result.current.resumeNonce).toBe(1));
+		// The later status push (WaitingForInput) is the retry when the step push's attach came back empty.
+		emit({ sessionId, seq: 11, kind: "status" });
+		await waitFor(() => expect(result.current.resumeNonce).toBe(2));
+		emit({ sessionId, seq: 7, kind: "status" });
+		await waitFor(() => expect(result.current.resumeNonce).toBe(3));
+		expect(result.current.watermark).toBe(11);
 	});
 
 	it("refreshes every feed when the replay was truncated", async () => {

@@ -298,6 +298,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var sessionId = state.Session.Id;
         var step = state.Session.StepCount + 1;
 
+        // The attempt key for this step's operation ids. Every attempt writes at least one row, so a re-run under the same
+        // step index always reads a higher value, and idempotency no longer swallows its StepStarted or ParkTimedOut.
+        var attempt = state.Session.LastSequence;
+
         // ONE scope for the turn, holding only the scoped stream service the enumeration belongs to; every store write
         // takes its own. The tool handlers write this session row mid-turn, so a held DbContext goes stale under them.
         await using var turnScope = _scopeFactory.CreateAsyncScope();
@@ -341,7 +345,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     SessionId = sessionId,
                     ExpectedVersion = WorkSessionVersions.Any,
                     EventType = WorkSessionEventTypes.StepEnded,
-                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate),
+                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate, attempt),
                     Outcome = ToolGateOutcome
                 },
                 CancellationToken.None));
@@ -355,18 +359,17 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         await turnScope.ServiceProvider.GetRequiredService<ConversationStepContextBound>()
                        .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None);
 
-        // Published BEFORE the send: by the time a step terminalizes the invocation resume registry has dropped its
-        // entry, so a client told only then re-attaches to an empty stream and never sees the turn go live.
+        // Recorded BEFORE the send (it is the completion read's watermark) but PUBLISHED from DrainStepAsync once the
+        // invocation is live, because a client re-attaches on this push and an earlier one finds nothing to attach to.
         var started = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
             {
                 SessionId = sessionId,
                 ExpectedVersion = WorkSessionVersions.Any,
                 EventType = WorkSessionEventTypes.StepStarted,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started, attempt),
                 Outcome = step.ToString(CultureInfo.InvariantCulture)
             },
             CancellationToken.None));
-        await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
         var correlation = new NodeChatMessageCorrelation
         {
@@ -417,20 +420,20 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         ChatStreamEvent terminal;
         try
         {
-            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step);
+            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step, started.Sequence);
         }
         catch (WorkSessionUndeclaredWriteException refusal)
         {
             // The send saw an undeclared write/execute tool in the offer and stopped (GRAPH-C4-2); nothing ran, so this
             // is the gate's own row. Failed, not Paused — the owning run would resume a pause until its budget died.
-            return await SettleWriteGateAsync(sessionId, step, refusal.Message);
+            return await SettleWriteGateAsync(sessionId, step, attempt, refusal.Message);
         }
         finally
         {
             run.Correlation = null;
         }
 
-        return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal, callBudget);
+        return await SettleStepAsync(run, guard, sessionId, step, attempt, stepsThisRun, terminal, callBudget);
     }
 
     private void ArmPark(StepCancellationGuard guard, Guid invocationId, string? toolName, long occurredAtUtc = 0)
@@ -456,11 +459,24 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         StepCancellationGuard guard,
         NodeChatStreamRequest request,
         Guid sessionId,
-        int step)
+        int step,
+        long stepStartedSequence)
     {
         var parked = false;
+        var announced = false;
         await foreach (var streamEvent in stream.SendMessageAsync(request, CancellationToken.None))
         {
+            // Only once the turn is live: the send registers the invocation (mirrored by the resume registry synchronously)
+            // before AssistantStreaming, while a pre-run AssistantNotice is emitted BEFORE the slot, when nothing is attachable.
+            if (!announced
+                && streamEvent.Type is ChatStreamEventTypes.AssistantStreaming or ChatStreamEventTypes.AssistantPhase
+                    or ChatStreamEventTypes.AssistantCompleted or ChatStreamEventTypes.AssistantFailed
+                    or ChatStreamEventTypes.AssistantCancelled or ChatStreamEventTypes.AssistantInterrupted)
+            {
+                announced = true;
+                await _publisher.PublishAsync(sessionId, stepStartedSequence, WorkSessionChangeKind.Step, CancellationToken.None);
+            }
+
             switch (streamEvent.Type)
             {
                 case ChatStreamEventTypes.ApprovalRequested:
@@ -543,8 +559,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         StepCancellationGuard guard,
         Guid sessionId,
         int step,
+        long attempt,
         int stepsThisRun,
-        long stepStartedSequence,
         ChatStreamEvent terminalEvent,
         ProviderCallCapScope? callBudget)
     {
@@ -562,7 +578,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 || string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal)))
         {
             _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
-            await AppendStepEndedAsync(sessionId, step, nameof(ProviderCallBudget), consumption);
+            await AppendStepEndedAsync(sessionId, step, attempt, nameof(ProviderCallBudget), consumption);
             endedRecorded = true;
             terminal = ChatStreamEventTypes.AssistantCompleted;
         }
@@ -581,7 +597,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         SessionId = sessionId,
                         ExpectedVersion = WorkSessionVersions.Any,
                         EventType = WorkSessionEventTypes.StepFailed,
-                        OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
+                        OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed, attempt),
                         Outcome = step.ToString(CultureInfo.InvariantCulture),
                         DetailJson = consumption
                     },
@@ -591,7 +607,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 return StepOutcome.Settled;
 
             case ChatStreamEventTypes.AssistantCancelled:
-                return await SettleCancelledStepAsync(run, guard, sessionId, step);
+                return await SettleCancelledStepAsync(run, guard, sessionId, step, attempt);
 
             default:
                 break;
@@ -601,10 +617,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // work. Written BEFORE AdvanceStepAsync so the row lands on the step it describes rather than on the next one.
         if (!endedRecorded)
         {
-            await AppendStepEndedAsync(sessionId, step, StepCompletedOutcome, consumption);
+            await AppendStepEndedAsync(sessionId, step, attempt, StepCompletedOutcome, consumption);
         }
 
-        var summary = await WithStoreAsync(store => ReadCompletionSummaryAsync(store, sessionId, stepStartedSequence));
+        var summary = await WithStoreAsync(store => ReadCompletionSummaryAsync(store, sessionId));
         var advanced = await WithStoreAsync(store => store.AdvanceStepAsync(sessionId, WorkSessionVersions.Any, CancellationToken.None));
         await _publisher.PublishAsync(sessionId, advanced.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
@@ -636,17 +652,17 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
     /// <summary>
     ///     Appends the step's <see cref="WorkSessionEventTypes.StepEnded" /> row. The operation id is derived from the
-    ///     step and its phase, so the two callers here can never write two rows for one step: whichever runs second is
-    ///     swallowed by the store's idempotency.
+    ///     step, its attempt and its phase, so the two callers here can never write two rows for one attempt: whichever
+    ///     runs second is swallowed by the store's idempotency.
     /// </summary>
-    private async Task AppendStepEndedAsync(Guid sessionId, int step, string outcome, string? detailJson)
+    private async Task AppendStepEndedAsync(Guid sessionId, int step, long attempt, string outcome, string? detailJson)
     {
         _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
             {
                 SessionId = sessionId,
                 ExpectedVersion = WorkSessionVersions.Any,
                 EventType = WorkSessionEventTypes.StepEnded,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended, attempt),
                 Outcome = outcome,
                 DetailJson = detailJson
             },
@@ -686,7 +702,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     A crash in that window reconciles to <c>Interrupted</c> off a valid checkpoint, whereas writing the status
     ///     first would leave a paused session resuming from a stale state block.
     /// </remarks>
-    private async Task<StepOutcome> SettleCancelledStepAsync(SessionRun run, StepCancellationGuard guard, Guid sessionId, int step)
+    private async Task<StepOutcome> SettleCancelledStepAsync(SessionRun run, StepCancellationGuard guard, Guid sessionId, int step, long attempt)
     {
         if (run.StopReason == WorkSessionStopReason.Cancel)
         {
@@ -705,7 +721,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     SessionId = sessionId,
                     ExpectedVersion = WorkSessionVersions.Any,
                     EventType = WorkSessionEventTypes.ParkTimedOut,
-                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
+                    OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired, attempt),
                     Outcome = guard.ParkedToolName
                 },
                 CancellationToken.None));
@@ -713,7 +729,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // A finding, not only an event, so the next step's state block re-asks it: the park is in-memory and
             // survives neither the timeout nor a restart. Written BEFORE the status so a crash cannot lose it.
             var findingId = Guid.NewGuid();
-            _ = await WithStoreAsync(store => store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+            var finding = await WithStoreAsync(store => store.AppendFindingAsync(new AppendWorkSessionFindingCommand
                 {
                     SessionId = sessionId,
                     FindingId = findingId,
@@ -723,6 +739,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     Text = ParkedQuestionText(guard.ParkedToolName)
                 },
                 CancellationToken.None));
+            await _publisher.PublishAsync(sessionId, finding.Sequence, WorkSessionChangeKind.Finding, CancellationToken.None);
         }
         else if (guard.DeadlineExpired)
         {
@@ -746,12 +763,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     The tool records an event rather than setting an in-memory flag, so the request survives a crash between the
     ///     call and the end of the turn; reading from the watermark the step opened with keeps the query bounded.
     /// </remarks>
-    private async Task<string?> ReadCompletionSummaryAsync(IAgentWorkSessionStore store, Guid sessionId, long stepStartedSequence)
+    private async Task<string?> ReadCompletionSummaryAsync(IAgentWorkSessionStore store, Guid sessionId)
     {
         const string Fallback = "The agent declared the work session complete.";
-        var events = await store.ListEventsAsync(sessionId, stepStartedSequence, CancellationToken.None);
-        var recorded = events.LastOrDefault(static candidate => candidate.EventType == WorkSessionEventTypes.CompletionRequested);
-        if (recorded is null)
+        // Any completion recorded since this step NUMBER began counts, whichever attempt recorded it: the tool handler dedups
+        // per step, so a retried attempt cannot record it again, and reading after its own StepStarted would hide it for good.
+        var stepBoundary = (await store.FindLatestEventAsync(sessionId, WorkSessionEventTypes.StepAdvanced, CancellationToken.None))?.Sequence ?? 0;
+        var recorded = await store.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, CancellationToken.None);
+        if (recorded is null || recorded.Sequence <= stepBoundary)
         {
             return null;
         }
@@ -840,7 +859,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     source for a historical cause. Re-derived from the definition's CURRENT state it goes quiet the moment an
     ///     operator restores or narrows it, and the node run falls through as a retryable provider failure.
     /// </remarks>
-    private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, string refusal)
+    private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, long attempt, string refusal)
     {
         _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
         _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
@@ -848,7 +867,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 SessionId = sessionId,
                 ExpectedVersion = WorkSessionVersions.Any,
                 EventType = WorkSessionEventTypes.StepEnded,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
+                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate, attempt),
                 Outcome = WorkSessionEventTypes.WriteGateOutcome,
                 DetailJson = WorkSessionEventTypes.WriteGateDetail(refusal)
             },

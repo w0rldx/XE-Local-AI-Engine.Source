@@ -90,8 +90,10 @@ Security and runtime invariants:
 - **Content-safe history.** Progress/history records status, model, token counts, and duration—not the
   fixed prompt, model output, tool arguments, or tool results. Missing agents and failures surface
   operator-safe reasons.
-- **Shared admission and cancellation.** The run uses the capacity gate and node-wide invocation slot,
-  observes Quartz cancellation/timeout, and releases any footprint reservation on every terminal path.
+- **Shared admission and cancellation.** The run takes the node-wide invocation slot first and decides
+  capacity while holding it, so a second fire for a model the first is still warming queues instead of
+  being refused; it observes Quartz cancellation/timeout and releases any footprint reservation, before
+  the slot, on every terminal path.
 
 `RunBenchmarkBatchHandler` (`Handlers/RunBenchmarkBatchHandler.cs`), template id `run-benchmark-batch`,
 freezes a whole model x KV-cache matrix against one benchmark project, so an overnight matrix is a

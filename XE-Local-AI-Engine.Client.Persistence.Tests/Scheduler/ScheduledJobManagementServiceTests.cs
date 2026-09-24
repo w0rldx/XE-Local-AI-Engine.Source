@@ -716,6 +716,63 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
 
     [Test]
+    public async Task CreateAndUpdateJobAsync_WithoutMisfirePolicy_StoreTheTemplateDefault()
+    {
+        // F-33: an API caller that omits misfirePolicy must get the template's default (SkipMissed for test.echo), not Smart,
+        // or a one-shot due during downtime fires retroactively at startup.
+        var dbPath = GetDatabasePath("misfire-default.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        var created = await service.CreateJobAsync(ValidCronInput(misfirePolicy: null));
+        AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, created.MisfirePolicy);
+
+        var explicitPolicy = await service.UpdateJobAsync(created.Id, ValidCronInput(misfirePolicy: SchedulerMisfirePolicy.FireOnceNow));
+        AssertEx.Equal(SchedulerMisfirePolicy.FireOnceNow, AssertEx.NotNull(explicitPolicy).MisfirePolicy);
+
+        var updated = await service.UpdateJobAsync(created.Id, ValidCronInput(misfirePolicy: null));
+        AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, AssertEx.NotNull(updated).MisfirePolicy);
+    }
+
+    [Test]
+    public async Task SoftDeletedJob_CannotBeEnabledDisabledOrUpdated_AndSecondDeleteIsANoOp()
+    {
+        // F-35: a soft-deleted definition is invisible, so enable/disable/update report it absent and never re-schedule its
+        // Quartz job, and a second delete succeeds without re-stamping DeletedAtUtc.
+        var dbPath = GetDatabasePath("deleted-guards.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
+
+        var created = await service.CreateJobAsync(ValidCronInput());
+        var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
+        AssertEx.True(await service.DeleteJobAsync(created.Id), "The first delete must soft-delete the row.");
+        var firstStamp = AssertEx.NotNull(await service.GetJobAsync(created.Id)).DeletedAtUtc;
+        AssertEx.True(firstStamp.HasValue, "DeletedAtUtc must be stamped by the first delete.");
+
+        AssertEx.Null(await service.SetEnabledAsync(created.Id, enabled: true));
+        AssertEx.Null(await service.SetEnabledAsync(created.Id, enabled: false));
+        AssertEx.Null(await service.UpdateJobAsync(created.Id, ValidCronInput()));
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+            "No action on a soft-deleted job may re-schedule its Quartz job.");
+
+        AssertEx.True(await service.DeleteJobAsync(created.Id), "A second delete is an idempotent success.");
+        var afterSecondDelete = AssertEx.NotNull(await service.GetJobAsync(created.Id));
+        AssertEx.Equal(firstStamp, afterSecondDelete.DeletedAtUtc);
+        AssertEx.False(afterSecondDelete.Enabled, "The soft-deleted row stays disabled.");
+
+        AssertEx.False(await service.DeleteJobAsync(Guid.NewGuid()), "An unknown id is still reported as not found.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TriggerNowAsync_WhenJobIsDisabled_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("trigger-disabled.sqlite");
@@ -1131,7 +1188,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         string templateId = TestEchoScheduledJobHandler.Id,
         string timeZoneId = "UTC",
         bool preventOverlap = false,
-        int? maxRuntimeSeconds = null)
+        int? maxRuntimeSeconds = null,
+        SchedulerMisfirePolicy? misfirePolicy = SchedulerMisfirePolicy.Smart)
     {
         return new ScheduledJobManagementInput
         {
@@ -1145,7 +1203,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             StartAtUtc = null,
             EndAtUtc = null,
             TimeZoneId = timeZoneId,
-            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            MisfirePolicy = misfirePolicy,
             PreventOverlap = preventOverlap,
             MaxRuntimeSeconds = maxRuntimeSeconds,
             Parameters = null

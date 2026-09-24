@@ -1,6 +1,6 @@
 import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import { IconCheck, IconChevronDown, IconChevronRight, IconSearch, IconUsers } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AgentOption } from "@/features/chat/models/ChatModels";
@@ -32,6 +32,26 @@ const triggerActiveStyle = {
 // Show a search box once the agent list exceeds this many items.
 const AGENT_SEARCH_THRESHOLD = 5;
 
+const OPTION_SELECTOR = '[role="menuitemradio"]';
+
+// ArrowUp/ArrowDown move focus between the rows (the search box counts as "above the first row"); Tab/Enter/Space and
+// Escape come from the trapped Popover and the native buttons.
+function moveOptionFocus(event: KeyboardEvent<HTMLElement>): void {
+	if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+		return;
+	}
+
+	const options = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(OPTION_SELECTOR));
+	if (options.length === 0) {
+		return;
+	}
+
+	event.preventDefault();
+	const current = options.indexOf(document.activeElement as HTMLElement);
+	const next = event.key === "ArrowDown" ? (current + 1) % options.length : current <= 0 ? options.length - 1 : current - 1;
+	options[next]?.focus();
+}
+
 interface AgentOptionItemProps {
 	agent: AgentOption;
 	selected: boolean;
@@ -46,6 +66,10 @@ function AgentOptionItem({ agent, selected, onSelect }: AgentOptionItemProps) {
 	return (
 		<UnstyledButton
 			data-testid={`chat-agent-selector-option-${agent.id}`}
+			role="menuitemradio"
+			aria-checked={selected}
+			// Escape closes this picker, not the modal around it (Mantine's Modal honours this attribute).
+			data-mantine-stop-propagation="true"
 			onClick={() => onSelect(agent.id)}
 			style={{
 				display: "block",
@@ -151,6 +175,10 @@ export function AgentSelectorCard({
 			position="top-start"
 			offset={4}
 			withinPortal={true}
+			// The portalled dropdown is outside a parent Modal's focus trap: trap focus inside it so keyboard users
+			// can reach the rows, and hand focus back to the trigger when it closes (F-28).
+			trapFocus={true}
+			returnFocus={true}
 			shadow="md"
 			opened={pickerOpened}
 			onChange={(opened) => {
@@ -174,6 +202,7 @@ export function AgentSelectorCard({
 						}}
 						aria-disabled={isDisabled}
 						aria-expanded={pickerOpened}
+						aria-haspopup="menu"
 						aria-label={t("pages.chat.agentSelector.triggerLabel", "Agent")}
 						style={{ width: "100%" }}
 					>
@@ -191,7 +220,7 @@ export function AgentSelectorCard({
 					</UnstyledButton>
 				</Paper>
 			</Popover.Target>
-			<Popover.Dropdown p={6}>
+			<Popover.Dropdown p={6} onKeyDown={moveOptionFocus}>
 				<Stack gap={2}>
 					{showSearch ? (
 						<Box px="xs" pt={4} pb={2}>
@@ -202,58 +231,64 @@ export function AgentSelectorCard({
 								leftSection={<IconSearch size={14} />}
 								value={searchQuery}
 								onChange={(event) => setSearchQuery(event.currentTarget.value)}
+								data-mantine-stop-propagation="true"
 								data-testid="chat-agent-selector-search"
 							/>
 						</Box>
 					) : null}
 					{/* Off / Default Assistant row — picking it disables agent mode (onSelectAgent("")). Always shown so the
 					    user can return to the node default in one click without a separate toggle. */}
-					<UnstyledButton
-						data-testid="chat-agent-selector-option-off"
-						onClick={() => select("")}
-						style={{
-							display: "block",
-							width: "100%",
-							padding: "6px 10px",
-							borderRadius: "var(--mantine-radius-sm)",
-							background: isOff ? "var(--mantine-primary-color-light)" : undefined,
-							cursor: "pointer",
-						}}
-					>
-						<Group gap={6} wrap="nowrap" align="flex-start">
-							<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-								<Text size="sm" fw={600} lineClamp={1}>
-									{t("pages.chat.defaultAgentName", "Default Assistant")}
-								</Text>
-								<Text size="xs" c="dimmed" lineClamp={1}>
-									{t("pages.chat.agentSelector.offOptionHint", "No agent — uses the node default")}
-								</Text>
-							</Stack>
-							<IconCheck
-								size={12}
-								color="var(--mantine-primary-color-filled)"
-								style={{ opacity: isOff ? 1 : 0, flexShrink: 0, marginTop: 2 }}
-							/>
-						</Group>
-					</UnstyledButton>
-					<Divider my={4} />
-					<ScrollArea.Autosize mah={320} type="auto" offsetScrollbars={true}>
-						<Stack gap={2}>
-							{filtered.map((agent) => (
-								<AgentOptionItem
-									key={agent.id}
-									agent={agent}
-									selected={agent.id === selectedAgentId && !isOff}
-									onSelect={select}
+					<Stack gap={2} role="menu" aria-label={t("pages.chat.agentSelector.triggerLabel", "Agent")}>
+						<UnstyledButton
+							data-testid="chat-agent-selector-option-off"
+							role="menuitemradio"
+							aria-checked={isOff}
+							data-mantine-stop-propagation="true"
+							onClick={() => select("")}
+							style={{
+								display: "block",
+								width: "100%",
+								padding: "6px 10px",
+								borderRadius: "var(--mantine-radius-sm)",
+								background: isOff ? "var(--mantine-primary-color-light)" : undefined,
+								cursor: "pointer",
+							}}
+						>
+							<Group gap={6} wrap="nowrap" align="flex-start">
+								<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+									<Text size="sm" fw={600} lineClamp={1}>
+										{t("pages.chat.defaultAgentName", "Default Assistant")}
+									</Text>
+									<Text size="xs" c="dimmed" lineClamp={1}>
+										{t("pages.chat.agentSelector.offOptionHint", "No agent — uses the node default")}
+									</Text>
+								</Stack>
+								<IconCheck
+									size={12}
+									color="var(--mantine-primary-color-filled)"
+									style={{ opacity: isOff ? 1 : 0, flexShrink: 0, marginTop: 2 }}
 								/>
-							))}
-							{filtered.length === 0 ? (
-								<Text size="sm" c="dimmed" px="sm" py="xs" ta="center">
-									{t("pages.chat.agentSelector.noResults", "No agents found")}
-								</Text>
-							) : null}
-						</Stack>
-					</ScrollArea.Autosize>
+							</Group>
+						</UnstyledButton>
+						<Divider my={4} />
+						<ScrollArea.Autosize mah={320} type="auto" offsetScrollbars={true}>
+							<Stack gap={2}>
+								{filtered.map((agent) => (
+									<AgentOptionItem
+										key={agent.id}
+										agent={agent}
+										selected={agent.id === selectedAgentId && !isOff}
+										onSelect={select}
+									/>
+								))}
+							</Stack>
+						</ScrollArea.Autosize>
+					</Stack>
+					{filtered.length === 0 ? (
+						<Text size="sm" c="dimmed" px="sm" py="xs" ta="center">
+							{t("pages.chat.agentSelector.noResults", "No agents found")}
+						</Text>
+					) : null}
 					<Divider my={4} />
 					<Text size="xs" c="dimmed" px="sm" py={4} lh={1.4}>
 						{t("pages.chat.agentSelector.hint", "Choose an agent defined on this node.")}

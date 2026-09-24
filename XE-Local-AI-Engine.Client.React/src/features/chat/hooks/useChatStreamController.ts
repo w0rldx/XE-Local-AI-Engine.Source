@@ -668,21 +668,43 @@ export function useChatStreamController({
 		resumeActiveTurnRef.current = resumeActiveTurn;
 	}, [resumeActiveTurn]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: resumeNonce is a re-arm signal, not an input the body reads.
+	// One abort scope per open conversation: switching away (or unmounting) aborts every resume opened for it.
+	const conversationAbortRef = useRef<AbortController | null>(null);
 	useEffect(() => {
 		if (!loadedSelectedConversationId) {
 			return;
 		}
+		const conversationAbort = new AbortController();
+		conversationAbortRef.current = conversationAbort;
+		return () => {
+			conversationAbort.abort();
+			conversationAbortRef.current = null;
+		};
+	}, [loadedSelectedConversationId]);
 
-		// Keyed on the conversation id alone, so one open attaches at most once: neither a re-render nor a background
-		// refetch of the same thread can re-fire it. Switching away aborts; returning later attaches again.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resumeNonce is a re-arm signal, not an input the body reads.
+	useEffect(() => {
+		const conversationAbort = conversationAbortRef.current;
+		if (!loadedSelectedConversationId || !conversationAbort) {
+			return;
+		}
+
+		// Keyed on the conversation id, so neither a re-render nor a background refetch of the same thread re-fires it.
+		// resumeNonce re-arms the attach when the OWNER signals a server-side turn on the same conversation (a
+		// work-session step or status push), which the conversation id alone cannot observe. A re-arm never aborts a
+		// live attach (resumeActiveTurn returns early while one owns the turn), so the owner may re-arm freely: an
+		// attach that came back empty because the turn was not registered yet is retried on the next signal (F-30).
+		// Each resume gets its own controller so Stop aborts only that stream, never the conversation scope.
 		const abortController = new AbortController();
+		const abortResume = () => abortController.abort();
+		conversationAbort.signal.addEventListener("abort", abortResume, { once: true });
 		// The loop surfaces the only failure worth showing (see its catch); a rejection escaping here is the
-		// post-turn refresh, which must not raise a banner on conversation open.
-		resumeActiveTurnRef.current(loadedSelectedConversationId, abortController).catch(() => undefined);
-		return () => abortController.abort();
-		// resumeNonce re-arms the re-attach when the OWNER starts a new server-side turn on the same conversation
-		// (a work-session step), which the conversation id alone cannot observe.
+		// post-turn refresh, which must not raise a banner on conversation open. The listener is released with the
+		// resume so re-arms do not accumulate closures on the conversation scope.
+		resumeActiveTurnRef
+			.current(loadedSelectedConversationId, abortController)
+			.catch(() => undefined)
+			.finally(() => conversationAbort.signal.removeEventListener("abort", abortResume));
 	}, [loadedSelectedConversationId, resumeNonce]);
 
 	const handleCancel = useCallback(async (): Promise<void> => {

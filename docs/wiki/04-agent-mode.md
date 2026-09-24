@@ -1692,9 +1692,10 @@ middleware ahead of authentication instead of 500-ing out of an empty container.
 ordered parts, the pump's terminalization, the resume registry a reloading browser re-attaches through,
 and the approval/question lifecycle all live in the send path.
 
-Per step it: writes a `StepStarted` event and **publishes it before the send** (by the time a step
-terminalizes, `InvocationResumeRegistry` has dropped its entry, so a client told only afterwards
-re-attaches to an empty stream); composes the state block; drains the stream, mapping
+Per step it: writes a `StepStarted` event before the send but **publishes the `Step` change only once the turn
+is live** (on the first `AssistantStreaming`/`AssistantPhase`/terminal event: earlier, `InvocationResumeRegistry`
+has no entry yet and a client told then re-attaches to an empty stream; later than the terminal, the entry is
+gone again); composes the state block; drains the stream, mapping
 `ApprovalRequested`/`QuestionRequested` onto `WaitingForApproval`/`WaitingForInput` and back; then
 settles on the terminal — `complete_work_session` → checkpoint + `Completed`, budget reached →
 checkpoint + `Paused`, failure → checkpoint + `Failed`.
@@ -1974,10 +1975,12 @@ Three things decide how the numbers may be read.
   invocation separately, and a step that spawned sub-agents ran more than one — eighteen calls across two budgets is
   two runs that each stayed under ten, not one run that breached it. Read the two together, or the record argues for
   raising a cap nothing hit.
-- **The row is per step *number*, not per attempt.** The supervisor derives its event operation id from the session and
-  the step, so a step replayed after a crash finds the first attempt's row already recorded and the store's idempotency
-  returns it unchanged. The numbers are what the *first* attempt spent; the replay's own spend is added nowhere.
-  Aggregate these rows as a lower bound on what a session cost, never as an exact total.
+- **The supervisor's rows are per step *attempt*, the tool handlers' rows per step *number*.** The supervisor keys its event
+  operation ids by session, step, phase and the attempt (the session's last sequence when the step began), so a step re-run
+  after a park timeout, a pause, an interruption or a crash records its own `StepStarted`/`StepEnded`/`ParkTimedOut` rows and
+  its own consumption; treat the sum across attempts as a lower bound only when a crash landed mid-attempt. The four state
+  tool handlers still key by step number, so a `complete_work_session` call repeated by a re-run attempt dedups onto the
+  first attempt's row (known limit, live QA F-38).
 
 A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline — writes no row
 at all, deliberately: the run may still be unwinding when the supervisor sees its terminal, so its counters would be a

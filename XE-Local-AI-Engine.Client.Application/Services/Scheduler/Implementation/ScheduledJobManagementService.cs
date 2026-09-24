@@ -107,7 +107,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         var descriptor = Validate(input);
 
         // Operator-created jobs are persisted enabled and scheduled immediately; disabling is the dedicated action.
-        var storeInput = ToStoreInput(input, enabled: true, ScheduledJobCreator.User);
+        var storeInput = ToStoreInput(input, descriptor, enabled: true, ScheduledJobCreator.User);
         var record = await _definitionStore.AddAsync(storeInput, cancellationToken);
 
         await ReconcileScheduleAsync(record, descriptor, cancellationToken);
@@ -129,17 +129,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var descriptor = Validate(input);
-
+        // Not-found (including soft-deleted) wins over a body problem, so a PUT on a deleted job is a 404, never a 400.
         var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
+        if (existing is null || existing.DeletedAtUtc is not null)
         {
             return null;
         }
 
+        var descriptor = Validate(input);
+
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag and original creator through to the store regardless of what the request body claims.
-        var storeInput = ToStoreInput(input, existing.Enabled, existing.CreatedBy);
+        var storeInput = ToStoreInput(input, descriptor, existing.Enabled, existing.CreatedBy);
         var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken);
         if (updated is null)
         {
@@ -164,20 +165,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         bool enabled,
         CancellationToken cancellationToken = default)
     {
-        if (enabled)
+        // A soft-deleted definition is invisible: enabling it would re-schedule a Quartz job nobody can see (F-35).
+        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
+        if (existing is null || existing.DeletedAtUtc is not null)
         {
-            // Resolve the template BEFORE the durable flag is flipped: a registered template is required to build the dispatch job,
-            // so a definition on an unknown template can never be scheduled and would otherwise read as enabled while never firing.
-            var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
-            if (existing is null)
-            {
-                return null;
-            }
+            return null;
+        }
 
-            if (_templateRegistry.GetTemplate(existing.TemplateId) is null)
-            {
-                throw new ScheduledJobValidationException($"Template '{existing.TemplateId}' is not registered, so this job cannot be enabled.");
-            }
+        // Resolve the template BEFORE the durable flag is flipped: a registered template is required to build the dispatch job,
+        // so a definition on an unknown template can never be scheduled and would otherwise read as enabled while never firing.
+        if (enabled && _templateRegistry.GetTemplate(existing.TemplateId) is null)
+        {
+            throw new ScheduledJobValidationException($"Template '{existing.TemplateId}' is not registered, so this job cannot be enabled.");
         }
 
         var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken);
@@ -220,8 +219,19 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
     public async Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        // Store-first soft-delete preserves run history; DeleteJob on the scheduler is idempotent, so a missing Quartz
-        // job is not an error. The whole operation is idempotent: a second delete of the same id simply returns false.
+        // Store-first soft-delete preserves run history, and a missing Quartz job is not an error. An unknown id is not found,
+        // and a repeat delete succeeds without re-stamping DeletedAtUtc, logging or publishing again.
+        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
+        if (existing is null)
+        {
+            return false;
+        }
+
+        if (existing.DeletedAtUtc is not null)
+        {
+            return true;
+        }
+
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         _ = await scheduler.DeleteJob(BuildJobKey(id), cancellationToken);
 
@@ -443,7 +453,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             throw new ScheduledJobValidationException($"Schedule kind '{input.ScheduleKind}' is not valid.");
         }
 
-        if (!Enum.IsDefined(input.MisfirePolicy))
+        if (input.MisfirePolicy is { } misfirePolicy && !Enum.IsDefined(misfirePolicy))
         {
             throw new ScheduledJobValidationException($"Misfire policy '{input.MisfirePolicy}' is not valid.");
         }
@@ -764,6 +774,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     }
 
     private static ScheduledJobDefinitionInput ToStoreInput(ScheduledJobManagementInput input,
+        ScheduledJobTemplateDescriptor descriptor,
         bool enabled,
         ScheduledJobCreator createdBy)
     {
@@ -780,7 +791,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             StartAtUtc = input.StartAtUtc,
             EndAtUtc = input.EndAtUtc,
             TimeZoneId = input.TimeZoneId,
-            MisfirePolicy = input.MisfirePolicy,
+            MisfirePolicy = input.MisfirePolicy ?? descriptor.DefaultMisfirePolicy,
             PreventOverlap = input.PreventOverlap,
             MaxRuntimeSeconds = input.MaxRuntimeSeconds,
             ParameterJson = input.Parameters,

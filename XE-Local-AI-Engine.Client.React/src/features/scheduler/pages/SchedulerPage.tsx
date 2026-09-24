@@ -177,7 +177,7 @@ export function SchedulerPage() {
 				icon={<IconCalendarClock size={24} />}
 				subtitle={t(
 					"pages.scheduler.subtitle",
-					"Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
+					"Schedule recurring and one-off jobs on this node. New jobs are enabled immediately (disable one to pause it), and parameters are stored encrypted.",
 				)}
 				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="scheduler-create-button">

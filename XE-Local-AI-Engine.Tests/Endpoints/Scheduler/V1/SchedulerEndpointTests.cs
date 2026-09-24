@@ -469,6 +469,89 @@ public sealed class SchedulerEndpointTests
         AssertEx.True(payload.Length > 0, "Error response must have a non-empty body.");
     }
 
+    [Test]
+    public async Task CreateJob_WithoutMisfirePolicy_StoresTheTemplateDefault_AndUpdateDoesToo()
+    {
+        // F-33: an omitted misfirePolicy resolves to the template's defaultMisfirePolicy (SkipMissed), never Smart.
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var jobId = await CreateManualRecommendationJobAsync(factory, client);
+        using (var get = new HttpRequestMessage(HttpMethod.Get, JobByIdRoute(jobId)))
+        {
+            factory.AddNodeBearerToken(get);
+            using var response = await client.SendAsync(get);
+            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            AssertEx.Equal("SkipMissed", document.RootElement.GetProperty("misfirePolicy").GetString());
+        }
+
+        using var update = new HttpRequestMessage(HttpMethod.Put, JobByIdRoute(jobId))
+        {
+            Content = JsonContent.Create(ManualRecommendationJobBody("Updated without misfire"))
+        };
+        factory.AddNodeBearerToken(update);
+        using var updateResponse = await client.SendAsync(update);
+        AssertEx.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        using var updated = JsonDocument.Parse(await updateResponse.Content.ReadAsStringAsync());
+        AssertEx.Equal("SkipMissed", updated.RootElement.GetProperty("misfirePolicy").GetString());
+    }
+
+    [Test]
+    public async Task SoftDeletedJob_ActionsReturnNotFound_AndSecondDeleteIsNoContent()
+    {
+        // F-35: enable/disable/trigger on a soft-deleted job are 404 like any missing job, and a repeated DELETE stays 204.
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var jobId = await CreateManualRecommendationJobAsync(factory, client);
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await SendAsync(factory, client, HttpMethod.Delete, JobByIdRoute(jobId)));
+        AssertEx.Equal(HttpStatusCode.NoContent, await SendAsync(factory, client, HttpMethod.Delete, JobByIdRoute(jobId)));
+        AssertEx.Equal(HttpStatusCode.NotFound, await SendAsync(factory, client, HttpMethod.Post, JobEnableRoute(jobId)));
+        AssertEx.Equal(HttpStatusCode.NotFound, await SendAsync(factory, client, HttpMethod.Post, JobDisableRoute(jobId)));
+        AssertEx.Equal(HttpStatusCode.NotFound, await SendAsync(factory, client, HttpMethod.Post, JobTriggerRoute(jobId)));
+        AssertEx.Equal(HttpStatusCode.NotFound, await SendAsync(factory, client, HttpMethod.Post, JobTriggerRoute(Guid.NewGuid())));
+
+        using var scope = factory.Services.CreateScope();
+        var stored = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<IScheduledJobDefinitionStore>().GetByIdAsync(jobId));
+        AssertEx.False(stored.Enabled, "A rejected enable must not flip the soft-deleted row back on.");
+    }
+
+    private static object ManualRecommendationJobBody(string displayName)
+    {
+        // misfirePolicy is deliberately absent: that omission is what the callers of this helper exercise.
+        return new
+        {
+            templateId = "model-recommendation-check",
+            displayName,
+            scheduleKind = "Manual",
+            timeZoneId = "UTC",
+            preventOverlap = false
+        };
+    }
+
+    private static async Task<Guid> CreateManualRecommendationJobAsync(TestServerWebAppFactory factory, HttpClient client)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
+        {
+            Content = JsonContent.Create(ManualRecommendationJobBody("Manual job without misfire policy"))
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        var payload = await response.Content.ReadAsStringAsync();
+        AssertEx.True(response.IsSuccessStatusCode, $"Create must succeed, got {(int)response.StatusCode}: {payload}");
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.GetProperty("id").GetGuid();
+    }
+
+    private static async Task<HttpStatusCode> SendAsync(TestServerWebAppFactory factory, HttpClient client, HttpMethod method, string route)
+    {
+        using var request = new HttpRequestMessage(method, route);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
     // Redaction: job response must not echo raw parameters; run response must not echo raw details.
 
     [Test]

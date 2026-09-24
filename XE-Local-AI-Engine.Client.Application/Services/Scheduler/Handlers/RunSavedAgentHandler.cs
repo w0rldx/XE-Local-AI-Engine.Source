@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -138,50 +139,32 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended.");
         }
 
-        // 4. CAPACITY / GPU admission for the effective model. RejectInsufficient fails with the sanitized reason; a local Allow carries
-        //    a footprint reservation that MUST be disposed, or later spawns are wrongly rejected; QueueSameModel reuses a resident model.
-        var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
-        if (decision.Verdict == CapacityVerdict.RejectInsufficient)
+        // 4. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the active model
+        //    keeps the resolver's model identical to the gated one, and the resolved prompt is threaded verbatim, never raw Instructions.
+        var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
+            effectiveModel,
+            retrievalQuery: parameters.Prompt,
+            supportsTools,
+            honorModelProfile: true,
+            effectiveModelIsCloud,
+            cancellationToken);
+        if (resolved is null)
         {
-            throw new ScheduledJobExecutionException(decision.Reason);
+            // The definition existed at step 1 but was deleted before the resolve completed (rare race).
+            throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
         }
 
-        var reservation = decision.Reservation;
-        try
-        {
-            // 5. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the active model
-            //    keeps the resolver's model identical to the gated one, and the resolved prompt is threaded verbatim, never raw Instructions.
-            var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
-                effectiveModel,
-                retrievalQuery: parameters.Prompt,
-                supportsTools,
-                honorModelProfile: true,
-                effectiveModelIsCloud,
-                cancellationToken);
-            if (resolved is null)
-            {
-                // The definition existed at step 1 but was deleted before the resolve completed (rare race).
-                throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
-            }
+        var package = BuildPackage(packageBuilder,
+            resolved,
+            effectiveModel,
+            parameters,
+            supportsThinking,
+            capabilities.ReasoningBudgetEnforceable,
+            nodeSettings.MaxMessageRequestTimeoutSeconds);
 
-            var package = BuildPackage(packageBuilder,
-                resolved,
-                effectiveModel,
-                parameters,
-                supportsThinking,
-                capabilities.ReasoningBudgetEnforceable,
-                nodeSettings.MaxMessageRequestTimeoutSeconds);
-
-            // 6. Run headless through the shared invocation runner, serialized against in-flight chat/platform turns via
-            //    the shared invocation slot, capturing a content-safe terminal summary.
-            await RunAndSummarizeAsync(eventDispatcher, invocationRunner, package, context, effectiveModel, cancellationToken);
-        }
-        finally
-        {
-            // Release the reserved footprint on every terminal path (success, failure, or cancellation). Disposing a null
-            // reservation (cloud/QueueSameModel) is a no-op; disposing a real one is idempotent.
-            reservation?.Dispose();
-        }
+        // 5. Take the shared invocation slot, THEN decide capacity, then run headless. Deciding before the slot let a second fire for the same
+        //    cold model see the first fire's footprint reservation and be refused instead of queueing (F-32); the integration path uses this order.
+        await RunAndSummarizeAsync(eventDispatcher, capacityService, invocationRunner, package, context, effectiveModel, cancellationToken);
     }
 
     /// <summary>
@@ -266,6 +249,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     ///     <see cref="ScheduledJobExecutionException" /> WITHOUT leaking the raw runner error.
     /// </remarks>
     private static async Task RunAndSummarizeAsync(IWorkerEventDispatcher eventDispatcher,
+        ICapacityService capacityService,
         IInvocationRunner invocationRunner,
         RuntimePackage package,
         ScheduledJobExecutionContext context,
@@ -288,15 +272,36 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // Acquire the shared invocation slot before running. Cancelling while still queued behind another invocation
         // aborts the wait here (OperationCanceledException propagates to the dispatcher as Cancelled/TimedOut).
         var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
+        IDisposable? reservation = null;
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
+            // RejectInsufficient fails with the sanitized reason; a local Allow carries a footprint reservation that MUST be disposed, or later
+            // spawns are wrongly rejected; QueueSameModel reuses a resident model and carries none.
+            var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
+            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
+            {
+                throw new ScheduledJobExecutionException(decision.Reason);
+            }
+
+            reservation = decision.Reservation;
             var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
             await invocationRunner.RunAsync(executionContext, cancellationToken);
+        }
+        catch (Exception exception) when (terminalState.Value is null)
+        {
+            // The slot already published Assigned; a refusal, fault or cancel before the runner reports would leave that phantom
+            // (drafting reads it as busy, the monitor shows a stuck run), so the terminal is reported here with a sanitized message.
+            await eventDispatcher.ReportInvocationFailedAsync(package.InvocationId,
+                exception is ScheduledJobExecutionException sanitized ? sanitized.Message : "The scheduled agent run could not start.",
+                exception is OperationCanceledException ? FailureCategory.Cancelled : FailureCategory.ModelUnavailable);
+            throw;
         }
         finally
         {
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+            // Reverse acquisition order: the footprint is released before the slot, so the next queued fire decides against the settled ledger.
+            reservation?.Dispose();
             await lease.DisposeAsync();
         }
 

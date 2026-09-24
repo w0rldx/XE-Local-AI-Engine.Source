@@ -100,7 +100,7 @@ public sealed class ModelRecommendationScheduleSeederTests
             StartAtUtc = input.StartAtUtc,
             EndAtUtc = input.EndAtUtc,
             TimeZoneId = input.TimeZoneId,
-            MisfirePolicy = input.MisfirePolicy,
+            MisfirePolicy = input.MisfirePolicy ?? SchedulerMisfirePolicy.SkipMissed,
             PreventOverlap = input.PreventOverlap,
             MaxRuntimeSeconds = input.MaxRuntimeSeconds,
             ParameterJson = input.Parameters,

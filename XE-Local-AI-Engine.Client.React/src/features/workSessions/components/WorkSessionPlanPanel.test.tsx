@@ -4,7 +4,13 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WorkSessionPlanPanel, type WorkSessionPlanPanelProps } from "@/features/workSessions/components/WorkSessionPlanPanel";
-import type { WorkSessionStatus, WorkSessionTaskResponse } from "@/features/workSessions/models/WorkSessionModels";
+import {
+	isObjectiveNotMet,
+	type WorkSessionEventResponse,
+	type WorkSessionStatus,
+	type WorkSessionTaskResponse,
+} from "@/features/workSessions/models/WorkSessionModels";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const handlers = {
@@ -66,6 +72,33 @@ describe("WorkSessionPlanPanel", () => {
 		expect(rendered.indexOf("first child")).toBeLessThan(rendered.indexOf("second child"));
 		expect(screen.getByTestId("work-session-task-child-a").getAttribute("data-current")).toBe("true");
 		expect(screen.getByTestId("work-session-task-child-b").getAttribute("data-current")).toBeNull();
+	});
+
+	it("says when a completed session did not meet its objective (F-29)", () => {
+		const completion = (sequence: number, detailJson: string | null): WorkSessionEventResponse => ({
+			id: `e${sequence}`,
+			sequence,
+			step: 1,
+			eventType: "CompletionRequested",
+			detailJson,
+			outcome: null,
+			occurredAtUtc: 0,
+			operationId: null,
+		});
+		// The server writes the detail with default (PascalCase) options; the NEWEST completion wins.
+		expect(
+			isObjectiveNotMet([completion(9, '{"Summary":"s","ObjectiveMet":false}'), completion(4, '{"ObjectiveMet":true}')]),
+		).toBe(true);
+		expect(isObjectiveNotMet([completion(4, '{"ObjectiveMet":false}'), completion(9, '{"ObjectiveMet":true}')])).toBe(false);
+		// Recorded before the argument existed, or unreadable: never claim a miss.
+		expect(isObjectiveNotMet([completion(1, '{"Summary":"s"}')])).toBe(false);
+		expect(isObjectiveNotMet([completion(1, "not json")])).toBe(false);
+
+		render({ status: "Completed", objectiveNotMet: true });
+		expect(screen.getByTestId("work-session-objective-not-met").textContent).toBe(en.pages.workSessions.plan.objectiveNotMet);
+		cleanup();
+		render({ status: "Completed", objectiveNotMet: false });
+		expect(screen.queryByTestId("work-session-objective-not-met")).toBeNull();
 	});
 
 	it("shows the blocked reason on a blocked task", () => {

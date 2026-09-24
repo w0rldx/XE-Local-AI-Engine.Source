@@ -81,7 +81,7 @@ internal static class SchedulerMapper
             StartAtUtc = request.StartAtUtc,
             EndAtUtc = request.EndAtUtc,
             TimeZoneId = request.TimeZoneId,
-            MisfirePolicy = request.MisfirePolicy.ToPersistence(),
+            MisfirePolicy = request.MisfirePolicy?.ToPersistence(),
             PreventOverlap = request.PreventOverlap,
             MaxRuntimeSeconds = request.MaxRuntimeSeconds,
             Parameters = request.Parameters
@@ -104,7 +104,7 @@ internal static class SchedulerMapper
             StartAtUtc = request.StartAtUtc,
             EndAtUtc = request.EndAtUtc,
             TimeZoneId = request.TimeZoneId,
-            MisfirePolicy = request.MisfirePolicy.ToPersistence(),
+            MisfirePolicy = request.MisfirePolicy?.ToPersistence(),
             PreventOverlap = request.PreventOverlap,
             MaxRuntimeSeconds = request.MaxRuntimeSeconds,
             Parameters = request.Parameters

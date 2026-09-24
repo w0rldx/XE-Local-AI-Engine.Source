@@ -4767,7 +4767,7 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest
 	startAtUtc: z.int().nullish(),
 	endAtUtc: z.int().nullish(),
 	timeZoneId: z.string().optional(),
-	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
+	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.nullish(),
 	preventOverlap: z.boolean().optional(),
 	maxRuntimeSeconds: z
 		.int()
@@ -4851,7 +4851,7 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	startAtUtc: z.int().nullish(),
 	endAtUtc: z.int().nullish(),
 	timeZoneId: z.string().optional(),
-	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
+	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.nullish(),
 	preventOverlap: z.boolean().optional(),
 	maxRuntimeSeconds: z
 		.int()

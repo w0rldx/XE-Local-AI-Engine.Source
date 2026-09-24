@@ -43,8 +43,11 @@ export function hasText(value?: string): boolean {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
-function roleLabel(role: ChatMessageModel["role"]): string {
-	return role === "assistant" ? "Assistant" : role === "user" ? "You" : role;
+function roleLabel(role: ChatMessageModel["role"], t: ChatMessageDisplayInput["t"]): string {
+	if (role === "assistant") {
+		return t("pages.chat.roles.assistant", "Assistant");
+	}
+	return role === "user" ? t("pages.chat.roles.you", "You") : role;
 }
 
 function timeText(iso?: string): string {
@@ -116,7 +119,7 @@ export function deriveChatMessageDisplay({
 	isWorkSessionConversation,
 	t,
 }: ChatMessageDisplayInput): ChatMessageDisplay {
-	const label = roleLabel(message.role);
+	const label = roleLabel(message.role, t);
 	const userMessage = message.role === "user";
 	const assistantMessage = message.role === "assistant";
 	const content = message.content.trim().length > 0 ? message.content : placeholder;
