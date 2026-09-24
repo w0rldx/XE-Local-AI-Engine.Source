@@ -23,6 +23,14 @@ EOF
 esac
 
 dev_require_tools
+
+# One model store for every worktree's dev host: the `<data dir>/models` layout DesktopBootstrap gives the desktop
+# build, instead of each host re-downloading GGUFs into its own bin/. A scratch XDG_DATA_HOME yields a scratch store,
+# and an explicit value on the invocation wins. The registry lock is per process, so never install, import or delete
+# models from two hosts sharing one store at the same time (docs/agent-knowledge.md, section 2).
+dev_models_root="${XDG_DATA_HOME:-${HOME}/.local/share}/XE-Local-AI-Engine/models"
+export HuggingFace__ModelsDirectory="${HuggingFace__ModelsDirectory:-${dev_models_root}}"
+export HuggingFaceImageModels__ModelsDirectory="${HuggingFaceImageModels__ModelsDirectory:-${dev_models_root}/images}"
 command -v setsid >/dev/null 2>&1 || { echo "[dev-start] setsid is required for transactional startup cleanup." >&2; exit 2; }
 dev_ensure_node_operator_secret || exit 2
 if dev_matching_app_json >/dev/null 2>&1; then

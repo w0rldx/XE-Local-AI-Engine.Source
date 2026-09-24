@@ -26,12 +26,12 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 ///         if that ever happens.
 ///     </para>
 ///     <para>
-///         Cost of outliving the process: one file per state, on the order of fifty under
-///         <c>$TMPDIR/xe-local-ai-engine-persistence-template-*</c>, tens of megabytes in total, and every rebuild of
-///         the persistence assembly orphans the whole set. Do NOT add automatic cleanup. Two worktrees running tests
-///         concurrently sit on two different module version ids, so a sweep that deletes "the other" ids would delete a
-///         live run's templates out from under it — the same cross-worktree hazard <c>AGENTS.md</c> bans
-///         <c>pkill -f</c> for. Delete them by hand when the disk matters.
+///         The files live in <c>sqlite-templates/</c> under this test assembly's own output directory, one file per
+///         state, so they die with the worktree's <c>bin/</c> and never fill the temp directory. Every build first
+///         sweeps that directory of files keyed on another module version id (<see cref="SweepStaleTemplates" />). The
+///         sweep is safe only because of where the directory is: it is per worktree and per build output, and the
+///         assembly guard forbids a build while tests run, so no live process can hold a different module version id in
+///         it. Never point the directory back at a location two worktrees share.
 ///     </para>
 /// </summary>
 internal static class MigratedDatabaseTemplate
@@ -41,6 +41,8 @@ internal static class MigratedDatabaseTemplate
     /// </summary>
     private static readonly string MigrationsAssemblyKey =
         typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId.ToString("N", CultureInfo.InvariantCulture);
+
+    private static readonly string TemplateDirectory = Path.Combine(AppContext.BaseDirectory, "sqlite-templates");
 
     private static readonly Lazy<Task<string>> ChatHead =
         new(() => BuildAsync("chat-head", path => MigrationSchemaProbe.ApplyChatAsync(path, targetMigration: null)),
@@ -131,15 +133,17 @@ internal static class MigratedDatabaseTemplate
     // simply keeps the winner's equivalent template.
     private static async Task<string> BuildAsync(string key, Func<string, Task> applyAsync)
     {
-        var templatePath = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-persistence-template-{MigrationsAssemblyKey}-{key}.sqlite");
+        SweepStaleTemplates(TemplateDirectory, MigrationsAssemblyKey);
+
+        var templatePath = Path.Combine(TemplateDirectory, $"{MigrationsAssemblyKey}-{key}.sqlite");
         if (File.Exists(templatePath))
         {
             return templatePath;
         }
 
-        // A directory, not a bare file: the migration path can drop sidecars next to the database, and one recursive
-        // delete takes the whole family with it.
-        var scratchDirectory = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-persistence-template-build-{Guid.NewGuid():N}");
+        // A directory, so one recursive delete takes any sidecars with it; inside the template directory, so the publish
+        // stays a same-filesystem rename. The sweep only touches files, so it leaves this alone.
+        var scratchDirectory = Path.Combine(TemplateDirectory, $"build-{Guid.NewGuid():N}");
         _ = Directory.CreateDirectory(scratchDirectory);
         try
         {
@@ -168,7 +172,7 @@ internal static class MigratedDatabaseTemplate
             catch (IOException) when (File.Exists(templatePath))
             {
                 // Another test process published the same-keyed template first; use theirs. The filter is what makes
-                // that comment true: without it a full disk or a read-only temp directory is swallowed too, and the
+                // that comment true: without it a full disk or a read-only template directory is swallowed too, and the
                 // method returns a path that does not exist. Its twin is
                 // TestServerWebAppFactory.BuildMigratedTemplate in XE-Local-AI-Engine.Tests, which carries the same
                 // filter for the same reason; the two must stay in step.
@@ -180,6 +184,22 @@ internal static class MigratedDatabaseTemplate
         }
 
         return templatePath;
+    }
+
+    /// <summary>
+    ///     Deletes top-level files not keyed on <paramref name="currentKey" />. Twin of
+    ///     <c>TestServerWebAppFactory.SweepStaleTemplates</c>.
+    /// </summary>
+    internal static void SweepStaleTemplates(string directory, string currentKey)
+    {
+        _ = Directory.CreateDirectory(directory);
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            if (!Path.GetFileName(file).StartsWith(currentKey + "-", StringComparison.Ordinal))
+            {
+                File.Delete(file);
+            }
+        }
     }
 
     private static IReadOnlySet<string> ReadDeclaredChatMigrations()

@@ -67,8 +67,8 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     ///     build across processes: the file is keyed by the module version ids of the two assemblies whose content
     ///     decides its bytes (the migrations/DbContext assembly and the identity-seed assembly), so a rebuild of either
     ///     yields a new name and a stale template can never be picked up. It deliberately outlives the process — the next
-    ///     test process reuses it — so it is the one <c>xe-local-ai-engine-tests-*</c> artifact left in the temp dir after
-    ///     a run. Delete it to force a rebuild.
+    ///     test process reuses it — and lives in <c>sqlite-templates/</c> under this assembly's output directory, so it
+    ///     dies with the worktree's <c>bin/</c> instead of filling the temp directory. Delete it to force a rebuild.
     /// </summary>
     private static readonly Lazy<string> MigratedTemplate = new(BuildMigratedTemplate, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -350,17 +350,20 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     // (another test process on the same build) simply keeps the winner's equivalent template.
     private static string BuildMigratedTemplate()
     {
-        var templatePath = Path.Combine(Path.GetTempPath(),
-            $"xe-local-ai-engine-tests-template-{typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId:N}"
-            + $"-{typeof(NodeIdentityInitializationService).Assembly.ManifestModule.ModuleVersionId:N}.sqlite");
+        var templateDirectory = Path.Combine(AppContext.BaseDirectory, "sqlite-templates");
+        var templateKey = $"{typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId:N}"
+                          + $"-{typeof(NodeIdentityInitializationService).Assembly.ManifestModule.ModuleVersionId:N}";
+        SweepStaleTemplates(templateDirectory, templateKey);
+
+        var templatePath = Path.Combine(templateDirectory, $"{templateKey}.sqlite");
         if (File.Exists(templatePath))
         {
             return templatePath;
         }
 
-        // A directory, not a bare file: the migration path drops a .migration.lock sidecar next to the database, and one
-        // recursive delete takes the whole family with it.
-        var scratchDirectory = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-template-build-{Guid.NewGuid():N}");
+        // A directory, so one recursive delete takes the .migration.lock sidecar with it; inside the template directory,
+        // so the publish stays a same-filesystem rename. The sweep only touches files, so it leaves this alone.
+        var scratchDirectory = Path.Combine(templateDirectory, $"build-{Guid.NewGuid():N}");
         Directory.CreateDirectory(scratchDirectory);
         try
         {
@@ -390,7 +393,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             catch (IOException) when (File.Exists(templatePath))
             {
                 // Another test process published the same-keyed template first; use theirs. The filter is what makes
-                // that comment true: without it a full disk or a read-only temp directory is swallowed too, and the
+                // that comment true: without it a full disk or a read-only template directory is swallowed too, and the
                 // method returns a path that does not exist. Its twin is MigratedDatabaseTemplate.BuildAsync in
                 // XE-Local-AI-Engine.Client.Persistence.Tests, which carries the same filter for the same reason.
             }
@@ -401,6 +404,20 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         }
 
         return templatePath;
+    }
+
+    // Deletes top-level files not keyed on currentKey; safe because the directory is per build output (see
+    // MigratedDatabaseTemplate, its twin in XE-Local-AI-Engine.Client.Persistence.Tests, which must stay in step).
+    internal static void SweepStaleTemplates(string directory, string currentKey)
+    {
+        Directory.CreateDirectory(directory);
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            if (!Path.GetFileName(file).StartsWith(currentKey, StringComparison.Ordinal))
+            {
+                File.Delete(file);
+            }
+        }
     }
 
     // The same content root WebApplicationFactory resolves: the Client project's source directory, taken from the

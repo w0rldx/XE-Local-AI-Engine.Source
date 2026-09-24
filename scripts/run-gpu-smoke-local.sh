@@ -78,8 +78,8 @@
 #   NO_GUARD                   skip the contamination snapshot/verify
 #
 #   Model discovery is deliberately NOT an env knob: the script asks the API what is installed, so
-#   it works on any machine. To point a node at an existing model store, set the app's own
-#   HuggingFace__ModelsDirectory before running.
+#   it works on any machine. dev-start.sh defaults the app's own HuggingFace__ModelsDirectory to
+#   the shared store under XDG_DATA_HOME; set it before running to point at a different one.
 #
 # Exit codes:
 #   0   — every expected step ran AND passed

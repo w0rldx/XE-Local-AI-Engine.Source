@@ -129,6 +129,23 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
         _ = await AssertEx.ThrowsAsync<ArgumentException>(async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "blank.sqlite"), "   "));
     }
 
+    [Test]
+    public void SweepStaleTemplates_DeletesAnotherBuildsTemplateAndKeepsTheCurrentOne()
+    {
+        var current = Path.Combine(_rootPath, "current-key-chat-head.sqlite");
+        var stale = Path.Combine(_rootPath, "stale-key-chat-head.sqlite");
+        var scratch = Path.Combine(_rootPath, "build-in-flight");
+        _ = Directory.CreateDirectory(scratch);
+        File.WriteAllText(current, "current");
+        File.WriteAllText(stale, "stale");
+
+        MigratedDatabaseTemplate.SweepStaleTemplates(_rootPath, "current-key");
+
+        AssertEx.False(File.Exists(stale), "A template keyed on another build's module version id must be swept.");
+        AssertEx.True(File.Exists(current), "The current build's template must survive the sweep.");
+        AssertEx.True(Directory.Exists(scratch), "A concurrent same-build process's scratch directory must survive the sweep.");
+    }
+
     private static void AssertNoSidecars(string databasePath, string subject)
     {
         AssertEx.False(File.Exists(databasePath + "-wal"),

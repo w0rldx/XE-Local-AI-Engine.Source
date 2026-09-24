@@ -46,6 +46,10 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
                 {
                     Directory.Delete(root, recursive: true);
                 }
+                else if (File.Exists(root))
+                {
+                    File.Delete(root);
+                }
             }
             catch (IOException)
             {

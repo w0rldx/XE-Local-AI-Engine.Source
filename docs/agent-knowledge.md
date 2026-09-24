@@ -706,13 +706,13 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 
 ### Test hosts leak temp files to `Path.GetTempPath()` — keep the fixture cleanup
 
-`TestServerWebAppFactory.DisposeAsync` must delete SQLite sidecars, node-data directories, and temporary `wwwroot` roots. A killed run cannot dispose; recover with:
+**Rule:** `TestServerWebAppFactory.DisposeAsync` must delete SQLite sidecars, node-data directories, and temporary `wwwroot` roots, and every test that registers a temp path for cleanup must delete it whether it is a file or a directory. A killed run cannot dispose; recover what it left in the temp directory with:
 
 ```bash
-find /tmp -maxdepth 1 -name 'xe-local-ai-engine-tests-*' -exec rm -rf {} +
+find /tmp -maxdepth 1 \( -name 'xe-local-ai-engine-tests-*' -o -name 'xe-local-ai-engine-persistence-*' -o -name 'agenthome-proc-*' \) -exec rm -rf {} +
 ```
 
-Do not use a huge shell glob; it can hit `ARG_MAX`.
+The migrated SQLite templates are not in that sweep: they live under each test project's `bin/`, and deleting `bin/` reclaims them (see "The one temp artifact that is meant to survive" below). Do not use a huge shell glob; it can hit `ARG_MAX`. **Prevents:** a tmpfs `/tmp` filling up across runs, as `agenthome-proc-edit-*.txt` did while `AgentHomeProcessWriteBackLoopTests.Dispose` only deleted directories. **Authority:** the disk-hygiene pass, 2026-09-24.
 
 ### A test host whose content root is the real Client source dir must register a fake `INodeDataDirectory`
 
@@ -746,7 +746,7 @@ this file with a bare `SaveAsync` composed from an earlier `LoadAsync`.
 
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 
-The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intentionally survives teardown. It is atomically published and invalidates on migration/seed assembly rebuild. Delete it to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves.
+**Rule:** the MVID-keyed migrated SQLite templates (`TestServerWebAppFactory.BuildMigratedTemplate` and its twin `MigratedDatabaseTemplate.BuildAsync`) intentionally survive teardown, in `<test bin>/sqlite-templates/` of their own project. They are atomically published and invalidate on migration/seed assembly rebuild, and each build sweeps that directory of other-MVID files. Delete the directory, or `bin/`, to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves. Never move them back to a directory two worktrees share: the sweep is safe only because the directory is per worktree and per build output, and the assembly guard forbids a build while tests run. **Prevents:** the old `/tmp` location, where every rebuild orphaned the whole set and nothing could sweep it safely (943 files, 790 MB of tmpfs across 20 builds). **Authority:** the disk-hygiene pass, 2026-09-24.
 
 ### Layering is mechanically frozen
 
@@ -1075,7 +1075,7 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 - `dev-start.sh` mints `.data/node.key` and passes **`Parameters__node-sqlite-key`** through the environment using Python because bash cannot export dashed names. Never put the secret in command-line args or `/proc/<pid>/cmdline`.
 - A key/data mismatch surfaces as `AuthenticationTagMismatchException`, often looking like corruption. Before deleting data, retry with `XE_NODE_OPERATOR_SECRET_FILE=/path/to/key ./scripts/dev-start.sh`.
 - Bare IDE/Aspire starts use interactive parameters or `dotnet user-secrets set "Parameters:node-sqlite-key" …`.
-- Reuse populated model storage through `HuggingFace__ModelsDirectory`.
+- `dev-start.sh` defaults `HuggingFace__ModelsDirectory` to `${XDG_DATA_HOME:-$HOME/.local/share}/XE-Local-AI-Engine/models` (and `HuggingFaceImageModels__ModelsDirectory` to its `images/` child) unless the invocation sets it, so every worktree's dev host shares one store instead of re-downloading GGUFs into its own `bin/`. A scratch `XDG_DATA_HOME` yields a scratch store. **Never install, import or delete models from two hosts sharing one store at the same time:** the `index.json` lock is an in-process semaphore and the manifest write is an unlocked read-modify-write through a fixed `index.json.tmp`, so two writers lose an entry or fail. Concurrent downloads of the same file are safe (unique `.part` names, `File.Move` without overwrite) but the loser fails with a destination conflict.
 - **GGUF import is desktop-only; provision a dev-run FAST/extra model via `HuggingFace__ModelsDirectory`
   instead.** `PreviewGgufImportEndpoint`/`StartGgufImportEndpoint` (`XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/`)
   carry `IDesktopOnlyEndpoint` and are unreachable (404/405) outside `XE_LAUNCH_MODE=desktop`, and that flag is not
@@ -1123,9 +1123,9 @@ user-level `installed-runtime.json`. **That scratch `XDG_DATA_HOME` must MIRROR 
 installs its toolchains under it, so a bare directory breaks the `dotnet` shim and Aspire exits 7 reporting "the
 `--apphost` option specified a project that does not exist" — a toolchain failure that reads as a missing project.
 Build it as one symlink per child of `~/.local/share`, omitting only `XE-Local-AI-Engine`. With mise 2026.8 the symlink alone is no longer enough: the shims still report "aspire is not a valid shim" and `dev-start.sh` refuses with "Could not query Aspire state safely", so also pin `MISE_DATA_DIR=$HOME/.local/share/mise` on the same invocation (paid for in the External Apps follow-ups batch 3, 2026-09-12). **And in Aspire dev mode
-`DesktopBootstrap` does not run**, so `HuggingFace:ModelsDirectory` falls back to `AppContext.BaseDirectory/models`
-and an isolated node lists no models at all; set `HuggingFace__ModelsDirectory` on the same invocation whenever the
-round needs a model. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously
+`DesktopBootstrap` does not run**, so `dev-start.sh` supplies `HuggingFace__ModelsDirectory` itself, under
+`XDG_DATA_HOME`: a scratch round sees an empty store, so set `HuggingFace__ModelsDirectory` on the same invocation
+whenever the round needs a model. A host started any other way falls back to `AppContext.BaseDirectory/models`. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously
 (observed ~45 min later) — read the table, do not poll once; and `dev_workflow_*` run ids are stored UPPER-CASE while
 SQLite text `IN` is case-sensitive, so a lower-case id returns zero rows silently. **Prevents:** a wasted or voided
 live round on every item above — each one cost one during the AI-trends wave — and, before `75e0f7b60`, a fresh-DB
