@@ -208,11 +208,11 @@
   </Target>
 
   <ItemGroup>
-    <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
-    <Content Remove="appsettings.AppUpdate.main.json"/>
-    <Content Remove="appsettings.AppUpdate.tester.json"/>
-    <None Include="appsettings.AppUpdate.main.json"/>
-    <None Include="appsettings.AppUpdate.tester.json"/>
+    <!-- Keep every flavor source out of default content globbing so only the active one ships (renamed) below.
+         A glob, not a list: a flavor missing here ships un-renamed in every other flavor's artifact and, when it
+         is the active flavor, is included twice (NETSDK1022 at publish). -->
+    <Content Remove="appsettings.AppUpdate.*.json"/>
+    <None Include="appsettings.AppUpdate.*.json"/>
     <!--
       Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel.
 
