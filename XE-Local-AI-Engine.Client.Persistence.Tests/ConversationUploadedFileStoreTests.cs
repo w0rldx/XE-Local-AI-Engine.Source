@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 [Category(TestCategories.Integration)]
-public sealed class ConversationUploadedFileStoreTests : IDisposable
+public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
 {
     private const string OriginalFileName = "secret-quarterly-report.pdf";
     private const string ExtractedMarkdown = "# Quarterly report\nThe classified revenue figure is 4815162342.";
@@ -26,9 +26,16 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
                                                                        .BuildServiceProvider();
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    private readonly List<(ServiceProvider Provider, FixedNodeSqliteKeyHolder KeyHolder)> _owned = [];
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        foreach (var (provider, keyHolder) in _owned)
+        {
+            await provider.DisposeAsync();
+            keyHolder.Dispose();
+        }
+
         if (Directory.Exists(_rootPath))
         {
             Directory.Delete(_rootPath, recursive: true);
@@ -82,7 +89,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         AssertEx.False(ContainsSubsequence(diskBytes, content), "On-disk bytes should not contain the plaintext file body.");
 
         // Cached extracted Markdown on disk must be ciphertext, but ReadExtractedMarkdownAsync round-trips it.
-        var markdownPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), fileId.ToString("D") + ".md");
+        var markdownPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), "extracted-" + fileId.ToString("D") + ".md");
         var diskMarkdown = await File.ReadAllBytesAsync(markdownPath);
         AssertEx.False(ContainsSubsequence(diskMarkdown, Encoding.UTF8.GetBytes(ExtractedMarkdown)), "On-disk Markdown should be encrypted at rest.");
         AssertEx.Equal(ExtractedMarkdown, await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None));
@@ -309,6 +316,115 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             "conversation_uploaded_files.conversation_id should be a cascading foreign key to conversations.");
         AssertEx.True(await HasConversationIndexAsync(connection),
             "conversation_uploaded_files.conversation_id should be indexed.");
+    }
+
+    [Test]
+    public async Task AddAsync_ForMarkdownUpload_KeepsBytesAndExtractedMarkdownOnSeparatePaths()
+    {
+        var (store, conversationId, uploadRoot, _) = await CreateConversationAsync("md-upload");
+        var fileId = Guid.NewGuid();
+        var content = Encoding.UTF8.GetBytes("# Raw upload body\nexactly as the user sent it");
+
+        _ = await store.AddAsync(MarkdownUpload(conversationId, fileId, content, DocumentExtractionStatus.Extracted, ExtractedMarkdown), CancellationToken.None);
+
+        var directory = ConversationDirectory(uploadRoot, conversationId);
+        AssertEx.True(File.Exists(Path.Combine(directory, fileId.ToString("D") + ".md")), "The bytes blob keeps the upload's own extension.");
+        AssertEx.True(File.Exists(Path.Combine(directory, "extracted-" + fileId.ToString("D") + ".md")), "The Markdown companion must not share the bytes path.");
+
+        var bytes = await store.ReadBytesAsync(conversationId, fileId, CancellationToken.None);
+        AssertEx.True(bytes.HasValue, "A .md upload's raw bytes must stay readable.");
+        AssertEx.True(bytes!.Value.Span.SequenceEqual(content), "The raw bytes must not be overwritten by the extracted Markdown.");
+        AssertEx.Equal(ExtractedMarkdown, await store.ReadExtractedMarkdownAsync(conversationId, fileId, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task FailedMarkdownUpload_HasNoMarkdown_AndIsNotStaged()
+    {
+        var (store, conversationId, _, _) = await CreateConversationAsync("md-failed");
+        var failedId = Guid.NewGuid();
+        _ = await store.AddAsync(MarkdownUpload(conversationId, failedId, Encoding.UTF8.GetBytes("unreadable"), DocumentExtractionStatus.Failed, markdown: null),
+            CancellationToken.None);
+        var extracted = await AddSampleFileAsync(store, conversationId, "notes.txt");
+
+        AssertEx.Null(await store.ReadExtractedMarkdownAsync(conversationId, failedId, CancellationToken.None),
+            "A failed .md upload's bytes blob must not be decrypted as Markdown.");
+
+        await using var snapshot = await store.CreateStagingSnapshotAsync(conversationId, CancellationToken.None);
+        AssertEx.Equal(expected: 1, snapshot.FileCount);
+        AssertEx.Equal("notes.md", string.Join(",", Directory.GetFiles(snapshot.HostPath).Select(Path.GetFileName)), "Only the extracted file is staged.");
+        AssertEx.Equal(ExtractedMarkdown, await store.ReadExtractedMarkdownAsync(conversationId, extracted.FileId, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task ReadExtractedMarkdownAsync_ReadsLegacyCompanionName()
+    {
+        var (store, conversationId, uploadRoot, keyHolder) = await CreateConversationAsync("legacy-md");
+        var file = await AddSampleFileAsync(store, conversationId, "legacy.txt");
+        var directory = ConversationDirectory(uploadRoot, conversationId);
+        File.Delete(Path.Combine(directory, "extracted-" + file.FileId.ToString("D") + ".md"));
+
+        // Exactly what the pre-prefix store wrote: the file_md blob at "<fileId>.md" next to the "<fileId>.txt" bytes.
+        const string legacyMarkdown = "# Written by the old store";
+        var legacyBlob = new UploadedFileBlobProtector(keyHolder).Encrypt(conversationId, file.FileId, UploadedFileBlobProtector.FileMarkdownColumn,
+            Encoding.UTF8.GetBytes(legacyMarkdown));
+        await File.WriteAllBytesAsync(Path.Combine(directory, file.FileId.ToString("D") + ".md"), legacyBlob);
+
+        AssertEx.Equal(legacyMarkdown, await store.ReadExtractedMarkdownAsync(conversationId, file.FileId, CancellationToken.None));
+        var bytes = await store.ReadBytesAsync(conversationId, file.FileId, CancellationToken.None);
+        AssertEx.True(bytes!.Value.Span.SequenceEqual(Encoding.UTF8.GetBytes("body-of-legacy.txt")), "The .txt bytes blob wins over the legacy companion.");
+    }
+
+    [Test]
+    public async Task DeleteAsync_RemovesBytesAndMarkdownCompanion()
+    {
+        var (store, conversationId, uploadRoot, _) = await CreateConversationAsync("delete-md");
+        var file = await AddSampleFileAsync(store, conversationId, "gone.txt");
+        var directory = ConversationDirectory(uploadRoot, conversationId);
+        var companion = Path.Combine(directory, "extracted-" + file.FileId.ToString("D") + ".md");
+        AssertEx.True(File.Exists(companion), "The Markdown companion should exist before delete.");
+
+        AssertEx.True(await store.DeleteAsync(conversationId, file.FileId, CancellationToken.None), "Delete should report the row existed.");
+
+        AssertEx.Empty(Directory.GetFiles(directory, "*" + file.FileId.ToString("D") + "*"));
+    }
+
+    private async Task<(ConversationUploadedFileStore Store, Guid ConversationId, string UploadRoot, FixedNodeSqliteKeyHolder KeyHolder)> CreateConversationAsync(string name)
+    {
+        var uploadRoot = Path.Combine(_rootPath, name + "-data");
+        var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var provider = await BuildProviderAsync(GetDatabasePath(name + ".sqlite"), keyHolder);
+        _owned.Add((provider, keyHolder));
+        var store = CreateStore(provider, uploadRoot, keyHolder);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Title",
+            UserId = "user",
+            CreatedAtUtc = 1000
+        });
+        return (store, conversation.ConversationId, uploadRoot, keyHolder);
+    }
+
+    private static ConversationUploadedFileInput MarkdownUpload(Guid conversationId, Guid fileId, byte[] content, DocumentExtractionStatus status, string? markdown)
+    {
+        return new ConversationUploadedFileInput
+        {
+            ConversationId = conversationId,
+            FileId = fileId,
+            OriginalFileName = "readme.md",
+            MimeType = "text/markdown",
+            Extension = ".md",
+            SizeBytes = content.Length,
+            Content = content,
+            ExtractionStatus = status,
+            ExtractedMarkdown = markdown,
+            ExtractedChars = markdown?.Length
+        };
+    }
+
+    private static string ConversationDirectory(string uploadRoot, Guid conversationId)
+    {
+        return Path.Combine(uploadRoot, "uploaded-files", "conversations", conversationId.ToString("D"));
     }
 
     private static async Task<ConversationUploadedFileInfo> AddSampleFileAsync(IConversationUploadedFileStore store, Guid conversationId, string fileName)

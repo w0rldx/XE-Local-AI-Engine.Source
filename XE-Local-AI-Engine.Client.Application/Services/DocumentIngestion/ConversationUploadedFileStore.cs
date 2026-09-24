@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -117,21 +118,36 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
     public async Task<string?> ReadExtractedMarkdownAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
-        var markdownPath = MarkdownPath(ConversationDirectory(conversationId), fileId);
-        if (!File.Exists(markdownPath))
+        var conversationDirectory = ConversationDirectory(conversationId);
+        var markdownPath = MarkdownPath(conversationDirectory, fileId);
+        if (File.Exists(markdownPath))
+        {
+            var encrypted = await File.ReadAllBytesAsync(markdownPath, cancellationToken);
+            return DecryptMarkdown(conversationId, fileId, encrypted);
+        }
+
+        var legacyPath = LegacyMarkdownPath(conversationDirectory, fileId);
+        if (!File.Exists(legacyPath))
         {
             return null;
         }
 
-        var encrypted = await File.ReadAllBytesAsync(markdownPath, cancellationToken);
-        var plaintext = _blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileMarkdownColumn, encrypted);
-        return Encoding.UTF8.GetString(plaintext);
+        var legacyEncrypted = await File.ReadAllBytesAsync(legacyPath, cancellationToken);
+        try
+        {
+            return DecryptMarkdown(conversationId, fileId, legacyEncrypted);
+        }
+        catch (AuthenticationTagMismatchException) when (string.Equals(FindBytesFilePath(conversationDirectory, fileId), legacyPath, StringComparison.Ordinal))
+        {
+            // The legacy name is also a ".md" upload's own bytes blob; its file_bytes tag fails here, so there is no Markdown.
+            return null;
+        }
     }
 
     public async Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
         // The bytes blob is server-named from the file id plus its extension, which is not passed in here, so locate it by
-        // the unique file-id prefix, excluding the ".md" companion. No DB round-trip on the send hot path.
+        // the unique file-id prefix, preferring any blob over the legacy ".md" companion. No DB round-trip on the send hot path.
         var bytesPath = FindBytesFilePath(ConversationDirectory(conversationId), fileId);
         if (bytesPath is null)
         {
@@ -158,6 +174,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         var conversationDirectory = ConversationDirectory(conversationId);
         DeleteFileIfExists(BytesPath(conversationDirectory, fileId, extension));
         DeleteFileIfExists(MarkdownPath(conversationDirectory, fileId));
+        DeleteFileIfExists(LegacyMarkdownPath(conversationDirectory, fileId));
         return true;
     }
 
@@ -217,7 +234,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         {
             var stagedNames = new List<string>();
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var file in files)
+            foreach (var file in files.Where(static file => file.ExtractionStatus == DocumentExtractionStatus.Extracted))
             {
                 var markdown = await ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken);
                 if (markdown is null)
@@ -250,13 +267,20 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         return Path.Combine(conversationDirectory, string.Concat(fileId.ToString("D"), extension));
     }
 
+    // Prefixed rather than suffixed: every bytes blob name starts with the file id, so no extension can reach this name.
     private static string MarkdownPath(string conversationDirectory, Guid fileId)
+    {
+        return Path.Combine(conversationDirectory, string.Concat("extracted-", fileId.ToString("D"), ".md"));
+    }
+
+    // Where Markdown was cached before the prefixed name; it is also where a ".md" upload's bytes blob lives.
+    private static string LegacyMarkdownPath(string conversationDirectory, Guid fileId)
     {
         return Path.Combine(conversationDirectory, string.Concat(fileId.ToString("D"), ".md"));
     }
 
-    // Locates the on-disk bytes blob for a file by its unique file-id name, excluding the ".md" companion; null when the
-    // directory, the blob, or its extension is absent — images always carry one, so only a degenerate upload is skipped.
+    // Locates the bytes blob by its file-id name, preferring any other extension over ".md", which on a legacy install
+    // may be the Markdown companion; null when the directory or the blob is absent.
     private static string? FindBytesFilePath(string conversationDirectory, Guid fileId)
     {
         if (!Directory.Exists(conversationDirectory))
@@ -264,9 +288,15 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             return null;
         }
 
-        var markdownPath = MarkdownPath(conversationDirectory, fileId);
-        return Directory.EnumerateFiles(conversationDirectory, string.Concat(fileId.ToString("D"), ".*"))
-                        .FirstOrDefault(path => !string.Equals(path, markdownPath, StringComparison.Ordinal));
+        var legacyMarkdownPath = LegacyMarkdownPath(conversationDirectory, fileId);
+        var candidates = Directory.EnumerateFiles(conversationDirectory, string.Concat(fileId.ToString("D"), ".*")).ToArray();
+        return candidates.FirstOrDefault(path => !string.Equals(path, legacyMarkdownPath, StringComparison.Ordinal))
+               ?? candidates.FirstOrDefault();
+    }
+
+    private string DecryptMarkdown(Guid conversationId, Guid fileId, byte[] encrypted)
+    {
+        return Encoding.UTF8.GetString(_blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileMarkdownColumn, encrypted));
     }
 
     private static void DeleteFileIfExists(string path)

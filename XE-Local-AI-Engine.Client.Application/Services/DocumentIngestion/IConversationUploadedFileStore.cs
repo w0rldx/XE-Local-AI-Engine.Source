@@ -35,7 +35,7 @@ public interface IConversationUploadedFileStore
     IReadOnlyList<Guid> ListConversationDirectoryIds();
 
     /// <summary>
-    ///     Decrypts each cached <c>.md</c> for the conversation into a fresh temp directory and returns a snapshot whose
+    ///     Decrypts the cached Markdown of each <c>Extracted</c> file into a fresh temp directory and returns a snapshot whose
     ///     disposal removes that directory. Used by the AgentHome staging step to copy attachments into the sandbox.
     /// </summary>
     Task<IConversationStagingSnapshot> CreateStagingSnapshotAsync(Guid conversationId, CancellationToken cancellationToken);
