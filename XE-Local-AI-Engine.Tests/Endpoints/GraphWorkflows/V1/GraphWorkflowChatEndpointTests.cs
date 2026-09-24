@@ -339,6 +339,7 @@ public sealed class GraphWorkflowChatEndpointTests
         AssertEx.Equal(fileId, attachment.GetProperty("fileId").GetGuid());
         AssertEx.Equal("notes.md", attachment.GetProperty("name").GetString());
         AssertEx.Equal("text", attachment.GetProperty("kind").GetString());
+        AssertEx.Equal(11L, attachment.GetProperty("bytes").GetInt64());
         AssertEx.False(run.InputJson!.Contains("SECRET-BODY", StringComparison.Ordinal), "only references travel; the content is S4's consumption.");
 
         using var unknown = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "other", attachmentFileIds: [Guid.NewGuid()]));

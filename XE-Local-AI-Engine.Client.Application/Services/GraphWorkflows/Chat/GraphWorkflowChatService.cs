@@ -298,7 +298,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
     }
 
-    /// <summary>References only — id, name and kind; what a node does with them is S4's consumption.</summary>
+    /// <summary>References only — id, name, kind and size; an <c>includeAttachments</c> node reads the content at attempt time.</summary>
     private async Task<IReadOnlyList<AttachmentReference>> ResolveAttachmentsAsync(Guid conversationId,
         GraphWorkflowGraph graph,
         IReadOnlyList<Guid> fileIds,
@@ -325,7 +325,8 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         {
             FileId = file.FileId,
             Name = file.OriginalFileName,
-            Kind = file.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? "image" : "text"
+            Kind = file.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? "image" : "text",
+            Bytes = file.SizeBytes
         };
 
     private async Task<GraphWorkflowChatSendResult?> ReplayAsync(Guid conversationId,
@@ -438,6 +439,8 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         public required string Name { get; init; }
 
         public required string Kind { get; init; }
+
+        public required long Bytes { get; init; }
     }
 
     private sealed class AnswerPayload

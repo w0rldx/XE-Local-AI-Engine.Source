@@ -119,6 +119,16 @@ export function useChatWorkflow({
 	// The hub's fallback cadence, fed back into the queries that must keep moving while it is down.
 	const [pollIntervalMs, setPollIntervalMs] = useState<number | undefined>();
 
+	// A conversation can appear BEFORE the first send (an upload's ensureConversationId, "New plain chat"): the pick made
+	// on the empty composer follows it, or that first send would slip into the normal stream with the workflow still shown.
+	const previousConversationId = useRef(conversationId);
+	useEffect(() => {
+		if (previousConversationId.current.length === 0 && conversationId.length > 0) {
+			carryOverPendingPick(conversationId);
+		}
+		previousConversationId.current = conversationId;
+	}, [carryOverPendingPick, conversationId]);
+
 	const definitionsQuery = useGraphWorkflowDefinitions({ enabled });
 	const chatDefinitions = useMemo(
 		() => (definitionsQuery.data?.definitions ?? []).filter((definition) => definition.kind === "Chat"),

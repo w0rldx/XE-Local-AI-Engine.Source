@@ -392,7 +392,7 @@ chat resume registry ([Graph Workflows](21-graph-workflows.md) §5, "Live activi
    and is a `Chat` one (400); the conversation exists (404), is `Kind == chat` (400) and is local
    (`NodeChatMutationGuard`, 409 `ReadOnlyConversation`); attachments are refused with 409
    `GraphWorkflowAttachmentsNotAccepted` unless the graph's `chat.acceptsAttachments` is on, and then travel as
-   `{ fileId, name, kind }` references only; a normal chat reply still streaming on the conversation
+   `{ fileId, name, kind, bytes }` references only; a normal chat reply still streaming on the conversation
    (`InvocationResumeRegistry`) is 409 `GraphWorkflowRunBusy`.
 2. **Replay** by `requestId`: a run it started, or a ChatInput answer it recorded on any of the conversation's runs,
    answers the same 202 and re-inserts the user message if absent.
@@ -400,7 +400,7 @@ chat resume registry ([Graph Workflows](21-graph-workflows.md) §5, "Live activi
 
 | Newest bound run | Send does |
 |---|---|
-| none, or terminal | 409 `GraphWorkflowRerunConfirmationRequired` when a previous run's pinned `chat.requireRerunConfirmation` is on and `confirmRerun` is not (nothing persisted); otherwise persist the user message, then start a run bound to the conversation with `trigger_message_id` = that message. Input `{ message, attachments: [{ fileId, name, kind }], conversationId, messageId }`. |
+| none, or terminal | 409 `GraphWorkflowRerunConfirmationRequired` when a previous run's pinned `chat.requireRerunConfirmation` is on and `confirmRerun` is not (nothing persisted); otherwise persist the user message, then start a run bound to the conversation with `trigger_message_id` = that message. Input `{ message, attachments: [{ fileId, name, kind, bytes }], conversationId, messageId }`. |
 | `WaitingForApproval`, parked on a `ChatInput`, nothing queued or running | persist the user message, then `DecideAsync(Answer, operationId: requestId, payload { text })`. Attachments here are 409 `GraphWorkflowAttachmentsNotAccepted`. |
 | `Pending`, `Running`, `Cancelling`, or parked on a `Pause` | 409 `GraphWorkflowRunBusy` — the client offers Stop, and Steer while an Agent/LLM call node runs (below). |
 
@@ -412,6 +412,13 @@ missing half. A second live run on one conversation is refused by the database (
 already answered, moved), a message THIS send inserted is deleted again before the 409, so a refused send leaves no
 orphan turn. A `requestId` whose user message already lives in another conversation is 409
 `GraphWorkflowRunConflict` before anything is written, and so is an answer whose `definitionId` is not the parked run's.
+
+**Attachments in workflow mode.** The chat path's inlining and sandbox staging do not apply. The run carries only
+references, and each Agent or LLM call node with `includeAttachments: true` reads the files when its attempt starts:
+extracted Markdown goes into a `## Attachments` section of its prompt. The section is fenced as untrusted content the
+same way plain chat fences attachments, budgeted at `GraphWorkflows:MaxRunInputBytes`. Images become image parts under the chat's image caps, but only for a vision-capable model. On any
+other model the node fails `ValidationFailed` and the reason names the model and the file. A file gone when the attempt starts is skipped
+and listed in the node's output document as `attachmentsSkipped`. See [Graph Workflows](21-graph-workflows.md) §3.8.
 
 **Intervene from the chat (steer).** While the bound run's Agent or LLM call node is queued or running (the run list's
 `steerable`), the operator can redirect it: `POST graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with

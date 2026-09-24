@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -14,12 +15,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -53,7 +56,7 @@ internal sealed class GraphWorkflowAgentUsage
 ///     It carries a failure class rather than an exception because the task body catches everything — a turn that
 ///     faulted would leave the poll rethrowing on every tick forever, about work that is long over.
 /// </remarks>
-internal sealed class GraphWorkflowAgentTurn
+internal sealed record GraphWorkflowAgentTurn
 {
     public required bool Succeeded { get; init; }
 
@@ -69,6 +72,9 @@ internal sealed class GraphWorkflowAgentTurn
 
     /// <summary>The node's <c>output</c> when its kind shapes one of its own (a <c>DecisionModel</c>); null means the Agent shape.</summary>
     public JsonElement? Output { get; init; }
+
+    /// <summary>The names of the attachments this turn went without because they left the conversation; null when none did.</summary>
+    public IReadOnlyList<string>? AttachmentsSkipped { get; init; }
 }
 
 /// <summary>
@@ -412,6 +418,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return Invalid("Graph workflow agent nodes are restricted to node-local models. This node's effective model is a cloud model, so it will not run unattended.");
             }
 
+            var attachments = await AttachmentsAsync(services, runId, node, agentConfig.IncludeAttachments, inputJson, effectiveModel, capabilities.SupportsVision, cancellationToken);
+            if (attachments.Refusal is { } refusal)
+            {
+                return Invalid(refusal);
+            }
+
             // 4. CAPACITY. A local Allow carries a footprint reservation that MUST be released on every terminal path:
             //    a leaked one wrongly rejects later spawns node-wide.
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
@@ -424,7 +436,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
             // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside the package: a playbook gated on a blank
             // query injects its full static prepend instead of the relevant slice, and that difference is a different resolved prompt.
-            var seedPrompt = WithSteering(SeedPrompt(agentConfig, inputJson, chatGraph), steering);
+            var seedPrompt = WithSteering(WithSection(SeedPrompt(agentConfig, inputJson, chatGraph), attachments.Section), steering);
 
             // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model: with a bare true, a node overriding a
             //    cloud-pinned agent to a local one would pass step 3 on its own choice while the resolver gated the offer against — and returned — the cloud pin.
@@ -456,7 +468,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 effectiveModel,
                 capabilities,
                 invocationId,
-                seedPrompt);
+                seedPrompt,
+                attachments.Images);
 
             // 8–10. The lease, the terminal capture, and the run.
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(),
@@ -466,7 +479,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     cancellationToken);
 
             // 11. What the turn came to.
-            return Map(terminal, agentConfig.ResponseJsonSchema);
+            return Map(terminal, agentConfig.ResponseJsonSchema) with { AttachmentsSkipped = attachments.Skipped };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -508,8 +521,6 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return Invalid($"Node '{node.NodeKey}' {bindingError}");
             }
 
-            var prompt = WithSteering(boundPrompt, steering);
-
             await using var scope = _scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
             var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
@@ -536,6 +547,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
 
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
+            var attachments = await AttachmentsAsync(services, runId, node, config.IncludeAttachments, inputJson, effectiveModel, capabilities.SupportsVision, cancellationToken);
+            if (attachments.Refusal is { } refusal)
+            {
+                return Invalid(refusal);
+            }
+
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
@@ -543,7 +560,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
 
             reservation = decision.Reservation;
-            var seedTurn = new ConversationMessageDto { Id = Guid.NewGuid(), Role = MessageRole.User, Content = prompt, SortOrder = 0 };
+            var prompt = WithSteering(WithSection(boundPrompt, attachments.Section), steering);
+            var seedTurn = new ConversationMessageDto { Id = Guid.NewGuid(), Role = MessageRole.User, Content = prompt, SortOrder = 0, Images = attachments.Images };
             var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>().Build(new LocalChatRuntimePackageRequest
             {
                 InvocationId = invocationId,
@@ -566,7 +584,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 RequireNodeManagedLlama = true
             });
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(), _invocationRunner, package, leaseAcquired, cancellationToken);
-            return Map(terminal, config.ResponseJsonSchema);
+            return Map(terminal, config.ResponseJsonSchema) with { AttachmentsSkipped = attachments.Skipped };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -811,7 +829,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         string effectiveModel,
         ModelCapabilitySnapshot capabilities,
         Guid invocationId,
-        string seedPrompt)
+        string seedPrompt,
+        IReadOnlyList<ConversationImagePart>? images)
     {
         var offeredTools = resolved.AllowedTools.Where(static tool => !tool.RequiresApproval).ToArray();
         var strippedTools = resolved.AllowedTools.Where(static tool => tool.RequiresApproval).ToArray();
@@ -833,7 +852,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = seedPrompt,
-            SortOrder = 0
+            SortOrder = 0,
+            Images = images
         };
 
         return packageBuilder.Build(new LocalChatRuntimePackageRequest
@@ -999,11 +1019,115 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     }
 
     private static string WithSteering(string prompt, string? steering) =>
-        steering is null ? prompt : $"{prompt}\n\n{steering}";
+        WithSection(prompt, steering);
+
+    private static string WithSection(string prompt, string? section) =>
+        section is null ? prompt : $"{prompt}\n\n{section}";
+
+    /// <summary>
+    ///     What an <c>includeAttachments</c> node's turn carries, from ONE resolution at attempt time: text framed as untrusted
+    ///     documents under "## Attachments", images as parts under the chat's caps, and the names of files gone from the conversation.
+    /// </summary>
+    /// <remarks>
+    ///     The text goes through the chat's own <see cref="ConversationAttachmentContextComposer" />: each body is fenced with a
+    ///     server-keyed marker (seeded per conversation, run and node) and budgeted before wrapping, so truncation never cuts a
+    ///     closing marker. An image for a model that cannot read one is a refusal naming both, not a silent drop.
+    /// </remarks>
+    private async Task<TurnAttachments> AttachmentsAsync(IServiceProvider services,
+        Guid runId,
+        GraphWorkflowGraphNode node,
+        bool includeAttachments,
+        string inputJson,
+        string effectiveModel,
+        bool supportsVision,
+        CancellationToken cancellationToken)
+    {
+        if (!includeAttachments)
+        {
+            return TurnAttachments.None;
+        }
+
+        var (conversationId, references) = AttachmentReferences(inputJson);
+        if (references.Count == 0)
+        {
+            return TurnAttachments.None;
+        }
+
+        var files = services.GetRequiredService<IConversationUploadedFileStore>();
+        var present = (await files.ListAsync(conversationId, cancellationToken)).Select(static file => file.FileId).ToHashSet();
+        var skipped = references.Where(reference => !present.Contains(reference.FileId)).Select(static reference => reference.Name).ToList();
+        if (skipped.Count > 0)
+        {
+            _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s) no longer in conversation {ConversationId}.",
+                runId,
+                node.NodeKey,
+                skipped.Count,
+                conversationId);
+        }
+
+        var parts = new List<AttachmentTextPart>();
+        var imageIds = new List<Guid>();
+        foreach (var reference in references.Where(reference => present.Contains(reference.FileId)))
+        {
+            if (string.Equals(reference.Kind, "image", StringComparison.Ordinal))
+            {
+                if (!supportsVision)
+                {
+                    return new TurnAttachments { Refusal = $"Node '{node.NodeKey}' was given the image '{reference.Name}', but its model '{effectiveModel}' cannot read images." };
+                }
+
+                imageIds.Add(reference.FileId);
+            }
+            else if (await files.ReadExtractedMarkdownAsync(conversationId, reference.FileId, cancellationToken) is { } markdown)
+            {
+                parts.Add(new AttachmentTextPart(reference.Name, markdown));
+            }
+        }
+
+        var images = imageIds.Count == 0
+            ? null
+            : (await services.GetRequiredService<IChatTurnContextBuilder>().BuildImageContextAsync(conversationId, imageIds, cancellationToken))?.Images;
+
+        // The budget is MaxRunInputBytes counted in characters, the composer's unit; the seed is server-keyed, so a document cannot forge the marker.
+        var seed = $"{services.GetRequiredService<IUntrustedContentFenceSeedProvider>().DeriveSeed(conversationId)}:{runId:N}:{node.NodeKey}";
+        var composed = ConversationAttachmentContextComposer.Compose(parts, _options.MaxRunInputBytes, seed);
+        return new TurnAttachments { Section = composed is null ? null : $"## Attachments\n\n{composed}", Images = images, Skipped = skipped.Count == 0 ? null : skipped };
+    }
+
+    /// <summary>The chat-bound run's conversation and attachment references, or none when the run input carries no such thing.</summary>
+    private static (Guid ConversationId, IReadOnlyList<AttachmentReference> References) AttachmentReferences(string inputJson)
+    {
+        if (GraphWorkflowDocuments.Resolve(inputJson, "run.input") is not { ValueKind: JsonValueKind.Object } input
+            || !input.TryGetProperty("conversationId", out var conversation)
+            || conversation.ValueKind != JsonValueKind.String
+            || !conversation.TryGetGuid(out var conversationId)
+            || !input.TryGetProperty("attachments", out var attachments)
+            || attachments.ValueKind != JsonValueKind.Array)
+        {
+            return (Guid.Empty, []);
+        }
+
+        var references = new List<AttachmentReference>();
+        foreach (var attachment in attachments.EnumerateArray())
+        {
+            if (attachment.ValueKind == JsonValueKind.Object
+                && attachment.TryGetProperty("fileId", out var id)
+                && id.ValueKind == JsonValueKind.String
+                && id.TryGetGuid(out var fileId))
+            {
+                references.Add(new AttachmentReference { FileId = fileId, Name = StringMember(attachment, "name") ?? fileId.ToString(), Kind = StringMember(attachment, "kind") });
+            }
+        }
+
+        return (conversationId, references);
+    }
+
+    private static string? StringMember(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     /// <summary>
     ///     The chat send that started the run — <c>run.input.message</c>, under the run-input budget — and the names of its
-    ///     attachments on one line (their content is a later slice). Null when the run input carries no message.
+    ///     attachments on one line (their content reaches only an <c>includeAttachments</c> node). Null when the run input carries no message.
     /// </summary>
     private string? ConversationRequest(string inputJson)
     {
@@ -1220,7 +1344,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
     /// <summary>The Agent <c>output</c> shape, per the binding document contract.</summary>
     private static JsonElement Output(GraphWorkflowAgentTurn turn) =>
-        turn.Output ?? JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage }, JsonOptions);
+        turn.Output ?? JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage, AttachmentsSkipped = turn.AttachmentsSkipped }, JsonOptions);
 
     /// <summary>Tells the runner to unwind a turn. A cancel for an invocation it no longer knows about is a no-op.</summary>
     private void CancelInvocation(Guid invocationId) =>
@@ -1240,6 +1364,30 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         public required GraphWorkflowAgentUsage? Usage { get; init; }
     }
 
+    /// <summary>One attachment reference off the run input.</summary>
+    private sealed record AttachmentReference
+    {
+        public required Guid FileId { get; init; }
+
+        public required string Name { get; init; }
+
+        public string? Kind { get; init; }
+    }
+
+    /// <summary>A turn's attachment content, or the refusal that fails the node instead.</summary>
+    private sealed record TurnAttachments
+    {
+        public static TurnAttachments None { get; } = new();
+
+        public string? Section { get; init; }
+
+        public IReadOnlyList<ConversationImagePart>? Images { get; init; }
+
+        public string? Refusal { get; init; }
+
+        public IReadOnlyList<string>? Skipped { get; init; }
+    }
+
     private sealed record AgentOutputPayload
     {
         public required string Text { get; init; }
@@ -1247,5 +1395,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         public required JsonElement? Json { get; init; }
 
         public required GraphWorkflowAgentUsage? Usage { get; init; }
+
+        /// <summary>Omitted unless a file was skipped, so an output without attachments is byte-identical to before.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<string>? AttachmentsSkipped { get; init; }
     }
 }

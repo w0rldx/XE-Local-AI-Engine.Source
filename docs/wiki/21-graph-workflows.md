@@ -96,7 +96,7 @@ node's `toolName` on an Agent node fails the save.
 Two chat members sit on several kinds and follow the same closed rule. `publishToChat` (Agent, LlmCall, End) marks a
 node whose answer a chat-bound run posts into the conversation; it defaults to **true on an `End` of a `Chat` graph**
 and false everywhere else, and `true` is refused outside a `Chat` graph, where no conversation could receive it.
-`includeAttachments` (Agent, LlmCall) hands the run's chat attachments to the node, and `true` is refused unless the
+`includeAttachments` (Agent, LlmCall) hands the run's chat attachments to the node (§3.8), and `true` is refused unless the
 graph's `chat.acceptsAttachments` is on. Neither is read by routing; both are carried for the chat surface.
 
 A node without a `position` is laid out client-side when the definition is opened
@@ -521,6 +521,36 @@ work. The re-run's seed prompt ends with an `## Operator steering` section listi
 (§4.2, §4.2a). Each reset restarts the node deadline, so `MaxSteersPerNode` is the bound. Cross-node routing stays
 absent (register 22, D6(a)).
 
+### 3.8 Attachments
+
+A chat send to a graph whose `chat.acceptsAttachments` is on carries **references only**: `run.input.attachments` is
+`[{ fileId, name, kind: "text"|"image", bytes }]` (`bytes` is the upload's size), checked with the rest of the run input
+against `MaxRunInputBytes` before the user message is persisted. Any other graph answers 409
+`GraphWorkflowAttachmentsNotAccepted` ([Chat](05-chat.md) "Chat workflow mode").
+
+Content is read **at attempt time**, and only by an Agent or LLM Call node with `includeAttachments: true` on a
+chat-bound run (`run.input.conversationId`). `GraphWorkflowInvocationExecutor` resolves each reference through
+`IConversationUploadedFileStore`:
+
+- **Text** — the cached extracted Markdown, composed by the chat's own `ConversationAttachmentContextComposer` into a
+  `## Attachments` section after the prompt (and before any steering section). The section opens with the chat's notice
+  that the content is untrusted DATA, not instructions. Each file is wrapped by `UntrustedContentFraming.WrapDocument`,
+  with its name inside the fence as `file:` metadata. The marker's nonce is keyed on the server-secret per-conversation
+  seed (`IUntrustedContentFenceSeedProvider`) plus the run id and node key, so a document cannot forge the closing marker.
+  Bodies are budgeted before wrapping at `MaxRunInputBytes`, counted in characters (the composer's unit). Truncation
+  therefore never cuts a closing marker, and the composer's truncation notice follows. A file without extracted Markdown adds nothing.
+- **Image** — attached as a `ConversationImagePart` on the seed turn through `IChatTurnContextBuilder.BuildImageContextAsync`,
+  so the chat's `MaxImageAttachments` / `MaxImageAttachmentBytes` caps apply (over-cap images are dropped with a
+  warning). Only when the node's effective model resolves `SupportsVision`; otherwise the node fails
+  `ValidationFailed` with a reason naming the node, the file and the model. An LLM Call carries images the same way.
+- **Gone** — a file no longer in the conversation when the attempt starts is skipped. The same attempt-time resolution
+  that reads the content decides this, so the notice can never disagree with the prompt. The node's **output** document
+  gains `attachmentsSkipped: [name…]` (omitted when nothing was skipped), the executor logs the count at Information,
+  and the turn still runs.
+
+A node without the flag, a `Standard` graph and a run without attachments send a prompt byte-identical to one before
+attachments existed; every Agent of a Chat graph still sees the `Attachments: <names>` line of its conversation request (§4.2).
+
 ---
 
 ## 4. The node kinds
@@ -594,12 +624,12 @@ is long gone by the time the turn lands.
 **In a `Chat` graph every Agent's seed prompt also carries the chat request**, whatever `includeUpstreamOutputs` says:
 after the instructions and before the upstream map, a `## Conversation request` section with `run.input.message` (same
 `MaxRunInputBytes` budget and truncation marker) and, when the run input lists attachments, one `Attachments: a.pdf,
-b.png` line (names only; content is a later slice). Agent nodes have no `inputBindings`, and after a router the upstream is
+b.png` line (names only; the content reaches an `includeAttachments` node, §3.8). Agent nodes have no `inputBindings`, and after a router the upstream is
 the router's choice rather than the message, so without it an agent downstream of a DecisionModel or Condition never sees
 what the user asked (live-round finding, 2026-09-23). A `Standard` graph's prompt is unchanged byte for byte.
 
 **A steered row's prompt ends with an `## Operator steering` section** (§3.7): the row's applied steers, numbered,
-oldest first, after everything above. An LLM Call gets the same section after its bound prompt. A row nobody steered
+oldest first, after everything above, the `## Attachments` section (§3.8) included. An LLM Call gets the same section after its bound prompt. A row nobody steered
 sends a prompt byte-identical to one before steering existed.
 
 Output: `{ "text": …, "json": … | null, "usage": { inputTokens, outputTokens, totalTokens, reasoningTokens,

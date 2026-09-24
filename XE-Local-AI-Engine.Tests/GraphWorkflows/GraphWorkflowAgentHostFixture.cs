@@ -123,7 +123,7 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
 }
 
 /// <summary>
-///     The three MARKERS this module's fakes answer off, and the one concrete name that carries none of them. A graph
+///     The MARKERS this module's fakes answer off, and the one concrete name that carries none of them. A graph
 ///     pinning a model whose name contains a marker is choosing the world its node run wakes up in, which is what lets
 ///     one shared host serve tests that need different worlds — and lets a test that needs a reservation of its very
 ///     own simply invent a name.
@@ -141,6 +141,9 @@ internal static class GraphWorkflowModels
 
     /// <summary>A name carrying this is more than this node can admit.</summary>
     public const string OvercommittedMarker = "overcommitted";
+
+    /// <summary>A name carrying this reads images.</summary>
+    public const string VisionMarker = "vision";
 }
 
 /// <summary>The node's local default, which a unit-test host has no installed GGUF to resolve.</summary>
@@ -157,15 +160,36 @@ internal sealed class FakeGraphWorkflowLocalDefaultModel : ILocalDefaultChatMode
 /// </summary>
 internal sealed class FakeGraphWorkflowModelCapabilities : IModelCapabilityResolver
 {
-    public Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken)
+    private readonly ConcurrentDictionary<string, GraphWorkflowCapabilityGate> _gates = new(StringComparer.Ordinal);
+
+    /// <summary>Holds every resolve of <paramref name="model" /> until the gate opens: a turn parked BEFORE its attempt-time reads. Invent a name per test.</summary>
+    public GraphWorkflowCapabilityGate Hold(string model) =>
+        _gates.GetOrAdd(model, static _ => new GraphWorkflowCapabilityGate());
+
+    public async Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken)
     {
         var name = model ?? string.Empty;
-        var thinking = name.Contains(GraphWorkflowModels.ThinkingMarker, StringComparison.Ordinal);
-        return Task.FromResult(new ModelCapabilitySnapshot(thinking, SupportsTools: true, name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
+        if (_gates.TryGetValue(name, out var gate))
         {
-            ReasoningBudgetEnforceable = thinking
-        });
+            gate.Entered.TrySetResult();
+            await gate.Released.Task.WaitAsync(cancellationToken);
+        }
+
+        var thinking = name.Contains(GraphWorkflowModels.ThinkingMarker, StringComparison.Ordinal);
+        return new ModelCapabilitySnapshot(thinking, SupportsTools: true, name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
+        {
+            ReasoningBudgetEnforceable = thinking,
+            SupportsVision = name.Contains(GraphWorkflowModels.VisionMarker, StringComparison.Ordinal)
+        };
     }
+}
+
+/// <summary>A capability resolve the test holds: <see cref="Entered" /> fires when a turn reaches it, <see cref="Released" /> lets it go on.</summary>
+internal sealed class GraphWorkflowCapabilityGate
+{
+    public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
 /// <summary>

@@ -491,6 +491,42 @@ describe("Chat workflow mode", () => {
 		expect(useChatWorkflowStore.getState().selectedDefinitionByConversation).toEqual({ [conversationId]: definitionId });
 	});
 
+	it("keeps the pick made on the empty composer when the conversation is created before the first send", async () => {
+		// An upload (ensureConversationId) or "New plain chat" creates the conversation ahead of the send; the pick follows it.
+		const created = conversation({ title: "New conversation" });
+		adapter.listConversations.mockResolvedValue({ conversations: [] });
+		adapter.createConversation.mockResolvedValue(created);
+		adapter.getConversation.mockResolvedValue(created);
+		const bodies: unknown[] = [];
+		server.use(
+			runsRoute([]),
+			http.post(localApiPath(`graph-workflows/conversations/${conversationId}/messages`), async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json({ runId, messageId: graphWorkflowTestGuid(94), action: "started" }, { status: 202 });
+			}),
+		);
+		renderChat();
+		await pickWorkflow();
+
+		// Once created, the list re-read shows the new conversation.
+		adapter.listConversations.mockResolvedValue({ conversations: [created] });
+		fireEvent.click(screen.getByLabelText(i18next.t("pages.chat.newConversation")));
+		await waitFor(() => expect(adapter.createConversation).toHaveBeenCalledTimes(1));
+		await screen.findByTestId(`conversation-item-${conversationId}`);
+		await waitFor(() =>
+			expect(useChatWorkflowStore.getState().selectedDefinitionByConversation).toEqual({ [conversationId]: definitionId }),
+		);
+		expect(screen.getByTestId("chat-workflow-selector-trigger").textContent).toBe("Support triage");
+
+		const input = (await screen.findByTestId("chat-input")) as HTMLTextAreaElement;
+		fireEvent.change(input, { target: { value: "Build me a CLI" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0]).toMatchObject({ definitionId, content: "Build me a CLI" });
+		expect(adapter.sendMessage).not.toHaveBeenCalled();
+	});
+
 	it("answers a parked input with the PARKED run's workflow and locks the picker while the run is live", async () => {
 		useChatWorkflowStore.getState().actions.selectDefinition(conversationId, otherChatDefinitionId);
 		server.use(
