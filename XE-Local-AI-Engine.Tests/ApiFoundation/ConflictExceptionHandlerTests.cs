@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -106,12 +107,13 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal("Reject", body.StandingDecision);
     }
 
-    /// <summary>The four chat-workflow refusals each reach the client under a discriminator of their own, which the chat page branches on.</summary>
+    /// <summary>The five chat-workflow refusals each reach the client under a discriminator of their own, which the chat page branches on.</summary>
     [Test]
     [Arguments("steer-limit")]
     [Arguments("busy")]
     [Arguments("rerun")]
     [Arguments("attachments")]
+    [Arguments("live-run")]
     public async Task TryHandleAsync_ForAChatWorkflowRefusal_WritesItsOwnConflictType(string refusal)
     {
         var (exception, expected) = refusal switch
@@ -119,6 +121,7 @@ public sealed class ConflictExceptionHandlerTests
             "busy" => ((Exception)new GraphWorkflowRunBusyException("busy"), "GraphWorkflowRunBusy"),
             "rerun" => (new GraphWorkflowRerunConfirmationRequiredException("confirm"), "GraphWorkflowRerunConfirmationRequired"),
             "steer-limit" => (new GraphWorkflowSteerLimitReachedException("capped"), "GraphWorkflowSteerLimitReached"),
+            "live-run" => (new NodeChatWorkflowRunLiveException(Guid.NewGuid()), "GraphWorkflowRunLiveInConversation"),
             _ => (new GraphWorkflowAttachmentsNotAcceptedException("no files"), "GraphWorkflowAttachmentsNotAccepted")
         };
 

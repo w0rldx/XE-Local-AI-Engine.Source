@@ -197,6 +197,33 @@ describe("toWorkflowActivity", () => {
 		expect(toWorkflowActivity(chatGraph, path, details, [])[0]?.error).toBeUndefined();
 	});
 
+	it("lists the attachments an Agent turn went without, and nothing when none were skipped", () => {
+		const path = toWorkflowPath(chatGraph, [
+			makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Succeeded" }),
+			makeNodeRun({ nodeKey: "classify", kind: "DecisionModel", status: "Succeeded" }),
+		]);
+		const details = new Map([
+			[
+				"code",
+				detail("code", "LlmCall", {
+					status: "succeeded",
+					attempt: 1,
+					branch: null,
+					output: { text: "done", attachmentsSkipped: ["a.pdf", "b.png"] },
+				}),
+			],
+			[
+				"classify",
+				detail("classify", "DecisionModel", { status: "succeeded", attempt: 1, branch: null, output: { choice: "x" } }),
+			],
+		]);
+
+		const entries = toWorkflowActivity(chatGraph, path, details, []);
+
+		expect(entries.find((entry) => entry.key === "code")?.attachmentsSkipped).toEqual(["a.pdf", "b.png"]);
+		expect(entries.find((entry) => entry.key === "classify")).not.toHaveProperty("attachmentsSkipped");
+	});
+
 	it("summarises a Tool result under its tool name and reports a Condition's branch", () => {
 		const path = toWorkflowPath(eightNodeGraph, [
 			makeNodeRun({ nodeKey: "check", kind: "Condition", status: "Succeeded" }),

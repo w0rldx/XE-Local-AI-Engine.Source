@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 internal sealed class GraphWorkflowHarness : IAsyncDisposable
 {
     /// <summary>How long <see cref="AdvanceUntilAsync" /> stands aside between ticks. See the comment at its use.</summary>
-    private static readonly TimeSpan PollPause = TimeSpan.FromMilliseconds(5);
+    internal static readonly TimeSpan PollPause = TimeSpan.FromMilliseconds(5);
 
     private readonly TestServerWebAppFactory _factory;
 

@@ -141,6 +141,12 @@ public enum NodeConflictProblemType
     GraphWorkflowSteerLimitReached,
 
     /// <summary>
+    ///     A normal chat send into a conversation whose bound workflow run is still live, a parked run included. Answer
+    ///     through the workflow, or stop the run, then send.
+    /// </summary>
+    GraphWorkflowRunLiveInConversation,
+
+    /// <summary>
     ///     A second lifecycle command on an external-app instance whose per-instance gate is already held — wait, or
     ///     cancel the operation that holds it.
     /// </summary>

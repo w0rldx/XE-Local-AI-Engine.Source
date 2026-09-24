@@ -85,7 +85,7 @@ vi.mock("@/features/graphWorkflows/hooks/useGraphWorkflowRunHub", async () => {
 // The live stream is `useGraphWorkflowNodeActivity.test.ts`'s subject; here it records what the page asks for and
 // hands back whatever folded state a test sets.
 const nodeActivity = vi.hoisted(() => ({
-	state: { status: "idle" } as { status: string; stream?: unknown },
+	state: { status: "idle" } as { status: string; stream?: unknown; model?: string },
 	calls: [] as unknown[][],
 }));
 vi.mock("@/features/chat/workflow/useGraphWorkflowNodeActivity", () => ({
@@ -326,6 +326,27 @@ describe("Chat workflow mode", () => {
 
 		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
 		expect(bodies).toHaveLength(0);
+	});
+
+	it("says the conversation is running a workflow when the hub refuses a normal send for it", async () => {
+		server.use(runsRoute([]));
+		adapter.sendMessage.mockImplementation(() => ({
+			// biome-ignore lint/correctness/useYield: the hub refuses the send before any frame.
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				throw new Error(
+					"An error occurred on the server while streaming results. HubException: GraphWorkflowRunLiveInConversation: Conversation 0e5b has a workflow run in progress; answer or stop the workflow before sending a normal message.",
+				);
+			},
+		}));
+		renderChat();
+		await screen.findByTestId("chat-workflow-selector-trigger");
+
+		await typeAndSend("hello");
+
+		const expected = i18next.t("pages.chat.workflowRunLive");
+		expect(expected).toBe("This conversation is running a workflow; answer through it or stop it first.");
+		expect((await screen.findAllByText(expected)).length).toBeGreaterThan(0);
+		expect(screen.queryByText(/GraphWorkflowRunLiveInConversation/)).toBeNull();
 	});
 
 	it("asks before starting a finished workflow again, then resends with confirmRerun", async () => {
@@ -770,6 +791,26 @@ describe("Chat workflow mode", () => {
 		expect(nodeActivity.calls.at(-1)).toEqual([runId, "code", invocationId]);
 		const row = await screen.findByTestId("chat-workflow-activity-node-code");
 		expect(within(row).getByTestId("chat-message-reasoning-summary-workflow-node-code")).toBeTruthy();
+	});
+
+	it("names the model the live stream resolved for a running node whose config runs on the default", async () => {
+		const invocationId = graphWorkflowTestGuid(95);
+		nodeActivity.state = {
+			status: "live",
+			stream: { conversationId: "c", messageId: invocationId, content: "", isActive: true },
+			model: "qwen3-8b",
+		};
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			...runRoutes("Running", [
+				makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Running", completedAtUtc: null, invocationId }),
+			]),
+		);
+		renderChat();
+
+		const active = await screen.findByTestId("chat-workflow-status-active");
+		await waitFor(() => expect(active.textContent).toContain("qwen3-8b"));
+		expect(active.textContent).not.toContain(i18next.t("pages.chat.workflow.status.defaultModel"));
 	});
 
 	it("asks for no live stream while the running node has no invocation yet", async () => {

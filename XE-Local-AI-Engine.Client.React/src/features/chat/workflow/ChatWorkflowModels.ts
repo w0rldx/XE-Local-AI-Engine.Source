@@ -270,6 +270,16 @@ export interface WorkflowActivityEntry {
 	 * arrived after it settled. `message` is absent when neither the event nor the node document carried the text.
 	 */
 	readonly steering?: readonly { readonly seq: number; readonly applied: boolean; readonly message?: string }[];
+	/** The attachments an Agent / LLM Call turn went without (file names), off its output's `attachmentsSkipped`. */
+	readonly attachmentsSkipped?: readonly string[];
+}
+
+function stringsAt(value: unknown, ...path: readonly string[]): readonly string[] | undefined {
+	const found = at(value, ...path);
+	const strings = Array.isArray(found)
+		? found.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+		: [];
+	return strings.length > 0 ? strings : undefined;
 }
 
 /** The node kinds whose detail document the activity block reads (the rest are fully described by their summary row). */
@@ -328,6 +338,7 @@ export function toWorkflowActivity(
 			const prompt = node.kind === "ChatInput" ? textAt(config, "prompt") : undefined;
 			const error = workflowNodeFailureReason(node.status, detail?.error);
 			const steering = steeringByKey.get(node.key);
+			const attachmentsSkipped = stringsAt(envelope, "output", "attachmentsSkipped");
 			return {
 				key: node.key,
 				label: node.label,
@@ -341,6 +352,7 @@ export function toWorkflowActivity(
 				...(prompt ? { input: { prompt, answer: textAt(envelope, "output", "text") } } : {}),
 				...(error ? { error } : {}),
 				...(steering ? { steering } : {}),
+				...(attachmentsSkipped ? { attachmentsSkipped } : {}),
 			};
 		});
 }

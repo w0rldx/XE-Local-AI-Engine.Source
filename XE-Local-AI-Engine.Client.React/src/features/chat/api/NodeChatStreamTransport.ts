@@ -138,12 +138,24 @@ export function streamNodeChatEvents(opening: NodeChatStreamOpening, signal: Abo
 				// (nothing pushed yet) the base is 0 and the rebase is the identity.
 				const resumeSequenceBase = isResume && Number.isFinite(lastPushedSequence) ? lastPushedSequence + 1 : 0;
 
+				// Per resumed subscription: whether it has delivered a frame yet. A reconcile as its FIRST frame is the
+				// server's replay cap (the snapshot is too large to replay) and the server then ends the stream, so
+				// re-entering would earn the same answer forever. The reason is not on the wire; the position tells them
+				// apart, as in useGraphWorkflowNodeActivity. A reconcile after progress (a queue overflow) still repairs.
+				let folded = false;
 				activeSubscription = connection.stream<NodeChatStreamEventDto>(methodName, ...args).subscribe({
 					next: (value) => {
 						if (!isResume) {
 							pushEvent(value);
 							return;
 						}
+						if (value.type === assistantReconcileEventType && !folded) {
+							// Nothing to replay: end cleanly, like an unresumable invocation, so the caller refetches the turn.
+							completed = true;
+							notify();
+							return;
+						}
+						folded = true;
 						// Resume events stamp the invocation id as the message id; remap to the assistant id
 						// so the caller updates the same message instead of spawning a new one.
 						pushEvent({

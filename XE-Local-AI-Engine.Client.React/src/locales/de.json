@@ -813,6 +813,7 @@
 			"loadingModel": "Modell wird geladen…",
 			"remoteViewOnlyTitle": "Remote-Unterhaltung",
 			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
+			"workflowRunLive": "In dieser Unterhaltung läuft ein Workflow; antworte darüber oder stoppe ihn zuerst.",
 			"streamFailedTitle": "Der lokale Chat-Stream ist fehlgeschlagen.",
 			"historyLoadFailedTitle": "Der lokale Chat-Verlauf konnte nicht geladen werden.",
 			"unknownError": "Unbekannter Fehler",
@@ -1284,7 +1285,8 @@
 					"toolResult": "{{tool}}: {{summary}}",
 					"steered": "Gesteuert: {{message}}",
 					"steeredNoText": "Gesteuert",
-					"steerIgnored": "Die Steuerung kam an, nachdem der Knoten fertig war"
+					"steerIgnored": "Die Steuerung kam an, nachdem der Knoten fertig war",
+					"attachmentsSkipped": "Übersprungene Anhänge: {{names}}"
 				},
 				"rerun": {
 					"title": "Workflow erneut ausführen?",

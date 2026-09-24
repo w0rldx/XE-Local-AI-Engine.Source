@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 using static GraphWorkflowChatTestSupport;
 
-/// <summary>A chat send's attachments reach an <c>includeAttachments</c> node at attempt time: text inlined, images as parts, gone files skipped.</summary>
+/// <summary>A chat send's attachments reach an <c>includeAttachments</c> node at attempt time: text inlined, images as parts, gone or unusable files skipped.</summary>
 [Category(TestCategories.Integration)]
 public sealed class GraphWorkflowChatAttachmentTests
 {
@@ -145,6 +145,38 @@ public sealed class GraphWorkflowChatAttachmentTests
         AssertEx.Equal("[\"gone.md\"]", GraphWorkflowDocuments.Resolve(output, "output.attachmentsSkipped")?.GetRawText());
         AssertEx.Null(GraphWorkflowDocuments.Resolve((await harness.ReadNodeRunAsync(runId, "other")).OutputJson, "output.attachmentsSkipped"),
             "a node that takes no attachments notes nothing.");
+    }
+
+    /// <summary>
+    ///     An image reference to a file that never became an image, and a text file with no extracted body, contribute nothing
+    ///     to the turn — so both are named in <c>attachmentsSkipped</c> beside the gone files, never dropped silently.
+    /// </summary>
+    [Test]
+    [Arguments(DocumentExtractionStatus.Unsupported)]
+    [Arguments(DocumentExtractionStatus.Failed)]
+    public async Task AnUnusableImageOrTextFile_IsSkippedWithANotice_AndTheTurnStillRuns(DocumentExtractionStatus status)
+    {
+        var reader = $"attachments-unusable-reader-{status}";
+        await using var harness = new GraphWorkflowHarness(Host);
+
+        // The default model reads no images: a skipped image must never reach the vision refusal.
+        var definitionId = await harness.SeedDefinitionAsync(TwoAgentGraph(reader, $"second-after-unusable-{status}"));
+        var conversationId = await CreateConversationAsync(harness.Services);
+        var kept = await AddTextAsync(harness, conversationId, "kept.md", "KEPT-BODY");
+        var brokenImage = await AddAsync(harness, conversationId, "broken.png", "image/png", [1, 2, 3], status, markdown: null);
+        var failedText = await AddAsync(harness, conversationId, "failed.md", "text/markdown", Encoding.UTF8.GetBytes("x"), status, markdown: null);
+        var blankText = await AddTextAsync(harness, conversationId, "blank.txt", string.Empty);
+
+        var runId = await StartAsync(harness.Factory, definitionId, conversationId, "read all", kept, brokenImage, failedText, blankText);
+        await harness.AdvanceUntilAsync(runId, async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId)).Status), "the run never settled");
+        var read = await harness.ReadNodeRunAsync(runId, "read");
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status, $"read node {read.Status}: {read.Error}");
+
+        var seed = harness.Invocations.PackageFor(reader).ConversationContext[0];
+        AssertEx.Contains(seed.Content, "KEPT-BODY");
+        AssertEx.Null(seed.Images, "an image reference whose file never became an image adds no part.");
+        var output = (await harness.ReadNodeRunAsync(runId, "read")).OutputJson;
+        AssertEx.Equal("[\"broken.png\",\"failed.md\",\"blank.txt\"]", GraphWorkflowDocuments.Resolve(output, "output.attachmentsSkipped")?.GetRawText());
     }
 
     /// <summary>Start → read (includeAttachments) → other (no flag) → End, in a Chat graph that accepts attachments.</summary>

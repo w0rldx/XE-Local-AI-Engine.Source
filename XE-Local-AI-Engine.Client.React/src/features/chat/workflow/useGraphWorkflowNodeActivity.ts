@@ -23,6 +23,8 @@ export interface GraphWorkflowNodeActivity {
 	readonly status: "idle" | "connecting" | "live" | "ended" | "unavailable";
 	/** The folded turn: reasoning, content, phase and token counts, exactly as the chat folds its own stream. */
 	readonly stream?: ChatStreamingState;
+	/** The model the server resolved for this turn, off the frames' `model` (the fold keeps it on the message, not here). */
+	readonly model?: string;
 }
 
 const idle: GraphWorkflowNodeActivity = { status: "idle" };
@@ -54,6 +56,7 @@ export function useGraphWorkflowNodeActivity(
 		let subscription: ISubscription<NodeChatStreamEventDto> | undefined;
 		let conversation = emptyConversation;
 		let stream: ChatStreamingState | undefined;
+		let model: string | undefined;
 		setActivity({ status: "connecting" });
 
 		const open = (): void => {
@@ -74,16 +77,17 @@ export function useGraphWorkflowNodeActivity(
 						} else {
 							// Nothing to show live; the node's durable output is the fallback once it settles.
 							ended = true;
-							setActivity({ status: "unavailable", stream });
+							setActivity({ status: "unavailable", stream, model });
 						}
 						return;
 					}
 					folded = true;
+					model = event.model ?? model;
 					const applied = applyNodeChatStreamEvent(conversation, event, stream);
 					conversation = applied.conversation;
 					stream = applied.streamingMessage;
 					ended = applied.isTerminal;
-					setActivity({ status: ended ? "ended" : "live", stream });
+					setActivity({ status: ended ? "ended" : "live", stream, model });
 				},
 				error: () => {
 					subscription = undefined;
@@ -93,7 +97,7 @@ export function useGraphWorkflowNodeActivity(
 					queueMicrotask(() => {
 						if (!(disposed || ended) && connection.state === HubConnectionState.Connected) {
 							ended = true;
-							setActivity({ status: "unavailable", stream });
+							setActivity({ status: "unavailable", stream, model });
 						}
 					});
 				},
@@ -101,7 +105,7 @@ export function useGraphWorkflowNodeActivity(
 					subscription = undefined;
 					if (!(disposed || ended)) {
 						ended = true;
-						setActivity({ status: "ended", stream });
+						setActivity({ status: "ended", stream, model });
 					}
 				},
 			});

@@ -38,6 +38,11 @@ interface WorkflowRunStatusCardProps {
 	/** The active node's live output (reasoning, phase, tokens). Rendered under the active line while the run is live. */
 	readonly liveDetail?: ReactNode;
 	/**
+	 * The model the active node actually runs on, when known (its live stream, then its output document). Wins over the
+	 * pinned config's `model`, which is `null` for a node that runs on the default.
+	 */
+	readonly activeModel?: string;
+	/**
 	 * Sends the operator's steering to a running Agent / LLM Call. Resolves once the server accepted it; rejects with an
 	 * Error whose message is what the dialog shows (the draft stays). Absent ⇒ no Intervene.
 	 */
@@ -154,6 +159,7 @@ export function WorkflowRunStatusCard({
 	onStop,
 	onDismiss,
 	liveDetail,
+	activeModel,
 	onSteer,
 }: WorkflowRunStatusCardProps) {
 	const { t } = useTranslation();
@@ -271,7 +277,7 @@ export function WorkflowRunStatusCard({
 							active.label,
 							...(active.model === undefined
 								? []
-								: [active.model ?? t("pages.chat.workflow.status.defaultModel", "default model")]),
+								: [activeModel ?? active.model ?? t("pages.chat.workflow.status.defaultModel", "default model")]),
 							...(active.startedAtUtc == null ? [] : [formatWorkflowElapsed(now - active.startedAtUtc)]),
 						].join(" · ")}
 					</Text>

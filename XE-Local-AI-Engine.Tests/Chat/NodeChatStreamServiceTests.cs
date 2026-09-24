@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -74,6 +75,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -127,6 +129,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -183,6 +186,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -247,6 +251,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -302,6 +307,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -352,6 +358,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -401,6 +408,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var sampling = new SamplingOptions
@@ -460,6 +468,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -514,6 +523,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -578,6 +588,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -640,6 +651,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -703,6 +715,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             nodePolicy,
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -869,6 +882,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
     }
 
@@ -917,6 +931,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1053,6 +1068,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1111,6 +1127,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -1223,6 +1240,80 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.Equal(conversationId, exception.ConversationId);
         await persistence.DidNotReceive().PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(GraphWorkflowRunStatus.Running)]
+    [Arguments(GraphWorkflowRunStatus.WaitingForApproval)]
+    public async Task SendMessageAsync_WhenTheBoundWorkflowRunIsLive_RefusesBeforePersisting(GraphWorkflowRunStatus status)
+    {
+        // A parked run is live too: its answer goes through the workflow path, never a normal send.
+        var conversationId = Guid.NewGuid();
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        var service = CreateAgentHomeService(persistence,
+            Substitute.For<IInvocationRunner>(),
+            new RecordingWorkerEventDispatcher(),
+            Substitute.For<IConversationSandboxStager>(),
+            graphWorkflows: BoundRunStore(conversationId, status));
+
+        var exception = await AssertEx.ThrowsAsync<NodeChatWorkflowRunLiveException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello")))
+            {
+                // Nothing is ever yielded: the refusal lands before the user turn is persisted.
+            }
+        });
+
+        AssertEx.Equal(conversationId, exception.ConversationId);
+        await persistence.DidNotReceive().PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenTheBoundWorkflowRunIsTerminal_DoesNotRefuse()
+    {
+        // Past the workflow check the unknown conversation's own NotFound surfaces, which proves the guard let it through.
+        var conversationId = Guid.NewGuid();
+        var service = CreateAgentHomeService(Substitute.For<INodeChatPersistenceService>(),
+            Substitute.For<IInvocationRunner>(),
+            new RecordingWorkerEventDispatcher(),
+            Substitute.For<IConversationSandboxStager>(),
+            graphWorkflows: BoundRunStore(conversationId, GraphWorkflowRunStatus.Completed));
+
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello")))
+            {
+                // Nothing is ever yielded: the conversation read fails.
+            }
+        });
+    }
+
+    private static IGraphWorkflowStore BoundRunStore(Guid conversationId, GraphWorkflowRunStatus status)
+    {
+        var store = Substitute.For<IGraphWorkflowStore>();
+        store.ListRunsByConversationAsync(conversationId, Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<GraphWorkflowRunSnapshot>>([
+                 new GraphWorkflowRunSnapshot
+                 {
+                     Id = Guid.NewGuid(),
+                     RequestId = Guid.NewGuid(),
+                     DefinitionId = Guid.NewGuid(),
+                     DefinitionVersion = 1,
+                     GraphHash = "hash",
+                     Status = status,
+                     FailureClass = GraphWorkflowFailureClass.None,
+                     GraphJson = "{}",
+                     InputJson = null,
+                     OutputJson = null,
+                     Seq = 1,
+                     Version = 1,
+                     CancelRequestedAtUtc = null,
+                     StartedAtUtc = null,
+                     CompletedAtUtc = null,
+                     CreatedAtUtc = 1
+                 }
+             ]));
+        return store;
     }
 
     [Test]
@@ -1384,6 +1475,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1542,6 +1634,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1749,6 +1842,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -1806,6 +1900,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1864,6 +1959,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1923,6 +2019,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1983,6 +2080,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2034,6 +2132,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         // The stop button is a SEPARATE request that routes through the cancellation registry (the real cancel
@@ -2101,6 +2200,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -2153,6 +2253,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
         var events = new List<ChatStreamEvent>();
@@ -2234,6 +2335,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
         // The blocked GetEnableToolsAsync is released as a cancellation when the client disconnects.
@@ -2313,6 +2415,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2379,6 +2482,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2436,6 +2540,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2513,6 +2618,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2586,6 +2692,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2787,6 +2894,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -2841,6 +2949,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var streamed = new List<ChatStreamEvent>();
@@ -2908,6 +3017,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2964,6 +3074,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3019,6 +3130,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3073,6 +3185,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3130,6 +3243,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -3202,6 +3316,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3280,6 +3395,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3383,6 +3499,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3501,6 +3618,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3608,6 +3726,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3663,6 +3782,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3739,6 +3859,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3798,6 +3919,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3859,6 +3981,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -3996,7 +4119,8 @@ public sealed class NodeChatStreamServiceTests
         IInvocationRunner runner,
         RecordingWorkerEventDispatcher dispatcher,
         IConversationSandboxStager stager,
-        ILocalChatRuntimePackageBuilder? runtimePackageBuilder = null)
+        ILocalChatRuntimePackageBuilder? runtimePackageBuilder = null,
+        IGraphWorkflowStore? graphWorkflows = null)
     {
         return new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -4025,6 +4149,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            graphWorkflows ?? Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
     }
 
@@ -4069,6 +4194,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
     }
 
@@ -4653,6 +4779,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;

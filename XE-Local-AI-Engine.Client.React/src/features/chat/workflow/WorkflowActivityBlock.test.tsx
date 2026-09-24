@@ -90,6 +90,48 @@ describe("WorkflowActivityBlock", () => {
 		expect(within(block).getByTestId("chat-workflow-activity-output-code").textContent).toBe("fn main() {}");
 	});
 
+	it("reads a truncated event trail to the end on its own, so a later page's publish marker still lands", async () => {
+		routes();
+		const requestedCursors: string[] = [];
+		const [created, completed, published] = chatWorkflowEvents().events;
+		if (!(created && completed && published)) {
+			throw new Error("The event fixture changed shape.");
+		}
+		server.use(
+			http.get(localApiPath(`graph-workflows/runs/${runId}/events`), ({ request }) => {
+				const afterSeq = new URL(request.url).searchParams.get("afterSeq") ?? "0";
+				requestedCursors.push(afterSeq);
+				return HttpResponse.json(
+					afterSeq === "0"
+						? chatWorkflowEvents({ events: [created, completed], lastSeq: 2, replayTruncated: true })
+						: chatWorkflowEvents({ events: [published], lastSeq: 3, replayTruncated: false }),
+				);
+			}),
+		);
+
+		renderWithProviders(<WorkflowActivityBlock runId={runId} workflowName="Support triage" />);
+
+		expect((await screen.findByTestId("chat-workflow-activity-published-code")).textContent).toBe(
+			i18next.t("pages.chat.workflow.activity.published"),
+		);
+		expect(requestedCursors).toEqual(["0", "2"]);
+	});
+
+	it("says which attachments an Agent turn went without", async () => {
+		outputs["code"] = { kind: "LlmCall", output: { text: "fn main() {}", attachmentsSkipped: ["a.pdf", "b.png"] } };
+		try {
+			routes();
+			renderWithProviders(<WorkflowActivityBlock runId={runId} workflowName="Support triage" />);
+
+			expect((await screen.findByTestId("chat-workflow-activity-attachments-skipped-code")).textContent).toBe(
+				i18next.t("pages.chat.workflow.activity.attachmentsSkipped", { names: "a.pdf, b.png" }),
+			);
+			expect(screen.queryByTestId("chat-workflow-activity-attachments-skipped-classify")).toBeNull();
+		} finally {
+			outputs["code"] = { kind: "LlmCall", output: { text: "fn main() {}" } };
+		}
+	});
+
 	it("replaces a cached Failed node document once the node run reports a later attempt", async () => {
 		server.use(
 			jsonRoute(

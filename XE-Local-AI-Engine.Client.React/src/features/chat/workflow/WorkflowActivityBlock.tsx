@@ -1,6 +1,6 @@
 import { Badge, Collapse, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconChevronDown, IconSitemap } from "@tabler/icons-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -118,6 +118,13 @@ function ActivityRow({ entry, liveDetail }: { entry: WorkflowActivityEntry; live
 						: t("pages.chat.workflow.activity.steerIgnored", "Steering arrived after the node finished")}
 				</Text>
 			))}
+			{entry.attachmentsSkipped ? (
+				<Text size="xs" c="orange" data-testid={`chat-workflow-activity-attachments-skipped-${entry.key}`}>
+					{t("pages.chat.workflow.activity.attachmentsSkipped", "Skipped attachments: {{names}}", {
+						names: entry.attachmentsSkipped.join(", "),
+					})}
+				</Text>
+			) : null}
 			{entry.error ? (
 				<Text size="xs" c="red">
 					{entry.error}
@@ -145,6 +152,14 @@ export function WorkflowActivityBlock({
 	const feed = { pollIntervalMs };
 	const runQuery = useGraphWorkflowRun(runId, feed);
 	const eventsQuery = useGraphWorkflowRunEvents(runId, feed);
+	// The feed is cursor-paged (a page is 200 events) and a chat block has no "Load more", so it reads to the end on its
+	// own. A failed page stops the chase rather than retrying in a loop.
+	const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = eventsQuery;
+	useEffect(() => {
+		if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+			fetchNextPage().catch(() => undefined);
+		}
+	}, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 	const graph = runQuery.data?.graph;
 	const nodeRuns = runQuery.data?.nodeRuns ?? [];
 	// Only the nodes that finished and whose documents say something: a node detail is one request each.

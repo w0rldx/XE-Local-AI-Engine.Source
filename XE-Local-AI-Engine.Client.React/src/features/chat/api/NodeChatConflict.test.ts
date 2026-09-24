@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
-import { isNodeChatReadOnlyConflict, stripSignalRHubErrorPrefix } from "@/features/chat/api/NodeChatConflict";
+import {
+	isNodeChatReadOnlyConflict,
+	isNodeChatWorkflowRunLiveConflict,
+	stripSignalRHubErrorPrefix,
+} from "@/features/chat/api/NodeChatConflict";
 
 function conflict(conflictType: string): ConflictProblemDetails {
 	return {
@@ -70,11 +74,40 @@ describe("isNodeChatReadOnlyConflict", () => {
 	});
 });
 
+describe("isNodeChatWorkflowRunLiveConflict", () => {
+	it("matches the REST 409 and the wrapped hub refusal, and nothing else", () => {
+		expect(isNodeChatWorkflowRunLiveConflict(new ApiError(409, conflict("GraphWorkflowRunLiveInConversation")))).toBe(true);
+		expect(
+			isNodeChatWorkflowRunLiveConflict(
+				new Error(
+					"An unexpected error occurred invoking 'SendMessage' on the server. HubException: GraphWorkflowRunLiveInConversation: A workflow run is live.",
+				),
+			),
+		).toBe(true);
+		// The hub's stream refuses once enumerated, so SignalR wraps it in its streaming-results sentence instead.
+		expect(
+			isNodeChatWorkflowRunLiveConflict(
+				new Error(
+					"An error occurred on the server while streaming results. HubException: GraphWorkflowRunLiveInConversation: Conversation 0e5b has a workflow run in progress; answer or stop the workflow before sending a normal message.",
+				),
+			),
+		).toBe(true);
+		expect(isNodeChatWorkflowRunLiveConflict(new ApiError(409, conflict("ReadOnlyConversation")))).toBe(false);
+		expect(isNodeChatWorkflowRunLiveConflict(new Error("ReadOnlyConversation: read-only."))).toBe(false);
+		expect(isNodeChatReadOnlyConflict(new Error("GraphWorkflowRunLiveInConversation: live."))).toBe(false);
+	});
+});
+
 describe("stripSignalRHubErrorPrefix", () => {
 	it("removes SignalR's wrapper and leaves anything else untouched", () => {
 		expect(
 			stripSignalRHubErrorPrefix("An unexpected error occurred invoking 'RegenerateMessage' on the server. HubException: nope"),
 		).toBe("nope");
+		expect(
+			stripSignalRHubErrorPrefix(
+				"An error occurred on the server while streaming results. HubException: ReadOnlyConversation: x",
+			),
+		).toBe("ReadOnlyConversation: x");
 		expect(stripSignalRHubErrorPrefix("plain message")).toBe("plain message");
 	});
 });

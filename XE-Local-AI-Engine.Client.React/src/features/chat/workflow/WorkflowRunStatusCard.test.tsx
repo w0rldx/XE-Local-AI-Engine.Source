@@ -96,6 +96,15 @@ describe("WorkflowRunStatusCard", () => {
 		expect(screen.getByTestId("chat-workflow-status-active").textContent).toBe("Analyze · qwen3-8b · 10s");
 	});
 
+	it("names the model the node actually resolved over the config's and the default label", () => {
+		vi.useFakeTimers({ now: 1_700_000_210_000, toFake: ["Date"] });
+		const path = toWorkflowPath(eightNodeGraph, [makeNodeRun({ nodeKey: "analyze", status: "Running", completedAtUtc: null })]);
+
+		renderCard("Running", { path, activeModel: "gemma-4b" });
+
+		expect(screen.getByTestId("chat-workflow-status-active").textContent).toBe("Analyze · gemma-4b · 10s");
+	});
+
 	it("says where a failed run stopped and why, and can be dismissed", () => {
 		const failedPath = toWorkflowPath(eightNodeGraph, [makeNodeRun({ nodeKey: "lookup", status: "Failed" })]);
 		const props = renderCard("Failed", { path: failedPath, failureReason: "The file is missing." });

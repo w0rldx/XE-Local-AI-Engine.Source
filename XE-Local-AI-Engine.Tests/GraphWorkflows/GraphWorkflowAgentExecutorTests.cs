@@ -1074,6 +1074,10 @@ public sealed class GraphWorkflowAgentExecutorTests
             }
 
             _ = await harness.AdvanceAsync(runId);
+
+            // real-timer: NOT a wait for the event — bounded by tick count, it hands the thread pool back so the lane's
+            // detached work these ticks wait on can run (see GraphWorkflowHarness.AdvanceUntilAsync).
+            await Task.Delay(GraphWorkflowHarness.PollPause);
         }
 
         throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");

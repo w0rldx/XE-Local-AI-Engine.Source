@@ -2,7 +2,10 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1;
 
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -480,6 +483,85 @@ public sealed class GraphWorkflowChatEndpointTests
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    /// <summary>
+    ///     A normal send (the chat hub, not the workflow route) into a conversation whose bound run is live is refused by the
+    ///     server, a parked run included, under its own conflict token and before the user turn is persisted.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task NormalSend_WhileTheBoundRunIsLive_IsRefusedOverTheHub(bool parked)
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph());
+        var conversationId = await CreateConversationAsync(harness.Services);
+        if (parked)
+        {
+            _ = await StartAndParkAsync(harness, definitionId, conversationId);
+        }
+        else
+        {
+            using var start = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "hello"));
+            AssertEx.Equal(HttpStatusCode.Accepted, start.StatusCode);
+        }
+
+        var before = (await MessagesAsync(harness.Services, conversationId)).Count;
+        await using var connection = CreateChatHubConnection();
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage", new NodeChatStreamRequest(conversationId, "sneaking in")))
+            {
+                // The refusal lands before the first event.
+            }
+        });
+
+        // SignalR prefixes a streamed server error; the SPA matches the token wherever it sits.
+        AssertEx.Contains(exception.Message, "HubException: GraphWorkflowRunLiveInConversation: ");
+        AssertEx.Equal(before, (await MessagesAsync(harness.Services, conversationId)).Count, "a refused normal send persists nothing.");
+    }
+
+    [Test]
+    public async Task NormalSend_AfterTheBoundRunFinished_IsNotRefused()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph());
+        var conversationId = await CreateConversationAsync(harness.Services);
+        var runId = await StartAndParkAsync(harness, definitionId, conversationId);
+        using (var answer = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "postgres")))
+        {
+            AssertEx.Equal(HttpStatusCode.Accepted, answer.StatusCode);
+        }
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
+        await using var connection = CreateChatHubConnection();
+        await connection.StartAsync();
+        using var stop = new CancellationTokenSource();
+
+        // Only the first event matters: it is written after the workflow check, so the send got past it. Stopping there keeps
+        // the turn from reaching a model this host does not have.
+        await using var events = connection.StreamAsync<ChatStreamEvent>("SendMessage", new NodeChatStreamRequest(conversationId, "plain chat again"), stop.Token)
+                                           .GetAsyncEnumerator(stop.Token);
+        AssertEx.True(await events.MoveNextAsync(), "the send streamed nothing.");
+        var firstEvent = events.Current.Type;
+        await stop.CancelAsync();
+
+        AssertEx.Equal(ChatStreamEventTypes.UserMessagePersisted, firstEvent);
+    }
+
+    private HubConnection CreateChatHubConnection() =>
+        new HubConnectionBuilder()
+            .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
+            {
+                options.HttpMessageHandlerFactory = _ => Host.Factory.Server.CreateHandler();
+                options.AccessTokenProvider = () => Task.FromResult<string?>(Host.Factory.CreateNodeAccessToken());
+                options.Headers.Add("Origin", "http://localhost");
+            })
+            .WithNodeJsonProtocol()
+            .Build();
 
     private async Task<Guid> StartAndParkAsync(GraphWorkflowHarness harness, Guid definitionId, Guid conversationId)
     {

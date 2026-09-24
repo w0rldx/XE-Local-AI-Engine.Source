@@ -11,11 +11,20 @@ import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
 const readOnlyConversationConflictType = "ReadOnlyConversation";
 
 /**
- * SignalR wraps a server HubException as "An unexpected error occurred invoking '<method>' on the server.
- * HubException: <the actual message>" — the prefix is generic noise and the tail is the sentence the hub
- * deliberately wrote (the message-size rejection, the read-only rejection).
+ * The node's refusal of a normal chat send into a conversation whose bound Chat workflow run is still live (parked on
+ * a question included): the send has to go through the workflow, or the run has to stop first. Same two wire shapes
+ * as {@link readOnlyConversationConflictType}.
  */
-const signalRHubErrorPrefix = /^An unexpected error occurred invoking '[^']*' on the server\.\s*HubException:\s*/;
+const graphWorkflowRunLiveConflictType = "GraphWorkflowRunLiveInConversation";
+
+/**
+ * SignalR wraps a server HubException as "An unexpected error occurred invoking '<method>' on the server.
+ * HubException: <the actual message>" — or, when the hub method is a STREAM that throws once enumerated, as "An error
+ * occurred on the server while streaming results. HubException: <the actual message>". The prefix is generic noise and
+ * the tail is the sentence the hub deliberately wrote (the message-size rejection, the read-only rejection).
+ */
+const signalRHubErrorPrefix =
+	/^An (?:unexpected error occurred invoking '[^']*' on the server|error occurred on the server while streaming results)\.\s*HubException:\s*/;
 
 /**
  * Strips SignalR's generic wrapper so callers read the sentence the hub actually wrote. Anything not matching the
@@ -34,14 +43,23 @@ export function stripSignalRHubErrorPrefix(message: string): string {
  * as `ApiError`, so `isAxiosError` is already false by the time a component sees it.
  */
 export function isNodeChatReadOnlyConflict(error: unknown): boolean {
+	return isNodeChatConflict(error, readOnlyConversationConflictType);
+}
+
+/** True when the node refused a normal send because the conversation's bound workflow run is still live. */
+export function isNodeChatWorkflowRunLiveConflict(error: unknown): boolean {
+	return isNodeChatConflict(error, graphWorkflowRunLiveConflictType);
+}
+
+function isNodeChatConflict(error: unknown, conflictType: string): boolean {
 	if (error instanceof ApiError) {
 		if (error.statusCode !== 409) {
 			return false;
 		}
 
 		const problemDetails = error.apiProblemDetails as Partial<ConflictProblemDetails> | undefined;
-		return problemDetails?.conflictType === readOnlyConversationConflictType;
+		return problemDetails?.conflictType === conflictType;
 	}
 
-	return error instanceof Error && stripSignalRHubErrorPrefix(error.message).startsWith(`${readOnlyConversationConflictType}:`);
+	return error instanceof Error && stripSignalRHubErrorPrefix(error.message).startsWith(`${conflictType}:`);
 }

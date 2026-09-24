@@ -124,17 +124,20 @@ internal static class ChatStreamEventMapper
     ///     never a terminal. The resume path stamps the invocation id as BOTH the message id and the request id, so
     ///     the ids are passed explicitly rather than as a correlation.
     /// </remarks>
+    /// <param name="model">The model the invocation runs on, known from its runtime package before the first token.</param>
     public static ChatStreamEvent SnapshotEvent(Guid conversationId,
         Guid messageId,
         Guid requestId,
         string content,
         string? reasoning,
         long timestampMs,
-        long sequence)
+        long sequence,
+        string? model = null)
     {
         return new ChatStreamEvent
         {
             Type = ChatStreamEventTypes.AssistantSnapshot,
+            Model = model,
             ConversationId = conversationId,
             MessageId = messageId,
             RequestId = requestId,

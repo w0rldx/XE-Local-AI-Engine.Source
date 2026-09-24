@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using System.ComponentModel;
+using Win32Exception = System.ComponentModel.Win32Exception;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The run list against real run directories: what it reads out of a well-formed run, what it does with a
 ///     malformed or oversized one, and what it refuses to carry off disk.
 /// </summary>
-[TUnit.Core.Category(TestCategories.Integration)]
+[Category(TestCategories.Integration)]
 public sealed class AgentHomeRunListServiceTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);

@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using System.ComponentModel;
+using Win32Exception = System.ComponentModel.Win32Exception;
 using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cannot close. Proved by planting a marker in a global configuration file; <c>[NotInParallel]</c> because the
 ///     probe must set <c>GIT_CONFIG_GLOBAL</c> on this process for the child to inherit it.
 /// </remarks>
-[TUnit.Core.Category(TestCategories.Integration)]
+[Category(TestCategories.Integration)]
 [NotInParallel]
 public sealed class HostGitRunnerHardeningTests : IDisposable
 {

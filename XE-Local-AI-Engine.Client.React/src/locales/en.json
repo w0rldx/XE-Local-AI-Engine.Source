@@ -813,6 +813,7 @@
 			"loadingModel": "Loading model…",
 			"remoteViewOnlyTitle": "Remote conversation",
 			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
+			"workflowRunLive": "This conversation is running a workflow; answer through it or stop it first.",
 			"streamFailedTitle": "Local chat stream failed.",
 			"historyLoadFailedTitle": "Unable to load local chat history.",
 			"unknownError": "Unknown error",
@@ -1284,7 +1285,8 @@
 					"toolResult": "{{tool}}: {{summary}}",
 					"steered": "Steered: {{message}}",
 					"steeredNoText": "Steered",
-					"steerIgnored": "Steering arrived after the node finished"
+					"steerIgnored": "Steering arrived after the node finished",
+					"attachmentsSkipped": "Skipped attachments: {{names}}"
 				},
 				"rerun": {
 					"title": "Run the workflow again?",

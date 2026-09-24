@@ -17,6 +17,7 @@ import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatConversationModel, ChatWorkflowSlots } from "@/features/chat/models/ChatModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import {
+	activeWorkflowNode,
 	graphAcceptsAttachments,
 	isBusyWorkflowRun,
 	isLiveWorkflowRun,
@@ -206,6 +207,10 @@ export function useChatWorkflow({
 	const liveNode = liveRun && liveRun === cardRun ? liveWorkflowNode(path) : undefined;
 	const liveActivity = useGraphWorkflowNodeActivity(cardRunId, liveNode?.key, liveNode?.invocationId);
 	const liveDetail = liveNode ? <WorkflowNodeLiveDetail nodeKey={liveNode.key} stream={liveActivity.stream} /> : undefined;
+	// The model the card's active node really runs on, as its live stream resolved it (a config with no `model` runs on
+	// the default). The node document is no fallback: `output.usage` lands only with the settled turn.
+	const activeNode = isLiveWorkflowRun(cardStatus) ? activeWorkflowNode(path) : undefined;
+	const activeModel = activeNode && activeNode.key === liveNode?.key ? liveActivity.model : undefined;
 	const cancelMutation = useCancelGraphWorkflowRun();
 	const steerMutation = useSteerGraphWorkflowNodeRun();
 	// Intervene is offered on the live run's running/queued Agent or LLM Call, never while a cancel drains.
@@ -500,6 +505,7 @@ export function useChatWorkflow({
 					onStop={stop}
 					onDismiss={() => dismissRun(conversationId, cardRun.run.id)}
 					liveDetail={liveDetail}
+					activeModel={activeModel}
 					onSteer={steer}
 				/>
 			) : null}

@@ -2021,7 +2021,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "a dirty submodule must not surface as a dirty patch target");
     }
 
-    /// <summary>Renders rejections for an assertion message, entry name included where the service supplied one.</summary>
     /// <summary>
     ///     A whole-patch refusal has no entry to name, and must not borrow one. The hash binding is the clearest
     ///     example: nothing about a single file failed.

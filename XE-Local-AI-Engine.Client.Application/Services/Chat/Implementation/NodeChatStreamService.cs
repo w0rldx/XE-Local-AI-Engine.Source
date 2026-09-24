@@ -8,12 +8,14 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -60,6 +62,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
     private readonly TimeProvider _timeProvider;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
+    private readonly IGraphWorkflowStore _graphWorkflows;
     private readonly ILogger<NodeChatStreamService> _logger;
 
     public NodeChatStreamService(INodeChatPersistenceService persistence,
@@ -84,6 +87,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
+        IGraphWorkflowStore graphWorkflows,
         ILogger<NodeChatStreamService> logger)
     {
         _persistence = persistence;
@@ -108,6 +112,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         _streamBudgetOptions = streamBudgetOptions;
         _timeProvider = timeProvider;
         _toolApprovalPolicy = toolApprovalPolicy;
+        _graphWorkflows = graphWorkflows;
         _logger = logger;
     }
 
@@ -504,6 +509,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
         // authoritative; throwing here propagates to the hub caller.
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+
+        // A live bound workflow run owns the conversation (parked runs included): a normal send would interleave with it.
+        // The SPA gate is cosmetic beside this. Only the newest run can be live; the database allows one per conversation.
+        var runs = await _graphWorkflows.ListRunsByConversationAsync(request.ConversationId, limit: 1, cancellationToken);
+        if (runs.Count > 0 && !GraphWorkflowStateMachine.IsTerminal(runs[0].Status))
+        {
+            throw new NodeChatWorkflowRunLiveException(request.ConversationId);
+        }
 
         var persistedSelectedPath = request.SelectedPath is not null
             ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest

@@ -469,7 +469,9 @@ A run started from the Chat page (`POST graph-workflows/conversations/{conversat
 `AddChatWorkflowBinding`). A **partial unique index** on `conversation_id` over the four live statuses
 (`ux_graph_workflow_runs_live_conversation`) makes one live run per conversation a database rule; the store answers the
 losing insert with `GraphWorkflowRunBusyException`. `IGraphWorkflowRunService.StartAsync` has an overload taking a
-`GraphWorkflowRunBinding`; an unbound run (the Graph Workflows page) publishes nothing. Every Agent of a Chat graph sees
+`GraphWorkflowRunBinding`; an unbound run (the Graph Workflows page) publishes nothing. While the newest bound run is
+live (parked included), a **normal** chat send into the conversation is refused server-side with conflict type
+`GraphWorkflowRunLiveInConversation`, not only by the Chat page's composer lock ([Chat](05-chat.md) "Chat workflow mode"). Every Agent of a Chat graph sees
 the chat message in its prompt (§4.2, "Conversation request"). A conversation purge
 (`ConversationFootprintPurge`) unbinds the conversation's runs explicitly and never deletes one.
 
@@ -518,7 +520,9 @@ so the terminal early return in `AdvanceCoreAsync` judges it on the tick the ste
 discard hook cancels its invocation. The next admit re-runs the node on the **same attempt**: no attempt is spent,
 `MaxTotalAttempts` is not charged, and the restart reconciler is unchanged, since a `Pending` row is not interrupted
 work. The re-run's seed prompt ends with an `## Operator steering` section listing the applied entries, oldest first
-(§4.2, §4.2a). Each reset restarts the node deadline, so `MaxSteersPerNode` is the bound. Cross-node routing stays
+(§4.2, §4.2a). Each reset restarts the node deadline, so `MaxSteersPerNode` is the bound. Steering text is **not**
+counted against `MaxRunInputBytes`: each entry is bounded by its own per-entry byte cap (above) and a row by
+`MaxSteersPerNode`. Cross-node routing stays
 absent (register 22, D6(a)).
 
 ### 3.8 Attachments
@@ -538,12 +542,16 @@ chat-bound run (`run.input.conversationId`). `GraphWorkflowInvocationExecutor` r
   with its name inside the fence as `file:` metadata. The marker's nonce is keyed on the server-secret per-conversation
   seed (`IUntrustedContentFenceSeedProvider`) plus the run id and node key, so a document cannot forge the closing marker.
   Bodies are budgeted before wrapping at `MaxRunInputBytes`, counted in characters (the composer's unit). Truncation
-  therefore never cuts a closing marker, and the composer's truncation notice follows. A file without extracted Markdown adds nothing.
+  therefore never cuts a closing marker, and the composer's truncation notice follows. A file whose status is not `Extracted`,
+  or whose Markdown is empty, is **skipped**, below. The Markdown is read only for an `Extracted` row, because a `.md`
+  upload's raw bytes share the Markdown blob's path.
 - **Image** — attached as a `ConversationImagePart` on the seed turn through `IChatTurnContextBuilder.BuildImageContextAsync`,
   so the chat's `MaxImageAttachments` / `MaxImageAttachmentBytes` caps apply (over-cap images are dropped with a
   warning). Only when the node's effective model resolves `SupportsVision`; otherwise the node fails
-  `ValidationFailed` with a reason naming the node, the file and the model. An LLM Call carries images the same way.
-- **Gone** — a file no longer in the conversation when the attempt starts is skipped. The same attempt-time resolution
+  `ValidationFailed` with a reason naming the node, the file and the model. An LLM Call carries images the same way. An
+  `image` reference whose file's extraction status is not `Image` is **skipped** before the vision check, so it never
+  reaches `BuildImageContextAsync`, which would drop it silently.
+- **Skipped** — a file no longer in the conversation when the attempt starts, and the unusable text or image files above, are skipped. The same attempt-time resolution
   that reads the content decides this, so the notice can never disagree with the prompt. The node's **output** document
   gains `attachmentsSkipped: [name…]` (omitted when nothing was skipped), the executor logs the count at Information,
   and the turn still runs.

@@ -124,7 +124,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             lastContent,
             string.IsNullOrEmpty(lastReasoning) ? null : lastReasoning,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            sequence++);
+            sequence++,
+            snapshot.ModelUsed);
 
         // The last runtime phase this stream surfaced. ONE mechanism serves the opening replay and the live loop, so
         // they cannot drift, and a state publish that changed only content does not re-emit the phase.

@@ -539,6 +539,38 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		});
 	});
 
+	it("stops resuming when a reconcile is the first frame of the resumed subscription (replay cap)", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: 0 }));
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+
+		// A mid-stream reconcile (queue overflow) repairs through ResumeMessage.
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ type: "assistant-reconcile", sequence: 1, delta: undefined, contentOffset: undefined }),
+		);
+		await settle();
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+
+		// The resumed subscription opens with a reconcile: the server's replay cap, after which it ends the stream.
+		// Re-entering would earn the same answer forever, so the adapter ends the turn instead.
+		const ended = iterator.next();
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({
+				type: "assistant-reconcile",
+				messageId: "request-1",
+				sequence: 0,
+				delta: undefined,
+				contentOffset: undefined,
+			}),
+		);
+		await expect(ended).resolves.toMatchObject({ done: true });
+		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
+	});
+
 	it("re-bases the offsets from a resume snapshot so the following delta is not mistaken for a gap", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();

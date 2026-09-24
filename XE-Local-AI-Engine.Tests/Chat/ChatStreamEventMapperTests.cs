@@ -203,9 +203,10 @@ public sealed class ChatStreamEventMapperTests
         var conversationId = Guid.NewGuid();
         var invocationId = Guid.NewGuid();
 
-        var snapshot = ChatStreamEventMapper.SnapshotEvent(conversationId, invocationId, invocationId, "Hello world", "I should greet them", Timestamp, sequence: 0);
+        var snapshot = ChatStreamEventMapper.SnapshotEvent(conversationId, invocationId, invocationId, "Hello world", "I should greet them", Timestamp, sequence: 0, model: "gemma-4b");
 
         AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, snapshot.Type);
+        AssertEx.Equal("gemma-4b", snapshot.Model);
         // Deliberately NOT terminal — the turn continues after a snapshot, so its status stays streaming.
         AssertEx.Equal(NodeChatMessageStatusValues.Streaming, snapshot.Status);
         AssertEx.Equal(conversationId, snapshot.ConversationId);
@@ -226,6 +227,7 @@ public sealed class ChatStreamEventMapperTests
         var snapshot = ChatStreamEventMapper.SnapshotEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Hi", reasoning: null, Timestamp, sequence: 0);
 
         AssertEx.Null(snapshot.Reasoning);
+        AssertEx.Null(snapshot.Model);
         AssertEx.Equal(expected: 0L, snapshot.ReasoningOffset);
         AssertEx.Equal(expected: 2L, snapshot.ContentOffset);
     }

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
+import { isNodeChatReadOnlyConflict, isNodeChatWorkflowRunLiveConflict } from "@/features/chat/api/NodeChatConflict";
 import {
 	clientWatchdogFailureCategory,
 	StreamWatchdogError,
@@ -360,6 +360,11 @@ export function useChatStreamController({
 						message = t(
 							"pages.chat.remoteViewOnly",
 							"This conversation was started from a paired client and is view-only on this node.",
+						);
+					} else if (isNodeChatWorkflowRunLiveConflict(error)) {
+						message = t(
+							"pages.chat.workflowRunLive",
+							"This conversation is running a workflow; answer through it or stop it first.",
 						);
 					} else if (watchdogNotice) {
 						message = t(watchdogNotice.key, watchdogNotice.fallback);

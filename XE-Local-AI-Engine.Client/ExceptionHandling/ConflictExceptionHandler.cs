@@ -44,6 +44,7 @@ public class ConflictExceptionHandler : IExceptionHandler
         var conflictType = exception switch
         {
             NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
+            NodeChatWorkflowRunLiveException => NodeConflictProblemType.GraphWorkflowRunLiveInConversation,
             ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,

@@ -1066,7 +1066,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
     /// <summary>
     ///     What an <c>includeAttachments</c> node's turn carries, from ONE resolution at attempt time: text framed as untrusted
-    ///     documents under "## Attachments", images as parts under the chat's caps, and the names of files gone from the conversation.
+    ///     documents under "## Attachments", images as parts under the chat's caps, and the names of files that contributed nothing.
     /// </summary>
     /// <remarks>
     ///     The text goes through the chat's own <see cref="ConversationAttachmentContextComposer" />: each body is fenced with a
@@ -1093,24 +1093,27 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             return TurnAttachments.None;
         }
 
+        // Every reference that contributes nothing lands in ONE list, whatever the reason: gone from the conversation, an image
+        // reference to a file that never became an image, or a text file with no extracted body.
         var files = services.GetRequiredService<IConversationUploadedFileStore>();
-        var present = (await files.ListAsync(conversationId, cancellationToken)).Select(static file => file.FileId).ToHashSet();
-        var skipped = references.Where(reference => !present.Contains(reference.FileId)).Select(static reference => reference.Name).ToList();
-        if (skipped.Count > 0)
-        {
-            _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s) no longer in conversation {ConversationId}.",
-                runId,
-                node.NodeKey,
-                skipped.Count,
-                conversationId);
-        }
-
+        var present = (await files.ListAsync(conversationId, cancellationToken)).ToDictionary(static file => file.FileId);
+        var skipped = new List<string>();
         var parts = new List<AttachmentTextPart>();
         var imageIds = new List<Guid>();
-        foreach (var reference in references.Where(reference => present.Contains(reference.FileId)))
+        foreach (var reference in references)
         {
-            if (string.Equals(reference.Kind, "image", StringComparison.Ordinal))
+            if (!present.TryGetValue(reference.FileId, out var file))
             {
+                skipped.Add(reference.Name);
+            }
+            else if (string.Equals(reference.Kind, "image", StringComparison.Ordinal))
+            {
+                if (file.ExtractionStatus != DocumentExtractionStatus.Image)
+                {
+                    skipped.Add(reference.Name);
+                    continue;
+                }
+
                 if (!supportsVision)
                 {
                     return new TurnAttachments
@@ -1121,10 +1124,25 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
                 imageIds.Add(reference.FileId);
             }
-            else if (await files.ReadExtractedMarkdownAsync(conversationId, reference.FileId, cancellationToken) is { } markdown)
+            // Only an Extracted row has a Markdown blob; reading another's path can hit the raw bytes of a ".md" upload instead.
+            else if (file.ExtractionStatus == DocumentExtractionStatus.Extracted
+                     && await files.ReadExtractedMarkdownAsync(conversationId, reference.FileId, cancellationToken) is { Length: > 0 } markdown)
             {
                 parts.Add(new AttachmentTextPart(reference.Name, markdown));
             }
+            else
+            {
+                skipped.Add(reference.Name);
+            }
+        }
+
+        if (skipped.Count > 0)
+        {
+            _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s) in conversation {ConversationId}: gone, not an image, or no extracted text.",
+                runId,
+                node.NodeKey,
+                skipped.Count,
+                conversationId);
         }
 
         var images = imageIds.Count == 0

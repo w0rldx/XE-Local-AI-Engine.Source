@@ -139,6 +139,56 @@ public sealed class GraphWorkflowChatSteerTests
         harness.Invocations.Cancel(invocationId);
     }
 
+    /// <summary>
+    ///     A steer taken while the row is still <c>Queued</c> carries no invocation id (none is minted until the lease lands),
+    ///     and the next tick still applies it: the row goes back to <c>Pending</c> on the same attempt, and the re-run carries it.
+    /// </summary>
+    [Test]
+    public async Task ASteerWhileQueued_ResetsTheRowToPendingOnTheSameAttempt()
+    {
+        const string instructions = "steer-while-queued";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.ScriptSequence(instructions,
+            new GraphWorkflowScriptedTurn
+            {
+                Outcome = GraphWorkflowTurnOutcome.Parks
+            },
+            new GraphWorkflowScriptedTurn
+            {
+                Text = "the steered analysis"
+            });
+        var definitionId = await harness.SeedDefinitionAsync(ChatAgentGraph(instructions));
+        var conversationId = await CreateConversationAsync(harness.Services);
+        using var start = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "please analyze"));
+        AssertEx.Equal(HttpStatusCode.Accepted, start.StatusCode);
+        using var body = await ReadJsonAsync(start);
+        var runId = body.RootElement.GetProperty("runId").GetGuid();
+
+        // The dispatch tick leaves the row Queued; only a later tick writes Running, so no tick runs between here and the steer.
+        await harness.AdvanceUntilAsync(runId,
+            async () => (await harness.ReadNodeRunAsync(runId, "analyze")).Status == GraphWorkflowNodeRunStatus.Queued,
+            "the agent was never dispatched");
+        using var steered = await PostSteerAsync(Host.Factory, runId, "analyze", Guid.NewGuid(), "steered while queued");
+        AssertEx.Equal(HttpStatusCode.Accepted, steered.StatusCode);
+        var recorded = (await harness.ReadNodeRunAsync(runId, "analyze")).Steering.Single();
+        AssertEx.Null(recorded.InvocationId, "a Queued row has no invocation to pin the steer to.");
+
+        _ = await harness.AdvanceAsync(runId);
+
+        var afterTick = await harness.ReadNodeRunAsync(runId, "analyze");
+        AssertEx.Equal<bool?>(true, afterTick.Steering[0].Applied, "a null invocation id still matches a Queued row.");
+        AssertEx.Equal(1, afterTick.Attempt, "a steer never spends an attempt.");
+        AssertEx.ContainsSingle(await harness.ReadEventsAsync(runId), static entry => entry.EventType == GraphWorkflowEventTypes.NodeSteered,
+            "node.steered is the Queued → Pending reset itself.");
+
+        await harness.AdvanceUntilAsync(runId, async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed, "the steered run never completed");
+        AssertEx.Equal(1, (await harness.ReadNodeRunAsync(runId, "analyze")).Attempt);
+        AssertEx.False((await harness.ReadEventTrailAsync(runId)).Contains(GraphWorkflowEventTypes.NodeRetried, StringComparison.Ordinal));
+        var lastPrompt = harness.Invocations.Packages.Select(static package => package.ConversationContext[0].Content)
+                                .Last(static prompt => prompt.Contains(instructions, StringComparison.Ordinal));
+        AssertEx.True(lastPrompt.EndsWith("1. steered while queued", StringComparison.Ordinal), lastPrompt);
+    }
+
     private async Task<(Guid RunId, Guid ConversationId)> StartRunningAsync(GraphWorkflowHarness harness, string instructions)
     {
         var definitionId = await harness.SeedDefinitionAsync(ChatAgentGraph(instructions));

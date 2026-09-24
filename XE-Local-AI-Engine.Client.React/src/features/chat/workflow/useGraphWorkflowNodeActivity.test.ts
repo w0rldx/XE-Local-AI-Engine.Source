@@ -117,6 +117,18 @@ describe("useGraphWorkflowNodeActivity", () => {
 		expect(result.current.stream?.outputTokens).toBe(42);
 	});
 
+	it("reports the model the server resolved and keeps it across frames that do not repeat it", async () => {
+		const { result } = renderHook(() => useGraphWorkflowNodeActivity(runId, nodeKey, "invocation-1"));
+		await waitFor(() => expect(hubMock.streams).toHaveLength(1));
+		expect(result.current.model).toBeUndefined();
+
+		emit(frame({ type: "assistant-snapshot", sequence: 0, content: "", contentOffset: 0, model: "qwen3-8b" }));
+		expect(result.current.model).toBe("qwen3-8b");
+
+		emit(frame({ sequence: 1, delta: "Hi", contentOffset: 0 }));
+		expect(result.current.model).toBe("qwen3-8b");
+	});
+
 	it("re-keys on a new invocation id and goes idle without one", async () => {
 		const { result, rerender } = renderHook(({ invocationId }) => useGraphWorkflowNodeActivity(runId, nodeKey, invocationId), {
 			initialProps: { invocationId: "invocation-1" as string | undefined },

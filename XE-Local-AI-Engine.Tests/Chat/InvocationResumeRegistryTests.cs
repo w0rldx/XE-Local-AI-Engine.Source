@@ -76,8 +76,8 @@ public sealed class InvocationResumeRegistryTests
         var invocationId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        // Invocation is already mid-stream when the client reconnects.
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+        // Invocation is already mid-stream when the client reconnects. Its model is known from the runtime package.
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello", modelUsed: "gemma-4b"));
 
         var events = new List<ChatStreamEvent>();
         var consumer = Task.Run(async () =>
@@ -91,8 +91,8 @@ public sealed class InvocationResumeRegistryTests
         // Wait for the snapshot replay before pushing more deltas so ordering is deterministic.
         await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
 
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world"));
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world", modelUsed: "gemma-4b"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world", modelUsed: "gemma-4b"));
 
         await consumer;
 
@@ -104,6 +104,8 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Null(snapshot.Delta);
         AssertEx.Null(snapshot.ReasoningDelta);
         AssertEx.Equal("Hello", snapshot.Content);
+        // The model rides the snapshot, not only the terminal: a client attaching mid-turn names it at once.
+        AssertEx.Equal("gemma-4b", snapshot.Model);
         AssertEx.Equal(expected: 5L, snapshot.ContentOffset);
         AssertEx.Equal(conversationId, snapshot.ConversationId);
         AssertEx.Equal(invocationId, snapshot.RequestId);
@@ -797,13 +799,15 @@ public sealed class InvocationResumeRegistryTests
         long? generationDurationMs = null,
         string thinking = "",
         InvocationRuntimePhase? runtimePhase = null,
-        DateTimeOffset? runtimePhaseChangedAtUtc = null)
+        DateTimeOffset? runtimePhaseChangedAtUtc = null,
+        string? modelUsed = null)
     {
         return new InvocationState
         {
             InvocationId = invocationId,
             ConversationId = conversationId,
             Status = status,
+            ModelUsed = modelUsed,
             StreamedContent = content,
             StreamedThinkingContent = thinking,
             RuntimePhase = runtimePhase,

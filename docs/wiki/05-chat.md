@@ -60,7 +60,7 @@ A critical invariant in `NodeChatStreamService.SendMessageCoreAsync` is that the
 
 ### Delta-only wire delivery and bounded queues
 
-An `assistant-delta` carries only `delta` / `reasoningDelta` plus `contentOffset` / `reasoningOffset`; it never repeats the accumulated answer. Full text is reserved for `assistant-snapshot` (resume/gap repair) and terminal events. The browser checks both offsets before appending; a gap or overlap disposes the subscription and re-enters through `ResumeMessage`, whose opening snapshot replaces local text and resets the offsets. This makes dropped/replayed frames detectable without retaining duplicate full-message payloads in each event.
+An `assistant-delta` carries only `delta` / `reasoningDelta` plus `contentOffset` / `reasoningOffset`; it never repeats the accumulated answer. Full text is reserved for `assistant-snapshot` (resume/gap repair) and terminal events. The browser checks both offsets before appending; a gap or overlap disposes the subscription and re-enters through `ResumeMessage`, whose opening snapshot replaces local text, resets the offsets and names the `model` the invocation runs on (known from its runtime package before the first token, so a mid-turn attach can show it). This makes dropped/replayed frames detectable without retaining duplicate full-message payloads in each event.
 
 Live delivery is bounded independently of durable persistence. `ChatStreamEventSink` uses a non-blocking bounded channel with `Chat:StreamBudget.QueueCapacity` (default 2,048 events) and `MaxQueuedChars` (default 1,048,576 characters); producers never wait, so a slow/disconnected browser cannot stall the pump's database terminalization. Overflow emits one `assistant-reconcile` per burst, causing the client to resume from an authoritative snapshot. Resume subscribers are also bounded, limited to four per invocation by default, and snapshots above `MaxReplaySnapshotChars` reconcile through a persisted-conversation refetch instead of sending an oversized replacement. Delta production is coalesced before sequence assignment by `EmitDebounceMs` (40 ms by default), so coalescing cannot create sequence holes.
 
@@ -413,12 +413,21 @@ already answered, moved), a message THIS send inserted is deleted again before t
 orphan turn. A `requestId` whose user message already lives in another conversation is 409
 `GraphWorkflowRunConflict` before anything is written, and so is an answer whose `definitionId` is not the parked run's.
 
+**A normal send while a run is live is refused by the server.** `NodeChatStreamService` checks the conversation's
+newest bound run right after the read-only guard, before the user turn is persisted: any non-terminal status, a run
+parked on a `ChatInput` or `Pause` included, throws `NodeChatWorkflowRunLiveException`. `LocalChatHub` forwards it as a
+`HubException` prefixed `GraphWorkflowRunLiveInConversation:`, and on a REST path `ConflictExceptionHandler` maps it to
+409 with that `conflictType`. The client's composer lock is the friendly half; this is the enforcing one, so a stale
+tab or a second client cannot interleave a plain turn with the run. A parked `ChatInput` is answered through the
+messages route above.
+
 **Attachments in workflow mode.** The chat path's inlining and sandbox staging do not apply. The run carries only
 references, and each Agent or LLM call node with `includeAttachments: true` reads the files when its attempt starts:
 extracted Markdown goes into a `## Attachments` section of its prompt. The section is fenced as untrusted content the
 same way plain chat fences attachments, budgeted at `GraphWorkflows:MaxRunInputBytes`. Images become image parts under the chat's image caps, but only for a vision-capable model. On any
-other model the node fails `ValidationFailed` and the reason names the model and the file. A file gone when the attempt starts is skipped
-and listed in the node's output document as `attachmentsSkipped`. See [Graph Workflows](21-graph-workflows.md) §3.8.
+other model the node fails `ValidationFailed` and the reason names the model and the file. A file that contributes nothing when
+the attempt starts is skipped and listed in the node's output document as `attachmentsSkipped`: one gone from the
+conversation, an image reference whose file was never stored as an image, or a text file with no extracted Markdown. See [Graph Workflows](21-graph-workflows.md) §3.8.
 
 **Intervene from the chat (steer).** While the bound run's Agent or LLM call node is queued or running (the run list's
 `steerable`), the operator can redirect it: `POST graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with
