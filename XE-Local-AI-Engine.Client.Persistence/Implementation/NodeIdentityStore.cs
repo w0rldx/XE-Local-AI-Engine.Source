@@ -51,21 +51,19 @@ public sealed class NodeIdentityStore : INodeIdentityStore
         return _dbContext.RefreshTokens.SingleOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
     }
 
-    public Task<bool> HasActiveTokenCreatedAtAsync(string userId, DateTime createdAtUtc, DateTime now, CancellationToken cancellationToken)
+    public Task<NodeRefreshToken?> FindRefreshTokenByIdAsync(string id, CancellationToken cancellationToken)
     {
-        return _dbContext.RefreshTokens
-                         .AnyAsync(token => token.UserId == userId
-                                            && token.RevokedAtUtc == null
-                                            && token.ExpiresAtUtc > now
-                                            && token.CreatedAtUtc == createdAtUtc,
-                             cancellationToken);
+        return _dbContext.RefreshTokens.SingleOrDefaultAsync(token => token.Id == id, cancellationToken);
     }
 
-    public async Task RevokeAsync(NodeRefreshToken token, DateTime now, CancellationToken cancellationToken)
+    public async Task RotateAsync(NodeRefreshToken presented, NodeRefreshToken successor, DateTime now, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(presented);
+        ArgumentNullException.ThrowIfNull(successor);
 
-        token.RevokedAtUtc = now;
+        presented.RevokedAtUtc = now;
+        presented.ReplacedByTokenId = successor.Id;
+        _ = _dbContext.RefreshTokens.Add(successor);
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

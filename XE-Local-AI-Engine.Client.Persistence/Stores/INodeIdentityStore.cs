@@ -41,26 +41,23 @@ public interface INodeIdentityStore
     /// <summary>The stored refresh token with this hash, tracked, or <see langword="null" /> when none matches.</summary>
     Task<NodeRefreshToken?> FindRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken);
 
+    /// <summary>The stored refresh token with this id, tracked, or <see langword="null" /> when none matches.</summary>
+    Task<NodeRefreshToken?> FindRefreshTokenByIdAsync(string id, CancellationToken cancellationToken);
+
     /// <summary>
-    ///     Whether the user holds a live refresh token created at exactly <paramref name="createdAtUtc" />.
+    ///     Revokes <paramref name="presented" /> at <paramref name="now" />, links it to <paramref name="successor" /> and
+    ///     persists the successor, in one save.
     /// </summary>
     /// <remarks>
-    ///     Nothing records WHY a token was revoked, so its successor is the discriminator: rotation stamps the
-    ///     revocation and the replacement from one instant, and only rotation issues anything at all.
+    ///     The link is what tells rotation apart from every other revoke path: logout, a password change and a reset
+    ///     revoke without naming a successor, so only a rotated token can ever qualify for the reuse grace.
     /// </remarks>
-    Task<bool> HasActiveTokenCreatedAtAsync(string userId, DateTime createdAtUtc, DateTime now, CancellationToken cancellationToken);
+    Task RotateAsync(NodeRefreshToken presented, NodeRefreshToken successor, DateTime now, CancellationToken cancellationToken);
 
-    /// <summary>Stamps one token revoked at <paramref name="now" /> and saves.</summary>
-    Task RevokeAsync(NodeRefreshToken token, DateTime now, CancellationToken cancellationToken);
-
-    /// <summary>Persists a newly issued refresh token.</summary>
+    /// <summary>Persists a newly issued refresh token that replaces nothing: a sign-in, or a grace refresh.</summary>
     Task AddRefreshTokenAsync(NodeRefreshToken token, CancellationToken cancellationToken);
 
-    /// <summary>Revokes every live refresh token of the user, stamping <paramref name="now" /> on each.</summary>
-    /// <remarks>
-    ///     The caller supplies the instant so that rotation's revoke-and-reissue share one — the clock read that
-    ///     <see cref="HasActiveTokenCreatedAtAsync" /> reads back as "replaced, not logged out".
-    /// </remarks>
+    /// <summary>Revokes every live refresh token of the user — every signed-in client — stamping <paramref name="now" /> on each.</summary>
     Task RevokeActiveTokensAsync(string userId, DateTime now, CancellationToken cancellationToken);
 
     /// <summary>Applies pending identity migrations. Startup bootstrap, before anything reads the schema.</summary>

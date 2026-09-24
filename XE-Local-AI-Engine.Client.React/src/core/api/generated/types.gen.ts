@@ -4505,6 +4505,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
 	role: string;
 	isResponsive: boolean;
 	detail: string;
+	detailCode: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse = {
@@ -7665,6 +7666,10 @@ export type NodeRefreshData = {
 };
 
 export type NodeRefreshErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
 	/**
 	 * Forbidden
 	 */

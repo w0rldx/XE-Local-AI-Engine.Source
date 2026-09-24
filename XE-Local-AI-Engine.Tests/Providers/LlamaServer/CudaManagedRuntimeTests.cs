@@ -47,6 +47,70 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    public async Task InstallTag_LinuxCudaWithoutManagedBuild_RefusesBeforeDownloadAndWritesNoRecord()
+    {
+        using var dir = new TempDir();
+        using var store = new InstalledRuntimeStore(dir.Path);
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
+
+        // The live-QA shape: the CPU asset handed in under a CUDA request must never be downloaded or recorded as CUDA.
+        var install = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(LlamaCppReleasePins.PinnedTag,
+            "llama-b10201-bin-ubuntu-x64.tar.gz",
+            new string('b', 64),
+            expectedSize: 0,
+            GpuVariant.Cuda,
+            CancellationToken.None));
+        var ensure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+
+        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda), install.Message);
+        AssertEx.Equal(install.Message, ensure.Message);
+        AssertEx.Contains(install.Message, "CUDA");
+        AssertEx.Contains(install.Message, "build from source");
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task InstallTag_LinuxCudaWithManagedBuild_RefusesAndKeepsServingManagedBuild()
+    {
+        using var dir = new TempDir();
+        var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
+        using var store = new InstalledRuntimeStore(dir.Path);
+        var recorded = SourceBuildState(binDir, sha);
+        await store.WriteAsync(recorded, CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.MarkAvailable();
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(LlamaCppReleasePins.PinnedTag,
+            "llama-b10201-bin-ubuntu-x64.tar.gz",
+            new string('b', 64),
+            expectedSize: 0,
+            GpuVariant.Cuda,
+            CancellationToken.None));
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
+
+        AssertEx.Equal(recorded, await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(serverPath, binary.ServerExecutablePath);
+        AssertEx.Equal(GpuVariant.Cuda, binary.Variant);
+    }
+
+    [Test]
+    public void MissingPrebuiltMessage_NamesVariantHostAndTheBuildsThatExist()
+    {
+        AssertEx.Null(LlamaCppReleasePins.ResolveForAcquisition(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+        AssertEx.Equal("llama.cpp publishes no prebuilt CUDA build for Linux x64; build it from source in Node settings → llama.cpp build from source, or choose CPU or Vulkan.",
+            LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+    }
+
+    [Test]
     [ExcludeOn(OS.Windows)]
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_ShaMismatch_DiscardsAndFailsLoud()

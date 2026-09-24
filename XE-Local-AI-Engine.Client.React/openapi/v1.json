@@ -2108,6 +2108,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden"
           }
@@ -40428,7 +40431,8 @@
           "modelName",
           "role",
           "isResponsive",
-          "detail"
+          "detail",
+          "detailCode"
         ],
         "properties": {
           "modelName": {
@@ -40441,6 +40445,9 @@
             "type": "boolean"
           },
           "detail": {
+            "type": "string"
+          },
+          "detailCode": {
             "type": "string"
           }
         }

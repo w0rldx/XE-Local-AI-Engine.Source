@@ -219,7 +219,13 @@ internal static class ModelFitMapper
             ModelName = health.ModelName,
             Role = health.Role.ToWireString(),
             IsResponsive = health.IsResponsive,
-            Detail = health.Detail
+            Detail = health.Detail,
+            DetailCode = (health.HasExited, health.IsResponsive) switch
+            {
+                (true, _) => "exited",
+                (false, true) => "responsive",
+                _ => "unresponsive"
+            }
         };
     }
 

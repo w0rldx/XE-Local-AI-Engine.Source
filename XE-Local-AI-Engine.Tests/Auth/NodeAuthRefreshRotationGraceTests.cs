@@ -3,9 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -14,8 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     still buys a successor for a short while, so the loser of the two refreshes every document load races does not
 ///     get a 401 that clears the cookie and signs the operator out. The window must not extend to a token that LOGOUT,
 ///     a password change or a reset revoked — nothing records why a token was revoked, so these tests walk each of
-///     those paths and pin that the discriminator (a live successor created at the revocation's own instant) tells them
-///     apart. The clock is this host's own <see cref="ManualTimeProvider" />; the window is
+///     those paths and pin that the discriminator (the successor link rotation writes, followed to a still-live head)
+///     tells them apart. Sign-ins are independent chains, so these tests also pin that one client's login, refresh or
+///     grace never touches another's session. The clock is this host's own <see cref="ManualTimeProvider" />; the window is
 ///     <c>NodeAuthService.RotationGraceWindow</c>.
 /// </summary>
 [Category(TestCategories.Integration)]
@@ -100,8 +104,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
     }
 
     // The adversarial shape: logout leaves no successor, but a fresh login right afterwards creates a live token for
-    // the same user. Only "created at the revocation's own instant" — not "created after it" — keeps that login from
-    // vouching for the pre-logout token.
+    // the same user. Only rotation's successor link — never "some live token of this user" — may vouch for a revoked one.
     [Test]
     public async Task Refresh_WhenLogoutIsFollowedByAFreshLogin_FailsForThePreLogoutToken()
     {
@@ -117,6 +120,125 @@ public sealed class NodeAuthRefreshRotationGraceTests
 
         AssertEx.False(afterRelogin.Succeeded,
             "A fresh login is not rotation: it must not vouch for the token logout revoked, even inside the window.");
+    }
+
+    // The same-tick collision the old timestamp discriminator could only assume away: logout's revocation and the next
+    // login's creation on the identical instant.
+    [Test]
+    public async Task Refresh_WhenLogoutAndAFreshLoginShareOneInstant_FailsForThePreLogoutToken()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var login = await SetupAndLoginAsync(factory);
+
+        await LogoutAsync(factory, login);
+        AssertEx.True((await LoginAsync(factory)).Succeeded, "The operator signs back in on the same tick.");
+
+        var afterRelogin = await RefreshAsync(factory, login.RefreshToken);
+
+        AssertEx.False(afterRelogin.Succeeded, "A login on the logout's own instant must not vouch for the token logout revoked.");
+    }
+
+    [Test]
+    public async Task Login_WhenAnotherSessionIsSignedIn_LeavesThatSessionLive()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var first = await SetupAndLoginAsync(factory);
+
+        AssertEx.True((await LoginAsync(factory)).Succeeded, "A second client signs in.");
+
+        AssertEx.True((await RefreshAsync(factory, first.RefreshToken)).Succeeded,
+            "Signing in on a second client must not sign the first one out.");
+    }
+
+    [Test]
+    public async Task Refresh_WhenTwoSessionsRotate_EachChainStaysIndependent()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var first = await SetupAndLoginAsync(factory);
+        var second = await LoginAsync(factory);
+
+        var firstRotated = await RefreshAsync(factory, first.RefreshToken);
+        var secondRotated = await RefreshAsync(factory, second.RefreshToken);
+        AssertEx.True(firstRotated.Succeeded && secondRotated.Succeeded, "Both sessions rotate.");
+
+        clock.Advance(PastTheWindow);
+        AssertEx.True((await RefreshAsync(factory, firstRotated.RefreshToken)).Succeeded,
+            "The second session's rotation must not revoke the first session's live token.");
+        AssertEx.True((await RefreshAsync(factory, secondRotated.RefreshToken)).Succeeded,
+            "The first session's rotation must not revoke the second session's live token.");
+        AssertEx.False((await RefreshAsync(factory, first.RefreshToken)).Succeeded,
+            "Rotation is still single-use: past the window, the replaced token is a replay.");
+    }
+
+    [Test]
+    public async Task Logout_WhenTwoSessionsAreSignedIn_RevokesBoth()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var first = await SetupAndLoginAsync(factory);
+        var second = await LoginAsync(factory);
+
+        await LogoutAsync(factory, first);
+
+        AssertEx.False((await RefreshAsync(factory, first.RefreshToken)).Succeeded, "Logout ends the session it came from.");
+        AssertEx.False((await RefreshAsync(factory, second.RefreshToken)).Succeeded, "Logout still ends every session of the user.");
+    }
+
+    // The grace pair is a sibling of the chain's head, not its replacement: whichever Set-Cookie the browser keeps must
+    // stay usable, and a third presenter of the same token inside the window is honoured too.
+    [Test]
+    public async Task Refresh_WhenTheGracePathIssuesAPair_TheWinnersTokenStaysLive()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var login = await SetupAndLoginAsync(factory);
+
+        var winner = await RefreshAsync(factory, login.RefreshToken);
+        clock.Advance(InsideTheWindow);
+        AssertEx.True((await RefreshAsync(factory, login.RefreshToken)).Succeeded, "The loser is graced.");
+        AssertEx.True((await RefreshAsync(factory, login.RefreshToken)).Succeeded, "A third presenter inside the window is graced too.");
+
+        AssertEx.True((await RefreshAsync(factory, winner.RefreshToken)).Succeeded, "The grace path must not revoke the winner's token.");
+    }
+
+    // The grace follows the presented token's OWN chain. Here that chain is dead (its successor revoked with no successor
+    // of its own — what a per-session revoke would leave) while a second session's token was created on the very instant
+    // of the rotation: the old "a live token created at the revocation instant" match would have honoured it.
+    [Test]
+    public async Task Refresh_WhenTheOwnChainIsDeadButAnotherSessionIsLive_FailsInsideTheWindow()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var login = await SetupAndLoginAsync(factory);
+
+        var rotated = await RefreshAsync(factory, login.RefreshToken);
+        AssertEx.True((await LoginAsync(factory)).Succeeded, "A second session signs in on the rotation's own instant.");
+        await RevokeWithoutSuccessorAsync(factory, AssertEx.NotNull(rotated.RefreshToken), clock.GetUtcNow().UtcDateTime);
+
+        clock.Advance(InsideTheWindow);
+        var replay = await RefreshAsync(factory, login.RefreshToken);
+
+        AssertEx.False(replay.Succeeded, "Another session's live token must never vouch for a token whose own chain ended.");
+    }
+
+    // Tampered links: the live successor pointing back at the token it replaced must fail the grace, never loop.
+    [Test]
+    public async Task Refresh_WhenTheSuccessorLinksFormACycle_FailsInsteadOfLooping()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateHost(clock);
+        var login = await SetupAndLoginAsync(factory);
+
+        var rotated = await RefreshAsync(factory, login.RefreshToken);
+        await LinkSuccessorAsync(factory, AssertEx.NotNull(rotated.RefreshToken), AssertEx.NotNull(login.RefreshToken));
+
+        clock.Advance(InsideTheWindow);
+        var replay = await RefreshAsync(factory, login.RefreshToken);
+
+        AssertEx.False(replay.Succeeded, "A successor chain that never reaches a head must not be honoured.");
     }
 
     [Test]
@@ -228,6 +350,30 @@ public sealed class NodeAuthRefreshRotationGraceTests
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AssertEx.NotNull(session.AccessToken));
         using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    private static async Task RevokeWithoutSuccessorAsync(TestServerWebAppFactory factory, string refreshToken, DateTime now)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>();
+        var stored = await FindStoredAsync(scope.ServiceProvider, dbContext, refreshToken);
+        stored.RevokedAtUtc = now;
+        _ = await dbContext.SaveChangesAsync();
+    }
+
+    private static async Task LinkSuccessorAsync(TestServerWebAppFactory factory, string fromRefreshToken, string toRefreshToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>();
+        var from = await FindStoredAsync(scope.ServiceProvider, dbContext, fromRefreshToken);
+        from.ReplacedByTokenId = (await FindStoredAsync(scope.ServiceProvider, dbContext, toRefreshToken)).Id;
+        _ = await dbContext.SaveChangesAsync();
+    }
+
+    private static Task<NodeRefreshToken> FindStoredAsync(IServiceProvider services, NodeIdentityDbContext dbContext, string refreshToken)
+    {
+        var hash = services.GetRequiredService<INodeTokenService>().HashRefreshToken(refreshToken);
+        return dbContext.RefreshTokens.SingleAsync(token => token.TokenHash == hash);
     }
 
     private static string GetRefreshCookie(HttpResponseMessage response)

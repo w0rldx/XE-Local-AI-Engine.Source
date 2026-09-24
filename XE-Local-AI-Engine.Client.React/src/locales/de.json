@@ -1671,6 +1671,7 @@
 					"updateAvailable": "Update verfügbar",
 					"upToDate": "Aktuell",
 					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
+					"noPrebuiltHint": "llama.cpp veröffentlicht für diesen Knoten keinen vorgefertigten {{variant}}-Build. Erstelle ihn über die Karte „llama.cpp aus Quellcode bauen“ unten oder wähle eine andere Variante.",
 					"installedSourceBuildNotice": "Entferne die installierte, aus Quellcode erstellte Laufzeit, bevor eine vorgefertigte Laufzeit installiert wird.",
 					"activeSourceBuildNotice": "Warte, bis der aktive Quellbuild abgeschlossen ist, oder brich ihn ab, bevor eine vorgefertigte Laufzeit installiert wird.",
 					"openLoadedModels": "Geladene Modelle öffnen",
@@ -3751,6 +3752,11 @@
 				"empty": "Derzeit laufen keine Modelle.",
 				"responsive": "Reagiert",
 				"unresponsive": "Startet / reagiert nicht",
+				"details": {
+					"responsive": "Antwortet auf Statusprüfungen.",
+					"unresponsive": "Antwortet nicht auf Statusprüfungen.",
+					"exited": "Der Prozess wurde beendet."
+				},
 				"eject": "Entladen",
 				"ejected": "Modell entladen.",
 				"ejectError": "Das Modell konnte nicht entladen werden.",

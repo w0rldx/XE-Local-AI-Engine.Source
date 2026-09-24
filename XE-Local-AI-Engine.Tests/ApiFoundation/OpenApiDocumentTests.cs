@@ -834,6 +834,22 @@ public sealed class OpenApiDocumentTests
         AssertEx.Contains(conflictSchema, "NodeSettingsConflictResponse", StringComparison.Ordinal);
     }
 
+    [Test]
+    public async Task Refresh_DeclaresTheUnauthorizedItActuallySends()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var refresh = document.RootElement.GetProperty("paths").GetProperty("/api/local/v1/auth/refresh").GetProperty("post");
+
+        var declared = refresh.GetProperty("responses").EnumerateObject().Select(static status => status.Name).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal("200, 401, 403", string.Join(", ", declared),
+            $"auth/refresh must declare its 200, the 401 a failed refresh sends and the middleware's 403. Declared: [{string.Join(", ", declared)}].");
+    }
+
     private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
     {
         var schema = FindSchema(schemas, schemaSuffix);

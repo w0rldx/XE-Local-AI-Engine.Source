@@ -172,9 +172,30 @@ The service **never throws out of `RefreshAsync`** — every failure path record
 A recommendation row is actionable: the operator can download the model. `GgufDownloadCoordinator` (`Implementation/GgufDownloadCoordinator.cs`, implements `IGgufDownloadCoordinator`) is a **Singleton** owning an in-memory registry of in-flight downloads:
 
 - **`StartAsync`** resolves the canonical model name (the same way the store registers it, so track/cancel keys match the installed identity even for variant resolutions), enforces **single-flight per model name** (rejoins an existing download rather than starting a second), and runs the download on a detached task with a per-model `CancellationTokenSource`.
-- **`Cancel`** signals the in-flight token (cooperative — stops at the next await/byte boundary).
+- **`Cancel`** signals the in-flight token (cooperative — stops at the next await/byte boundary). A cancel abandons the
+  download: the partial and its resume cursors are deleted, so the next start begins at byte 0.
 - **`GetStatus`** returns the latest sanitized `GgufDownloadStatus` (phase + completed/total bytes; **never** a path/URL/token).
 - On success it writes the `model_provider_map` row pointing the GGUF at the `llamacpp` provider (through a fresh DI scope, since the map store is scoped) — the **single production writer** that makes a downloaded GGUF reachable by the runtime. Best-effort: a map-write failure never marks the download Failed.
+
+### Partial files, resume and cleanup
+
+`HuggingFaceGgufDownloadTransaction` downloads each weight or projector into one **stable** partial per final file,
+`<file>.gguf.part`, with its resume cursors in `<file>.gguf.part.ranges.part`. Only the completed, hash-verified bytes
+move to the per-operation staging name `<file>.gguf.<operation>.part` that the commit renames into place. Because the
+partial name does not change between attempts, the downloader's `Range` resume works across attempts:
+
+| Event | Partial + cursors | Next start |
+|---|---|---|
+| Transient failure after retries, a cancellation the operator did not request (idle timeout), or node restart mid-download | kept | resumes from the recorded cursors (the in-memory status is lost; the bytes are not) |
+| Failure after a file finished and verified (projector download, sidecar write) | the verified file moves back to its partial, recorded as complete | commits it without a request |
+| Operator cancel | both deleted | byte 0 |
+| Completed download | the partial becomes the staged file; the cursors are deleted | n/a |
+| Failure during the commit, after `PrepareAsync` returned | the staged files are deleted | byte 0 |
+
+Partials from the older per-operation layout (`<file>.gguf.<operation>.part.part` and its `.ranges.part`) are carried
+over on the next start of the same model: the newest one is renamed to the stable name and resumed, the rest are deleted.
+The startup `GgufAcquisitionArtifactStartupReaper` deletes any `<file>.gguf.…part` leftover whose `<file>.gguf` already
+exists, and any other `*.part` untouched for 24 hours. So a resumable partial survives a restart for a day.
 
 ### Weights-only installs (`includeProjector`)
 

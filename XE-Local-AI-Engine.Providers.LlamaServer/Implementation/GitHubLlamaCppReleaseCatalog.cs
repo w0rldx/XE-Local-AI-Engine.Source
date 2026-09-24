@@ -155,7 +155,8 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     /// </remarks>
     private static LlamaCppReleaseAsset? MatchAsset(IReadOnlyList<GitHubAsset> assets, string tag, OSPlatform os, Architecture arch, GpuVariant variant)
     {
-        var pin = LlamaCppReleasePins.Resolve(os, arch, variant);
+        // Never the CPU floor for a GPU request: a Linux CUDA install would otherwise resolve the CPU archive and record it as CUDA.
+        var pin = LlamaCppReleasePins.ResolveForAcquisition(os, arch, variant);
         if (pin is null)
         {
             return null;

@@ -91,11 +91,34 @@ internal sealed class HfDownloadClient
     ///     integrity-checks the stream ONLY as a fallback when the resolve endpoint did not expose the LFS OID, so the
     ///     returned sha256 always reflects content that was actually verified — never an unverified digest echoed back.
     /// </remarks>
+    public Task<HfDownloadResult> DownloadAsync(string repoId,
+        string fileName,
+        string revision,
+        string modelName,
+        string destinationPath,
+        long expectedSizeBytes,
+        string? expectedSha256,
+        IProgress<PullProgress>? progress,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        return DownloadAsync(repoId, fileName, revision, modelName, destinationPath, destinationPath + PartSuffix, expectedSizeBytes, expectedSha256, progress, ct);
+    }
+
+    /// <summary>
+    ///     Same as the overload above, but the in-progress file (and its <see cref="RangeSidecarSuffix" /> cursors) lives at
+    ///     <paramref name="partPath" /> instead of beside <paramref name="destinationPath" />.
+    /// </summary>
+    /// <remarks>
+    ///     For a caller whose destination is itself a per-operation staging name: the partial must stay at a stable name so
+    ///     the next attempt finds it and resumes, while the completed bytes still land at the operation's own path.
+    /// </remarks>
     public async Task<HfDownloadResult> DownloadAsync(string repoId,
         string fileName,
         string revision,
         string modelName,
         string destinationPath,
+        string partPath,
         long expectedSizeBytes,
         string? expectedSha256,
         IProgress<PullProgress>? progress,
@@ -106,8 +129,8 @@ internal sealed class HfDownloadClient
         ArgumentException.ThrowIfNullOrWhiteSpace(revision);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(partPath);
 
-        var partPath = destinationPath + PartSuffix;
         var directory = Path.GetDirectoryName(destinationPath)
                         ?? throw new InvalidOperationException("The model destination path has no directory.");
         Directory.CreateDirectory(directory);
@@ -168,6 +191,13 @@ internal sealed class HfDownloadClient
         IProgress<PullProgress>? progress,
         CancellationToken ct)
     {
+        // A partial already holding every byte (a verified file handed back after a later step failed) needs only the commit.
+        if (await ReadSingleStreamResumeAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false) is { } complete && complete.Bytes == expectedSizeBytes)
+        {
+            return await CommitAsync(partPath, destinationPath, modelName, expectedSha ?? fallbackSha, RangeResumeState.Unstamp(complete.Revision), progress, ct)
+                .ConfigureAwait(false);
+        }
+
         var connections = ResolveConnections(expectedSizeBytes);
         if (connections > 1)
         {
@@ -603,6 +633,12 @@ internal sealed class HfDownloadClient
         }
 
         DiscardPartial(partPath);
+    }
+
+    /// <summary>Records <paramref name="partPath" /> as one complete run written at <paramref name="revision" />, so the next attempt only commits it.</summary>
+    internal static void RecordCompletePartial(string partPath, long totalBytes, string revision)
+    {
+        RangeResumeState.CreateSingle(partPath + RangeSidecarSuffix, totalBytes, revision, totalBytes).Persist(index: 0, totalBytes);
     }
 
     /// <summary>Drops a partial and the record beside it, so the next attempt starts from byte 0 with nothing to trust.</summary>
@@ -1093,6 +1129,12 @@ internal sealed class HfDownloadClient
         public static RangeResumeState CreateSingle(string sidecarPath, long totalBytes, string revision, long cursor)
         {
             return new RangeResumeState(sidecarPath, totalBytes, Stamp(revision), [cursor]);
+        }
+
+        /// <summary>The revision a stamp stands for: empty when the origin named none.</summary>
+        public static string Unstamp(string stamped)
+        {
+            return string.Equals(stamped, UnknownRevision, StringComparison.Ordinal) ? string.Empty : stamped;
         }
 
         /// <summary>The on-disk form of a revision: the fields are space separated, so "the origin named none" needs a token.</summary>

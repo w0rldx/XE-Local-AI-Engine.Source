@@ -161,10 +161,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via TryResolveExact: Resolve() would substitute the CPU floor where no GPU prebuilt exists
         // — Linux CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
-        var pin = (variant == GpuVariant.Cpu
-                      ? LlamaCppReleasePins.Resolve(_os, _arch, variant)
-                      : LlamaCppReleasePins.TryResolveExact(_os, _arch, variant))
-                  ?? throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.");
+        var pin = ResolveAcquirablePin(variant);
 
         var isPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
@@ -269,9 +266,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         // skipped: it is a network call, and it only ever selects a tag to ACQUIRE — it cannot make a binary appear.
         var resolvedTag = installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
 
-        var pin = variant == GpuVariant.Cpu
-            ? LlamaCppReleasePins.Resolve(_os, _arch, variant)
-            : LlamaCppReleasePins.TryResolveExact(_os, _arch, variant);
+        var pin = LlamaCppReleasePins.ResolveForAcquisition(_os, _arch, variant);
         if (pin is null)
         {
             // No prebuilt exists for this (os, arch, variant) — e.g. Linux CUDA. Nothing can be on disk under that name.
@@ -287,6 +282,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             ? null
             : new LlamaBinary { ServerExecutablePath = cachedServer, Version = resolvedTag, Variant = variant, IsPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal) };
     }
+
+    /// <summary>
+    ///     The pin a prebuilt acquisition of <paramref name="variant" /> uses on this host, shared by ensure and install so
+    ///     both refuse a request with no genuine prebuilt (Linux CUDA) with one typed error instead of serving the CPU floor.
+    /// </summary>
+    private LlamaCppAssetPin ResolveAcquirablePin(GpuVariant variant) =>
+        LlamaCppReleasePins.ResolveForAcquisition(_os, _arch, variant)
+        ?? throw new LlamaRuntimeException(LlamaCppReleasePins.MissingPrebuiltMessage(_os, _arch, variant));
 
     /// <summary>
     ///     Records the runtime <see cref="EnsureBinaryAsync" /> actually resolved on disk into
@@ -409,6 +412,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
 
+        // Same refusal as EnsureBinaryAsync, before any download: a (Linux, CUDA) install has no genuine asset, and the caller's asset would be recorded as CUDA.
+        var pin = ResolveAcquirablePin(variant);
+
         if (!IsValidTag(tag))
         {
             throw new LlamaRuntimeException("The requested llama.cpp runtime version is not in a recognized format.");
@@ -449,7 +455,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // failure the previously-installed binary (a sibling versioned dir) is untouched — versioned dirs isolate tiers.
             await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
 
-            var pin = LlamaCppReleasePins.Resolve(_os, _arch, variant);
             var serverPath = ResolveServerPathForAsset(variantDir, pin);
             if (serverPath is null)
             {

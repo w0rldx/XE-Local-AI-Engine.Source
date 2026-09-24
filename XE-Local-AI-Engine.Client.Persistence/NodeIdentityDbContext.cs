@@ -62,6 +62,9 @@ public sealed class NodeIdentityDbContext : IdentityDbContext<NodeUser>
         builder.Property(entity => entity.RevokedAtUtc)
                .HasColumnName("revoked_at_utc");
 
+        builder.Property(entity => entity.ReplacedByTokenId)
+               .HasColumnName("replaced_by_token_id");
+
         builder.HasOne<NodeUser>()
                .WithMany()
                .HasForeignKey(entity => entity.UserId)
@@ -70,10 +73,7 @@ public sealed class NodeIdentityDbContext : IdentityDbContext<NodeUser>
         builder.HasIndex(entity => entity.TokenHash)
                .IsUnique();
 
+        // Not unique: every sign-in starts its own rotation chain, so one user holds a live token per signed-in client.
         builder.HasIndex(entity => entity.UserId);
-
-        builder.HasIndex(entity => entity.UserId)
-               .IsUnique()
-               .HasFilter("\"revoked_at_utc\" IS NULL");
     }
 }

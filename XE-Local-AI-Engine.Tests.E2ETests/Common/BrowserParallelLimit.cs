@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     (the <c>WorkerEventDispatcher.CurrentInvocation</c> slot, <c>FakeOllamaState</c>, the canonical admin's
 ///     tutorial row) or assert a node-wide empty state, none of which survives a concurrent sibling.
 ///     <para>
-///         This is NOT about the auth model. The node revokes all of a user's active refresh tokens on every
-///         login/refresh (<c>NodeAuthService.RevokeActiveTokensAsync</c>), but that is strictly per-user — so
+///         This is NOT about the auth model. Each sign-in is its own refresh session; the auth couplings left
+///         (a logout revoking every session of its user, Identity lockout) are strictly per-user — so
 ///         concurrency is unlocked by giving each test its own user, which is what
 ///         <see cref="PooledBrowserParallelLimit" /> and <see cref="XEPooledE2ETestBase" /> do.
 ///     </para>
@@ -23,7 +23,7 @@ public sealed class BrowserParallelLimit : IParallelLimit
 /// <summary>
 ///     Concurrency cap for the <c>BrowserPooled</c> group (<see cref="XEPooledE2ETestBase" />). Equal to the
 ///     number of seeded pool users, because each concurrent test must hold a DISTINCT user: two browser
-///     sessions sharing one user would revoke each other's refresh cookie mid-test.
+///     sessions sharing one user would sign each other out on logout.
 /// </summary>
 public sealed class PooledBrowserParallelLimit : IParallelLimit
 {

@@ -119,6 +119,19 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         var temporaryWeightPath = finalWeightPath + $".{operationId}.part";
         var temporarySidecarPath = finalSidecarPath + $".{operationId}.part";
         var temporaryProjectorPath = finalProjectorPath is null ? null : finalProjectorPath + $".{operationId}.part";
+
+        // One stable partial per final file lets an interrupted download resume on the next attempt; only verified bytes take
+        // the per-operation name. The acquisition registry admits one operation per model, so nothing else writes it.
+        var weightPartPath = PartPathFor(finalWeightPath);
+        var projectorPartPath = finalProjectorPath is null ? null : PartPathFor(finalProjectorPath);
+        AdoptLegacyPartials(finalWeightPath);
+        if (finalProjectorPath is not null)
+        {
+            AdoptLegacyPartials(finalProjectorPath);
+        }
+
+        var weightVerified = false;
+        var projectorVerified = false;
         try
         {
             var weightResult = await _downloadClient.DownloadAsync(source.RepoId,
@@ -126,6 +139,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 source.ResolvedRevision,
                 destination.CanonicalModelName,
                 temporaryWeightPath,
+                weightPartPath,
                 source.SourceSizeBytes,
                 source.SourceSha256,
                 progress,
@@ -140,6 +154,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 throw IntegrityFailure("The downloaded model resolved to a different revision.");
             }
 
+            weightVerified = true;
             string? projectorHash = null;
             if (source.Projector is not null)
             {
@@ -148,6 +163,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                     source.ResolvedRevision,
                     $"{destination.CanonicalModelName} projector",
                     temporaryProjectorPath!,
+                    projectorPartPath!,
                     source.Projector.SourceSizeBytes,
                     source.Projector.SourceSha256,
                     progress: null,
@@ -156,6 +172,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                     source.Projector.SourceSizeBytes,
                     source.Projector.SourceSha256,
                     cancellationToken).ConfigureAwait(false);
+                projectorVerified = true;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -257,16 +274,31 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         }
         catch (Exception exception)
         {
+            // A cancel is the operator abandoning the download, so its partial and resume cursors go too; any other failure
+            // keeps them for the next attempt to resume (a corrupt or superseded partial is already dropped by the client).
+            var abandoned = exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
+            if (!abandoned && weightVerified)
+            {
+                HandBackVerified(temporaryWeightPath, weightPartPath, source.SourceSizeBytes, source.ResolvedRevision);
+            }
+
+            if (!abandoned && projectorVerified)
+            {
+                HandBackVerified(temporaryProjectorPath!, projectorPartPath!, source.Projector!.SourceSizeBytes, source.ResolvedRevision);
+            }
+
             var artifacts = new List<OwnedArtifact>
             {
                 new() { Path = temporarySidecarPath, Owned = true },
                 new() { Path = temporaryWeightPath, Owned = true },
-                new() { Path = temporaryWeightPath + ".part", Owned = true }
+                new() { Path = weightPartPath, Owned = abandoned },
+                new() { Path = weightPartPath + HfDownloadClient.RangeSidecarSuffix, Owned = abandoned }
             };
             if (temporaryProjectorPath is not null)
             {
                 artifacts.Add(new OwnedArtifact { Path = temporaryProjectorPath, Owned = true });
-                artifacts.Add(new OwnedArtifact { Path = temporaryProjectorPath + ".part", Owned = true });
+                artifacts.Add(new OwnedArtifact { Path = projectorPartPath!, Owned = abandoned });
+                artifacts.Add(new OwnedArtifact { Path = projectorPartPath + HfDownloadClient.RangeSidecarSuffix, Owned = abandoned });
             }
 
             var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll([.. artifacts]);
@@ -408,17 +440,86 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         var artifacts = new List<OwnedArtifact>
         {
             new() { Path = preparedDownload.TemporarySidecarPath, Owned = true },
-            new() { Path = preparedDownload.TemporaryGgufPath, Owned = true },
-            new() { Path = preparedDownload.TemporaryGgufPath + ".part", Owned = true }
+            new() { Path = preparedDownload.TemporaryGgufPath, Owned = true }
         };
         if (preparedDownload.TemporaryProjectorPath is not null)
         {
             artifacts.Add(new OwnedArtifact { Path = preparedDownload.TemporaryProjectorPath, Owned = true });
-            artifacts.Add(new OwnedArtifact { Path = preparedDownload.TemporaryProjectorPath + ".part", Owned = true });
         }
 
         OwnedArtifactCleanup.DeleteAll(CleanupOwnership, [.. artifacts]);
         return Task.CompletedTask;
+    }
+
+    /// <summary>Moves a verified staged file back to its stable partial, recorded as complete, so the next attempt commits it without a download.</summary>
+    private static void HandBackVerified(string stagedPath, string partPath, long sizeBytes, string revision)
+    {
+        try
+        {
+            File.Move(stagedPath, partPath, overwrite: true);
+            HfDownloadClient.RecordCompletePartial(partPath, sizeBytes, revision);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: a file that cannot be handed back is deleted with the other staged artifacts and fetched again.
+        }
+    }
+
+    /// <summary>The stable in-progress name for <paramref name="finalPath" />: <c>&lt;final&gt;.part</c>, cursors beside it.</summary>
+    internal static string PartPathFor(string finalPath) =>
+        finalPath + HfDownloadClient.PartSuffix;
+
+    /// <summary>
+    ///     Carries partials from the per-operation layout (<c>&lt;final&gt;.&lt;operation&gt;.part.part</c> plus its
+    ///     <c>.ranges.part</c> cursors) over to the stable name: the newest is renamed so it resumes, the rest are deleted.
+    /// </summary>
+    /// <remarks>
+    ///     Nothing writes that layout any more, so no running operation can own one of these files.
+    /// </remarks>
+    private static void AdoptLegacyPartials(string finalPath)
+    {
+        var directory = Path.GetDirectoryName(finalPath);
+        if (directory is null || !Directory.Exists(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            AdoptLegacyPartials(directory, finalPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: a partial that cannot be carried over only costs a fresh download; the startup reaper reclaims it.
+        }
+    }
+
+    private static void AdoptLegacyPartials(string directory, string finalPath)
+    {
+        var partPath = PartPathFor(finalPath);
+        var legacy = Directory.EnumerateFiles(directory, Path.GetFileName(finalPath) + ".*" + HfDownloadClient.PartSuffix + HfDownloadClient.PartSuffix)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ToList();
+        foreach (var file in legacy)
+        {
+            var cursors = file + HfDownloadClient.RangeSidecarSuffix;
+            if (!File.Exists(partPath))
+            {
+                // Cursors beside the stable name without a partial describe bytes that are gone; the adopted file's own
+                // cursors (or none, which the client treats as "refetch") replace them.
+                File.Delete(partPath + HfDownloadClient.RangeSidecarSuffix);
+                if (File.Exists(cursors))
+                {
+                    File.Move(cursors, partPath + HfDownloadClient.RangeSidecarSuffix);
+                }
+
+                File.Move(file, partPath);
+                continue;
+            }
+
+            File.Delete(cursors);
+            File.Delete(file);
+        }
     }
 
     private static GgufRepoFile ResolveFile(IReadOnlyList<GgufRepoFile> files, GgufModelRequest request, string defaultQuant)

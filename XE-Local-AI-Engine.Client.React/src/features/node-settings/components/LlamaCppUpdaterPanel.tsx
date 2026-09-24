@@ -43,6 +43,10 @@ function isLlamaCppVariant(value: string): value is LlamaCppVariant {
 	return (llamaCppVariants as readonly string[]).includes(value);
 }
 
+// The node's refusal for a variant llama.cpp ships no prebuilt for (Linux CUDA). The hardware profile carries no OS, so
+// the panel keys its translated source-build hint on this server message instead of guessing the host from the browser.
+const NO_PREBUILT_PATTERN = /no prebuilt/i;
+
 // The single llama.cpp runtime card. It is the one source of truth for the runtime on the Node Settings page: it shows
 // the installed tag + variant (resolved on mount — no operator click), the recommended tag, and (under developer mode)
 // the true upstream-latest tag, plus an up-to-date / update-available / offline state. It owns three actions: install
@@ -66,6 +70,8 @@ export function LlamaCppUpdaterPanel() {
 	// already runs the Vulkan/CUDA build defaults the "Ensure / select" target to that build, not silently to cpu. Held
 	// as a nullable draft (not seeded into state via an effect) to stay controlled without a derived-state render churn.
 	const [variantChoice, setVariantChoice] = useState<LlamaCppVariant | null>(null);
+	// Set when the node refused the selected variant for want of a prebuilt; cleared on the next variant pick or success.
+	const [noPrebuiltVariant, setNoPrebuiltVariant] = useState<LlamaCppVariant | null>(null);
 
 	const status = statusQuery.data;
 	const isOffline = status?.isOffline === true;
@@ -87,6 +93,10 @@ export function LlamaCppUpdaterPanel() {
 	// Effective Select value: the operator's explicit pick, else the installed variant (when it is a known build), else
 	// the cpu fallback. Recomputed on each render so it tracks the resolved status without copying it into state.
 	const selectedVariant: LlamaCppVariant = variantChoice ?? (isLlamaCppVariant(installedVariant) ? installedVariant : "cpu");
+	// The variant an install carries: the operator's pick, else the installed build. Only a node with neither lets the
+	// server choose, so a first install on a GPU box is not forced onto the cpu display fallback.
+	const updateVariant: LlamaCppVariant | undefined =
+		variantChoice ?? (isLlamaCppVariant(installedVariant) ? installedVariant : undefined);
 
 	// The default install target is the recommended tag; under developer mode the operator may instead install the
 	// true upstream-latest when it differs from recommended. Both go through the same verified update path, and both are
@@ -116,6 +126,13 @@ export function LlamaCppUpdaterPanel() {
 	const handleVariantChange = (value: string | null): void => {
 		if (value !== null && isLlamaCppVariant(value)) {
 			setVariantChoice(value);
+			setNoPrebuiltVariant(null);
+		}
+	};
+
+	const noteNoPrebuilt = (variant: LlamaCppVariant | undefined, error: unknown): void => {
+		if (variant !== undefined && NO_PREBUILT_PATTERN.test(apiErrorMessage(error, ""))) {
+			setNoPrebuiltVariant(variant);
 		}
 	};
 
@@ -134,12 +151,18 @@ export function LlamaCppUpdaterPanel() {
 	};
 
 	const handleEnsure = (): void => {
-		ensureMutation.mutate(selectedVariant, {
-			onSuccess: () => toast.success(t("pages.nodeSettings.llamaCpp.ensured", "llama.cpp binary ready.")),
-			onError: (error) =>
+		const variant = selectedVariant;
+		ensureMutation.mutate(variant, {
+			onSuccess: () => {
+				setNoPrebuiltVariant(null);
+				toast.success(t("pages.nodeSettings.llamaCpp.ensured", "llama.cpp binary ready."));
+			},
+			onError: (error) => {
+				noteNoPrebuilt(variant, error);
 				toast.error(
 					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary.")),
-				),
+				);
+			},
 		});
 	};
 
@@ -152,22 +175,27 @@ export function LlamaCppUpdaterPanel() {
 			title: t("pages.nodeSettings.llamaCpp.updater.toastTitle", "Updating llama.cpp runtime"),
 			message: t("pages.nodeSettings.llamaCpp.updater.toastPreparing", "Downloading and verifying {{tag}}…", { tag }),
 		});
+		const variant = updateVariant;
 		updateMutation.mutate(
-			{ tag },
+			{ tag, variant },
 			{
-				onSuccess: () =>
+				onSuccess: () => {
+					setNoPrebuiltVariant(null);
 					toast.success(t("pages.nodeSettings.llamaCpp.updater.toastSuccess", "llama.cpp runtime updated to {{tag}}.", { tag }), {
 						id: UPDATE_TOAST_ID,
 						title: t("pages.nodeSettings.llamaCpp.updater.toastSuccessTitle", "Runtime updated"),
-					}),
-				onError: (error) =>
+					});
+				},
+				onError: (error) => {
+					noteNoPrebuilt(variant, error);
 					toast.error(
 						apiErrorMessage(
 							error,
 							t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime."),
 						),
 						{ id: UPDATE_TOAST_ID, title: t("pages.nodeSettings.llamaCpp.updater.toastErrorTitle", "Update failed") },
-					),
+					);
+				},
 			},
 		);
 	};
@@ -356,6 +384,15 @@ export function LlamaCppUpdaterPanel() {
 								{t("pages.nodeSettings.llamaCpp.ensure", "Ensure / select")}
 							</Button>
 						</Group>
+						{noPrebuiltVariant !== null && noPrebuiltVariant === selectedVariant ? (
+							<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="llamacpp-updater-no-prebuilt-hint">
+								{t(
+									"pages.nodeSettings.llamaCpp.updater.noPrebuiltHint",
+									"llama.cpp publishes no prebuilt {{variant}} build for this node. Build it with the llama.cpp build from source card below, or choose another variant.",
+									{ variant: t(`pages.nodeSettings.llamaCpp.variants.${noPrebuiltVariant}`, noPrebuiltVariant) },
+								)}
+							</Alert>
+						) : null}
 					</Stack>
 				) : null}
 			</Stack>

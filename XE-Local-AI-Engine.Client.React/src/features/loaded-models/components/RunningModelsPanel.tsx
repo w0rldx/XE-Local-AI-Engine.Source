@@ -75,9 +75,11 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 											<Text size="sm" fw={500}>
 												{model.modelName}
 											</Text>
-											{model.detail ? (
-												<Text size="xs" c="dimmed">
-													{model.detail}
+											{model.detailCode !== null || model.detail ? (
+												<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-detail-${model.modelName}`}>
+													{model.detailCode === null
+														? model.detail
+														: t(`pages.loadedModels.llamaCpp.details.${model.detailCode}`, model.detail)}
 												</Text>
 											) : null}
 										</Table.Td>

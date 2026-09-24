@@ -84,6 +84,8 @@ function installJsdomEnvironmentMocks(): void {
 			dispatchEvent: vi.fn(),
 		})),
 	});
+	// The Mantine Select combobox scrolls its selected option into view on open; jsdom has no layout to scroll.
+	Element.prototype.scrollIntoView = vi.fn();
 	Object.defineProperty(window, "ResizeObserver", {
 		writable: true,
 		value: class ResizeObserverMock {
@@ -117,6 +119,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		hooksMock.sourceBuildRunning = false;
 		devModeMock.developerMode = false;
 		vi.clearAllMocks();
+		hooksMock.mutate.mockReset();
 	});
 
 	afterEach(() => cleanup());
@@ -277,6 +280,84 @@ describe("LlamaCppUpdaterPanel", () => {
 		// (vulkan), not the hard-coded cpu default — otherwise the GPU node silently re-ensures the CPU binary.
 		fireEvent.click(screen.getByTestId("llamacpp-updater-ensure-button"));
 		expect(hooksMock.ensureMutate.mock.calls[0]?.[0]).toBe("vulkan");
+	});
+
+	it("installs the recommended tag as the installed variant, not the server's own pick", () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9700", variant: "vulkan", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9800",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+		};
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
+
+		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "vulkan" });
+	});
+
+	it("leaves the variant to the node when nothing is installed and the operator picked none", () => {
+		hooksMock.statusData = {
+			installed: null,
+			recommendedTag: "b9800",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+		};
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
+
+		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: undefined });
+	});
+
+	it("sends the picked CUDA variant and shows the source-build hint when the node has no CUDA prebuilt", async () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9700", variant: "vulkan", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9800",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+		};
+		hooksMock.mutate.mockImplementation((_vars: unknown, options?: { onError?: (error: unknown) => void }) =>
+			options?.onError?.(new Error("llama.cpp publishes no prebuilt CUDA build for Linux x64; build it from source.")),
+		);
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-variant-select"));
+		fireEvent.click(await screen.findByRole("option", { name: "cuda", hidden: true }));
+		expect(screen.queryByTestId("llamacpp-updater-no-prebuilt-hint")).toBeNull();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
+
+		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "cuda" });
+		expect(screen.getByTestId("llamacpp-updater-no-prebuilt-hint").textContent).toContain("no prebuilt cuda build");
+	});
+
+	it("shows no source-build hint for an unrelated update failure", () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9700", variant: "cuda", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9800",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+		};
+		hooksMock.mutate.mockImplementation((_vars: unknown, options?: { onError?: (error: unknown) => void }) =>
+			options?.onError?.(new Error("The downloaded llama.cpp runtime failed its post-install self-check.")),
+		);
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
+
+		expect(screen.queryByTestId("llamacpp-updater-no-prebuilt-hint")).toBeNull();
 	});
 
 	it("ensures cpu by default when nothing is installed yet", () => {

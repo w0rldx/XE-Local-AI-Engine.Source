@@ -19,7 +19,11 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
         Post(LocalApiRoutes.Auth.Refresh);
         AllowAnonymous();
         Options(static options => options.RequireRateLimiting(NodeAuthRateLimits.AuthPolicy));
-        Description(static descriptor => descriptor.AutoTagOverride("Auth"));
+
+        // A missing, expired or revoked cookie answers a bodyless 401 (see NodeAuthEndpointSupport). FastEndpoints drops its
+        // auto-401 for an anonymous verb, so the contract states it here or the generated client never learns it exists.
+        Description(static descriptor => descriptor.Produces(StatusCodes.Status401Unauthorized)
+                                                   .AutoTagOverride("Auth"));
     }
 
     public override async Task HandleAsync(CancellationToken ct)

@@ -16,11 +16,10 @@ using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionO
 ///     lets a separate request cancel the in-flight download by model name.
 /// </summary>
 /// <remarks>
-///     <b>Singleton</b>: the registry must outlive any one request scope, because the download runs on after the HTTP
-///     request that started it returns. It composes the singleton staged Hugging Face transaction <see cref="IGgufDownloadTransaction" />.
-///     <b>Honest limits:</b> progress and cancellation are best-effort and process-local. The registry is RAM-only — a
-///     node restart drops in-flight state and the partial <c>.part</c> file resumes on the next Start — and cancel is
-///     cooperative: it signals the token, the store stops at the next await/byte boundary, and no path, URL or token is reported.
+///     <b>Singleton</b>: the registry outlives the request that started the download, and composes the singleton staged
+///     <see cref="IGgufDownloadTransaction" />. Progress and cancellation are best-effort and process-local: a restart drops the
+///     RAM-only state but the next Start resumes the partial, while a cooperative cancel deletes it so the next Start begins
+///     at 0. No path, URL or token is reported. Partial-file lifecycle: docs/wiki/07-model-fit.md.
 /// </remarks>
 public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 {

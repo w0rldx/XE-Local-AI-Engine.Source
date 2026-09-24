@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 /// <summary>
 ///     Base for browser E2E tests that are safe to run CONCURRENTLY: they only read node-global state or
 ///     mutate rows they name with a fresh <c>Guid</c>, so a sibling browser session cannot change what they
-///     assert. Each test leases a distinct seeded user for the duration of the test, because the single
-///     coupling that forbids concurrency is strictly per-user — <c>NodeAuthService.RevokeActiveTokensAsync</c>
-///     revokes only the logging-in user's refresh tokens, and Identity lockout is per-user too.
+///     assert. Each test leases a distinct seeded user for the duration of the test, because the couplings
+///     that forbid concurrency are strictly per-user — a logout revokes every refresh session of that user
+///     only (<c>NodeAuthService.RevokeRefreshTokensAsync</c>), and Identity lockout is per-user too.
 ///     <para>
 ///         This is the <c>BrowserPooled</c> group. TUnit runs the two browser groups as DISJOINT phases, so
 ///         none of these ever overlaps a serial test (measured: 0 overlapping pairs across a 69-test run).

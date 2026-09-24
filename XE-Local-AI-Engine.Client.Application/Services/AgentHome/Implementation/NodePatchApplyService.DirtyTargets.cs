@@ -170,8 +170,8 @@ internal sealed partial class NodePatchApplyService
             var paths = new List<string> { field[3..] };
             if (indexStatus is 'R' or 'C' && index < fields.Length)
             {
-                // A staged rename or copy carries its ORIGIN in a second field rather than a record of its own;
-                // either side can be a patch target, and reading the origin as a record would mis-frame the rest.
+                // A staged rename or copy carries its ORIGIN in a second field rather than a record of its own.
+                // Either side can be a patch target, and reading the origin as a record would mis-frame the rest.
                 paths.Add(fields[index]);
                 index++;
             }

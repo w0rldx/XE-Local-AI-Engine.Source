@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class NodeAuthService : INodeAuthService
 {
+    private const int MaxRotationChainHops = 16;
+
     private static readonly SemaphoreSlim SetupLock = new(initialCount: 1, maxCount: 1);
 
     /// <summary>How long a refresh token that ROTATION replaced still buys a successor.</summary>
@@ -154,7 +156,8 @@ public sealed class NodeAuthService : INodeAuthService
                 : FailedTokenResult();
         }
 
-        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        // A new, independent rotation chain: signing in on one client never signs another out.
+        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, rotated: null, cancellationToken);
     }
 
     public async Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken)
@@ -177,8 +180,8 @@ public sealed class NodeAuthService : INodeAuthService
             return FailedTokenResult();
         }
 
-        var withinRotationGrace = storedToken.RevokedAtUtc is { } revokedAtUtc
-                                  && await WasReplacedByRotationAsync(storedToken.UserId, revokedAtUtc, now, cancellationToken);
+        var withinRotationGrace = storedToken.RevokedAtUtc is not null
+                                  && await IsWithinRotationGraceAsync(storedToken, now, cancellationToken);
 
         if (storedToken.RevokedAtUtc is not null && !withinRotationGrace)
         {
@@ -197,17 +200,13 @@ public sealed class NodeAuthService : INodeAuthService
 
         if (withinRotationGrace)
         {
-            // Deliberately NOT re-stamped: the window is measured from the ORIGINAL rotation, so presenting the same
-            // token again every few seconds cannot walk it forward into an unbounded replay window.
+            // Not re-stamped, so replaying every few seconds cannot walk the window forward. The pair issued below is a
+            // sibling of the chain's live head, not its replacement: whichever Set-Cookie a browser keeps stays live.
             _logger.LogInformation("Node refresh honoured a token that rotation replaced inside the grace window for user {UserId}.",
                 storedToken.UserId);
         }
-        else
-        {
-            await _identity.RevokeAsync(storedToken, now, cancellationToken);
-        }
 
-        var result = await CreateTokenResultAsync(user, now, cancellationToken);
+        var result = await CreateTokenResultAsync(user, now, withinRotationGrace ? null : storedToken, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
     }
@@ -292,41 +291,70 @@ public sealed class NodeAuthService : INodeAuthService
     }
 
     /// <summary>
-    ///     Whether the revocation at <paramref name="revokedAtUtc" /> was ROTATION replacing the presented token, rather
-    ///     than logout, a password change or a reset revoking it.
+    ///     Whether <paramref name="presented" /> was revoked by ROTATION inside the grace window and its own chain is
+    ///     still signed in — rather than revoked by logout, a password change or a reset.
     /// </summary>
     /// <remarks>
-    ///     Nothing records WHY a token was revoked, so the discriminator is the successor: rotation stamps the revocation and the replacement
-    ///     from one instant (both take the caller's <c>now</c>), so a still-live token created at exactly that instant is rotation's own
-    ///     successor. <see cref="RevokeRefreshTokensAsync" />, <see cref="ChangePasswordAsync" /> and <see cref="ResetAdminPasswordAsync" />
-    ///     revoke without issuing anything, so they leave no such token and a logged-out cookie can never be resurrected here.
+    ///     Rotation links the revoked token to its successor; <see cref="RevokeRefreshTokensAsync" />,
+    ///     <see cref="ChangePasswordAsync" /> and <see cref="ResetAdminPasswordAsync" /> link nothing and revoke the
+    ///     chain's live head, so following the links to the head and requiring it live keeps a logged-out cookie from
+    ///     ever being resurrected. Another client's session is never consulted. A real walk is short (every hop is a
+    ///     rotation within one window); the hop cap and same-user check make a tampered cycle or cross-user link fail.
     /// </remarks>
-    private Task<bool> WasReplacedByRotationAsync(string userId, DateTime revokedAtUtc, DateTime now, CancellationToken cancellationToken)
+    private async Task<bool> IsWithinRotationGraceAsync(NodeRefreshToken presented, DateTime now, CancellationToken cancellationToken)
     {
-        if (revokedAtUtc > now || now - revokedAtUtc > RotationGraceWindow)
+        if (presented.RevokedAtUtc is not { } revokedAtUtc || revokedAtUtc > now || now - revokedAtUtc > RotationGraceWindow)
         {
-            return Task.FromResult(false);
+            return false;
         }
 
-        return _identity.HasActiveTokenCreatedAtAsync(userId, revokedAtUtc, now, cancellationToken);
+        var head = presented;
+        for (var hops = 0; hops <= MaxRotationChainHops; hops++)
+        {
+            if (head.ReplacedByTokenId is not { } successorId)
+            {
+                return head.RevokedAtUtc is null && head.ExpiresAtUtc > now;
+            }
+
+            head = await _identity.FindRefreshTokenByIdAsync(successorId, cancellationToken);
+            if (head is null || !string.Equals(head.UserId, presented.UserId, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
-    private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user, DateTime now, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Issues an access token and a refresh token; with <paramref name="rotated" /> the refresh token is that token's
+    ///     linked successor, otherwise it replaces nothing.
+    /// </summary>
+    private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user,
+        DateTime now,
+        NodeRefreshToken? rotated,
+        CancellationToken cancellationToken)
     {
         var roles = await _userManager.GetRolesAsync(user);
         var (accessToken, accessTokenExpiresAtUtc) = _tokenService.CreateAccessToken(user, roles);
         var refreshToken = _tokenService.CreateRefreshTokenRaw();
         var refreshTokenExpiresAtUtc = now.AddDays(_options.Value.RefreshTokenDays);
+        var stored = new NodeRefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = _tokenService.HashRefreshToken(refreshToken),
+            ExpiresAtUtc = refreshTokenExpiresAtUtc,
+            CreatedAtUtc = now
+        };
 
-        await _identity.RevokeActiveTokensAsync(user.Id, now, cancellationToken);
-        await _identity.AddRefreshTokenAsync(new NodeRefreshToken
-            {
-                UserId = user.Id,
-                TokenHash = _tokenService.HashRefreshToken(refreshToken),
-                ExpiresAtUtc = refreshTokenExpiresAtUtc,
-                CreatedAtUtc = now
-            },
-            cancellationToken);
+        if (rotated is null)
+        {
+            await _identity.AddRefreshTokenAsync(stored, cancellationToken);
+        }
+        else
+        {
+            await _identity.RotateAsync(rotated, stored, now, cancellationToken);
+        }
 
         return new NodeAuthTokenResult { Succeeded = true, AccessToken = accessToken, AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc, RefreshToken = refreshToken, RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc };
     }

@@ -12,6 +12,9 @@ public sealed class RunningModelResponse
 
     /// <summary>A sanitized, user-safe diagnostic line (no internal paths/secrets).</summary>
     public required string Detail { get; init; }
+
+    /// <summary>Stable code for <see cref="Detail" /> the SPA translates — <c>responsive|unresponsive|exited</c>.</summary>
+    public required string DetailCode { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/running</c>.</summary>

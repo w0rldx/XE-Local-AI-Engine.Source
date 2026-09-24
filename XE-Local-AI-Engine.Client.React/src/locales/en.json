@@ -1671,6 +1671,7 @@
 					"updateAvailable": "Update available",
 					"upToDate": "Up to date",
 					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before updating the runtime.",
+					"noPrebuiltHint": "llama.cpp publishes no prebuilt {{variant}} build for this node. Build it with the llama.cpp build from source card below, or choose another variant.",
 					"installedSourceBuildNotice": "Remove the installed source-built runtime before installing a prebuilt runtime.",
 					"activeSourceBuildNotice": "Wait for the active source build to finish or cancel it before installing a prebuilt runtime.",
 					"openLoadedModels": "Open Loaded models",
@@ -3751,6 +3752,11 @@
 				"empty": "No models are currently running.",
 				"responsive": "Responsive",
 				"unresponsive": "Starting / unresponsive",
+				"details": {
+					"responsive": "Responding to health checks.",
+					"unresponsive": "Not responding to health checks.",
+					"exited": "The process has exited."
+				},
 				"eject": "Eject",
 				"ejected": "Model ejected.",
 				"ejectError": "Could not eject the model.",

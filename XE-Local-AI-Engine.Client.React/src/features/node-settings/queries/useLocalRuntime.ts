@@ -4,6 +4,7 @@ import type { XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusRe
 import {
 	cancelLlamaCppSourceBuildMutation,
 	ensureLlamaCppBinaryMutation,
+	getHardwareProfileOptions,
 	getHfTokenStatusOptions,
 	getLlamaCppRuntimeOptions,
 	getLlamaCppSourceBuildPrerequisitesOptions,
@@ -93,6 +94,21 @@ export function useRefreshLlamaCppRuntime() {
 // developer mode). Adapts the domain variables to the generated `{ body }` envelope and invalidates the runtime-status
 // query on success so the panel + banner reflect the freshly installed tag. The caller surfaces the progress/success/
 // error toasts (mirrors the model-pull pattern) so this hook stays a thin data-layer seam.
+/**
+ * The source-build backend this node's GPU vendor points at: nvidia → cuda, amd/intel → vulkan, anything else (or
+ * an unanswered profile) → cpu. Reads the shared cached hardware profile; no probe of its own.
+ */
+export function useDefaultSourceBuildBackend(): LlamaCppSourceBackend {
+	const { data } = useQuery({
+		...withResponseValidation(getHardwareProfileOptions({ query: { refresh: false } })),
+		select: (profile) => profile.gpuVendor,
+	});
+	if (data === "nvidia") {
+		return "cuda";
+	}
+	return data === "amd" || data === "intel" ? "vulkan" : "cpu";
+}
+
 export function useUpdateLlamaCppRuntime() {
 	const queryClient = useQueryClient();
 

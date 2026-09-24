@@ -4607,6 +4607,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.o
 	role: z.string(),
 	isResponsive: z.boolean(),
 	detail: z.string(),
+	detailCode: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({

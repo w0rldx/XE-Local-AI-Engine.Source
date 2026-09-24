@@ -23,4 +23,18 @@ public sealed class ModelFitMapperRoleTests
 
         AssertEx.Equal("reranker", token);
     }
+
+    [Test]
+    [Arguments(true, false, "responsive")]
+    [Arguments(false, false, "unresponsive")]
+    [Arguments(false, true, "exited")]
+    public void RunningModelToResponse_CarriesAStableDetailCodeTheSpaTranslates(bool responsive, bool exited, string expected)
+    {
+        var health = new LlamaServerProcessHealth { ModelName = "m", Role = ModelRole.Chat, IsResponsive = responsive, Detail = "free text", HasExited = exited };
+
+        var response = health.ToResponse();
+
+        AssertEx.Equal(expected, response.DetailCode);
+        AssertEx.Equal("free text", response.Detail);
+    }
 }

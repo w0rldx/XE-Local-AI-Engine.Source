@@ -180,6 +180,58 @@ public static class LlamaCppReleasePins
         return Pins.TryGetValue(new PinKey(os, arch, variant), out var pin) ? pin : null;
     }
 
+    /// <summary>
+    ///     Resolves the pin an ACQUISITION of <paramref name="variant" /> may use: the CPU floor for a CPU request, the
+    ///     exact GPU pin otherwise, <see langword="null" /> when no genuine prebuilt exists.
+    /// </summary>
+    /// <remarks>
+    ///     Every acquisition path (ensure, install, catalog asset matching) routes through this so none can install the
+    ///     CPU floor under a GPU label; a null answer is reported with <see cref="MissingPrebuiltMessage" />.
+    /// </remarks>
+    public static LlamaCppAssetPin? ResolveForAcquisition(OSPlatform os, Architecture arch, GpuVariant variant)
+    {
+        return variant == GpuVariant.Cpu ? Resolve(os, arch, variant) : TryResolveExact(os, arch, variant);
+    }
+
+    /// <summary>
+    ///     The user-safe refusal for a request <see cref="ResolveForAcquisition" /> answers null: it names the variant and
+    ///     host and points at the in-app source build and the prebuilt variants that do exist.
+    /// </summary>
+    public static string MissingPrebuiltMessage(OSPlatform os, Architecture arch, GpuVariant variant)
+    {
+        var alternatives = Pins.Keys
+            .Where(key => key.Os == os && key.Arch == arch && key.Variant != variant)
+            .Select(key => VariantDisplayName(key.Variant))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        if (alternatives.Count == 0)
+        {
+            return "No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.";
+        }
+
+        var osName = "Linux";
+        if (os == OSPlatform.Windows)
+        {
+            osName = "Windows";
+        }
+        else if (os == OSPlatform.OSX)
+        {
+            osName = "macOS";
+        }
+
+        var archName = arch == Architecture.Arm64 ? "arm64" : "x64";
+        return $"llama.cpp publishes no prebuilt {VariantDisplayName(variant)} build for {osName} {archName}; build it from source in Node settings → "
+               + $"llama.cpp build from source, or choose {string.Join(" or ", alternatives)}.";
+    }
+
+    private static string VariantDisplayName(GpuVariant variant) =>
+        variant switch
+        {
+            GpuVariant.Cuda => "CUDA",
+            GpuVariant.Vulkan => "Vulkan",
+            _ => "CPU"
+        };
+
     /// <summary>The host shape one prebuilt asset is pinned for.</summary>
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct PinKey(OSPlatform Os, Architecture Arch, GpuVariant Variant);

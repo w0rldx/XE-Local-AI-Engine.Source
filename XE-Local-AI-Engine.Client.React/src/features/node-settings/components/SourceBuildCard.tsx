@@ -24,6 +24,7 @@ import {
 } from "@/features/node-settings/models/SourceBuildModels";
 import {
 	useCancelSourceBuild,
+	useDefaultSourceBuildBackend,
 	useLlamaCppRuntimeStatus,
 	useRemoveSourceBuild,
 	useSourceBuildPrerequisites,
@@ -33,7 +34,10 @@ import {
 
 export function SourceBuildCard() {
 	const { t } = useTranslation();
-	const [backend, setBackend] = useState<LlamaCppSourceBackend>("cpu");
+	// The operator's pick, else the backend the node's GPU vendor points at (an NVIDIA host defaults to CUDA, not CPU).
+	const [backendChoice, setBackend] = useState<LlamaCppSourceBackend | null>(null);
+	const defaultBackend = useDefaultSourceBuildBackend();
+	const backend = backendChoice ?? defaultBackend;
 	const [source, setSource] = useState<LlamaCppSourceSelection>("official");
 	const [repository, setRepository] = useState("");
 	const [commit, setCommit] = useState("");

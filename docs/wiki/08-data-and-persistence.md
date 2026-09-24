@@ -37,7 +37,7 @@ The key-holder **implementation** that actually derives the key (`NodeSqliteKeyH
 
 `NodeChatDbContext` (`NodeChatDbContext.cs`) takes an `INodeSqliteKeyHolder` in its constructor and exposes the derived key via `NodeEncryptionKey`. `OnModelCreating` applies one `IEntityTypeConfiguration` per entity from `Configurations/`. The context also exposes raw-SQL crypto helpers used by the chat write path, including `EncryptConversationTitle`, `DecryptConversationTitle`, `DecryptMessageContent`, and the compaction-summary helpers; these mirror the interceptor's AAD scheme so raw-SQL writes round-trip with change-tracker writes.
 
-`NodeIdentityDbContext` (`NodeIdentityDbContext.cs`) deliberately uses a **separate migrations-history table** (`IdentityMigrationsHistoryTable`) so identity and app schemas migrate independently even when they share one physical SQLite file. The unique filtered index on `node_refresh_tokens.user_id` `WHERE revoked_at_utc IS NULL` enforces "at most one live refresh token per user". See [API & Hubs](09-api-and-hubs.md) for how auth consumes these.
+`NodeIdentityDbContext` (`NodeIdentityDbContext.cs`) deliberately uses a **separate migrations-history table** (`IdentityMigrationsHistoryTable`) so identity and app schemas migrate independently even when they share one physical SQLite file. `node_refresh_tokens` holds one live refresh token per signed-in session (migration `AllowConcurrentRefreshSessions` dropped the former one-live-token-per-user unique index); `replaced_by_token_id` links a rotated token to its successor for the reuse grace ([Security & Privacy](12-security-and-privacy.md)). See [API & Hubs](09-api-and-hubs.md) for how auth consumes these.
 
 ### Design-time factories
 

@@ -10,6 +10,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdministrationService
 {
+    private const string SourceBuildInstalledMessage =
+        "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.";
+
     private const string KeepModelWarmBlockedMessage =
         "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
 
@@ -168,11 +171,29 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         }
 
         var selectedVariant = variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
+        var os = CurrentOsPlatform();
+        var arch = RuntimeInformation.OSArchitecture;
+
+        // An installed source build refuses every prebuilt install, so its 409 must win over the missing-prebuilt answer below.
+        if ((await _installedRuntimeStore.ReadAsync(cancellationToken))?.SourceBuildPath is { Length: > 0 })
+        {
+            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
+                SourceBuildInstalledMessage,
+                _processSupervisor.CountRunningProcesses());
+        }
+
+        // The binary manager refuses this too; answering before the catalog call gives the caller that message, not "no matching asset".
+        if (LlamaCppReleasePins.ResolveForAcquisition(os, arch, selectedVariant) is null)
+        {
+            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure,
+                LlamaCppReleasePins.MissingPrebuiltMessage(os, arch, selectedVariant));
+        }
+
         try
         {
             var asset = await _releaseCatalog.ResolveAssetAsync(canonicalTag,
-                CurrentOsPlatform(),
-                RuntimeInformation.OSArchitecture,
+                os,
+                arch,
                 selectedVariant,
                 cancellationToken);
             if (asset.Asset is null)
@@ -280,7 +301,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                 {
                     Lease = null,
                     RunningProcessCount = _processSupervisor.CountRunningProcesses(),
-                    BlockedMessage = "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime."
+                    BlockedMessage = SourceBuildInstalledMessage
                 };
             }
 

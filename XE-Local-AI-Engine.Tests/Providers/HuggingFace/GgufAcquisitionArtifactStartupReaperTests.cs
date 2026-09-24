@@ -32,6 +32,51 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     }
 
     [Test]
+    public async Task Reaper_DeletesFreshDownloadLeftoversOfAnInstalledFile_ButKeepsAResumablePartial()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var installed = dir.FilePath("Installed-Q4_K_M.gguf");
+        var installedSidecar = installed + ".xe-model.json";
+        await File.WriteAllTextAsync(installed, "fake-gguf");
+        await File.WriteAllTextAsync(installedSidecar, "{}");
+        // Leftovers of an earlier attempt at the SAME file — fresh, so only the installed final can condemn them.
+        string[] leftovers =
+        [
+            installed + ".part",
+            installed + ".part.ranges.part",
+            installed + ".0123456789abcdef0123456789abcdef.part.part",
+            installed + ".0123456789abcdef0123456789abcdef.part.part.ranges.part",
+            installed + ".0123456789abcdef0123456789abcdef.part"
+        ];
+        foreach (var leftover in leftovers)
+        {
+            await File.WriteAllTextAsync(leftover, "partial");
+        }
+
+        // A download in progress (or waiting to resume) has no final file yet.
+        var resumable = dir.FilePath("Downloading-Q4_K_M.gguf.part");
+        await File.WriteAllTextAsync(resumable, "partial");
+        await File.WriteAllTextAsync(resumable + ".ranges.part", "cursors");
+        // A sidecar temp belongs to a commit or repair, not to a download: the installed final does not condemn it.
+        var sidecarTemp = installedSidecar + ".repair.part";
+        await File.WriteAllTextAsync(sidecarTemp, "{}");
+
+        await RunReaperAsync(options);
+
+        foreach (var leftover in leftovers)
+        {
+            AssertEx.False(File.Exists(leftover), $"{Path.GetFileName(leftover)} must be reaped once its final file is installed");
+        }
+
+        AssertEx.True(File.Exists(installed), "the installed .gguf must never be reaped");
+        AssertEx.True(File.Exists(installedSidecar), "the installed sidecar must survive");
+        AssertEx.True(File.Exists(resumable), "a fresh partial with no final file is resumable and must survive");
+        AssertEx.True(File.Exists(resumable + ".ranges.part"), "the resumable partial's cursors must survive");
+        AssertEx.True(File.Exists(sidecarTemp), "a fresh sidecar temp is judged by age only");
+    }
+
+    [Test]
     public async Task Reaper_DeletesStaleOrphanSidecar_ButKeepsSidecarWithAdjacentGguf()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

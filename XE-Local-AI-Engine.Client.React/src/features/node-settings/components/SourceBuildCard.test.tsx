@@ -33,6 +33,7 @@ const { state } = vi.hoisted(() => ({
 		start: vi.fn(),
 		cancel: vi.fn(),
 		remove: vi.fn(),
+		defaultBackend: "cpu" as "cpu" | "vulkan" | "cuda",
 		prerequisiteArgs: vi.fn(),
 		statusArgs: vi.fn(),
 	},
@@ -88,6 +89,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 		return { data: state.status };
 	},
 	useLlamaCppRuntimeStatus: () => ({ data: state.runtime }),
+	useDefaultSourceBuildBackend: () => state.defaultBackend,
 	useStartSourceBuild: () => ({ mutate: state.start, isPending: false }),
 	useCancelSourceBuild: () => ({ mutate: state.cancel, isPending: false }),
 	useRemoveSourceBuild: () => ({ mutate: state.remove, isPending: false }),
@@ -158,6 +160,7 @@ describe("SourceBuildCard", () => {
 			sanitizedError: null,
 			currentBuild: null,
 		};
+		state.defaultBackend = "cpu";
 		vi.clearAllMocks();
 	});
 
@@ -293,6 +296,16 @@ describe("SourceBuildCard", () => {
 			expect.any(Object),
 		);
 		expect(acknowledgement.checked).toBe(false);
+	});
+
+	it("defaults the backend to the one the node's GPU vendor points at", async () => {
+		state.defaultBackend = "cuda";
+		state.prerequisites = { backend: "cuda", canBuild: true, items: [] };
+		renderCard();
+		await openBuildForm();
+
+		expect((screen.getByRole("combobox", { name: "Backend" }) as HTMLInputElement).value).toBe("CUDA");
+		expect(state.prerequisiteArgs).toHaveBeenLastCalledWith("cuda", true);
 	});
 
 	it("submits an optional explicit commit for official upstream", async () => {

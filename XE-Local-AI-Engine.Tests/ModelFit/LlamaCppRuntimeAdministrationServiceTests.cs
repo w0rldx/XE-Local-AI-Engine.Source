@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [Category(TestCategories.Unit)]
 public sealed class LlamaCppRuntimeAdministrationServiceTests
@@ -176,6 +178,45 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         await variantSelector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>());
         await releaseCatalog.DidNotReceiveWithAnyArgs()
                             .ResolveAssetAsync(default!, default, default, default, default);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task InstallAsync_LinuxCuda_RefusesWithTheEnsureMessageBeforeCatalogOrLease()
+    {
+        var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager, supervisor, releaseCatalog: releaseCatalog);
+
+        var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, result.Failure);
+        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, RuntimeInformation.OSArchitecture, GpuVariant.Cuda), result.DisplayMessage);
+        await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task InstallAsync_LinuxCudaWithInstalledSourceBuild_AnswersTheSourceBuildRefusalNotTheMissingPrebuilt()
+    {
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b10201", "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, "/cache/llama.cpp/source-cuda/bin"));
+        var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager, Substitute.For<ILlamaServerProcessSupervisor>(), installedStore, releaseCatalog: releaseCatalog);
+
+        var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
+        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
+        await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
     }
 
     [Test]

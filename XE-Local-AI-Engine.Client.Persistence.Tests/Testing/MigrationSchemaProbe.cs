@@ -363,14 +363,29 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     {
         _ = Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
 
-        var options = new DbContextOptionsBuilder<NodeIdentityDbContext>()
-                      .UseSqlite($"Data Source={databasePath}",
-                          static sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
-                      .ConfigureWarnings(static warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                      .Options;
-
-        await using var context = new NodeIdentityDbContext(options);
+        await using var context = new NodeIdentityDbContext(IdentityOptions(databasePath));
         await context.Database.MigrateAsync();
+    }
+
+    /// <summary>Moves this probe's identity chain to <paramref name="targetMigration" />, forward or back.</summary>
+    public async Task MigrateIdentityToAsync(string targetMigration)
+    {
+        await _connection.CloseAsync();
+        await using (var context = new NodeIdentityDbContext(IdentityOptions(_databasePath)))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(targetMigration);
+        }
+
+        await _connection.OpenAsync();
+    }
+
+    private static DbContextOptions<NodeIdentityDbContext> IdentityOptions(string databasePath)
+    {
+        return new DbContextOptionsBuilder<NodeIdentityDbContext>()
+               .UseSqlite($"Data Source={databasePath}",
+                   static sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
+               .ConfigureWarnings(static warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+               .Options;
     }
 
     private static async Task ApplyChatAsync(string databasePath, INodeSqliteKeyHolder keyHolder, string? targetMigration)

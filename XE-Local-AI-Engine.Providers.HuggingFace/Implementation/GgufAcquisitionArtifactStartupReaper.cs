@@ -5,15 +5,14 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
-///     Startup sweep for stale GGUF acquisition artifacts left behind by a crashed import/download: operation-owned
-///     <c>*.part</c> staging files and orphaned final <c>.xe-model.json</c> sidecars with no adjacent GGUF.
+///     Startup sweep that deletes GGUF acquisition leftovers: stale <c>*.part</c> files, download partials of an installed
+///     file, and orphaned <c>.xe-model.json</c> sidecars.
 /// </summary>
 /// <remarks>
-///     The <c>.part</c> writers are <see cref="GgufModelImporter" />, <see cref="HuggingFaceGgufDownloadTransaction" /> and <see cref="HfDownloadClient" />;
-///     an orphan means a crash between the sidecar-first and weight renames of a commit (<see cref="GgufModelImporter.CommitAsync" />).
-///     Runs once at startup, best-effort, never blocking startup on a cleanup failure. <b>Safety.</b> Never deletes a <c>.gguf</c> file —
-///     no real weight carries those patterns — and only removes an artifact older than <see cref="StaleArtifactAge" />, so a live
-///     acquisition is untouched. <b>Scope.</b> It does not reconcile the model-provider-map; the default-provider fallback covers that.
+///     Writers: <see cref="GgufModelImporter" />, <see cref="HuggingFaceGgufDownloadTransaction" />, <see cref="HfDownloadClient" />.
+///     Best-effort, never blocks startup, never deletes a <c>.gguf</c>. An artifact goes only when older than
+///     <see cref="StaleArtifactAge" /> or when it is a download leftover whose final <c>.gguf</c> exists, which no live download
+///     can own. It does not reconcile the model-provider-map. Rules: docs/wiki/07-model-fit.md.
 /// </remarks>
 internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
 {
@@ -61,6 +60,12 @@ internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         foreach (var path in Directory.EnumerateFiles(_options.ModelsDirectory, "*.part", SearchOption.TopDirectoryOnly))
         {
+            if (IsDownloadLeftoverOfInstalledFile(path))
+            {
+                TryDelete(path, "download partial of an already installed file");
+                continue;
+            }
+
             TryDeleteIfStale(path, now, "stale operation-owned .part file");
         }
 
@@ -93,6 +98,28 @@ internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
             return;
         }
 
+        TryDelete(path, reason);
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="path" /> is a download partial, cursor or staged file (<c>&lt;name&gt;.gguf.…part</c>, not a
+    ///     sidecar temp) whose final <c>&lt;name&gt;.gguf</c> is already installed.
+    /// </summary>
+    private static bool IsDownloadLeftoverOfInstalledFile(string path)
+    {
+        var name = Path.GetFileName(path);
+        var end = name.IndexOf(".gguf.", StringComparison.OrdinalIgnoreCase);
+        if (end < 0 || name.Contains(GgufAcquisitionSidecar.Suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var finalPath = Path.Combine(Path.GetDirectoryName(path)!, name[..(end + ".gguf".Length)]);
+        return File.Exists(finalPath);
+    }
+
+    private void TryDelete(string path, string reason)
+    {
         try
         {
             File.Delete(path);

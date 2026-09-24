@@ -11,6 +11,15 @@ export interface RunningModel {
 	readonly role: string;
 	readonly isResponsive: boolean;
 	readonly detail: string;
+	// Stable code for `detail` the panel translates; null for a value this build does not know (render `detail` then).
+	readonly detailCode: RunningModelDetailCode | null;
+}
+
+const runningModelDetailCodes = ["responsive", "unresponsive", "exited"] as const;
+export type RunningModelDetailCode = (typeof runningModelDetailCodes)[number];
+
+function toDetailCode(value: string | null | undefined): RunningModelDetailCode | null {
+	return (runningModelDetailCodes as readonly string[]).includes(value ?? "") ? (value as RunningModelDetailCode) : null;
 }
 
 // Maps the generated (OpenAPI) running-model response to the stricter domain view-model. The generated fields are all
@@ -21,6 +30,7 @@ export function toRunningModel(dto: XeLocalAiEngineClientEndpointsModelFitV1Runn
 		role: dto.role ?? "",
 		isResponsive: dto.isResponsive ?? false,
 		detail: dto.detail ?? "",
+		detailCode: toDetailCode(dto.detailCode),
 	};
 }
 
