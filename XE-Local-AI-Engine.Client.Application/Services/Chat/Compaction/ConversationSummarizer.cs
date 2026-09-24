@@ -69,12 +69,18 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    // The widest content a single rune can serialize to: a supplementary scalar (surrogate pair) that the relaxed
+    // encoder still writes as two \uXXXX escapes, 12 characters where a BMP rune costs 1. Any emoji would do.
+    private const string WidestSingleRune = "😀";
+
+    // The smallest request the summarizer can send: an empty prior summary and one message holding one rune. The
+    // fragmenting loop never splits a surrogate pair, so a budget that fits this frame can always make progress.
     private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty,
     [
         new ConversationSummarizerMessage
         {
             Role = "user",
-            Content = "😀"
+            Content = WidestSingleRune
         }
     ]), SerializerOptions).Length;
 
