@@ -826,7 +826,8 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 **Tool-offer security invariant** (`ProjectAllowedTools`): only the seeded **"Default Assistant"**
 (mode-off persona, identified by forge-proof `Source=Seeded` + `SeedSlug`) receives the *full*
 capability-gated offer. **Every other definition is intersected** down to its `AllowedToolNames` — a
-selected agent's offer is never widened beyond its allowed set. `spawn_subagent`, `run_python` and
+selected agent's offer is never widened beyond its allowed set, except by `ask_user` on an interactive turn
+and by the four work-session state tools inside a work-session step (§5.4). `spawn_subagent`, `run_python` and
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
 non-tool-capable model gets an **empty** offer before per-name gating. See [Chat](05-chat.md) for how
 the selected agent surfaces as per-message attribution.
@@ -909,12 +910,16 @@ tools':
   C-quoted path — git's spelling for a name holding a quote, a backslash or a control byte — is decoded by
   `GitQuotedPath` before any guard runs and then applies like any other; a quoted literal that git itself could
   not decode is refused without a name. A path the workspace's `.gitignore`
-  covers is not in the patch at all, because staging honours it (below).
+  covers is not in the patch at all, because staging honours it (below). git runs with its repository discovery
+  stopped at the folder's parent, so a folder inside another work tree applies from its own root, and a check that
+  would not write every planned file (`git apply --numstat` missing one) is refused rather than reported applied.
+  A run recorded as applied is never re-applied: an operator who reverts the files by hand must export again. That
+  state is read from the same bounded head-and-tail window of the run's event log that the run list reads.
 - **The preview also reads what the operator's own folders already hold.** For each selected folder the patch
   touches that is inside a git work tree, `PreviewAsync` runs one `git --no-optional-locks status
   --porcelain=v1 -z` through the same hardened `HostGitRunner`, scoped by pathspec to the patch's own targets,
   and reports the ones that are modified, staged or untracked (`NodePatchApplyPreview.DirtyTargets`). It is a
-  **warning, never a gate**: `git apply --check` stays the only thing that decides `CanApply`, the warning is
+  **warning, never a gate**: `git apply --check` and the numstat coverage above stay the only things that decide `CanApply`, the warning is
   outside the hash binding, and it does not run at apply time. A folder that is no work tree reports nothing;
   a status call that fails or times out sets `DirtyCheckUnavailable` and leaves the preview otherwise intact.
 
@@ -1271,7 +1276,7 @@ The three timeouts are a ladder; a stalled or slow turn trips them in this order
 
 | Bound | Source | Enforced by | What it bounds |
 |---|---|---|---|
-| `StreamIdleTimeout` | package `TimeoutSettings.StreamIdleTimeoutSeconds` | `StreamIdleWatchdog` | No chunk arrives between two yielded items of ONE streamed segment |
+| `StreamIdleTimeout` | package `TimeoutSettings.StreamIdleTimeoutSeconds` | `StreamIdleWatchdog` | No chunk arrives between two yielded items of ONE streamed segment, while no requested or approved tool call awaits its result (server-side tool execution carries its own bound) |
 | `ToolResultTimeout` | package `TimeoutSettings.ToolCallTimeoutSeconds`, else the node-global pending-tool-call age | `ApiToolCallBridge` | The wait for a tool call's RESULT |
 | `InvocationTimeout` | package `TimeoutSettings.InvocationTimeoutSeconds` | `InvocationLifecycleTracker` | The whole turn's wall clock, every segment and approval round-trip end to end |
 
@@ -1841,6 +1846,13 @@ for Qwen3 on markdown — the round was passed through as fitting and llama.cpp 
 held out of the whole chat offer and appended only in `GetOfferedToolsForProfile[Async]`, beside
 `spawn_subagent` — the same profile-opt-in seam (**HIGH-1**: registering a handler in DI surfaces it in
 the resolution seam only; without the offer merge the seeded personas intersect to an empty tool set).
+
+They belong to the **turn**, not the agent. The supervisor sends every step inside `WorkSessionTurnScope`, and
+`AgentDefinitionResolver.ProjectAllowedTools` unions the four in from the profile pool after the
+`AllowedToolNames` intersection, for the Default Assistant as well. A custom agent driving a session, or bound
+to a development-workflow Agent node, therefore gets them without listing them. Before this, such an agent ran
+every step tool-less until the step cap. The union lifts from the gated pool, so the tool-capable list still
+decides, and an ordinary chat turn carries no scope and is never offered them.
 
 Each resolves its session from `AgentRunConversationContext.Current` plus a conversation-to-session
 lookup — **never from the arguments**, which are model-authored. That is what makes the profile-opt-in

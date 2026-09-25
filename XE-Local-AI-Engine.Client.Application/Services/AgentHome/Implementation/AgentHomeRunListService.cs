@@ -200,6 +200,12 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         };
     }
 
+    /// <summary>One of <see cref="AgentHomeRunApplyStates" /> for a run directory, read the same way the list reads it.</summary>
+    internal static async Task<string> ReadApplyStateAsync(string runDirectory, CancellationToken cancellationToken)
+    {
+        return (await ReadEventsAsync(Path.Combine(runDirectory, "logs", "events.jsonl"), cancellationToken)).ApplyState;
+    }
+
     /// <summary>The three facts a run's event log carries, or the unknown defaults when it carries none of them.</summary>
     private static async Task<EventSummary> ReadEventsAsync(string eventsPath, CancellationToken cancellationToken)
     {

@@ -16,14 +16,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector
 {
+    private readonly IInstalledRuntimeStore? _installedRuntimeStore;
     private readonly bool _isWindows;
     private readonly ICudaManagedBuildSignal _managedCudaSignal;
     private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
+    private readonly Lazy<Task> _seedFromRecord;
     private readonly IGpuVendorProbe _vendorProbe;
 
     /// <summary>Creates a selector over the supplied vendor probe + override options + managed-CUDA signal, defaulting OS detection to the live host.</summary>
-    public GpuVariantSelector(IGpuVendorProbe vendorProbe, LlamaServerRuntimeOverrideOptions overrideOptions, ICudaManagedBuildSignal managedCudaSignal)
-        : this(vendorProbe, OperatingSystem.IsWindows(), overrideOptions, managedCudaSignal)
+    public GpuVariantSelector(IGpuVendorProbe vendorProbe,
+        LlamaServerRuntimeOverrideOptions overrideOptions,
+        ICudaManagedBuildSignal managedCudaSignal,
+        IInstalledRuntimeStore installedRuntimeStore)
+        : this(vendorProbe, OperatingSystem.IsWindows(), overrideOptions, managedCudaSignal, installedRuntimeStore)
     {
     }
 
@@ -32,12 +37,18 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
     ///     override options default to an inactive instance and the signal to a cleared one so existing tests keep the
     ///     vendor-rule path unchanged.
     /// </summary>
-    internal GpuVariantSelector(IGpuVendorProbe vendorProbe, bool isWindows, LlamaServerRuntimeOverrideOptions? overrideOptions = null, ICudaManagedBuildSignal? managedCudaSignal = null)
+    internal GpuVariantSelector(IGpuVendorProbe vendorProbe,
+        bool isWindows,
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null,
+        ICudaManagedBuildSignal? managedCudaSignal = null,
+        IInstalledRuntimeStore? installedRuntimeStore = null)
     {
         _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
         _isWindows = isWindows;
         _overrideOptions = overrideOptions ?? new LlamaServerRuntimeOverrideOptions();
         _managedCudaSignal = managedCudaSignal ?? new CudaManagedBuildSignal();
+        _installedRuntimeStore = installedRuntimeStore;
+        _seedFromRecord = new Lazy<Task>(SeedFromRecordAsync);
     }
 
     /// <inheritdoc />
@@ -50,6 +61,11 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
             return _overrideOptions.Variant;
         }
 
+        if (_managedCudaSignal.ActiveVariant is null && _installedRuntimeStore is not null)
+        {
+            await _seedFromRecord.Value.WaitAsync(ct).ConfigureAwait(false);
+        }
+
         if (_managedCudaSignal.ActiveVariant is { } activeVariant)
         {
             return activeVariant;
@@ -60,6 +76,35 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
         // Managed source-built CUDA: a Linux NVIDIA box with a recorded build serves CUDA instead of the Vulkan fallback.
         // Reads the cached signal only (no per-call store read). [archHIGH-2]
         return SelectForVendor(vendor, _isWindows);
+    }
+
+    /// <summary>
+    ///     Seeds the unset signal once from the installed-runtime record, so a caller that runs before
+    ///     <see cref="CudaBuildStartupService" /> is not admitted on Vulkan and then spawned on CUDA.
+    /// </summary>
+    /// <remarks>
+    ///     Uncancellable, so a cancelled first caller cannot leave the others unseeded. A signal write that lands during
+    ///     the read is newer than the record and wins; an unreadable record leaves the signal to the serve-time validator.
+    /// </remarks>
+    private async Task SeedFromRecordAsync()
+    {
+        var versionBefore = _managedCudaSignal.Version;
+        InstalledRuntimeState? installed;
+        try
+        {
+            installed = await _installedRuntimeStore!.ReadAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Advisory seed, cached once: a faulted task would fail every later selection. The serve-time validator is the gate.
+            return;
+        }
+
+        if (CudaBuildStartupService.RecordedSourceBuildVariant(installed) is { } recorded
+            && _managedCudaSignal.Version == versionBefore)
+        {
+            _managedCudaSignal.SetActive(recorded);
+        }
     }
 
     /// <summary>Pure selection rule, exposed for direct assertion in tests.</summary>

@@ -47,7 +47,8 @@ internal sealed class HostGitRunner
         CancellationToken cancellationToken,
         ReadOnlyMemory<byte>? standardInput = null,
         int? maxStandardOutputBytes = null,
-        int? maxStandardErrorBytes = null)
+        int? maxStandardErrorBytes = null,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -72,6 +73,17 @@ internal sealed class HostGitRunner
         // apply` reads .gitattributes drivers; their names are arbitrary, so the files leave git's search entirely.
         foreach (var (key, value) in AgentHomeGitHardening.Environment)
         {
+            startInfo.Environment[key] = value;
+        }
+
+        // Per-call additions, which never replace the hardening above: only a key it does not set may be passed.
+        foreach (var (key, value) in environment ?? new Dictionary<string, string>(StringComparer.Ordinal))
+        {
+            if (AgentHomeGitHardening.Environment.ContainsKey(key))
+            {
+                throw new ArgumentException($"'{key}' is part of the hardened git environment and cannot be overridden.", nameof(environment));
+            }
+
             startInfo.Environment[key] = value;
         }
 

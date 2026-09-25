@@ -9,19 +9,22 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     An endpoint is the HTTP edge and may not take a persistence store itself, so each call arrives here unchanged.
-///     This type adds no validation, ordering or defaulting: graph validation, the request-size refusal and the
-///     status-filter parse stay in the endpoints, and the store keeps deciding not-found, version conflicts and what
-///     a null field means. Everything that MOVES a run is deliberately elsewhere — commands on
+///     This type adds no ordering or defaulting, and no validation beyond a work-item create's project check: graph
+///     validation, the request-size refusal and the status-filter parse stay in the endpoints, and the store keeps
+///     deciding not-found, version conflicts and what a null field means. Everything that MOVES a run is deliberately elsewhere — commands on
 ///     <see cref="IDevWorkflowRunService" />, run-feed reads on <see cref="DevWorkflowRunQueryService" />.
 /// </remarks>
 public sealed class DevWorkflowAuthoringService
 {
+    private readonly IDevelopmentStore? _development;
     private readonly IDevWorkflowStore _store;
 
-    public DevWorkflowAuthoringService(IDevWorkflowStore store)
+    // The development store is registered only while Development Mode is on; null means no project can be bound.
+    public DevWorkflowAuthoringService(IDevWorkflowStore store, IDevelopmentStore? development = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
+        _development = development;
     }
 
     /// <summary>The definition picker's feed. Never loads a graph blob: the node count is a column, not a parse.</summary>
@@ -95,9 +98,32 @@ public sealed class DevWorkflowAuthoringService
     }
 
     /// <summary>Creates a work item. Definition-agnostic: the definition is chosen per RUN.</summary>
-    public Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default)
+    /// <remarks>
+    ///     The one check this type makes: a named development project has to exist. The column carries no foreign key,
+    ///     so an unknown id would be stored and only fail at the first run's first repository command.
+    /// </remarks>
+    public async Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default)
     {
-        return _store.CreateWorkItemAsync(command, cancellationToken);
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.DevelopmentProjectId is { } projectId)
+        {
+            if (_development is null)
+            {
+                throw new DevWorkflowValidationException("Development Mode is off on this node, so the work item cannot be bound to a development project. Leave the project out.");
+            }
+
+            try
+            {
+                _ = await _development.GetProjectAsync(projectId, cancellationToken);
+            }
+            catch (DevelopmentNotFoundException)
+            {
+                throw new DevWorkflowValidationException($"There is no development project '{projectId}', so the work item cannot be bound to it. "
+                                                         + "Pick an existing project, or leave the project out.");
+            }
+        }
+
+        return await _store.CreateWorkItemAsync(command, cancellationToken);
     }
 
     /// <summary>One work item, without its runs — the caller embeds those from <see cref="DevWorkflowRunQueryService" />.</summary>

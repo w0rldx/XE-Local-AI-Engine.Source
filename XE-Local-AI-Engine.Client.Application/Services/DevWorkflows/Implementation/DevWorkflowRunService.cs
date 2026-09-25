@@ -74,17 +74,27 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
-        var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand
-            {
-                RunId = operationId,
-                WorkItemId = workItemId,
-                DefinitionId = definitionId,
-                DefinitionVersion = definition.Version,
-                DefinitionGraphHash = definition.GraphHash,
-                GraphJson = definition.GraphJson,
-                NodeRuns = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)
-            },
-            cancellationToken);
+        DevWorkflowRunSnapshot run;
+        try
+        {
+            run = await _store.StartRunAsync(new StartDevWorkflowRunCommand
+                {
+                    RunId = operationId,
+                    WorkItemId = workItemId,
+                    DefinitionId = definitionId,
+                    DefinitionVersion = definition.Version,
+                    DefinitionGraphHash = definition.GraphHash,
+                    GraphJson = definition.GraphJson,
+                    NodeRuns = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)
+                },
+                cancellationToken);
+        }
+        catch (DevWorkflowRunInFlightException exception)
+        {
+            // The store's message carries the provider's constraint text for the log; the operator gets what to do about it.
+            _logger.LogWarning(exception, "A second run on work item {WorkItemId} was refused: {StoreMessage}", workItemId, exception.Message);
+            throw new DevWorkflowRunInFlightException("This work item already has a live run. Wait for it to finish, or cancel it, before starting another.", exception);
+        }
 
         return await SignalAndComposeAsync(run.Id, cancellationToken);
     }

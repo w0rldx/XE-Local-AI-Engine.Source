@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { z } from "zod";
 
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { getGraphWorkflowCapabilityOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { type GraphWorkflowSelection, graphWorkflowTabs } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { GraphWorkflowsPage } from "@/features/graphWorkflows/pages/GraphWorkflowsPage";
 
@@ -18,9 +19,16 @@ const graphWorkflowsSearchSchema = z.object({
 
 export const Route = createFileRoute("/_layout/graph-workflows")({
 	// Capability gate: Graph Workflows ships ON since S4; a build that turns it off redirects here to home, matching the nav
-	// child being filtered out of NavigationMenuData.
-	beforeLoad: () => {
+	// child being filtered out of NavigationMenuData. The node's own switch (`GraphWorkflows:Enabled=false`) redirects the
+	// same way, read from the one route that still answers with the feature off.
+	beforeLoad: async ({ context }) => {
 		if (!nodeCapabilities.graphWorkflows) {
+			throw redirect({ to: nodeRoutePaths.home });
+		}
+
+		// Fails open: a capability read failure must not lock the page away; the page reports its own load errors.
+		const capability = await context.queryClient.ensureQueryData(getGraphWorkflowCapabilityOptions()).catch(() => undefined);
+		if (capability?.enabled === false) {
 			throw redirect({ to: nodeRoutePaths.home });
 		}
 	},

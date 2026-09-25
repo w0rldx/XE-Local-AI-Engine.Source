@@ -6164,7 +6164,7 @@
 				"toolPlaceholder": "Choose a tool",
 				"arguments": "Arguments (JSON)",
 				"argumentBindings": "Argument bindings",
-				"argumentBindingsHelp": "Replaces one argument with a value read from the run document at save time.",
+				"argumentBindingsHelp": "Replaces one argument with a value read from this node's input document when the run reaches it.",
 				"addBinding": "Add binding",
 				"removeBinding": "Remove binding",
 				"noBindings": "None. The arguments above are sent as they are.",

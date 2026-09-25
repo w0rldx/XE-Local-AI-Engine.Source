@@ -417,6 +417,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             ? ProviderCallBudget.BeginCallCapScope(_options.MaxProviderCallsPerStep)
             : null;
 
+        // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag.
+        using var workSessionTurn = WorkSessionTurnScope.Begin();
+
         ChatStreamEvent terminal;
         try
         {

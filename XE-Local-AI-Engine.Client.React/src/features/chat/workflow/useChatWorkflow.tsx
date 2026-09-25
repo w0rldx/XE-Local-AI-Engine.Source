@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { titleFromContent } from "@/features/chat/models/ChatConversationDerivations";
@@ -46,6 +47,7 @@ import {
 	graphWorkflowInvalidationKey,
 	graphWorkflowQueryIds,
 	useCancelGraphWorkflowRun,
+	useGraphWorkflowCapability,
 	useGraphWorkflowConversationRuns,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
@@ -97,7 +99,7 @@ export interface ChatWorkflowMode {
 const EMPTY_RUNS: readonly GraphWorkflowConversationRunResponse[] = [];
 
 export function useChatWorkflow({
-	enabled,
+	enabled: requested,
 	conversationId,
 	resolveSendConversation,
 	cacheConversation,
@@ -108,6 +110,10 @@ export function useChatWorkflow({
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();
+	// An operator can switch graph workflows off per node; every other route then answers a bodyless 404, so chat stays
+	// plain chat. Until the answer lands the mode stays on, so a bound conversation cannot slip into the model stream.
+	const capabilityQuery = useGraphWorkflowCapability({ enabled: requested });
+	const enabled = requested && capabilityQuery.data?.enabled !== false;
 	const explicitSelection = useChatWorkflowStore((state) => state.selectedDefinitionByConversation[conversationId]);
 	const dismissedRunId = useChatWorkflowStore((state) => state.dismissedRunByConversation[conversationId]);
 	const showActivity = useChatWorkflowStore((state) => state.showActivity);
@@ -136,6 +142,8 @@ export function useChatWorkflow({
 		[definitionsQuery.data],
 	);
 	const runsQuery = useGraphWorkflowConversationRuns(conversationId || undefined, { enabled, pollIntervalMs });
+	// A 404 means no bound run can exist (the feature is off, or the conversation is gone): the binding resolves to none.
+	const runsNotFound = getErrorStatus(runsQuery.error) === 404;
 	const runs = runsQuery.data ?? EMPTY_RUNS;
 	const newest = runs[0];
 
@@ -227,7 +235,7 @@ export function useChatWorkflow({
 	// false and a send would slip into the normal model stream past a live run. The composer stays usable (a fast
 	// switch-then-Enter must not be dropped); the send waits for the list instead — see `sendWhenResolved`.
 	const bindingUnresolved =
-		enabled && conversationId.length > 0 && explicitSelection === undefined && runsQuery.data === undefined;
+		enabled && conversationId.length > 0 && explicitSelection === undefined && runsQuery.data === undefined && !runsNotFound;
 	const composerDisabled = active && busy;
 	const sendAttachments = acceptsAttachments && pendingInput === undefined;
 	// An answer goes to the PARKED run, whatever the picker says: the server refuses a mismatched definition.
@@ -352,6 +360,10 @@ export function useChatWorkflow({
 		oneAtATime(async () => {
 			// Joins the read already in flight (the reload's or the switch's) rather than cancelling it for a duplicate.
 			const result = await runsQuery.refetch({ cancelRefetch: false });
+			if (result.data === undefined && getErrorStatus(result.error) === 404) {
+				normalSend();
+				return;
+			}
 			if (result.data === undefined) {
 				throw result.error ?? new Error("The conversation's workflow runs could not be read.");
 			}

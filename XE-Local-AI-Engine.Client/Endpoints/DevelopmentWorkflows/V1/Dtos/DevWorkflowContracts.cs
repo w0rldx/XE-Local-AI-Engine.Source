@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 // Requests. Route parameters and query parameters bind by name, so the property names here are the wire names.
 
@@ -255,6 +256,7 @@ public sealed record DevWorkflowGraphNode(
     int? NodeTimeoutSeconds,
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
+    [property: JsonConverter(typeof(DevWorkflowRequiredCapabilitiesJsonConverter))]
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
     /// <summary>

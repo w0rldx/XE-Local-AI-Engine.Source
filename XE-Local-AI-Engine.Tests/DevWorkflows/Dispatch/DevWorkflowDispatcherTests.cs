@@ -538,6 +538,56 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A cancel accepted while the pause drain is still waiting on the agent lane wins: the settle re-reads the run
+    ///     rather than trusting the tick's snapshot, which said Pausing and used to write Paused over the cancel.
+    /// </summary>
+    [Test]
+    public async Task ACancelLandingWhileThePauseDrainWaitsOnTheAgent_SettlesCancelledWithItsSession()
+    {
+        // A host of this test's own: it sets the fake agent's pause hook.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        harness.Agent.OnPausing = _ => harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status, "the operator's cancel must not be lost to the pause it overtook.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "research")).Status);
+        // The Pausing transition itself writes a run.paused row; what the race used to add was a SECOND one after the cancel.
+        var trail = (await harness.ReadEventsAsync(runId)).Select(static entry => entry.EventType).ToList();
+        AssertEx.False(trail.Skip(trail.IndexOf("run.cancelled")).Contains("run.paused"),
+            $"no pause may be recorded over the cancel: {string.Join(", ", trail)}");
+        AssertEx.Equal(AgentWorkSessionStatus.Cancelled, (await harness.Agent.GetAsync(sessionId)).Status, "the session the pause parked is cancelled with its run.");
+    }
+
+    /// <summary>
+    ///     Cancelling a PAUSED run cancels the session the pause parked on the Pending row, or that session stays Paused
+    ///     and resumable under a run that can never drive it again.
+    /// </summary>
+    [Test]
+    public async Task CancellingAPausedRun_CancelsTheSessionThePauseParked()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(AgentWorkSessionStatus.Paused, (await harness.Agent.GetAsync(sessionId)).Status);
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(AgentWorkSessionStatus.Cancelled, (await harness.Agent.GetAsync(sessionId)).Status);
+    }
+
+    /// <summary>
     ///     A pause is meant to be resumed, so it leaves the human wait alone rather than tearing it down. The run says
     ///     <c>Pausing</c> until it has settled, because the command that asked for it has already returned.
     /// </summary>

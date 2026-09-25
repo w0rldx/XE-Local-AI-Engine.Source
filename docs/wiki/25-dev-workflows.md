@@ -416,6 +416,12 @@ draining, so leaving it would pin `Pausing` for as long as the lane stayed busy.
 startup reconciler performs, for the same reason. A paused run also keeps its promised re-attempts — it is
 coming back, and a resume that skipped every cushion a definition asked for would be the pause spending them.
 
+A cancel can be accepted while a pause drain is still waiting on the agent lane. The settle therefore re-reads
+the run instead of trusting the tick's snapshot: a run that moved to `Cancelling` is left for the next tick's
+cancel drain rather than written `Paused` over the cancel. A cancel drain that finds a `Pending` Agent row with a
+session attached, which is what a pause leaves, cancels that session too. Otherwise the session would stay
+`Paused` and resumable under a run that can never drive it again.
+
 Every terminal is reached through a drain or through the "nothing is live" recomputation. There is no path that
 writes one directly, because doing so would strand the run's live node runs under a run no tick looks at again.
 

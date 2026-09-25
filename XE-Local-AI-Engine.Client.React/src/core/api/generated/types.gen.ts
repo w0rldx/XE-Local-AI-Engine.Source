@@ -2713,6 +2713,10 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNod
 	payload?: unknown;
 };
 
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse = {
+	enabled: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowConversationRunResponse = {
 	run: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse;
 	definitionId: string;
@@ -13032,6 +13036,33 @@ export type ProbeExternalProviderResponses = {
 };
 
 export type ProbeExternalProviderResponse = ProbeExternalProviderResponses[keyof ProbeExternalProviderResponses];
+
+export type GetGraphWorkflowCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/capability";
+};
+
+export type GetGraphWorkflowCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGraphWorkflowCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse;
+};
+
+export type GetGraphWorkflowCapabilityResponse = GetGraphWorkflowCapabilityResponses[keyof GetGraphWorkflowCapabilityResponses];
 
 export type SendGraphWorkflowChatMessageData = {
 	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest;

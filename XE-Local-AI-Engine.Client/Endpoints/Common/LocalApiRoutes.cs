@@ -932,6 +932,13 @@ public static class LocalApiRoutes
     {
         public const string Root = "graph-workflows";
 
+        /// <summary>
+        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="DevelopmentWorkflows.Capability" />:
+        ///     it answers <c>enabled: false</c> so the SPA hides the feature and keeps chat sending instead of reading the
+        ///     bodyless 404 as a load failure.
+        /// </summary>
+        public const string Capability = "graph-workflows/capability";
+
         /// <summary>The definition collection: GET lists without the graph blob, POST validates the graph and stores it.</summary>
         public const string Definitions = "graph-workflows/definitions";
 

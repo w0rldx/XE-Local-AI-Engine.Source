@@ -11421,6 +11421,40 @@
         ]
       }
     },
+    "/api/local/v1/graph-workflows/capability": {
+      "get": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "getGraphWorkflowCapability",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/graph-workflows/conversations/{conversationId}/messages": {
       "post": {
         "tags": [
@@ -34128,6 +34162,18 @@
           },
           "payload": {
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

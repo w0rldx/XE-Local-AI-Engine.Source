@@ -247,6 +247,38 @@ public sealed class DockerDaemonProbeTests
     }
 
     [Test]
+    public async Task AFirstUseConfirmationNamingAnotherDaemon_PinsNothing()
+    {
+        // With no pin, a confirmation used to pin whichever daemon answered for any non-blank id: the id the operator
+        // was shown was never compared with the daemon that was approved.
+        var (client, store) = Doubles();
+
+        var outcome = await RunAsync(client, store, confirmingDaemonId: "daemon-bogus");
+
+        AssertEx.Equal(DockerDaemonPreflightStatus.DaemonIdentityChanged, outcome.Status);
+        AssertEx.Equal(DockerDaemonProbeReason.ConfirmationRaced, outcome.Reason);
+        AssertEx.Null(await store.ReadAsync());
+        AssertEx.Equal(expected: 0, store.WriteCount);
+    }
+
+    [Test]
+    public async Task AConfirmationNamingAnotherDaemon_IsRefusedEvenWhenThePinMatchesTheReachableOne()
+    {
+        // The pinned case of the same defect: a matching pin answered Ready before the confirmed id was looked at.
+        var (client, store) = Doubles();
+        await RunAsync(client, store);
+
+        var outcome = await RunAsync(client, store, confirmingDaemonId: "daemon-bogus");
+
+        AssertEx.Equal(DockerDaemonPreflightStatus.DaemonIdentityChanged, outcome.Status);
+        AssertEx.Equal(DockerDaemonProbeReason.ConfirmationRaced, outcome.Reason);
+        var pinned = AssertEx.NotNull(await store.ReadAsync());
+        AssertEx.Equal("daemon-alpha", pinned.DaemonId);
+        AssertEx.False(pinned.ConfirmedByOperator);
+        AssertEx.Equal(expected: 1, store.WriteCount);
+    }
+
+    [Test]
     public void TheProbe_NeverWritesOperatorProse()
     {
         // The extraction's contract, asserted structurally rather than by reading messages. ADR 0004 makes Development

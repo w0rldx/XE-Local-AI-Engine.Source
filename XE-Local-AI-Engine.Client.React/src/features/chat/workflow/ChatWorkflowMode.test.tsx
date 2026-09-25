@@ -142,6 +142,7 @@ setupMswServer(
 	jsonRoute("get", "agents", { items: [] }),
 	jsonRoute("get", "knowledge-base/documents", { items: [], embeddingModel: "nomic-embed-text", embeddingModelAvailable: true }),
 	jsonRoute("get", `chat/conversations/${conversationId}/uploads`, { items: [] }),
+	jsonRoute("get", "graph-workflows/capability", { enabled: true }),
 	jsonRoute("get", "graph-workflows/definitions", {
 		definitions: [
 			graphWorkflowDefinitionSummary({ id: definitionId, name: "Support triage", kind: "Chat" }),
@@ -887,6 +888,46 @@ describe("Chat workflow mode", () => {
 		expect(bodies[0]).toMatchObject({ definitionId, content: "A CLI", attachmentFileIds: null });
 		expect(adapter.sendMessage).not.toHaveBeenCalled();
 		await waitFor(() => expect(input.value).toBe(""));
+	});
+
+	it("sends plain chat and offers no workflow when the node switched graph workflows off", async () => {
+		// The node's switch 404s every other route in the family, bodyless; only the capability route still answers.
+		server.use(
+			jsonRoute("get", "graph-workflows/capability", { enabled: false }),
+			http.get(localApiPath("graph-workflows/*"), () => new HttpResponse(null, { status: 404 })),
+		);
+		const bodies = messagesRoute();
+		adapter.sendMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield* [];
+			},
+		}));
+		renderChat();
+
+		await typeAndSend("hello");
+
+		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
+		expect(screen.queryByTestId("chat-workflow-runs-error")).toBeNull();
+		expect(screen.queryByTestId("chat-workflow-selector-trigger")).toBeNull();
+		expect(bodies).toHaveLength(0);
+	});
+
+	it("reads a 404 for the bound runs as no binding and sends plain chat instead of pausing", async () => {
+		const release = heldRunsRoute();
+		const bodies = messagesRoute();
+		adapter.sendMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield* [];
+			},
+		}));
+		renderChat();
+
+		await typeAndSend("hello");
+		release(() => new HttpResponse(null, { status: 404 }));
+
+		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
+		expect(screen.queryByTestId("chat-workflow-runs-error")).toBeNull();
+		expect(bodies).toHaveLength(0);
 	});
 
 	it("keeps the draft and offers Retry when the bound runs cannot be read for a deferred send", async () => {

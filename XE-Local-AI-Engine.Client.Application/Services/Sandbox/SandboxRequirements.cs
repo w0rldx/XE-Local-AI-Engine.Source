@@ -52,6 +52,16 @@ public sealed record SandboxRequirements
     public required SandboxNetworkPolicy NetworkFloor { get; init; }
 
     /// <summary>
+    ///     Whether the workload asks for <see cref="SandboxIsolationMode.Filesystem" /> on its create request wherever the backend
+    ///     advertises <c>SupportsFilesystemIsolation</c>, above an <see cref="IsolationFloor" /> that does not demand it.
+    /// </summary>
+    /// <remarks>
+    ///     A preference, not a floor: it constrains no candidate. It exists so the create site and the operator-facing isolation summary
+    ///     read one declaration; before it, AgentHome asked for the boundary while the summary reported the role as never asking.
+    /// </remarks>
+    public bool RequestsFilesystemIsolationWhereAdvertised { get; init; }
+
+    /// <summary>
     ///     WHICH set of CPU, memory and process-count ceilings this workload asks for on its create request, or
     ///     <see cref="SandboxCeilingProfile.None" /> for none at all.
     /// </summary>

@@ -89,22 +89,14 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         foreach (var alias in plan.Aliases)
         {
-            var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
-            if (check is null || check.ExitCode != 0)
+            var (rejection, stats) = await CheckSubPatchAsync(runner, alias, cancellationToken);
+            if (rejection is not null)
             {
-                rejections.Add(new PatchApplyRejection
-                {
-                    Reason = string.Create(CultureInfo.InvariantCulture,
-                        $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
-                });
+                rejections.Add(rejection);
                 continue;
             }
 
-            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken);
-            if (stats is not null && stats.ExitCode == 0)
-            {
-                MergeNumstat(numstat, alias.Alias, stats.StandardOutput);
-            }
+            MergeNumstat(numstat, alias.Alias, stats);
         }
 
         // Advisory, and read AFTER CanApply is decided by the loop above so it cannot be mistaken for a gate: what an
@@ -145,24 +137,47 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     private async Task<NodePatchApplyResult> ApplyApprovedCoreAsync(NodePatchApplyRequest request, CancellationToken cancellationToken)
     {
+        // A landed patch is refused up front and logs nothing: re-running git on it fails ("already exists"), and logging that
+        // failure rewrote the run's recorded state from applied to rejected for a patch that is on disk.
+        if (IsValidRunId(request.RunId)
+            && string.Equals(await AgentHomeRunListService.ReadApplyStateAsync(ResolveRunDirectory(request.RunId), cancellationToken),
+                AgentHomeRunApplyStates.Applied,
+                StringComparison.Ordinal))
+        {
+            return new NodePatchApplyResult
+            {
+                Applied = false,
+                AppliedFiles = [],
+                Rejections =
+                [
+                    new PatchApplyRejection
+                    {
+                        Reason = "this run's patch was already applied to the host; it is not applied a second time."
+                    }
+                ]
+            };
+        }
+
         // Re-run the full validation + dry-run check (TOCTOU defense; never blind-apply).
         var plan = await BuildPlanAsync(request, cancellationToken);
         var rejections = new List<PatchApplyRejection>(plan.Rejections);
         var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
 
+        // Line counts are read here, before anything is written, because the same read is what proves git will write
+        // every planned file; the counts shown for the applied files are the ones that cleared the check.
+        var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         if (plan.IsValid)
         {
             foreach (var alias in plan.Aliases)
             {
-                var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
-                if (check is null || check.ExitCode != 0)
+                var (rejection, stats) = await CheckSubPatchAsync(runner, alias, cancellationToken);
+                if (rejection is not null)
                 {
-                    rejections.Add(new PatchApplyRejection
-                    {
-                        Reason = string.Create(CultureInfo.InvariantCulture,
-                            $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
-                    });
+                    rejections.Add(rejection);
+                    continue;
                 }
+
+                MergeNumstat(numstat, alias.Alias, stats);
             }
         }
 
@@ -226,14 +241,6 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 };
             }
 
-            // Populate line counts for the applied files (parity with preview).
-            var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
-            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken);
-            if (stats is not null && stats.ExitCode == 0)
-            {
-                MergeNumstat(numstat, alias.Alias, stats.StandardOutput);
-            }
-
             appliedFiles.AddRange(ApplyNumstat(alias.Files, numstat));
             appliedAliases++;
         }
@@ -248,9 +255,44 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         };
     }
 
-    private static async Task<HostGitResult?> CheckSubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
+    /// <summary>
+    ///     The dry run that clears an alias for apply: a clean <c>--check</c>, and a <c>--numstat</c> that accounts for every
+    ///     file the plan names. Returns the refusal, or the numstat output on success.
+    /// </summary>
+    /// <remarks>
+    ///     A clean check is not enough on its own. git skips a path it considers outside its working directory with exit 0
+    ///     and no output, so a patch that would write nothing passes <c>--check</c>; a planned file missing from numstat is what shows
+    ///     it. The ceiling in <see cref="RunSubPatchAsync" /> removes the known cause; this refuses any other one.
+    /// </remarks>
+    private static async Task<(PatchApplyRejection? Rejection, string Numstat)> CheckSubPatchAsync(HostGitRunner runner,
+        AliasPlan alias,
+        CancellationToken cancellationToken)
     {
-        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--check", "--whitespace=nowarn"), cancellationToken);
+        var check = await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--check", "--whitespace=nowarn"), cancellationToken);
+        if (check is null || check.ExitCode != 0)
+        {
+            return (new PatchApplyRejection
+            {
+                Reason = string.Create(CultureInfo.InvariantCulture,
+                    $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
+            }, string.Empty);
+        }
+
+        var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken);
+        var reported = new Dictionary<string, LineStat>(StringComparer.Ordinal);
+        if (stats is not null && stats.ExitCode == 0)
+        {
+            MergeNumstat(reported, alias.Alias, stats.StandardOutput);
+        }
+
+        // By NAME, not count: a header-only block still prints a numstat line, which a count would accept in place of a skipped file.
+        if (stats is null || stats.ExitCode != 0 || !alias.Files.All(file => reported.ContainsKey(Describe(file.Alias, file.RelativePath))))
+        {
+            return (AliasRejection(alias.Alias, "git would not write every file in the patch under this folder, so nothing was applied."),
+                string.Empty);
+        }
+
+        return (null, stats.StandardOutput);
     }
 
     private static async Task<HostGitResult?> NumstatSubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
@@ -323,7 +365,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             await WriteSubPatchAsync(tempPatch, alias.SubPatch, cancellationToken);
             var fullArguments = arguments.Append(tempPatch).ToArray();
-            return await runner.RunAsync(alias.ResolvedRoot, fullArguments, cancellationToken);
+            return await runner.RunAsync(alias.ResolvedRoot, fullArguments, cancellationToken, environment: CeilingAt(alias.ResolvedRoot));
         }
         catch (IOException)
         {
@@ -339,6 +381,26 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             // propagates out of the write or out of the runner, so a cancelled apply leaves no copy behind.
             TryDeleteFile(tempPatch);
         }
+    }
+
+    /// <summary>
+    ///     Stops git's repository discovery at the alias root, so every patch path resolves from the root itself.
+    /// </summary>
+    /// <remarks>
+    ///     Without it, a selected folder inside another work tree (any subfolder of a repository) makes <c>git apply</c> resolve
+    ///     paths from that repository's top level and silently skip each one outside the folder: exit 0, nothing written. The
+    ///     ceiling is the root's PARENT, so a root that is itself a repository root is still found and applied as one. The dirty
+    ///     read does not use this: it wants the enclosing repository, whose status is the operator's.
+    /// </remarks>
+    private static Dictionary<string, string> CeilingAt(string resolvedRoot)
+    {
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (Path.GetDirectoryName(resolvedRoot) is { Length: > 0 } parent)
+        {
+            environment["GIT_CEILING_DIRECTORIES"] = parent;
+        }
+
+        return environment;
     }
 
     /// <summary>

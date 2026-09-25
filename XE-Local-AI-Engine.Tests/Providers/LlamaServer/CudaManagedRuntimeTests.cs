@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -326,6 +328,40 @@ public sealed class CudaManagedRuntimeTests
         var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, signal);
 
         AssertEx.Equal(GpuVariant.Cuda, await selector.SelectVariantAsync(CancellationToken.None));
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Selector_BeforeStartupSeed_SeedsOnceFromRecordedSourceBuild()
+    {
+        using var dir = new TempDir();
+        var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
+        using var store = new InstalledRuntimeStore(dir.Path);
+        await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, signal, store);
+
+        // A hosted service that runs before CudaBuildStartupService has seeded the signal (a workflow dispatcher's first
+        // sweep after a restart) is admitted and spawned through this selector: both must already answer CUDA.
+        AssertEx.Equal(GpuVariant.Cuda, await selector.SelectVariantAsync(CancellationToken.None));
+        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
+
+        // Seeded once only: a later removal clears the signal and the record is not read back over it.
+        signal.Clear();
+        AssertEx.Equal(GpuVariant.Vulkan, await selector.SelectVariantAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Selector_WhenTheRecordReadThrows_FallsBackToTheVendorRuleOnEveryCall()
+    {
+        var store = Substitute.For<IInstalledRuntimeStore>();
+        store.ReadAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("store gone"));
+        var selector = new GpuVariantSelector(new StubVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false, overrideOptions: null, new CudaManagedBuildSignal(), store);
+
+        // The seed is cached once: a faulted seed must not turn every later selection into a throw.
+        AssertEx.Equal(GpuVariant.Vulkan, await selector.SelectVariantAsync(CancellationToken.None));
+        AssertEx.Equal(GpuVariant.Vulkan, await selector.SelectVariantAsync(CancellationToken.None));
     }
 
     [Test]

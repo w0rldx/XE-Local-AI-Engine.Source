@@ -706,12 +706,20 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return written;
         }
 
-        var settledStatus = run.Status == DevWorkflowRunStatus.Pausing ? DevWorkflowRunStatus.Paused : DevWorkflowRunStatus.Cancelled;
-        DevWorkflowStateMachine.EnsureLegal(run.Status, settledStatus);
+        // Re-read the RUN too: a cancel accepted while this pause drain waited on a lane must not be overwritten by a Paused settle off the tick's snapshot. The next
+        // tick's cancel drain settles it instead, and the write expects the re-read version, so a cancel landing after this read fails it rather than being lost.
+        var current = await store.GetRunAsync(run.Id, cancellationToken);
+        if (current.Status != run.Status)
+        {
+            return written;
+        }
+
+        var settledStatus = current.Status == DevWorkflowRunStatus.Pausing ? DevWorkflowRunStatus.Paused : DevWorkflowRunStatus.Cancelled;
+        DevWorkflowStateMachine.EnsureLegal(current.Status, settledStatus);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
             {
                 RunId = run.Id,
-                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                ExpectedVersion = current.Version,
                 TargetStatus = settledStatus,
                 WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)
             },
@@ -792,6 +800,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // comes immediately rather than settling here, which would hold the advance gate — and with it every other run — for as long as the stop's grace period.
             await lanes.Agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: true, cancellationToken);
             return 1;
+        }
+
+        if (nodeRun is { NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } parkedSessionId })
+        {
+            // A row a pause parked back to Pending keeps its Paused session attached for the resume. Abandoning the row without it would leave that session Paused, and resumable,
+            // under a run that can never drive it again.
+            await lanes.Agent.StopAsync(parkedSessionId, cancel: true, cancellationToken);
         }
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);

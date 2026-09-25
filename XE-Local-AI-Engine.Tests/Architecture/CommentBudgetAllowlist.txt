@@ -869,7 +869,7 @@ XE-Local-AI-Engine.Tests/Endpoints/Development/DevelopmentEndpointRegistrationTe
 XE-Local-AI-Engine.Tests/Endpoints/Development/DevelopmentFeatureAvailabilityTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/DevelopmentEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/DevelopmentEndpointTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|run|7
+XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|run|6
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|summary|4
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|multi|1
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|summary|8

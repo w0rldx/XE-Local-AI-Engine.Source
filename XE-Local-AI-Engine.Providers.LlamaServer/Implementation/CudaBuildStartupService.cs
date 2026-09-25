@@ -39,12 +39,9 @@ internal sealed class CudaBuildStartupService : IHostedService
             await _buildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
 
             var installed = await _installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath
-                && File.Exists(Path.Combine(sourceBuildPath, "llama-server")))
+            if (RecordedSourceBuildVariant(installed) is { } recorded)
             {
-                // Optimistic seed: the serve-time validator (EnsureBinaryAsync) re-checks perms/SHA and clears the signal
-                // if the build is actually invalid, so seeding on presence alone is safe.
-                _signal.SetActive(installed.Variant);
+                _signal.SetActive(recorded);
             }
         }
         catch (Exception exception)
@@ -52,6 +49,20 @@ internal sealed class CudaBuildStartupService : IHostedService
             _logger.LogError(exception, "Reconciling the managed source-build state at startup failed.");
             throw;
         }
+    }
+
+    /// <summary>The variant of a recorded source build whose server binary is present, or <see langword="null" />.</summary>
+    /// <remarks>
+    ///     Optimistic: the serve-time validator (<c>EnsureBinaryAsync</c>) re-checks perms/SHA and clears the signal if the
+    ///     build is actually invalid, so seeding on presence alone is safe. Shared with <see cref="GpuVariantSelector" />'s
+    ///     first-use seed.
+    /// </remarks>
+    internal static GpuVariant? RecordedSourceBuildVariant(InstalledRuntimeState? installed)
+    {
+        return installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath
+               && File.Exists(Path.Combine(sourceBuildPath, "llama-server"))
+            ? installed.Variant
+            : null;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

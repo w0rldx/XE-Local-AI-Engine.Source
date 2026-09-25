@@ -162,8 +162,21 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         return MoveAsync("resume", sessionId, AgentWorkSessionStatus.Running, cancellationToken);
     }
 
-    public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        MoveAsync("pause", sessionId, AgentWorkSessionStatus.Paused, cancellationToken);
+    /// <summary>
+    ///     Runs at the top of every pause, before the session parks. A real pause waits out the step in flight, and this
+    ///     is where a test lands what raced it — an operator's cancel arriving while the drain is still waiting.
+    /// </summary>
+    public Func<Guid, Task>? OnPausing { get; set; }
+
+    public async Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        if (OnPausing is { } observe)
+        {
+            await observe(sessionId);
+        }
+
+        return await MoveAsync("pause", sessionId, AgentWorkSessionStatus.Paused, cancellationToken);
+    }
 
     public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         MoveAsync("cancel", sessionId, AgentWorkSessionStatus.Cancelled, cancellationToken);

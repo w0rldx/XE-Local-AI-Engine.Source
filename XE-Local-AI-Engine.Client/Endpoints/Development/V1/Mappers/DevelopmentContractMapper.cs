@@ -176,8 +176,12 @@ internal static class DevelopmentContractMapper
         ArgumentNullException.ThrowIfNull(containment);
 
         var capabilities = provider.Capabilities;
-        var boundaryRequested = requirements.IsolationFloor == SandboxIsolationMode.Filesystem;
-        var boundaryAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
+        // A floor is served by any backend with the boundary PROPERTY; a preference only by the mechanism the create site asks for.
+        var boundaryFloor = requirements.IsolationFloor == SandboxIsolationMode.Filesystem;
+        var boundaryRequested = boundaryFloor || requirements.RequestsFilesystemIsolationWhereAdvertised;
+        var boundaryAdvertised = capabilities.HasFlag(boundaryFloor
+            ? SandboxProviderCapabilities.SupportsHostFilesystemBoundary
+            : SandboxProviderCapabilities.SupportsFilesystemIsolation);
         var filesystem = boundaryRequested && boundaryAdvertised;
         var network = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var networkRequired = SandboxEgressPolicy.IsRequired(requirements, nodeRequiresEgressDenial);

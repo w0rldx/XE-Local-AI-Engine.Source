@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -90,9 +93,38 @@ public sealed class DevWorkflowRunServiceTests
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()));
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
                 harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
             "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.");
+
+        // The domain sentence only: the provider's constraint text stays on the inner exception, for the log.
+        AssertEx.Equal("This work item already has a live run. Wait for it to finish, or cancel it, before starting another.", refusal.Message);
+        AssertEx.NotNull(refusal.InnerException);
+    }
+
+    /// <summary>
+    ///     The same refusal over HTTP, against the real store: the 409's detail is the domain sentence and never the
+    ///     provider's constraint text (F-46).
+    /// </summary>
+    [Test]
+    public async Task StartingASecondLiveRunOverHttp_AnswersTheDomainSentenceWithoutProviderText()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()));
+
+        using var client = Host.Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/local/v1/development-workflows/work-items/{workItemId}/runs")
+        {
+            Content = new StringContent($$"""{"operationId":"{{Guid.NewGuid()}}","definitionId":"{{definitionId}}"}""", Encoding.UTF8, "application/json")
+        };
+        Host.Factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("This work item already has a live run. Wait for it to finish, or cancel it, before starting another.",
+            document.RootElement.GetProperty("detail").GetString());
     }
 
     /// <summary>

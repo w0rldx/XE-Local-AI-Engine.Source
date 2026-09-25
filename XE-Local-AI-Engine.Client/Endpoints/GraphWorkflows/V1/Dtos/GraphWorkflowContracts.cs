@@ -473,3 +473,15 @@ public sealed class ListGraphWorkflowRunEventsResponse
 
     public required bool ReplayTruncated { get; init; }
 }
+
+/// <summary>
+///     Whether this node serves graph workflows at all — the one response every node answers, switch on or off.
+/// </summary>
+/// <remarks>
+///     The rest of the family is 404ed by request-path middleware when <c>GraphWorkflows:Enabled</c> is false, and a
+///     bodyless 404 is indistinguishable from a broken route.
+/// </remarks>
+public sealed class GraphWorkflowCapabilityResponse
+{
+    public required bool Enabled { get; init; }
+}

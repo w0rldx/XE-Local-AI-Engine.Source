@@ -15,6 +15,7 @@ import {
 	createGraphWorkflowDefinitionMutation,
 	decideGraphWorkflowNodeRunMutation,
 	deleteGraphWorkflowDefinitionMutation,
+	getGraphWorkflowCapabilityOptions,
 	getGraphWorkflowDefinitionOptions,
 	getGraphWorkflowNodeRunOptions,
 	getGraphWorkflowRunOptions,
@@ -40,6 +41,7 @@ import type {
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const graphWorkflowQueryIds = {
+	capability: "getGraphWorkflowCapability",
 	definitions: "listGraphWorkflowDefinitions",
 	definition: "getGraphWorkflowDefinition",
 	runs: "listGraphWorkflowRuns",
@@ -350,6 +352,20 @@ export function useStartGraphWorkflowRun() {
  * name, trigger message, a parked ChatInput's prompt). This is what puts a reloaded conversation back into workflow
  * mode. A node with Graph Workflows switched off answers 404, which the chat reads as "no bound runs".
  */
+/**
+ * Whether this node serves graph workflows at all — the ONE route that still answers when the operator switched the
+ * feature off (`GraphWorkflows:Enabled=false`), every other one being 404ed with a bodyless response the client cannot
+ * tell from a broken route. The route gate, the nav entry and chat workflow mode read it, so a disabled node hides the
+ * feature instead of reporting load failures. Same shape as `useDevWorkflowCapability`.
+ */
+export function useGraphWorkflowCapability(options: { readonly enabled?: boolean } = {}) {
+	return useQuery({
+		...withResponseValidation(getGraphWorkflowCapabilityOptions()),
+		enabled: options.enabled ?? true,
+		staleTime: 30_000,
+	});
+}
+
 export function useGraphWorkflowConversationRuns(conversationId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(

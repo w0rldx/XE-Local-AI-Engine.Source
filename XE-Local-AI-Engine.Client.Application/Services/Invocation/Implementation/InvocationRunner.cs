@@ -68,6 +68,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly InvocationLifecycleTracker _lifecycleTracker;
     private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly ILogger<InvocationRunner> _logger;
+    private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
 
@@ -114,7 +115,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         InvocationLifecycleTracker lifecycleTracker,
         IExternalProviderRegistry externalProviderRegistry,
         IServiceScopeFactory scopeFactory,
-        ILogger<InvocationRunner> logger)
+        ILogger<InvocationRunner> logger,
+        TimeProvider? timeProvider = null)
     {
         _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
         _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
@@ -144,6 +146,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         // Read once at singleton construction from INodeRuntimeSettings (stored > appsettings seed > default) into plain fields the hot
         // streaming/cleanup loops read, so an operator edit applies on the next restart. The out-of-band Ollama:ChatModel override still wins, as in the chat-connection fallback.
@@ -665,6 +668,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // matching FunctionCallContent, and a re-emitted FunctionCallContent is recognised as a repeat before it pays another serialize + dispatch.
         var pendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal);
 
+        // Tool calls requested (or approved) and not yet resulted: while one is open the pull is server-side tool execution, which neither the idle watchdog
+        // nor the model's turn budget is charged for. Cleared per segment and at the next round's provider output, so a stale id cannot keep them off.
+        var openToolCalls = new OpenToolCalls(_lifecycleTracker);
+
         // Surrogate ids for a provider that streams a BLANK CallId (Microsoft.Extensions.AI rejects a null one, so the empty string is the id-less shape): the FIRST
         // call to a tool keys on the tool NAME, the id the approval card resolves, and later id-less calls take "<name>#2". Holds the one still awaiting a result.
         var openSurrogateCallIds = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -725,7 +732,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 return StreamIdleWatchdog.WithIdleTimeout(innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
                     streamIdleTimeout,
                     streamIdleTimeoutMessage,
-                    sendToken);
+                    sendToken,
+                    isSuspended: () => openToolCalls.Any,
+                    timeProvider: _timeProvider);
             }
 
             var segmentStream = isFirstSegment
@@ -828,6 +837,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 // callName, not functionCall.Name: the local above null-coalesces the property the compiler still treats as maybe-null.
                                 // The two are the same string whenever the provider gave a name at all.
                                 pendingLocalToolCalls[callId] = new RequestedToolCall(callName, functionCall.Arguments, serializedArguments);
+                                openToolCalls.Open(callId);
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -857,6 +867,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     }
                                 }
 
+                                openToolCalls.Close(resultCallId);
                                 var toolName = pendingLocalToolCalls.TryGetValue(resultCallId, out var requested)
                                     ? requested.Name
                                     : resultCallId;
@@ -894,6 +905,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 break;
                         }
                     }
+                }
+
+                if (thinkingBuilder is { Length: > 0 } || !string.IsNullOrEmpty(textChunk))
+                {
+                    openToolCalls.OnProviderOutput();
                 }
 
                 if (usage is not null)
@@ -935,6 +951,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
             }
 
+            openToolCalls.Clear();
+
             // The first segment has drained; any resume segment past this point follows earlier output and must not be
             // retried (a retry there would replay already-streamed chunks).
             isFirstSegment = false;
@@ -955,11 +973,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     {
                         var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
                         approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
+                        openToolCalls.OpenApproved(approvalRequest);
                         continue;
                     }
 
                     var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
                     approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
+                    if (approved)
+                    {
+                        openToolCalls.OpenApproved(approvalRequest);
+                    }
                 }
 
                 currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
@@ -1055,6 +1078,62 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
         await RunAsync(context, cancellationToken);
+    }
+
+    /// <summary>The turn's open tool calls, mirrored onto the whole-turn deadline so tool time is not charged to the model.</summary>
+    /// <remarks>
+    ///     A round's calls all run before the next provider round, so provider text or reasoning after a round boundary (a result, or a segment start)
+    ///     proves none is still running. Usage is not that proof: it closes the very round whose calls are about to run.
+    /// </remarks>
+    private sealed class OpenToolCalls
+    {
+        private readonly HashSet<string> _ids = new(StringComparer.Ordinal);
+        private readonly InvocationLifecycleTracker _tracker;
+        private bool _atRoundBoundary = true;
+
+        public OpenToolCalls(InvocationLifecycleTracker tracker) => _tracker = tracker;
+
+        public bool Any => _ids.Count > 0;
+
+        public void Open(string callId)
+        {
+            _ = _ids.Add(callId);
+            _atRoundBoundary = false;
+            _tracker.SetToolExecuting(executing: true);
+        }
+
+        /// <summary>An approved call runs in the resume segment before the provider streams; an id-less one could never be closed.</summary>
+        public void OpenApproved(ToolApprovalRequestContent approvalRequest)
+        {
+            if (!string.IsNullOrEmpty(approvalRequest.ToolCall.CallId))
+            {
+                Open(approvalRequest.ToolCall.CallId);
+                _atRoundBoundary = true;
+            }
+        }
+
+        public void Close(string callId)
+        {
+            _ = _ids.Remove(callId);
+            // A round boundary even with ids still open: the framework runs a round's calls one at a time (AllowConcurrentInvocation is false).
+            _atRoundBoundary = true;
+            _tracker.SetToolExecuting(Any);
+        }
+
+        public void OnProviderOutput()
+        {
+            if (_atRoundBoundary && Any)
+            {
+                Clear();
+            }
+        }
+
+        public void Clear()
+        {
+            _ids.Clear();
+            _atRoundBoundary = true;
+            _tracker.SetToolExecuting(executing: false);
+        }
     }
 
     /// <summary>Derives the id that keys a tool-call card: the wire call id when present, otherwise the tool name.</summary>

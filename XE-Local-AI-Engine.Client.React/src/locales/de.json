@@ -6164,7 +6164,7 @@
 				"toolPlaceholder": "Werkzeug auswählen",
 				"arguments": "Argumente (JSON)",
 				"argumentBindings": "Argumentbindungen",
-				"argumentBindingsHelp": "Ersetzt ein Argument durch einen Wert, der beim Lauf aus dem Dokument gelesen wird.",
+				"argumentBindingsHelp": "Ersetzt ein Argument durch einen Wert, der beim Lauf aus dem Eingabedokument dieses Knotens gelesen wird.",
 				"addBinding": "Bindung hinzufügen",
 				"removeBinding": "Bindung entfernen",
 				"noBindings": "Keine. Die Argumente oben werden unverändert gesendet.",

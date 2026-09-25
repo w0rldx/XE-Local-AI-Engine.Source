@@ -11,8 +11,8 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 public static class SandboxWorkloads
 {
     /// <summary>
-    ///     AgentHome: host binaries only (<c>dotnet --version</c>, <c>git</c>, its own file tools), nothing outliving the run, and no
-    ///     filesystem boundary beyond the jail it has always had.
+    ///     AgentHome: host binaries only (<c>dotnet --version</c>, <c>git</c>, its own file tools), nothing outliving the run, and a
+    ///     filesystem boundary wherever the backend advertises one, the jail it has always had where it does not.
     /// </summary>
     /// <remarks>
     ///     The network floor is <see cref="SandboxNetworkPolicy.Unrestricted" /> for the reason on
@@ -25,6 +25,7 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
+        RequestsFilesystemIsolationWhereAdvertised = true,
         // Host-toolchain ceilings (LocalContainer:ToolchainLimits) wherever the backend advertises them. AgentHome runs model-directed host
         // commands including a real `dotnet`, so it needs a build-sized ceiling, and one at all: a runaway otherwise costs the machine.
         Ceilings = SandboxCeilingProfile.HostToolchain,
@@ -52,7 +53,9 @@ public static class SandboxWorkloads
     /// </remarks>
     public static readonly SandboxRequirements WorkSession = AgentHome with
     {
-        Workload = "WorkSession"
+        Workload = "WorkSession",
+        // Its one create site asks for no boundary, so its summary row must not claim one.
+        RequestsFilesystemIsolationWhereAdvertised = false
     };
 
     /// <summary>

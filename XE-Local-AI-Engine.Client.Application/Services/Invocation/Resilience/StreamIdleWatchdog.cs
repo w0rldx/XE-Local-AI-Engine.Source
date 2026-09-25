@@ -39,27 +39,37 @@ internal static class StreamIdleWatchdog
     ///     <see cref="OperationCanceledException" /> and is never reported as an idle timeout.
     /// </remarks>
     /// <param name="abandonmentGrace">Overrides <see cref="DefaultAbandonmentGrace" />; null or non-positive uses it.</param>
+    /// <param name="isSuspended">Asked at the deadline: true re-arms a window, the silence being a server-side tool's own.</param>
     public static IAsyncEnumerable<T> WithIdleTimeout<T>(Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
         TimeSpan idleTimeout,
         string timeoutMessage,
         CancellationToken cancellationToken,
-        TimeSpan? abandonmentGrace = null)
+        TimeSpan? abandonmentGrace = null,
+        Func<bool>? isSuspended = null,
+        TimeProvider? timeProvider = null)
     {
+        // The deadline runs on timeProvider (the system clock when null), so a test drives it without real waits.
         ArgumentNullException.ThrowIfNull(streamFactory);
         ArgumentNullException.ThrowIfNull(timeoutMessage);
 
         var grace = abandonmentGrace is { } value && value > TimeSpan.Zero ? value : DefaultAbandonmentGrace;
-        return IterateAsync(streamFactory, idleTimeout, timeoutMessage, grace, cancellationToken);
+        var deadline = new IdleDeadline
+        {
+            Timeout = idleTimeout,
+            IsSuspended = isSuspended ?? (static () => false),
+            Clock = timeProvider ?? TimeProvider.System
+        };
+        return IterateAsync(streamFactory, deadline, timeoutMessage, grace, cancellationToken);
     }
 
     private static async IAsyncEnumerable<T> IterateAsync<T>(Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
-        TimeSpan idleTimeout,
+        IdleDeadline deadline,
         string timeoutMessage,
         TimeSpan abandonmentGrace,
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
-        if (idleTimeout <= TimeSpan.Zero)
+        if (deadline.Timeout <= TimeSpan.Zero)
         {
             await foreach (var item in streamFactory(cancellationToken).WithCancellation(cancellationToken))
             {
@@ -111,7 +121,7 @@ internal static class StreamIdleWatchdog
                 // outcome and whether, on abandonment, it took ownership of the enumerator's disposal.
                 var outcome = await PullNextAsync(enumerator,
                     pending,
-                    idleTimeout,
+                    deadline,
                     abandonmentGrace,
                     awaitingFirstChunk,
                     providerCts,
@@ -170,31 +180,42 @@ internal static class StreamIdleWatchdog
     /// </remarks>
     private static async Task<PullOutcome> PullNextAsync<T>(IAsyncEnumerator<T> enumerator,
         Task<bool> moveTask,
-        TimeSpan idleTimeout,
+        IdleDeadline deadline,
         TimeSpan abandonmentGrace,
         bool awaitingFirstChunk,
         CancellationTokenSource providerCts,
         CancellationToken cancellationToken)
     {
         bool idleFired;
-        try
+        while (true)
         {
-            // WaitAsync is the wall-clock bound: its timer fires whether or not the provider honours cancellation, at
-            // one timer registration per pull. A chunk or a provider fault inside the window returns or rethrows.
-            var moved = await moveTask.WaitAsync(idleTimeout, cancellationToken);
-            return new PullOutcome(moved ? PullStatus.Advanced : PullStatus.Completed, DisposalHandedOff: false);
-        }
-        catch (TimeoutException idleDeadline) when (!IsFaultOf(moveTask, idleDeadline))
-        {
-            // Our deadline fired. The filter keeps a provider fault that happens to BE a TimeoutException propagating
-            // as a provider fault; only our own deadline lands here, and an outer cancel takes precedence over a stall.
-            idleFired = !cancellationToken.IsCancellationRequested;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Outer cancellation won, through WaitAsync or a cooperative provider; both run the stop/grace/abandon tail
-            // so nothing is disposed mid-pull. A provider cancel for its OWN reasons is not caught and propagates.
-            idleFired = false;
+            try
+            {
+                // WaitAsync is the wall-clock bound: its timer fires whether or not the provider honours cancellation, at
+                // one timer registration per pull. A chunk or a provider fault inside the window returns or rethrows.
+                var moved = await moveTask.WaitAsync(deadline.Timeout, deadline.Clock, cancellationToken);
+                return new PullOutcome(moved ? PullStatus.Advanced : PullStatus.Completed, DisposalHandedOff: false);
+            }
+            catch (TimeoutException idleDeadline) when (!IsFaultOf(moveTask, idleDeadline))
+            {
+                // Our deadline fired. The filter keeps a provider fault that happens to BE a TimeoutException propagating
+                // as a provider fault; only our own deadline lands here, and an outer cancel takes precedence over a stall.
+                if (!cancellationToken.IsCancellationRequested && deadline.IsSuspended())
+                {
+                    // A server-side tool is executing inside the pull: that silence is the tool's, bounded by the tool.
+                    continue;
+                }
+
+                idleFired = !cancellationToken.IsCancellationRequested;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Outer cancellation won, through WaitAsync or a cooperative provider; both run the stop/grace/abandon tail
+                // so nothing is disposed mid-pull. A provider cancel for its OWN reasons is not caught and propagates.
+                idleFired = false;
+            }
+
+            break;
         }
 
         // The round is over either way, so ask the provider to stop and give it a bounded grace: a cooperative one
@@ -335,6 +356,16 @@ internal static class StreamIdleWatchdog
 
         /// <summary>The outer cancellation token fired; the round is a plain cancellation, not a stall.</summary>
         OuterCancelled
+    }
+
+    /// <summary>The idle bound, the question that suspends it, and the clock it runs on.</summary>
+    private sealed class IdleDeadline
+    {
+        public required TimeSpan Timeout { get; init; }
+
+        public required Func<bool> IsSuspended { get; init; }
+
+        public required TimeProvider Clock { get; init; }
     }
 
     /// <summary>A <see cref="PullStatus" /> plus whether the enumerator's disposal was handed to an abandonment cleanup.</summary>

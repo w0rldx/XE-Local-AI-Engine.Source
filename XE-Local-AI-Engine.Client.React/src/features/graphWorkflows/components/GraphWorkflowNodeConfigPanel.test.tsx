@@ -33,6 +33,7 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { type GraphWorkflowNodeKind, graphWorkflowNodeKinds } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowTools } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const tools = graphWorkflowTools().tools ?? [];
@@ -222,6 +223,14 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		fireEvent.blur(screen.getByTestId("gw-node-config-binding-path-0"));
 
 		expect(screen.getByTestId("gw-node-config-bindings-error").textContent).toBe("Enter the path this argument reads from.");
+	});
+
+	it("says argument bindings are resolved when the run reaches the node, not when the graph is saved", () => {
+		renderPanel({ ...defaultNodeData("Tool", "tool-1"), toolName: "read_file" } as GraphWorkflowCanvasNodeData);
+
+		const help = en.pages.graphWorkflows.config.argumentBindingsHelp;
+		expect(help).toBe("Replaces one argument with a value read from this node's input document when the run reaches it.");
+		expect(screen.getByText(help)).toBeTruthy();
 	});
 
 	it("keeps showing a configured tool that the node no longer offers", () => {

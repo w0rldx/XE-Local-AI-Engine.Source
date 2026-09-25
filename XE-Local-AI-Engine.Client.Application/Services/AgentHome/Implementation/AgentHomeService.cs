@@ -173,7 +173,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             RuntimeProfile = effectiveProfile,
             // Ask for a real filesystem boundary wherever the backend advertises one, one posture for every run: the request
             // is capability-gated so it can never fail the run closed, and CreateOrAttach reuses an owner-node sandbox.
-            Isolation = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+            Isolation = SandboxWorkloads.AgentHome.RequestsFilesystemIsolationWhereAdvertised
+                        && _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
                 ? SandboxIsolationMode.Filesystem
                 : SandboxIsolationMode.None,
 

@@ -24,6 +24,8 @@ public sealed class InvocationLifecycleTracker
 
     private readonly TimeSpan _maxPendingToolCallAge;
 
+    private readonly TimeProvider _timeProvider;
+
     // The SAME dictionary instance ToolApprovalCoordinator and ApiToolCallBridge hold (see PendingToolCallRegistry):
     // the cancel/drain path below must observe the calls those registered.
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls;
@@ -42,6 +44,16 @@ public sealed class InvocationLifecycleTracker
 
     private CancellationTokenSource? _invocationCancellationTokenSource;
 
+    // The whole-turn deadline, a timer on _timeProvider rather than CancelAfter (which only runs on the system clock). Re-armed in place under _syncRoot.
+    private ITimer? _deadlineTimer;
+
+    private DateTimeOffset _deadlineDueAt;
+
+    // While a server-side tool runs, the model's clock is paused: what it had left is kept here and re-armed when the tool returns.
+    private bool _toolExecuting;
+
+    private TimeSpan _modelBudgetAtToolStart;
+
     // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
     // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
     private TimeSpan _invocationTimeout;
@@ -56,8 +68,10 @@ public sealed class InvocationLifecycleTracker
 
     public InvocationLifecycleTracker(IInvocationAttachmentTracker attachmentTracker,
         PendingToolCallRegistry pendingToolCallRegistry,
-        INodeRuntimeSettings runtimeSettings)
+        INodeRuntimeSettings runtimeSettings,
+        TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
         ArgumentNullException.ThrowIfNull(runtimeSettings);
@@ -169,6 +183,9 @@ public sealed class InvocationLifecycleTracker
         lock (_syncRoot)
         {
             _parkedOnHuman = parkedOnHuman;
+
+            // A park re-arms the whole deadline, so any paused tool budget is superseded rather than restored later.
+            _toolExecuting = false;
             ApplyInvocationDeadline();
         }
     }
@@ -176,7 +193,7 @@ public sealed class InvocationLifecycleTracker
     // Caller must hold _syncRoot.
     private void ApplyInvocationDeadline()
     {
-        if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
+        if (_invocationCancellationTokenSource is null)
         {
             return;
         }
@@ -186,7 +203,59 @@ public sealed class InvocationLifecycleTracker
         var extendPark = _parkedOnHuman
                          && _currentInvocationId is { } invocationId
                          && !_attachmentTracker.IsDetached(invocationId);
-        invocationCancellationTokenSource.CancelAfter(extendPark ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
+        ArmDeadline(extendPark ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
+    }
+
+    /// <summary>
+    ///     Pauses the model's turn budget while a server-side tool runs, and resumes it with what was left when the tool returns.
+    /// </summary>
+    /// <remarks>
+    ///     Like a human park, tool time is not charged to the model: an AgentHome run bounded by its own <c>MaxRunSeconds</c> would otherwise be cut by
+    ///     the turn deadline the model had already spent part of. The tool's backstop is a full <c>InvocationTimeout</c> from its start. Idempotent.
+    /// </remarks>
+    public void SetToolExecuting(bool executing)
+    {
+        lock (_syncRoot)
+        {
+            if (executing == _toolExecuting || _invocationCancellationTokenSource is null || _parkedOnHuman)
+            {
+                return;
+            }
+
+            _toolExecuting = executing;
+            if (executing)
+            {
+                var left = _deadlineDueAt - _timeProvider.GetUtcNow();
+                _modelBudgetAtToolStart = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+                ArmDeadline(_invocationTimeout);
+            }
+            else
+            {
+                ArmDeadline(_modelBudgetAtToolStart);
+            }
+        }
+    }
+
+    // Caller must hold _syncRoot.
+    private void ArmDeadline(TimeSpan dueIn)
+    {
+        _deadlineDueAt = _timeProvider.GetUtcNow() + dueIn;
+        _ = _deadlineTimer?.Change(dueIn, Timeout.InfiniteTimeSpan);
+    }
+
+    private static void FireDeadline(object? state) =>
+        _ = CancelDeadlineAsync((CancellationTokenSource)state!);
+
+    private static async Task CancelDeadlineAsync(CancellationTokenSource invocationCancellationTokenSource)
+    {
+        try
+        {
+            await invocationCancellationTokenSource.CancelAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The turn ended between the timer firing and this callback; there is nothing left to cancel.
+        }
     }
 
     // A client attaching or detaching mid-park changes which deadline the park is entitled to, and neither park site is running code at that moment, so the
@@ -322,7 +391,6 @@ public sealed class InvocationLifecycleTracker
         try
         {
             invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            invocationCancellationTokenSource.CancelAfter(invocationTimeout);
 
             lock (_syncRoot)
             {
@@ -338,6 +406,8 @@ public sealed class InvocationLifecycleTracker
 
                 // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
                 _invocationTimeout = invocationTimeout;
+                _deadlineTimer = _timeProvider.CreateTimer(FireDeadline, invocationCancellationTokenSource, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                ArmDeadline(invocationTimeout);
                 invocationCancellationTokenSource = null;
             }
         }
@@ -383,6 +453,9 @@ public sealed class InvocationLifecycleTracker
 
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
+            _deadlineTimer?.Dispose();
+            _deadlineTimer = null;
+            _toolExecuting = false;
             _invocationTimeout = TimeSpan.Zero;
             _parkedOnHuman = false;
             _currentInvocationId = null;

@@ -70,6 +70,9 @@ public sealed class InvocationRunnerTests
 
     private const long TwoWarmFloorMs = 60L;
 
+    // A running turn on the manual clock holds two timers: the stream-idle deadline of the current pull and the whole-turn deadline.
+    private const int IdleAndTurnDeadline = 2;
+
     // MAF's skill-tool names, aliased once so the scoped MAAI001 suppression the [Experimental] Agent Skills surface
     // needs is not repeated at every use site below.
 #pragma warning disable MAAI001
@@ -4081,6 +4084,164 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Timeout);
     }
 
+    /// <summary>
+    ///     A server-side tool that runs past the stream-idle timeout completes: the watchdog bounds provider silence, not tool execution.
+    ///     An AgentHome run longer than 60 s used to fail the turn and cancel the run at the idle deadline.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenAToolRunsLongerThanTheIdleTimeout_TheTurnCompletes()
+    {
+        var clock = new ManualTimeProvider();
+        var toolDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(token => SlowToolUpdates(toolDone.Task, token)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(streamIdleSeconds: 60).Build();
+
+        var run = RunAsync(runner, package);
+        for (var window = 0; window < 3; window++)
+        {
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the idle deadline is armed");
+            clock.Advance(TimeSpan.FromSeconds(61));
+        }
+
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the deadline re-armed while the tool ran");
+        toolDone.SetResult();
+        await run.WaitAsync(TimeSpan.FromSeconds(15));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed && payload.ToolCallId == "call-slow"));
+    }
+
+    /// <summary>The negative control on the same clock: provider silence with no tool open still times out.</summary>
+    [Test]
+    public async Task RunAsync_WhenTheProviderIsSilentWithNoToolOpen_TheIdleDeadlineStillFails()
+    {
+        var clock = new ManualTimeProvider();
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(token => SilentAfterTextUpdates(never.Task, token)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(streamIdleSeconds: 60).Build();
+
+        var run = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the idle deadline is armed");
+        clock.Advance(TimeSpan.FromSeconds(61));
+        await run.WaitAsync(TimeSpan.FromSeconds(15));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    /// <summary>
+    ///     Tool time is not charged to the turn: 50 s of model time plus 122 s of tool time outlives a 150 s turn budget, which used to cut an AgentHome
+    ///     run whose own bound equals the turn's.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenModelAndToolTimeTogetherExceedTheTurnBudget_TheTurnCompletes()
+    {
+        var clock = new ManualTimeProvider();
+        var modelDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var toolDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(token => ThinkThenSlowToolUpdates(modelDone.Task, toolDone.Task, token)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(invocationSeconds: 150, streamIdleSeconds: 60).Build();
+
+        var run = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the model is thinking");
+        clock.Advance(TimeSpan.FromSeconds(50));
+        modelDone.SetResult();
+        await AssertEx.EventuallyAsync(() => dispatcher.ReceivedCalls().Any(static call => call.GetMethodInfo().Name == nameof(IWorkerEventDispatcher.ReportToolCallLifecycleAsync)),
+            TimeSpan.FromSeconds(10),
+            "the tool call was requested");
+        for (var window = 0; window < 2; window++)
+        {
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the tool is running");
+            clock.Advance(TimeSpan.FromSeconds(61));
+        }
+
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "still running");
+        toolDone.SetResult();
+        await run.WaitAsync(TimeSpan.FromSeconds(15));
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    /// <summary>
+    ///     An approved call whose result the framework never streams must not keep the idle bound off: the resume segment's provider text proves the
+    ///     call finished, so a stall after it still times out.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenAnApprovedCallIsNeverResulted_AStallAfterProviderTextStillTimesOut()
+    {
+        var clock = new ManualTimeProvider();
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var segment = 0;
+        var factory = CreateFactory(token =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : SilentAfterTextUpdates(never.Task, token);
+        });
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, providerStreamResilience: NoRetryResilience(), timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(streamIdleSeconds: 60).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
+
+        var run = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvals.Single().RequestId,
+            Approved = true
+        });
+        await AssertEx.EventuallyAsync(() => segment == 2 && clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the resume stalls");
+        clock.Advance(TimeSpan.FromSeconds(61));
+        await run.WaitAsync(TimeSpan.FromSeconds(15));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ThinkThenSlowToolUpdates(Task modelDone,
+        Task toolDone,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "planning");
+        await modelDone.WaitAsync(cancellationToken);
+        await foreach (var update in SlowToolUpdates(toolDone, cancellationToken))
+        {
+            yield return update;
+        }
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> SlowToolUpdates(Task toolDone, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-slow", "slow-tool")
+        });
+
+        // The framework runs the tool inside this pull; nothing streams until it returns.
+        await toolDone.WaitAsync(cancellationToken);
+        yield return new AgentResponseUpdate(ChatRole.Tool, new List<AIContent>
+        {
+            new FunctionResultContent("call-slow", "ok")
+        });
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> SilentAfterTextUpdates(Task never, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "hi");
+        await never.WaitAsync(cancellationToken);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "unreachable");
+    }
+
     [Test]
     public async Task RunAsync_WhenProviderRoundIrreduciblyExceedsWindow_ClassifiesContextWindowExceeded()
     {
@@ -4432,7 +4593,8 @@ public sealed class InvocationRunnerTests
         IToolRelevanceCoreSet? toolRelevanceCoreSet = null,
         Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
         IExternalProviderRegistry? externalProviderRegistry = null,
-        PendingToolCallRegistry? pendingToolCallRegistry = null)
+        PendingToolCallRegistry? pendingToolCallRegistry = null,
+        TimeProvider? timeProvider = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -4525,12 +4687,13 @@ public sealed class InvocationRunnerTests
                 NullLogger<ToolApprovalCoordinator>.Instance,
                 TimeProvider.System),
             new ApiToolCallBridge(resolvedPendingToolCallRegistry, TimeProvider.System),
-            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings),
+            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings, timeProvider),
             externalProviderRegistry ?? new FakeExternalProviderRegistry(),
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
             CreateScopeFactory(reasoningEffortDispatcherFactory),
-            NullLogger<InvocationRunner>.Instance);
+            NullLogger<InvocationRunner>.Instance,
+            timeProvider);
     }
 
     /// <summary>

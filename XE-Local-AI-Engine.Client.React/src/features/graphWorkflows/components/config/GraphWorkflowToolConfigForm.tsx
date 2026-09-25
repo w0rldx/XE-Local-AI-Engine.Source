@@ -152,7 +152,7 @@ export function GraphWorkflowToolConfigForm({
 				<Text size="xs" c="dimmed">
 					{t(
 						"pages.graphWorkflows.config.argumentBindingsHelp",
-						"Replaces one argument with a value read from the run document at save time.",
+						"Replaces one argument with a value read from this node's input document when the run reaches it.",
 					)}
 				</Text>
 				{node.argumentBindings.length === 0 ? (

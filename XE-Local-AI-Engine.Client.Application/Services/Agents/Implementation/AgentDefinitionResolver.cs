@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
@@ -371,7 +372,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 
             // The Default Assistant ships with ZERO AllowedToolNames, so ask_user must not depend on the allowed set.
             // A no-op today, kept so the rule is enforced AT the seam and no offer-side gate can silently drop it.
-            return AskUserToolOffer.EnsureOffered(composedWholeOffer, wholeOffer, _toolApprovalPolicy);
+            var withAskUser = AskUserToolOffer.EnsureOffered(composedWholeOffer, wholeOffer, _toolApprovalPolicy);
+
+            // The whole offer holds the state tools out, so a work-session step lifts them from the profile pool.
+            return WorkSessionTurnScope.IsActive
+                ? WorkSessionTurnScope.EnsureStateTools(withAskUser,
+                    await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken),
+                    _toolApprovalPolicy)
+                : withAskUser;
         }
 
         // Start from the PROFILE pool (the whole offer plus opt-in-only spawn_subagent), which is what lets a profile
@@ -401,8 +409,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 string.Join(", ", droppedNames));
         }
 
-        // ask_user is unioned in AFTER the intersection, whatever AllowedToolNames says: asking the operator is a
-        // property of an interactive turn. Safe to widen only because it is approval-gated and side-effect-free.
-        return AskUserToolOffer.EnsureOffered(projected, offered, _toolApprovalPolicy);
+        // ask_user and, in a work-session step, the state tools are unioned AFTER the intersection: both belong to the
+        // turn, not the agent. ask_user is safe to widen because it is approval-gated and side-effect-free.
+        return WorkSessionTurnScope.EnsureStateTools(AskUserToolOffer.EnsureOffered(projected, offered, _toolApprovalPolicy), offered, _toolApprovalPolicy);
     }
 }

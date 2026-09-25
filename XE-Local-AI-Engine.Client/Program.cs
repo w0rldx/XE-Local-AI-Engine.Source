@@ -659,9 +659,13 @@ namespace XE_Local_AI_Engine.Client
                 // The graph-workflow family holds the same posture as the two blocks above: discovered with the feature off, so the document and the generated client are
                 // identical on every node, with only behaviour gated here — ahead of security and authentication, so it answers 404 before anything can answer 403.
                 var graphWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Root}");
+                // The same carve-out as development workflows: the capability GET stays reachable so the SPA can hide the
+                // feature and keep chat sending instead of reading this bodyless 404 as a load failure.
+                var graphWorkflowCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Capability}");
                 app.Use(async (context, next) =>
                 {
-                    if (context.Request.Path.StartsWithSegments(graphWorkflowPath, StringComparison.OrdinalIgnoreCase))
+                    if (context.Request.Path.StartsWithSegments(graphWorkflowPath, StringComparison.OrdinalIgnoreCase)
+                        && !context.Request.Path.Equals(graphWorkflowCapabilityPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;

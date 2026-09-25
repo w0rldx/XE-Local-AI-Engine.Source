@@ -14,10 +14,12 @@ import type {
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
 import {
+	filterNavigationLinksByDisabledCapabilities,
 	filterNavigationLinksByUiMode,
 	matchesNavRoute,
 	navigationLinks,
 	navLinkActiveOptions,
+	useServerDisabledNavigationCapabilities,
 } from "@/data/navigation/NavigationMenuData";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
@@ -38,6 +40,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 	// The second nav gate: capability (compile-time, already applied to `navigationLinks`) then mode (live, from the
 	// node settings). Changing the mode in Node Settings re-renders this memo on the next commit — no reload.
 	const uiMode = useUiMode();
+	const serverDisabled = useServerDisabledNavigationCapabilities();
 
 	// Explicit open/closed state per group id, persisted so the user's choices survive a reload. A group with
 	// no explicit entry falls back to "open when it contains the active route" so the active page is always
@@ -80,8 +83,10 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			return viewableLinks;
 		};
 
-		return mapViewableNavigationLinks(filterNavigationLinksByUiMode(navigationLinks, uiMode));
-	}, [t, uiMode]);
+		return mapViewableNavigationLinks(
+			filterNavigationLinksByUiMode(filterNavigationLinksByDisabledCapabilities(navigationLinks, serverDisabled), uiMode),
+		);
+	}, [t, uiMode, serverDisabled]);
 
 	const toggleSidebar = () => {
 		setSideBarCollapsed(!sideBarCollapsed);

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import {
 	allNavigationLinks,
+	filterNavigationLinksByDisabledCapabilities,
 	filterNavigationLinksByUiMode,
 	matchesNavRoute,
 	navigationLinks,
@@ -272,6 +273,28 @@ describe("navigationLinks", () => {
 	// Graph Workflows ships ON since S4 and is a TOP-LEVEL entry, not a Preview child (R3): it replaced Open Canvas,
 	// and a later refactor must not push it back into the group. The capability-off case is kept: the gate is still
 	// the thing that decides, only its default moved.
+	// The node's own switch (`GraphWorkflows:Enabled=false`) is a runtime answer the compile-time filter cannot see.
+	it("drops only the entries whose capability the server reports switched off", () => {
+		const filtered = filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set(["graphWorkflows"]));
+
+		expect(filtered.some((link) => link.id === "graphWorkflows")).toBe(false);
+		expect(filtered.map((link) => link.id)).toEqual(
+			navigationLinks.filter((link) => link.id !== "graphWorkflows").map((link) => link.id),
+		);
+		expect(filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set())).toEqual(navigationLinks);
+	});
+
+	it("drops a group whose every child the server reports switched off", () => {
+		const icon = allNavigationLinks.find((link) => link.id === "graphWorkflows")?.icon;
+		if (icon === undefined) {
+			throw new Error("the Graph Workflows entry is missing");
+		}
+		const child = { translationKey: "navigation.child", to: "/x", capability: "graphWorkflows" as const, simple: false };
+		const links = [{ id: "group", icon, translationKey: "navigation.group", links: [child] }];
+
+		expect(filterNavigationLinksByDisabledCapabilities(links, new Set(["graphWorkflows"]))).toEqual([]);
+	});
+
 	it("shows Graph Workflows by default as a top-level entry and drops it when the capability is off", async () => {
 		const { navigationLinks: offLinks } = await mockCapabilities({ graphWorkflows: false });
 		expect(offLinks.some((link) => link.id === "graphWorkflows")).toBe(false);

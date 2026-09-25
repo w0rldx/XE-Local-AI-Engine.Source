@@ -191,6 +191,7 @@ import {
 	getGgufImportCapability,
 	getGgufImports,
 	getGgufImportStatus,
+	getGraphWorkflowCapability,
 	getGraphWorkflowDefinition,
 	getGraphWorkflowNodeRun,
 	getGraphWorkflowRun,
@@ -905,6 +906,8 @@ import type {
 	GetGgufImportsResponse,
 	GetGgufImportStatusData,
 	GetGgufImportStatusResponse,
+	GetGraphWorkflowCapabilityData,
+	GetGraphWorkflowCapabilityResponse,
 	GetGraphWorkflowDefinitionData,
 	GetGraphWorkflowDefinitionResponse,
 	GetGraphWorkflowNodeRunData,
@@ -6031,6 +6034,28 @@ export const probeExternalProviderMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getGraphWorkflowCapabilityQueryKey = (options?: Options<GetGraphWorkflowCapabilityData>) =>
+	createQueryKey("getGraphWorkflowCapability", options);
+
+export const getGraphWorkflowCapabilityOptions = (options?: Options<GetGraphWorkflowCapabilityData>) =>
+	queryOptions<
+		GetGraphWorkflowCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetGraphWorkflowCapabilityResponse,
+		ReturnType<typeof getGraphWorkflowCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGraphWorkflowCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGraphWorkflowCapabilityQueryKey(options),
+	});
 
 export const sendGraphWorkflowChatMessageMutation = (
 	options?: Partial<Options<SendGraphWorkflowChatMessageData>>,

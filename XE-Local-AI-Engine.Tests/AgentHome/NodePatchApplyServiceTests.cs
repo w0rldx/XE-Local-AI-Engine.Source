@@ -346,6 +346,36 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         }
     }
 
+    /// <summary>
+    ///     A second apply of a landed run used to reach git, fail on "already exists", and log a rejection that
+    ///     rewrote the run's recorded state to rejected while the patch sat on disk.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_OnARunAlreadyApplied_RefusesAndKeepsTheAppliedState()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        var runDirectory = SeedRunDirectory(harness, "run-twice");
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, "run-twice", patch);
+        var request = new NodePatchApplyRequest
+        {
+            RunId = "run-twice"
+        };
+        var first = await harness.Service.ApplyApprovedAsync(request);
+        AssertEx.True(first.Applied, $"rejections: {Describe(first.Rejections)}");
+        var eventsBefore = await File.ReadAllTextAsync(Path.Combine(runDirectory, "logs", "events.jsonl"));
+
+        var second = await harness.Service.ApplyApprovedAsync(request);
+
+        AssertEx.False(second.Applied);
+        AssertEx.Contains(second.Rejections, rejection => rejection.Reason.Contains("already applied", StringComparison.Ordinal));
+        AssertEx.False(second.PatchMissing);
+        AssertEx.Equal(AgentHomeRunApplyStates.Applied, await AgentHomeRunListService.ReadApplyStateAsync(runDirectory, CancellationToken.None));
+        AssertEx.Equal(eventsBefore, await File.ReadAllTextAsync(Path.Combine(runDirectory, "logs", "events.jsonl")), "the refusal logs nothing");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
+    }
+
     [Test]
     public async Task ApplyApprovedAsync_LogsAppliedFilesFolderRelativeWithoutHostPath()
     {
@@ -1619,6 +1649,97 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
         AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/src/App.cs", State: "modified" });
+    }
+
+    /// <summary>
+    ///     The same subdirectory-of-a-repository folder, applied: git resolved patch paths from the repository's top level
+    ///     and skipped every one outside the folder, so preview said it applies, the apply said applied, and nothing changed.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenTheFolderSitsInsideARepository_WritesTheFileItReportsApplied()
+    {
+        var harness = NewHarness();
+        var repositoryRoot = NewTempDir();
+        var hostRoot = Path.Combine(repositoryRoot, "packages", "app");
+        Directory.CreateDirectory(hostRoot);
+        harness.Resolver.Add(Guid.NewGuid(), "repo-01", hostRoot);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await InitHostRepositoryAsync(repositoryRoot);
+        await WritePatchAsync(harness, "run-nested-apply", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nested-apply"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nested-apply"
+        });
+
+        AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
+        AssertEx.Equal(expected: 1, preview.Files.Single(file => file.RelativePath == "src/App.cs").Added);
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
+        AssertEx.Equal(expected: 1, result.AppliedFiles.Single(file => file.RelativePath == "src/App.cs").Added);
+    }
+
+    /// <summary>
+    ///     A <c>.git</c> file whose repository's work tree is the folder's PARENT makes git skip every path even under the ceiling.
+    ///     A clean check that would write fewer files than planned is refused, never reported as applied.
+    /// </summary>
+    [Test]
+    public async Task PreviewAndApply_WhenGitWouldWriteFewerFilesThanPlanned_RefuseAndWriteNothing()
+    {
+        const string Refusal = "alias 'repo-01': git would not write every file in the patch under this folder, so nothing was applied.";
+        var harness = NewHarness();
+        var parentRoot = NewTempDir();
+        var hostRoot = Path.Combine(parentRoot, "sub");
+        Directory.CreateDirectory(hostRoot);
+        harness.Resolver.Add(Guid.NewGuid(), "repo-01", hostRoot);
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await GitOkAsync(parentRoot, "init");
+        await GitOkAsync(parentRoot, "config", "core.worktree", parentRoot);
+        await File.WriteAllTextAsync(Path.Combine(hostRoot, ".git"), $"gitdir: {Path.Combine(parentRoot, ".git")}\n");
+        await WritePatchAsync(harness, "run-skipped", patch);
+        var request = new NodePatchApplyRequest
+        {
+            RunId = "run-skipped"
+        };
+
+        var preview = await harness.Service.PreviewAsync(request);
+        var result = await harness.Service.ApplyApprovedAsync(request);
+
+        AssertEx.False(preview.CanApply);
+        AssertEx.Contains(preview.Rejections, rejection => string.Equals(rejection.Reason, Refusal, StringComparison.Ordinal));
+        AssertEx.False(result.Applied);
+        AssertEx.Contains(result.Rejections, rejection => string.Equals(rejection.Reason, Refusal, StringComparison.Ordinal));
+        AssertEx.Empty(result.AppliedFiles);
+        AssertEx.Equal("alpha\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
+    }
+
+    /// <summary>A folder that is its own repository root inside another repository still applies as that root.</summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenTheFolderIsANestedRepositoryRoot_WritesTheFile()
+    {
+        var harness = NewHarness();
+        var repositoryRoot = NewTempDir();
+        var hostRoot = Path.Combine(repositoryRoot, "vendor", "lib");
+        Directory.CreateDirectory(hostRoot);
+        harness.Resolver.Add(Guid.NewGuid(), "repo-01", hostRoot);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await InitHostRepositoryAsync(hostRoot);
+        await InitHostRepositoryAsync(repositoryRoot);
+        await WritePatchAsync(harness, "run-nested-root", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nested-root"
+        });
+
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
     }
 
     /// <summary>

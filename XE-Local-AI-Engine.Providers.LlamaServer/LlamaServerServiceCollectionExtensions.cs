@@ -62,7 +62,8 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<IGpuVariantSelector>(static sp =>
             new GpuVariantSelector(sp.GetRequiredService<IGpuVendorProbe>(),
                 sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<ICudaManagedBuildSignal>()));
+                sp.GetRequiredService<ICudaManagedBuildSignal>(),
+                sp.GetRequiredService<IInstalledRuntimeStore>()));
 
         // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime state (tier 2), with the pinned floor
         // behind them. These two ALONE keep the host's shared default factory client — a deliberate KEEP: each issues an idempotent GET, so a retry costs a read, never a side effect.

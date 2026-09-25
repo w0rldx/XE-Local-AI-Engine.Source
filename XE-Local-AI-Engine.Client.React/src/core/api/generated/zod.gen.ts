@@ -3049,6 +3049,10 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowN
 	payload: z.unknown().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse = z.object({
+	enabled: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse = z.object({
 	decision: z.string(),
 	runStatus: z.string(),
@@ -9761,6 +9765,11 @@ export const zProbeExternalProviderBody = zXeLocalAiEngineClientEndpointsExterna
  * Success
  */
 export const zProbeExternalProviderResponse = zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
+
+/**
+ * Success
+ */
+export const zGetGraphWorkflowCapabilityResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowCapabilityResponse;
 
 export const zSendGraphWorkflowChatMessageBody =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest;

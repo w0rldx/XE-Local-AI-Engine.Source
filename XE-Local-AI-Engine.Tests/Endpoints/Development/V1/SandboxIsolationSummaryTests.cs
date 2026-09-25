@@ -51,12 +51,10 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.False(summary.ResourceLimits);
         AssertEx.False(summary.ReadOnlyMounts);
 
-        // AgentHome declares an isolation floor of None, so the honest sentence is that the role never asked — even
-        // on a host that also could not have served it. The probe reason belongs to the role that DOES ask; see
-        // ToIsolationSummary_ForRunPythonOnAHostWithoutABoundary_ReportsTheMeasuredProbeReason.
-        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
-        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, SandboxWorkloads.AgentHome.Workload);
-        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains(Reason, StringComparison.Ordinal) == true);
+        // AgentHome asks for the boundary wherever it is advertised, so the "No" here is the host's and the sentence is
+        // the measured probe reason, not "not requested by this role".
+        AssertEx.True(SandboxWorkloads.AgentHome.RequestsFilesystemIsolationWhereAdvertised);
+        AssertEx.Equal(Reason, summary.FilesystemIsolationUnavailableReason);
 
         // The ceilings axis reads the other way round now that every executing role asks: AgentHome DOES request
         // them, so its "No" here is the host's, and the sentence is the measured probe reason rather than
@@ -134,6 +132,36 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.True(summary.ResourceLimits);
         AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
         AssertEx.Null(summary.ResourceLimitsUnavailableReason);
+    }
+
+    /// <summary>
+    ///     AgentHome asks for <see cref="SandboxIsolationMode.Filesystem" /> wherever it is advertised, so its row reports the
+    ///     boundary it gets, not "not requested by this role".
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForAgentHomeOnAFullyContainedHost_ReportsTheBoundaryItRequests()
+    {
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home",
+            SandboxWorkloads.AgentHome,
+            provider,
+            containment);
+        var workSession = DevelopmentContractMapper.ToIsolationSummary("work-session",
+            SandboxWorkloads.WorkSession,
+            provider,
+            containment);
+
+        AssertEx.True(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation));
+        AssertEx.True(summary.FilesystemIsolation);
+        AssertEx.Equal("bwrap", summary.Backend);
+        AssertEx.Equal("Isolated", summary.Level);
+        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+
+        // The work-session create site asks for no boundary, and its row says so on the same host.
+        AssertEx.False(workSession.FilesystemIsolation);
+        AssertEx.Contains(workSession.FilesystemIsolationUnavailableReason, "not requested by this role");
     }
 
     [Test]
@@ -270,8 +298,8 @@ public sealed class SandboxIsolationSummaryTests
         };
         using var provider = CreateProcessProvider(containment);
 
-        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home",
-            SandboxWorkloads.AgentHome,
+        var summary = DevelopmentContractMapper.ToIsolationSummary("development",
+            SandboxWorkloads.DevelopmentModeHostToolchain,
             provider,
             containment);
 

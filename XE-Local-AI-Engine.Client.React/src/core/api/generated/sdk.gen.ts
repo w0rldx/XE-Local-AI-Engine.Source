@@ -552,6 +552,9 @@ import type {
 	GetGgufImportStatusData,
 	GetGgufImportStatusErrors,
 	GetGgufImportStatusResponses,
+	GetGraphWorkflowCapabilityData,
+	GetGraphWorkflowCapabilityErrors,
+	GetGraphWorkflowCapabilityResponses,
 	GetGraphWorkflowDefinitionData,
 	GetGraphWorkflowDefinitionErrors,
 	GetGraphWorkflowDefinitionResponses,
@@ -1719,6 +1722,7 @@ import {
 	zGetGgufImportsResponse,
 	zGetGgufImportStatusPath,
 	zGetGgufImportStatusResponse,
+	zGetGraphWorkflowCapabilityResponse,
 	zGetGraphWorkflowDefinitionPath,
 	zGetGraphWorkflowDefinitionResponse,
 	zGetGraphWorkflowNodeRunPath,
@@ -8436,6 +8440,36 @@ export const probeExternalProvider = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getGraphWorkflowCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetGraphWorkflowCapabilityData, ThrowOnError>,
+): RequestResult<GetGraphWorkflowCapabilityResponses, GetGraphWorkflowCapabilityErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetGraphWorkflowCapabilityResponses, GetGraphWorkflowCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGraphWorkflowCapabilityResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/capability",
+		...options,
 	});
 
 export const sendGraphWorkflowChatMessage = <ThrowOnError extends boolean = false>(

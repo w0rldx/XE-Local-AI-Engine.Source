@@ -76,6 +76,43 @@ public sealed class WorkSessionStepLoopTests
             "Completing a session checkpoints it first, so the final state is recoverable.");
     }
 
+    /// <summary>
+    ///     The send runs inside the work-session turn scope, which is what makes the agent resolver offer the four state
+    ///     tools to WHATEVER agent drives the session, not only to one whose allowed names list them (F-44).
+    /// </summary>
+    [Test]
+    public async Task Loop_SendsEveryStepInsideTheWorkSessionTurnScope()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        var observed = false;
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (services, id) =>
+            {
+                observed = WorkSessionTurnScope.IsActive;
+                return DeclareCompleteAsync(services, id);
+            }
+        });
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
+
+        AssertEx.True(observed, "the step's send must see the work-session turn scope, or a custom agent is never offered the state tools.");
+    }
+
     [Test]
     public async Task Loop_PublishesTheStepOnlyOnceTheTurnIsLive_SoAClientResumingOnThePushAttaches()
     {

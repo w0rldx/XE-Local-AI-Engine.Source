@@ -21,6 +21,7 @@ import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
 import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { useGraphWorkflowCapability } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
@@ -360,6 +361,31 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks
 		link.links ? { ...link, links: link.links.filter((nestedLink) => isCapabilityEnabled(nestedLink.capability)) } : link,
 	)
 	.filter((link) => !link.links || link.links.length > 0);
+
+// Server switches: a feature the node's operator turned off at runtime (today only `GraphWorkflows:Enabled=false`).
+// The compile-time filter above cannot see it, so the nav bars apply this one live, before the mode filter. Pure,
+// and dropping a group that ends up empty, exactly like the capability filter.
+export function filterNavigationLinksByDisabledCapabilities(
+	links: readonly INavigationLink[],
+	disabled: ReadonlySet<string>,
+): INavigationLink[] {
+	const isShown = (link: { readonly capability?: NavigationCapabilityKey }): boolean =>
+		link.capability === undefined || !disabled.has(link.capability);
+	return links
+		.filter(isShown)
+		.map((link) => (link.links ? { ...link, links: link.links.filter(isShown) } : link))
+		.filter((link) => !link.links || link.links.length > 0);
+}
+
+const NO_DISABLED_CAPABILITIES: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>();
+const GRAPH_WORKFLOWS_DISABLED: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>(["graphWorkflows"]);
+
+// The capabilities this node's server reports switched off. Unknown (loading, failed) reads as on: hiding an entry on a
+// failed read would lock the operator out of a page the node still serves.
+export function useServerDisabledNavigationCapabilities(): ReadonlySet<NavigationCapabilityKey> {
+	const { data } = useGraphWorkflowCapability({ enabled: nodeCapabilities.graphWorkflows });
+	return data?.enabled === false ? GRAPH_WORKFLOWS_DISABLED : NO_DISABLED_CAPABILITIES;
+}
 
 // The SECOND, independent filter, layered on top of the capability one above. It is a separate pure function rather
 // than another branch inside that computation because the two gates have incompatible lifetimes: `navigationLinks` is

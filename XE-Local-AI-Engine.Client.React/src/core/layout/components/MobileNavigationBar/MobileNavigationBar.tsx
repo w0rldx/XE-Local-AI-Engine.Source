@@ -18,7 +18,13 @@ import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuIte
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
-import { filterNavigationLinksByUiMode, matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
+import {
+	filterNavigationLinksByDisabledCapabilities,
+	filterNavigationLinksByUiMode,
+	matchesNavRoute,
+	navigationLinks,
+	useServerDisabledNavigationCapabilities,
+} from "@/data/navigation/NavigationMenuData";
 import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
@@ -37,6 +43,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 	const [aboutOpened, { open: openAbout, close: closeAbout }] = useDisclosure(false);
 	// Same two-gate composition as the desktop rail: capability first (baked into `navigationLinks`), mode second.
 	const uiMode = useUiMode();
+	const serverDisabled = useServerDisabledNavigationCapabilities();
 	const { report, pending: reportPending } = useReportProblem(() => {
 		navigate({ to: "/diagnostics" }).catch(() => undefined);
 	});
@@ -120,7 +127,9 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					<Divider />
 
 					{/* Regular Navigation Menus */}
-					{viewableNavigationMenus(filterNavigationLinksByUiMode(navigationLinks, uiMode)).map((menu) => (
+					{viewableNavigationMenus(
+						filterNavigationLinksByUiMode(filterNavigationLinksByDisabledCapabilities(navigationLinks, serverDisabled), uiMode),
+					).map((menu) => (
 						<MobileNavigationMenu
 							key={menu.menuId}
 							menuItemStyle={menuItemStyle}

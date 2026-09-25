@@ -7,9 +7,9 @@ using System.Collections.Concurrent;
 ///     <c>CallId</c>.
 /// </summary>
 /// <remarks>
-///     A tool handler runs inside <c>FunctionInvokingChatClient</c>, which the stream-idle watchdog wraps, so a handler that blocked on a human would be
-///     killed after <c>StreamIdleTimeout</c> (60 s). <c>ask_user</c> is therefore registered approval-required: the runner waits OUTSIDE the watched
-///     segment, drops the answer here and approves the call, and the handler pops the answer and returns immediately. The framework's
+///     A handler that blocked on a human would hold the turn until the whole-turn timeout with no card asking anyone: the idle watchdog stands down while
+///     a tool call is open. <c>ask_user</c> is therefore registered approval-required: the runner waits OUTSIDE the tool, in the approval round-trip,
+///     drops the answer here and approves the call, and the handler pops the answer and returns immediately. The framework's
 ///     <c>FunctionInvokingChatClient.CurrentContext.CallContent.CallId</c> makes the key exact, so no ambient plumbing or argument-hash matching is needed.
 /// </remarks>
 public sealed class UserQuestionAnswerStash

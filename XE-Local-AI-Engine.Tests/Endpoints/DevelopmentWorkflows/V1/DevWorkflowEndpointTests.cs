@@ -226,6 +226,26 @@ public sealed class DevWorkflowEndpointTests
         await store.DidNotReceive().CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>An unknown project is refused at create, with a sentence, rather than stored and failing at the first run (F-46).</summary>
+    [Test]
+    public async Task CreateWorkItem_WithAnUnknownDevelopmentProject_ReturnsBadRequestAndNeverReachesTheStore()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory,
+            "POST",
+            WorkItems,
+            """{"title":"t","request":"r","developmentProjectId":"00000000-0000-0000-0000-00000000abcd"}""");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal("There is no development project '00000000-0000-0000-0000-00000000abcd', so the work item cannot be bound to it. "
+                       + "Pick an existing project, or leave the project out.",
+            document.RootElement.GetProperty("detail").GetString());
+        await store.DidNotReceive().CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task GetWorkItem_EmbedsItsRunSummaries()
     {
@@ -541,6 +561,36 @@ public sealed class DevWorkflowEndpointTests
         var nodes = graph.GetProperty("nodes");
         AssertEx.Equal("runs the release script", nodes[0].GetProperty("requiredCapabilities").GetProperty("WriteExecute").GetString());
         AssertEx.Equal(expected: 2, nodes[1].GetProperty("maxLoopIterations").GetInt32());
+    }
+
+    /// <summary>
+    ///     A malformed <c>requiredCapabilities</c> is refused with the runtime parser's own sentence, naming the node,
+    ///     rather than the serializer's message about a CLR dictionary type (F-46).
+    /// </summary>
+    [Test]
+    [Arguments("""["WriteExecute"]""", "shape")]
+    [Arguments("""{"WriteExecute":3}""", "reason")]
+    public async Task CreateDefinition_WithAMalformedRequiredCapabilities_AnswersTheParsersSentence(string capabilities, string refusal)
+    {
+        var graph = $$"""
+                      {"schemaVersion":1,"allowUngatedWrites":true,
+                       "nodes":[{"nodeKey":"implement","nodeType":"Agent","requiredCapabilities":{{capabilities}}}],
+                       "edges":[]}
+                      """;
+        var expected = refusal == "shape"
+            ? "The 'requiredCapabilities' on node 'implement' must be an object whose keys are effects and whose values say why the node needs each one; "
+              + $"expected keys from {string.Join(", ", Enum.GetNames<DevWorkflowNodeEffect>())}."
+            : "The capability 'WriteExecute' on node 'implement' needs a reason, written as a non-empty string. A declared effect widens what the node may do, "
+              + "so the definition has to say what for.";
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(graph));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal(expected, document.RootElement.GetProperty("detail").GetString());
+        await store.DidNotReceive().CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>

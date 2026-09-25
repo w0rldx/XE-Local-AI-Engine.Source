@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
-import { localApiPath } from "@/test/msw/Handlers";
+import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer();
+setupMswServer(jsonRoute("get", "graph-workflows/capability", { enabled: true }));
 
 const settingsPath = localApiPath("node-settings");
 

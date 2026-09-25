@@ -25,7 +25,10 @@ internal enum DockerDaemonProbeReason
     /// <summary>A daemon answered and it is not the one this node pinned, and no confirmation was offered.</summary>
     IdentityChanged = 4,
 
-    /// <summary>A confirmation was offered for a daemon other than the one reachable now, so nothing was approved.</summary>
+    /// <summary>
+    ///     A confirmation named a daemon other than the one reachable now, so nothing was approved — whether or not a pin exists and
+    ///     whether or not the pin already matches the reachable daemon.
+    /// </summary>
     ConfirmationRaced = 5
 }
 
@@ -213,6 +216,21 @@ internal static class DockerDaemonProbe
     {
         var pinned = await attestationStore.ReadAsync(cancellationToken);
 
+        // A confirmation binds to the daemon the operator was shown, before any other branch: checked only on the substitution path, a
+        // bogus id answered Ready whenever the pin already matched, and on first use any non-blank id pinned whatever answered.
+        if (request.ConfirmingDaemonId is not null
+            && !string.Equals(request.ConfirmingDaemonId, identity.DaemonId, StringComparison.Ordinal))
+        {
+            return new DockerDaemonProbeOutcome
+            {
+                Status = DockerDaemonPreflightStatus.DaemonIdentityChanged,
+                Reason = DockerDaemonProbeReason.ConfirmationRaced,
+                Endpoint = endpoint,
+                ObservedDaemon = identity,
+                PinnedDaemon = pinned
+            };
+        }
+
         // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon against. What it buys is that every
         // subsequent run has something to compare against, which is where the control actually bites.
         if (pinned is null)
@@ -230,18 +248,6 @@ internal static class DockerDaemonProbe
 
         if (request.ConfirmingDaemonId is not null)
         {
-            if (!string.Equals(request.ConfirmingDaemonId, identity.DaemonId, StringComparison.Ordinal))
-            {
-                return new DockerDaemonProbeOutcome
-                {
-                    Status = DockerDaemonPreflightStatus.DaemonIdentityChanged,
-                    Reason = DockerDaemonProbeReason.ConfirmationRaced,
-                    Endpoint = endpoint,
-                    ObservedDaemon = identity,
-                    PinnedDaemon = pinned
-                };
-            }
-
             var confirmed = BuildAttestation(identity, endpoint, timeProvider, confirmedByOperator: true);
             await attestationStore.WriteAsync(confirmed, cancellationToken);
             logger.LogWarning("Operator re-confirmed the Docker daemon: {PreviousDaemonId} replaced by {DaemonId} at {Endpoint}.",

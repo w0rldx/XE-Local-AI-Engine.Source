@@ -159,7 +159,7 @@ public sealed class DevWorkflowRunComposerTests
         IAgentDefinitionService? agents = null,
         IWorkSessionService? sessions = null) =>
         new(new DevWorkflowRunQueryService(store),
-            new DevWorkflowAuthoringService(store),
+            new DevWorkflowAuthoringService(store, Substitute.For<IDevelopmentStore>()),
             agents ?? Substitute.For<IAgentDefinitionService>(),
             sessions ?? Substitute.For<IWorkSessionService>());
 

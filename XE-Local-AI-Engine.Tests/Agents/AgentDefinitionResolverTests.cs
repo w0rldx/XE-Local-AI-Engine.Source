@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -470,6 +472,89 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.AllowedTools.Any(tool => tool.Name == KnowledgeSearchToolName),
             "the opt-in (KnowledgeBase:AllowCloudModelAccess=true) restores knowledge tools for a cloud-pinned agent");
+    }
+
+    /// <summary>
+    ///     F-44: inside a work-session step, an agent whose allowed names omit the four state tools still gets them — a
+    ///     custom agent driving a session, or bound to a development-workflow node, otherwise runs tool-less to its step cap.
+    /// </summary>
+    [Test]
+    public async Task ResolveAsync_InAWorkSessionStep_OffersTheStateToolsToACustomAgent()
+    {
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, Substitute.For<IModelCapabilityResolver>());
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime", "Calculate"], modelProfile: null);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        ResolvedAgentRuntime? resolved;
+        using (WorkSessionTurnScope.Begin())
+        {
+            resolved = await resolver.ResolveAsync(definition.Id, CloudPinnedModel);
+        }
+
+        AssertEx.NotNull(resolved);
+        foreach (var name in WorkSessionToolDefinitions.ToolNames)
+        {
+            var tool = AssertEx.NotNull(resolved!.AllowedTools.FirstOrDefault(candidate => candidate.Name == name), $"{name} must reach any agent driving a work session.");
+            AssertEx.False(tool.RequiresApproval, $"{name} auto-executes, as it does for the seeded work-session agents.");
+        }
+
+        AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "GetCurrentTime");
+    }
+
+    [Test]
+    public async Task ResolveAsync_OutsideAWorkSessionStep_DoesNotOfferTheStateToolsToACustomAgent()
+    {
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, Substitute.For<IModelCapabilityResolver>());
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime", "Calculate"], modelProfile: null);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, CloudPinnedModel);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => WorkSessionToolDefinitions.ToolNames.Contains(tool.Name, StringComparer.Ordinal)),
+            "an ordinary chat turn must not be widened: the state tools belong to the work-session turn.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_InAWorkSessionStep_OffersTheStateToolsToTheDefaultAssistant()
+    {
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, Substitute.For<IModelCapabilityResolver>());
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: [], modelProfile: null) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        ResolvedAgentRuntime? resolved;
+        using (WorkSessionTurnScope.Begin())
+        {
+            resolved = await resolver.ResolveAsync(defaultAssistant.Id, CloudPinnedModel);
+        }
+
+        AssertEx.NotNull(resolved);
+        foreach (var name in WorkSessionToolDefinitions.ToolNames)
+        {
+            AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == name, $"the whole offer holds {name} out, so the step must lift it from the profile pool.");
+        }
+    }
+
+    [Test]
+    public async Task ResolveAsync_InAWorkSessionStep_OnAModelOffTheToolCapableList_OffersNoStateTools()
+    {
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, Substitute.For<IModelCapabilityResolver>());
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: null);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        ResolvedAgentRuntime? resolved;
+        using (WorkSessionTurnScope.Begin())
+        {
+            resolved = await resolver.ResolveAsync(definition.Id, IncapableModel);
+        }
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => WorkSessionToolDefinitions.ToolNames.Contains(tool.Name, StringComparer.Ordinal)),
+            "the union lifts from the gated pool and never bypasses the tool-capable list.");
     }
 
     [Test]
