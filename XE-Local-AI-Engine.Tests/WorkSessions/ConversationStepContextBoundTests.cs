@@ -287,8 +287,7 @@ public sealed class ConversationStepContextBoundTests
         };
 
         var projected = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", "save it"), failed]), estimator, includeToolHistory: true);
-        var expected = ConversationStepContextBound.Project(
-            Conversation([Message(sequence: 0, "user", $"save it\n\n{ConversationContextBuilder.UnansweredNotice}"), asSent]),
+        var expected = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", $"save it\n\n{ConversationContextBuilder.UnansweredNotice}"), asSent]),
             estimator,
             includeToolHistory: true);
 

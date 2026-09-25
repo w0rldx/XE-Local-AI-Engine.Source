@@ -1091,7 +1091,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         private readonly InvocationLifecycleTracker _tracker;
         private bool _atRoundBoundary = true;
 
-        public OpenToolCalls(InvocationLifecycleTracker tracker) => _tracker = tracker;
+        public OpenToolCalls(InvocationLifecycleTracker tracker) =>
+            _tracker = tracker;
 
         public bool Any => _ids.Count > 0;
 

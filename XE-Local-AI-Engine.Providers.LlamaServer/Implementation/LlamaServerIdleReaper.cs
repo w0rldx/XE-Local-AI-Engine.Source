@@ -272,7 +272,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         // here, after the winning TryRemove, so whichever path notices the exit (prune, same-key respawn, reaper, eject) leaves exactly one trace.
         if (running.Handle.HasExited)
         {
-            _logger.LogWarning("llama-server for model {ModelName} role {Role} (pid {ProcessId}) exited outside the supervisor's control with exit code {ExitCode}; it was not evicted by the node and is respawned on the next request.",
+            _logger.LogWarning(
+                "llama-server for model {ModelName} role {Role} (pid {ProcessId}) exited outside the supervisor's control with exit code {ExitCode}; it was not evicted by the node and is respawned on the next request.",
                 key.ModelName, key.Role, running.Handle.ProcessId, running.Handle.ExitCode);
         }
 

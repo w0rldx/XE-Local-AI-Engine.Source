@@ -2092,11 +2092,19 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 [
                     new ConversationStateEntry
                     {
-                        Id = "e1", Category = ConversationStateCategory.Fact, Value = "ancient fact", SourceSequences = [coveredSequence], CreatedAtSequence = replacedSequence
+                        Id = "e1",
+                        Category = ConversationStateCategory.Fact,
+                        Value = "ancient fact",
+                        SourceSequences = [coveredSequence],
+                        CreatedAtSequence = replacedSequence
                     },
                     new ConversationStateEntry
                     {
-                        Id = "e2", Category = ConversationStateCategory.Fact, Value = "the answer was four", SourceSequences = [replacedSequence], CreatedAtSequence = replacedSequence
+                        Id = "e2",
+                        Category = ConversationStateCategory.Fact,
+                        Value = "the answer was four",
+                        SourceSequences = [replacedSequence],
+                        CreatedAtSequence = replacedSequence
                     }
                 ]
             }),

@@ -603,8 +603,7 @@ public sealed class WhisperServerSupervisorTests
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
         harness.Launcher.Handles.Single().SimulateExit(exitCode: 7);
 
-        var reports = await Task.WhenAll(
-            harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None),
+        var reports = await Task.WhenAll(harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None),
             harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None));
 
         foreach (var report in reports)

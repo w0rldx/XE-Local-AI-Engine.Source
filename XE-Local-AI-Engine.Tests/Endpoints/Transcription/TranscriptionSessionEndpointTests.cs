@@ -365,7 +365,10 @@ public sealed class TranscriptionSessionEndpointTests
     {
         using var service = new StubTranscriptionService
         {
-            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = outcome }
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult
+            {
+                Outcome = outcome
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -380,7 +383,10 @@ public sealed class TranscriptionSessionEndpointTests
     {
         using var service = new StubTranscriptionService
         {
-            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionTranscribing }
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult
+            {
+                Outcome = UpdateTranscriptSegmentOutcome.SessionTranscribing
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -414,7 +420,10 @@ public sealed class TranscriptionSessionEndpointTests
     {
         using var service = new StubTranscriptionService
         {
-            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound }
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult
+            {
+                Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();

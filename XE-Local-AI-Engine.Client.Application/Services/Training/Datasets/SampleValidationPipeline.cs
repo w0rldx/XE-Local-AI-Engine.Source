@@ -161,6 +161,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         {
             return GenerationDefect(DuplicateUserMessageReason, context, layers);
         }
+
         return new SampleValidationOutcome
         {
             Accepted = true,

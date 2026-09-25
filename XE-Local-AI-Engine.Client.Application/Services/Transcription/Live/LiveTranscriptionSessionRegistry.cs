@@ -465,7 +465,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         }
 
         // Finalized: no commit allocates a sequence any more, so Seq is stable without the commit gate.
-        _logger.LogInformation("Live transcription session {SessionId} ended: reason {EndReason}, status {Status}, audio received {ReceivedSeconds:F1} s, consumed {ConsumedSeconds:F1} s, {SegmentCount} segments committed, duration {Duration}.",
+        _logger.LogInformation(
+            "Live transcription session {SessionId} ended: reason {EndReason}, status {Status}, audio received {ReceivedSeconds:F1} s, consumed {ConsumedSeconds:F1} s, {SegmentCount} segments committed, duration {Duration}.",
             session.Id,
             outcome,
             MapReason(outcome).Status,

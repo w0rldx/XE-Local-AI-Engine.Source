@@ -110,7 +110,8 @@ public sealed class LocalChatHub : Hub
         CancellationToken cancellationToken)
     {
         return TrackAttachment(
-            RejectInvalidRequest(() => _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken)),
+            RejectInvalidRequest(() =>
+                _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken)),
             cancellationToken);
     }
 

@@ -56,6 +56,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     "the process exited", not only the one whose report detached it. Guarded by <see cref="_stateGate" />.
     /// </summary>
     private (long Generation, int? ExitCode)? _lastExited;
+
     private bool _starting;
 
     /// <summary>Creates the supervisor over its collaborators. The idle reaper loop starts immediately.</summary>
@@ -292,8 +293,14 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
     private static WhisperRuntimeException ExitedFailure(int? exitCode, Exception cause) =>
         exitCode is { } code
-            ? new WhisperRuntimeException(string.Create(CultureInfo.InvariantCulture, $"The transcription runtime process exited (exit code {code})."), cause) { ProcessExited = true }
-            : new WhisperRuntimeException("The transcription runtime process exited.", cause) { ProcessExited = true };
+            ? new WhisperRuntimeException(string.Create(CultureInfo.InvariantCulture, $"The transcription runtime process exited (exit code {code})."), cause)
+            {
+                ProcessExited = true
+            }
+            : new WhisperRuntimeException("The transcription runtime process exited.", cause)
+            {
+                ProcessExited = true
+            };
 
     /// <inheritdoc />
     public WhisperRuntimeStatusSnapshot GetStatus()

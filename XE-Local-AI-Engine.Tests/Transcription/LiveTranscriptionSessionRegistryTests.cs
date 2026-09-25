@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 using XE_Local_AI_Engine.Client.Services.Transcription.Live;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -376,8 +379,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         AssertEx.False(fixture.Registry.IsLive(sessionId), "A session nothing ever feeds must end by itself.");
         AssertEx.Equal(1, fixture.Logger.CountContaining("received no audio frame and no producer attached within the 00:01:00 producer-attachment timeout", LogLevel.Warning),
             "One Warning names the timeout, so a browser that never delivered audio leaves a trace on the node.");
-        await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining(
-                $"session {sessionId} ended: reason NeverAttached, status Cancelled, audio received 0.0 s, consumed 0.0 s, 0 segments committed", LogLevel.Information) == 1,
+        await AssertEx.EventuallyAsync(
+            () => fixture.Logger.CountContaining($"session {sessionId} ended: reason NeverAttached, status Cancelled, audio received 0.0 s, consumed 0.0 s, 0 segments committed",
+                LogLevel.Information) == 1,
             TestBudgets.Contended, "The end line reports the reason and that nothing arrived.");
     }
 
@@ -399,8 +403,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var committed = Snapshot(segments).Count;
         await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining($"session {sessionId} ended:", LogLevel.Information) == 1,
             TestBudgets.Contended, "Every end logs exactly one Information line.");
-        AssertEx.Equal(1, fixture.Logger.CountContaining(
-                $"ended: reason Completed, status Completed, audio received 1.5 s, consumed 1.5 s, {committed} segments committed, duration 00:00:02.", LogLevel.Information),
+        AssertEx.Equal(1,
+            fixture.Logger.CountContaining($"ended: reason Completed, status Completed, audio received 1.5 s, consumed 1.5 s, {committed} segments committed, duration 00:00:02.",
+                LogLevel.Information),
             "The line carries the reason, the status, the audio totals, the commit count and the registry clock's duration.");
         AssertEx.Equal(0, fixture.Logger.CountContaining("producer-attachment timeout"), "Only NeverAttached warns about the attachment timeout.");
     }
@@ -630,10 +635,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
     [Test]
     public void MaxBufferedAudioMb_BelowSixteen_FailsValidation()
     {
-        var options = new TranscriptionOptions { MaxBufferedAudioMb = 15 };
-        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
-        var valid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(options,
-            new System.ComponentModel.DataAnnotations.ValidationContext(options),
+        var options = new TranscriptionOptions
+        {
+            MaxBufferedAudioMb = 15
+        };
+        var results = new List<ValidationResult>();
+        var valid = Validator.TryValidateObject(options,
+            new ValidationContext(options),
             results,
             validateAllProperties: true);
 
@@ -645,7 +653,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
     public async Task DaemonDeathDuringALiveWindow_IsRetriedOnceAndTheSessionStaysLive()
     {
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
-        transcriber.FailOnce.Enqueue(new XE_Local_AI_Engine.Providers.WhisperCpp.WhisperRuntimeException("The transcription runtime process exited.") { ProcessExited = true });
+        transcriber.FailOnce.Enqueue(new WhisperRuntimeException("The transcription runtime process exited.")
+        {
+            ProcessExited = true
+        });
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
         var segments = fixture.RecordSegments();
@@ -1858,7 +1869,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          {
                              lock (recorded)
                              {
-                                 recorded.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}"));
+                                 recorded.Add(string.Create(CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}"));
                              }
 
                              return Task.CompletedTask;
@@ -1876,7 +1887,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
             _ = Publisher.PublishAdmissionClosedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                          .Returns(_ => Note(recorded, "admission-closed"));
             _ = Publisher.PublishCatchUpAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                         .Returns(call => Note(recorded, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}")));
+                         .Returns(call => Note(recorded, string.Create(CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}")));
             _ = Publisher.PublishStatusAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>())
                          .Returns(_ => Note(recorded, "status"));
             return recorded;

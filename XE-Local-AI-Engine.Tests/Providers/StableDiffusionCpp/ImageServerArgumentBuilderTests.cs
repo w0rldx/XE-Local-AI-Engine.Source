@@ -156,7 +156,10 @@ public sealed class ImageServerArgumentBuilderTests
             Part(ImageModelPartRole.Diffusion, "qwen-image-Q4_K_M.gguf", "/models/qwen/qwen-image-Q4_K_M.gguf"),
             Part(ImageModelPartRole.Llm, "Qwen3-VL-8B.gguf", "/models/qwen/Qwen3-VL-8B.gguf")
         ];
-        var options = new StableDiffusionRuntimeOptions { TextEncoderOnGpu = true };
+        var options = new StableDiffusionRuntimeOptions
+        {
+            TextEncoderOnGpu = true
+        };
 
         var spec = ImageServerArgumentBuilder.Build("qwen-image", "/bin/sd-server", parts, SdGpuBackend.Cuda, 18201, options, threads: 16);
 

@@ -76,7 +76,10 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
     {
         if (!_options.DistillEnabled)
         {
-            return new ConversationStateDistillationOutcome { Status = ConversationStateDistillationStatus.Disabled };
+            return new ConversationStateDistillationOutcome
+            {
+                Status = ConversationStateDistillationStatus.Disabled
+            };
         }
 
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
@@ -112,7 +115,10 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         var conversation = await _persistence.GetConversationAsync(conversationId, operationToken);
         if (conversation is null)
         {
-            return new ConversationStateDistillationOutcome { Status = ConversationStateDistillationStatus.ConversationNotFound };
+            return new ConversationStateDistillationOutcome
+            {
+                Status = ConversationStateDistillationStatus.ConversationNotFound
+            };
         }
 
         // Null or corrupt stored JSON starts a fresh document; the watermark still bounds what is pending.

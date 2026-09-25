@@ -18,7 +18,10 @@ public static class ConversationStateReducer
         ArgumentNullException.ThrowIfNull(options);
         if (delta.IsEmpty)
         {
-            return new ConversationStateReduceResult { Document = document };
+            return new ConversationStateReduceResult
+            {
+                Document = document
+            };
         }
 
         var entries = document.Entries.ToList();
@@ -31,7 +34,11 @@ public static class ConversationStateReducer
             var value = proposed.Value?.Trim();
             if (string.IsNullOrEmpty(value))
             {
-                rejections.Add(new ConversationStateRejection { Operation = "add", Reason = "blank value" });
+                rejections.Add(new ConversationStateRejection
+                {
+                    Operation = "add",
+                    Reason = "blank value"
+                });
                 continue;
             }
 
@@ -42,7 +49,12 @@ public static class ConversationStateReducer
                 var index = LiveIndex(entries, supersededId);
                 if (index < 0)
                 {
-                    rejections.Add(new ConversationStateRejection { Operation = "add", EntryId = supersededId, Reason = "superseded id is unknown or not live" });
+                    rejections.Add(new ConversationStateRejection
+                    {
+                        Operation = "add",
+                        EntryId = supersededId,
+                        Reason = "superseded id is unknown or not live"
+                    });
                     continue;
                 }
 
@@ -64,7 +76,12 @@ public static class ConversationStateReducer
             var index = LiveIndex(entries, retirement.EntryId);
             if (index < 0)
             {
-                rejections.Add(new ConversationStateRejection { Operation = "supersede", EntryId = retirement.EntryId, Reason = "id is unknown or not live" });
+                rejections.Add(new ConversationStateRejection
+                {
+                    Operation = "supersede",
+                    EntryId = retirement.EntryId,
+                    Reason = "id is unknown or not live"
+                });
                 continue;
             }
 
@@ -76,7 +93,12 @@ public static class ConversationStateReducer
             var index = LiveIndex(entries, resolvedId);
             if (index < 0 || entries[index].Category != ConversationStateCategory.OpenQuestion)
             {
-                rejections.Add(new ConversationStateRejection { Operation = "resolve", EntryId = resolvedId, Reason = "id is not a live open question" });
+                rejections.Add(new ConversationStateRejection
+                {
+                    Operation = "resolve",
+                    EntryId = resolvedId,
+                    Reason = "id is not a live open question"
+                });
                 continue;
             }
 
@@ -86,7 +108,12 @@ public static class ConversationStateReducer
         var dropped = EnforceBudget(entries, options);
         return new ConversationStateReduceResult
         {
-            Document = new ConversationStateDocument { Version = document.Version, NextEntryNumber = (int)nextId, Entries = entries },
+            Document = new ConversationStateDocument
+            {
+                Version = document.Version,
+                NextEntryNumber = (int)nextId,
+                Entries = entries
+            },
             Rejections = rejections,
             DroppedIds = dropped
         };
@@ -107,9 +134,9 @@ public static class ConversationStateReducer
         var totalChars = entries.Sum(static entry => entry.Value.Length);
         var victims = new HashSet<ConversationStateEntry>(ReferenceEqualityComparer.Instance);
         foreach (var candidate in entries
-                     .OrderBy(static entry => DropTier(entry))
-                     .ThenBy(static entry => entry.CreatedAtSequence)
-                     .ThenBy(static entry => IdNumber(entry.Id)))
+                                  .OrderBy(static entry => DropTier(entry))
+                                  .ThenBy(static entry => entry.CreatedAtSequence)
+                                  .ThenBy(static entry => IdNumber(entry.Id)))
         {
             if (entries.Count - victims.Count <= options.MaxStateEntries && totalChars <= options.MaxStateChars)
             {

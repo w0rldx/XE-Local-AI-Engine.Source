@@ -289,7 +289,10 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         UpdateSegmentCallCount++;
         LastUpdatedSeq = seq;
         LastUpdatedText = text;
-        return Task.FromResult(UpdateSegmentResult ?? new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound });
+        return Task.FromResult(UpdateSegmentResult ?? new UpdateTranscriptSegmentResult
+        {
+            Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound
+        });
     }
 
     public void Dispose()

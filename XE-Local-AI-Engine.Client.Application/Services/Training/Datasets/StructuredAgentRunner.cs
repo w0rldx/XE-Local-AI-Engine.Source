@@ -119,6 +119,7 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
             // Live-found: a reasoning teacher spent the shared budget thinking and returned no answer at all.
             chatOptions.MaxOutputTokens = ReasoningMaxOutputTokens;
         }
+
         if (TryParseSeed(request.Seed, out var seedValue))
         {
             chatOptions.Seed = seedValue;

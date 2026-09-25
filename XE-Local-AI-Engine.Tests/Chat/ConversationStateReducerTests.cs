@@ -34,7 +34,15 @@ public sealed class ConversationStateReducerTests
     {
         var delta = new ConversationStateDelta
         {
-            Add = [new ConversationStateProposedEntry { Category = ConversationStateCategory.Fact, Value = "  padded  ", SourceSequences = [9, 3, 9, 5] }]
+            Add =
+            [
+                new ConversationStateProposedEntry
+                {
+                    Category = ConversationStateCategory.Fact,
+                    Value = "  padded  ",
+                    SourceSequences = [9, 3, 9, 5]
+                }
+            ]
         };
 
         var entry = ConversationStateReducer.Apply(new ConversationStateDocument(), delta, 9, Roomy).Document.Entries.Single();
@@ -69,7 +77,15 @@ public sealed class ConversationStateReducerTests
         var document = Doc(Entry("e1", ConversationStateCategory.Decision, "use sqlite", 1));
         var delta = new ConversationStateDelta
         {
-            Add = [new ConversationStateProposedEntry { Category = ConversationStateCategory.Correction, Value = "use postgres", Supersedes = ["e1"] }]
+            Add =
+            [
+                new ConversationStateProposedEntry
+                {
+                    Category = ConversationStateCategory.Correction,
+                    Value = "use postgres",
+                    Supersedes = ["e1"]
+                }
+            ]
         };
 
         var result = ConversationStateReducer.Apply(document, delta, 4, Roomy);
@@ -87,7 +103,15 @@ public sealed class ConversationStateReducerTests
         var document = Doc(Retired(Entry("e1", ConversationStateCategory.Fact, "old", 1), 2));
         var delta = new ConversationStateDelta
         {
-            Add = [new ConversationStateProposedEntry { Category = ConversationStateCategory.Fact, Value = "new", Supersedes = ["e1", "e99"] }]
+            Add =
+            [
+                new ConversationStateProposedEntry
+                {
+                    Category = ConversationStateCategory.Fact,
+                    Value = "new",
+                    Supersedes = ["e1", "e99"]
+                }
+            ]
         };
 
         var result = ConversationStateReducer.Apply(document, delta, 5, Roomy);
@@ -105,9 +129,21 @@ public sealed class ConversationStateReducerTests
         {
             Supersede =
             [
-                new ConversationStateRetirement { EntryId = "e1", BySequence = 8 },
-                new ConversationStateRetirement { EntryId = "e2", BySequence = 8 },
-                new ConversationStateRetirement { EntryId = "e7", BySequence = 8 }
+                new ConversationStateRetirement
+                {
+                    EntryId = "e1",
+                    BySequence = 8
+                },
+                new ConversationStateRetirement
+                {
+                    EntryId = "e2",
+                    BySequence = 8
+                },
+                new ConversationStateRetirement
+                {
+                    EntryId = "e7",
+                    BySequence = 8
+                }
             ]
         };
 
@@ -122,7 +158,10 @@ public sealed class ConversationStateReducerTests
     public void Apply_ResolveRetiresOnlyLiveOpenQuestions()
     {
         var document = Doc(Entry("e1", ConversationStateCategory.OpenQuestion, "which db?", 1), Entry("e2", ConversationStateCategory.Goal, "ship", 1));
-        var delta = new ConversationStateDelta { Resolve = ["e1", "e2", "e5"] };
+        var delta = new ConversationStateDelta
+        {
+            Resolve = ["e1", "e2", "e5"]
+        };
 
         var result = ConversationStateReducer.Apply(document, delta, 6, Roomy);
 
@@ -146,8 +185,7 @@ public sealed class ConversationStateReducerTests
     [Test]
     public void Apply_OverTheEntryCap_DropsNonLiveEntriesOldestFirst()
     {
-        var document = Doc(
-            Entry("e1", ConversationStateCategory.Fact, "live fact", 1),
+        var document = Doc(Entry("e1", ConversationStateCategory.Fact, "live fact", 1),
             Retired(Entry("e3", ConversationStateCategory.Goal, "dead newer", 5), 6),
             Retired(Entry("e2", ConversationStateCategory.Goal, "dead older", 2), 6));
 
@@ -160,8 +198,7 @@ public sealed class ConversationStateReducerTests
     [Test]
     public void Apply_WhenNonLiveAreGone_DropsRoutineLiveCategoriesBeforeIntent()
     {
-        var document = Doc(
-            Entry("e1", ConversationStateCategory.Goal, "goal", 1),
+        var document = Doc(Entry("e1", ConversationStateCategory.Goal, "goal", 1),
             Entry("e2", ConversationStateCategory.ToolOutcome, "tool", 2),
             Entry("e3", ConversationStateCategory.CompletedWork, "done", 1),
             Retired(Entry("e4", ConversationStateCategory.Fact, "dead", 3), 4));
@@ -175,8 +212,7 @@ public sealed class ConversationStateReducerTests
     [Test]
     public void Apply_WhenIntentAloneExceedsTheCap_DropsIntentOldestFirst()
     {
-        var document = Doc(
-            Entry("e2", ConversationStateCategory.Decision, "later decision", 3),
+        var document = Doc(Entry("e2", ConversationStateCategory.Decision, "later decision", 3),
             Entry("e1", ConversationStateCategory.Constraint, "early constraint", 3));
 
         var result = ConversationStateReducer.Apply(document, Adds(("goal", ConversationStateCategory.Goal)), 4, Caps(entries: 1));
@@ -188,8 +224,7 @@ public sealed class ConversationStateReducerTests
     [Test]
     public void Apply_OverTheCharCap_DropsUntilTheSummedValuesFit()
     {
-        var document = Doc(
-            Entry("e1", ConversationStateCategory.Fact, new string('a', 400), 1),
+        var document = Doc(Entry("e1", ConversationStateCategory.Fact, new string('a', 400), 1),
             Entry("e2", ConversationStateCategory.Goal, new string('b', 400), 1));
 
         var result = ConversationStateReducer.Apply(document, Adds((new string('c', 400), ConversationStateCategory.Fact)), 2, Caps(chars: 1000));
@@ -204,7 +239,15 @@ public sealed class ConversationStateReducerTests
         var first = ConversationStateReducer.Apply(new ConversationStateDocument(), Adds(("a", ConversationStateCategory.Fact), ("b", ConversationStateCategory.Fact)), 1, Roomy).Document;
         var supersede = new ConversationStateDelta
         {
-            Add = [new ConversationStateProposedEntry { Category = ConversationStateCategory.Fact, Value = "b2", Supersedes = ["e2"] }]
+            Add =
+            [
+                new ConversationStateProposedEntry
+                {
+                    Category = ConversationStateCategory.Fact,
+                    Value = "b2",
+                    Supersedes = ["e2"]
+                }
+            ]
         };
 
         var second = ConversationStateReducer.Apply(first, supersede, 2, Caps(entries: 2));
@@ -225,7 +268,11 @@ public sealed class ConversationStateReducerTests
             [
                 new ConversationStateEntry
                 {
-                    Id = "e1", Category = ConversationStateCategory.Goal, Value = "old goal", SourceSequences = [1], CreatedAtSequence = 1,
+                    Id = "e1",
+                    Category = ConversationStateCategory.Goal,
+                    Value = "old goal",
+                    SourceSequences = [1],
+                    CreatedAtSequence = 1,
                     SupersededById = "e5"
                 }
             ]
@@ -251,33 +298,55 @@ public sealed class ConversationStateReducerTests
 
     private static ConversationCompactionOptions Caps(int entries = 500, int chars = 50_000)
     {
-        return new ConversationCompactionOptions { MaxStateEntries = entries, MaxStateChars = chars };
+        return new ConversationCompactionOptions
+        {
+            MaxStateEntries = entries,
+            MaxStateChars = chars
+        };
     }
 
     private static ConversationStateDelta Adds(params (string Value, ConversationStateCategory Category)[] adds)
     {
         return new ConversationStateDelta
         {
-            Add = adds.Select(static add => new ConversationStateProposedEntry { Category = add.Category, Value = add.Value }).ToList()
+            Add = adds.Select(static add => new ConversationStateProposedEntry
+            {
+                Category = add.Category,
+                Value = add.Value
+            }).ToList()
         };
     }
 
     private static ConversationStateDocument Doc(params ConversationStateEntry[] entries)
     {
-        return new ConversationStateDocument { Entries = entries };
+        return new ConversationStateDocument
+        {
+            Entries = entries
+        };
     }
 
     private static ConversationStateEntry Entry(string id, ConversationStateCategory category, string value, int createdAt)
     {
-        return new ConversationStateEntry { Id = id, Category = category, Value = value, SourceSequences = [createdAt], CreatedAtSequence = createdAt };
+        return new ConversationStateEntry
+        {
+            Id = id,
+            Category = category,
+            Value = value,
+            SourceSequences = [createdAt],
+            CreatedAtSequence = createdAt
+        };
     }
 
     private static ConversationStateEntry Retired(ConversationStateEntry entry, int at)
     {
         return new ConversationStateEntry
         {
-            Id = entry.Id, Category = entry.Category, Value = entry.Value, SourceSequences = entry.SourceSequences,
-            CreatedAtSequence = entry.CreatedAtSequence, RetiredAtSequence = at
+            Id = entry.Id,
+            Category = entry.Category,
+            Value = entry.Value,
+            SourceSequences = entry.SourceSequences,
+            CreatedAtSequence = entry.CreatedAtSequence,
+            RetiredAtSequence = at
         };
     }
 }

@@ -26,5 +26,6 @@ internal sealed class NodeEfInternalServices : IDisposable
 
     public ServiceProvider Provider { get; }
 
-    public void Dispose() => Provider.Dispose();
+    public void Dispose() =>
+        Provider.Dispose();
 }

@@ -11,7 +11,10 @@ public static class ConversationStateSerializer
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: false) }
+        Converters =
+        {
+            new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: false)
+        }
     };
 
     public static string Serialize(ConversationStateDocument document)

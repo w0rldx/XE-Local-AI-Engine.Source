@@ -200,8 +200,9 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
         var tokens = pending.Count == 0
             ? 0
             : services.GetRequiredService<ITokenEstimator>()
-                      .EstimateTokens(pending.Select(static pair => new ChatMessage(string.Equals(pair.Message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
-                                                 pair.Message.Content))
+                      .EstimateTokens(pending.Select(static pair =>
+                                                 new ChatMessage(string.Equals(pair.Message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
+                                                     pair.Message.Content))
                                              .ToList(),
                           job.ModelName);
         if (pending.Count < options.DistillEveryMessages && tokens < options.DistillEveryTokens)

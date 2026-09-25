@@ -21,8 +21,7 @@ public sealed class ConversationStateSourceMessageMapperTests
     [Test]
     public void Map_BuildsOneToolPartPerToolCallWithItsCollapsedResult()
     {
-        var mapped = ConversationStateSourceMessageMapper.Map(Message(
-        [
+        var mapped = ConversationStateSourceMessageMapper.Map(Message([
             new NodeChatMessagePart(NodeChatMessagePartKinds.Reasoning, 1, Text: "thinking"),
             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 3, ToolCallId: "c2", Name: "read_file", State: NodeChatToolPartStates.Failed, Result: "not found"),
             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 2, ToolCallId: "c1", Name: "search", State: NodeChatToolPartStates.Received, Args: """{"q":"x"}""", Result: "3 hits"),
@@ -45,8 +44,7 @@ public sealed class ConversationStateSourceMessageMapperTests
         var longArgs = "a" + string.Concat(Enumerable.Repeat("😀", 300));
         var longResult = new string('r', 1000);
 
-        var tool = ConversationStateSourceMessageMapper.Map(Message(
-        [
+        var tool = ConversationStateSourceMessageMapper.Map(Message([
             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "c1", Name: "search", Args: longArgs, Result: longResult)
         ]), anchorSequence: 1).Tools.Single();
 
@@ -60,8 +58,7 @@ public sealed class ConversationStateSourceMessageMapperTests
     [Test]
     public void Map_SkipsAToolPartWithoutAName()
     {
-        var mapped = ConversationStateSourceMessageMapper.Map(Message(
-        [
+        var mapped = ConversationStateSourceMessageMapper.Map(Message([
             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "c1", Name: null, Result: "orphan")
         ]), anchorSequence: 1);
 

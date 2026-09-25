@@ -27,10 +27,10 @@ public static class ConversationStateRenderer
         foreach (var (category, heading) in Groups)
         {
             var entries = document.Entries
-                .Where(entry => entry.Category == category && (asOfSequence is { } asOf ? IsLiveAsOf(entry, asOf, byId) : entry.IsLive))
-                .OrderBy(static entry => ConversationStateReducer.IdNumber(entry.Id))
-                .ThenBy(static entry => entry.Id, StringComparer.Ordinal)
-                .ToList();
+                                  .Where(entry => entry.Category == category && (asOfSequence is { } asOf ? IsLiveAsOf(entry, asOf, byId) : entry.IsLive))
+                                  .OrderBy(static entry => ConversationStateReducer.IdNumber(entry.Id))
+                                  .ThenBy(static entry => entry.Id, StringComparer.Ordinal)
+                                  .ToList();
             if (entries.Count == 0)
             {
                 continue;

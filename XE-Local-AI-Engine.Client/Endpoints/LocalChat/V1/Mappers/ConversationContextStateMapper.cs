@@ -14,17 +14,17 @@ internal static class ConversationContextStateMapper
         return new NodeChatConversationContextStateResponse
         {
             Entries = document.Entries.Select(static entry => new NodeChatConversationContextStateEntryResponse
-                {
-                    Id = entry.Id,
-                    Category = entry.Category.ToString(),
-                    Value = entry.Value,
-                    SourceSequences = entry.SourceSequences,
-                    SupersededById = entry.SupersededById,
-                    RetiredAtSequence = entry.RetiredAtSequence,
-                    CreatedAtSequence = entry.CreatedAtSequence,
-                    IsLive = entry.IsLive
-                })
-                .ToArray(),
+                              {
+                                  Id = entry.Id,
+                                  Category = entry.Category.ToString(),
+                                  Value = entry.Value,
+                                  SourceSequences = entry.SourceSequences,
+                                  SupersededById = entry.SupersededById,
+                                  RetiredAtSequence = entry.RetiredAtSequence,
+                                  CreatedAtSequence = entry.CreatedAtSequence,
+                                  IsLive = entry.IsLive
+                              })
+                              .ToArray(),
             StateCoversToSequence = conversation.ConversationStateCoversToSequence,
             StateUpdatedAtUtc = conversation.ConversationStateUpdatedAtUtc,
             Synopsis = conversation.CompactionSummary,

@@ -227,9 +227,8 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         }
         catch (ArgumentException exception)
         {
-            throw new TrainingExportRejectedException(
-                $"The model name '{modelName.Trim()}' is not usable as a registry name. Use letters, digits, '.', '_' or '-' with no ':' suffix; "
-                + $"the quantization is appended for you, so 'my-model' registers as 'my-model:{quantization}'.",
+            throw new TrainingExportRejectedException($"The model name '{modelName.Trim()}' is not usable as a registry name. Use letters, digits, '.', '_' or '-' with no ':' suffix; "
+                                                      + $"the quantization is appended for you, so 'my-model' registers as 'my-model:{quantization}'.",
                 exception);
         }
         catch (InvalidOperationException exception)

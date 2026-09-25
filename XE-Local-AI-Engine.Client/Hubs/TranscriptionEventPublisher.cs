@@ -76,14 +76,21 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.CatchUpProgress,
-                       new TranscriptionCatchUpProgressPush { SessionId = sessionId, BufferedMs = bufferedMs },
+                       new TranscriptionCatchUpProgressPush
+                       {
+                           SessionId = sessionId,
+                           BufferedMs = bufferedMs
+                       },
                        cancellationToken);
 
     public Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken) =>
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.AdmissionClosed,
-                       new TranscriptionAdmissionClosedPush { SessionId = sessionId },
+                       new TranscriptionAdmissionClosedPush
+                       {
+                           SessionId = sessionId
+                       },
                        cancellationToken);
 
     /// <summary>

@@ -157,11 +157,11 @@ public sealed class DatasetGenerationExecutorTests
         var runner = Substitute.For<IStructuredAgentRunner>();
         _ = runner.RunAsync(Arg.Any<IChatClient>(), Arg.Any<StructuredAgentRequest>(), Arg.Any<CancellationToken>())
                   .Returns(new StructuredAgentResult
-                           {
-                               Success = true,
-                               Text = "{}",
-                               FailureReason = null
-                           },
+                      {
+                          Success = true,
+                          Text = "{}",
+                          FailureReason = null
+                      },
                       new StructuredAgentResult
                       {
                           Success = true,

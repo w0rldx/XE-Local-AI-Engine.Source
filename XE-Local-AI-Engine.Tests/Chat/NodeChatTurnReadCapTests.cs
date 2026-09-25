@@ -61,7 +61,11 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         AssertEx.True(turn.CompactionSummaryCoversToSequence == 3, "The turn read must report the same covered sequence.");
 
         // The turn read transfers the distilled state exactly like the synopsis.
-        foreach (var read in new[] { full, turn })
+        foreach (var read in new[]
+                 {
+                     full,
+                     turn
+                 })
         {
             AssertEx.Equal(StateJson, read.ConversationState);
             AssertEx.Equal<int?>(3, read.ConversationStateCoversToSequence);

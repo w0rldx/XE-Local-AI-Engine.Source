@@ -16,13 +16,21 @@ public sealed class ConversationStateSerializerTests
             [
                 new ConversationStateEntry
                 {
-                    Id = "e1", Category = ConversationStateCategory.Decision, Value = "use sqlite", SourceSequences = [2, 4],
-                    CreatedAtSequence = 4, SupersededById = "e2"
+                    Id = "e1",
+                    Category = ConversationStateCategory.Decision,
+                    Value = "use sqlite",
+                    SourceSequences = [2, 4],
+                    CreatedAtSequence = 4,
+                    SupersededById = "e2"
                 },
                 new ConversationStateEntry
                 {
-                    Id = "e2", Category = ConversationStateCategory.OpenQuestion, Value = "which schema? 中", SourceSequences = [5],
-                    CreatedAtSequence = 5, RetiredAtSequence = 9
+                    Id = "e2",
+                    Category = ConversationStateCategory.OpenQuestion,
+                    Value = "which schema? 中",
+                    SourceSequences = [5],
+                    CreatedAtSequence = 5,
+                    RetiredAtSequence = 9
                 }
             ]
         };
@@ -50,7 +58,17 @@ public sealed class ConversationStateSerializerTests
     {
         var json = ConversationStateSerializer.Serialize(new ConversationStateDocument
         {
-            Entries = [new ConversationStateEntry { Id = "e1", Category = ConversationStateCategory.ToolOutcome, Value = "ok 中", SourceSequences = [1], CreatedAtSequence = 1 }]
+            Entries =
+            [
+                new ConversationStateEntry
+                {
+                    Id = "e1",
+                    Category = ConversationStateCategory.ToolOutcome,
+                    Value = "ok 中",
+                    SourceSequences = [1],
+                    CreatedAtSequence = 1
+                }
+            ]
         });
 
         using var parsed = JsonDocument.Parse(json);
@@ -81,7 +99,10 @@ public sealed class ConversationStateSerializerTests
     [Test]
     public void Deserialize_OtherVersion_ReturnsNull()
     {
-        var json = ConversationStateSerializer.Serialize(new ConversationStateDocument { Version = ConversationStateDocument.CurrentVersion + 1 });
+        var json = ConversationStateSerializer.Serialize(new ConversationStateDocument
+        {
+            Version = ConversationStateDocument.CurrentVersion + 1
+        });
 
         AssertEx.Null(ConversationStateSerializer.Deserialize(json));
     }

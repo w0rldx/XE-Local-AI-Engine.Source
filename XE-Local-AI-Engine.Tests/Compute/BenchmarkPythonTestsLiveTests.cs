@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Compute;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.AI.Agent.Configuration;
 using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
@@ -201,18 +201,18 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     {
         // Codex round 2: a deadline that unittest files as an expected failure must still fail the criterion.
         var result = await VerifyAsync("def solve(n):\n    return n * 2\n", """
-                                                                          import time
-                                                                          import unittest
+                                                                            import time
+                                                                            import unittest
 
 
-                                                                          class Deadline(unittest.TestCase):
-                                                                              @unittest.expectedFailure
-                                                                              def test_a_sleeps_past_the_deadline(self):
-                                                                                  time.sleep(30)
+                                                                            class Deadline(unittest.TestCase):
+                                                                                @unittest.expectedFailure
+                                                                                def test_a_sleeps_past_the_deadline(self):
+                                                                                    time.sleep(30)
 
-                                                                              def test_b_would_fail(self):
-                                                                                  assert solve(10) == 21
-                                                                          """,
+                                                                                def test_b_would_fail(self):
+                                                                                    assert solve(10) == 21
+                                                                            """,
             criterionTimeoutSeconds: 3,
             computeTimeoutSeconds: 60);
 

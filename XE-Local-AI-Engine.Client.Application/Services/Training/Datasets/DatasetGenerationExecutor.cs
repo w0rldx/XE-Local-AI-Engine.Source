@@ -63,10 +63,9 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
     ///     Matches a user turn that restates the teacher instruction, built from the template's first sentence so a
     ///     reworded prompt moves the check with it. Live-found: a 7B teacher copied the instruction in as the "user" turn.
     /// </summary>
-    private static readonly Regex TeacherPromptEcho = new(
-        "^" + string.Join(".+?", TeacherPromptTemplate[..(TeacherPromptTemplate.IndexOf(". ", StringComparison.Ordinal) + 1)]
-                                     .Split(["{0}", "{1}", "{2}"], StringSplitOptions.None)
-                                     .Select(Regex.Escape)),
+    private static readonly Regex TeacherPromptEcho = new("^" + string.Join(".+?", TeacherPromptTemplate[..(TeacherPromptTemplate.IndexOf(". ", StringComparison.Ordinal) + 1)]
+                                                                                   .Split(["{0}", "{1}", "{2}"], StringSplitOptions.None)
+                                                                                   .Select(Regex.Escape)),
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 

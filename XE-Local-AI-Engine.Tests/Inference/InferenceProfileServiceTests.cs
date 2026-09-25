@@ -56,9 +56,9 @@ public sealed class InferenceProfileServiceTests
         AssertEx.Equal<int?>(33, profile.NGpuLayers);
         AssertEx.Equal("Explored", profile.Status);
         AssertEx.Equal("Q4_K_M", profile.Quant, "The registry quant label wins over the header's numeric general.file_type.");
-        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(
-            Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == 33 && input.Backend == "cuda" && input.LlamacppBuild == Build
-                                                   && input.Quant == "Q4_K_M"),
+        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input =>
+                input.CtxSize == 8192 && input.NGpuLayers == 33 && input.Backend == "cuda" && input.LlamacppBuild == Build
+                && input.Quant == "Q4_K_M"),
             Arg.Any<CancellationToken>());
     }
 
@@ -632,7 +632,12 @@ public sealed class InferenceProfileServiceTests
     {
         var fixture = new ServiceFixture();
         _ = fixture.ProfileStore.ListAsync(Arg.Any<CancellationToken>())
-                   .Returns<IReadOnlyList<InferenceProfileRecord>>([ExploredRecord() with { Quant = "15" }]);
+                   .Returns<IReadOnlyList<InferenceProfileRecord>>([
+                       ExploredRecord() with
+                       {
+                           Quant = "15"
+                       }
+                   ]);
 
         var profiles = await fixture.CreateService().ListProfilesAsync(CancellationToken.None);
 

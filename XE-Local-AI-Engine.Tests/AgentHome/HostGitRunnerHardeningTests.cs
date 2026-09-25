@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using Win32Exception = System.ComponentModel.Win32Exception;
 using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using Win32Exception = System.ComponentModel.Win32Exception;
 
 /// <summary>
 ///     The host-side runner carries <c>AgentHomeGitHardening.Environment</c>, not just the <c>-c</c> pins.

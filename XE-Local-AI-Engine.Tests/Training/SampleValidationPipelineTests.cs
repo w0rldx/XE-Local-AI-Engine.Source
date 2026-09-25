@@ -252,8 +252,7 @@ public sealed class SampleValidationPipelineTests
 
         // Requested Good but demoted to Bad by the tool-name layer: it must be keyed under the label it ends with.
         var demotedSeen = new HashSet<string>(StringComparer.Ordinal);
-        var demoted = await pipeline.ValidateAsync(
-            """{"userMessage":"Delete it","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
+        var demoted = await pipeline.ValidateAsync("""{"userMessage":"Delete it","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
             Context(TrainingSampleLabel.Good, demotedSeen));
         var laterBad = await pipeline.ValidateAsync(Record("Delete it"), Context(TrainingSampleLabel.Bad, demotedSeen));
         var laterGood = await pipeline.ValidateAsync(Record("Delete it"), Context(TrainingSampleLabel.Good, demotedSeen));

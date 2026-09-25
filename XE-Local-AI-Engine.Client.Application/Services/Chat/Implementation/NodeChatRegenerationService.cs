@@ -627,7 +627,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         // Non-destructive compaction: the synopsis replaces the messages it covers, but only while the covered sequence
         // sits BELOW the cutoff; the state is rendered as of the cutoff too, or the answer being replaced would steer its rerun.
-        if (applyCompaction && CompactionContextResolver.Resolve(conversation, leadingContext.Count, stateAsOfSequence: cutoffSequence) is { } compaction && compaction.CoveredSequence < cutoffSequence)
+        if (applyCompaction && CompactionContextResolver.Resolve(conversation, leadingContext.Count, stateAsOfSequence: cutoffSequence) is { } compaction &&
+            compaction.CoveredSequence < cutoffSequence)
         {
             leadingContext.Add(compaction.Summary);
             selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];

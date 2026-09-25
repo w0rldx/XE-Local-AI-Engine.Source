@@ -26,8 +26,7 @@ public sealed class ConversationStateDeltaParserTests
     [Test]
     public void TryParse_AcceptsACodeFenceAndSurroundingProse()
     {
-        var delta = AssertEx.NotNull(ConversationStateDeltaParser.TryParse(
-            "Here is the delta:\n```json\n{\"resolve\":[\"e1\"]}\n```\nDone."));
+        var delta = AssertEx.NotNull(ConversationStateDeltaParser.TryParse("Here is the delta:\n```json\n{\"resolve\":[\"e1\"]}\n```\nDone."));
 
         AssertEx.Equal("e1", delta.Resolve.Single());
     }

@@ -66,7 +66,8 @@ public sealed class DevWorkflowRequiredCapabilitiesJsonConverter : JsonConverter
 
         public string this[string key] => throw new KeyNotFoundException(key);
 
-        public bool ContainsKey(string key) => false;
+        public bool ContainsKey(string key) =>
+            false;
 
         public bool TryGetValue(string key, [MaybeNullWhen(false)] out string value)
         {
@@ -74,8 +75,10 @@ public sealed class DevWorkflowRequiredCapabilitiesJsonConverter : JsonConverter
             return false;
         }
 
-        public IEnumerator<KeyValuePair<string, string>> GetEnumerator() => Enumerable.Empty<KeyValuePair<string, string>>().GetEnumerator();
+        public IEnumerator<KeyValuePair<string, string>> GetEnumerator() =>
+            Enumerable.Empty<KeyValuePair<string, string>>().GetEnumerator();
 
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() =>
+            GetEnumerator();
     }
 }

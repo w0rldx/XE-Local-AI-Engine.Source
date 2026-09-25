@@ -153,7 +153,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
                     // Every silent window under auto-detect lands here until a language is learned, so only the first is a Warning.
                     if (Interlocked.Exchange(ref _silentWindowFallbackWarned, 1) == 0)
                     {
-                        _logger.LogWarning("whisper-server answered 500 for a window without speech while language probabilities were requested; retrying without them. Later occurrences are logged at Debug. ({Body})",
+                        _logger.LogWarning(
+                            "whisper-server answered 500 for a window without speech while language probabilities were requested; retrying without them. Later occurrences are logged at Debug. ({Body})",
                             loggedBody);
                     }
                     else

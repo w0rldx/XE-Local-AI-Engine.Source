@@ -161,7 +161,9 @@ public sealed class TrainingRunEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/{Guid.NewGuid()}/cancel")
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);

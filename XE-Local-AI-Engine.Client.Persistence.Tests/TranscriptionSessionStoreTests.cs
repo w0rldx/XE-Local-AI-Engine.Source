@@ -435,7 +435,7 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
 
         await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "edit", "{}", createdAtUtc: 100), CancellationToken.None));
         await RunAsync(databasePath,
-                store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "untouched"), NewSegment(seq: 2, startMs: 1_000, original)], updatedAtUtc: 200, CancellationToken.None));
+            store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "untouched"), NewSegment(seq: 2, startMs: 1_000, original)], updatedAtUtc: 200, CancellationToken.None));
         var cipherBefore = await ReadRawSegmentTextAsync(databasePath, seq: 2);
 
         var outcome = await QueryAsync(databasePath, store => store.UpdateSegmentTextAsync(sessionId, seq: 2, corrected, updatedAtUtc: 300, CancellationToken.None));

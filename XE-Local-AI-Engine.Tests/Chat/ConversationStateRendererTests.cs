@@ -27,15 +27,14 @@ public sealed class ConversationStateRendererTests
 
         var rendered = ConversationStateRenderer.RenderForContext(document);
 
-        AssertEx.Equal(
-            "Goals:\n- [e9] goal\n\n"
-            + "Corrections:\n- [e5] correction\n\n"
-            + "Open questions:\n- [e4] question\n\n"
-            + "Decisions:\n- [e6] decision\n\n"
-            + "Constraints:\n- [e7] constraint\n\n"
-            + "Facts:\n- [e2] fact two\n- [e12] fact twelve\n\n"
-            + "Tool outcomes:\n- [e8] tool\n\n"
-            + "Completed work:\n- [e3] done",
+        AssertEx.Equal("Goals:\n- [e9] goal\n\n"
+                       + "Corrections:\n- [e5] correction\n\n"
+                       + "Open questions:\n- [e4] question\n\n"
+                       + "Decisions:\n- [e6] decision\n\n"
+                       + "Constraints:\n- [e7] constraint\n\n"
+                       + "Facts:\n- [e2] fact two\n- [e12] fact twelve\n\n"
+                       + "Tool outcomes:\n- [e8] tool\n\n"
+                       + "Completed work:\n- [e3] done",
             rendered);
     }
 
@@ -80,8 +79,13 @@ public sealed class ConversationStateRendererTests
     {
         return new ConversationStateEntry
         {
-            Id = id, Category = category, Value = value, SourceSequences = [1], CreatedAtSequence = 1,
-            SupersededById = supersededBy, RetiredAtSequence = retiredAt
+            Id = id,
+            Category = category,
+            Value = value,
+            SourceSequences = [1],
+            CreatedAtSequence = 1,
+            SupersededById = supersededBy,
+            RetiredAtSequence = retiredAt
         };
     }
 }

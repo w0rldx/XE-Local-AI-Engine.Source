@@ -447,6 +447,7 @@ public sealed class RunSavedAgentHandlerTests
                     .ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                     .Returns(Substitute.For<IAsyncDisposable>());
             }
+
             Runner
                 .RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo =>
@@ -534,7 +535,12 @@ public sealed class RunSavedAgentHandlerTests
         {
             if (_resident.Contains(model))
             {
-                return new CapacityDecision { Verdict = CapacityVerdict.QueueSameModel, Reason = "Resident.", OllamaEvictionWarning = false };
+                return new CapacityDecision
+                {
+                    Verdict = CapacityVerdict.QueueSameModel,
+                    Reason = "Resident.",
+                    OllamaEvictionWarning = false
+                };
             }
 
             if (HeldReservations > 0 || _resident.Count > 0)

@@ -611,7 +611,10 @@ public sealed class ConversationCompactionServiceTests
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>())
-                   .Returns(Conversation(CompletedMessages(12)) with { CompactionSummaryUpdatedAtUtc = 40 });
+                   .Returns(Conversation(CompletedMessages(12)) with
+                   {
+                       CompactionSummaryUpdatedAtUtc = 40
+                   });
         // The store rejects the compare-and-set: a path change restamped compaction_summary_updated_at_utc meanwhile.
         persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns((NodeChatConversationDto?)null);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();

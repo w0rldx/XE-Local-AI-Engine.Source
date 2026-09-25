@@ -12,8 +12,7 @@ public sealed class TestServerWebAppFactoryTemplateSweepTests
         var template = TestServerWebAppFactory.EnsureMigratedTemplate();
 
         AssertEx.True(File.Exists(template), $"The migrated template must exist after it was built: {template}");
-        AssertEx.Equal(
-            Path.Combine(AppContext.BaseDirectory, "sqlite-templates"),
+        AssertEx.Equal(Path.Combine(AppContext.BaseDirectory, "sqlite-templates"),
             Path.GetDirectoryName(template),
             "The template must live under this build's output directory, where a copied output tree carries it along.");
     }

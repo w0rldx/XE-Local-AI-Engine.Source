@@ -4209,7 +4209,8 @@ public sealed class InvocationRunnerTests
 
     private static async IAsyncEnumerable<AgentResponseUpdate> ThinkThenSlowToolUpdates(Task modelDone,
         Task toolDone,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, "planning");
         await modelDone.WaitAsync(cancellationToken);

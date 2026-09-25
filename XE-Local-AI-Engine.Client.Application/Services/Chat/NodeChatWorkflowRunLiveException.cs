@@ -10,8 +10,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 /// </remarks>
 public sealed class NodeChatWorkflowRunLiveException : InvalidOperationException
 {
-    public NodeChatWorkflowRunLiveException(Guid conversationId) : base(
-        $"Conversation {conversationId} has a workflow run in progress; answer or stop the workflow before sending a normal message.")
+    public NodeChatWorkflowRunLiveException(Guid conversationId) : base($"Conversation {conversationId} has a workflow run in progress; answer or stop the workflow before sending a normal message.")
     {
         ConversationId = conversationId;
     }

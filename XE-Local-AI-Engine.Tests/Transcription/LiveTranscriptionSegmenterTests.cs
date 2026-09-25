@@ -379,7 +379,10 @@ public sealed class LiveTranscriptionSegmenterTests
     }
 
     private static WhisperRuntimeException DaemonExited() =>
-        new("The transcription runtime process exited (exit code -1073741819).") { ProcessExited = true };
+        new("The transcription runtime process exited (exit code -1073741819).")
+        {
+            ProcessExited = true
+        };
 
     [Test]
     public async Task FlushThatThrows_LeavesTheWatermarkAndTheRetainedAudioIntact()

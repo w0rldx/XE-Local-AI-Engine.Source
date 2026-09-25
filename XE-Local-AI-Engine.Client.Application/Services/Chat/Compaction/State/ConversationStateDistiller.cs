@@ -62,38 +62,38 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
 
     // The forced-JSON schema only; the reply is read by ConversationStateDeltaParser, which tolerates what a schema cannot.
     private static readonly ChatResponseFormat ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonElement.Parse("""
-        {
-          "type": "object",
-          "properties": {
-            "add": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "category": { "type": "string", "enum": ["Goal", "Decision", "Constraint", "Fact", "Correction", "OpenQuestion", "ToolOutcome", "CompletedWork"] },
-                  "value": { "type": "string" },
-                  "sourceSequences": { "type": "array", "items": { "type": "integer" } },
-                  "supersedes": { "type": "array", "items": { "type": "string" } }
-                },
-                "required": ["category", "value", "sourceSequences", "supersedes"]
-              }
-            },
-            "supersede": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "entryId": { "type": "string" },
-                  "bySequence": { "type": "integer" }
-                },
-                "required": ["entryId", "bySequence"]
-              }
-            },
-            "resolve": { "type": "array", "items": { "type": "string" } }
-          },
-          "required": ["add", "supersede", "resolve"]
-        }
-        """), "conversation_state_delta");
+                                                                                                                   {
+                                                                                                                     "type": "object",
+                                                                                                                     "properties": {
+                                                                                                                       "add": {
+                                                                                                                         "type": "array",
+                                                                                                                         "items": {
+                                                                                                                           "type": "object",
+                                                                                                                           "properties": {
+                                                                                                                             "category": { "type": "string", "enum": ["Goal", "Decision", "Constraint", "Fact", "Correction", "OpenQuestion", "ToolOutcome", "CompletedWork"] },
+                                                                                                                             "value": { "type": "string" },
+                                                                                                                             "sourceSequences": { "type": "array", "items": { "type": "integer" } },
+                                                                                                                             "supersedes": { "type": "array", "items": { "type": "string" } }
+                                                                                                                           },
+                                                                                                                           "required": ["category", "value", "sourceSequences", "supersedes"]
+                                                                                                                         }
+                                                                                                                       },
+                                                                                                                       "supersede": {
+                                                                                                                         "type": "array",
+                                                                                                                         "items": {
+                                                                                                                           "type": "object",
+                                                                                                                           "properties": {
+                                                                                                                             "entryId": { "type": "string" },
+                                                                                                                             "bySequence": { "type": "integer" }
+                                                                                                                           },
+                                                                                                                           "required": ["entryId", "bySequence"]
+                                                                                                                         }
+                                                                                                                       },
+                                                                                                                       "resolve": { "type": "array", "items": { "type": "string" } }
+                                                                                                                     },
+                                                                                                                     "required": ["add", "supersede", "resolve"]
+                                                                                                                   }
+                                                                                                                   """), "conversation_state_delta");
 
     private readonly ITokenEstimatorCalibrationStore _calibrationStore;
     private readonly ILogger<ConversationStateDistiller> _logger;

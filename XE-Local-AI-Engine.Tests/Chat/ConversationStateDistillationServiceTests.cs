@@ -46,7 +46,10 @@ public sealed class ConversationStateDistillationServiceTests
     [Test]
     public async Task DistillPendingAsync_GuardsEveryWriteOnTheStampItLastSaw()
     {
-        var harness = new Harness(Conversation(CompletedMessages(count: 4)) with { ConversationStateUpdatedAtUtc = 40 });
+        var harness = new Harness(Conversation(CompletedMessages(count: 4)) with
+        {
+            ConversationStateUpdatedAtUtc = 40
+        });
         harness.Results.Enqueue(Distillation("first fact", consumed: 2, coversTo: 1));
         harness.Results.Enqueue(Distillation("second fact", consumed: 2, coversTo: 3));
 

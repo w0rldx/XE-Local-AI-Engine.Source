@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using Win32Exception = System.ComponentModel.Win32Exception;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -8,6 +7,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using Win32Exception = System.ComponentModel.Win32Exception;
 
 /// <summary>
 ///     The run list against real run directories: what it reads out of a well-formed run, what it does with a

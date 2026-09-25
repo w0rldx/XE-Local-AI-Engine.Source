@@ -55,7 +55,7 @@ public sealed class RuntimeAuditCudaDeviceProbeTests
 
         AssertEx.True(new RuntimeAuditCudaDeviceProbe(audit, DriverLibraryPresent(), NullLogger<RuntimeAuditCudaDeviceProbe>.Instance).HasEnumerableCudaDevice());
         AssertEx.False(new RuntimeAuditCudaDeviceProbe(audit, new DefaultCudaDeviceProbe(isWindows: true, static () => false), NullLogger<RuntimeAuditCudaDeviceProbe>.Instance)
-                           .HasEnumerableCudaDevice(), "a missing driver library still rules CUDA out");
+            .HasEnumerableCudaDevice(), "a missing driver library still rules CUDA out");
     }
 
     [Test]
@@ -92,7 +92,8 @@ public sealed class RuntimeAuditCudaDeviceProbeTests
         AssertEx.Equal(WhisperBackend.Cpu, await selector.SelectBackendAsync(CancellationToken.None));
     }
 
-    private static DefaultCudaDeviceProbe DriverLibraryPresent() => new(isWindows: true, static () => true);
+    private static DefaultCudaDeviceProbe DriverLibraryPresent() =>
+        new(isWindows: true, static () => true);
 
     private static RuntimeDeviceAuditService Audit(GpuVariant variant, LlamaDeviceInventory inventory)
     {
@@ -109,7 +110,20 @@ public sealed class RuntimeAuditCudaDeviceProbeTests
     }
 
     private static LlamaDeviceInventory WithDevice(GpuVariant variant) =>
-        new() { Variant = variant, ProbeSucceeded = true, Devices = [new LlamaGpuDevice { Name = "GPU0", TotalBytes = 16 * Gb, FreeBytes = 15 * Gb }] };
+        new()
+        {
+            Variant = variant,
+            ProbeSucceeded = true,
+            Devices =
+            [
+                new LlamaGpuDevice
+                {
+                    Name = "GPU0",
+                    TotalBytes = 16 * Gb,
+                    FreeBytes = 15 * Gb
+                }
+            ]
+        };
 
     private static IHardwareProfiler Profiler()
     {
