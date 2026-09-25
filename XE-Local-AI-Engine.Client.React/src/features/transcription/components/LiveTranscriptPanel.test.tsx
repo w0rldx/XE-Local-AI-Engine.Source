@@ -16,6 +16,7 @@ function view(overrides: Partial<LiveTranscriptView> = {}): LiveTranscriptView {
 		],
 		partials: { you: "and then", others: "hold on" },
 		status: "Transcribing",
+		bufferedMs: null,
 		lastSeq: 2,
 		replayTruncated: false,
 		...overrides,

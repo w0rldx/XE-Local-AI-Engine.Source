@@ -72,7 +72,14 @@ function cx(...values: Array<string | false | undefined>): string {
  */
 function BranchHandle({ id, top, caption }: { readonly id: string; readonly top: string; readonly caption: string }) {
 	return (
-		<Handle type="source" position={Position.Right} id={id} style={{ top }} data-testid={`graph-workflow-handle-source-${id}`}>
+		<Handle
+			type="source"
+			position={Position.Right}
+			id={id}
+			style={{ top }}
+			className={classes["handle"]}
+			data-testid={`graph-workflow-handle-source-${id}`}
+		>
 			<span className={classes["handle-caption"]}>{caption}</span>
 		</Handle>
 	);
@@ -111,7 +118,14 @@ function SourceHandles({ data }: { readonly data: GraphWorkflowCanvasNodeData })
 			</>
 		);
 	}
-	return <Handle type="source" position={Position.Right} data-testid="graph-workflow-handle-source-default" />;
+	return (
+		<Handle
+			type="source"
+			position={Position.Right}
+			className={classes["handle"]}
+			data-testid="graph-workflow-handle-source-default"
+		/>
+	);
 }
 
 export function GraphWorkflowNodeCard({ data, selected }: NodeProps<GraphWorkflowCanvasNode>) {
@@ -131,7 +145,7 @@ export function GraphWorkflowNodeCard({ data, selected }: NodeProps<GraphWorkflo
 		>
 			{/* A Start node has no predecessor, so it gets no target handle — same reason End gets no source. */}
 			{data.kind === "Start" ? null : (
-				<Handle type="target" position={Position.Left} data-testid="graph-workflow-handle-target" />
+				<Handle type="target" position={Position.Left} className={classes["handle"]} data-testid="graph-workflow-handle-target" />
 			)}
 			<Stack gap={4}>
 				<div className={classes["node-title"]}>

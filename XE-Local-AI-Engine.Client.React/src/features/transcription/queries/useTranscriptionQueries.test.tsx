@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,7 @@ import {
 	useCaptureProcesses,
 	useStartProcessCapture,
 	useTranscriptionSession,
+	useUpdateTranscriptSegment,
 } from "@/features/transcription/queries/useTranscriptionQueries";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -187,5 +188,109 @@ describe("useStartProcessCapture", () => {
 		const { result } = renderHook(() => useStartProcessCapture(), { wrapper });
 
 		await expect(result.current.mutateAsync({ sessionId, processId: 4242 })).rejects.toBeDefined();
+	});
+});
+
+describe("useUpdateTranscriptSegment", () => {
+	// The response is the updated row, so the cached transcript is patched by seq: re-reading the detail would
+	// re-decrypt the whole transcript for one corrected line.
+	it("patches the edited row into the cached session without re-reading it", async () => {
+		let reads = 0;
+		const row = (seq: number, text: string) => ({
+			id: `33333333-0000-4000-8000-00000000000${seq}`,
+			seq,
+			startMs: seq * 1000,
+			endMs: seq * 1000 + 900,
+			text,
+			channel: "Mono",
+		});
+		const bodies: unknown[] = [];
+		server.use(
+			http.get(localApiPath(`transcription/sessions/${sessionId}`), () => {
+				reads += 1;
+				return HttpResponse.json({
+					...transcribingDetail("Microphone"),
+					session: { ...transcribingDetail("Microphone").session, status: "Completed", segmentCount: 2 },
+					segments: [row(1, "first"), row(2, "secnod")],
+				});
+			}),
+			http.put(localApiPath(`transcription/sessions/${sessionId}/segments/2`), async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json(row(2, "second"));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+		const { result } = renderHook(
+			() => ({ detail: useTranscriptionSession(sessionId), update: useUpdateTranscriptSegment(sessionId) }),
+			{
+				wrapper,
+			},
+		);
+		await vi.waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
+
+		await act(async () => {
+			await result.current.update.mutateAsync({ seq: 2, text: "second" });
+		});
+
+		expect(bodies).toEqual([{ text: "second" }]);
+		await vi.waitFor(() =>
+			expect(result.current.detail.data?.segments.map((segment) => segment.text)).toEqual(["first", "second"]),
+		);
+		expect(reads).toBe(1);
+	});
+
+	// Codex r1 #8: the detail query is `staleTime: 0`, so a refetch can be in flight when the save lands. Its response
+	// carries the pre-edit text and used to overwrite the patch; it is cancelled before the patch is written.
+	it("keeps the patched row when a refetch holding the old text is still in flight", async () => {
+		const row = (seq: number, text: string) => ({
+			id: `33333333-0000-4000-8000-00000000000${seq}`,
+			seq,
+			startMs: seq * 1000,
+			endMs: seq * 1000 + 900,
+			text,
+			channel: "Mono",
+		});
+		const detail = () => ({
+			...transcribingDetail("Microphone"),
+			session: { ...transcribingDetail("Microphone").session, status: "Completed", segmentCount: 1 },
+			segments: [row(1, "secnod")],
+		});
+		let reads = 0;
+		let releaseRefetch: () => void = () => undefined;
+		const refetchHeld = new Promise<void>((resolve) => {
+			releaseRefetch = resolve;
+		});
+		server.use(
+			http.get(localApiPath(`transcription/sessions/${sessionId}`), async () => {
+				reads += 1;
+				if (reads > 1) {
+					await refetchHeld;
+				}
+				return HttpResponse.json(detail());
+			}),
+			http.put(localApiPath(`transcription/sessions/${sessionId}/segments/1`), () => HttpResponse.json(row(1, "second"))),
+		);
+		const { wrapper } = createProvidersWrapper();
+		const { result } = renderHook(
+			() => ({ detail: useTranscriptionSession(sessionId), update: useUpdateTranscriptSegment(sessionId) }),
+			{ wrapper },
+		);
+		await vi.waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
+
+		let refetched: Promise<unknown> = Promise.resolve();
+		act(() => {
+			refetched = result.current.detail.refetch();
+		});
+		await vi.waitFor(() => expect(reads).toBe(2));
+		await act(async () => {
+			await result.current.update.mutateAsync({ seq: 1, text: "second" });
+		});
+		// Settles once the refetch is over either way: cancelled by the save, or landed with its stale text.
+		await act(async () => {
+			releaseRefetch();
+			await refetched;
+		});
+
+		expect(result.current.detail.data?.segments.map((segment) => segment.text)).toEqual(["second"]);
 	});
 });

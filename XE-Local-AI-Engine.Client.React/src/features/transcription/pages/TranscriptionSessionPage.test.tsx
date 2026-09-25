@@ -45,6 +45,7 @@ vi.mock("@/features/transcription/hooks/useTranscriptionHub", async () => {
 // The orchestration has its own tests (`useLiveCapture.test.ts`); what the page owns is the REQUEST it hands the
 // hook, which is where the session's own microphone is chosen.
 const liveCapture = vi.hoisted(() => ({
+	state: "idle" as "idle" | "starting" | "capturing" | "stopping",
 	start: vi.fn(() => Promise.resolve()),
 	stop: vi.fn(() => Promise.resolve()),
 	cancel: vi.fn(() => Promise.resolve()),
@@ -58,7 +59,7 @@ vi.mock("@/features/transcription/capture/useLiveCapture", async () => {
 			const [error, setError] = useState<LiveCaptureErrorCode | null>(null);
 			liveCapture.setError = setError;
 			return {
-				state: "idle",
+				state: liveCapture.state,
 				error,
 				replayStalled: false,
 				connected: true,
@@ -111,7 +112,7 @@ function detail(overrides: Record<string, unknown> = {}, segments = [segment(1),
 }
 
 function liveView(status: string, committed: LiveTranscriptView["committed"] = []): LiveTranscriptView {
-	return { committed, partials: {}, status, lastSeq: committed.length, replayTruncated: false };
+	return { committed, partials: {}, status, bufferedMs: null, lastSeq: committed.length, replayTruncated: false };
 }
 
 /** Delivers a live transcript the way the hub does: by writing the push-fed query the view reads. */
@@ -128,6 +129,7 @@ describe("TranscriptionSessionPage", () => {
 	beforeEach(() => {
 		navigate.mockClear();
 		liveCapture.start.mockClear();
+		liveCapture.state = "idle";
 		usePendingComposerTextStore.setState({ pendingText: "" });
 		useTranscriptionCaptureStore.setState({ deviceIdBySession: {}, processIdBySession: {} });
 	});
@@ -229,6 +231,61 @@ describe("TranscriptionSessionPage", () => {
 		expect((await screen.findByTestId("transcription-committed-list")).textContent).toContain("live line");
 		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
 		expect(screen.queryByTestId("transcript-segment-list")).toBeNull();
+	});
+
+	// C2: text is corrected only on a finished transcript; a transcribing file session offers no edit control.
+	it.each([
+		{ status: "Completed", editable: true },
+		{ status: "Failed", editable: true },
+		{ status: "Cancelled", editable: true },
+		{ status: "Transcribing", editable: false },
+	])("offers segment editing on a $status session: $editable", async ({ status, editable }) => {
+		server.use(jsonRoute("get", `transcription/sessions/${sessionId}`, detail({ status }, [segment(1)])));
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		await screen.findByTestId("transcript-segment-list");
+		expect(screen.queryByTestId("transcript-segment-edit-1") !== null).toBe(editable);
+	});
+
+	// A3: a pending start polls the runtime and says what it is waiting on, here the model load.
+	it("names what a pending live start is waiting on from the runtime status", async () => {
+		liveCapture.state = "starting";
+		server.use(
+			jsonRoute("get", `transcription/sessions/${sessionId}`, detail({ status: "Created", sourceKind: "Microphone" }, [])),
+			jsonRoute("get", "transcription/runtime", {
+				enabled: true,
+				state: "starting",
+				recommendedModelId: "base",
+				supportsTranscode: true,
+				idleTimeoutMinutes: 10,
+				vadInstalled: true,
+				processCaptureSupported: false,
+				activity: {
+					activeTranscriptionCount: 0,
+					spawnReadinessCount: 1,
+					residentProcessCount: 0,
+					mutationReserved: false,
+					evictionReserved: false,
+					isBusy: true,
+				},
+			}),
+		);
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect((await screen.findByText("Loading the model…")).dataset["testid"]).toBe("transcription-capture-start-status");
+	});
+
+	// B2: the node's catch-up report reaches the controls through the live transcript.
+	it("shows how far behind a running capture is from the live transcript", async () => {
+		liveCapture.state = "capturing";
+		server.use(
+			jsonRoute("get", `transcription/sessions/${sessionId}`, detail({ status: "Transcribing", sourceKind: "Microphone" }, [])),
+		);
+		const { queryClient } = renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		pushLiveTranscript(queryClient, { ...liveView("Transcribing"), bufferedMs: 2500 });
+		expect((await screen.findByTestId("transcription-capture-behind")).textContent).toBe("Transcribing… 3 s behind");
 	});
 
 	// M3: two sessions created on two different microphones must each capture from their own. The device is never

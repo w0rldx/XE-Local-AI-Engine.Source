@@ -1,8 +1,8 @@
-// The saved workflow definitions, as a table. Pure presentation: the page owns the query, the confirmation and every
+// The saved workflow definitions, as compact card rows. Pure presentation: the page owns the query, the confirmation and every
 // mutation — this file only reports which row the operator picked. Same division as Preview's `WorkflowList`, which it
 // is copy-adapted from (features never import each other).
 
-import { ActionIcon, Badge, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Badge, Button, Group, Loader, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -68,76 +68,76 @@ export function GraphWorkflowDefinitionList({
 			) : null}
 
 			{definitions.length > 0 ? (
-				<Table.ScrollContainer minWidth={480}>
-					<Table highlightOnHover={true} verticalSpacing="sm" data-testid="gw-definition-table">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.graphWorkflows.definitions.columns.name", "Name")}</Table.Th>
-								<Table.Th>{t("pages.graphWorkflows.definitions.columns.nodes", "Nodes")}</Table.Th>
-								<Table.Th>{t("pages.graphWorkflows.definitions.columns.version", "Version")}</Table.Th>
-								<Table.Th>{t("pages.graphWorkflows.definitions.columns.updated", "Updated")}</Table.Th>
-								<Table.Th />
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{definitions.map((definition) => {
-								const id = definition.id ?? "";
-								const name = definition.name ?? id;
-								return (
-									<Table.Tr
-										key={id}
-										bg={id === selectedId ? "var(--mantine-color-default-hover)" : undefined}
-										data-testid={`gw-definition-row-${id}`}
+				// Card rows, not a table: the list lives in the fixed-width left rail, where five columns forced a horizontal
+				// scrollbar. Same shape as the chat sidebar's conversation rows.
+				<Stack gap={4} data-testid="gw-definition-rows">
+					{definitions.map((definition) => {
+						const id = definition.id ?? "";
+						const name = definition.name ?? id;
+						const selected = id === selectedId;
+						return (
+							<Paper
+								key={id}
+								p="xs"
+								radius="md"
+								withBorder={selected}
+								bg={selected ? "var(--mantine-primary-color-light)" : "transparent"}
+								data-testid={`gw-definition-row-${id}`}
+								data-selected={selected ? "true" : "false"}
+							>
+								<Group gap={4} wrap="nowrap" align="flex-start">
+									{/* The row's control is a real button so a definition is reachable from the keyboard; the delete
+									    icon sits beside it, not inside it, so it stays its own focus stop. */}
+									<UnstyledButton
+										onClick={() => onSelect(id)}
+										aria-current={selected ? "true" : undefined}
+										style={{ flex: 1, minWidth: 0, textAlign: "inherit" }}
+										data-testid={`gw-definition-open-${id}`}
 									>
-										<Table.Td>
-											{/* The row's own control, not an onClick on the <tr>: a table row is not focusable and a
-											    definition has to be reachable from the keyboard. */}
-											<Group gap={6} wrap="nowrap">
-												<Button
-													variant="subtle"
-													size="compact-sm"
-													px={0}
-													onClick={() => onSelect(id)}
-													data-testid={`gw-definition-open-${id}`}
-												>
-													{name}
-												</Button>
-												{definition.kind === "Chat" ? (
-													<Badge size="xs" variant="light" data-testid={`gw-definition-chat-badge-${id}`}>
-														{t("pages.graphWorkflows.settings.kindOption.Chat", "Chat")}
-													</Badge>
-												) : null}
-											</Group>
-											{definition.description ? (
-												<Text size="xs" c="dimmed">
-													{definition.description}
-												</Text>
-											) : null}
-										</Table.Td>
-										<Table.Td>{definition.nodeCount ?? 0}</Table.Td>
-										<Table.Td>{definition.version ?? 1}</Table.Td>
-										<Table.Td>
-											<Text size="sm" c="dimmed">
-												{formatTimestamp(definition.updatedAtUtc ?? null)}
+										<Group gap={6} wrap="nowrap">
+											<Text fw={600} size="sm" truncate="end" title={name} data-testid={`gw-definition-name-${id}`}>
+												{name}
 											</Text>
-										</Table.Td>
-										<Table.Td>
-											<ActionIcon
-												variant="subtle"
-												color="red"
-												aria-label={t("pages.graphWorkflows.definitions.deleteAria", "Delete {{name}}", { name })}
-												onClick={() => onDelete(id)}
-												data-testid={`gw-definition-delete-${id}`}
-											>
-												<IconTrash size={16} />
-											</ActionIcon>
-										</Table.Td>
-									</Table.Tr>
-								);
-							})}
-						</Table.Tbody>
-					</Table>
-				</Table.ScrollContainer>
+											{definition.kind === "Chat" ? (
+												<Badge size="xs" variant="light" style={{ flexShrink: 0 }} data-testid={`gw-definition-chat-badge-${id}`}>
+													{t("pages.graphWorkflows.settings.kindOption.Chat", "Chat")}
+												</Badge>
+											) : null}
+										</Group>
+										{definition.description ? (
+											<Text size="xs" c="dimmed" truncate="end" title={definition.description}>
+												{definition.description}
+											</Text>
+										) : null}
+										<Text
+											size="xs"
+											c="dimmed"
+											truncate="end"
+											title={formatTimestamp(definition.updatedAtUtc ?? null)}
+											data-testid={`gw-definition-meta-${id}`}
+										>
+											{t("pages.graphWorkflows.definitions.meta", "{{count}} nodes · v{{version}} · updated {{updated}}", {
+												count: definition.nodeCount ?? 0,
+												version: definition.version ?? 1,
+												updated: formatTimestamp(definition.updatedAtUtc ?? null, { month: "short", day: "numeric" }),
+											})}
+										</Text>
+									</UnstyledButton>
+									<ActionIcon
+										variant="subtle"
+										color="red"
+										size="sm"
+										aria-label={t("pages.graphWorkflows.definitions.deleteAria", "Delete {{name}}", { name })}
+										onClick={() => onDelete(id)}
+										data-testid={`gw-definition-delete-${id}`}
+									>
+										<IconTrash size={14} />
+									</ActionIcon>
+								</Group>
+							</Paper>
+						);
+					})}
+				</Stack>
 			) : null}
 		</Stack>
 	);

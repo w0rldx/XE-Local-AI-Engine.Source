@@ -3785,22 +3785,22 @@
 					"unresponsive": "Antwortet nicht auf Statusprüfungen.",
 					"exited": "Der Prozess wurde beendet."
 				},
-				"eject": "Entladen",
-				"ejected": "Modell entladen.",
-				"ejectError": "Das Modell konnte nicht entladen werden.",
+				"eject": "Auswerfen",
+				"ejected": "Modell ausgeworfen.",
+				"ejectError": "Das Modell konnte nicht ausgeworfen werden.",
 				"ejectConfirm": {
-					"title": "Modell entladen",
-					"description": "'{{modelName}}' aus der llama.cpp-Laufzeit entladen? Der Speicher wird freigegeben, nachdem eine laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
-					"action": "Entladen"
+					"title": "Modell auswerfen",
+					"description": "'{{modelName}}' aus der llama.cpp-Laufzeit auswerfen? Der Speicher wird freigegeben, nachdem eine laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+					"action": "Auswerfen"
 				},
 				"forceConfirm": {
-					"title": "Entladen erzwingen?",
+					"title": "Auswerfen erzwingen?",
 					"description": "'{{modelName}}' generiert noch. Trotzdem erzwingen und die laufende Antwort unterbrechen?",
-					"action": "Entladen erzwingen"
+					"action": "Auswerfen erzwingen"
 				},
 				"ejectOutcome": {
-					"ejected": "Modell entladen.",
-					"forced": "Modell entladen — die laufende Generierung wurde unterbrochen.",
+					"ejected": "Modell ausgeworfen.",
+					"forced": "Modell ausgeworfen — die laufende Generierung wurde unterbrochen.",
 					"notRunning": "Dieses Modell lief nicht.",
 					"timedOutStillBusy": "'{{modelName}}' beendet noch eine Antwort und wurde daher weiter ausgeführt."
 				},
@@ -4051,7 +4051,8 @@
 						"TightHint": "Die dauerhaft benötigten Gewichte ({{resident}}) passen nur knapp in das gemessene Budget ({{budget}}). Es wird langsam laufen.",
 						"WontFitHint": "Die dauerhaft benötigten Gewichte ({{resident}}) überschreiten das gemessene Budget ({{budget}}).",
 						"UnknownHint": "Das Speicherbudget dieses Rechners konnte nicht gemessen werden — daher wird keine Aussage getroffen, ob dieses Modell läuft."
-					}
+					},
+					"researchLicense": "Nicht-kommerzielle Forschungslizenz"
 				},
 				"browse": {
 					"title": "Hugging Face durchsuchen",
@@ -4088,7 +4089,8 @@
 							"file": "Datei",
 							"role": "Rolle",
 							"size": "Größe"
-						}
+						},
+						"diffusersLayoutUnsupported": "Dieses Repository speichert das Modell im Diffusers-Layout, das die lokale Bildlaufzeit nicht laden kann. Wähle einen Einzeldatei-Checkpoint im GGUF- oder safetensors-Format."
 					},
 					"modelName": {
 						"label": "Installieren als",
@@ -6221,12 +6223,8 @@
 				"namePlaceholder": "Nächtliche Sichtung",
 				"descriptionLabel": "Beschreibung",
 				"descriptionPlaceholder": "Wozu dieser Workflow dient.",
-				"columns": {
-					"name": "Name",
-					"nodes": "Knoten",
-					"version": "Version",
-					"updated": "Aktualisiert"
-				}
+				"meta_one": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
+				"meta_other": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}"
 			},
 			"run": {
 				"label": "Ablaufgraph",
@@ -7026,8 +7024,6 @@
 				"languageAuto": "Automatisch erkennen",
 				"translateLabel": "Ins Englische übersetzen",
 				"translateDescription": "Die Sprache transkribieren und das Ergebnis ins Englische übersetzen.",
-				"maxWindowLabel": "Aufnahmefenster (Sekunden)",
-				"maxWindowDescription": "Wie viel Audio jedes Live-Segment abdeckt.",
 				"channelAttributionLabel": "Kanäle zuordnen",
 				"channelAttributionDescription": "Jedes Segment dir oder den anderen zuordnen. Benötigt Mikrofon und Systemaudio.",
 				"submit": "Transkribieren",
@@ -7068,8 +7064,8 @@
 					"invalid": "Der verwaltete Build ist ungültig und wird neu gebaut."
 				},
 				"cpuSourceBuildHint": "Transkription läuft auf der CPU. Unter Linux mit NVIDIA-GPU lässt sich in den Knoteneinstellungen eine CUDA-Laufzeit aus dem Quellcode bauen; alle anderen Systeme erhalten bereits eine vorgebaute Binärdatei.",
-				"eject": "Entladen",
-				"ejectFailed": "Die Laufzeit konnte nicht entladen werden.",
+				"eject": "Auswerfen",
+				"ejectFailed": "Die Laufzeit konnte nicht ausgeworfen werden.",
 				"models": {
 					"title": "Modelle",
 					"loadFailed": "Der Modellkatalog für die Transkription konnte nicht geladen werden.",
@@ -7113,6 +7109,16 @@
 				"sendToChat": "An den Chat senden",
 				"processMissing": "Dieser Browser weiß nicht mehr, für welche Anwendung diese Sitzung erstellt wurde; die Aufnahme kann nicht gestartet werden. Erstelle eine neue Sitzung und wähle die Anwendung erneut aus."
 			},
+			"segment": {
+				"edit": "Segmenttext bearbeiten",
+				"textLabel": "Segmenttext",
+				"save": "Speichern",
+				"cancel": "Abbrechen",
+				"saved": "Segmenttext gespeichert.",
+				"failed": "Der Segmenttext konnte nicht gespeichert werden.",
+				"tooLong": "Der Text ist zu lang (höchstens 8000 Zeichen).",
+				"transcribing": "Diese Sitzung wird noch transkribiert; bearbeite sie, sobald sie abgeschlossen ist."
+			},
 			"live": {
 				"hint": "Segmente erscheinen, sobald die Laufzeit sie festschreibt. Audio wird nie gespeichert.",
 				"waiting": "Es wird zugehört — das erste Segment erscheint, sobald genug Sprache aufgenommen wurde.",
@@ -7123,6 +7129,13 @@
 				"start": "Aufnahme starten",
 				"stop": "Aufnahme beenden",
 				"finalizing": "Transkript wird abgeschlossen…",
+				"behind": "Transkription läuft… {{seconds}} s im Rückstand",
+				"finishing": "Die letzten {{seconds}} s werden abgeschlossen…",
+				"startStatus": {
+					"preparing": "Die Transkriptions-Laufzeit wird vorbereitet… beim ersten Mal kann das eine Minute dauern",
+					"loadingModel": "Das Modell wird geladen…",
+					"starting": "Wird gestartet…"
+				},
 				"cancel": "Jetzt abbrechen",
 				"replayStalled": "Der Node sendet keine verpassten Segmente mehr. Das Transkript auf dem Bildschirm ist möglicherweise unvollständig — lade die Seite neu, um es erneut abzurufen.",
 				"error": {
@@ -7131,7 +7144,6 @@
 					"no-device": "Auf diesem Computer wurde kein nutzbares Mikrofon gefunden.",
 					"no-audio-track": "Der geteilte Bildschirm kam ohne Audio zurück. Teile einen ganzen Bildschirm und aktiviere „Audio teilen“.",
 					"worklet-failed": "Die Audio-Engine des Browsers konnte nicht gestartet werden, es wurde nichts aufgenommen.",
-					"overloaded": "Dieser Node konnte dem Audio nicht folgen, die Aufnahme wurde beendet. Alles bisher Festgeschriebene bleibt erhalten.",
 					"start-failed": "Der Node hat diese Live-Sitzung nicht geöffnet. Möglicherweise ist sie bereits beendet.",
 					"disconnected": "Die Live-Verbindung zu diesem Node ist abgerissen, die Aufnahme wurde beendet. Lade die Seite neu und starte erneut.",
 					"subscribeFailed": "Dieser Node hat das Live-Transkript für diese Sitzung nicht geöffnet. Lade die Seite neu, um es erneut zu versuchen.",
@@ -7140,7 +7152,9 @@
 					"capture-not-supported": "Dieser Node kann das Audio einer einzelnen Anwendung nicht aufnehmen. Dafür ist Windows 10 Build 20348 oder neuer nötig.",
 					"session-not-live": "Diese Sitzung war auf dem Node nicht geöffnet, das Anwendungsaudio hätte also nirgendwo hingehen können. Lade die Seite neu und starte erneut.",
 					"capture-already-running": "Diese Sitzung nimmt bereits eine Anwendung auf. Beende sie, bevor du eine weitere startest.",
-					"stop-failed": "Die Aufnahme wurde hier beendet, aber dieser Node hat das nicht bestätigt. Der Stopp wird wiederholt, sobald die Verbindung wieder steht — lass diese Seite geöffnet."
+					"stop-failed": "Die Aufnahme wurde hier beendet, aber dieser Node hat das nicht bestätigt. Der Stopp wird wiederholt, sobald die Verbindung wieder steht — lass diese Seite geöffnet.",
+					"start-timeout": "Das Mikrofon ist innerhalb von 20 Sekunden nicht gestartet. Prüfe die Berechtigungsabfrage des Browsers oder der Desktop-App und starte erneut.",
+					"live-never-attached": "Der Node hat kein Audio empfangen. Prüfe die Mikrofonberechtigung und das Eingabegerät und starte dann erneut."
 				},
 				"notConnected": "Verbindung zu diesem Node wird aufgebaut — Starten ist möglich, sobald die Live-Verbindung steht."
 			}

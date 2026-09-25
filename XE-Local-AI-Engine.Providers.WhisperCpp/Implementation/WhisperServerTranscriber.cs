@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -29,10 +30,17 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
     private static readonly JsonSerializerOptions ResponseSerializerOptions = new(JsonSerializerDefaults.Web);
 
+    // Enough of the daemon's error text to name the failure in a log line, never a whole HTML page.
+    private const int LoggedErrorBodyChars = 300;
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<WhisperServerTranscriber> _logger;
     private readonly WhisperRuntimeOptions _options;
     private readonly IWhisperServerSupervisor _supervisor;
+
+    // ponytail: one latch per transcriber instance, so a node that runs for weeks warns about silent windows once in its
+    // life. Move to a per-session or time-windowed latch if the first warning scrolling away ever hides a regression.
+    private int _silentWindowFallbackWarned;
 
     public WhisperServerTranscriber(IWhisperServerSupervisor supervisor,
         HttpClient httpClient,
@@ -69,7 +77,9 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
         using (lease)
         {
-            var result = await PostInferenceAsync(endpoint, request, ct).ConfigureAwait(false);
+            // A forced language is never detected, whatever the caller asked: there is nothing to learn from the probabilities.
+            var languageProbabilities = request.DetectLanguage && request.LanguageMode != WhisperLanguageMode.Explicit;
+            var result = await PostInferenceAsync(endpoint, request, languageProbabilities, ct).ConfigureAwait(false);
             lease.Touch();
             return result;
         }
@@ -89,8 +99,16 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         throw new WhisperRuntimeException("The transcription runtime changed models while the request was starting.");
     }
 
+    /// <summary>Posts one window to the daemon and maps its verbose JSON onto the contract.</summary>
+    /// <remarks>
+    ///     A request that asked for language probabilities and was answered 500 is retried ONCE, on the same lease, without
+    ///     them. whisper-server (pinned 927cfce, launched with <c>--vad</c>) throws "basic_string: construction from null is
+    ///     not valid" when VAD finds no speech segment AND probabilities are requested; the same audio answers 200 without
+    ///     them. The retry's result carries no detected language, so a caller that wanted one asks again on a later window.
+    /// </remarks>
     private async Task<WhisperTranscriptionResult> PostInferenceAsync(WhisperServerEndpoint endpoint,
         WhisperTranscriptionRequest request,
+        bool languageProbabilities,
         CancellationToken ct)
     {
         // The client carries an infinite timeout on purpose — one client serves requests whose right budgets differ by four orders of magnitude — so every call site owns its own deadline, linked to
@@ -100,7 +118,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
         request.Audio.Seek(offset: 0, SeekOrigin.Begin);
 
-        using var content = BuildMultipartContent(request);
+        using var content = BuildMultipartContent(request, languageProbabilities);
 
         HttpResponseMessage response;
         try
@@ -124,7 +142,28 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
             if (!response.IsSuccessStatusCode)
             {
                 // The body carries the daemon's own error text; it is logged, never surfaced.
-                _logger.LogWarning("whisper-server rejected a transcription request ({StatusCode}).", (int)response.StatusCode);
+                var body = await response.Content.ReadAsStringAsync(inferenceCts.Token).ConfigureAwait(false);
+                var loggedBody = body.Length > LoggedErrorBodyChars ? body[..LoggedErrorBodyChars] : body;
+
+                if (languageProbabilities && response.StatusCode == HttpStatusCode.InternalServerError)
+                {
+                    // Every silent window under auto-detect lands here until a language is learned, so only the first is a Warning.
+                    if (Interlocked.Exchange(ref _silentWindowFallbackWarned, 1) == 0)
+                    {
+                        _logger.LogWarning("whisper-server answered 500 for a window without speech while language probabilities were requested; retrying without them. Later occurrences are logged at Debug. ({Body})",
+                            loggedBody);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("whisper-server answered 500 for a window without speech while language probabilities were requested. ({Body})", loggedBody);
+                    }
+
+                    _logger.LogDebug("Retrying the transcription request once without language probabilities.");
+                    return await PostInferenceAsync(endpoint, request, languageProbabilities: false, ct).ConfigureAwait(false);
+                }
+
+                _logger.LogWarning("whisper-server rejected a transcription request ({StatusCode}): {Body}", (int)response.StatusCode, loggedBody);
+
                 throw new WhisperRuntimeException("The transcription runtime rejected the audio.");
             }
 
@@ -135,7 +174,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         }
     }
 
-    private static MultipartFormDataContent BuildMultipartContent(WhisperTranscriptionRequest request)
+    private static MultipartFormDataContent BuildMultipartContent(WhisperTranscriptionRequest request, bool languageProbabilities)
     {
         var content = new MultipartFormDataContent();
         try
@@ -154,7 +193,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
             // The daemon is launched with language probabilities off because computing them is expensive; this is the
             // per-request switch that turns them back on for the one call that needs a detected language.
-            content.Add(new StringContent(request.DetectLanguage ? "false" : "true"), "no_language_probabilities");
+            content.Add(new StringContent(languageProbabilities ? "false" : "true"), "no_language_probabilities");
 #pragma warning restore CA2000
 
             return content;

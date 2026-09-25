@@ -211,6 +211,59 @@ public sealed class ImageModelDiscoveryTests
     }
 
     [Test]
+    public async Task ImageDiscovery_InspectRepo_FlagsDiffusersLayoutFiles_WithAMachineReadableReason()
+    {
+        // The tester's qwen-image-2.1 import picked transformer/diffusion_pytorch_model.safetensors and sd-server died at
+        // load. Every Diffusers-shaped file carries the reason, including a bare model.safetensors beside its config.json.
+        var detail = """
+                     {
+                       "id": "Qwen/Qwen-Image-2.1",
+                       "sha": "ccc",
+                       "siblings": [
+                         { "rfilename": "model_index.json", "size": 500 },
+                         { "rfilename": "transformer/config.json", "size": 500 },
+                         { "rfilename": "transformer/diffusion_pytorch_model.safetensors", "lfs": { "size": 9000000000 } },
+                         { "rfilename": "text_encoder/config.json", "size": 500 },
+                         { "rfilename": "text_encoder/model.safetensors", "lfs": { "size": 8000000000 } }
+                       ]
+                     }
+                     """;
+
+        using var harness = BuildHarness(repoDetail: detail);
+
+        var result = await harness.Discovery.InspectRepoAsync("Qwen/Qwen-Image-2.1", CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, result.Files.Count);
+        AssertEx.True(result.Files.All(static f => f.UnsupportedReason == ImageWeightLayout.DiffusersLayoutUnsupportedCode));
+        AssertEx.Equal("diffusers_layout_unsupported", ImageWeightLayout.DiffusersLayoutUnsupportedCode, "The code is wire contract.");
+    }
+
+    [Test]
+    public async Task ImageDiscovery_InspectRepo_LeavesSingleFileCheckpointsUnflagged()
+    {
+        // Negative control: a bare model.safetensors with no config.json beside it and no model_index.json in the repo is an
+        // ordinary single-file checkpoint.
+        var detail = """
+                     {
+                       "id": "leejet/Qwen-Image-2.1-GGUF",
+                       "sha": "ddd",
+                       "siblings": [
+                         { "rfilename": "qwen_image_2.1-Q4_K.gguf", "lfs": { "size": 4197494816 } },
+                         { "rfilename": "model.safetensors", "lfs": { "size": 100 } },
+                         { "rfilename": "text_encoder/config.json", "size": 500 }
+                       ]
+                     }
+                     """;
+
+        using var harness = BuildHarness(repoDetail: detail);
+
+        var result = await harness.Discovery.InspectRepoAsync("leejet/Qwen-Image-2.1-GGUF", CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, result.Files.Count);
+        AssertEx.True(result.Files.All(static f => f.UnsupportedReason is null));
+    }
+
+    [Test]
     public async Task ImageDiscovery_InspectRepo_DropsATraversalFileName_SoItNeverReachesAnInstallForm()
     {
         // A repo listing is untrusted input. The store re-checks containment before writing, but a name that could
@@ -281,6 +334,10 @@ public sealed class ImageModelDiscoveryTests
     [Arguments("split_files/text_encoders/qwen_2.5_vl_7b.safetensors", ImageModelPartRole.Llm)]
     [Arguments("Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf", ImageModelPartRole.Llm)]
     [Arguments("Qwen2.5-VL-7B-Instruct.mmproj-f16.gguf", ImageModelPartRole.LlmVision)]
+    [Arguments("Qwen3VL-8B-Instruct-Q4_K_M.gguf", ImageModelPartRole.Llm)]
+    [Arguments("mmproj-Qwen3VL-8B-Instruct-F16.gguf", ImageModelPartRole.LlmVision)]
+    [Arguments("vae/qwen_image_2.1_vae_bf16.safetensors", ImageModelPartRole.Vae)]
+    [Arguments("qwen_image_2.1-Q4_K.gguf", ImageModelPartRole.Diffusion)]
     [Arguments("Qwen_Image-Q4_K_M.gguf", ImageModelPartRole.Diffusion)]
     [Arguments("stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf", ImageModelPartRole.Diffusion)]
     public void SuggestRole_ReadsTheWholeRelativePath_NotJustTheLeaf(string fileName, ImageModelPartRole expected)

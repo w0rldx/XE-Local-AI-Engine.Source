@@ -14,8 +14,20 @@ export const TRANSCRIPTION_SEGMENT_COMMITTED = "transcriptionSegmentCommitted";
 /** `TranscriptPartialUpdatedPush` — one lane's provisional text. Replaced on every update, never accumulated. */
 export const TRANSCRIPTION_PARTIAL_UPDATED = "transcriptionPartialUpdated";
 
-/** `TranscriptionSessionStatusPush` — the session reached a terminal state, or the node reported `Overloaded`. */
+/** `TranscriptionSessionStatusPush` — the session reached a terminal state (`Completed | Cancelled | Abandoned | Failed`). */
 export const TRANSCRIPTION_SESSION_STATUS_CHANGED = "transcriptionSessionStatusChanged";
+
+/**
+ * `TranscriptionCatchUpProgressPush` — how much captured audio the node has buffered but not yet transcribed. Sent at
+ * most once per second of audio consumed while behind, once with 0 when caught up, and once as a graceful drain starts.
+ */
+export const TRANSCRIPTION_CATCH_UP_PROGRESS = "transcriptionCatchUpProgress";
+
+/**
+ * `TranscriptionAdmissionClosedPush` — the node stopped accepting audio for this session and is draining what it has.
+ * Sent once at the start of every graceful end (the buffered-audio cap or a requested Stop), never for Cancel.
+ */
+export const TRANSCRIPTION_ADMISSION_CLOSED = "transcriptionAdmissionClosed";
 
 /**
  * The `int channel` argument of `PushAudioFrame`, matching the backend `TranscriptChannel` enum (Mono 0, You 1,
@@ -68,9 +80,20 @@ export const transcriptionPartialPushSchema = z.object({
 	text: z.string(),
 });
 
+export const transcriptionCatchUpProgressPushSchema = z.object({
+	sessionId: z.string(),
+	bufferedMs: z.number(),
+});
+
+export const transcriptionAdmissionClosedPushSchema = z.object({
+	sessionId: z.string(),
+});
+
 export const transcriptionStatusPushSchema = z.object({
 	sessionId: z.string(),
 	status: z.string(),
+	/** `live-never-attached` (no audio ever arrived; the status reads `Abandoned`) or `live-failed`; null otherwise. */
+	errorCode: z.string().nullish(),
 });
 
 // `TranscriptionSessionSubscriptionSnapshot`. `segments` is the S2 REST DTO verbatim; the row's `id` is not read

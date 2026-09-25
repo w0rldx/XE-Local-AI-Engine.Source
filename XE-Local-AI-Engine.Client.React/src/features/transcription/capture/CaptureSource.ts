@@ -30,11 +30,11 @@ export type CaptureErrorCode =
 	| "no-audio-track"
 	/** `AudioContext` construction or `audioWorklet.addModule` failed. */
 	| "worklet-failed"
-	/** R34a: the hub send limit was hit or the server reported `Overloaded`; frames are never dropped silently. */
-	| "overloaded"
+	/** The microphone (permission prompt, `getUserMedia`, the audio graph) did not start within its bound. */
+	| "start-timeout"
 	/**
-	 * The hub transport is not connected, so the frame could not be sent at all. Handled exactly like `overloaded`
-	 * — capture stops — but it is a different diagnosis, and the diagnosis is the only thing the operator acts on.
+	 * R34a: the hub transport is not connected, so the frame could not be sent at all. Capture stops rather than
+	 * dropping frames silently. It is the only send failure: a node that falls behind buffers and catches up.
 	 */
 	| "disconnected";
 

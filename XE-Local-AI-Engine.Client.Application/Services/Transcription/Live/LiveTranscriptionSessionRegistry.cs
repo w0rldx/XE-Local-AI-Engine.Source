@@ -19,9 +19,6 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 /// </remarks>
 public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSessionRegistry, IAsyncDisposable
 {
-    /// <summary>The ceiling on retained PCM per session, whatever the window size works out to.</summary>
-    public const int MaxPendingBytes = 640 * 1024;
-
     // The clock starts at REGISTRATION, not at the first frame: a session whose microphone permission was denied
     // registers lanes nothing ever feeds, and no browser ever disconnects to arm the abandonment grace.
     private static readonly TimeSpan ProducerAttachmentTimeout = TimeSpan.FromSeconds(60);
@@ -36,11 +33,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private const string FlushFailedErrorMessage =
         "The final window could not be transcribed; the transcript may be missing its last seconds.";
 
-    // Abort cleanup stays short. Graceful draining and final inference share a larger, single session budget.
-    // Shutdown has its own outer bound; persistence already inside the commit gate is never abandoned.
+    // Abort cleanup stays short; a graceful end has no deadline (per request the inference timeout, per lane the stall
+    // detector, and Cancel interrupts it). Shutdown has its own bound; persistence inside the commit gate is never abandoned.
     private static readonly TimeSpan LaneDrainTimeout = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan GracefulFinalizationTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
+
+    // Catch-up progress is reported at most once per this much audio consumed while behind.
+    private const long CatchUpReportBytes = 1_000L * WavPcm16.BytesPerMillisecond;
 
     private readonly ConcurrentDictionary<Guid, LiveSession> _sessions = new();
     private readonly IWhisperTranscriber _transcriber;
@@ -49,6 +48,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private readonly TimeProvider _timeProvider;
     private readonly TranscriptionOptions _options;
     private readonly ILogger<LiveTranscriptionSessionRegistry> _logger;
+    private readonly long _maxBufferedBytes;
     private bool _disposed;
 
     /// <summary>Creates the registry.</summary>
@@ -58,7 +58,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     ///     Resolved at call time: injecting <see cref="ITranscriptionService" /> would close a constructor cycle,
     ///     since it resolves this registry for the one termination path.
     /// </param>
-    /// <param name="options">Carries the abandonment grace.</param>
+    /// <param name="options">Carries the abandonment grace and the buffered-audio safety cap.</param>
     /// <param name="timeProvider">Every timer in this class comes from here; there is no hosted service.</param>
     /// <param name="logger">Ending a session never throws to its caller, so failures are only visible here.</param>
     public LiveTranscriptionSessionRegistry(IWhisperTranscriber transcriber,
@@ -74,6 +74,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _options = options.Value;
+        _maxBufferedBytes = (long)_options.MaxBufferedAudioMb * 1024 * 1024;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -112,10 +113,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             Abort = abort,
             Options = options,
             Lanes = lanes,
-            // Four windows of audio. A lane that is behind drains at one inference per window (see ConsumeAsync), so
-            // the budget measures sustained lag, not one slow request or the runtime's first model load.
-            PendingBudgetBytes = Math.Min((long)options.Settings.MaxWindowSeconds * 4 * WavPcm16.SampleRate * 2, MaxPendingBytes),
-            Seq = options.StartingSeq
+            Seq = options.StartingSeq,
+            StartedAt = _timeProvider.GetUtcNow()
         };
 
         if (!_sessions.TryAdd(sessionId, session))
@@ -159,9 +158,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         // Copied before it is queued and never referenced again: this method returns while the frame is still queued, so an in-process capture source may reuse its
         // buffer at once, and holding the caller's memory would put replacement audio in the transcript. The hub path is safe already (SignalR hands a fresh array per invocation); this seam is not.
         var owned = pcm16.ToArray();
-        var overloaded = false;
+        var capReached = false;
 
-        // Admission, the budget and the queue insertion are ONE critical section, taken on the same gate BeginEnd closes admission under. Splitting them lets a push pass
+        // Admission, the cap check and the queue insertion are ONE critical section, taken on the same gate BeginEnd closes admission under. Splitting them lets a push pass
         // admission, pause, and append to a lane whose chain termination had snapshotted — a second concurrent call into a single-threaded segmenter, after the session was declared over.
         lock (session.Gate)
         {
@@ -175,25 +174,27 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             session.AttachmentTimer?.Dispose();
             session.AttachmentTimer = null;
 
-            // Accounted BEFORE the frame is queued. The lane holds its chain across inference, so a transcriber
-            // slower than real time otherwise accumulates invocations and PCM without any limit at all.
-            if (session.PendingBytes + owned.Length > session.PendingBudgetBytes)
+            // A slow node never ends a session: a lagging lane buffers and catches up at one inference per window. Only the
+            // memory cap ends it, gracefully, and the frame that crossed the cap is still queued, so nothing admitted is dropped.
+            session.PendingBytes += owned.Length;
+            session.ReceivedBytes += owned.Length;
+            lane.QueuedBytes += owned.Length;
+            lane.Chain = ConsumeAsync(session, lane, owned, lane.Chain);
+            if (session.PendingBytes > _maxBufferedBytes && !session.BufferCapReached)
             {
-                overloaded = true;
-            }
-            else
-            {
-                session.PendingBytes += owned.Length;
-                lane.QueuedBytes += owned.Length;
-                lane.Chain = ConsumeAsync(session, lane, owned, lane.Chain);
+                session.BufferCapReached = true;
+                capReached = true;
             }
         }
 
-        if (overloaded)
+        if (capReached)
         {
-            // Not awaited, and outside the gate: the caller is a capture callback, and ending drains lanes. The
-            // frame is refused rather than silently dropped — the session fails visibly instead of going quiet.
-            _ = BeginEnd(session, LiveEndReason.Overloaded);
+            _logger.LogWarning("Live transcription session {SessionId} buffered more than {CapMb} MB of untranscribed audio; stopping it gracefully.",
+                sessionId,
+                _options.MaxBufferedAudioMb);
+
+            // Not awaited, and outside the gate: the caller is a capture callback, and ending drains lanes.
+            _ = BeginEnd(session, LiveEndReason.Completed);
         }
 
         return Task.CompletedTask;
@@ -341,8 +342,6 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             LiveEndReason.Completed => (TranscriptionSessionStatus.Completed, null, null),
             LiveEndReason.Cancelled or LiveEndReason.Abandoned or LiveEndReason.NeverAttached =>
                 (TranscriptionSessionStatus.Cancelled, null, null),
-            LiveEndReason.Overloaded => (TranscriptionSessionStatus.Failed, "live-overloaded",
-                "Audio arrived faster than this node could transcribe it."),
             LiveEndReason.Failed => (TranscriptionSessionStatus.Failed, "live-failed",
                 "The live transcription lane stopped making progress."),
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown live transcription end reason.")
@@ -404,7 +403,21 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         {
             DisarmTimers(session);
 
-            if (reason != LiveEndReason.Completed)
+            if (reason == LiveEndReason.NeverAttached)
+            {
+                // The one end that says the client never delivered anything: a denied permission, a dead input device or
+                // a capture graph that never started. Without this line a stuck browser leaves no trace on the node.
+                _logger.LogWarning("Live transcription session {SessionId} received no audio frame and no producer attached within the {AttachmentTimeout} producer-attachment timeout; ending it.",
+                    session.Id,
+                    ProducerAttachmentTimeout);
+            }
+
+            if (reason == LiveEndReason.Completed)
+            {
+                // Before the producer stop, which may take seconds: the client shows the backlog from the moment it asks to stop.
+                await AnnounceGracefulEndAsync(session);
+            }
+            else
             {
                 // An abort must not wait behind an inference. Cancelling frees every lane at its next cancellation
                 // point, which is what makes stopping prompt even while the transcriber is mid-call.
@@ -424,7 +437,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             var errorMessage = gracefulFailure ? FlushFailedErrorMessage : null;
 
             await CompleteAsync(session, outcome, errorCode, errorMessage);
+            await CloseProgressAsync(session);
             await _publisher.PublishStatusAsync(session.Id, outcome, CancellationToken.None);
+            LogEnded(session, outcome);
         }
 #pragma warning disable CA1031 // Ending a session is the last chance to release it; nothing above may escape.
         catch (Exception exception)
@@ -435,6 +450,61 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         finally
         {
             _ = _sessions.TryRemove(session.Id, out _);
+        }
+    }
+
+    private void LogEnded(LiveSession session, LiveEndReason outcome)
+    {
+        long receivedMs;
+        long consumedMs;
+        lock (session.Gate)
+        {
+            receivedMs = WavPcm16.DurationMs(session.ReceivedBytes);
+            consumedMs = WavPcm16.DurationMs(session.ConsumedBytes);
+        }
+
+        // Finalized: no commit allocates a sequence any more, so Seq is stable without the commit gate.
+        _logger.LogInformation("Live transcription session {SessionId} ended: reason {EndReason}, status {Status}, audio received {ReceivedSeconds:F1} s, consumed {ConsumedSeconds:F1} s, {SegmentCount} segments committed, duration {Duration}.",
+            session.Id,
+            outcome,
+            MapReason(outcome).Status,
+            receivedMs / 1000.0,
+            consumedMs / 1000.0,
+            session.Seq - session.Options.StartingSeq,
+            _timeProvider.GetUtcNow() - session.StartedAt);
+    }
+
+    /// <summary>
+    ///     Publishes admission closed, then the drain-start backlog, as ONE progress-gate section. The snapshot is taken
+    ///     inside it, so a lane finishing a frame meanwhile cannot report ahead of admission closed or be overtaken by a stale backlog.
+    /// </summary>
+    private async Task AnnounceGracefulEndAsync(LiveSession session)
+    {
+        await session.ProgressGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            // First, so the browser stops sending frames that admission would now drop silently.
+            await _publisher.PublishAdmissionClosedAsync(session.Id, CancellationToken.None);
+
+            long bufferedMs;
+            lock (session.Gate)
+            {
+                bufferedMs = WavPcm16.DurationMs(session.PendingBytes);
+                session.ReportedBehind = session.PendingBytes > 0;
+                session.ConsumedWhileBehindBytes = 0;
+            }
+
+            await _publisher.PublishCatchUpAsync(session.Id, bufferedMs, CancellationToken.None);
+        }
+#pragma warning disable CA1031 // Progress is advisory; failing to announce it must not stop the graceful end.
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            _logger.LogWarning(exception, "Announcing the graceful end of transcription session {SessionId} failed.", session.Id);
+        }
+        finally
+        {
+            _ = session.ProgressGate.Release();
         }
     }
 
@@ -492,11 +562,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             return true;
         }
 
-        // One deadline for ALL lanes, including their final inference; producer stopping and persistence are not
-        // included in this budget. Independent lanes finalize concurrently, but each lane drains before it flushes.
-        using var deadline = new CancellationTokenSource(GracefulFinalizationTimeout, _timeProvider);
-        using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, session.Abort.Token);
-        var results = await Task.WhenAll(session.Lanes.Values.Select(lane => FinalizeLaneAsync(session, lane, graceful: true, stop.Token)));
+        // No deadline: the operator asked for the whole transcript. Only an abort (Cancel, shutdown, a failed lane
+        // escalating) interrupts it. Independent lanes finalize concurrently, but each lane drains before it flushes.
+        var results = await Task.WhenAll(session.Lanes.Values.Select(lane => FinalizeLaneAsync(session, lane, graceful: true, session.Abort.Token)));
         return results.All(static clean => clean);
     }
 
@@ -610,6 +678,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         }
 
         bool catchingUp;
+        var consumed = false;
+        long? progress = null;
         lock (session.Gate)
         {
             // Another frame is already queued behind this one: the lane is behind real time.
@@ -621,6 +691,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             var tick = await lane.Segmenter.PushAsync(pcm16, catchingUp, lane.Abort.Token);
             await CommitAsync(session, lane, tick);
             NoteProgress(session, lane, tick);
+            consumed = true;
         }
         catch (OperationCanceledException)
         {
@@ -641,8 +712,91 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 session.PendingBytes -= pcm16.Length;
                 lane.QueuedBytes -= pcm16.Length;
+                if (consumed)
+                {
+                    session.ConsumedBytes += pcm16.Length;
+                }
+
+                // Progress counts audio transcribed, not audio discarded: an abort unwinding its backlog reports nothing.
+                if (consumed && !session.Abort.IsCancellationRequested)
+                {
+                    progress = NextCatchUpReport(session, lane, pcm16.Length);
+                }
             }
         }
+
+        if (progress is { } bufferedMs)
+        {
+            await PublishCatchUpAsync(session, bufferedMs);
+        }
+    }
+
+    /// <summary>Decides, under the session gate, whether consuming one frame is worth a catch-up report.</summary>
+    private static long? NextCatchUpReport(LiveSession session, Lane lane, int consumedBytes)
+    {
+        if (session.PendingBytes == 0)
+        {
+            if (!session.ReportedBehind)
+            {
+                return null;
+            }
+
+            session.ReportedBehind = false;
+            session.ConsumedWhileBehindBytes = 0;
+            return 0;
+        }
+
+        // Only a lane with its own queue is behind; a sibling's frame merely in flight is not lag worth reporting.
+        if (lane.QueuedBytes == 0)
+        {
+            return null;
+        }
+
+        session.ConsumedWhileBehindBytes += consumedBytes;
+        if (session.ConsumedWhileBehindBytes < CatchUpReportBytes)
+        {
+            return null;
+        }
+
+        session.ConsumedWhileBehindBytes = 0;
+        session.ReportedBehind = true;
+        return WavPcm16.DurationMs(session.PendingBytes);
+    }
+
+    /// <summary>
+    ///     Publishes catch-up progress under its own gate, never the commit gate: a lane with nothing to commit must not
+    ///     wait behind a sibling's persistence. <see cref="CloseProgressAsync" /> shuts it before the terminal status.
+    /// </summary>
+    private Task PublishCatchUpAsync(LiveSession session, long bufferedMs) =>
+        PublishProgressAsync(session, () => _publisher.PublishCatchUpAsync(session.Id, bufferedMs, CancellationToken.None), "catch-up progress");
+
+    private async Task PublishProgressAsync(LiveSession session, Func<Task> publish, string what)
+    {
+        await session.ProgressGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            if (!session.ProgressClosed)
+            {
+                await publish();
+            }
+        }
+#pragma warning disable CA1031 // Progress is advisory; failing to report it must not fail the lane that consumed the audio.
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            _logger.LogWarning(exception, "Publishing {Event} for transcription session {SessionId} failed.", what, session.Id);
+        }
+        finally
+        {
+            _ = session.ProgressGate.Release();
+        }
+    }
+
+    private static async Task CloseProgressAsync(LiveSession session)
+    {
+        await session.ProgressGate.WaitAsync(CancellationToken.None);
+        session.ProgressClosed = true;
+        _ = session.ProgressGate.Release();
     }
 
     private async Task CommitAsync(LiveSession session, Lane lane, LiveTick tick)
@@ -787,8 +941,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         /// <summary>
         ///     This lane's cancellation, linked to the session's. Cancelling the session cancels every lane; a lane
-        ///     that misses its drain deadline is cancelled alone, so a sibling that drained cleanly can still flush
-        ///     the speech it was holding.
+        ///     whose finalization faulted is cancelled alone, so a sibling that drained cleanly can still flush the
+        ///     speech it was holding.
         /// </summary>
         public CancellationTokenSource Abort { get; }
 
@@ -817,7 +971,16 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         /// <summary>Retained PCM across every lane, in bytes. Guarded by <see cref="Gate" />, like the queue itself.</summary>
         public long PendingBytes;
 
+        /// <summary>Every admitted byte across lanes, for the end-of-session log line. Guarded by <see cref="Gate" />.</summary>
+        public long ReceivedBytes;
+
+        /// <summary>Admitted bytes a lane actually transcribed. Guarded by <see cref="Gate" />.</summary>
+        public long ConsumedBytes;
+
         public required Guid Id { get; init; }
+
+        /// <summary>Registration time, from the registry's clock.</summary>
+        public required DateTimeOffset StartedAt { get; init; }
 
         public required LiveSessionOptions Options { get; init; }
 
@@ -826,10 +989,23 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         public required IReadOnlyDictionary<TranscriptChannel, Lane> Lanes { get; init; }
 
-        public required long PendingBudgetBytes { get; init; }
+        /// <summary>Set once the buffered-audio cap ended the session, so it warns once. Guarded by <see cref="Gate" />.</summary>
+        public bool BufferCapReached { get; set; }
+
+        /// <summary>Audio consumed while behind since the last catch-up report. Guarded by <see cref="Gate" />.</summary>
+        public long ConsumedWhileBehindBytes { get; set; }
+
+        /// <summary>Whether a non-zero backlog was reported and the caught-up <c>0</c> is still owed. Guarded by <see cref="Gate" />.</summary>
+        public bool ReportedBehind { get; set; }
 
         /// <summary>Allocation, persistence and publication of one commit are one critical section under this.</summary>
         public SemaphoreSlim CommitGate { get; } = new(initialCount: 1, maxCount: 1);
+
+        /// <summary>Orders catch-up reports against the terminal status; guards <see cref="ProgressClosed" />.</summary>
+        public SemaphoreSlim ProgressGate { get; } = new(initialCount: 1, maxCount: 1);
+
+        /// <summary>Set just before the terminal status push; no catch-up report is sent after it.</summary>
+        public bool ProgressClosed { get; set; }
 
         /// <summary>The token an in-host producer stops on.</summary>
         public CancellationTokenSource ProducerCts { get; } = new();

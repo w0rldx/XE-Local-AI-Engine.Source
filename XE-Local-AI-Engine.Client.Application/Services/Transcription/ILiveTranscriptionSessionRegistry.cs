@@ -78,9 +78,6 @@ public enum LiveEndReason
     /// <summary>No audio ever arrived before the producer-attachment deadline — a denied microphone, typically.</summary>
     NeverAttached = 3,
 
-    /// <summary>Audio arrived faster than the lanes consumed it and the pending budget overflowed.</summary>
-    Overloaded = 4,
-
     /// <summary>A lane stopped making progress, or the runtime failed.</summary>
     Failed = 5
 }

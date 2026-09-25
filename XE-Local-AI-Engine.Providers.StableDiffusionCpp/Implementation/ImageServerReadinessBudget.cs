@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// <remarks>
 ///     sd-server binds its listening socket only <em>after</em> the synchronous model load finishes, so the readiness wait is really a
 ///     model-load wait, and a flat budget encodes an assumption about model size: the two minutes that comfortably covers a ~2 GB SD1.5
-///     file is not enough for an ~18 GB Qwen-Image set (diffusion transformer + 7B LLM text encoder + VAE, with the encoder pinned to
+///     file is not enough for the ~10 GB Qwen-Image 2.1 set (4.2 GB DiT + 0.7 GB VAE + 5.0 GB Qwen3-VL-8B encoder pinned to
 ///     CPU), and the operator then sees "did not become ready in time" — a message that blames the model for a budget that was too small.
 /// </remarks>
 internal static class ImageServerReadinessBudget

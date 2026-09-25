@@ -74,6 +74,8 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
 
     public bool LastTranslate { get; private set; }
 
+    public bool LastDetectLanguage { get; private set; }
+
     public async Task<WhisperTranscriptionResult> TranscribeAsync(string modelId, WhisperTranscriptionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -84,6 +86,7 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
         LastLanguageMode = request.LanguageMode;
         LastLanguageCode = request.LanguageCode;
         LastTranslate = request.Translate;
+        LastDetectLanguage = request.DetectLanguage;
         LastStartPosition = request.Audio.Position;
 
         var head = new byte[16];
@@ -364,6 +367,9 @@ internal sealed class GatedTranscriptionSessionStore : ITranscriptionSessionStor
 
     public Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken) =>
         _inner.GetLastSeqAsync(sessionId, cancellationToken);
+
+    public Task<TranscriptSegmentUpdateOutcome> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, long updatedAtUtc, CancellationToken cancellationToken) =>
+        _inner.UpdateSegmentTextAsync(sessionId, seq, text, updatedAtUtc, cancellationToken);
 }
 
 /// <summary>

@@ -5,11 +5,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The five session routes that carry no audio: list, create, get, delete and cancel. The transport is what is
+///     The session routes that carry no audio: list, create, get, delete, cancel and the transcript-row edit. The transport is what is
 ///     under test here — the service behind it is stubbed — so the assertions are about status codes, the paging
 ///     envelope, and who is allowed to call at all.
 /// </summary>
@@ -322,6 +324,133 @@ public sealed class TranscriptionSessionEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Test]
+    public async Task UpdateSegment_WhenUpdated_ReturnsTheRowAndHandsTheServiceTrimmedText()
+    {
+        var sessionId = Guid.NewGuid();
+        using var service = new StubTranscriptionService
+        {
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult
+            {
+                Outcome = UpdateTranscriptSegmentOutcome.Updated,
+                Segment = new TranscriptSegmentView
+                {
+                    Id = Guid.NewGuid(),
+                    Seq = 3,
+                    StartMs = 2_000,
+                    EndMs = 3_000,
+                    Text = "corrected",
+                    Channel = TranscriptChannel.You
+                }
+            }
+        };
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var response = await PutSegmentAsync(factory, client, sessionId, seq: 3, "  corrected  ");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = await ReadJsonAsync(response);
+        AssertEx.Equal(expected: 3L, row.GetProperty("seq").GetInt64());
+        AssertEx.Equal("corrected", row.GetProperty("text").GetString());
+        AssertEx.Equal("You", row.GetProperty("channel").GetString());
+        AssertEx.Equal("corrected", service.LastUpdatedText, "The endpoint stores the trimmed text, the same text the validator measured.");
+        AssertEx.Equal(expected: 3L, service.LastUpdatedSeq);
+    }
+
+    [Test]
+    [Arguments(UpdateTranscriptSegmentOutcome.SessionNotFound)]
+    [Arguments(UpdateTranscriptSegmentOutcome.SegmentNotFound)]
+    public async Task UpdateSegment_WhenSessionOrRowUnknown_ReturnsNotFound(UpdateTranscriptSegmentOutcome outcome)
+    {
+        using var service = new StubTranscriptionService
+        {
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = outcome }
+        };
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var response = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, "corrected");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task UpdateSegment_WhileTranscribing_ReturnsConflictWithReasonCode()
+    {
+        using var service = new StubTranscriptionService
+        {
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionTranscribing }
+        };
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var response = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, "corrected");
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        AssertEx.Equal("session-transcribing", body.GetProperty("reason").GetString(), "The SPA branches on the code, never on the prose.");
+        AssertEx.False(string.IsNullOrWhiteSpace(body.GetProperty("message").GetString()));
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
+    public async Task UpdateSegment_WithBlankText_IsRejectedBeforeTheService(string? text)
+    {
+        using var service = new StubTranscriptionService();
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var response = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, text);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal(expected: 0, service.UpdateSegmentCallCount);
+    }
+
+    [Test]
+    public async Task UpdateSegment_WithTextOverTheLimit_IsRejected_ButTheLimitItselfPasses()
+    {
+        using var service = new StubTranscriptionService
+        {
+            UpdateSegmentResult = new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound }
+        };
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        // Padding around the limit proves the length is measured after trimming.
+        using var atLimit = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, $"  {new string('a', 8000)}  ");
+        using var overLimit = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, new string('a', 8001));
+
+        AssertEx.Equal(HttpStatusCode.NotFound, atLimit.StatusCode, "8000 characters after trimming reaches the service.");
+        AssertEx.Equal(HttpStatusCode.BadRequest, overLimit.StatusCode);
+        AssertEx.Equal(expected: 1, service.UpdateSegmentCallCount);
+    }
+
+    [Test]
+    public async Task UpdateSegment_WithNonPositiveSeq_IsRejected()
+    {
+        using var service = new StubTranscriptionService();
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var response = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 0, "corrected");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "Sequences ascend from one; zero is never a row.");
+        AssertEx.Equal(expected: 0, service.UpdateSegmentCallCount);
+    }
+
+    private static async Task<HttpResponseMessage> PutSegmentAsync(TestServerWebAppFactory factory, HttpClient client, Guid sessionId, long seq, string? text)
+    {
+        using var request = Authorized(factory, HttpMethod.Put, $"{ApiPrefix}/transcription/sessions/{sessionId}/segments/{seq}");
+        request.Content = JsonContent.Create(new
+        {
+            text
+        });
+        return await client.SendAsync(request);
+    }
+
     /// <summary>
     ///     Every route the slice adds, as request factories — a <see cref="HttpRequestMessage" /> cannot be sent twice,
     ///     and the authorization tests send each route under two different principals.
@@ -342,6 +471,13 @@ public sealed class TranscriptionSessionEndpointTests
             ("GET transcription/sessions/{id}", () => new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}")),
             ("DELETE transcription/sessions/{id}", () => new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/transcription/sessions/{sessionId}")),
             ("POST transcription/sessions/{id}/cancel", () => new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/cancel")),
+            ("PUT transcription/sessions/{id}/segments/{seq}", () => new HttpRequestMessage(HttpMethod.Put, $"{ApiPrefix}/transcription/sessions/{sessionId}/segments/1")
+            {
+                Content = JsonContent.Create(new
+                {
+                    text = "corrected"
+                })
+            }),
 
             // An empty multipart body, so the operator control reaches the handler's own "a file is required" answer
             // rather than a content-type rejection that would prove nothing about authorization.

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -214,6 +215,101 @@ public sealed class WhisperServerTranscriberTests
         AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
     }
 
+    // whisper-server 927cfce with --vad answers 500 ("basic_string: construction from null is not valid") when VAD finds
+    // no speech AND language probabilities were asked for; the same audio is a 200 without them.
+    [Test]
+    public async Task Transcribe_DetectingALanguage_RetriesA500OnceWithoutProbabilitiesAndReportsNoLanguage()
+    {
+        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
+            (HttpStatusCode.OK, SilentPayload)));
+
+        var result = await harness.TranscribeAsync(detectLanguage: true);
+
+        AssertEx.Equal(expected: 2, harness.Handler.CallCount);
+        AssertEx.Equal(expected: 2, harness.Handler.RequestBodies.Count);
+        AssertEx.Equal("false", NoLanguageProbabilities(harness.Handler.RequestBodies[0]), "The first request asks for probabilities.");
+        AssertEx.Equal("true", NoLanguageProbabilities(harness.Handler.RequestBodies[1]), "The retry does not.");
+        AssertEx.Contains(harness.Handler.RequestBodies[1], "RIFFxxxxWAVE", StringComparison.Ordinal);
+        AssertEx.Null(result.DetectedLanguageCode, "A result without probabilities detects nothing; a later window asks again.");
+        AssertEx.Empty(result.Segments);
+        AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
+    }
+
+    // 60 s of silence under auto-detect is 60 fallbacks: the first is worth a Warning, the rest are not.
+    [Test]
+    public async Task Transcribe_SilentWindowFallback_WarnsOnceThenLogsAtDebug()
+    {
+        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
+            (HttpStatusCode.OK, SilentPayload),
+            (HttpStatusCode.InternalServerError, NullStringError),
+            (HttpStatusCode.OK, SilentPayload)));
+
+        _ = await harness.TranscribeAsync(detectLanguage: true);
+        _ = await harness.TranscribeAsync(detectLanguage: true);
+
+        var entries = harness.Logger.Entries;
+        AssertEx.Equal(expected: 1, entries.Count(static entry => entry.Level == LogLevel.Warning), "One Warning for the whole transcriber.");
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "Later occurrences are logged at Debug"), "The Warning explains itself.");
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Debug, NullStringError), "The later occurrence still names the daemon's error.");
+        AssertEx.Equal(expected: 2, entries.Count(static entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith("Retrying", StringComparison.Ordinal)),
+            "One Debug retry line per window.");
+    }
+
+    [Test]
+    public async Task Transcribe_ARejectionThatIsNotRetried_WarnsWithTheBodyEveryTime()
+    {
+        await using var harness = new TranscriberHarness(NullStringError, HttpStatusCode.InternalServerError);
+
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
+
+        AssertEx.Equal(expected: 2, harness.Logger.Entries.Count(static entry => entry.Level == LogLevel.Warning
+                                                                                 && entry.Message.Contains("rejected a transcription request (500): basic_string", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task Transcribe_DetectingALanguage_WhenTheRetryFailsToo_ThrowsTheRejection()
+    {
+        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
+            (HttpStatusCode.InternalServerError, NullStringError)));
+
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: true));
+
+        AssertEx.Contains(exception.Message, "rejected the audio", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 2, harness.Handler.CallCount, "Retried once, never twice.");
+        AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "rejected a transcription request (500): basic_string"),
+            "The failed retry keeps its own Warning with the body.");
+    }
+
+    [Test]
+    public async Task Transcribe_WithAnExplicitLanguage_NeverAsksForProbabilitiesAndDoesNotRetry()
+    {
+        await using var harness = new TranscriberHarness(NullStringError, HttpStatusCode.InternalServerError);
+
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: true,
+            static request => request with
+            {
+                LanguageMode = WhisperLanguageMode.Explicit,
+                LanguageCode = "en"
+            }));
+
+        AssertEx.Equal(expected: 1, harness.Handler.CallCount, "Nothing to fall back from: probabilities were never asked for.");
+        AssertEx.Equal("true", NoLanguageProbabilities(AssertEx.NotNull(harness.Handler.LastRequestBody)));
+    }
+
+    [Test]
+    [Arguments(false, HttpStatusCode.InternalServerError)]
+    [Arguments(true, HttpStatusCode.BadRequest)]
+    public async Task Transcribe_OtherRejections_AreNotRetried(bool detectLanguage, HttpStatusCode status)
+    {
+        await using var harness = new TranscriberHarness(NullStringError, status);
+
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage));
+
+        AssertEx.Equal(expected: 1, harness.Handler.CallCount);
+    }
+
     [Test]
     public async Task Transcribe_WhenTheRuntimeIsUnreachable_ThrowsTypedAndReleasesTheLease()
     {
@@ -265,6 +361,32 @@ public sealed class WhisperServerTranscriberTests
     ///     Doubles cross a JSON boundary here, so an exact comparison would assert the serializer's rounding rather
     ///     than the mapping. The tolerance is far tighter than any mapping error could be.
     /// </summary>
+    private const string NullStringError = "basic_string: construction from null is not valid";
+
+    private const string SilentPayload = """{"text":"","duration":1.0,"segments":[]}""";
+
+    private static Func<HttpRequestMessage, HttpResponseMessage> Sequence(params (HttpStatusCode Status, string Body)[] responses)
+    {
+        var next = 0;
+        return _ =>
+        {
+            var (status, body) = responses[Math.Min(next++, responses.Length - 1)];
+            return new HttpResponseMessage(status)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+        };
+    }
+
+    /// <summary>The value of the multipart field, read off the recorded body.</summary>
+    private static string NoLanguageProbabilities(string body)
+    {
+        var name = body.IndexOf("name=no_language_probabilities", StringComparison.Ordinal);
+        AssertEx.True(name >= 0, "The field is always sent.");
+        var start = body.IndexOf("\r\n\r\n", name, StringComparison.Ordinal) + 4;
+        return body[start..body.IndexOf("\r\n", start, StringComparison.Ordinal)];
+    }
+
     private static void AssertClose(double expected, double? actual, string what)
     {
         AssertEx.True(actual is { } value && Math.Abs(value - expected) < 1e-6,
@@ -297,10 +419,12 @@ public sealed class WhisperServerTranscriberTests
             };
 
             Supervisor = new FakeTranscriptionSupervisor();
-            Transcriber = new WhisperServerTranscriber(Supervisor, _httpClient, new WhisperRuntimeOptions());
+            Transcriber = new WhisperServerTranscriber(Supervisor, _httpClient, new WhisperRuntimeOptions(), Logger);
         }
 
         public RecordingHandler Handler { get; }
+
+        public RecordingLogger<WhisperServerTranscriber> Logger { get; } = new();
 
         public FakeTranscriptionSupervisor Supervisor { get; }
 
@@ -343,6 +467,8 @@ public sealed class WhisperServerTranscriberTests
 
         public string? LastRequestBody { get; private set; }
 
+        public List<string> RequestBodies { get; } = [];
+
         public Uri? LastRequestUri { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -352,6 +478,10 @@ public sealed class WhisperServerTranscriberTests
             LastRequestBody = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
+            if (LastRequestBody is not null)
+            {
+                RequestBodies.Add(LastRequestBody);
+            }
 
             return _responder(request);
         }

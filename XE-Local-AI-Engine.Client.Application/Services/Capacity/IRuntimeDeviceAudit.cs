@@ -21,6 +21,15 @@ public interface IRuntimeDeviceAudit
     /// </summary>
     Task<RuntimeDeviceAuditState> GetAuditAsync(bool forceRefresh, CancellationToken ct);
 
+    /// <summary>
+    ///     The memoized DETERMINATE audit, or <see langword="null" /> when none is cached or the cache is stale. Never probes, never blocks:
+    ///     safe on a synchronous spawn path.
+    /// </summary>
+    RuntimeDeviceAuditState? PeekCached()
+    {
+        return null;
+    }
+
     /// <summary>The EFFECTIVE hardware profile the advisor and capacity gate must size against.</summary>
     /// <remarks>
     ///     The raw profile — its live free figures re-probed when <paramref name="forceRefreshProfile" /> is set — degraded to CPU-mode (VRAM

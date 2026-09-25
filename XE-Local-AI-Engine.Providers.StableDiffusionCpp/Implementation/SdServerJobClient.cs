@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// </summary>
 /// <remarks>
 ///     Prompts pass through the request body but are NEVER logged here. Frozen field-level against
-///     stable-diffusion.cpp @ <c>master-742-1a13107</c>.
+///     stable-diffusion.cpp @ <c>master-913-b167b94</c>.
 /// </remarks>
 internal sealed class SdServerJobClient
 {

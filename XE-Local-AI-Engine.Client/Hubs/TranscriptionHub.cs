@@ -18,6 +18,10 @@ public static class TranscriptionHubEvents
     public const string PartialUpdated = "transcriptionPartialUpdated";
 
     public const string SessionStatusChanged = "transcriptionSessionStatusChanged";
+
+    public const string CatchUpProgress = "transcriptionCatchUpProgress";
+
+    public const string AdmissionClosed = "transcriptionAdmissionClosed";
 }
 
 /// <summary>
@@ -103,6 +107,9 @@ public sealed class TranscriptionSessionStatusPush
     public required Guid SessionId { get; init; }
 
     public required string Status { get; init; }
+
+    /// <summary><c>live-never-attached</c> or <c>live-failed</c> when the status alone does not say why; otherwise null.</summary>
+    public string? ErrorCode { get; init; }
 }
 
 /// <summary>
@@ -283,6 +290,12 @@ public sealed class TranscriptionHub : Hub
         // made here or "never silently dropped" would not hold.
         if (!_live.IsLive(sessionId))
         {
+            if (_live.IsRegistered(sessionId))
+            {
+                // Draining after a Stop or the buffered-audio cap: a refusal makes the client abort, which cancels the drain.
+                return;
+            }
+
             throw new HubException(TranscriptionHubErrors.NotTranscribing);
         }
 

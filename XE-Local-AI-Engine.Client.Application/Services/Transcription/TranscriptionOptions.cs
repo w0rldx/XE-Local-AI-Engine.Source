@@ -41,4 +41,15 @@ public sealed class TranscriptionOptions
     /// </remarks>
     [Range(1, 3_600)]
     public int AbandonedSessionGraceSeconds { get; init; } = 60;
+
+    /// <summary>
+    ///     The safety cap, in MiB, on one live session's queued-but-untranscribed audio across all its lanes.
+    /// </summary>
+    /// <remarks>
+    ///     A lane that falls behind buffers in memory and catches up; nothing ends a session for being slow. Only this
+    ///     cap does, and gracefully (<c>Completed</c>, draining what is queued). 512 MiB is about 4.6 hours of one mono
+    ///     lane. Audio is never written to disk.
+    /// </remarks>
+    [Range(16, 1_048_576)]
+    public int MaxBufferedAudioMb { get; init; } = 512;
 }

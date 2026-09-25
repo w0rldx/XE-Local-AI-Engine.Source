@@ -16,7 +16,8 @@ public sealed class ImageFamilyDefaultsTests
     [Arguments(ImageModelFamily.Sdxl, 25, 7.0, "euler_a")]
     [Arguments(ImageModelFamily.Sd3, 28, 4.5, "euler")]
     [Arguments(ImageModelFamily.Flux, 4, 1.0, "euler")]
-    [Arguments(ImageModelFamily.QwenImage, 20, 2.5, "euler")]
+    // Qwen-Image 2.1: CFG 6.0 + euler per sd.cpp docs/qwen_image_2.1.md; 40 steps per the QwenLM/Qwen-Image-2.1 model card.
+    [Arguments(ImageModelFamily.QwenImage, 40, 6.0, "euler")]
     public void For_ReturnsTheFamilysStartingParameters(ImageModelFamily family, int steps, double cfgScale, string sampler)
     {
         var defaults = ImageFamilyDefaults.For(family);

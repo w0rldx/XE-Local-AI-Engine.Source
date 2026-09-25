@@ -54,7 +54,8 @@ public sealed class InspectImageRepositoryEndpoint : Endpoint<InspectImageReposi
                             FileName = file.FileName,
                             Format = file.Format.ToString(),
                             SizeBytes = file.SizeBytes,
-                            SuggestedRole = file.SuggestedRole.ToString()
+                            SuggestedRole = file.SuggestedRole.ToString(),
+                            UnsupportedReason = file.UnsupportedReason
                         })
                     ]
                 },

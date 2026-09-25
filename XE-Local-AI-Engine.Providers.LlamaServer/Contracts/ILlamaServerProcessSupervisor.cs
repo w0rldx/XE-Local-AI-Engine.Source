@@ -171,6 +171,16 @@ public interface ILlamaServerProcessSupervisor
     int CountRunningProcesses();
 
     /// <summary>
+    ///     The live processes normal inference can reuse: not exited, not being torn down, not a profiling run's own
+    ///     transient process.
+    /// </summary>
+    /// <remarks>A synchronous in-memory read of the process table with NO health or HTTP probe, safe on a per-send path.</remarks>
+    IReadOnlyList<LlamaServerRunningProcess> ListRunningProcesses()
+    {
+        return [];
+    }
+
+    /// <summary>
     ///     Live runtime facts for the running <c>(model, role)</c> process — currently the effective context window it
     ///     loaded, read from <c>/props</c> after readiness. A synchronous in-memory read with no HTTP.
     /// </summary>

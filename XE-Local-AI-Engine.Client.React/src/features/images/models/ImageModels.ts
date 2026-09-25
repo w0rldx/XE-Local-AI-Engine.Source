@@ -267,6 +267,8 @@ export interface ImageRepositoryFileView {
 	format: string;
 	sizeBytes: number;
 	suggestedRole: ImageModelPartRole;
+	/** Why this file cannot be the Diffusion part (today only `diffusers_layout_unsupported`); absent/null = usable. */
+	unsupportedReason?: string | null;
 }
 
 export function toImageRepositoryFileView(dto: ImageRepositoryFileResponse): ImageRepositoryFileView {
@@ -275,6 +277,7 @@ export function toImageRepositoryFileView(dto: ImageRepositoryFileResponse): Ima
 		format: dto.format,
 		sizeBytes: dto.sizeBytes,
 		suggestedRole: toImageModelPartRole(dto.suggestedRole),
+		unsupportedReason: dto.unsupportedReason ?? null,
 	};
 }
 

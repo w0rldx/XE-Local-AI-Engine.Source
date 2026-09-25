@@ -23148,6 +23148,95 @@
         ]
       }
     },
+    "/api/local/v1/transcription/sessions/{sessionId}/segments/{seq}": {
+      "put": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "updateTranscriptSegment",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateTranscriptSegmentRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptSegmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptSegmentUpdateBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/tutorial-state": {
       "get": {
         "tags": [
@@ -35612,6 +35701,10 @@
           },
           "suggestedRole": {
             "type": "string"
+          },
+          "unsupportedReason": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -44922,6 +45015,22 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptSegmentUpdateBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto": {
         "type": "string",
         "description": "",
@@ -45471,6 +45580,15 @@
           },
           "ffmpegRequired": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
           }
         }
       },

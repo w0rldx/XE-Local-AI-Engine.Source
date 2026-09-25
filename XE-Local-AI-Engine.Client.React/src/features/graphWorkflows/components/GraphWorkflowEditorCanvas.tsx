@@ -274,6 +274,9 @@ function GraphWorkflowEditorCanvasInner({
 					onDrop={onDrop}
 					onDragOver={onDragOver}
 					fitView={true}
+					// A drop within 40 px of a handle snaps to it (React Flow's default is 20), so an edge does not have to
+					// land on the dot itself.
+					connectionRadius={40}
 					minZoom={0.1}
 					deleteKeyCode={["Delete", "Backspace"]}
 					proOptions={{ hideAttribution: true }}

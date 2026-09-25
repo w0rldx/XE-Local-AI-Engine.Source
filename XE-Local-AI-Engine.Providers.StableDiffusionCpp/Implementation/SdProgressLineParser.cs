@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// </summary>
 /// <remarks>
 ///     The rate token is the anchor, NOT the fraction: three different sd.cpp lines carry an <c>N/M</c> pair and only the one ending in
-///     a per-iteration rate is a sampler step. Verified against the pinned build <c>master-742-1a13107</c> by running the daemon and
-///     hexdumping a real generation, the same capture that pinned the framing in <see cref="SdOutputFrameSplitter" />. See
+///     a per-iteration rate is a sampler step. Captured by hexdump at <c>master-742-1a13107</c> (the capture behind
+///     <see cref="SdOutputFrameSplitter" />); the printer and anchor lines are source-identical at <c>master-913-b167b94</c>. See
 ///     docs/wiki/14-image-generation.md ("The rate token is the anchor, not the fraction").
 /// </remarks>
 internal static partial class SdProgressLineParser

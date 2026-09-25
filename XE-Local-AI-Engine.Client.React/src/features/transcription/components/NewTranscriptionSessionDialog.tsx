@@ -4,7 +4,6 @@ import {
 	Button,
 	FileInput,
 	Group,
-	NumberInput,
 	Progress,
 	SegmentedControl,
 	Select,
@@ -39,7 +38,6 @@ export interface NewTranscriptionSessionValues {
 	/** null while the language is auto-detected — the field is absent from the request rather than empty. */
 	readonly languageOverride: string | null;
 	readonly translate: boolean;
-	readonly maxWindowSeconds: number;
 	readonly channelAttribution: boolean;
 	/** null for a live session: there is no upload, the audio arrives over the hub. */
 	readonly file: File | null;
@@ -63,7 +61,6 @@ interface NewTranscriptionSessionDialogProps {
 	readonly onSubmit: (values: NewTranscriptionSessionValues) => void;
 }
 
-const DEFAULT_MAX_WINDOW_SECONDS = 5;
 const AUTO_LANGUAGE = "auto";
 // Chrome enumerates the operating-system default input under the literal deviceId "default" (and "communications"),
 // so the sentinel for "let the browser choose" must be a value no browser can hand back: Mantine's Select throws on a
@@ -144,7 +141,6 @@ export function NewTranscriptionSessionDialog({
 	const [devices, setDevices] = useState<readonly AudioInputDevice[]>([]);
 	const [language, setLanguage] = useState(AUTO_LANGUAGE);
 	const [translate, setTranslate] = useState(false);
-	const [maxWindowSeconds, setMaxWindowSeconds] = useState(DEFAULT_MAX_WINDOW_SECONDS);
 	const [channelAttribution, setChannelAttribution] = useState(false);
 	const [file, setFile] = useState<File | null>(null);
 	const [processId, setProcessId] = useState<number | null>(null);
@@ -189,7 +185,6 @@ export function NewTranscriptionSessionDialog({
 		setDeviceId(DEFAULT_DEVICE);
 		setLanguage(AUTO_LANGUAGE);
 		setTranslate(false);
-		setMaxWindowSeconds(DEFAULT_MAX_WINDOW_SECONDS);
 		setChannelAttribution(false);
 		setFile(null);
 		setProcessId(null);
@@ -220,7 +215,6 @@ export function NewTranscriptionSessionDialog({
 			languageMode: language === AUTO_LANGUAGE ? "auto" : "override",
 			languageOverride: language === AUTO_LANGUAGE ? null : language,
 			translate,
-			maxWindowSeconds,
 			channelAttribution,
 			file: stagedFile,
 			deviceId: chosenDevice,
@@ -366,17 +360,6 @@ export function NewTranscriptionSessionDialog({
 					description={t("pages.transcription.dialog.translateDescription")}
 					data-testid="new-transcription-session-translate"
 				/>
-				{isFileSource ? null : (
-					<NumberInput
-						value={maxWindowSeconds}
-						onChange={(value) => setMaxWindowSeconds(typeof value === "number" ? value : DEFAULT_MAX_WINDOW_SECONDS)}
-						min={2}
-						max={10}
-						label={t("pages.transcription.dialog.maxWindowLabel")}
-						description={t("pages.transcription.dialog.maxWindowDescription")}
-						data-testid="new-transcription-session-max-window"
-					/>
-				)}
 				{isSubmitting ? (
 					<Progress
 						value={uploadProgressPercent}

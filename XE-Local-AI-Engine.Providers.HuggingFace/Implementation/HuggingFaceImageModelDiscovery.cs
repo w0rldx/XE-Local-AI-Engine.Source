@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -17,7 +16,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     are exactly the parts a multi-part install needs. <b><c>.safetensors</c> counts:</b> stable-diffusion.cpp loads both containers,
 ///     and real file-sets mix them (a GGUF diffusion transformer next to a <c>.safetensors</c> VAE).
 /// </remarks>
-internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscovery
+internal sealed class HuggingFaceImageModelDiscovery : IImageModelDiscovery
 {
     /// <summary>The Hub task facet that identifies a diffusion model. This is what makes the search return images.</summary>
     private const string TextToImagePipelineTag = "text-to-image";
@@ -93,6 +92,7 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
             };
         }
 
+        var repoFileNames = detail.Files.Select(static file => file.FileName).ToList();
         var files = new List<ImageRepoFile>();
         foreach (var file in detail.Files)
         {
@@ -108,7 +108,10 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
                 Format = ResolveFormat(file.FileName),
                 SizeBytes = file.SizeBytes,
                 Sha256 = file.Sha256,
-                SuggestedRole = SuggestRole(file.FileName)
+                SuggestedRole = SuggestRole(file.FileName),
+                UnsupportedReason = ImageWeightLayout.IsUnloadableDiffusionFile(file.FileName, repoFileNames)
+                    ? ImageWeightLayout.DiffusersLayoutUnsupportedCode
+                    : null
             });
         }
 
@@ -173,9 +176,10 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
             return ImageModelPartRole.T5;
         }
 
-        // Qwen-Image conditions on a full Qwen2.5-VL language model rather than a CLIP/T5 encoder, so anything that
-        // looks like a VL/text-encoder LLM rides the Llm role (sd-server's --llm).
-        if (Contains(path, "qwen2.5-vl") || Contains(path, "qwen_2.5_vl") || Contains(path, "qwen2_5_vl") || Contains(path, "text_encoder"))
+        // Qwen-Image conditions on a full Qwen2.5-VL (2.1: Qwen3-VL) language model rather than a CLIP/T5 encoder, so
+        // anything that looks like a VL/text-encoder LLM rides the Llm role (sd-server's --llm).
+        if (Contains(path, "qwen2.5-vl") || Contains(path, "qwen_2.5_vl") || Contains(path, "qwen2_5_vl") || Contains(path, "qwen3vl")
+            || Contains(path, "qwen3-vl") || Contains(path, "text_encoder"))
         {
             return ImageModelPartRole.Llm;
         }
@@ -207,33 +211,12 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
     // re-applies before writing — filtering here just keeps an unusable name from ever reaching a picker.
     private static bool IsUsableWeightFile(string fileName)
     {
-        return IsWeightFileName(fileName) && !IsShardMember(fileName) && GgufFilePath.IsSafeRelativePath(fileName);
+        return IsWeightFileName(fileName) && !ImageWeightLayout.IsShardMember(fileName) && GgufFilePath.IsSafeRelativePath(fileName);
     }
 
     private static bool IsWeightFileName(string fileName)
     {
         return fileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
                || fileName.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    ///     Matches the two shard conventions a large diffusion quant ships under: llama.cpp's
-    ///     <c>-00001-of-00003.gguf</c> splits and the Hugging Face <c>-00001-of-00003.safetensors</c> convention.
-    /// </summary>
-    /// <remarks>
-    ///     Sharded weight files are excluded on purpose, rather than grouped the way <c>HuggingFaceGgufDiscovery.GroupShards</c> does: a
-    ///     part is ONE file, since <see cref="ImageModelPartRequest.FileName" /> is a single string and the store downloads exactly one
-    ///     blob per role, so a shard member would install a fragment that cannot be loaded. Filtering them out of both search and
-    ///     inspection beats letting a picker offer a broken install; supporting them means making a part a list of files end-to-end
-    ///     (request, store, registry, argument builder), a change well beyond discovery.
-    /// </remarks>
-    [GeneratedRegex(@"-\d{5}-of-\d{5}\.(?:gguf|safetensors)$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: 2000)]
-    private static partial Regex ShardSuffixRegex();
-
-    internal static bool IsShardMember(string fileName)
-    {
-        return ShardSuffixRegex().IsMatch(fileName);
     }
 }

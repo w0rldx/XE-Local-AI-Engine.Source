@@ -115,7 +115,15 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 	const duplicateRole = selectedFiles.length !== new Set(selectedFiles.map((file) => selection[file.fileName])).size;
 	const trimmedName = modelName.trim();
 	const isNameTaken = installedModelNames.some((name) => name.toLowerCase() === trimmedName.toLowerCase());
-	const canInstall = openRepoId !== null && trimmedName.length > 0 && hasDiffusion && !duplicateRole && !isNameTaken;
+	// Every file flagged = nothing here can be the Diffusion part, so the repo as a whole is not installable.
+	const allUnsupported = files.length > 0 && files.every((file) => file.unsupportedReason);
+	const canInstall =
+		openRepoId !== null && trimmedName.length > 0 && hasDiffusion && !duplicateRole && !isNameTaken && !allUnsupported;
+	// ponytail: one message for every reason code; the backend emits only `diffusers_layout_unsupported` today.
+	const unsupportedMessage = t(
+		"pages.images.models.browse.files.diffusersLayoutUnsupported",
+		"This repository stores the model in Diffusers layout, which the local image runtime cannot load. Pick a single-file GGUF or safetensors checkpoint.",
+	);
 
 	const handleInstall = useCallback(() => {
 		if (openRepoId === null || !canInstall) {
@@ -216,6 +224,16 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 						</Text>
 					) : (
 						<>
+							{allUnsupported ? (
+								<Alert
+									variant="light"
+									color="orange"
+									icon={<IconAlertTriangle size={16} />}
+									data-testid="image-model-browse-files-unsupported"
+								>
+									{unsupportedMessage}
+								</Alert>
+							) : null}
 							<Alert variant="light" color="gray" data-testid="image-model-browse-files-hint">
 								{t(
 									"pages.images.models.browse.files.hint",
@@ -235,11 +253,16 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 									<Table.Tbody>
 										{files.map((file) => {
 											const picked = selection[file.fileName];
+											const unsupported = Boolean(file.unsupportedReason);
+											// A flagged file cannot be the Diffusion part. If Diffusion is also what it would be ticked as,
+											// there is no role to tick it under, so the checkbox is off too; other roles stay pickable.
+											const blocked = unsupported && file.suggestedRole === "Diffusion";
 											return (
 												<Table.Tr key={file.fileName} data-testid={`image-model-browse-file-${file.fileName}`}>
 													<Table.Td>
 														<Checkbox
 															checked={picked !== undefined}
+															disabled={blocked}
 															aria-label={file.fileName}
 															onChange={(event) => toggleFile(file, event.currentTarget.checked)}
 															data-testid={`image-model-browse-file-check-${file.fileName}`}
@@ -249,6 +272,12 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 														<Text size="xs" style={{ wordBreak: "break-all" }}>
 															{file.fileName}
 														</Text>
+														{/* Said once for the whole repo when every file is flagged, not repeated on each row. */}
+														{unsupported && !allUnsupported ? (
+															<Text size="xs" c="orange" data-testid={`image-model-browse-file-unsupported-${file.fileName}`}>
+																{unsupportedMessage}
+															</Text>
+														) : null}
 													</Table.Td>
 													<Table.Td>
 														<Select
@@ -261,6 +290,7 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 															data={imageModelPartRoles.map((role) => ({
 																value: role,
 																label: t(`pages.images.models.partRoles.${role}`, role),
+																disabled: unsupported && role === "Diffusion",
 															}))}
 															value={picked ?? file.suggestedRole}
 															allowDeselect={false}

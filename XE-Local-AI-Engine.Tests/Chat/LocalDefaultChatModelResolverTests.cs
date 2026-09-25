@@ -6,6 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -19,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     - A GGUF with DetectedKind=Embedding (and no override) is excluded.
 ///     - A GGUF with OverrideKind=Embedding overrides a Chat detected kind and is excluded.
 ///     - A GGUF with OverrideKind=Chat overrides an Embedding detected kind and is eligible.
+///     - A model resident in a llama.cpp Chat-role process outranks all of the above, if it is an installed chat model.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalDefaultChatModelResolverTests
@@ -246,13 +249,110 @@ public sealed class LocalDefaultChatModelResolverTests
         AssertEx.Equal("nomic-embed-chat:Q4_K_M", resolved);
     }
 
+    [Test]
+    public async Task ResolveAsync_WhenAChatModelIsResident_PrefersItOverThePersistedDefault()
+    {
+        // The tester's case: a big chat model is loaded, the node default is a different small one. Reusing the loaded
+        // one avoids a second process the capacity gate would refuse.
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("bartowski/Small-GGUF:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
+            Gguf("unsloth/Big-GGUF:UD-Q2_K_XL", DateTimeOffset.UnixEpoch)
+        ];
+        var resolver = CreateResolver([], installed, Resident("UNSLOTH/big-GGUF:UD-Q2_K_XL", ModelRole.Chat, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "bartowski/Small-GGUF:Q4_K_M");
+
+        AssertEx.Equal("unsloth/Big-GGUF:UD-Q2_K_XL", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheResidentProcessIsNotChatRole_IgnoresIt()
+    {
+        // A chat-capable GGUF served only in an Embedding-role process does not count as a loaded chat model.
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch),
+            Gguf("other:Q4_K_M", DateTimeOffset.UnixEpoch)
+        ];
+        var resolver = CreateResolver([], installed, Resident("other:Q4_K_M", ModelRole.Embedding, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
+
+        AssertEx.Equal("default:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheResidentModelIsNoLongerInstalled_IgnoresIt()
+    {
+        var resolver = CreateResolver([], [Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch)],
+            Resident("deleted:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
+
+        AssertEx.Equal("default:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheResidentModelIsEmbeddingClassified_IgnoresIt()
+    {
+        // Same chat-capability notion as the non-resident pick: an Embedding-classified GGUF never becomes the chat default.
+        ModelClassificationRecord[] classifications = [Classification("embed:Q4_K_M", ModelKind.Embedding, overrideKind: null)];
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch),
+            Gguf("embed:Q4_K_M", DateTimeOffset.UnixEpoch)
+        ];
+        var resolver = CreateResolver(classifications, installed, Resident("embed:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
+
+        AssertEx.Equal("default:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenThePersistedDefaultIsAmongSeveralResident_PrefersIt()
+    {
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch),
+            Gguf("recent:Q4_K_M", DateTimeOffset.UnixEpoch)
+        ];
+        var resolver = CreateResolver([], installed,
+            Resident("default:Q4_K_M", ModelRole.Chat, minutesAgo: 30),
+            Resident("recent:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
+
+        AssertEx.Equal("default:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenSeveralAreResidentAndNoneIsTheDefault_PrefersTheMostRecentlyUsed()
+    {
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch),
+            Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
+            Gguf("zeta:Q4_K_M", DateTimeOffset.UnixEpoch)
+        ];
+        var resolver = CreateResolver([], installed,
+            Resident("alpha:Q4_K_M", ModelRole.Chat, minutesAgo: 30),
+            Resident("zeta:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
+
+        AssertEx.Equal("zeta:Q4_K_M", resolved);
+    }
+
     private static LocalDefaultChatModelResolver CreateResolver(params LocalModelDescriptor[] installed)
     {
         return CreateResolver([], installed);
     }
 
     private static LocalDefaultChatModelResolver CreateResolver(ModelClassificationRecord[] persistedClassifications,
-        LocalModelDescriptor[] installed)
+        LocalModelDescriptor[] installed,
+        params LlamaServerRunningProcess[] resident)
     {
         var ggufStore = Substitute.For<IGgufModelStore>();
         ggufStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
@@ -262,7 +362,20 @@ public sealed class LocalDefaultChatModelResolverTests
         classificationStore.ListAsync(Arg.Any<CancellationToken>())
                            .Returns(Task.FromResult<IReadOnlyList<ModelClassificationRecord>>(persistedClassifications));
 
-        return new LocalDefaultChatModelResolver(ggufStore, classificationStore);
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.ListRunningProcesses().Returns(resident);
+
+        return new LocalDefaultChatModelResolver(ggufStore, classificationStore, supervisor);
+    }
+
+    private static LlamaServerRunningProcess Resident(string modelName, ModelRole role, int minutesAgo)
+    {
+        return new LlamaServerRunningProcess
+        {
+            ModelName = modelName,
+            Role = role,
+            LastUsedUtc = DateTimeOffset.UnixEpoch.AddDays(30).AddMinutes(-minutesAgo)
+        };
     }
 
     private static LocalModelDescriptor Gguf(string modelName, DateTimeOffset modifiedAt)

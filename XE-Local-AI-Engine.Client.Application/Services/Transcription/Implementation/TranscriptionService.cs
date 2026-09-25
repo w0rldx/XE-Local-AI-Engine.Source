@@ -406,6 +406,45 @@ public sealed class TranscriptionService : ITranscriptionService
                           .ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken);
     }
 
+    public async Task<UpdateTranscriptSegmentResult> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>();
+
+        var session = await store.GetSummaryAsync(sessionId, cancellationToken);
+        if (session is null)
+        {
+            return new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound };
+        }
+
+        // The registry is asked as well as the row, and for registration rather than liveness: after Stop a session
+        // still drains and commits rows while it no longer accepts audio.
+        if (session.Status == TranscriptionSessionStatus.Transcribing || _live.IsRegistered(sessionId))
+        {
+            return new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionTranscribing };
+        }
+
+        var outcome = await store.UpdateSegmentTextAsync(sessionId, seq, text, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
+        if (outcome != TranscriptSegmentUpdateOutcome.Updated)
+        {
+            return new UpdateTranscriptSegmentResult
+            {
+                Outcome = outcome == TranscriptSegmentUpdateOutcome.SessionNotFound
+                              ? UpdateTranscriptSegmentOutcome.SessionNotFound
+                              : UpdateTranscriptSegmentOutcome.SegmentNotFound
+            };
+        }
+
+        // The exclusive watermark one below the row reads back exactly that row, without decrypting the rest of the transcript.
+        // A delete racing the edit can take the row first; that is a 404, not a fault.
+        var rows = await store.ListSegmentsAfterAsync(sessionId, seq - 1, limit: 1, cancellationToken);
+        return rows.Count == 1 && rows[0].Seq == seq
+            ? new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.Updated, Segment = rows[0] }
+            : new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound };
+    }
+
     /// <summary>
     ///     What to tell a caller whose status transition lost: the row moved under it between the read and the write.
     /// </summary>
@@ -542,7 +581,8 @@ public sealed class TranscriptionService : ITranscriptionService
                     ContentType = contentType,
                     LanguageMode = explicitLanguage ? WhisperLanguageMode.Explicit : WhisperLanguageMode.Auto,
                     LanguageCode = explicitLanguage ? config.LanguageOverride : null,
-                    Translate = config.Translate
+                    Translate = config.Translate,
+                    DetectLanguage = !explicitLanguage
                 }, cancellationToken);
 
                 detectedLanguage ??= transcribed.DetectedLanguageCode;

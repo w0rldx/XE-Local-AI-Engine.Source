@@ -1,6 +1,6 @@
 # Audio Transcription (whisper.cpp)
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-09-23 · Code-grounded.
 
 The node transcribes audio **locally** with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), supervised as a
 `whisper-server` child process exactly the way `llama-server` and `sd-server` are. A **transcription session** is a
@@ -50,16 +50,23 @@ and `IWhisperServerSupervisor` and nothing else.
 pinned nightly tag in `WhisperCppReleasePins`; upstream publishes no Linux CUDA asset, so a Linux NVIDIA box resolves
 the CPU tarball and the CUDA lane is the managed source build or the `XE_WHISPERCPP_SERVER_PATH` override.
 
-`WhisperBackendSelector` serves the Windows cuBLAS prebuilt only when the vendor is NVIDIA **and** the shared
-`ICudaDeviceProbe` (`nvcuda.dll` present in the system directory, the same probe the image runtime uses) does not rule a
-CUDA device out. A Windows NVIDIA box whose driver enumerates no CUDA device degrades to CPU with one Warning telling the
-operator to repair the NVIDIA driver or supply a bring-your-own binary, and the model recommendation follows the CPU
-tier. The override and a validated managed build short-circuit the probe. If the daemon still dies, for example on a
-driver too old for the bundled CUDA runtime, the launcher keeps a bounded, path-sanitized stderr tail on the process
-handle. The supervisor logs one Warning with model, pid, exit code and that tail, tears the dead daemon down so the next
-request respawns, and the transcription fails with "the transcription runtime process exited (exit code N)" instead of
-"could not be reached". The stderr tail stays in the log and never reaches the exception message. The probe only
-catches a missing driver, so when the pinned CUDA daemon dies anyway (at load or after readiness) the supervisor latches
+`WhisperBackendSelector` serves the Windows cuBLAS prebuilt only when the vendor is NVIDIA **and** the node's
+`ICudaDeviceProbe` does not rule a CUDA device out. The node registers `RuntimeAuditCudaDeviceProbe`
+(`Client.Application`, `Services/Capacity`) ahead of the providers' `TryAdd` default, so the image runtime shares it.
+It only *peeks* the cached, determinate llama.cpp device audit (`IRuntimeDeviceAudit.PeekCached`, which never probes and
+never blocks, because the selector runs on the spawn path) and answers "no device" when the CUDA llama.cpp variant ran
+on a box that expects a GPU and fell back to CPU because it enumerated zero devices; it logs that finding as a Warning
+once per process. With no audit cached, or any other audit answer, it defers to `DefaultCudaDeviceProbe` (`nvcuda.dll`
+present in the system directory). When the probe rules CUDA out, the selector degrades to CPU and logs a Warning on
+every such selection telling the operator to repair the NVIDIA driver or supply a bring-your-own binary, and the model
+recommendation follows the CPU tier. The override and a validated managed build short-circuit the probe. If the daemon
+still dies, for example on a driver too old for the bundled CUDA runtime, the launcher keeps a bounded, path-sanitized
+stderr tail on the process handle. The supervisor logs one Warning with model, pid, exit code and that tail, tears the
+dead daemon down so the next request respawns, and the request fails with "the transcription runtime process exited
+(exit code N)" instead of "could not be reached"; a live window retries that death once
+([the segmenter](#the-segmenter)). The stderr tail stays in the log and never reaches the exception message. The
+driver-library check only catches a missing driver, and the audit only knows better once llama.cpp has run on the box,
+so when the pinned CUDA daemon dies anyway (at load or after readiness) the supervisor latches
 `WhisperCudaFailureSignal` and every later selection serves CPU until the node restarts, with one Warning; a
 bring-your-own or managed build is the operator's choice and never latches it. Full
 detail: [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime).
@@ -97,6 +104,11 @@ matter to callers: `AppendSegmentsAsync` checks the session exists and returns `
 turns what the foreign key would raise as an exception into the `false` the contract promises); `DeleteAsync` uses
 `ExecuteDeleteAsync` inside one transaction rather than loading and decrypting the whole transcript; and both the
 summary and detail views carry `SegmentCount`, while `ErrorCode`/`ErrorMessage` are on the **detail** view only.
+
+Segment `Text` is the one transcript column that changes after commit. `UpdateSegmentTextAsync` loads the tracked row,
+replaces its text, bumps the session's `UpdatedAtUtc` and saves, so the save interceptor re-encrypts it under the same
+`transcript_segment_text` AAD; it answers `Updated`, `SessionNotFound` or `SegmentNotFound`. Seq, timing and channel
+are never rewritten. The service refuses the edit while the session is still producing rows (see the endpoint below).
 
 ## The batch upload path
 
@@ -177,9 +189,12 @@ This is the feature's load-bearing privacy rule, and it is enforced in four plac
 4. **The streaming upload keeps the framework out of it** (step 1 above); the endpoint test asserts an isolated
    ASP.NET Core temp directory stays empty on success, rejection, cancellation and handler failure.
 
-Live PCM lives only in the segmenter's in-memory ring buffer — the same rule, one layer up. In the browser it lives
-only in the worklet's current frame and the at most eight frames in flight to the hub; nothing is written to disk or to
-any storage on either side.
+Live PCM lives only in memory — the same rule, one layer up: the registry's per-lane queue of frames not yet consumed
+and the segmenter's buffer of the uncommitted window. A lane that falls behind keeps buffering there rather than
+spilling anywhere, bounded per session by `Transcription:MaxBufferedAudioMb` ([options](#options-and-settings)), and
+whatever is still queued when a session is cancelled is discarded. In the browser it lives only in the worklet's current
+frame and the frames whose hub invocation has not completed yet; nothing is written to disk or to any storage on either
+side.
 
 ## Endpoints
 
@@ -193,6 +208,7 @@ Routes under `transcription/*` (`LocalApiRoutes.Transcription`), one endpoint cl
 | `GetTranscriptionSessionEndpoint` | `GET transcription/sessions/{sessionId}` | One session with its decrypted transcript. |
 | `DeleteTranscriptionSessionEndpoint` | `DELETE transcription/sessions/{sessionId}` | Cancels anything in flight, then deletes the session and its segments. |
 | `CancelTranscriptionSessionEndpoint` | `POST transcription/sessions/{sessionId}/cancel` | Signals the in-flight transcription for this session. |
+| `UpdateTranscriptSegmentEndpoint` | `PUT transcription/sessions/{sessionId}/segments/{seq}` | Replaces one row's text. Body `{ text }`, validated 1–8000 characters after trimming (400 otherwise) and stored trimmed. 200 with the updated `TranscriptSegmentResponse`; 404 for an unknown session or row; 409 `session-transcribing` while the row is `Transcribing` **or** the session is still registered in the live registry, which covers the drain after Stop. |
 | `UploadTranscriptionAudioEndpoint` | `POST transcription/sessions/{sessionId}/file` | The streaming multipart upload and the batch transcription it drives. |
 | `ListCaptureProcessesEndpoint` | `GET transcription/capture/processes` | The per-application capture picker: `{ supported, processes: [{ pid, name, hasAudio }] }`, one row per non-expired render session, `hasAudio` telling the operator which of them is playing right now. Only the id and the name — no path, window title or command line. |
 | `StartProcessCaptureEndpoint` | `POST transcription/sessions/{sessionId}/capture/process` | Attaches server-side capture of one process to a session that is already live. 400 `capture-not-supported`, 409 `session-not-live` / `capture-already-running`. |
@@ -255,7 +271,13 @@ Server → client:
 |---|---|
 | `transcriptionSegmentCommitted` | `{ sessionId, seq, startMs, endMs, text, channel, confidence }` |
 | `transcriptionPartialUpdated` | `{ sessionId, channel, text }` |
-| `transcriptionSessionStatusChanged` | `{ sessionId, status }`, one of `Completed`, `Cancelled`, `Abandoned`, `Overloaded`, `Failed` |
+| `transcriptionSessionStatusChanged` | `{ sessionId, status, errorCode }`, status one of `Completed`, `Cancelled`, `Abandoned`, `Failed`; `errorCode` is `live-never-attached` for a `NeverAttached` end (whose status reads `Abandoned`), `live-failed` for `Failed`, otherwise null |
+| `transcriptionAdmissionClosed` | `{ sessionId }`: the node stopped accepting audio for this session. Sent once when a graceful end (the buffered-audio cap or `EndSession`) closes admission, before the drain-start `transcriptionCatchUpProgress`, and never for an abort. A frame sent after it is dropped, so the client stops capturing. |
+| `transcriptionCatchUpProgress` | `{ sessionId, bufferedMs }`: the session's queued, untranscribed audio across all lanes. Sent at most once per second of audio a lane consumes while it still has frames queued, once with `0` when the backlog empties after a non-zero report, once at the start of a graceful end whatever the value, and never after the terminal status push. |
+
+Catch-up progress is advisory. It is published under its own gate, never the commit gate, so a lane with nothing to
+commit does not wait behind a sibling's persistence; the gate closes just before the terminal status push, and a failed
+publish is logged without failing the lane.
 
 Every hub-side rejection is a typed `HubException` from `TranscriptionHubErrors`. The replay bound is
 `Transcription:SegmentReplayLimit` (500, roughly fifteen minutes of two-lane speech); a truncated replay sets
@@ -292,6 +314,13 @@ calls into it per lane.
   text with nothing left to re-transcribe it from.
 - **A graceful end flushes the retained tail** with the same guard suspended, so audio shorter than one window still
   reaches the model at least once.
+- **A daemon that dies under a submission is retried once.** When the transcriber throws a `WhisperRuntimeException`
+  with `ProcessExited` set — the supervisor sets it only on its "process exited" failures — `SubmitAsync` sends the same
+  WAV bytes again. Nothing was freed before the failure, so it is the same uncommitted span, and the supervisor, which
+  already tore the dead daemon down, respawns it for the retry (on CPU after a CUDA death, because the latch is set by
+  then). A second death propagates and fails the lane. No other runtime failure is retried: a timeout would double the
+  inference-timeout wait, and "not installed", "busy" or "rejected the audio" cannot succeed on a retry. The final
+  flush submits through the same path.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
   no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
   bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed
@@ -317,20 +346,35 @@ calls into it per lane.
   cancel/delete via `TranscriptionService.CancelAsync` (`Cancelled`); the disconnect grace,
   `Transcription:AbandonedSessionGraceSeconds` (60 s) with no hub connection left (`Abandoned`); a 60 s
   producer-attachment deadline with **no producer ever attaching** — `AttachProducer` disarms it, not the first
-  frame, so a silent native capture is not reaped (`NeverAttached`); the pending-audio budget —
-  four windows' worth (20 s at the default window), capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
-  flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
-- Graceful stopping gives all lanes **one shared 30-second drain-and-flush budget**. Lanes finalize independently,
-  but each lane drains before flushing. Producer shutdown and terminal persistence are outside this budget.
-  Cancellation can interrupt a pending graceful stop until the commit barrier freezes its terminal outcome;
-  repeated end requests join the same task. A finalizing session remains registered for REST cancellation even
-  though it no longer admits frames.
+  frame, so a silent native capture is not reaped (`NeverAttached`); a lane that failed, for example stalled or lost
+  its daemon twice (`Failed`); and the buffered-audio safety cap, which ends the session **gracefully** as `Completed`.
+  Only `Completed` flushes the retained tail; every other reason aborts in-flight inference instead, so stopping
+  stays prompt.
+- **Nothing ends a session for being slow.** `PushAudioAsync` always queues an admitted frame; a lane that falls
+  behind catches up at one inference per window. The only bound is `Transcription:MaxBufferedAudioMb` (512 MiB, about
+  4.6 hours of one mono lane) on the session's queued, untranscribed audio across all lanes: the push that crosses it
+  logs one Warning and starts a graceful end, and that frame is already queued, so nothing admitted is dropped.
+- A graceful end has **no deadline**: every lane drains its whole queue, then flushes. Each request is still bounded
+  by the transcriber's inference timeout and each lane by the stall detector (`LiveSegmenterStalledException`), and
+  an abort — Cancel, node shutdown, or a failed lane escalating — interrupts the drain at once through the session's
+  abort token. Before it stops the producer, the end publishes `transcriptionAdmissionClosed` and then one
+  `transcriptionCatchUpProgress` with the whole backlog, so the browser stops its sources and shows the backlog from the
+  moment admission closed — whether it asked to stop or the cap did. Lanes finalize independently, but each lane drains
+  before flushing. Cancellation can interrupt a pending graceful stop until the commit barrier freezes its terminal
+  outcome; repeated end requests join the same task. A finalizing session remains registered for REST cancellation
+  even though it no longer admits frames.
 - Persisted status mapping: `Completed` → `Completed`; `Cancelled`, `Abandoned`, `NeverAttached` → `Cancelled`;
-  `Overloaded`, `Failed` → `Failed` with error codes `live-overloaded` / `live-failed`. A graceful end whose final
-  flush throws, or whose lane did not drain inside its bound, finalizes as `Failed` with `live-flush-failed` rather
-  than reporting `Completed` over a transcript that is missing its last seconds; the committed rows stay readable.
-- A commit that arrives after the session is finalized (a lane that outlived its drain bound) is dropped with a
-  warning: nothing is persisted or published after the terminal status push.
+  `Failed` → `Failed` with error code `live-failed`. A graceful end whose drain or final flush fails for a lane
+  finalizes as `Failed` with `live-flush-failed` rather than reporting `Completed` over a transcript that is missing
+  its last seconds; the committed rows stay readable.
+- A commit that arrives after the session is finalized (a lane still inside a submission when an abort ended the
+  session) is dropped with a warning: nothing is persisted or published after the terminal status push.
+- Every end that reaches its terminal status push logs **one Information line**: `Live transcription session {SessionId}
+  ended: reason {EndReason}, status {Status}, audio received {ReceivedSeconds} s, consumed {ConsumedSeconds} s,
+  {SegmentCount} segments committed, duration {Duration}.` Audio is summed across lanes; duration is registration to
+  end on the registry's clock. A `NeverAttached` end first logs a Warning naming the 60 s producer-attachment timeout,
+  so a browser that never delivered a frame leaves a trace on the node. The hub logs nothing for a frame it drops
+  while a session drains, so a client still sending after admission closed cannot flood the log.
 
 ### Known gaps
 
@@ -394,9 +438,9 @@ Within `useLiveCapture.start` the order depends on whether a display picker is i
 
 | Path | Order |
 |---|---|
-| Microphone only | `await live/start` → `getUserMedia` + worklet → forward PCM |
+| Microphone only | `getUserMedia` + worklet → `await live/start` → forward PCM |
 | System audio | `getDisplayMedia` **synchronously, before the first `await`** → `await live/start` → worklet → forward PCM |
-| Both | `getDisplayMedia` **synchronously, before the first `await`** → `await live/start` → `getUserMedia` + worklet → await the display promise → forward PCM |
+| Both | `getDisplayMedia` **synchronously, before the first `await`** → `getUserMedia` + worklet → `await live/start` → await the display promise → forward PCM |
 
 `getDisplayMedia` requires transient user activation *at the moment it is invoked*, and the Screen Capture
 specification requires rejection when that activation is absent — so awaiting anything first (the endpoint, a
@@ -406,6 +450,21 @@ path. The constraint reaches the call site too, and `useLiveCapture`'s doc comme
 straight out of the click handler, with nothing awaited in between. A future refactor that routes the click through a
 confirmation dialog or an async guard breaks system audio silently, and the call-order tests in
 `useLiveCapture.test.ts` are the only thing that catches it.
+
+The microphone comes **before** `live/start` on purpose. A first live start can spend a minute on the runtime download
+and model load, and asking for the microphone afterwards put the permission prompt at the end of that wait; now the
+operator answers it while the node prepares. Its frames are dropped until `live/start` returns, so audio captured while
+the session was still opening is discarded, not queued. While the start is pending, `CaptureControls` shows a status
+line from the runtime status route, polled every 2 s only while the start runs: `stopped` reads as preparing the runtime
+("this can take a minute on first use" — the binary download, or the backend probe before it), `starting` as loading
+the model, and `ready` as starting.
+
+The microphone start — permission prompt, `getUserMedia`, `addModule` and `AudioContext.resume()` — has one 20 s bound
+(`MICROPHONE_START_TIMEOUT_MS` in `MicrophoneCaptureSource`). Any of those can wait for ever, a resume outside a user
+gesture never settles, and a start that never settles captures nothing and says nothing. Past the bound, `start` rejects
+with `CaptureError("start-timeout")`, and a stream or graph that arrives later is released at once. With the microphone
+first, no node session is open yet, so nothing is left for the node's attachment timeout to reap. The display picker is
+not bounded, because it waits on the operator's own choice.
 
 Any failure on that path disposes everything: the display promise is settled first so its stream is registered, then
 every acquired source is stopped and REST cancellation is requested if the session had already been opened. A cancelled
@@ -432,15 +491,29 @@ diarization behind the labels. A stereo source is downmixed to mono by the audio
 
 ### Backpressure: refused, never dropped
 
-`pushFrame` allows at most **eight** frames in flight and rejects with `CaptureError("overloaded", …)` beyond that.
-The limit is a latency budget: the node queues a frame and returns, so eight 250 ms frames tolerate a 2 s hub
-round-trip (1 s with two sources); the node's pending-audio budget is the real backpressure.
-A transport that is not `Connected` rejects with `CaptureError("disconnected", …)`. Both stop capture identically, but
-they are different diagnoses and the string the operator reads is the whole of what they act on — "this node could not
-keep up" sends them after a performance problem the node does not have. A rejected frame is speech the node did not
-receive, and a hole nobody is told about is worse than a stopped capture — so `useLiveCapture` stops every source, ends the session and shows the
-named error. The node's own `Overloaded` status push (the pending-audio budget exceeded) takes the same route. Frames
-are never silently discarded.
+`pushFrame` has no in-flight limit. SignalR runs one connection's invocations in order, and the node copies each frame,
+queues it and returns, buffering while a lane is behind ([the registry](#the-registry)). The only rejection left is a
+transport that is not `Connected`, which rejects with `CaptureError("disconnected", …)`. A rejected frame is speech the
+node did not receive, and a hole nobody is told about is worse than a stopped capture — so `useLiveCapture` stops every
+source, ends the session and shows the named error. Frames are never silently discarded.
+
+A slow node is shown, not refused. `transcriptionCatchUpProgress` feeds the live view's `bufferedMs`: while capturing,
+a non-zero backlog reads "Transcribing… N s behind" beside the controls, and after Stop the finalizing button reads
+"Finishing the last N s…" until the drain empties it. Seconds are rounded up, and zero hides the line. Cancel stays
+available throughout as the escape hatch.
+
+When the node closes admission itself (the buffered-audio cap), it pushes `transcriptionAdmissionClosed`; a capture that is
+running or starting treats it exactly like the operator pressing Stop: the browser sources stop, the phase moves to `stopping`
+and a graceful `EndSession` joins the drain already in progress — no REST cancel, no error. A push that arrives while the phase
+is already `stopping` or idle is ignored.
+
+Any terminal `transcriptionSessionStatusChanged` for the session while the phase is `starting` or `capturing` ends
+capture in this browser without ending anything on the node, which has already ended the session. This covers a cancel
+from another surface, a failed lane, and no audio before the attachment timeout. The sources stop, the phase goes to
+`idle`, and nothing is sent: no `EndSession`, and no REST cancel that could only fail and read as `stop-failed`. Only
+`live-never-attached` becomes a capture error, telling the operator the node received no audio. A failure is already on
+the session row, and a cancel is neutral. The hub keeps the terminal status across resubscribes. The hub drops a frame that reaches a registered but no longer live session rather than
+refusing it, so a frame in flight at that moment cannot turn the drain into a cancel.
 
 ### Reconnect and the replay drain
 
@@ -643,8 +716,8 @@ operator is still making.
   a local **before** the task lambda, because a lambda that reads `.Token` when the pool thread runs it can find the
   source already disposed. `RunAsync` throws on an already-cancelled token before it builds a recorder.
 - **Cancelling the registry's `ProducerToken` is the one stop signal.** Every handle links its own source to that
-  token, so ending a session for any reason — including the pending-audio budget overflowing into `Overloaded` —
-  stops the capture at its next iteration. A private token the registry cannot reach is how a recorder outlives its
+  token, so ending a session for any reason — including the buffered-audio safety cap ending it gracefully — stops
+  the capture at its next iteration. A private token the registry cannot reach is how a recorder outlives its
   session.
 - **`Start` is synchronous** and returns `StartProcessCaptureOutcome` (`Started`, `NotSupported`, `SessionNotLive`,
   `AlreadyCapturing`). Nothing in it performs I/O, and a `Task`-returning start would suggest it waits for the
@@ -736,7 +809,8 @@ replaces `Completed` until the commit barrier freezes the outcome. A session who
 frozen stays unchanged. Normal Stop uses the hub first; capture failures, explicit Cancel and unmount cleanup use
 REST cancellation directly. This applies to every request kind, not only process capture.
 
-Normal Stop releases capture sources immediately and displays **Finalizing…** while the node drains and flushes.
+Normal Stop releases capture sources immediately and displays **Finalizing…** while the node drains and flushes, or
+**Finishing the last N s…** while `transcriptionCatchUpProgress` still reports a backlog.
 Cancel remains available during that wait. Capture errors are shown before cancellation finishes and remain visible
 after the persisted session becomes terminal.
 
@@ -745,8 +819,8 @@ after the persisted session becomes terminal.
 matters because the reconnect is the *same* event that re-subscribes and disarms the node's abandonment grace: without
 it, a stop whose only record lived in this browser would never reach the node at all, and the grace that would
 otherwise have caught the session has just been disarmed. The pending flag clears on the first acknowledgement from
-either transport, and clearing it only resets the `stop-failed` message — a teardown triggered by an `overloaded`
-push keeps saying so.
+either transport, and clearing it only resets the `stop-failed` message — a teardown triggered by a capture failure
+keeps saying so.
 
 **A stop that actually ends the session over REST finalizes the row as `Cancelled`, not `Completed`.** That matters: only `Completed`
 flushes the segmenter's retained tail, so a session ended over REST keeps every committed segment but not the last
@@ -813,7 +887,7 @@ Everything platform-independent runs on the Linux gate: the documented build flo
 `NAudio.Core` types — no mock), the picker's de-duplication and activity OR-ing
 (`ProcessAudioCaptureCandidates.Aggregate`, pure and WASAPI-free precisely so a Linux runner can exercise it), the
 coordinator lifecycle (`ProcessAudioCaptureCoordinatorTests`, including the
-overload and blocked-push cases) and the endpoint policy, shapes and reason codes
+buffered-audio cap and blocked-push cases) and the endpoint policy, shapes and reason codes
 (`TranscriptionCaptureEndpointTests`).
 
 **The WASAPI process-loopback path itself was not executed.** The development box is WSL2 with no Windows audio stack,
@@ -832,7 +906,10 @@ running.
 generated hey-api client; the upload is the one hand-written multipart call, following `useKnowledgeUpload`'s axios
 precedent because the generated client does not express upload progress. The segment list renders the committed
 transcript with a channel badge for any non-`Mono` channel, and "Send to chat" hands the transcript to the composer
-through `core/ui/stores/PendingComposerTextStore.ts`, which exists to carry text across a navigation. The live half of
+through `core/ui/stores/PendingComposerTextStore.ts`, which exists to carry text across a navigation. On a finished
+session (`Completed`, `Failed` or `Cancelled`) with no capture still ending on the page, each row's text is editable in
+place through the segment-edit route; the response patches the cached session detail by `seq` instead of re-reading the
+transcript. The live half of
 the feature — the capture sources, the worklet, the hub hook and the live panel — is described in
 [Browser capture and the live UI](#browser-capture-and-the-live-ui). See [React Client](10-react-client.md).
 
@@ -878,12 +955,15 @@ re-probes server-side regardless, so a stale "can build" can never let an unbuil
 | `Transcription:Enabled` | `TranscriptionOptions.Enabled`, read once in `Program.cs` | `true` | Gates behaviour, never registration: the 404 middleware, not a missing endpoint. |
 | `Transcription:IdleTimeoutMinutes` | `TranscriptionOptions.IdleTimeoutMinutes` | `15` | Seed for the daemon's idle-unload TTL, used until a node setting is stored. |
 | `TranscriptionIdleTimeoutMinutes` | `StoredNodeSettings`, clamped 1–240 | unset | The stored node setting; it wins over the appsettings seed. |
+| `Transcription:MaxBufferedAudioMb` | `TranscriptionOptions.MaxBufferedAudioMb`, 16–1 048 576, validated on start | `512` | Safety cap in MiB on one live session's queued, untranscribed audio across its lanes (about 4.6 h of one mono lane). Crossing it ends the session gracefully as `Completed`, draining what is queued, with one Warning. |
 | `TranscriptionSelectedModelId` | `StoredNodeSettings` | unset | The operator's selected whisper model. Unset resolves through `ITranscriptionRuntimeService.ResolveEffectiveModelIdAsync`. |
 | `Security:MaxUploadFileSizeMb` | `SecurityOptions.MaxUploadFileSizeMb` | `25` | The upload cap the copy enforces as it writes. |
 
 Per-session options live in the session's encrypted `ConfigJson`: language mode (`auto` / `override`) and the
-override code, translate-to-English, the live maximum window in seconds (clamped 2–10) and channel attribution. The
-last two are persisted and normalized already, and are read by the live slices.
+override code, translate-to-English, the live maximum window in seconds (clamped 2–10, default 5) and channel
+attribution. The last two are persisted and normalized already, and are read by the live slices. The SPA's new-session
+dialog no longer offers the window: it sends no `maxWindowSeconds`, so every session it creates gets the REST default
+of 5, and the field stays on the REST contract for API callers.
 
 ## What is not here yet
 

@@ -96,6 +96,13 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public RuntimeDeviceAuditState? PeekCached()
+    {
+        // Same trust rule as the GetAuditAsync fast path: a memo computed against an older managed-CUDA stamp is stale.
+        return _cached is { } cached && CurrentSignalVersion() == Volatile.Read(ref _cachedSignalVersion) ? cached : null;
+    }
+
     /// <summary>Stamps the CURRENT measured layer placement onto an audit.</summary>
     /// <remarks>
     ///     The device audit is memoized per binary, but placement changes every time a different model loads, so it must never be frozen into
@@ -182,6 +189,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return new RuntimeDeviceAuditState
         {
             InferenceBackend = backend,
+            SelectedVariant = variant,
             GpuExpected = gpuExpected,
             CpuFallback = cpuFallback,
             Reason = fallbackText?.Reason,

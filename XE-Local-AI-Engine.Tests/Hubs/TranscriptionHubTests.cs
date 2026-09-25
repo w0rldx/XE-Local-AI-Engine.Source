@@ -260,6 +260,7 @@ public sealed class TranscriptionHubTests
     {
         var live = Live();
         live.IsLive(SessionId).Returns(false);
+        live.IsRegistered(SessionId).Returns(false);
         using var fixture = CreateHub(Sessions(), live);
 
         var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[32]));
@@ -268,6 +269,22 @@ public sealed class TranscriptionHubTests
         // capturing into nothing and never be told.
         AssertEx.Equal(TranscriptionHubErrors.NotTranscribing, error.Message);
         await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
+    }
+
+    [Test]
+    public async Task PushAudioFrame_OnADrainingSession_IsDroppedWithoutAnError()
+    {
+        var live = Live();
+        live.IsLive(SessionId).Returns(false);
+        live.IsRegistered(SessionId).Returns(true);
+        using var fixture = CreateHub(Sessions(), live);
+
+        // Registered but no longer live: the session is draining after a Stop or the buffered-audio cap. A refusal
+        // here makes the client abort, and its cancel would throw away the drain.
+        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[32]);
+
+        await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
+        live.DidNotReceiveWithAnyArgs().NoteBrowserAttached(Guid.Empty, default!);
     }
 
     [Test]

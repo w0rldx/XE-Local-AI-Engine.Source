@@ -84,7 +84,6 @@ export interface TranscriptionSessionConfigView {
 	languageMode: TranscriptionLanguageMode;
 	languageOverride: string | null;
 	translate: boolean;
-	maxWindowSeconds: number;
 	channelAttribution: boolean;
 }
 
@@ -128,7 +127,6 @@ function toTranscriptionSessionConfigView(dto: TranscriptionSessionConfigRespons
 		languageMode: dto.languageMode === "override" ? "override" : "auto",
 		languageOverride: dto.languageOverride ?? null,
 		translate: dto.translate,
-		maxWindowSeconds: dto.maxWindowSeconds,
 		channelAttribution: dto.channelAttribution,
 	};
 }
@@ -240,6 +238,21 @@ export function processCaptureBlockedReason(error: unknown): ProcessCaptureBlock
 	return (processCaptureBlockedReasons as readonly string[]).includes(reason as string)
 		? (reason as ProcessCaptureBlockedReason)
 		: null;
+}
+
+/** Longest segment text the edit endpoint accepts, after trimming. */
+export const TRANSCRIPT_SEGMENT_TEXT_MAX_LENGTH = 8000;
+
+/**
+ * True when the segment-edit endpoint refused because the session is still transcribing (409 `session-transcribing`).
+ * The body is `{ reason, message }`, not ProblemDetails, so it is read off `apiProblemDetails` like the capture refusals.
+ */
+export function isSessionTranscribingRefusal(error: unknown): boolean {
+	return (
+		error instanceof ApiError &&
+		error.statusCode === 409 &&
+		(error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["reason"] === "session-transcribing"
+	);
 }
 
 /** The container list the node can actually read, carried on the upload endpoint's typed 415 body. */

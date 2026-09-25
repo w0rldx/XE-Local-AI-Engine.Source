@@ -20,4 +20,10 @@ public sealed class WhisperRuntimeException : Exception
         : base(message, innerException)
     {
     }
+
+    /// <summary>
+    ///     Whether the daemon process died under the request. Only this failure is worth one retry: the supervisor has
+    ///     already torn the dead process down, so the next request respawns it (on CPU after a CUDA death).
+    /// </summary>
+    public bool ProcessExited { get; init; }
 }

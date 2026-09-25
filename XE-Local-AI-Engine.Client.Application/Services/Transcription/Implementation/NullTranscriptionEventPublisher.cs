@@ -26,4 +26,10 @@ public sealed class NullTranscriptionEventPublisher : ITranscriptionEventPublish
 
     public Task PublishStatusAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    public Task PublishCatchUpAsync(Guid sessionId, long bufferedMs, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

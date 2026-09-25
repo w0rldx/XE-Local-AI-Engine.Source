@@ -20,7 +20,7 @@ public sealed class StaleImageServerReaperTests
     [Test]
     public async Task StartAsync_WhenOrphanUnderBinariesRoot_TreeKillsIt()
     {
-        var ourServer = OurServerPath("master-742-1a13107", "vulkan");
+        var ourServer = OurServerPath("master-913-b167b94", "vulkan");
         var scanner = new FakeStaleImageServerProcessScanner([new StaleImageServerProcess(1234, ourServer)]);
         var reaper = new StaleImageServerReaper(scanner, BinariesRoot, NullLogger<StaleImageServerReaper>.Instance);
 
@@ -72,7 +72,7 @@ public sealed class StaleImageServerReaperTests
     [Test]
     public async Task StartAsync_WhenBinariesRootUnresolved_ReapsNothing()
     {
-        var ourServer = OurServerPath("master-742-1a13107", "cpu");
+        var ourServer = OurServerPath("master-913-b167b94", "cpu");
         var scanner = new FakeStaleImageServerProcessScanner([new StaleImageServerProcess(1234, ourServer)]);
         var reaper = new StaleImageServerReaper(scanner, binariesRoot: null, NullLogger<StaleImageServerReaper>.Instance);
 
@@ -86,8 +86,8 @@ public sealed class StaleImageServerReaperTests
     [Test]
     public async Task StartAsync_WhenMultipleCandidates_ReapsOnlyThoseUnderRoot()
     {
-        var first = OurServerPath("master-742-1a13107", "vulkan");
-        var second = OurServerPath("master-742-1a13107", "cuda");
+        var first = OurServerPath("master-913-b167b94", "vulkan");
+        var second = OurServerPath("master-913-b167b94", "cuda");
         var foreign = OperatingSystem.IsWindows()
             ? @"C:\Program Files\SomeOtherApp\sd-server.exe"
             : "/opt/some-other-app/sd-server";

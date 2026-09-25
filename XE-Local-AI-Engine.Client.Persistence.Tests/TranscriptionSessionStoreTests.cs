@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -423,6 +425,109 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         AssertEx.Equal(expected: 0L, unknown, "An unknown session has no sequences.");
     }
 
+    [Test]
+    public async Task UpdateSegmentText_ReEncryptsTheRow_AndDecryptsBackThroughTheDetailRead()
+    {
+        var databasePath = await CreateSchemaAsync("store-update-segment.sqlite");
+        var sessionId = Guid.NewGuid();
+        const string original = "an-utterly-distinctive-misheard-phrase";
+        const string corrected = "an-utterly-distinctive-corrected-phrase";
+
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "edit", "{}", createdAtUtc: 100), CancellationToken.None));
+        await RunAsync(databasePath,
+                store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "untouched"), NewSegment(seq: 2, startMs: 1_000, original)], updatedAtUtc: 200, CancellationToken.None));
+        var cipherBefore = await ReadRawSegmentTextAsync(databasePath, seq: 2);
+
+        var outcome = await QueryAsync(databasePath, store => store.UpdateSegmentTextAsync(sessionId, seq: 2, corrected, updatedAtUtc: 300, CancellationToken.None));
+
+        AssertEx.Equal(TranscriptSegmentUpdateOutcome.Updated, outcome);
+        var cipherAfter = await ReadRawSegmentTextAsync(databasePath, seq: 2);
+        AssertEx.False(cipherBefore.AsSpan().SequenceEqual(cipherAfter), "The stored ciphertext must change with the text.");
+        AssertEx.False(await DatabaseContainsAsync(databasePath, Encoding.UTF8.GetBytes(corrected)),
+            "The edited text is encrypted at rest — its plaintext must not appear in the database file.");
+
+        var view = AssertEx.NotNull(await QueryAsync(databasePath, store => store.GetWithSegmentsAsync(sessionId, CancellationToken.None)));
+        AssertEx.Equal("untouched", view.Segments[0].Text, "Only the addressed row changes.");
+        AssertEx.Equal(corrected, view.Segments[1].Text);
+        AssertEx.Equal(expected: 300L, view.UpdatedAtUtc, "The edit bumps the session's updated stamp.");
+        AssertEx.Equal("{}", view.ConfigJson, "The session's own ciphertext survives the edit.");
+    }
+
+    [Test]
+    public async Task UpdateSegmentText_ForAnUnknownSessionOrSeq_WritesNothing()
+    {
+        var databasePath = await CreateSchemaAsync("store-update-segment-missing.sqlite");
+        var sessionId = Guid.NewGuid();
+
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "edit", "{}", createdAtUtc: 100), CancellationToken.None));
+        await RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "kept")], updatedAtUtc: 200, CancellationToken.None));
+
+        var unknownSession = await QueryAsync(databasePath, store => store.UpdateSegmentTextAsync(Guid.NewGuid(), seq: 1, "x", updatedAtUtc: 300, CancellationToken.None));
+        var unknownSeq = await QueryAsync(databasePath, store => store.UpdateSegmentTextAsync(sessionId, seq: 9, "x", updatedAtUtc: 300, CancellationToken.None));
+
+        AssertEx.Equal(TranscriptSegmentUpdateOutcome.SessionNotFound, unknownSession);
+        AssertEx.Equal(TranscriptSegmentUpdateOutcome.SegmentNotFound, unknownSeq);
+        var view = AssertEx.NotNull(await QueryAsync(databasePath, store => store.GetWithSegmentsAsync(sessionId, CancellationToken.None)));
+        AssertEx.Equal("kept", view.Segments[0].Text);
+        AssertEx.Equal(expected: 200L, view.UpdatedAtUtc, "A refused edit must not bump the session's updated stamp.");
+    }
+
+    [Test]
+    public async Task UpdateSegmentText_WhenTheSegmentIsDeletedBetweenLoadAndSave_ReportsSegmentNotFound()
+    {
+        var databasePath = await CreateSchemaAsync("store-update-segment-race.sqlite");
+        var sessionId = Guid.NewGuid();
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "edit", "{}", createdAtUtc: 100), CancellationToken.None));
+        await RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "doomed")], updatedAtUtc: 200, CancellationToken.None));
+
+        var outcome = await UpdateRacingADeleteAsync(databasePath, sessionId, async other =>
+            await other.TranscriptSegments.Where(row => row.SessionId == sessionId).ExecuteDeleteAsync());
+
+        // Without the mapping the save throws DbUpdateConcurrencyException, which the endpoint turns into a 500.
+        AssertEx.Equal(TranscriptSegmentUpdateOutcome.SegmentNotFound, outcome);
+    }
+
+    [Test]
+    public async Task UpdateSegmentText_WhenTheSessionIsDeletedBetweenLoadAndSave_ReportsSessionNotFound()
+    {
+        var databasePath = await CreateSchemaAsync("store-update-session-race.sqlite");
+        var sessionId = Guid.NewGuid();
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "edit", "{}", createdAtUtc: 100), CancellationToken.None));
+        await RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 0, "doomed")], updatedAtUtc: 200, CancellationToken.None));
+
+        var outcome = await UpdateRacingADeleteAsync(databasePath, sessionId, async other =>
+        {
+            await other.TranscriptSegments.Where(row => row.SessionId == sessionId).ExecuteDeleteAsync();
+            await other.TranscriptionSessions.Where(row => row.Id == sessionId).ExecuteDeleteAsync();
+        });
+
+        AssertEx.Equal(TranscriptSegmentUpdateOutcome.SessionNotFound, outcome);
+    }
+
+    // Runs the delete on a second context inside the update's own save, after its tracked load: the race, made certain.
+    private async Task<TranscriptSegmentUpdateOutcome> UpdateRacingADeleteAsync(string databasePath, Guid sessionId, Func<NodeChatDbContext, Task> delete)
+    {
+        var interceptor = new CompetingWriteInterceptor(async () =>
+        {
+            await using var other = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder);
+            await delete(other);
+        });
+        await using var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder, interceptor);
+        return await new TranscriptionSessionStore(context).UpdateSegmentTextAsync(sessionId, seq: 1, "edited", updatedAtUtc: 300, CancellationToken.None);
+    }
+
+    // The caller's database holds one session. Straight off the connection, bypassing the materialization interceptor,
+    // so this is the ciphertext at rest.
+    private static async Task<byte[]> ReadRawSegmentTextAsync(string databasePath, long seq)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT text FROM transcript_segments WHERE seq = $seq;";
+        _ = command.Parameters.AddWithValue("$seq", seq);
+        return await command.ExecuteScalarAsync() as byte[] ?? throw new AssertionException("Expected a non-null encrypted BLOB.");
+    }
+
     private async Task<string> CreateSchemaAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);
@@ -489,6 +594,31 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
     private static byte[] CreateKeyMaterial()
     {
         return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 37)).ToArray();
+    }
+
+    /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
+    private sealed class CompetingWriteInterceptor : SaveChangesInterceptor
+    {
+        private readonly Func<Task> _write;
+        private bool _fired;
+
+        public CompetingWriteInterceptor(Func<Task> write)
+        {
+            _write = write;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_fired)
+            {
+                _fired = true;
+                await _write();
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
     }
 
     private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder

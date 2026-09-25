@@ -34,6 +34,20 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<LlamaServerRunningProcess> ListRunningProcesses()
+    {
+        return _processes
+               .Where(static entry => !entry.Value.Handle.HasExited && !entry.Value.IsEvicting && !entry.Value.IsProfilingOwned)
+               .Select(static entry => new LlamaServerRunningProcess
+               {
+                   ModelName = entry.Key.ModelName,
+                   Role = entry.Key.Role,
+                   LastUsedUtc = entry.Value.LastUsedUtc
+               })
+               .ToArray();
+    }
+
+    /// <inheritdoc />
     public Task<bool> WaitForProcessExitAsync(string modelName, ModelRole role, TimeSpan timeout, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);

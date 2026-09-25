@@ -15,8 +15,10 @@ public interface ILocalDefaultChatModelResolver
     /// </summary>
     /// <remarks>
     ///     It enumerates the installed GGUF models, drops the Embedding-classified ones on the same chat-capability
-    ///     notion the chat picker uses, then picks <paramref name="persistedDefault" /> if it is an installed GGUF
-    ///     chat model, else the most-recently-modified one, tie-broken by name.
+    ///     notion the chat picker uses. A model already resident in a llama.cpp Chat-role process wins first (the
+    ///     persisted default if resident, else the most recently used resident one), so a default send reuses loaded
+    ///     weights. With none resident it picks <paramref name="persistedDefault" /> if it is an installed GGUF chat
+    ///     model, else the most-recently-modified one, tie-broken by name.
     /// </remarks>
     Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default);
 }

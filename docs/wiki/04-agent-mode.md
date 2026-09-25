@@ -1201,6 +1201,8 @@ which the model would otherwise default-route to `llamacpp` and be rejected on a
 Neither branch grants anything: capacity admission is about local resources only, and an external model's trust and
 egress decision is made elsewhere, from its operator-declared locality.
 
+Every **reject** names the requested model and the loaded `(model, role)` set in its reason ("Insufficient capacity for '…' (Chat): not enough free memory for another model. Loaded now: '…' (Chat), '…' (Embedding). Eject one of them or pick a loaded model.") and logs one Warning (`Capacity rejected {Model} ({Role}): …`), so a refused graph-workflow node or spawn is visible in the node log; the gate never evicts a resident model.
+
 The rest of the decision runs under `IPendingFootprintLedger.EnterDecisionAsync`. The device audit is warmed
 **before** that gate, because its bounded, cached `--list-devices` probe would otherwise serialize every capacity
 decision behind a one-time probe. The hardware profile is then force-refreshed **under** the gate: an admission

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -17,15 +18,15 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 /// <remarks>See <c>docs/wiki/04-agent-mode.md</c> ("Capacity gate &amp; sub-agent spawn") for the four admission passes.</remarks>
 public sealed class CapacityService : ICapacityService
 {
-    // Sanitized, user-safe constants — never interpolate a model name, path, or budget figure into a caller-facing
-    // reason (the calling agent's transcript is not a trusted sink for node-internal detail).
+    // Caller-facing reasons. A rejection names the requested and the loaded models (operator decision: model names
+    // are safe to show and are what makes "pick a loaded model" actionable), never a path or a budget figure.
     private const string ReasonAllow = "Capacity available.";
     private const string ReasonAllowCloud = "Cloud provider selected; no local capacity required.";
     private const string ReasonAllowExternal = "External endpoint configured; no local capacity required.";
     private const string ReasonQueueSameModel = "Model already running; the spawn will share that process.";
-    private const string ReasonRejectFootprintUnknown = "Insufficient capacity: the model's memory footprint could not be determined.";
-    private const string ReasonRejectByteBudget = "Insufficient capacity: not enough free memory for another model.";
-    private const string ReasonRejectProcessCap = "Insufficient capacity: the maximum number of concurrent models is already loaded.";
+    private const string ReasonRejectFootprintUnknown = "the model's memory footprint could not be determined.";
+    private const string ReasonRejectByteBudget = "not enough free memory for another model.";
+    private const string ReasonRejectProcessCap = "the maximum number of concurrent models is already loaded.";
 
     private readonly IActiveCloudChatClientFactory _cloudFactory;
     private readonly IModelFootprintProvider _footprintProvider;
@@ -37,6 +38,7 @@ public sealed class CapacityService : ICapacityService
     private readonly ILocalModelProviderResolver _localProviderResolver;
     private readonly IOllamaModelService _ollamaModelService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ILogger<CapacityService> _logger;
 
     public CapacityService(IActiveCloudChatClientFactory cloudFactory,
         ILocalModelProviderResolver localProviderResolver,
@@ -47,7 +49,8 @@ public sealed class CapacityService : ICapacityService
         IPendingFootprintLedger ledger,
         IProcessLaunchAdmissionRegistry launchAdmissions,
         LlamaServerExternalEndpointOptions externalEndpoints,
-        LlamaServerSupervisorOptions supervisorOptions)
+        LlamaServerSupervisorOptions supervisorOptions,
+        ILogger<CapacityService> logger)
     {
         _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
         _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
@@ -59,6 +62,7 @@ public sealed class CapacityService : ICapacityService
         _launchAdmissions = launchAdmissions ?? throw new ArgumentNullException(nameof(launchAdmissions));
         _externalEndpoints = externalEndpoints ?? throw new ArgumentNullException(nameof(externalEndpoints));
         _supervisorOptions = supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc />
@@ -158,12 +162,7 @@ public sealed class CapacityService : ICapacityService
             };
         if (launchSnapshot.HasRequestedKey || launchSnapshot.HasGlobalBlocker)
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = ReasonRejectByteBudget,
-                OllamaEvictionWarning = ollamaWarning
-            };
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         // INVARIANT: the forced refresh runs UNDER the gate, never before it. The free-VRAM baseline nets out every resident model, so two racing decisions
@@ -173,12 +172,7 @@ public sealed class CapacityService : ICapacityService
             .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct);
         if (!footprint.IsKnown)
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = ReasonRejectFootprintUnknown,
-                OllamaEvictionWarning = ollamaWarning
-            };
+            return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap).
@@ -187,12 +181,7 @@ public sealed class CapacityService : ICapacityService
                                        .ToHashSet();
         if (activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = ReasonRejectProcessCap,
-                OllamaEvictionWarning = ollamaWarning
-            };
+            return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         var hasUnmeasuredGpuLoad = !runningSnapshot.IsKnown
@@ -204,12 +193,7 @@ public sealed class CapacityService : ICapacityService
         {
             if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
-                return new CapacityDecision
-                {
-                    Verdict = CapacityVerdict.RejectInsufficient,
-                    Reason = ReasonRejectByteBudget,
-                    OllamaEvictionWarning = ollamaWarning
-                };
+                return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
             }
 
             // A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the reservation
@@ -217,12 +201,7 @@ public sealed class CapacityService : ICapacityService
             if (request.RequiredContextTokens is { } required
                 && downTiered.Admission?.Allocation.ProcessContextTokens < required)
             {
-                return new CapacityDecision
-                {
-                    Verdict = CapacityVerdict.RejectInsufficient,
-                    Reason = ReasonRejectByteBudget,
-                    OllamaEvictionWarning = ollamaWarning
-                };
+                return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
             }
 
             footprint = downTiered;
@@ -231,12 +210,7 @@ public sealed class CapacityService : ICapacityService
         if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
             || !FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = ReasonRejectByteBudget,
-                OllamaEvictionWarning = ollamaWarning
-            };
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
@@ -249,15 +223,44 @@ public sealed class CapacityService : ICapacityService
 
         if (footprint.Admission is null || !reservation.TryAttach(_launchAdmissions, footprint.Admission))
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = ReasonRejectByteBudget,
-                OllamaEvictionWarning = ollamaWarning
-            };
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         return reservation.TransferToDecision(ollamaWarning);
+    }
+
+    /// <summary>A rejection whose reason names the requested model and what is loaded, logged at Warning so the refusal is visible in the node log.</summary>
+    private CapacityDecision Reject(string detail,
+        string modelName,
+        ModelRole role,
+        RunningSnapshot runningSnapshot,
+        ProcessLaunchAdmissionSnapshot launchSnapshot,
+        bool ollamaWarning)
+    {
+        var resident = runningSnapshot.Keys
+                                      .Concat(launchSnapshot.AdmittedKeys.Select(static key => new RunningKey(key.ModelName, key.Role)))
+                                      .Distinct()
+                                      .Select(static key => $"'{key.ModelName}' ({key.Role})")
+                                      .ToArray();
+        var loaded = "The loaded models could not be listed.";
+        if (runningSnapshot.IsKnown)
+        {
+            loaded = resident.Length == 0 ? "No model is loaded." : $"Loaded now: {string.Join(", ", resident)}.";
+        }
+
+        // Ejecting frees memory and a process slot; it cannot make an unknown footprint known.
+        var hint = runningSnapshot.IsKnown && resident.Length > 0 && !string.Equals(detail, ReasonRejectFootprintUnknown, StringComparison.Ordinal)
+            ? " Eject one of them or pick a loaded model."
+            : string.Empty;
+        var reason = $"Insufficient capacity for '{modelName}' ({role}): {detail} {loaded}{hint}";
+        _logger.LogWarning("Capacity rejected {Model} ({Role}): {Detail} {Loaded}",
+            modelName, role, detail, loaded);
+        return new CapacityDecision
+        {
+            Verdict = CapacityVerdict.RejectInsufficient,
+            Reason = reason,
+            OllamaEvictionWarning = ollamaWarning
+        };
     }
 
     /// <summary>Whether the footprint fits every non-zero resource axis of the live free baseline, less the in-flight ledger reservations.</summary>

@@ -5,6 +5,7 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Live;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -264,6 +265,54 @@ public sealed class LiveTranscriptionSegmenterTests
     }
 
     [Test]
+    public async Task DaemonDeathOnce_RetriesTheSameWindowAndCommits()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        transcriber.FailOnce.Enqueue(DaemonExited());
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+        _ = await PushAsync(segmenter, 0, 750, 250);
+
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
+
+        AssertEx.Equal("[0,750);[0,750)", string.Join(';', transcriber.Windows), "The retry resubmits exactly the span that failed.");
+        AssertEx.Equal(1, flush.Commits.Count, "The retried answer reaches the transcript.");
+        AssertEx.Equal(750L, segmenter.CommittedEndMs);
+    }
+
+    [Test]
+    public async Task DaemonDeathTwice_PropagatesAndKeepsTheAudio()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        transcriber.FailOnce.Enqueue(DaemonExited());
+        transcriber.FailOnce.Enqueue(DaemonExited());
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+        _ = await PushAsync(segmenter, 0, 750, 250);
+
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(async () => await segmenter.FlushAsync(CancellationToken.None),
+            "A second consecutive death is not retried again.");
+
+        AssertEx.Equal(2, transcriber.CallCount, "Exactly one retry.");
+        AssertEx.Equal(0L, segmenter.CommittedEndMs, "Nothing was committed past the failed span.");
+    }
+
+    [Test]
+    public async Task OtherRuntimeFailure_IsNotRetried()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        transcriber.FailOnce.Enqueue(new WhisperRuntimeException("The transcription did not finish within the allowed time."));
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+        _ = await PushAsync(segmenter, 0, 750, 250);
+
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(async () => await segmenter.FlushAsync(CancellationToken.None),
+            "A timeout would double its own wait if retried.");
+
+        AssertEx.Equal(1, transcriber.CallCount);
+    }
+
+    private static WhisperRuntimeException DaemonExited() =>
+        new("The transcription runtime process exited (exit code -1073741819).") { ProcessExited = true };
+
+    [Test]
     public async Task FlushThatThrows_LeavesTheWatermarkAndTheRetainedAudioIntact()
     {
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
@@ -421,6 +470,42 @@ public sealed class LiveTranscriptionSegmenterTests
 
         _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None),
             "A lane that cannot progress fails the session instead of discarding the audio it cannot resolve.");
+    }
+
+    [Test]
+    public async Task DetectedLanguage_AWindowThatReportsNone_KeepsAskingUntilOneDoes()
+    {
+        // A silent first window detects no language, because the transcriber retried it without probabilities. The
+        // session must keep asking for detection until a later window reports a language.
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+
+        _ = await PushAsync(segmenter, 0, 1_500, 500);
+        var asked = transcriber.DetectLanguageFlags.Count;
+        AssertEx.True(asked > 0, "A window was submitted.");
+        transcriber.DetectedLanguageCode = "en";
+        _ = await PushAsync(segmenter, 1_500, 4_000, 500);
+
+        var flags = transcriber.DetectLanguageFlags;
+        AssertEx.True(flags.Take(asked + 1).All(static flag => flag), $"Detection is asked for until a window reports a language: {string.Join(',', flags)}");
+        AssertEx.True(flags.Count > asked + 1 && flags.Skip(asked + 1).All(static flag => !flag), $"and not after: {string.Join(',', flags)}");
+        AssertEx.Equal("en", segmenter.DetectedLanguageCode);
+    }
+
+    [Test]
+    public async Task ExplicitLanguage_NeverAsksForDetection()
+    {
+        // The live round's session 979d7368: English forced, yet the first window asked for language probabilities and
+        // whisper-server answered 500 because VAD found no speech in it.
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = new LiveTranscriptionSegmenter(transcriber, TranscriptChannel.Mono, ModelId, languageCode: "en", translate: false,
+            Settings(maxWindowSeconds: 5));
+
+        _ = await PushAsync(segmenter, 0, 3_000, 500);
+
+        var flags = transcriber.DetectLanguageFlags;
+        AssertEx.True(flags.Count > 0 && flags.All(static flag => !flag), $"No request asks for detection: {string.Join(',', flags)}");
+        AssertEx.Null(segmenter.DetectedLanguageCode, "A forced language is not a detected one.");
     }
 
     [Test]
@@ -654,6 +739,9 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
     /// <summary>Thrown instead of answering, when set.</summary>
     public Exception? Failure { get; set; }
 
+    /// <summary>Each thrown once, in order, before <see cref="Failure" /> or an answer is considered.</summary>
+    public Queue<Exception> FailOnce { get; } = new();
+
     /// <summary>The code every answer reports, or <see langword="null" /> to report none.</summary>
     public string? DetectedLanguageCode { get; set; }
 
@@ -678,6 +766,11 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
         var window = LivePcm.Decode(WavPayload.Read(buffer.ToArray()));
         _windows.Add(window);
         _detectLanguageFlags.Add(request.DetectLanguage);
+
+        if (FailOnce.TryDequeue(out var once))
+        {
+            throw once;
+        }
 
         if (Failure is not null)
         {

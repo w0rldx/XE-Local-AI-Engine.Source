@@ -8,7 +8,7 @@ public sealed class SdBinary
     /// <summary>Absolute path to the resolved <c>sd-server</c> executable.</summary>
     public required string ServerExecutablePath { get; init; }
 
-    /// <summary>The stable-diffusion.cpp rolling release tag the binary was built from (for example <c>master-742-1a13107</c>).</summary>
+    /// <summary>The stable-diffusion.cpp rolling release tag the binary was built from (for example <c>master-913-b167b94</c>).</summary>
     public required string Version { get; init; }
 
     /// <summary>The acceleration backend of the resolved binary.</summary>

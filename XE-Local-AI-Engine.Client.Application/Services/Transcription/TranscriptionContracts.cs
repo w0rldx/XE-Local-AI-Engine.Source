@@ -363,3 +363,29 @@ public sealed class LiveTranscriptionSourceKindException : Exception
     /// <summary>The source kind that was refused.</summary>
     public TranscriptionSourceKind SourceKind { get; }
 }
+
+/// <summary>Which of the four ways a transcript-row edit can end actually happened.</summary>
+public enum UpdateTranscriptSegmentOutcome
+{
+    /// <summary>The row holds the new text.</summary>
+    Updated = 0,
+
+    /// <summary>The session id is unknown.</summary>
+    SessionNotFound = 1,
+
+    /// <summary>The session holds no row with that sequence.</summary>
+    SegmentNotFound = 2,
+
+    /// <summary>The session is still transcribing; its transcript is not the operator's to edit yet.</summary>
+    SessionTranscribing = 3
+}
+
+/// <summary>The outcome of one transcript-row edit, as data rather than as an exception.</summary>
+public sealed record UpdateTranscriptSegmentResult
+{
+    /// <summary>What happened.</summary>
+    public required UpdateTranscriptSegmentOutcome Outcome { get; init; }
+
+    /// <summary>The row as it now reads; set only when <see cref="Outcome" /> is <c>Updated</c>.</summary>
+    public TranscriptSegmentView? Segment { get; init; }
+}

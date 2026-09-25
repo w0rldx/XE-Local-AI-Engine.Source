@@ -1326,6 +1326,9 @@ import type {
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionErrors,
 	UpdateTrainingDefinitionResponses,
+	UpdateTranscriptSegmentData,
+	UpdateTranscriptSegmentErrors,
+	UpdateTranscriptSegmentResponses,
 	UpdateWorkSessionData,
 	UpdateWorkSessionErrors,
 	UpdateWorkSessionResponses,
@@ -2242,6 +2245,9 @@ import {
 	zUpdateTrainingDefinitionBody,
 	zUpdateTrainingDefinitionPath,
 	zUpdateTrainingDefinitionResponse,
+	zUpdateTranscriptSegmentBody,
+	zUpdateTranscriptSegmentPath,
+	zUpdateTranscriptSegmentResponse,
 	zUpdateWorkSessionBody,
 	zUpdateWorkSessionPath,
 	zUpdateWorkSessionResponse,
@@ -15632,6 +15638,40 @@ export const startLiveTranscriptionSession = <ThrowOnError extends boolean = fal
 		],
 		url: "/api/local/v1/transcription/sessions/{sessionId}/live/start",
 		...options,
+	});
+
+export const updateTranscriptSegment = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateTranscriptSegmentData, ThrowOnError>,
+): RequestResult<UpdateTranscriptSegmentResponses, UpdateTranscriptSegmentErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateTranscriptSegmentResponses, UpdateTranscriptSegmentErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateTranscriptSegmentBody,
+					path: zUpdateTranscriptSegmentPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateTranscriptSegmentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/segments/{seq}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getTutorialState = <ThrowOnError extends boolean = false>(

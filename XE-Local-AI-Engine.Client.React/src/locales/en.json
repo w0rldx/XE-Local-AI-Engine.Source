@@ -4051,7 +4051,8 @@
 						"TightHint": "The resident weights ({{resident}}) only just fit inside the measured budget ({{budget}}). Expect it to be slow.",
 						"WontFitHint": "The resident weights ({{resident}}) exceed the measured budget ({{budget}}).",
 						"UnknownHint": "This machine's memory budget could not be measured, so no claim is made about whether this model runs."
-					}
+					},
+					"researchLicense": "Non-commercial research license"
 				},
 				"browse": {
 					"title": "Browse Hugging Face",
@@ -4088,7 +4089,8 @@
 							"file": "File",
 							"role": "Role",
 							"size": "Size"
-						}
+						},
+						"diffusersLayoutUnsupported": "This repository stores the model in Diffusers layout, which the local image runtime cannot load. Pick a single-file GGUF or safetensors checkpoint."
 					},
 					"modelName": {
 						"label": "Install as",
@@ -6221,12 +6223,8 @@
 				"namePlaceholder": "Nightly triage",
 				"descriptionLabel": "Description",
 				"descriptionPlaceholder": "What this workflow is for.",
-				"columns": {
-					"name": "Name",
-					"nodes": "Nodes",
-					"version": "Version",
-					"updated": "Updated"
-				}
+				"meta_one": "{{count}} node · v{{version}} · updated {{updated}}",
+				"meta_other": "{{count}} nodes · v{{version}} · updated {{updated}}"
 			},
 			"run": {
 				"label": "Run graph",
@@ -7026,8 +7024,6 @@
 				"languageAuto": "Detect automatically",
 				"translateLabel": "Translate to English",
 				"translateDescription": "Transcribe the speech and translate the result into English.",
-				"maxWindowLabel": "Capture window (seconds)",
-				"maxWindowDescription": "How much audio each live segment covers.",
 				"channelAttributionLabel": "Attribute channels",
 				"channelAttributionDescription": "Label each segment as you or the others. Needs both microphone and system audio.",
 				"submit": "Transcribe",
@@ -7113,6 +7109,16 @@
 				"sendToChat": "Send to chat",
 				"processMissing": "This browser no longer remembers which application this session was created for, so capture cannot be started. Create a new session and pick the application again."
 			},
+			"segment": {
+				"edit": "Edit segment text",
+				"textLabel": "Segment text",
+				"save": "Save",
+				"cancel": "Cancel",
+				"saved": "Segment text saved.",
+				"failed": "Could not save the segment text.",
+				"tooLong": "The text is too long (at most 8000 characters).",
+				"transcribing": "This session is still transcribing; edit it once it has finished."
+			},
 			"live": {
 				"hint": "Segments appear as the runtime commits them. Audio is never stored.",
 				"waiting": "Listening — the first segment appears once enough speech has been captured.",
@@ -7123,6 +7129,13 @@
 				"start": "Start capture",
 				"stop": "Stop capture",
 				"finalizing": "Finalizing transcript…",
+				"behind": "Transcribing… {{seconds}} s behind",
+				"finishing": "Finishing the last {{seconds}} s…",
+				"startStatus": {
+					"preparing": "Preparing the transcription runtime… this can take a minute on first use",
+					"loadingModel": "Loading the model…",
+					"starting": "Starting…"
+				},
 				"cancel": "Cancel now",
 				"replayStalled": "The node stopped sending missed segments. The transcript on screen may be incomplete — reload the page to fetch it again.",
 				"error": {
@@ -7131,7 +7144,6 @@
 					"no-device": "No usable microphone was found on this computer.",
 					"no-audio-track": "The shared screen came back without audio. Share a whole screen and tick 'share audio'.",
 					"worklet-failed": "The browser's audio engine could not be started, so nothing was captured.",
-					"overloaded": "This node could not keep up with the audio, so capture was stopped. Everything committed so far is kept.",
 					"start-failed": "The node refused to open this live session. It may already have finished.",
 					"disconnected": "The live connection to this node was lost, so capture was stopped. Reload the page and start again.",
 					"subscribeFailed": "This node did not open the live transcript for this session. Reload the page to try again.",
@@ -7140,7 +7152,9 @@
 					"capture-not-supported": "This node cannot capture a single application's audio. That needs Windows 10 build 20348 or later.",
 					"session-not-live": "This session was not open on the node, so there was nothing for the application's audio to feed. Reload the page and start again.",
 					"capture-already-running": "This session is already capturing an application. Stop it before starting another one.",
-					"stop-failed": "Capture stopped here, but this node never confirmed it. The stop is retried as soon as the connection is back — keep this page open."
+					"stop-failed": "Capture stopped here, but this node never confirmed it. The stop is retried as soon as the connection is back — keep this page open.",
+					"start-timeout": "The microphone did not start within 20 seconds. Check the browser or desktop permission prompt and start again.",
+					"live-never-attached": "The node received no audio. Check the microphone permission and the input device, then start again."
 				},
 				"notConnected": "Connecting to this node — start becomes available once the live connection is ready."
 			}

@@ -19,8 +19,10 @@ describe("GraphWorkflowDefinitionList", () => {
 			<GraphWorkflowDefinitionList definitions={[first, second]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
 		);
 
-		expect(screen.getByTestId("gw-definition-open-def-1").textContent).toBe("Nightly triage");
-		expect(screen.getByTestId("gw-definition-open-def-2").textContent).toBe("Release notes");
+		expect(screen.getByTestId("gw-definition-name-def-1").textContent).toBe("Nightly triage");
+		expect(screen.getByTestId("gw-definition-name-def-2").textContent).toBe("Release notes");
+		// Rows, not a table: five columns in the fixed-width rail forced a horizontal scrollbar.
+		expect(screen.queryByRole("table")).toBeNull();
 		expect(screen.queryByTestId("gw-definition-list-empty")).toBeNull();
 	});
 
@@ -32,6 +34,31 @@ describe("GraphWorkflowDefinitionList", () => {
 
 		expect(screen.getByTestId("gw-definition-chat-badge-def-3").textContent).toBe("Chat");
 		expect(screen.queryByTestId("gw-definition-chat-badge-def-1")).toBeNull();
+	});
+
+	it("summarises nodes, version and update time on one meta line, the name carrying its full text as a title", () => {
+		renderWithProviders(
+			<GraphWorkflowDefinitionList definitions={[first, second]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+		);
+
+		expect(screen.getByTestId("gw-definition-meta-def-1").textContent).toMatch(/^8 nodes · v3 · updated /);
+		expect(screen.getByTestId("gw-definition-name-def-2").getAttribute("title")).toBe("Release notes");
+	});
+
+	it("marks only the selected row as current", () => {
+		renderWithProviders(
+			<GraphWorkflowDefinitionList
+				definitions={[first, second]}
+				selectedId="def-2"
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("gw-definition-open-def-2").getAttribute("aria-current")).toBe("true");
+		expect(screen.getByTestId("gw-definition-open-def-1").getAttribute("aria-current")).toBeNull();
+		expect(screen.getByTestId("gw-definition-row-def-2").getAttribute("data-selected")).toBe("true");
 	});
 
 	it("reports the row the operator opened and the row they deleted", () => {
@@ -59,13 +86,13 @@ describe("GraphWorkflowDefinitionList", () => {
 		expect(onCreate).toHaveBeenCalledTimes(1);
 	});
 
-	it("shows the empty state rather than a headed table with no rows", () => {
+	it("shows the empty state rather than an empty list", () => {
 		renderWithProviders(
 			<GraphWorkflowDefinitionList definitions={[]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
 		);
 
 		expect(screen.getByTestId("gw-definition-list-empty").textContent).toBe("No workflows yet. Create one to start authoring.");
-		expect(screen.queryByTestId("gw-definition-table")).toBeNull();
+		expect(screen.queryByTestId("gw-definition-rows")).toBeNull();
 	});
 
 	it("renders a load failure as an alert instead of an empty list", () => {

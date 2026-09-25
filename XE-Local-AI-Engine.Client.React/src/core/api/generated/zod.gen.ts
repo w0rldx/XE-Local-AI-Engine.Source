@@ -3517,6 +3517,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse 
 	format: z.string(),
 	sizeBytes: z.int(),
 	suggestedRole: z.string(),
+	unsupportedReason: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = z.object({
@@ -5621,6 +5622,11 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResp
 	confidence: z.number().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentUpdateBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto = z.enum(["cpu", "cuda"]);
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto = z.enum(["pinned", "managed", "byo"]);
@@ -5791,6 +5797,10 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsuppor
 	detectedContainer: z.string(),
 	supportedContainers: z.array(z.string()),
 	ffmpegRequired: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest = z.object({
+	text: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest = z.object({
@@ -11722,6 +11732,18 @@ export const zStartLiveTranscriptionSessionPath = z.object({
  */
 export const zStartLiveTranscriptionSessionResponse =
 	zXeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse;
+
+export const zUpdateTranscriptSegmentBody = zXeLocalAiEngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest;
+
+export const zUpdateTranscriptSegmentPath = z.object({
+	sessionId: z.guid(),
+	seq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateTranscriptSegmentResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse;
 
 /**
  * Success

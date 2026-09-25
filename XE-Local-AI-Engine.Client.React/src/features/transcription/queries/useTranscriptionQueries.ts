@@ -16,6 +16,7 @@ import {
 	startLiveTranscriptionSessionMutation,
 	startProcessCaptureMutation,
 	startTranscriptionModelDownloadMutation,
+	updateTranscriptSegmentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -142,13 +143,42 @@ export function useCancelTranscriptionSession() {
 	});
 }
 
+// Rewrites one committed segment's text on a finished session. The response is the updated row, so the cached detail
+// is patched in place by seq rather than re-reading (and re-decrypting) the whole transcript.
+export function useUpdateTranscriptSegment(sessionId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({ seq, text }: { seq: number; text: string }) => {
+			const options = withResponseValidation(updateTranscriptSegmentMutation());
+			return await options.mutationFn?.({ path: { sessionId, seq }, body: { text } }, undefined as never);
+		},
+		onSuccess: async (updated) => {
+			if (updated === undefined) {
+				return;
+			}
+			const { queryKey } = getTranscriptionSessionOptions({ path: { sessionId } });
+			// A refetch already in flight carries the pre-edit text and would land on top of the patch.
+			await queryClient.cancelQueries({ queryKey });
+			queryClient.setQueryData(queryKey, (detail) =>
+				detail === undefined
+					? detail
+					: { ...detail, segments: detail.segments.map((row) => (row.seq === updated.seq ? updated : row)) },
+			);
+		},
+	});
+}
+
 // Whisper runtime status: state, backend, selected vs recommended model, VAD and the managed build. backend /
 // binarySource / binaryVersion stay null until a daemon has spawned — a null is "not started", never "not installed".
-export function useTranscriptionRuntimeStatus() {
+// `poll` is for a caller waiting on the runtime (a live start): enabled only then, re-read every 2 s.
+export function useTranscriptionRuntimeStatus(poll?: boolean) {
 	return useQuery({
 		...withResponseValidation(getTranscriptionRuntimeStatusOptions()),
 		select: toTranscriptionRuntimeView,
 		staleTime: 10_000,
+		enabled: poll ?? true,
+		refetchInterval: poll === true ? 2000 : false,
 	});
 }
 

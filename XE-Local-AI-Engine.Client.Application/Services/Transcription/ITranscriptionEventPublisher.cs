@@ -43,4 +43,17 @@ public interface ITranscriptionEventPublisher
     ///     persist-free session — which moves no row at all — still tells its client what happened.
     /// </summary>
     Task PublishStatusAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken);
+
+    /// <summary>Announces how much of a live session's audio is queued but not yet transcribed, summed over its lanes.</summary>
+    /// <remarks>
+    ///     Sent at most once per second of audio consumed while behind, once with <c>0</c> when the session catches up,
+    ///     once when a graceful stop starts draining, and never after <see cref="PublishStatusAsync" />.
+    /// </remarks>
+    Task PublishCatchUpAsync(Guid sessionId, long bufferedMs, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Announces that a live session stopped admitting audio and is draining toward a graceful end. Sent once, before
+    ///     the drain-start catch-up report; never for an abort, which gets its terminal status at once.
+    /// </summary>
+    Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken);
 }

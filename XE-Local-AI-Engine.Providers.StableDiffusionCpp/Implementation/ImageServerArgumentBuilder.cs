@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 ///     Per-generation parameters (prompt, steps, seed, cfg) are NOT here — they ride the per-job HTTP body (<see cref="SdServerJobClient" />) — so startup args carry only the resident concerns: bind
 ///     address, model file-set, backend and threads. Model selection follows the file-set shape: a single <see cref="ImageModelPartRole.Diffusion" /> part (SD1.5) uses <c>-m</c>, a multi-part set
 ///     (FLUX/SD3/Qwen-Image) uses <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c> [+ <c>--llm</c> + <c>--llm_vision</c>]. Verified @
-///     <c>master-742-1a13107</c>. Two Qwen-adjacent flags are deliberately NOT emitted — see docs/wiki/14-image-generation.md ("sd-server flags never emitted").
+///     <c>master-913-b167b94</c>. Two Qwen-adjacent settings are deliberately NOT emitted — see docs/wiki/14-image-generation.md ("sd-server flags never emitted").
 /// </remarks>
 internal static class ImageServerArgumentBuilder
 {
@@ -112,7 +112,7 @@ internal static class ImageServerArgumentBuilder
                     args.Add(part.LocalPath);
                     break;
                 case ImageModelPartRole.Llm:
-                    // Qwen-Image's text encoder is a full language model (Qwen2.5-VL), not a CLIP/T5 encoder.
+                    // Qwen-Image's text encoder is a full language model (Qwen2.5-VL; Qwen3-VL for 2.1), not a CLIP/T5 encoder.
                     args.Add("--llm");
                     args.Add(part.LocalPath);
                     break;

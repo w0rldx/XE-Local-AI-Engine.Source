@@ -5,12 +5,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { type CaptureChannel, CaptureError } from "@/features/transcription/capture/CaptureSource";
 import {
+	TRANSCRIPTION_ADMISSION_CLOSED,
+	TRANSCRIPTION_CATCH_UP_PROGRESS,
 	TRANSCRIPTION_PARTIAL_UPDATED,
 	TRANSCRIPTION_SEGMENT_COMMITTED,
 	TRANSCRIPTION_SESSION_STATUS_CHANGED,
 	type TranscriptionSegmentPush,
 	channelToWire,
 	fromWireChannel,
+	transcriptionAdmissionClosedPushSchema,
+	transcriptionCatchUpProgressPushSchema,
 	transcriptionPartialPushSchema,
 	transcriptionSegmentPushSchema,
 	transcriptionSnapshotSchema,
@@ -30,14 +34,9 @@ import {
 // the client cannot send raises instead of being dropped.
 
 const HUB_PATH = "transcription/hub";
-
-/**
- * At most eight `PushAudioFrame` invocations awaited at once: a LATENCY budget, not a throughput one. The node queues
- * each frame and returns, so an invoke is outstanding for one hub round-trip; eight 250 ms frames tolerate a 2 s
- * round-trip (1 s with microphone and system audio both sending) before capture stops as `overloaded`. The node owns
- * the real backpressure: it drains a lane that is behind one window at a time and refuses sustained lag itself.
- */
-const MAX_FRAMES_IN_FLIGHT = 8;
+// An acknowledgement timeout, not a health check: the node acknowledges a frame once it is queued, so an invoke
+// unacknowledged for 30 s is a stalled transport.
+const PUSH_FRAME_TIMEOUT_MS = 30_000;
 
 export interface CommittedSegment {
 	readonly seq: number;
@@ -54,6 +53,11 @@ export interface LiveTranscriptView {
 	/** One provisional line per channel. Replaced on each update — provisional text is never accumulated. */
 	readonly partials: Readonly<Partial<Record<CaptureChannel, string>>>;
 	readonly status: string;
+	/**
+	 * Captured audio the node has buffered but not yet transcribed, from `transcriptionCatchUpProgress`. Null until the
+	 * first progress push: "no report yet" and "caught up" (0) read differently while a stop drains.
+	 */
+	readonly bufferedMs: number | null;
 	/** The watermark every row up to which has actually been delivered. What a reconnect resumes from. */
 	readonly lastSeq: number;
 	readonly replayTruncated: boolean;
@@ -88,6 +92,12 @@ function toSubscribeFailureCode(error: unknown): string {
 	return HUB_REFUSAL_CODE.test(message) ? message : "transcription-subscribe-failed";
 }
 
+/** The terminal status the node pushed for this session while this hook was subscribed. */
+export interface TranscriptionTerminalStatus {
+	readonly status: string;
+	readonly errorCode: string | null;
+}
+
 export interface TranscriptionHubHandle {
 	/**
 	 * True when the transport is connected AND the subscription snapshot has resolved AND every `ReplayTruncated`
@@ -101,7 +111,21 @@ export interface TranscriptionHubHandle {
 	readonly replayStalled: TranscriptionReplayStalled | null;
 	/** Non-null once the node refused the subscription; cleared by the next subscribe that completes. */
 	readonly subscribeFailed: TranscriptionSubscribeFailed | null;
-	/** Rejects when the send fails, at the in-flight limit, or while the transport is down. Never drops a frame. */
+	/**
+	 * True once the node announced it stopped accepting audio for this session (`transcriptionAdmissionClosed`): a
+	 * graceful end is draining, so a frame sent now would be discarded. Cleared by every subscribe.
+	 */
+	readonly admissionClosed: boolean;
+	/**
+	 * Non-null once the node pushed this session's terminal status live. Unlike `admissionClosed` it is not cleared by a
+	 * re-subscribe: a session that ended stays ended.
+	 */
+	readonly terminal: TranscriptionTerminalStatus | null;
+	/**
+	 * Rejects when the send fails, the transport is down, or an invoke stays open past the stall timeout; never drops a
+	 * frame. There is no in-flight limit: SignalR runs one connection's invocations in order and the node returns as
+	 * soon as the frame is queued, buffering while it is behind.
+	 */
 	pushFrame(channel: CaptureChannel, pcm: Int16Array): Promise<void>;
 	/**
 	 * Ends the live session over the hub. Resolves **true** once `EndSession` was invoked, **false** when there was no
@@ -151,15 +175,18 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 	const [connected, setConnected] = useState(false);
 	const [replayStalled, setReplayStalled] = useState<TranscriptionReplayStalled | null>(null);
 	const [subscribeFailed, setSubscribeFailed] = useState<TranscriptionSubscribeFailed | null>(null);
+	const [admissionClosed, setAdmissionClosed] = useState(false);
+	const [terminal, setTerminal] = useState<TranscriptionTerminalStatus | null>(null);
 	// The live connection, read by pushFrame/endSession without re-creating them on every reconnect.
 	const connectionRef = useRef<ReturnType<typeof acquireHubConnection>["connection"] | null>(null);
-	const inFlightRef = useRef(0);
 
 	useEffect(() => {
 		if (sessionId === null) {
 			setConnected(false);
 			setReplayStalled(null);
 			setSubscribeFailed(null);
+			setAdmissionClosed(false);
+			setTerminal(null);
 			return;
 		}
 
@@ -185,6 +212,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		// The published watermark. It only ever names a cursor every row up to which has been delivered.
 		let lastSeq = 0;
 		let status = "";
+		let bufferedMs: number | null = null;
 		let replayTruncated = false;
 		// A terminal status that arrived live must not be overwritten by a snapshot still reporting `Transcribing`.
 		let liveStatusSeen = false;
@@ -194,6 +222,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 				committed: [...committed.values()].sort((left, right) => left.startMs - right.startMs || left.seq - right.seq),
 				partials: { ...partials },
 				status,
+				bufferedMs,
 				lastSeq,
 				replayTruncated,
 			} satisfies LiveTranscriptView);
@@ -240,6 +269,22 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			render();
 		};
 
+		const onCatchUpProgress = (payload: unknown): void => {
+			const parsed = transcriptionCatchUpProgressPushSchema.safeParse(payload);
+			if (!parsed.success || !isSameSession(parsed.data.sessionId, sessionId)) {
+				return;
+			}
+			bufferedMs = parsed.data.bufferedMs;
+			render();
+		};
+
+		const onAdmissionClosed = (payload: unknown): void => {
+			const parsed = transcriptionAdmissionClosedPushSchema.safeParse(payload);
+			if (parsed.success && isSameSession(parsed.data.sessionId, sessionId)) {
+				setAdmissionClosed(true);
+			}
+		};
+
 		const onStatus = (payload: unknown): void => {
 			const parsed = transcriptionStatusPushSchema.safeParse(payload);
 			if (!parsed.success || !isSameSession(parsed.data.sessionId, sessionId)) {
@@ -247,6 +292,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			}
 			liveStatusSeen = true;
 			status = parsed.data.status;
+			setTerminal({ status: parsed.data.status, errorCode: parsed.data.errorCode ?? null });
 			render();
 		};
 
@@ -263,6 +309,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			buffered = [];
 			stalled = false;
 			setConnected(false);
+			setAdmissionClosed(false);
 			// The drain's own cursor. The published `lastSeq` is only moved once the LAST page has landed.
 			let cursor = lastSeq;
 			try {
@@ -335,6 +382,8 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		connection.on(TRANSCRIPTION_SEGMENT_COMMITTED, onSegment);
 		connection.on(TRANSCRIPTION_PARTIAL_UPDATED, onPartial);
 		connection.on(TRANSCRIPTION_SESSION_STATUS_CHANGED, onStatus);
+		connection.on(TRANSCRIPTION_CATCH_UP_PROGRESS, onCatchUpProgress);
+		connection.on(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
 
 		// A reconnect is a subscription like any other: it re-subscribes from the watermark it has, never from 0, and
 		// goes through the same buffer-then-merge path.
@@ -351,6 +400,8 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			connection.off(TRANSCRIPTION_SEGMENT_COMMITTED, onSegment);
 			connection.off(TRANSCRIPTION_PARTIAL_UPDATED, onPartial);
 			connection.off(TRANSCRIPTION_SESSION_STATUS_CHANGED, onStatus);
+			connection.off(TRANSCRIPTION_CATCH_UP_PROGRESS, onCatchUpProgress);
+			connection.off(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
 			removeReconnected();
 			removeReconnecting();
 			removeClosed();
@@ -368,26 +419,27 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			const connection = connectionRef.current;
 			if (sessionId === null || connection === null || connection.state !== HubConnectionState.Connected) {
 				// Not a drop: speech the node never received is a hole in the transcript, and a hole nobody is told about
-				// is worse than a stopped capture. `disconnected` rather than `overloaded`: both stop capture, but a dead
-				// transport told as "this node could not keep up" sends the operator after a performance problem it
-				// does not have.
+				// is worse than a stopped capture.
 				throw new CaptureError("disconnected", "the transcription hub is not connected");
 			}
-			if (inFlightRef.current >= MAX_FRAMES_IN_FLIGHT) {
-				throw new CaptureError("overloaded", "the transcription hub already has the maximum frames in flight");
-			}
-			inFlightRef.current += 1;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const stalled = new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() => reject(new CaptureError("disconnected", "the transcription hub stopped completing frames")),
+					PUSH_FRAME_TIMEOUT_MS,
+				);
+			});
 			try {
-				await connection.invoke("PushAudioFrame", sessionId, channelToWire(channel), toBase64(pcm));
+				await Promise.race([connection.invoke("PushAudioFrame", sessionId, channelToWire(channel), toBase64(pcm)), stalled]);
 			} finally {
-				inFlightRef.current -= 1;
+				clearTimeout(timer);
 			}
 		},
 		[sessionId],
 	);
 
-	// Never waits behind an outstanding frame: the caller stops its sources first, and a pending `PushAudioFrame` may
-	// still be inside a 30 s inference when the operator presses stop.
+	// Never waits behind an outstanding frame: the caller stops its sources first. The node returns from
+	// `PushAudioFrame` as soon as the frame is queued, so a frame still pending here is a slow transport, not inference.
 	const endSession = useCallback(async (): Promise<boolean> => {
 		const connection = connectionRef.current;
 		if (sessionId === null || connection === null || connection.state !== HubConnectionState.Connected) {
@@ -399,5 +451,14 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		return true;
 	}, [sessionId]);
 
-	return { connected, subscriptionReady: connected, replayStalled, subscribeFailed, pushFrame, endSession };
+	return {
+		connected,
+		subscriptionReady: connected,
+		replayStalled,
+		subscribeFailed,
+		admissionClosed,
+		terminal,
+		pushFrame,
+		endSession,
+	};
 }

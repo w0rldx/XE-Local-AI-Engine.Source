@@ -127,6 +127,17 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 						<Text size="xs" c="dimmed" truncate={true}>
 							{entry.repoId} · {entry.license}
 						</Text>
+						{entry.license === "qwen-research" ? (
+							<Badge
+								color="orange"
+								variant="light"
+								size="xs"
+								w="fit-content"
+								data-testid={`image-model-catalog-research-license-${entry.id}`}
+							>
+								{t("pages.images.models.catalog.researchLicense", "Non-commercial research license")}
+							</Badge>
+						) : null}
 					</Stack>
 					{entry.isInstalled ? (
 						<Badge

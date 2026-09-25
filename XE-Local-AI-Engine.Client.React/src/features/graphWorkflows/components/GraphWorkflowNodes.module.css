@@ -32,13 +32,41 @@
 	min-width: 0;
 }
 
+/* React Flow's default handle is a 6 px dot, which operators could barely hit. A 14 px dot with a ring in the card's
+   own background colour reads in light and dark alike; the pseudo-element widens the grab area to about 28 px without
+   moving the dot off the card edge (React Flow positions the handle, a pseudo-element hit-tests as the handle). Scoped
+   under `.node` so it outranks `.react-flow__handle` and never reaches the read-only run view, which has its own card. */
+
+.node .handle {
+	width: 14px;
+	height: 14px;
+	min-width: 14px;
+	min-height: 14px;
+	background-color: var(--mantine-primary-color-filled);
+	border: 2px solid var(--mantine-color-body);
+	box-shadow: 0 0 0 1px var(--mantine-color-default-border);
+	transition: box-shadow 120ms ease;
+}
+
+.node .handle::before {
+	content: "";
+	position: absolute;
+	inset: -7px;
+	border-radius: 50%;
+}
+
+.node .handle:hover,
+.node .handle:focus-visible {
+	box-shadow: 0 0 0 4px var(--mantine-primary-color-light-hover);
+}
+
 /* Condition and Pause carry more than one source handle, so each needs a caption saying which branch leaves it.
    Rendered as the handle's own child, because React Flow positions the handle and nothing else knows where it put it.
    The handles sit on the card's right edge (the layout ranks left to right), so the caption sits to their right. */
 
 .handle-caption {
 	position: absolute;
-	left: 10px;
+	left: 18px;
 	top: 50%;
 	transform: translateY(-50%);
 	font-size: 10px;

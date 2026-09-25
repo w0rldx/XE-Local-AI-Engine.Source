@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { LiveCaptureErrorCode, LiveCaptureState } from "@/features/transcription/capture/useLiveCapture";
 import type { TranscriptionSubscribeFailed } from "@/features/transcription/hooks/useTranscriptionHub";
-import type { TranscriptionSourceKind } from "@/features/transcription/models/TranscriptionModels";
+import type { TranscriptionRuntimeView, TranscriptionSourceKind } from "@/features/transcription/models/TranscriptionModels";
 
 interface CaptureControlsProps {
 	readonly sourceKind: TranscriptionSourceKind;
@@ -18,6 +18,10 @@ interface CaptureControlsProps {
 	readonly subscribeFailed: TranscriptionSubscribeFailed | null;
 	/** The end of the last committed segment — AUDIO time, which is the only clock the transcript itself keeps. */
 	readonly elapsedMs: number;
+	/** Audio the node has buffered but not yet transcribed; null until it has reported any. */
+	readonly bufferedMs: number | null;
+	/** The runtime's state while a start is pending; null when unknown. Only read while `state` is `starting`. */
+	readonly runtimeState: TranscriptionRuntimeView["state"] | null;
 	readonly onStart: () => void;
 	readonly onStop: () => void;
 	readonly onCancel: () => void;
@@ -48,6 +52,17 @@ function sourceBadgeKeys(sourceKind: TranscriptionSourceKind): readonly string[]
  * The refusals worth their own sentence, because each has a different thing for the operator to do. Everything else
  * the node or the transport can refuse with reads the same to them, so it shares one string.
  */
+/**
+ * What a pending start is waiting on. The runtime reports `starting` only once its binary is in place, so `stopped`
+ * while a start is pending is the first-use binary download (or the backend probe before it) and `starting` is the
+ * model load.
+ */
+const startStatusKeys: Readonly<Record<TranscriptionRuntimeView["state"], string>> = {
+	stopped: "pages.transcription.capture.startStatus.preparing",
+	starting: "pages.transcription.capture.startStatus.loadingModel",
+	ready: "pages.transcription.capture.startStatus.starting",
+};
+
 const subscribeErrorKeys: Readonly<Record<string, string>> = {
 	"transcription-session-not-found": "pages.transcription.capture.error.subscribeSessionNotFound",
 	"transcription-disabled": "pages.transcription.capture.error.subscribeDisabled",
@@ -62,6 +77,8 @@ export function CaptureControls({
 	connected,
 	subscribeFailed,
 	elapsedMs,
+	bufferedMs,
+	runtimeState,
 	onStart,
 	onStop,
 	onCancel,
@@ -70,13 +87,16 @@ export function CaptureControls({
 	// While a start is still acquiring devices the Start button stays in place and busy: offering Stop there would
 	// race the acquisition it is meant to undo.
 	const canStop = state === "capturing";
+	const behindSeconds = bufferedMs === null ? 0 : Math.ceil(bufferedMs / 1000);
 
 	return (
 		<Group gap="sm" align="center" wrap="wrap">
 			{state === "stopping" ? (
 				<>
 					<Button variant="light" disabled={true} data-testid="transcription-capture-finalizing">
-						{t("pages.transcription.capture.finalizing")}
+						{behindSeconds > 0
+							? t("pages.transcription.capture.finishing", { seconds: behindSeconds })
+							: t("pages.transcription.capture.finalizing")}
 					</Button>
 					<Button variant="light" color="red" onClick={onCancel} data-testid="transcription-capture-cancel">
 						{t("pages.transcription.capture.cancel")}
@@ -105,6 +125,18 @@ export function CaptureControls({
 					{t("pages.transcription.capture.start")}
 				</Button>
 			)}
+
+			{state === "starting" ? (
+				<Text size="sm" c="dimmed" data-testid="transcription-capture-start-status">
+					{t(runtimeState === null ? startStatusKeys.ready : startStatusKeys[runtimeState])}
+				</Text>
+			) : null}
+
+			{state === "capturing" && behindSeconds > 0 ? (
+				<Text size="sm" c="dimmed" data-testid="transcription-capture-behind">
+					{t("pages.transcription.capture.behind", { seconds: behindSeconds })}
+				</Text>
+			) : null}
 
 			{state === "capturing" || state === "stopping" || connected ? null : (
 				<Text size="sm" c="dimmed" data-testid="transcription-capture-not-ready">

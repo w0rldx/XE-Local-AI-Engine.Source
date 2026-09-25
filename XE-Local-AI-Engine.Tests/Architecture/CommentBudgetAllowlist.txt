@@ -1122,7 +1122,6 @@ XE-Local-AI-Engine.Tests/Images/ImageJobCoordinatorTests.cs|run|3
 XE-Local-AI-Engine.Tests/Images/ImageJobCoordinatorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Images/ImageJobSeedWriteBackTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Images/ImageJobStartupReconcilerTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Images/ImageModelCatalogTests.cs|run|1
 XE-Local-AI-Engine.Tests/Images/ImageModelCatalogTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Images/ImageModelDownloadCoordinatorTests.cs|run|1
 XE-Local-AI-Engine.Tests/Images/ImageModelDownloadCoordinatorTests.cs|summary|1
@@ -1660,7 +1659,7 @@ XE-Local-AI-Engine.Tests/Transcription/LiveSegmenterGoldenTests.cs|remarks|1
 XE-Local-AI-Engine.Tests/Transcription/LiveSessionEndToEndTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSegmenterTests.cs|run|2
 XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSessionRegistryTests.cs|remarks|1
-XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSessionRegistryTests.cs|run|7
+XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSessionRegistryTests.cs|run|5
 XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSessionRegistryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Transcription/ProcessAudioCaptureCoordinatorTests.cs|block|1
 XE-Local-AI-Engine.Tests/Transcription/ProcessAudioCaptureCoordinatorTests.cs|remarks|1

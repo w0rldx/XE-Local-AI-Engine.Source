@@ -81,15 +81,54 @@ Like the text runtime, a `StaleImageServerReaper` runs at startup to reap `sd-se
 
 ## sd-server flags never emitted
 
-`ImageServerArgumentBuilder` is the only place sd-server startup flag names live, and two Qwen-adjacent flags the
+`ImageServerArgumentBuilder` is the only place sd-server startup flag names live, and two Qwen-adjacent settings the
 pinned binary offers are left out on purpose:
 
 - **`--flow-shift`** documents itself as `default: auto`, so passing a hand-picked value would replace a model-aware
   default with a guess.
-- **`--qwen-image-zero-cond-t`** is an *edit*-model conditioning switch (Qwen-Image-Edit); emitting it would change
-  conditioning for the text-to-image sets this install path ships.
+- **`qwen_image_zero_cond_t`** is an *edit*-model conditioning switch (Qwen-Image-Edit); emitting it would change
+  conditioning for the text-to-image sets this install path ships. Since `master-913-b167b94` it is no longer a
+  standalone flag but a `--model-args` key.
 
 Both stay off until there is a measurement that says otherwise.
+
+## The curated Qwen-Image 2.1 set
+
+The catalog ships `qwen-image-2.1` and no longer ships the original `qwen-image`. The set spans three repositories and
+totals about 10 GB:
+
+| Role | File | Repository |
+|---|---|---|
+| Diffusion | `qwen_image_2.1-Q4_K.gguf` | `leejet/Qwen-Image-2.1-GGUF` |
+| Vae | `vae/qwen_image_2.1_vae_bf16.safetensors` | `Comfy-Org/Qwen-Image-2.1` |
+| Llm | `Qwen3VL-8B-Instruct-Q4_K_M.gguf` | `Qwen/Qwen3-VL-8B-Instruct-GGUF` |
+
+The weights are under the **Qwen Research License**, which allows non-commercial research use only. The catalog
+entry says so in its `license` (`qwen-research`) and `notes` fields, and it is not marked recommended. The 2.1 VAE is
+not interchangeable with the original Qwen-Image or Wan 2.2 VAE. Text-to-image needs only `--diffusion-model`,
+`--vae` and `--llm`, which the builder already emits for a Qwen set, so 2.1 added no startup flag. Upstream support
+arrived in stable-diffusion.cpp PR #1994, so older pins cannot load this set.
+
+The `QwenImage` family defaults are 40 steps, CFG 6.0 and `euler`. CFG and sampler come from upstream
+`docs/qwen_image_2.1.md`, and the step count from the QwenLM model card. An import of the original Qwen-Image wants
+CFG 2.5, which the operator sets by hand.
+
+## Diffusers-layout files are refused as the diffusion part
+
+sd-server loads one self-describing checkpoint. A Diffusers repo splits the model into per-component folders, and
+sd-server exits with `get sd version from file failed` when handed one of those components, after the download has
+finished. `ImageWeightLayout.IsUnloadableDiffusionFile` is the single predicate that recognizes such a file:
+
+- a `diffusion_pytorch_model*.safetensors` leaf;
+- a shard member (`-00001-of-00003.gguf` or `.safetensors`);
+- a `model*.safetensors` beside a `config.json` in the same folder, or anywhere in a repo with a `model_index.json`.
+  This rule needs the repo listing, so only inspection applies it.
+
+Repo inspection sets `unsupportedReason: "diffusers_layout_unsupported"` on every such file in the
+`GET images/models/inspect` response. The download boundary, `ImageModelFileSetRules.Validate`, refuses a Diffusion
+part that matches the name rules with a 400 whose message reads "This repository stores the model in Diffusers
+layout, which the local image runtime cannot load. Pick a single-file GGUF or safetensors checkpoint." The rule
+applies only to the Diffusion role.
 
 ## The rate token is the anchor, not the fraction
 
@@ -111,8 +150,10 @@ The batch counter is the dangerous one: it prints `1/1` for every ordinary singl
 fraction reads it as "step 1 of 1, complete" and slams the bar to 100% before sampling has even begun. It is covered
 by an explicit must-not-match test.
 
-All of this was verified against the pinned build `master-742-1a13107` by running the daemon and hexdumping a real
-generation — the same capture that pinned the framing above.
+All of this was verified against the build `master-742-1a13107` by running the daemon and hexdumping a real
+generation — the same capture that pinned the framing above. At the current pin `master-913-b167b94` the progress
+printer is source-identical, and every anchor line still logs at INFO. The tensor-loader line moved from DEBUG to
+VERBOSE, and the builder's `-v` still shows VERBOSE.
 
 ## Framing sd-server's progress bar
 
@@ -163,7 +204,7 @@ reaching the next job's tracker.
 ## The pinned prebuilt release table
 
 `StableDiffusionReleasePins` is the recommended-pinned acquisition source `StableDiffusionCppBinaryManager` uses when no
-managed source-built runtime is selected. The pinned tag is **`master-742-1a13107`** (commit `1a13107`), and assets are
+managed source-built runtime is selected. The pinned tag is **`master-913-b167b94`** (commit `b167b94`), and assets are
 fetched from `https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}`.
 
 SHA256 digests come from the GitHub release-assets API `digest` field, because stable-diffusion.cpp publishes **no**
@@ -320,7 +361,7 @@ The ordering that makes the pass race-free: migrations are applied in `Program` 
 
 It is deliberately **not** `MemoryFitEstimator.Estimate`. That estimator's whole model is a transformer LLM's: it needs block counts, attention head counts, an embedding length and a llama.cpp quant-byte table to size a KV cache. A diffusion transformer has no KV cache, and a GGUF diffusion file exposes none of those fields, so feeding it here would produce a confident number with nothing behind it. What genuinely reuses is the **hardware probe**: the image estimator shares `MemoryFitEstimator.ResolveFitBudgetBytes`, so an image verdict is scored against the identical budget the LLM advisor uses and cannot drift from it.
 
-**Only the diffusion part is a VRAM cost.** `ImageServerArgumentBuilder.BuildBackendSpec` pins the text encoder and VAE to the CPU on every GPU backend (`diffusion=cuda0,te=cpu,vae=cpu`), so charging an 18 GB Qwen-Image set's full weight against VRAM would reject a set that runs fine. In CPU mode there is no such split and the whole set is resident in RAM.
+**Only the diffusion part is a VRAM cost.** `ImageServerArgumentBuilder.BuildBackendSpec` pins the text encoder and VAE to the CPU on every GPU backend (`diffusion=cuda0,te=cpu,vae=cpu`), so charging a Qwen-Image set's full weight (about 10 GB for 2.1, 18 GB for the original) against VRAM would reject a set that runs fine. In CPU mode there is no such split and the whole set is resident in RAM.
 
 A set is called a comfortable `Fits` below 80% of the budget rather than tight; the remaining headroom absorbs the runtime's own allocations and the working buffers a diffusion step needs beyond the weights. `Unknown` is a first-class verdict, not a soft "probably fine": `HardwareProfiler` leaves VRAM unmeasured on every non-NVIDIA GPU (and on NVIDIA without `nvidia-smi`), there is no budget to score against, and the CPU budget is the wrong one because the box would run on the GPU.
 

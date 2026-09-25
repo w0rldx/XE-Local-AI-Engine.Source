@@ -24,6 +24,7 @@ import {
 	invalidate,
 	transcriptionQueryIds,
 	useCancelTranscriptionSession,
+	useTranscriptionRuntimeStatus,
 	useTranscriptionSession,
 } from "@/features/transcription/queries/useTranscriptionQueries";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
@@ -32,10 +33,13 @@ interface TranscriptionSessionPageProps {
 	readonly sessionId: string;
 }
 
-// The statuses the hub pushes when a live session is over. `Abandoned` and `Overloaded` exist only on the wire — the
+// The statuses the hub pushes when a live session is over. `Abandoned` exists only on the wire — the
 // row itself is persisted as Cancelled, Completed or Failed — which is why this is a set of strings rather than the
 // persisted status union.
-const liveTerminalStatuses: ReadonlySet<string> = new Set(["Completed", "Cancelled", "Abandoned", "Overloaded", "Failed"]);
+// The persisted statuses whose transcript is final and may have its text corrected.
+const editableStatuses: ReadonlySet<string> = new Set(["Completed", "Failed", "Cancelled"]);
+
+const liveTerminalStatuses: ReadonlySet<string> = new Set(["Completed", "Cancelled", "Abandoned", "Failed"]);
 
 /**
  * Whether this source kind runs as a live session at all — hub-fed panel plus capture controls.
@@ -115,6 +119,8 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 	const capture = useLiveCapture(isLive ? sessionId : null);
 	const liveView = useLiveTranscript(sessionId);
 	const liveStatus = liveView?.status ?? "";
+	// A3: the first live start can spend a minute on the runtime download and model load; polled only while it does.
+	const runtimeQuery = useTranscriptionRuntimeStatus(capture.state === "starting");
 
 	// The node persisted the last rows as it ended the session, so the REST view has to be re-read before it takes over
 	// from the panel — otherwise the finished session renders the transcript as it was when the page first loaded.
@@ -227,6 +233,8 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 							connected={capture.connected}
 							subscribeFailed={capture.subscribeFailed}
 							elapsedMs={(liveView?.committed ?? []).reduce((latest, segment) => Math.max(latest, segment.endMs), 0)}
+							bufferedMs={liveView?.bufferedMs ?? null}
+							runtimeState={runtimeQuery.data?.state ?? null}
 							// R39a: start is called straight out of the click, with nothing awaited in between, or the browser
 							// refuses to open the screen-share picker.
 							onStart={() => {
@@ -254,7 +262,12 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 						) : detail.segments.length === 0 ? (
 							<EmptyState message={t("pages.transcription.session.noSegments")} data-testid="transcription-session-empty" />
 						) : (
-							<TranscriptSegmentList segments={detail.segments} />
+							<TranscriptSegmentList
+								segments={detail.segments}
+								sessionId={sessionId}
+								// Finished rows only, and never while this page still holds a capture that is ending.
+								editable={editableStatuses.has(detail.session.status) && capture.state === "idle"}
+							/>
 						)}
 					</SectionCard>
 				</Stack>

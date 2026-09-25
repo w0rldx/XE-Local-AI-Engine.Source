@@ -85,7 +85,6 @@ export function TranscriptionPage() {
 				languageMode: values.languageMode,
 				languageOverride: values.languageOverride,
 				translate: values.translate,
-				maxWindowSeconds: values.maxWindowSeconds,
 				channelAttribution: values.channelAttribution,
 			},
 			{

@@ -256,7 +256,6 @@ describe("NewTranscriptionSessionDialog", () => {
 			languageMode: "auto",
 			languageOverride: null,
 			translate: false,
-			maxWindowSeconds: 5,
 			channelAttribution: false,
 			file,
 			deviceId: null,
@@ -264,12 +263,14 @@ describe("NewTranscriptionSessionDialog", () => {
 		});
 	});
 
-	// The capture-window control belongs to the live sources, so it must not be on screen while File is the only
-	// reachable one — its value still rides the create request at the endpoint's own default.
-	it("hides the capture-window control for a file source", () => {
+	// The capture window is the node's to choose (its default, 5 s): no source offers the control any more.
+	it("offers no capture-window control on any source", () => {
 		renderDialog();
 
-		expect(screen.queryByTestId("new-transcription-session-max-window")).toBeNull();
+		for (const label of ["File", "Microphone", "System audio", "Microphone + system"]) {
+			fireEvent.click(screen.getByRole("radio", { name: label }));
+			expect(screen.queryByTestId("new-transcription-session-max-window")).toBeNull();
+		}
 	});
 
 	// The upload is a whole recording over a local socket, but a long one still takes visible seconds; without this

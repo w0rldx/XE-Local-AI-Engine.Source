@@ -329,4 +329,10 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 		expect(flowNodes().find((node) => node.id === "analyze")?.position).toEqual({ x: 280, y: 0 });
 		expect(flowNodes()).toHaveLength(8);
 	});
+
+	it("widens the connection snap radius so an edge need not land on the dot itself", () => {
+		renderWithProviders(<Harness initial={eightNodeGraph} />);
+
+		expect(flowProps().connectionRadius).toBe(40);
+	});
 });

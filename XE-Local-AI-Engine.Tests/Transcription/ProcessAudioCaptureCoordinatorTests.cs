@@ -16,11 +16,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         Both seams are hand-written fakes, which is the mandated order once the real thing is out of reach: there
 ///         is no repo fake for either, and NSubstitute cannot express "block on a gate the test controls" or "cancel
-///         the producer token from inside the push", which is precisely what the overload path does.
+///         the producer token from inside the push", which is precisely what the buffered-audio cap does.
 ///     </para>
 ///     <para>
 ///         The registry fake mirrors the real <c>LiveTranscriptionSessionRegistry</c> where it matters: it hands out
-///         a real <c>ProducerToken</c>, holds the attached producer, and on overload cancels that token rather than
+///         a real <c>ProducerToken</c>, holds the attached producer, and on the buffered-audio cap cancels that token rather than
 ///         throwing — because that is what <c>BeginEnd</c> does.
 ///     </para>
 /// </remarks>
@@ -157,9 +157,9 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     }
 
     [Test]
-    public async Task PendingAudioOverload_StopsTheProducerAndDoesNotRetry()
+    public async Task BufferedAudioCap_StopsTheProducerAndDoesNotRetry()
     {
-        // The real registry does not throw on overflow: it calls BeginEnd(Overloaded), which cancels ProducerToken
+        // The real registry does not throw when the buffered-audio cap is crossed: it ends the session, which cancels ProducerToken
         // before anything else. The fake mirrors that, so this asserts the behaviour the product actually meets.
         await using var harness = Harness.Create();
         var sessionId = Guid.NewGuid();
@@ -169,9 +169,9 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         _ = harness.Coordinator.Start(sessionId, processId: 4321);
 
         await AssertEx.EventuallyAsync(() => !harness.Coordinator.IsCapturing(sessionId), Bound,
-            "Overload cancels the producer token, which stops the capture.");
+            "Crossing the cap cancels the producer token, which stops the capture.");
         AssertEx.Equal(1, harness.Registry.PushesEntered(sessionId),
-            "The pump stops on the overload rather than retrying into a session that is already ending.");
+            "The pump stops on the cap rather than retrying into a session that is already ending.");
     }
 
     [Test]
@@ -341,7 +341,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
     /// <summary>
     ///     The registry seam: real producer tokens, a recorded attachment, and a push that can block or cancel the
-    ///     producer token exactly as the overflow path does.
+    ///     producer token exactly as the buffered-audio cap does.
     /// </summary>
     private sealed class RecordingLiveSessionRegistry : ILiveTranscriptionSessionRegistry, IDisposable
     {
@@ -405,8 +405,8 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
             if (CancelProducerOnPush)
             {
-                // Exactly what the real registry's overflow path does: cancel the producer token first, then end.
-                // It does NOT throw, so a pump that "handles the overload error" would never see one.
+                // Exactly what the real registry does when the buffered-audio cap is crossed: cancel the producer token first, then end.
+                // It does NOT throw, so a pump that "handles an error" would never see one.
                 await state.Cancellation.CancelAsync();
                 return;
             }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.08.04",
-  "updatedAt": "2026-08-04",
+  "catalogVersion": "2026.09.25",
+  "updatedAt": "2026-09-25",
   "models": [
     {
       "id": "sd-1.5",
@@ -76,32 +76,32 @@
       ]
     },
     {
-      "id": "qwen-image",
-      "displayName": "Qwen-Image",
-      "publisher": "QuantStack",
-      "repoId": "QuantStack/Qwen-Image-GGUF",
+      "id": "qwen-image-2.1",
+      "displayName": "Qwen-Image 2.1",
+      "publisher": "leejet",
+      "repoId": "leejet/Qwen-Image-2.1-GGUF",
       "family": "QwenImage",
-      "license": "apache-2.0",
+      "license": "qwen-research",
       "recommended": false,
-      "notes": "Spans two repositories: the diffusion transformer and VAE ship from QuantStack, the Qwen2.5-VL text encoder from mradermacher. About 18 GB in total.",
+      "notes": "Qwen Research License: non-commercial research use only. Spans three repositories: the diffusion transformer from leejet, the Qwen-Image 2.1 VAE from Comfy-Org and the Qwen3-VL-8B text encoder from Qwen. About 10 GB in total.",
       "parts": [
         {
           "role": "Diffusion",
-          "fileName": "Qwen_Image-Q4_K_M.gguf",
+          "fileName": "qwen_image_2.1-Q4_K.gguf",
           "repoId": null,
-          "sizeBytes": 13065746976
+          "sizeBytes": 4197494816
         },
         {
           "role": "Vae",
-          "fileName": "VAE/Qwen_Image-VAE.safetensors",
-          "repoId": null,
-          "sizeBytes": 253806246
+          "fileName": "vae/qwen_image_2.1_vae_bf16.safetensors",
+          "repoId": "Comfy-Org/Qwen-Image-2.1",
+          "sizeBytes": 675509688
         },
         {
           "role": "Llm",
-          "fileName": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
-          "repoId": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
-          "sizeBytes": 4683072512
+          "fileName": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+          "repoId": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+          "sizeBytes": 5027784800
         }
       ]
     }

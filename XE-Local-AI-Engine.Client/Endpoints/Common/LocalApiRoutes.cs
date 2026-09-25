@@ -563,6 +563,9 @@ public static class LocalApiRoutes
         public const string SessionCancel = "transcription/sessions/{sessionId}/cancel";
         public const string SessionFile = "transcription/sessions/{sessionId}/file";
 
+        /// <summary>Replaces one transcript row's text (PUT). Refused with 409 while the session is still transcribing.</summary>
+        public const string SessionSegmentBySeq = "transcription/sessions/{sessionId}/segments/{seq}";
+
         /// <summary>
         ///     Starts live capture for an existing session. Idempotent and body-less; the client awaits it before it
         ///     forwards a single audio frame.

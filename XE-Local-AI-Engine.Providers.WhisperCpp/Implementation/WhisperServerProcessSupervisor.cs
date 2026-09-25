@@ -50,6 +50,12 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private RunningServer? _current;
     private int _disposed;
     private long _generation;
+
+    /// <summary>
+    ///     The last daemon torn down after exiting on its own, so every lane that had a request against it hears
+    ///     "the process exited", not only the one whose report detached it. Guarded by <see cref="_stateGate" />.
+    /// </summary>
+    private (long Generation, int? ExitCode)? _lastExited;
     private bool _starting;
 
     /// <summary>Creates the supervisor over its collaborators. The idle reaper loop starts immediately.</summary>
@@ -249,7 +255,14 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         var running = Current;
         if (running is null || running.Endpoint.Generation != generation)
         {
-            return null;
+            // Another lane's report (or the reaper) already tore this daemon down.
+            (long Generation, int? ExitCode)? lastExited;
+            lock (_stateGate)
+            {
+                lastExited = _lastExited;
+            }
+
+            return lastExited is { } exited && exited.Generation == generation ? ExitedFailure(exited.ExitCode, cause) : null;
         }
 
         if (!running.Handle.HasExited)
@@ -272,12 +285,15 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         }
 
         // Composed before the teardown disposes the handle, after which the OS can no longer report the code.
-        var failure = running.Handle.ExitCode is { } exitCode
-            ? new WhisperRuntimeException(string.Create(CultureInfo.InvariantCulture, $"The transcription runtime process exited (exit code {exitCode})."), cause)
-            : new WhisperRuntimeException("The transcription runtime process exited.", cause);
+        var failure = ExitedFailure(running.Handle.ExitCode, cause);
         TearDownExited(running);
         return failure;
     }
+
+    private static WhisperRuntimeException ExitedFailure(int? exitCode, Exception cause) =>
+        exitCode is { } code
+            ? new WhisperRuntimeException(string.Create(CultureInfo.InvariantCulture, $"The transcription runtime process exited (exit code {code})."), cause) { ProcessExited = true }
+            : new WhisperRuntimeException("The transcription runtime process exited.", cause) { ProcessExited = true };
 
     /// <inheritdoc />
     public WhisperRuntimeStatusSnapshot GetStatus()
@@ -794,6 +810,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
 
             _current = null;
+            _lastExited = (running.Endpoint.Generation, running.Handle.ExitCode);
         }
 
         _logger.LogWarning("whisper-server for model {ModelId} (pid {ProcessId}) exited unexpectedly with exit code {ExitCode}; it is respawned on the next request. Last stderr: {StderrTail}",

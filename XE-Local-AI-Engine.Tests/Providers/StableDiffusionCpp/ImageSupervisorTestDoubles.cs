@@ -166,7 +166,7 @@ internal sealed class FakeSdBinaryManager : IStableDiffusionBinaryManager
         return Task.FromResult(new SdBinary
         {
             ServerExecutablePath = "/fake/bin/sd-server",
-            Version = "master-742-1a13107",
+            Version = "master-913-b167b94",
             Backend = _resolvedBackend,
             IsPinnedFallback = true
         });

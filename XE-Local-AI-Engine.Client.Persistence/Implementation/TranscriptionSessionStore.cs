@@ -261,6 +261,46 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
         return rows.Select(static segment => ToSegmentView(segment)).ToArray();
     }
 
+    public async Task<TranscriptSegmentUpdateOutcome> UpdateSegmentTextAsync(Guid sessionId,
+        long seq,
+        string text,
+        long updatedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var session = await LoadTrackedAsync(sessionId, cancellationToken);
+        if (session is null)
+        {
+            return TranscriptSegmentUpdateOutcome.SessionNotFound;
+        }
+
+        var segment = await _dbContext.TranscriptSegments
+                                      .FirstOrDefaultAsync(row => row.SessionId == sessionId && row.Seq == seq, cancellationToken);
+        if (segment is null)
+        {
+            return TranscriptSegmentUpdateOutcome.SegmentNotFound;
+        }
+
+        segment.Text = Encoding.UTF8.GetBytes(text);
+        session.UpdatedAtUtc = updatedAtUtc;
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A delete landed between the load and the save. Detach the stale rows so the scope's context stays usable.
+            _dbContext.Entry(segment).State = EntityState.Detached;
+            _dbContext.Entry(session).State = EntityState.Detached;
+            return await _dbContext.TranscriptionSessions.AsNoTracking().AnyAsync(row => row.Id == sessionId, cancellationToken)
+                ? TranscriptSegmentUpdateOutcome.SegmentNotFound
+                : TranscriptSegmentUpdateOutcome.SessionNotFound;
+        }
+
+        return TranscriptSegmentUpdateOutcome.Updated;
+    }
+
     // Tracked load so a status-only mutation leaves the encrypted properties unmodified — the SaveChanges interceptor
     // skips an unmodified column, preserving its stored ciphertext.
     private Task<TranscriptionSession?> LoadTrackedAsync(Guid sessionId, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -260,6 +261,10 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(0, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): the maximum number of concurrent models is already loaded. "
+                       + "Loaded now: 'running/a:Q4_K_M' (Chat), 'running/b:Q4_K_M' (Chat). Eject one of them or pick a loaded model.",
+            decision.Reason);
+        AssertRejectionLogged(harness, "maximum number of concurrent models", "'running/a:Q4_K_M' (Chat)");
     }
 
     [Test]
@@ -462,16 +467,36 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(4 * Gb),
-            Footprint = GpuFootprint(40 * Gb)
+            Footprint = GpuFootprint(40 * Gb),
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "unsloth/Big-GGUF:UD-Q2_K_XL",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                },
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
+                    Role = ModelRole.Embedding,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
         };
         var service = harness.Build();
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
-        AssertEx.True(decision.Reason.Length > 0);
-        // Sanitized reason carries no model identity, path, or byte figure.
-        AssertEx.False(decision.Reason.Contains(Model, StringComparison.Ordinal));
+        // The reason names the requested model and every resident one, so the user can pick a loaded model instead.
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): not enough free memory for another model. "
+                       + "Loaded now: 'unsloth/Big-GGUF:UD-Q2_K_XL' (Chat), 'nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M' (Embedding). "
+                       + "Eject one of them or pick a loaded model.",
+            decision.Reason);
+        AssertRejectionLogged(harness, "not enough free memory", "'nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M' (Embedding)");
         harness.FootprintProvider.DidNotReceive()
                .TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
     }
@@ -555,13 +580,28 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            Footprint = ModelFootprint.Unknown
+            Footprint = ModelFootprint.Unknown,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
         };
         var service = harness.Build();
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        // Ejecting cannot make a footprint known, so this kind carries no eject hint.
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): the model's memory footprint could not be determined. "
+                       + "Loaded now: 'running/a:Q4_K_M' (Chat).",
+            decision.Reason);
+        AssertRejectionLogged(harness, "footprint could not be determined", "'running/a:Q4_K_M' (Chat)");
     }
 
     [Test]
@@ -776,6 +816,9 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): not enough free memory for another model. The loaded models could not be listed.",
+            decision.Reason);
+        AssertRejectionLogged(harness, "not enough free memory", "could not be listed");
     }
 
     [Test]
@@ -911,6 +954,16 @@ public sealed class CapacityServiceTests
         decision.Reservation?.Dispose();
     }
 
+    // Exactly one Warning, naming the requested model, the reject kind and the resident set.
+    private static void AssertRejectionLogged(Harness harness, string kind, string resident)
+    {
+        var warnings = harness.Logger.Entries.Where(static entry => entry.Level == LogLevel.Warning).ToArray();
+        AssertEx.Equal(1, warnings.Length);
+        AssertEx.Contains(warnings[0].Message, Model);
+        AssertEx.Contains(warnings[0].Message, kind);
+        AssertEx.Contains(warnings[0].Message, resident);
+    }
+
     private static ModelFootprint GpuFootprint(long gpuBytes, long ramBytes = Gb) =>
         ModelFootprint.Known(new ResourceFootprint(gpuBytes, ramBytes));
 
@@ -1009,6 +1062,7 @@ public sealed class CapacityServiceTests
         public IModelFootprintProvider FootprintProvider { get; } = Substitute.For<IModelFootprintProvider>();
         public IProcessLaunchAdmissionRegistry LaunchAdmissions { get; init; } = new ProcessLaunchAdmissionRegistry();
         public PendingFootprintLedger Ledger { get; } = new();
+        public RecordingLogger<CapacityService> Logger { get; } = new();
 
         public CapacityService Build()
         {
@@ -1076,7 +1130,8 @@ public sealed class CapacityServiceTests
                 Ledger,
                 LaunchAdmissions,
                 ExternalEndpoints,
-                SupervisorOptions);
+                SupervisorOptions,
+                Logger);
         }
     }
 }

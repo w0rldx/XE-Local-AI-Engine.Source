@@ -274,6 +274,24 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<TranscriptSegmentView>>([]);
 
+    /// <summary>What <see cref="UpdateSegmentTextAsync" /> answers; null means the session is unknown.</summary>
+    public UpdateTranscriptSegmentResult? UpdateSegmentResult { get; init; }
+
+    public int UpdateSegmentCallCount { get; private set; }
+
+    /// <summary>The text the endpoint handed over — trimmed, if the endpoint did its job.</summary>
+    public string? LastUpdatedText { get; private set; }
+
+    public long LastUpdatedSeq { get; private set; }
+
+    public Task<UpdateTranscriptSegmentResult> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, CancellationToken cancellationToken)
+    {
+        UpdateSegmentCallCount++;
+        LastUpdatedSeq = seq;
+        LastUpdatedText = text;
+        return Task.FromResult(UpdateSegmentResult ?? new UpdateTranscriptSegmentResult { Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound });
+    }
+
     public void Dispose()
     {
         try

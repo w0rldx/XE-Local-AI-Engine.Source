@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CaptureError, type CaptureFrame } from "@/features/transcription/capture/CaptureSource";
-import { MicrophoneCaptureSource } from "@/features/transcription/capture/MicrophoneCaptureSource";
+import { MICROPHONE_START_TIMEOUT_MS, MicrophoneCaptureSource } from "@/features/transcription/capture/MicrophoneCaptureSource";
 
 /**
  * jsdom has neither `navigator.mediaDevices` nor `AudioContext` (`installJsdomEnvironmentMocks` stubs neither), so
@@ -283,6 +283,99 @@ describe("MicrophoneCaptureSource", () => {
 		expect(closeCalls).toBe(1);
 		expect(lastWorkletNode?.disconnectCalls).toBe(1);
 		expect(lastWorkletNode?.port.onmessage).toBeNull();
+	});
+
+	describe("start timeout", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		// A permission prompt nobody answers, or a device the OS never opens: without a bound the start never settles and
+		// the operator watches a spinner while the node receives nothing.
+		it("rejects with 'start-timeout' after 20 s and stops the microphone that arrives late", async () => {
+			const track = createTrack();
+			let grant: (stream: MediaStream) => void = () => undefined;
+			installMediaDevices({
+				getUserMedia: () =>
+					new Promise<MediaStream>((resolve) => {
+						grant = resolve;
+					}),
+			});
+			installAudioGraph();
+			const source = new MicrophoneCaptureSource("mono");
+
+			const rejection = source.start(() => undefined).catch((error: unknown) => error);
+			await vi.advanceTimersByTimeAsync(MICROPHONE_START_TIMEOUT_MS - 1);
+			expect(track.stopped).toBe(false);
+			await vi.advanceTimersByTimeAsync(1);
+
+			expect(await rejection).toMatchObject({ code: "start-timeout" });
+			grant(createStream([track]));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(track.stopped).toBe(true);
+			expect(addedModules).toHaveLength(0);
+		});
+
+		/** A context that starts suspended and whose resume settles only when the test says so — the autoplay policy. */
+		function installHangingGraph(): () => void {
+			let resumed: () => void = () => undefined;
+			installAudioGraph();
+			vi.stubGlobal(
+				"AudioContext",
+				class extends StubAudioContext {
+					readonly state = "suspended";
+
+					resume(): Promise<void> {
+						return new Promise<void>((resolve) => {
+							resumed = resolve;
+						});
+					}
+				},
+			);
+			return () => resumed();
+		}
+
+		// The autoplay policy: a context resumed outside a user gesture never settles, so the graph never hands back a
+		// disposer. The timeout itself must release the stream it already holds, not wait for a settle that never comes.
+		it("stops every track and closes the context when the graph never starts, without waiting for it to settle", async () => {
+			const tracks = [createTrack(), createTrack()];
+			installMediaDevices({ getUserMedia: () => Promise.resolve(createStream(tracks)) });
+			const resume = installHangingGraph();
+
+			const rejection = new MicrophoneCaptureSource("mono").start(() => undefined).catch((error: unknown) => error);
+			await vi.advanceTimersByTimeAsync(MICROPHONE_START_TIMEOUT_MS);
+
+			expect(await rejection).toMatchObject({ code: "start-timeout" });
+			expect(tracks.every((track) => track.stopped)).toBe(true);
+			expect(closeCalls).toBe(1);
+
+			// A graph that settles after all is released again, and the context is not closed twice.
+			resume();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(closeCalls).toBe(1);
+		});
+
+		it("stops every track and closes the context when stop is called while the graph hangs", async () => {
+			const tracks = [createTrack(), createTrack()];
+			installMediaDevices({ getUserMedia: () => Promise.resolve(createStream(tracks)) });
+			installHangingGraph();
+			const source = new MicrophoneCaptureSource("mono");
+
+			const starting = source.start(() => undefined).catch((error: unknown) => error);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(tracks.some((track) => track.stopped)).toBe(false);
+
+			await source.stop();
+
+			expect(tracks.every((track) => track.stopped)).toBe(true);
+			expect(closeCalls).toBe(1);
+			await vi.advanceTimersByTimeAsync(MICROPHONE_START_TIMEOUT_MS);
+			expect(await starting).toMatchObject({ code: "start-timeout" });
+		});
 	});
 
 	it("tolerates a stop before a start", async () => {

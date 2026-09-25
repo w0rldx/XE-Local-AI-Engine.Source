@@ -12,7 +12,7 @@ public sealed class StableDiffusionReleasePinsTests
     {
         var pin = AssertEx.NotNull(StableDiffusionReleasePins.Resolve(OSPlatform.Windows, Architecture.X64, SdGpuBackend.Cuda));
 
-        AssertEx.Equal("sd-master-1a13107-bin-win-cuda12-x64.zip", pin.AssetName);
+        AssertEx.Equal("sd-master-b167b94-bin-win-cuda12-x64.zip", pin.AssetName);
         AssertEx.Equal("sd-server.exe", pin.ServerRelativePath);
         AssertEx.Equal(expected: 64, pin.Sha256.Length);
         AssertEx.NotNullOrEmpty(pin.CudartAssetName);
@@ -25,7 +25,7 @@ public sealed class StableDiffusionReleasePinsTests
         // stable-diffusion.cpp ships no Linux CUDA asset — a Linux CUDA request must degrade to the CPU floor, never null.
         var pin = AssertEx.NotNull(StableDiffusionReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Cuda));
 
-        AssertEx.Equal("sd-master-1a13107-bin-Linux-Ubuntu-24.04-x86_64.zip", pin.AssetName);
+        AssertEx.Equal("sd-master-b167b94-bin-Linux-Ubuntu-24.04-x86_64.zip", pin.AssetName);
         AssertEx.Equal("sd-server", pin.ServerRelativePath);
         AssertEx.Null(pin.CudartAssetName);
     }
@@ -50,9 +50,9 @@ public sealed class StableDiffusionReleasePinsTests
     [Test]
     public void DownloadUri_BuildsLeejetReleaseAssetUrl()
     {
-        var uri = StableDiffusionReleasePins.DownloadUri(StableDiffusionReleasePins.PinnedTag, "sd-master-1a13107-bin-win-cpu-x64.zip");
+        var uri = StableDiffusionReleasePins.DownloadUri(StableDiffusionReleasePins.PinnedTag, "sd-master-b167b94-bin-win-cpu-x64.zip");
 
-        AssertEx.Equal("https://github.com/leejet/stable-diffusion.cpp/releases/download/master-742-1a13107/sd-master-1a13107-bin-win-cpu-x64.zip",
+        AssertEx.Equal("https://github.com/leejet/stable-diffusion.cpp/releases/download/master-913-b167b94/sd-master-b167b94-bin-win-cpu-x64.zip",
             uri.ToString());
     }
 }

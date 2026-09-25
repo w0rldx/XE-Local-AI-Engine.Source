@@ -92,7 +92,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var items = body.GetProperty("items").EnumerateArray().ToList();
         AssertEx.True(items.Single(item => item.GetProperty("id").GetString() == "sd-1.5").GetProperty("isInstalled").GetBoolean());
-        AssertEx.False(items.Single(item => item.GetProperty("id").GetString() == "qwen-image").GetProperty("isInstalled").GetBoolean());
+        AssertEx.False(items.Single(item => item.GetProperty("id").GetString() == "qwen-image-2.1").GetProperty("isInstalled").GetBoolean());
     }
 
     [Test]
@@ -179,6 +179,15 @@ public sealed class ImageModelDiscoveryEndpointTests
                         SizeBytes = 335_304_388L,
                         Sha256 = null,
                         SuggestedRole = ImageModelPartRole.Vae
+                    },
+                    new ImageRepoFile
+                    {
+                        FileName = "transformer/diffusion_pytorch_model.safetensors",
+                        Format = ImageWeightFormat.Safetensors,
+                        SizeBytes = 9_000_000_000L,
+                        Sha256 = null,
+                        SuggestedRole = ImageModelPartRole.Diffusion,
+                        UnsupportedReason = ImageWeightLayout.DiffusersLayoutUnsupportedCode
                     }
                 ]
             }
@@ -192,9 +201,11 @@ public sealed class ImageModelDiscoveryEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var files = body.GetProperty("files").EnumerateArray().ToList();
-        AssertEx.Equal(expected: 2, files.Count);
+        AssertEx.Equal(expected: 3, files.Count);
         AssertEx.Equal("Vae", files.Single(f => f.GetProperty("fileName").GetString() == "ae.safetensors").GetProperty("suggestedRole").GetString());
         AssertEx.Equal("Safetensors", files.Single(f => f.GetProperty("fileName").GetString() == "ae.safetensors").GetProperty("format").GetString());
+        AssertEx.Equal("diffusers_layout_unsupported",
+            files.Single(f => f.GetProperty("fileName").GetString()!.StartsWith("transformer/", StringComparison.Ordinal)).GetProperty("unsupportedReason").GetString());
     }
 
     [Test]

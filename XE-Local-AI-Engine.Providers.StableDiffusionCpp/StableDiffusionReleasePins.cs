@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 /// </summary>
 public sealed class StableDiffusionAssetPin
 {
-    /// <summary>The release asset file name (for example <c>sd-master-1a13107-bin-win-vulkan-x64.zip</c>).</summary>
+    /// <summary>The release asset file name (for example <c>sd-master-b167b94-bin-win-vulkan-x64.zip</c>).</summary>
     public required string AssetName { get; init; }
 
     /// <summary>Lowercase hex SHA256 the downloaded archive must match.</summary>
@@ -38,7 +38,7 @@ public sealed class StableDiffusionAssetPin
 ///     <see cref="Implementation.StableDiffusionCppBinaryManager" /> when no managed source-built runtime is selected.
 /// </summary>
 /// <remarks>
-///     Pinned tag <c>master-742-1a13107</c> (commit <c>1a13107</c>), fetched from
+///     Pinned tag <c>master-913-b167b94</c> (commit <c>b167b94</c>), fetched from
 ///     <c>https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}</c>. The project ships <b>rolling</b>
 ///     <c>master-&lt;n&gt;-&lt;sha&gt;</c> releases, so re-pin the tag AND every hash when bumping. stable-diffusion.cpp ships NO prebuilt
 ///     Linux CUDA asset, which <see cref="Implementation.SdGpuBackendSelector" /> enforces. See
@@ -47,26 +47,26 @@ public sealed class StableDiffusionAssetPin
 public static class StableDiffusionReleasePins
 {
     /// <summary>The recommended-pinned stable-diffusion.cpp rolling release tag.</summary>
-    public const string PinnedTag = "master-742-1a13107";
+    public const string PinnedTag = "master-913-b167b94";
 
     /// <summary>The exact canonical source revision used by official managed builds.</summary>
-    public const string PinnedSourceCommitSha = "1a13107bac236b0cd6fadbf5c264f3644874ba4f";
+    public const string PinnedSourceCommitSha = "b167b942f77ecb17e7f78e163a8c32ff7ac95c10";
 
     // stable-diffusion.cpp ships sd-server at the archive root as a bare file name (no build/bin/ nesting).
     private const string WindowsServerPath = "sd-server.exe";
     private const string UnixServerPath = "sd-server";
 
-    // Keyed by (os, arch, backend). Verified against the master-742-1a13107 release-assets digest API on 2026-07-01.
+    // Keyed by (os, arch, backend). Verified against the master-913-b167b94 release-assets digest API on 2026-09-25.
     private static readonly IReadOnlyDictionary<PinKey, StableDiffusionAssetPin> Pins =
         new Dictionary<PinKey, StableDiffusionAssetPin>
         {
             // Windows x64 — the CUDA pin also carries its companion runtime archive (cudart-…); both digests are from
-            // the master-742-1a13107 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream.
+            // the master-913-b167b94 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream.
             [new PinKey(OSPlatform.Windows, Architecture.X64, SdGpuBackend.Cuda)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-win-cuda12-x64.zip",
-                    Sha256 = "86ae82bd9fa53f703b426d7c1853f53de3b3ff8efccc426ffab2a037e1a230b2",
+                    AssetName = "sd-master-b167b94-bin-win-cuda12-x64.zip",
+                    Sha256 = "4d3977d84bfea5dc4118a583073cf71ffd9db1f0c888de7e5644007db6629190",
                     ServerRelativePath = WindowsServerPath,
                     CudartAssetName = "cudart-sd-bin-win-cu12-x64.zip",
                     CudartSha256 = "fe20366827d357c00797eebb58244dddab7fd9a348d70090c3871004c320f38d"
@@ -74,15 +74,15 @@ public static class StableDiffusionReleasePins
             [new PinKey(OSPlatform.Windows, Architecture.X64, SdGpuBackend.Vulkan)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-win-vulkan-x64.zip",
-                    Sha256 = "a72ff5a59b45438e55626868c2ba47417d419c4c4dabb7b6f0ee7d46a353dfea",
+                    AssetName = "sd-master-b167b94-bin-win-vulkan-x64.zip",
+                    Sha256 = "8148cfc825a6a0fae98b72b495927b9ba75fb8666b8d15400c6bbca793b361c9",
                     ServerRelativePath = WindowsServerPath
                 },
             [new PinKey(OSPlatform.Windows, Architecture.X64, SdGpuBackend.Cpu)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-win-cpu-x64.zip",
-                    Sha256 = "9fb05b3e4544294126bfd8b4ce4100e72b31129a57215433f992796acc0df08f",
+                    AssetName = "sd-master-b167b94-bin-win-cpu-x64.zip",
+                    Sha256 = "907709fc8c1af748616afc83111c2a3e43cf28fdc10c668b05b51515d2c86a6c",
                     ServerRelativePath = WindowsServerPath
                 },
 
@@ -90,15 +90,15 @@ public static class StableDiffusionReleasePins
             [new PinKey(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Vulkan)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
-                    Sha256 = "c29937b7d12d09d5d18295894d998d09aa73b17fec792c833683cf1a88f35add",
+                    AssetName = "sd-master-b167b94-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+                    Sha256 = "dd4478f9ab3e73adc215f3bb29456f8a9adf90142200a5da156ab7bc96bbfbe0",
                     ServerRelativePath = UnixServerPath
                 },
             [new PinKey(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Cpu)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-Linux-Ubuntu-24.04-x86_64.zip",
-                    Sha256 = "7da69c45f33c91e0802daf3d2195d174503dd448809569bac173a4e76301ddf5",
+                    AssetName = "sd-master-b167b94-bin-Linux-Ubuntu-24.04-x86_64.zip",
+                    Sha256 = "e6036c1f5c19be44694fad4f4292a4c49320d15cf9be97430c56aadf1192c342",
                     ServerRelativePath = UnixServerPath
                 },
 
@@ -106,8 +106,8 @@ public static class StableDiffusionReleasePins
             [new PinKey(OSPlatform.OSX, Architecture.Arm64, SdGpuBackend.Cpu)] =
                 new()
                 {
-                    AssetName = "sd-master-1a13107-bin-Darwin-macOS-15.7.7-arm64.zip",
-                    Sha256 = "f8c3a7f0c32b3ca786f3fcbef016b53376dba7bb49d5d4b39932ae5746c5562b",
+                    AssetName = "sd-master-b167b94-bin-Darwin-macOS-26.6.2-arm64.zip",
+                    Sha256 = "f1b872bb32be3c9d69dac8188cc07ea72e054643cb5c8b33ac53c86351d11342",
                     ServerRelativePath = UnixServerPath
                 }
         };

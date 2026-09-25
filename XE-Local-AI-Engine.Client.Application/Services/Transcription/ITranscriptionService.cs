@@ -112,4 +112,11 @@ public interface ITranscriptionService
     ///     order; the session view sorts by the latter and a resuming subscriber needs the former.
     /// </remarks>
     Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Replaces one transcript row's text. Refused with <see cref="UpdateTranscriptSegmentOutcome.SessionTranscribing" />
+    ///     while the session is <c>Transcribing</c> or the live registry still owns it (draining included), so an edit never
+    ///     races a commit.
+    /// </summary>
+    Task<UpdateTranscriptSegmentResult> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, CancellationToken cancellationToken);
 }

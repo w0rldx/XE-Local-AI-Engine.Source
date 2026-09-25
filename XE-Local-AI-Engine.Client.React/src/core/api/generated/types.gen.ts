@@ -3116,6 +3116,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = 
 	format: string;
 	sizeBytes: number;
 	suggestedRole: string;
+	unsupportedReason?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse = {
@@ -5746,6 +5747,11 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentRespon
 	confidence?: number | null;
 };
 
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentUpdateBlockedResponse = {
+	reason: string;
+	message: string;
+};
+
 export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto = "cpu" | "cuda";
 
 export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto = "pinned" | "managed" | "byo";
@@ -5887,6 +5893,10 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupporte
 	detectedContainer: string;
 	supportedContainers: Array<string>;
 	ffmpegRequired: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest = {
+	text?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest = {
@@ -20172,6 +20182,47 @@ export type StartLiveTranscriptionSessionResponses = {
 
 export type StartLiveTranscriptionSessionResponse =
 	StartLiveTranscriptionSessionResponses[keyof StartLiveTranscriptionSessionResponses];
+
+export type UpdateTranscriptSegmentData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1UpdateTranscriptSegmentRequest;
+	path: {
+		sessionId: string;
+		seq: number;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/segments/{seq}";
+};
+
+export type UpdateTranscriptSegmentErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentUpdateBlockedResponse;
+};
+
+export type UpdateTranscriptSegmentError = UpdateTranscriptSegmentErrors[keyof UpdateTranscriptSegmentErrors];
+
+export type UpdateTranscriptSegmentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse;
+};
+
+export type UpdateTranscriptSegmentResponse = UpdateTranscriptSegmentResponses[keyof UpdateTranscriptSegmentResponses];
 
 export type GetTutorialStateData = {
 	body?: never;

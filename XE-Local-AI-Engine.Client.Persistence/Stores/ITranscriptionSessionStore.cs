@@ -115,6 +115,29 @@ public interface ITranscriptionSessionStore
     ///     already run to thousands of rows.
     /// </remarks>
     Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Replaces one transcript row's text and bumps the session's <c>updated_at_utc</c> in one <c>SaveChangesAsync</c>.
+    /// </summary>
+    /// <remarks>
+    ///     A tracked update, never raw SQL: the save interceptor re-encrypts the new text under the row's own AAD. The
+    ///     store does not look at the session's status; refusing an edit while a session is still transcribing is the
+    ///     caller's rule.
+    /// </remarks>
+    Task<TranscriptSegmentUpdateOutcome> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, long updatedAtUtc, CancellationToken cancellationToken);
+}
+
+/// <summary>What <see cref="ITranscriptionSessionStore.UpdateSegmentTextAsync" /> did.</summary>
+public enum TranscriptSegmentUpdateOutcome
+{
+    /// <summary>The row now holds the new text.</summary>
+    Updated = 0,
+
+    /// <summary>The session does not exist; nothing was written.</summary>
+    SessionNotFound = 1,
+
+    /// <summary>The session exists but holds no row with that sequence; nothing was written.</summary>
+    SegmentNotFound = 2
 }
 
 /// <summary>

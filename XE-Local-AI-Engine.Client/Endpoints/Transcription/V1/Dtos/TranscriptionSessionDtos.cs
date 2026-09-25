@@ -202,3 +202,29 @@ public sealed class TranscriptionUnsupportedContainerResponse
     /// <summary>True when installing ffmpeg would make this exact upload work. What turns a refusal into an action.</summary>
     public required bool FfmpegRequired { get; init; }
 }
+
+/// <summary>The request for <c>PUT transcription/sessions/{sessionId}/segments/{seq}</c>: the row's new text.</summary>
+public sealed class UpdateTranscriptSegmentRequest
+{
+    /// <summary>Bound from the route.</summary>
+    public Guid SessionId { get; init; }
+
+    /// <summary>Bound from the route: the row's sequence within the session.</summary>
+    public long Seq { get; init; }
+
+    /// <summary>The corrected text. Trimmed before it is stored; 1 to 8000 characters after trimming.</summary>
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <summary>
+///     The typed 409 a transcript edit answers while the session is still transcribing, in the reason-plus-message shape
+///     the family's other refusals use, so the SPA branches on a code rather than on prose.
+/// </summary>
+public sealed class TranscriptSegmentUpdateBlockedResponse
+{
+    /// <summary>The reason code the SPA matches: <c>session-transcribing</c>.</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>What to tell the operator.</summary>
+    public required string Message { get; init; }
+}

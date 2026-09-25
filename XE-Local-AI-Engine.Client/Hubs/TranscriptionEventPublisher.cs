@@ -67,8 +67,23 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
                        new TranscriptionSessionStatusPush
                        {
                            SessionId = sessionId,
-                           Status = ToWireStatus(reason)
+                           Status = ToWireStatus(reason),
+                           ErrorCode = ToWireErrorCode(reason)
                        },
+                       cancellationToken);
+
+    public Task PublishCatchUpAsync(Guid sessionId, long bufferedMs, CancellationToken cancellationToken) =>
+        _hubContext.Clients
+                   .Group(TranscriptionHubGroups.Session(sessionId))
+                   .SendAsync(TranscriptionHubEvents.CatchUpProgress,
+                       new TranscriptionCatchUpProgressPush { SessionId = sessionId, BufferedMs = bufferedMs },
+                       cancellationToken);
+
+    public Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        _hubContext.Clients
+                   .Group(TranscriptionHubGroups.Session(sessionId))
+                   .SendAsync(TranscriptionHubEvents.AdmissionClosed,
+                       new TranscriptionAdmissionClosedPush { SessionId = sessionId },
                        cancellationToken);
 
     /// <summary>
@@ -86,8 +101,16 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
             LiveEndReason.Cancelled => "Cancelled",
             LiveEndReason.Abandoned => "Abandoned",
             LiveEndReason.NeverAttached => "Abandoned",
-            LiveEndReason.Overloaded => "Overloaded",
             LiveEndReason.Failed => "Failed",
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown live transcription end reason.")
+        };
+
+    // The one distinction the wire status folds away that the capturing browser must name: no audio ever arrived.
+    private static string? ToWireErrorCode(LiveEndReason reason) =>
+        reason switch
+        {
+            LiveEndReason.NeverAttached => "live-never-attached",
+            LiveEndReason.Failed => "live-failed",
+            _ => null
         };
 }

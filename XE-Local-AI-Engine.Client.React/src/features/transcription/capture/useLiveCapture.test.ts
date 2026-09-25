@@ -29,6 +29,8 @@ const hub = vi.hoisted(() => ({
 	status: "Transcribing",
 	// Mutable so a test can take the transport down and bring it back; the factory reads it per render.
 	connected: true,
+	admissionClosed: false,
+	terminal: null as { status: string; errorCode: string | null } | null,
 }));
 
 vi.mock("@/features/transcription/hooks/useTranscriptionHub", () => ({
@@ -37,6 +39,8 @@ vi.mock("@/features/transcription/hooks/useTranscriptionHub", () => ({
 		subscriptionReady: true,
 		replayStalled: null,
 		subscribeFailed: null,
+		admissionClosed: hub.admissionClosed,
+		terminal: hub.terminal,
 		pushFrame: hub.pushFrame,
 		endSession: hub.endSession,
 	}),
@@ -91,11 +95,32 @@ function harness(failures: Partial<Record<"microphone" | "systemAudio", CaptureE
 	return { order, sources, factory };
 }
 
+/** A display source whose picker stays open until the test answers it, logging when it started and each stop. */
+class PickerCaptureSource extends FakeCaptureSource {
+	readonly picker = deferred<void>();
+	readonly log: string[] = [];
+
+	override async start(onFrame: Parameters<FakeCaptureSource["start"]>[0]): Promise<void> {
+		await this.picker.promise;
+		await super.start(onFrame);
+		this.log.push("started");
+	}
+
+	override async stop(): Promise<void> {
+		this.log.push("stop");
+		await super.stop();
+	}
+}
+
+/** How many `live/start` requests reached the gated route below — "the endpoint is in flight" as a fact, not a guess. */
+let liveStartHits = 0;
+
 /** Answers `live/start` only once the returned gate is settled, so a test can hold the endpoint open. */
 function liveStartGate(): Deferred<void> {
 	const gate = deferred<void>();
 	server.use(
 		http.post(livePath, async () => {
+			liveStartHits += 1;
 			await gate.promise;
 			return HttpResponse.json({ sessionId, status: "Transcribing", lastSeq: 0 });
 		}),
@@ -170,6 +195,7 @@ async function startCapture(
 describe("useLiveCapture", () => {
 	beforeEach(() => {
 		abortCancels.length = 0;
+		liveStartHits = 0;
 		server.use(
 			http.post(cancelPath, () => {
 				abortCancels.push("cancel");
@@ -183,6 +209,8 @@ describe("useLiveCapture", () => {
 		hub.endSession.mockResolvedValue(true);
 		hub.status = "Transcribing";
 		hub.connected = true;
+		hub.admissionClosed = false;
+		hub.terminal = null;
 	});
 
 	afterEach(() => {
@@ -281,6 +309,120 @@ describe("useLiveCapture", () => {
 		parked.resolve(undefined);
 	});
 
+	// Codex r2 #10: once the node closes admission (the buffered-audio cap) every later frame is discarded, so the
+	// browser must stop recording the way Stop does — graceful EndSession, never a REST cancel, no error.
+	it("stops the sources and ends gracefully when the node closes admission during capture", async () => {
+		liveStartOk();
+		const endGate = deferred<boolean>();
+		hub.endSession.mockReturnValue(endGate.promise);
+		const { factory, sources } = harness();
+		const { result, rerender } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		expect(result.current.state).toBe("capturing");
+		await act(async () => {
+			hub.admissionClosed = true;
+			rerender();
+		});
+		await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+
+		expect(sources.get("microphone")?.stopped).toBe(true);
+		expect(result.current.state).toBe("stopping");
+		expect(result.current.error).toBeNull();
+		expect(abortCancels).toEqual([]);
+
+		await act(async () => {
+			endGate.resolve(true);
+			await endGate.promise;
+		});
+		await vi.waitFor(() => expect(result.current.state).toBe("idle"));
+		expect(abortCancels).toEqual([]);
+	});
+
+	// The tester's four-minute spinner: the node ended the session because no frame ever arrived, and the page kept
+	// "capturing". Any terminal push leaves the capture phases and releases the sources; the node already ended the
+	// session, so nothing is ended or cancelled again.
+	it.each([
+		{ status: "Abandoned", errorCode: "live-never-attached", error: "live-never-attached" },
+		{ status: "Failed", errorCode: "live-failed", error: null },
+		{ status: "Cancelled", errorCode: null, error: null },
+	])("leaves capturing when the node pushes $status ($errorCode)", async ({ status, errorCode, error }) => {
+		liveStartOk();
+		const { factory, sources } = harness();
+		const { result, rerender } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		expect(result.current.state).toBe("capturing");
+		await act(async () => {
+			hub.terminal = { status, errorCode };
+			rerender();
+		});
+
+		expect(result.current.state).toBe("idle");
+		expect(result.current.error).toBe(error);
+		await vi.waitFor(() => expect(sources.get("microphone")?.stopped).toBe(true));
+		act(() => sources.get("microphone")?.emit(new Int16Array([1])));
+		expect(hub.pushFrame).not.toHaveBeenCalled();
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual([]);
+	});
+
+	it("releases a start still waiting on live/start when the node pushes a terminal status", async () => {
+		const gate = liveStartGate();
+		const { factory, sources } = harness();
+		const { result, rerender } = renderCapture();
+
+		let starting: Promise<void> = Promise.resolve();
+		await act(async () => {
+			starting = result.current.start({ kind: "microphone" }, factory);
+			await vi.waitFor(() => expect(liveStartHits).toBe(1));
+		});
+		expect(result.current.state).toBe("starting");
+		await act(async () => {
+			hub.terminal = { status: "Cancelled", errorCode: null };
+			rerender();
+		});
+		expect(result.current.state).toBe("idle");
+
+		await act(async () => {
+			gate.resolve(undefined);
+			await starting;
+		});
+		expect(result.current.state).toBe("idle");
+		expect(sources.get("microphone")?.stopped).toBe(true);
+		expect(result.current.error).toBeNull();
+		expect(abortCancels).toEqual([]);
+	});
+
+	it("ignores admission closed while a stop is already draining", async () => {
+		liveStartOk();
+		const endGate = deferred<boolean>();
+		hub.endSession.mockReturnValue(endGate.promise);
+		const { factory } = harness();
+		const { result, rerender } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		let stopped = Promise.resolve();
+		await act(async () => {
+			stopped = result.current.stop();
+			await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+		});
+		await act(async () => {
+			hub.admissionClosed = true;
+			rerender();
+		});
+
+		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(result.current.state).toBe("stopping");
+		expect(abortCancels).toEqual([]);
+
+		await act(async () => {
+			endGate.resolve(true);
+			await stopped;
+		});
+		expect(result.current.state).toBe("idle");
+	});
+
 	it("cancels a finalization without waiting for a stuck graceful EndSession", async () => {
 		liveStartOk();
 		const endGate = deferred<boolean>();
@@ -356,10 +498,10 @@ describe("useLiveCapture", () => {
 		const { factory, sources } = harness();
 		const { result } = renderCapture();
 		await startCapture(result, { kind: "microphone" }, factory);
-		hub.pushFrame.mockRejectedValue(new CaptureError("overloaded", "maximum frames in flight"));
+		hub.pushFrame.mockRejectedValue(new CaptureError("disconnected", "transport gone"));
 
 		act(() => sources.get("microphone")?.emit(new Int16Array([1])));
-		await vi.waitFor(() => expect(result.current.error).toBe("overloaded"));
+		await vi.waitFor(() => expect(result.current.error).toBe("disconnected"));
 		expect(result.current.state).toBe("stopping");
 
 		await act(async () => {
@@ -381,47 +523,107 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 	});
 
-	// Plan §4.2: OverloadedStatusPush_StopsCaptureAndSurfacesTheNamedError
-	it("stops capture and names the error when the node reports overloaded", async () => {
+	// B1/B3: live sessions are open-ended. A node that is behind buffers the audio and catches up, so frames whose
+	// sends are still outstanding are not a reason to stop: every frame is sent and capture carries on.
+	it("keeps capturing while earlier frames are still outstanding", async () => {
 		liveStartOk();
+		const parked = deferred<void>();
+		hub.pushFrame.mockReturnValue(parked.promise);
 		const { factory, sources } = harness();
-		const { result, rerender } = renderCapture();
-
-		await startCapture(result, { kind: "microphone" }, factory);
-		expect(result.current.state).toBe("capturing");
-
-		hub.status = "Overloaded";
-		await act(async () => {
-			rerender();
-		});
-
-		expect(result.current.error).toBe("overloaded");
-		expect(result.current.state).toBe("idle");
-		expect(sources.get("microphone")?.stopped).toBe(true);
-		expect(hub.endSession).not.toHaveBeenCalled();
-		expect(abortCancels).toEqual(["cancel"]);
-	});
-
-	// Plan §4.2: MicrophoneOnly_AwaitsLiveStartBeforeGetUserMedia
-	// R39a: no display picker is involved, so there is no activation window to protect and R31's rule stands unaltered
-	// — nothing is acquired until the node has accepted the session.
-	it("acquires no microphone until live/start has resolved", async () => {
-		const gate = liveStartGate();
-		const { factory, order } = harness();
 		const { result } = renderCapture();
 
-		let orderWhilePending: string[] = [];
+		await startCapture(result, { kind: "microphone" }, factory);
+		act(() => {
+			for (let index = 0; index < 40; index += 1) {
+				sources.get("microphone")?.emit(new Int16Array([index]));
+			}
+		});
+
+		expect(hub.pushFrame).toHaveBeenCalledTimes(40);
+		expect(result.current.state).toBe("capturing");
+		expect(result.current.error).toBeNull();
+		expect(sources.get("microphone")?.stopped).toBe(false);
+		parked.resolve(undefined);
+	});
+
+	// A3: the microphone prompt comes BEFORE `live/start`, so the operator answers it while the node spends its
+	// first-use minute on the runtime, not after. R31 still holds: nothing is forwarded until the session is open.
+	it("acquires the microphone before live/start and forwards nothing until it resolves", async () => {
+		let microphoneStartedAtRequest: boolean | undefined;
+		const gate = deferred<void>();
+		const { factory, sources } = harness();
+		server.use(
+			http.post(livePath, async () => {
+				microphoneStartedAtRequest = sources.get("microphone")?.started;
+				await gate.promise;
+				return HttpResponse.json({ sessionId, status: "Transcribing", lastSeq: 0 });
+			}),
+		);
+		const { result } = renderCapture();
+
+		let pushesWhilePending = -1;
 		await act(async () => {
 			const started = result.current.start({ kind: "microphone" }, factory);
-			// One turn of the event loop: enough for the endpoint to be issued, not enough for the gate to open.
-			await Promise.resolve();
-			orderWhilePending = [...order];
+			await vi.waitFor(() => expect(microphoneStartedAtRequest).toBe(true));
+			sources.get("microphone")?.emit(new Int16Array([7]));
+			pushesWhilePending = hub.pushFrame.mock.calls.length;
 			gate.resolve(undefined);
 			await started;
 		});
 
-		expect(orderWhilePending).toEqual([]);
-		expect(order).toEqual(["microphone"]);
+		expect(pushesWhilePending).toBe(0);
+		expect(result.current.state).toBe("capturing");
+		act(() => sources.get("microphone")?.emit(new Int16Array([7])));
+		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
+	});
+
+	// A3: the microphone is now hot before the node has accepted anything, so a refused `live/start` must release it.
+	it("stops the microphone when live/start fails after it was acquired", async () => {
+		server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Cancelled", lastSeq: 3 }, { status: 409 })));
+		const { factory, sources } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+
+		expect(sources.get("microphone")?.started).toBe(true);
+		expect(sources.get("microphone")?.stopped).toBe(true);
+		expect(result.current.error).toBe("start-failed");
+		expect(result.current.state).toBe("idle");
+		// No session was opened, so there is nothing to end or cancel.
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual([]);
+	});
+
+	// A refused microphone never opens a session at all: the node is not asked to load a runtime nobody can feed.
+	it("never calls live/start when the microphone is refused", async () => {
+		const gate = liveStartGate();
+		const { factory } = harness({ microphone: new CaptureError("permission-denied", "microphone refused") });
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		gate.resolve(undefined);
+
+		expect(result.current.error).toBe("permission-denied");
+		expect(result.current.state).toBe("idle");
+		expect(liveStartHits).toBe(0);
+		expect(abortCancels).toEqual([]);
+	});
+
+	// A microphone that never started (an unanswered prompt, a graph that never resumed) is reported and released, and
+	// the node is never asked to open a session nothing would feed.
+	it("reports a microphone start timeout, stops the source and never calls live/start", async () => {
+		const gate = liveStartGate();
+		const { factory, sources } = harness({ microphone: new CaptureError("start-timeout", "microphone did not start") });
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		gate.resolve(undefined);
+
+		expect(result.current.error).toBe("start-timeout");
+		expect(result.current.state).toBe("idle");
+		expect(sources.get("microphone")?.stopped).toBe(true);
+		expect(liveStartHits).toBe(0);
+		expect(abortCancels).toEqual([]);
 	});
 
 	// Plan §4.2: SystemAudio_InvokesGetDisplayMediaBeforeAnyAwait
@@ -455,7 +657,8 @@ describe("useLiveCapture", () => {
 			await started;
 		});
 
-		expect(orderAtEntry).toEqual(["systemAudio"]);
+		// The picker opens first; the microphone (A3) is asked for right behind it, still before `live/start`.
+		expect(orderAtEntry).toEqual(["systemAudio", "microphone"]);
 		expect(order).toEqual(["systemAudio", "microphone"]);
 	});
 
@@ -507,7 +710,8 @@ describe("useLiveCapture", () => {
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
 		expect(result.current.error).toBe("permission-denied");
 		expect(hub.endSession).not.toHaveBeenCalled();
-		expect(abortCancels).toEqual(["cancel"]);
+		// A3: the microphone is acquired before `live/start`, so its refusal means no session was ever opened.
+		expect(abortCancels).toEqual([]);
 	});
 
 	// Plan §4.2: the mirror case — the display fails and the microphone must not be left hot.
@@ -523,6 +727,33 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual(["cancel"]);
 	});
 
+	// Codex r1 #4: the microphone is acquired while the display picker may still be open. A refused `live/start` used to
+	// wait for the operator to answer the picker before stopping anything, so the microphone stayed hot all that time.
+	it("stops the microphone at once when live/start fails while the display picker is still open", async () => {
+		server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Cancelled", lastSeq: 3 }, { status: 409 })));
+		const microphone = new FakeCaptureSource("you");
+		const display = new PickerCaptureSource("others");
+		const factory: CaptureSourceFactory = (kind) => (kind === "systemAudio" ? display : microphone);
+		const { result } = renderCapture();
+
+		let started: Promise<void> = Promise.resolve();
+		await act(async () => {
+			started = result.current.start({ kind: "both" }, factory);
+			await vi.waitFor(() => expect(microphone.stopped).toBe(true));
+		});
+
+		expect(result.current.error).toBe("start-failed");
+		expect(display.log).not.toContain("started");
+
+		await act(async () => {
+			display.picker.resolve(undefined);
+			await started;
+		});
+
+		// The stream the picker handed over only exists once it resolved, so only a stop after that releases it.
+		expect(display.log.slice(display.log.indexOf("started"))).toEqual(["started", "stop"]);
+	});
+
 	// S4 review B1 — WhenUnmountedDuringStart_StopsEverySourceAcquiredAfterwards.
 	// The unmount teardown stops whatever `sourcesRef` holds at that instant. A start still awaiting `live/start`
 	// used to resume afterwards, acquire the microphone into an array nothing pointed at any more, and reach
@@ -535,9 +766,8 @@ describe("useLiveCapture", () => {
 		let started: Promise<void> = Promise.resolve();
 		await act(async () => {
 			started = result.current.start({ kind: "both" }, factory);
-			// One turn of the event loop: the display source is acquired and the endpoint issued, and the gate holds
-			// `live/start` open across the unmount below.
-			await Promise.resolve();
+			// Both sources are acquired and the endpoint issued; the gate holds `live/start` open across the unmount.
+			await vi.waitFor(() => expect(liveStartHits).toBe(1));
 		});
 		unmount();
 		await act(async () => {
@@ -546,9 +776,10 @@ describe("useLiveCapture", () => {
 		});
 
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
-		// Acquiring it at all would leave it hot: nothing after the unmount can reach it.
-		expect(sources.has("microphone")).toBe(false);
+		// A3 acquires the microphone before `live/start`; the unmount must still leave it stopped, not hot.
+		expect(sources.get("microphone")?.stopped).toBe(true);
 		sources.get("systemAudio")?.emit(new Int16Array([1]));
+		sources.get("microphone")?.emit(new Int16Array([1]));
 		expect(hub.pushFrame).not.toHaveBeenCalled();
 		expect(abortCancels).toEqual(["cancel"]);
 	});
@@ -793,23 +1024,22 @@ describe("useLiveCapture", () => {
 		expect(hub.endSession).not.toHaveBeenCalled();
 	});
 
-	// Plan §4.2: WhenAPushReportsOverloaded_StopsEverySourceEndsTheSessionAndShowsTheError
-	// R34a: hitting the hub's in-flight limit is a visible failure. A dropped frame is a hole in the transcript that
+	// R34a: a frame the transport refused is a visible failure. A dropped frame is a hole in the transcript that
 	// nothing refetches, so capture stops instead.
-	it("stops every source and cancels the session when a push reports overloaded", async () => {
+	it("stops every source and cancels the session when a push is refused", async () => {
 		liveStartOk();
 		const { factory, sources } = harness();
 		const { result } = renderCapture();
 
 		await startCapture(result, { kind: "both" }, factory);
-		hub.pushFrame.mockRejectedValue(new CaptureError("overloaded", "maximum frames in flight"));
+		hub.pushFrame.mockRejectedValue(new CaptureError("disconnected", "transport gone"));
 
 		await act(async () => {
 			sources.get("microphone")?.emit(new Int16Array([1]));
 			await Promise.resolve();
 		});
 
-		expect(result.current.error).toBe("overloaded");
+		expect(result.current.error).toBe("disconnected");
 		expect(result.current.state).toBe("idle");
 		expect(sources.get("microphone")?.stopped).toBe(true);
 		expect(sources.get("systemAudio")?.stopped).toBe(true);

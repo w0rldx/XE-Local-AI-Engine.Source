@@ -580,6 +580,7 @@ public sealed class WhisperServerSupervisorTests
 
         var exception = AssertEx.NotNull(failure, "An exited daemon must yield the supervisor's exit verdict.");
         AssertEx.Contains(exception.Message, "process exited (exit code -1073740791)", StringComparison.Ordinal);
+        AssertEx.True(exception.ProcessExited, "The live lane retries on this flag, so the exit verdict must carry it.");
         AssertEx.False(exception.Message.Contains("ggml_cuda_init", StringComparison.Ordinal), "The stderr tail must stay in the log.");
         var warnings = logger.Entries.Where(static entry => entry.Level == LogLevel.Warning).ToList();
         AssertEx.Equal(expected: 1, warnings.Count);
@@ -591,6 +592,45 @@ public sealed class WhisperServerSupervisorTests
 
         AssertEx.Equal(expected: 2, harness.Launcher.LaunchCount);
         AssertEx.Equal(expected: 1, logger.Entries.Count(static entry => entry.Level == LogLevel.Warning), "The respawn must not report the same death twice.");
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_TwoLanesOnOneDeadDaemon_BothHearTheProcessExited()
+    {
+        // Two lanes had a request in flight when the daemon died. The first report tears it down; the second must still
+        // hear "the process exited", or its lane skips the retry and fails the whole session.
+        await using var harness = new WhisperSupervisorHarness();
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 7);
+
+        var reports = await Task.WhenAll(
+            harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None),
+            harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None));
+
+        foreach (var report in reports)
+        {
+            var exception = AssertEx.NotNull(report, "Every lane on the dead daemon gets the exit verdict.");
+            AssertEx.True(exception.ProcessExited);
+            AssertEx.Contains(exception.Message, "exit code 7", StringComparison.Ordinal);
+        }
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_ForAnOlderDeadGeneration_ReturnsNull()
+    {
+        // Only the LAST exited daemon is remembered: a report naming an earlier one is stale and keeps the caller's message.
+        await using var harness = new WhisperSupervisorHarness();
+        var first = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        var firstHandle = harness.Launcher.Handles.Single();
+        firstHandle.SimulateExit(exitCode: 1);
+        AssertEx.NotNull(await harness.Supervisor.ReportRequestFailureAsync(first.Generation, new HttpRequestException("reset"), CancellationToken.None));
+        var second = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single(handle => !ReferenceEquals(handle, firstHandle)).SimulateExit(exitCode: 2);
+        AssertEx.NotNull(await harness.Supervisor.ReportRequestFailureAsync(second.Generation, new HttpRequestException("reset"), CancellationToken.None));
+
+        var stale = await harness.Supervisor.ReportRequestFailureAsync(first.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        AssertEx.Null(stale);
     }
 
     [Test]

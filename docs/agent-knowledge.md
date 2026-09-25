@@ -1045,6 +1045,48 @@ neither could make an informed call to wait longer, switch box, or ask the holde
 `scripts/tests/build-lock.test.sh`. Do not quote today's 65-minute figure, or any other timing or count, as
 current beyond what these scripts print — re-measure from their own output.
 
+### PROPOSED (awaiting operator approval): the `Architecture` guards are a NAMESPACE, so a class-name treenode filter never reaches them
+
+**Rule:** to run the architecture guards (comment budget, primary-constructor guard, layering, test categories) from the
+`XE-Local-AI-Engine.Tests` executable, filter on the namespace segment: `--treenode-filter '/*/*.Architecture/*/*'`
+(or the full `'/*/XE_Local_AI_Engine.Tests.Architecture/*/*'`). The treenode path is
+`/<assembly>/<namespace>/<class>/<method>`, so `'/*/*/Architecture*/*'` matches CLASS names starting with
+"Architecture" and runs none of the guards, while still exiting green as long as some other alternation matched.
+**Prevents:** a scoped run reported as "including the Architecture namespace" that never executed the shrink-only
+comment-budget guard, so the Release gate is the first place a lowered allowlist line goes red. **Authority:** the
+2026-09-23 transcription-open-sessions BE-1 and BE-2 runs (`Plans/transcription-open-sessions-2026-09-23/progress/`),
+where only the namespace filter ran the guards; confirm with
+`--list-tests`, never from this entry.
+
+### PROPOSED (awaiting operator approval): run build and test inside ONE build-lock invocation in a shared worktree
+
+**Rule:** in a worktree several workers share, run the build and the `--no-build` test executable as one locked command,
+`scripts/with-build-lock.sh -- sh -c '<build> && <test exe …>'`. Two separate locked calls release the lock between
+them, and another worker's build can replace the binaries in that gap. **Prevents:** a test run that grades another
+worker's half-finished tree as yours; the lock serialized each call, not the pair. **Authority:**
+`scripts/with-build-lock.sh`; `Plans/transcription-open-sessions-2026-09-23/progress/BE1-report.md` (how every BE-1
+build and test ran).
+
+### PROPOSED (awaiting operator approval): a test that builds `Host.CreateApplicationBuilder` is `Integration`, however small
+
+**Rule:** a DI-composition test that calls `Host.CreateApplicationBuilder()` (or `WebApplication.Create*`,
+`AddNodeApplication`, `AddNodeModelRuntime`) carries `[Category(TestCategories.Integration)]`, even when it only lists
+`builder.Services` descriptors and starts nothing. `TestCategoryConventionTests` scans `Unit` classes for those
+primitives and fails the Architecture namespace on a match. **Prevents:** a registration-order test (such as "the node's
+probe beats the provider's `TryAdd`") written as `Unit` passing its own filter and then failing the gate's Architecture
+lane. **Authority:** `TestCategoryConventionTests` (the `Host.CreateApplicationBuilder` primitive);
+`RuntimeAuditCudaDeviceProbeCompositionTests`.
+
+### PROPOSED (awaiting operator approval): `SqliteParameter.AddWithValue(Guid)` binds a BLOB, but EF stores this schema's Guids as TEXT
+
+**Rule:** in a raw `SqliteCommand` against an EF-created database, bind a Guid key as `guid.ToString()` (as the
+migration tests do), or filter on a non-Guid column instead. `Microsoft.Data.Sqlite` binds a `Guid` value as a 16-byte
+BLOB, while the EF Core SQLite provider stores Guid columns as TEXT, and SQLite compares a BLOB and a TEXT as unequal
+without an error. **Prevents:** a raw read-back (for example "the ciphertext at rest changed") whose `WHERE session_id =
+$id` matches zero rows, so the helper returns null and the test either throws for the wrong reason or asserts over
+nothing. **Authority:** `TranscriptionSessionStoreTests.ReadRawSegmentTextAsync` (filters on `seq` for this reason);
+`AddAgentDefinitionsMigrationTests`, which binds `conversationId.ToString()`.
+
 ---
 
 ## 2. Dev environment & local runtime
@@ -1973,6 +2015,57 @@ the live `dumpasync --coalesce` capture whose pending chain ends
 and `SupervisorProfilingReentrancyTests`, whose deadlock-detector tests hang (then red) against the unpatched
 supervisor while `SupervisorProfilingTests.Profiling_ConcurrentEnsureForSameKey_NeverReusesTheProfilingProcess` keeps
 the exclusion honest for every other caller.
+
+### PROPOSED (awaiting operator approval): `nvcuda.dll` present is not a CUDA device; peek the cached llama.cpp audit, never probe on a spawn path
+
+**Rule:** this sharpens "A GPU-vendor check is not a device check" above. The node's `ICudaDeviceProbe` is
+`RuntimeAuditCudaDeviceProbe`, registered in `AddNodeModelFitExtensions` ahead of the whisper and sd-server providers'
+`TryAdd` default. It answers "no device" when the cached, determinate llama.cpp device audit shows the CUDA variant ran
+with a GPU expected and fell back to CPU, and otherwise defers to `DefaultCudaDeviceProbe` (the driver-library check).
+It reads the audit only through `IRuntimeDeviceAudit.PeekCached`: the backend selectors call the probe synchronously on
+the spawn path, and computing the audit there would run `--list-devices` inside a spawn. Note what warns: the probe
+logs once per process, while `WhisperBackendSelector` logs its own Warning on every selection the probe degrades.
+**Prevents:** the Windows tester box whose driver enumerated zero CUDA devices crashing the cuBLAS `whisper-server` on
+its first inference (2026-09-23) although llama.cpp had already recorded that the same driver enumerates nothing.
+The limit is real: with no audit cached (llama.cpp never ran), the default answer stands and the first CUDA daemon can
+still die, which the in-lane retry and the CUDA latch absorb. **Authority:** `RuntimeAuditCudaDeviceProbe.CudaEnumeratesNoDevice`;
+`RuntimeAuditCudaDeviceProbeTests`, `RuntimeAuditCudaDeviceProbeCompositionTests`.
+
+### PROPOSED (awaiting operator approval): live transcription never ends a session for being slow; only a memory cap does, gracefully
+
+**Rule:** this supersedes the budget half of "Live transcription backpressure measures lag" in §1 (the skip-ticks half
+still holds). There is no pending-audio budget, no `Overloaded` end and no browser in-flight limit. A lane that falls
+behind queues in memory and catches up at one inference per window; the only bound is `Transcription:MaxBufferedAudioMb`
+(default 512), which ends the session as `Completed`, draining what is queued. A graceful Stop has no deadline, and only
+an abort interrupts it; progress is reported through `transcriptionCatchUpProgress`. A submission whose daemon died
+(`WhisperRuntimeException.ProcessExited`) is retried once on the same span, inside `LiveTranscriptionSegmenter.SubmitAsync`
+and not in the registry: by the time the registry sees a failure, the frame is already in the segmenter's buffer, so
+re-pushing it would double the audio. **Prevents:** reintroducing a lag threshold that ends a recording because a CPU
+model is slower than real time, and a retry placed in `ConsumeAsync` that transcribes the same second twice.
+**Authority:** `LiveTranscriptionSessionRegistry.PushAudioAsync`, `LiveTranscriptionSegmenter.SubmitAsync`;
+`LiveTranscriptionSessionRegistryTests.BufferedAudioBeyondTheCap_EndsTheSessionGracefullyAndTranscribesEveryAdmittedFrame`,
+`LiveTranscriptionSegmenterTests.DaemonDeathOnce_RetriesTheSameWindowAndCommits`; `docs/wiki/24-audio-transcription.md`
+("The registry", "The segmenter").
+
+### PROPOSED (awaiting operator approval): never publish an advisory hub event under a live session's commit gate
+
+**Rule:** the commit gate in `LiveTranscriptionSessionRegistry` serializes seq allocation, persistence and publication
+because the client's watermark depends on that order. Progress and other advisory pushes go through their own gate
+(`ProgressGate`), which is closed just before the terminal status push so nothing advisory follows it. **Prevents:** a
+lane with nothing to commit waiting behind a sibling lane's blocked persistence just to report progress, which the
+first cut did. **Authority:** `LiveTranscriptionSessionRegistry.PublishCatchUpAsync` / `CloseProgressAsync`;
+`LiveTranscriptionSessionRegistryTests.Commit_WithBlockedSeqOnePersistence_DoesNotPublishSeqTwoFirst` (the test that
+went red), `GracefulStop_ReportsTheBacklogAtOnceThenCountsDownBeforeTheTerminalStatus`.
+
+### PROPOSED (awaiting operator approval): "still producing rows" is `IsRegistered`, not `IsLive`
+
+**Rule:** a guard that must refuse while a live session can still commit transcript rows asks
+`ILiveTranscriptionSessionRegistry.IsRegistered`, in addition to the persisted `Transcribing` status. `IsLive` turns
+false the moment audio admission closes (Stop), but the session keeps draining its backlog and committing rows until
+finalization unregisters it; with an unbounded drain that window can last minutes. **Prevents:** a transcript edit (or
+any row mutation) accepted during the drain after Stop and then raced by a late commit. **Authority:**
+`TranscriptionService.UpdateSegmentTextAsync`; `TranscriptSegmentEditServiceTests`; `UpdateTranscriptSegmentEndpoint`
+(409 `session-transcribing`).
 
 ---
 

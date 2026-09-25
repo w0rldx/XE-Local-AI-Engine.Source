@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Live;
 
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>One durable piece of transcript. Times are milliseconds from the start of the session's audio.</summary>
@@ -97,7 +98,7 @@ public sealed class LiveTranscriptionSegmenter
     private readonly IWhisperTranscriber _transcriber;
     private long _audioEndMs;
     private long _committedEndMs;
-    private bool _detectLanguage = true;
+    private bool _detectLanguage;
     private string? _detectedLanguageCode;
     private long _lastSubmittedBoundaryMs = -1;
     private long _nextTickMs;
@@ -128,6 +129,10 @@ public sealed class LiveTranscriptionSegmenter
         _channel = channel;
         _modelId = modelId;
         _languageCode = string.IsNullOrWhiteSpace(languageCode) ? null : languageCode;
+
+        // A forced language is never detected: the probability pass is paid for nothing, and whisper-server 927cfce
+        // answers 500 when VAD finds no speech in a window that asked for it.
+        _detectLanguage = _languageCode is null;
         _translate = translate;
         _settings = settings;
         _maxWindowMs = settings.MaxWindowSeconds * 1_000;
@@ -256,19 +261,17 @@ public sealed class LiveTranscriptionSegmenter
         var windowEndMs = _audioEndMs;
         var wav = WavPcm16.Wrap(CollectionsMarshal.AsSpan(_tail)[..(int)(uncommittedMs * WavPcm16.BytesPerMillisecond)]);
 
-        // A MemoryStream over a byte[] is seekable, so the multipart body can report a content length. It is written read-only because the provider must not
-        // mutate it, and disposed here because the provider disposes nothing it did not create.
-        using var audio = new MemoryStream(wav, writable: false);
-        var result = await _transcriber.TranscribeAsync(_modelId, new WhisperTranscriptionRequest
+        WhisperTranscriptionResult result;
+        try
         {
-            Audio = audio,
-            ContentType = "audio/wav",
-            LanguageMode = _languageCode is null ? WhisperLanguageMode.Auto : WhisperLanguageMode.Explicit,
-            LanguageCode = _languageCode,
-            Translate = _translate,
-            UseVoiceActivityDetection = true,
-            DetectLanguage = _detectLanguage
-        }, cancellationToken);
+            result = await TranscribeWindowAsync(wav, cancellationToken);
+        }
+        catch (WhisperRuntimeException exception) when (exception.ProcessExited)
+        {
+            // The daemon died under this window (the Windows cuBLAS crash). The supervisor already tore it down, so this
+            // request respawns it, on CPU after a CUDA death. Nothing was freed, so it is the same span; a second death propagates.
+            result = await TranscribeWindowAsync(wav, cancellationToken);
+        }
 
         string? learnedLanguage = null;
         if (_detectedLanguageCode is null && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))
@@ -281,6 +284,23 @@ public sealed class LiveTranscriptionSegmenter
 
         Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
         return learnedLanguage;
+    }
+
+    private async Task<WhisperTranscriptionResult> TranscribeWindowAsync(byte[] wav, CancellationToken cancellationToken)
+    {
+        // A MemoryStream over a byte[] is seekable, so the multipart body can report a content length. It is written read-only because the provider must not
+        // mutate it, and disposed here because the provider disposes nothing it did not create.
+        using var audio = new MemoryStream(wav, writable: false);
+        return await _transcriber.TranscribeAsync(_modelId, new WhisperTranscriptionRequest
+        {
+            Audio = audio,
+            ContentType = "audio/wav",
+            LanguageMode = _languageCode is null ? WhisperLanguageMode.Auto : WhisperLanguageMode.Explicit,
+            LanguageCode = _languageCode,
+            Translate = _translate,
+            UseVoiceActivityDetection = true,
+            DetectLanguage = _detectLanguage
+        }, cancellationToken);
     }
 
     /// <summary>Turns one transcription result into commits and moves the watermark. Nothing here awaits.</summary>

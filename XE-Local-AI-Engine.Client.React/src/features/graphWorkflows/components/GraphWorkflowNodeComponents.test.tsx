@@ -9,6 +9,7 @@ import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowNodeCard } from "@/features/graphWorkflows/components/GraphWorkflowNodeComponents";
+import classes from "@/features/graphWorkflows/components/GraphWorkflowNodes.module.css";
 import {
 	defaultNodeData,
 	type GraphWorkflowCanvasNodeData,
@@ -22,13 +23,14 @@ interface HandleMockProps {
 	readonly type: string;
 	readonly id?: string;
 	readonly position: string;
+	readonly className?: string;
 	readonly children?: React.ReactNode;
 }
 
 vi.mock("@xyflow/react", () => ({
 	Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-	Handle: ({ type, id, position, children }: HandleMockProps) => (
-		<div data-testid={`handle-${type}-${id ?? "default"}`} data-position={position}>
+	Handle: ({ type, id, position, className, children }: HandleMockProps) => (
+		<div data-testid={`handle-${type}-${id ?? "default"}`} data-position={position} className={className}>
 			{children}
 		</div>
 	),
@@ -84,6 +86,18 @@ describe("GraphWorkflowNodeCard handles", () => {
 		renderCard(nodeData("Agent", "analyze"));
 		expect(screen.getByTestId("handle-target-default").getAttribute("data-position")).toBe("left");
 		expect(screen.getByTestId("handle-source-default").getAttribute("data-position")).toBe("right");
+	});
+
+	// The enlarged, grabbable dot lives on this class; a handle without it falls back to React Flow's 6 px default.
+	it("gives every handle the enlarged handle class", () => {
+		renderCard(nodeData("Condition", "check"));
+		for (const testId of ["handle-target-default", "handle-source-true", "handle-source-false"]) {
+			expect(screen.getByTestId(testId).classList.contains(classes["handle"] ?? "missing")).toBe(true);
+		}
+
+		cleanup();
+		renderCard(nodeData("Agent", "analyze"));
+		expect(screen.getByTestId("handle-source-default").classList.contains(classes["handle"] ?? "missing")).toBe(true);
 	});
 
 	it("gives a Pause node one source handle per allowed decision, captioned with the decision's label", () => {

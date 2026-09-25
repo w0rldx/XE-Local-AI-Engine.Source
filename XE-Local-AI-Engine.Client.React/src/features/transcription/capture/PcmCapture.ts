@@ -15,11 +15,23 @@ const FRAME_MS = 250;
 /**
  * Starts feeding 16 kHz mono int16 frames from `stream` to `onFrame`.
  *
+ * @param signal aborting it closes the context of a start that is still building the graph, since a hung `addModule` or
+ *   `resume` never reaches the disposer.
  * @returns a disposer that stops every track, tears the graph down and closes the context. Idempotent.
  * @throws {CaptureError} `worklet-failed` when the context or the worklet module cannot be created.
  */
-export async function startPcmCapture(stream: MediaStream, onFrame: (pcm: Int16Array) => void): Promise<() => Promise<void>> {
+export async function startPcmCapture(
+	stream: MediaStream,
+	onFrame: (pcm: Int16Array) => void,
+	signal?: AbortSignal,
+): Promise<() => Promise<void>> {
 	const context = createAudioContext();
+	let closing: Promise<void> | null = null;
+	const closeOnce = (): Promise<void> => {
+		closing ??= closeQuietly(context);
+		return closing;
+	};
+	signal?.addEventListener("abort", () => closeOnce().catch(() => undefined), { once: true });
 	// Every throw path from here on is inside the guard: once the context exists, the only way it gets closed on a
 	// failure is `closeQuietly`, and a start that leaks one leaks it per attempt with nothing left holding it.
 	try {
@@ -67,10 +79,10 @@ export async function startPcmCapture(stream: MediaStream, onFrame: (pcm: Int16A
 			source.disconnect();
 			node.disconnect();
 			silentGain.disconnect();
-			await closeQuietly(context);
+			await closeOnce();
 		};
 	} catch (error) {
-		await closeQuietly(context);
+		await closeOnce();
 		throw new CaptureError("worklet-failed", `The PCM downsampler worklet did not start: ${describe(error)}`);
 	}
 }

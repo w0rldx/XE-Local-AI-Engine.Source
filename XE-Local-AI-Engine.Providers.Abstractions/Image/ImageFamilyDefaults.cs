@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// <remarks>
 ///     <c>sd-server</c>'s own defaults (20 steps, CFG 7.0, <c>euler_a</c>) are the <b>SD1.5</b> defaults, and applying them to a later
 ///     family produces a bad image rather than an error: FLUX-schnell is distilled for ~4 steps at CFG 1.0 and burns out at 7.0, and
-///     Qwen-Image is tuned for a low guidance scale around 2.5, so a form pre-filling SD-era numbers for every model looks like it works
+///     Qwen-Image 2.1 is meant for 40 steps at CFG 6.0, so a form pre-filling SD-era numbers for every model looks like it works
 ///     and quietly generates garbage. These are <em>starting points</em> surfaced to the operator, never a clamp: the request contract
 ///     keeps its own bounds and the operator can override any of them.
 /// </remarks>
@@ -53,11 +53,12 @@ public static class ImageFamilyDefaults
                 Sampler = "euler"
             },
 
-            // Qwen-Image conditions on a 7B LLM encoder and is tuned for a low guidance scale; 7.0 over-saturates it.
+            // Qwen-Image 2.1 (the curated set): CFG 6.0 + euler from sd.cpp docs/qwen_image_2.1.md, 40 steps from the
+            // QwenLM model card. The original Qwen-Image wanted CFG 2.5; the operator overrides it for such an import.
             ImageModelFamily.QwenImage => new ImageGenerationDefaults
             {
-                Steps = 20,
-                CfgScale = 2.5,
+                Steps = 40,
+                CfgScale = 6.0,
                 Sampler = "euler"
             },
 

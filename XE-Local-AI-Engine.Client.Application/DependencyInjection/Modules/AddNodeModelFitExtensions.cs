@@ -119,6 +119,10 @@ internal static class AddNodeModelFitExtensions
         // llama-server provider) to catch a silent CPU fallback and expose the EFFECTIVE profile the advisor and capacity gate size against.
         builder.Services.AddSingleton<IRuntimeDeviceAudit, RuntimeDeviceAuditService>();
 
+        // Beats the DefaultCudaDeviceProbe that the whisper and sd-server modules TryAdd (they run later, so their TryAdd is a no-op): the
+        // cached audit already knows when the CUDA driver enumerates no device, which the default's driver-library check cannot see.
+        builder.Services.AddSingleton<ICudaDeviceProbe, RuntimeAuditCudaDeviceProbe>();
+
         return builder;
     }
 }

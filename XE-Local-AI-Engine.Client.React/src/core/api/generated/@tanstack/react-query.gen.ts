@@ -450,6 +450,7 @@ import {
 	updateSuggestedPlaybookAction,
 	updateToolMock,
 	updateTrainingDefinition,
+	updateTranscriptSegment,
 	updateWorkSession,
 	uploadConversationFile,
 	uploadKnowledgeDocument,
@@ -1544,6 +1545,9 @@ import type {
 	UpdateToolMockResponse,
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionResponse,
+	UpdateTranscriptSegmentData,
+	UpdateTranscriptSegmentError,
+	UpdateTranscriptSegmentResponse,
 	UpdateWorkSessionData,
 	UpdateWorkSessionError,
 	UpdateWorkSessionResponse,
@@ -11059,6 +11063,30 @@ export const startLiveTranscriptionSessionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startLiveTranscriptionSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateTranscriptSegmentMutation = (
+	options?: Partial<Options<UpdateTranscriptSegmentData>>,
+): UseMutationOptions<
+	UpdateTranscriptSegmentResponse,
+	AxiosError<UpdateTranscriptSegmentError>,
+	Options<UpdateTranscriptSegmentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateTranscriptSegmentResponse,
+		AxiosError<UpdateTranscriptSegmentError>,
+		Options<UpdateTranscriptSegmentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateTranscriptSegment({
 				...options,
 				...fnOptions,
 				throwOnError: true,

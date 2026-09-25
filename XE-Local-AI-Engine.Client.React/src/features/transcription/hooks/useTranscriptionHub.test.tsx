@@ -9,6 +9,8 @@ import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubCo
 import { CaptureError } from "@/features/transcription/capture/CaptureSource";
 import { liveTranscriptKey, useLiveTranscript, useTranscriptionHub } from "@/features/transcription/hooks/useTranscriptionHub";
 import {
+	TRANSCRIPTION_ADMISSION_CLOSED,
+	TRANSCRIPTION_CATCH_UP_PROGRESS,
 	TRANSCRIPTION_PARTIAL_UPDATED,
 	TRANSCRIPTION_SEGMENT_COMMITTED,
 	TRANSCRIPTION_SESSION_STATUS_CHANGED,
@@ -230,8 +232,7 @@ describe("useTranscriptionHub", () => {
 		expect(decoded).toEqual([1, 0, 254, 255]);
 	});
 
-	// A dead transport is `disconnected`, never `overloaded`: both stop capture, but the string the operator reads
-	// off the code would otherwise blame a node that could keep up perfectly well and simply was not there.
+	// A dead transport is the one send failure: the frame never left, so capture stops rather than leaving a hole.
 	it("PushFrame_WhileDisconnected_DoesNotInvokeAndReportsDisconnected", async () => {
 		const { result } = renderHub();
 		await waitFor(() => expect(result.current.hub.connected).toBe(true));
@@ -347,10 +348,9 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.view?.replayTruncated).toBe(false);
 	});
 
-	// R34a: a frame the client cannot send is NOT dropped. Two maximum frames are 64 KiB and the node's minimum
-	// pending-audio budget is 128 000 bytes, so the node can never complain about frames the client threw away — the
-	// operator would get a transcript with holes in it and no indication anything went wrong.
-	it("PushFrame_AtTheInFlightLimit_RejectsWithOverloaded", async () => {
+	// B3: a node that is behind buffers and catches up, so the client has no in-flight limit. Frames sent while
+	// earlier ones are still outstanding are all invoked, none rejected — a slow round-trip is not a failure.
+	it("PushFrame_WithManyFramesOutstanding_InvokesEveryOneAndRejectsNone", async () => {
 		// Every send is held open, then settled at the end: sends left pending forever keep the test from finishing.
 		const settle: Array<() => void> = [];
 		pushHandler = () =>
@@ -360,17 +360,68 @@ describe("useTranscriptionHub", () => {
 		const { result } = renderHub();
 		await waitFor(() => expect(result.current.hub.connected).toBe(true));
 
-		const held = Array.from({ length: 8 }, (_, index) => result.current.hub.pushFrame("mono", Int16Array.of(index)));
-		const ninth = result.current.hub.pushFrame("mono", Int16Array.of(8));
+		const held = Array.from({ length: 20 }, (_, index) => result.current.hub.pushFrame("mono", Int16Array.of(index)));
 
-		await expect(ninth).rejects.toMatchObject({ name: "CaptureError", code: "overloaded" });
-		expect(pushFrameInvokes()).toHaveLength(8);
-
-		await waitFor(() => expect(settle).toHaveLength(8));
+		await waitFor(() => expect(settle).toHaveLength(20));
+		expect(pushFrameInvokes()).toHaveLength(20);
 		for (const resolve of settle) {
 			resolve();
 		}
-		await Promise.all(held);
+		await expect(Promise.all(held)).resolves.toHaveLength(20);
+	});
+
+	// B2: the node reports its backlog so the capture controls can say how far behind it is. Null until the first
+	// report, so "nothing reported" and "caught up" stay distinguishable; another session's report is ignored.
+	it("CatchUpProgress_SurfacesBufferedMsForThisSessionOnly", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		expect(result.current.view?.bufferedMs).toBeNull();
+
+		fire(TRANSCRIPTION_CATCH_UP_PROGRESS, { sessionId: SESSION_ID.toUpperCase(), bufferedMs: 4200 });
+		await waitFor(() => expect(result.current.view?.bufferedMs).toBe(4200));
+
+		fire(TRANSCRIPTION_CATCH_UP_PROGRESS, { sessionId: "22222222-2222-2222-2222-222222222222", bufferedMs: 9000 });
+		fire(TRANSCRIPTION_CATCH_UP_PROGRESS, { sessionId: SESSION_ID, bufferedMs: "lots" });
+		expect(result.current.view?.bufferedMs).toBe(4200);
+
+		fire(TRANSCRIPTION_CATCH_UP_PROGRESS, { sessionId: SESSION_ID, bufferedMs: 0 });
+		await waitFor(() => expect(result.current.view?.bufferedMs).toBe(0));
+	});
+
+	// Codex r2 #10: the node announces it stopped accepting audio so the capture can stop instead of recording into a
+	// drain that discards every frame. Only this session's well-formed push counts; a resubscribe clears it.
+	it("AdmissionClosed_IsSetForThisSessionOnlyAndClearedByAResubscribe", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		expect(result.current.hub.admissionClosed).toBe(false);
+
+		fire(TRANSCRIPTION_ADMISSION_CLOSED, { sessionId: "22222222-2222-2222-2222-222222222222" });
+		fire(TRANSCRIPTION_ADMISSION_CLOSED, { sessionId: 42 });
+		expect(result.current.hub.admissionClosed).toBe(false);
+
+		fire(TRANSCRIPTION_ADMISSION_CLOSED, { sessionId: SESSION_ID.toUpperCase() });
+		expect(result.current.hub.admissionClosed).toBe(true);
+
+		act(() => reconnectedFanout?.());
+		await waitFor(() => expect(result.current.hub.admissionClosed).toBe(false));
+	});
+
+	// The capture hook stops on this. It carries the error code the wire status folds away (NeverAttached reads
+	// `Abandoned`), only this session's push counts, and a resubscribe does not clear it: an ended session stays ended.
+	it("StatusChanged_SurfacesTheTerminalWithItsErrorCodeForThisSessionOnly", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		expect(result.current.hub.terminal).toBeNull();
+
+		fire(TRANSCRIPTION_SESSION_STATUS_CHANGED, { sessionId: "22222222-2222-2222-2222-222222222222", status: "Failed" });
+		expect(result.current.hub.terminal).toBeNull();
+
+		fire(TRANSCRIPTION_SESSION_STATUS_CHANGED, { sessionId: SESSION_ID, status: "Abandoned", errorCode: "live-never-attached" });
+		expect(result.current.hub.terminal).toEqual({ status: "Abandoned", errorCode: "live-never-attached" });
+
+		act(() => reconnectedFanout?.());
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		expect(result.current.hub.terminal).toEqual({ status: "Abandoned", errorCode: "live-never-attached" });
 	});
 
 	// R32a: no page cap. An earlier draft stopped at 20, which leaves a session past 10 000 rows permanently
@@ -458,17 +509,16 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.hub.subscriptionReady).toBe(true);
 	});
 
-	// R34: `Overloaded` means the node's pending-audio budget was exceeded, and `useLiveCapture` stops every source on
-	// it — a session that silently went quiet is the failure mode that replaces. The snapshot must not undo it either:
-	// a status that arrived live is newer than the one the in-flight subscribe was already carrying.
-	it("StatusChanged_SurfacesOverloadedAndIsNotOverwrittenByALaterSnapshot", async () => {
+	// A status that arrived live is newer than the one the in-flight subscribe was already carrying, so the snapshot
+	// must not undo it.
+	it("StatusChanged_SurfacesATerminalStatusAndIsNotOverwrittenByALaterSnapshot", async () => {
 		const gate = deferred<unknown>();
 		subscribeHandler = () => gate.promise;
 		const { result } = renderHub();
 		await waitFor(() => expect(subscribeInvokes()).toHaveLength(1));
 
-		fire(TRANSCRIPTION_SESSION_STATUS_CHANGED, { sessionId: SESSION_ID, status: "Overloaded" });
-		await waitFor(() => expect(result.current.view?.status).toBe("Overloaded"));
+		fire(TRANSCRIPTION_SESSION_STATUS_CHANGED, { sessionId: SESSION_ID, status: "Failed" });
+		await waitFor(() => expect(result.current.view?.status).toBe("Failed"));
 
 		await act(async () => {
 			gate.resolve(snapshot({ status: "Transcribing" }));
@@ -476,7 +526,7 @@ describe("useTranscriptionHub", () => {
 		});
 
 		await waitFor(() => expect(result.current.hub.connected).toBe(true));
-		expect(result.current.view?.status).toBe("Overloaded");
+		expect(result.current.view?.status).toBe("Failed");
 	});
 
 	// M1: nothing retries an initial subscribe — `withAutomaticReconnect` does not retry an initial start either, so
@@ -506,6 +556,48 @@ describe("useTranscriptionHub", () => {
 
 		await waitFor(() => expect(result.current.hub.subscribeFailed).not.toBeNull());
 		expect(result.current.hub.subscribeFailed).toEqual({ code: "transcription-subscribe-failed" });
+	});
+
+	// Codex r1 #5: a transport that stays Connected but stops completing invokes is not a slow node — the node returns
+	// as soon as it has copied the frame — so a frame still open after the stall timeout stops capture as disconnected.
+	it("PushFrame_WhenTheInvokeNeverCompletes_RejectsAsDisconnectedAfterThirtySeconds", async () => {
+		pushHandler = () => new Promise<unknown>(() => undefined);
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+
+		vi.useFakeTimers();
+		try {
+			let settled = false;
+			const pushed = result.current.hub.pushFrame("mono", Int16Array.of(1)).catch((error: unknown) => {
+				settled = true;
+				return error;
+			});
+
+			await vi.advanceTimersByTimeAsync(29_999);
+			expect(settled).toBe(false);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(settled).toBe(true);
+
+			const rejection = await pushed;
+			expect(rejection).toBeInstanceOf(CaptureError);
+			expect(rejection).toMatchObject({ code: "disconnected" });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("PushFrame_WhenTheInvokeCompletes_LeavesNoStallTimerBehind", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+
+		vi.useFakeTimers();
+		try {
+			const before = vi.getTimerCount();
+			await result.current.hub.pushFrame("mono", Int16Array.of(1));
+			expect(vi.getTimerCount()).toBe(before);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("PushFrame_WhenTheInvokeRejects_ReturnsARejectedPromise", async () => {

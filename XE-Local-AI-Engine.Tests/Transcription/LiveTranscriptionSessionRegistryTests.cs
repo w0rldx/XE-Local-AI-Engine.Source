@@ -33,7 +33,6 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private const int GraceSeconds = 5;
     private static readonly TimeSpan AttachmentDeadline = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ProducerStopBound = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan GracefulFinalizationBound = TimeSpan.FromSeconds(30);
 
     [Test]
     [Arguments(0)]
@@ -375,6 +374,35 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await WaitForEndAsync(statuses, LiveEndReason.NeverAttached);
         AssertEx.False(fixture.Registry.IsLive(sessionId), "A session nothing ever feeds must end by itself.");
+        AssertEx.Equal(1, fixture.Logger.CountContaining("received no audio frame and no producer attached within the 00:01:00 producer-attachment timeout", LogLevel.Warning),
+            "One Warning names the timeout, so a browser that never delivered audio leaves a trace on the node.");
+        await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining(
+                $"session {sessionId} ended: reason NeverAttached, status Cancelled, audio received 0.0 s, consumed 0.0 s, 0 segments committed", LogLevel.Information) == 1,
+            TestBudgets.Contended, "The end line reports the reason and that nothing arrived.");
+    }
+
+    [Test]
+    public async Task GracefulEnd_LogsOneInformationLineWithTheSessionTotals()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var segments = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_500), CancellationToken.None);
+        fixture.Time.Advance(TimeSpan.FromSeconds(2));
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+        await WaitForEndAsync(statuses, LiveEndReason.Completed);
+
+        var committed = Snapshot(segments).Count;
+        await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining($"session {sessionId} ended:", LogLevel.Information) == 1,
+            TestBudgets.Contended, "Every end logs exactly one Information line.");
+        AssertEx.Equal(1, fixture.Logger.CountContaining(
+                $"ended: reason Completed, status Completed, audio received 1.5 s, consumed 1.5 s, {committed} segments committed, duration 00:00:02.", LogLevel.Information),
+            "The line carries the reason, the status, the audio totals, the commit count and the registry clock's duration.");
+        AssertEx.Equal(0, fixture.Logger.CountContaining("producer-attachment timeout"), "Only NeverAttached warns about the attachment timeout.");
     }
 
     [Test]
@@ -451,53 +479,289 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
-    public async Task PendingAudioBeyondTheBudget_EndsTheSessionOverloadedAndStopsTheProducer()
+    public async Task BufferedAudioBeyondTheCap_EndsTheSessionGracefullyAndTranscribesEveryAdmittedFrame()
+    {
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber, maxBufferedAudioMb: 1);
+        var sessionId = Guid.NewGuid();
+        var producer = new RecordingAudioProducer();
+        var statuses = fixture.RecordStatuses();
+        var segments = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+
+        // 1 MiB is 32 768 ms. After three 10 s frames 31 s are buffered; the fourth crosses the cap and is still queued.
+        for (var frame = 0; frame < 3; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(1_000 + (frame * 10_000), 11_000 + (frame * 10_000)), CancellationToken.None);
+            AssertEx.True(fixture.Registry.IsLive(sessionId), $"Below the cap, a slow node buffers (frame {frame}).");
+        }
+
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(31_000, 41_000), CancellationToken.None);
+        AssertEx.False(fixture.Registry.IsLive(sessionId), "Crossing the cap closes admission.");
+        await AssertEx.EventuallyAsync(() => producer.StopCount == 1, TestBudgets.Contended, "The producer is stopped.");
+
+        transcriber.Release();
+        await WaitForEndAsync(statuses, LiveEndReason.Completed);
+
+        AssertEx.Equal(41_000L, Snapshot(segments)[^1].EndMs, "The frame that crossed the cap was drained too.");
+        AssertEx.Equal(1, fixture.Logger.CountContaining("untranscribed audio"), "One Warning names the cap.");
+        await fixture.Service.Received(1)
+                     .CompleteLiveAsync(sessionId,
+                         TranscriptionSessionStatus.Completed,
+                         Arg.Any<long>(),
+                         Arg.Any<string?>(),
+                         Arg.Is<string?>(static code => code == null),
+                         Arg.Is<string?>(static message => message == null),
+                         Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task BufferedAudioBeyondTheCap_AnnouncesAdmissionClosedOnceBeforeTheDrain()
+    {
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber, maxBufferedAudioMb: 1);
+        var sessionId = Guid.NewGuid();
+        var events = fixture.RecordAdmissionClosed();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        for (var frame = 0; frame < 4; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(1_000 + (frame * 10_000), 11_000 + (frame * 10_000)), CancellationToken.None);
+        }
+
+        AssertEx.False(fixture.Registry.IsLive(sessionId), "Crossing the cap closes admission.");
+        await AssertEx.EventuallyAsync(() => Snapshot(events).Contains("admission-closed"), TestBudgets.Contended, "The browser learns at once, not at the terminal status.");
+        transcriber.Release();
+        await AssertEx.EventuallyAsync(() => Snapshot(events).Contains("status"), TestBudgets.Contended, "The drain finishes.");
+
+        var recorded = Snapshot(events);
+        AssertEx.Equal(1, recorded.Count(static e => e == "admission-closed"), "Announced exactly once.");
+        AssertEx.Equal("admission-closed", recorded[0], $"Before any catch-up report and the terminal status: {string.Join(',', recorded)}");
+        AssertEx.True(recorded[1].StartsWith("catchup:", StringComparison.Ordinal), $"The drain-start report follows: {string.Join(',', recorded)}");
+        AssertEx.Equal("status", recorded[^1]);
+    }
+
+    [Test]
+    public async Task RequestedGracefulEnd_AnnouncesAdmissionClosedOnce()
+    {
+        // The hub's EndSession path: harmless for the browser that asked, and the same code as the cap.
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var events = fixture.RecordAdmissionClosed();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+
+        var recorded = Snapshot(events);
+        AssertEx.Equal(1, recorded.Count(static e => e == "admission-closed"), $"Announced exactly once: {string.Join(',', recorded)}");
+        AssertEx.Equal("admission-closed", recorded[0]);
+        AssertEx.Equal("status", recorded[^1]);
+    }
+
+    [Test]
+    public async Task AFrameFinishingWhileAdmissionClosedIsAnnounced_IsCountedByTheDrainStartReportAndNeverReportsAhead()
+    {
+        // The window the first cut left open: the backlog snapshot was taken before the progress gate, so a frame
+        // finishing in between reported "caught up" ahead of admission closed, or was overtaken by the stale backlog.
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var events = fixture.RecordAdmissionClosed();
+        var announced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var admissionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = fixture.Publisher.PublishAdmissionClosedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                   .Returns(_ =>
+                   {
+                       lock (events)
+                       {
+                           events.Add("admission-closed");
+                       }
+
+                       announced.TrySetResult();
+                       return admissionGate.Task;
+                   });
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+
+        var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+        await announced.Task.WaitAsync(TestBudgets.Contended);
+
+        // The queued frame finishes while admission closed is still being published: inside the old window.
+        transcriber.Release();
+        await AssertEx.SettleAsync();
+        admissionGate.SetResult();
+        await ending.WaitAsync(TestBudgets.Contended);
+
+        var recorded = Snapshot(events);
+        AssertEx.Equal("admission-closed", recorded[0], $"Nothing is reported ahead of admission closed: {string.Join(',', recorded)}");
+        AssertEx.Equal(1, recorded.Count(static e => e.StartsWith("catchup:", StringComparison.Ordinal)),
+            $"One drain-start report, and no stale backlog after a caught-up one: {string.Join(',', recorded)}");
+        AssertEx.Equal("catchup:0", recorded[1], "The drain-start report counts the frame that finished before it was taken.");
+        AssertEx.Equal("status", recorded[^1]);
+    }
+
+    [Test]
+    public async Task Cancel_AnnouncesNoAdmissionClosed()
     {
         var transcriber = new GatedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
-        var producer = new RecordingAudioProducer();
+        var events = fixture.RecordAdmissionClosed();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
+
+        AssertEx.Equal("status", string.Join(',', Snapshot(events)), "An abort gets its terminal status at once and nothing else.");
+    }
+
+    [Test]
+    public void MaxBufferedAudioMb_BelowSixteen_FailsValidation()
+    {
+        var options = new TranscriptionOptions { MaxBufferedAudioMb = 15 };
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var valid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(options,
+            new System.ComponentModel.DataAnnotations.ValidationContext(options),
+            results,
+            validateAllProperties: true);
+
+        AssertEx.False(valid, "The cap is a safety net, not a way to reintroduce an early end.");
+        AssertEx.ContainsSingle(results, static result => result.MemberNames.Contains(nameof(TranscriptionOptions.MaxBufferedAudioMb)));
+    }
+
+    [Test]
+    public async Task DaemonDeathDuringALiveWindow_IsRetriedOnceAndTheSessionStaysLive()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        transcriber.FailOnce.Enqueue(new XE_Local_AI_Engine.Providers.WhisperCpp.WhisperRuntimeException("The transcription runtime process exited.") { ProcessExited = true });
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var segments = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+
+        var published = await WaitForSegmentsAsync(segments, count: 1);
+        AssertEx.Equal("1|Mono|0-1000|w0-1000", Describe(published[0]), "The respawned runtime answered the same window.");
+        AssertEx.True(fixture.Registry.IsLive(sessionId), "One daemon death does not fail the lane.");
+    }
+
+    [Test]
+    public async Task CatchUpProgress_ReportsEachSecondConsumedWhileBehindThenZeroOnce()
+    {
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var progress = fixture.RecordCatchUp();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        for (var frame = 1; frame < 6; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
+        }
+
+        AssertEx.Empty(Snapshot(progress), "Nothing is reported while nothing has been consumed.");
+        transcriber.Release();
+
+        await AssertEx.EventuallyAsync(() => Snapshot(progress).Contains("catchup:0"), TestBudgets.Contended, "Catching up reports zero.");
+        AssertEx.Equal("catchup:5000,catchup:4000,catchup:3000,catchup:2000,catchup:1000,catchup:0", string.Join(',', Snapshot(progress)));
+    }
+
+    [Test]
+    public async Task CatchUpProgress_AfterACancelWithABacklog_ReportsNothing()
+    {
+        // The live round: Cancel with a backlog published a countdown burst to zero in milliseconds, for audio that
+        // was thrown away rather than transcribed.
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var progress = fixture.RecordCatchUp();
         var statuses = fixture.RecordStatuses();
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
-        producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
-
-        // One second of audio per frame, into a transcriber that never answers. The budget is four two-second windows.
-        var budgetBytes = 4 * 2 * WavPcm16.SampleRate * 2;
-        var frameBytes = 1_000 * WavPcm16.BytesPerMillisecond;
-
-        // The first frame is allowed to reach the transcriber before the rest are pushed. Without this the whole
-        // burst can be admitted and refused before inference ever starts, which is a real outcome but not the one
-        // this test is about: the finding is a lane held open by a slow transcriber while audio keeps arriving.
-        await fixture.Registry
-                     .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
         await transcriber.Entered.WaitAsync(TestBudgets.Contended);
-
-        var accepted = 1;
-        for (var frame = 1; frame < 12 && fixture.Registry.IsLive(sessionId); frame++)
+        for (var frame = 1; frame < 6; frame++)
         {
-            await fixture.Registry
-                         .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
-            accepted++;
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
         }
 
-        await WaitForEndAsync(statuses, LiveEndReason.Overloaded);
-        AssertEx.Equal(0, fixture.Logger.CountContaining("lane of transcription session"),
-            "Cancelled queued frames must not report secondary lane failures.");
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
+        await WaitForEndAsync(statuses, LiveEndReason.Cancelled);
 
-        AssertEx.Equal(budgetBytes / frameBytes, accepted - 1,
-            $"Exactly the budget was retained before the refusal: {accepted - 1} frames of {frameBytes} bytes against a budget of {budgetBytes}.");
-        await AssertEx.EventuallyAsync(() => producer.StopCount == 1, TestBudgets.Contended,
-            "The producer is stopped promptly, while the transcriber is still holding the lane.");
-        AssertEx.Equal(expected: 1, transcriber.CallCount, "The gate was never released, so nothing drained behind the scenes.");
-        await fixture.Service.Received(1)
-                     .CompleteLiveAsync(sessionId,
-                         TranscriptionSessionStatus.Failed,
-                         Arg.Any<long>(),
-                         Arg.Any<string?>(),
-                         "live-overloaded",
-                         Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>());
+        AssertEx.Empty(Snapshot(progress), "Discarded audio is not progress.");
+    }
+
+    [Test]
+    public async Task CatchUpProgress_IsSilentWhileTheLaneKeepsUp()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var progress = fixture.RecordCatchUp();
+        var segments = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        for (var frame = 0; frame < 4; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
+            _ = await WaitForSegmentsAsync(segments, count: frame + 1);
+        }
+
+        AssertEx.Empty(Snapshot(progress), "A lane that never queues is never behind.");
+    }
+
+    [Test]
+    public async Task GracefulStop_ReportsTheBacklogAtOnceThenCountsDownBeforeTheTerminalStatus()
+    {
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var progress = fixture.RecordCatchUp();
+        _ = fixture.Publisher.PublishStatusAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>())
+                   .Returns(_ =>
+                   {
+                       lock (progress)
+                       {
+                           progress.Add("status");
+                       }
+
+                       return Task.CompletedTask;
+                   });
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+
+        // The first frame reaches the transcriber alone (an ordinary tick) before the backlog queues behind it, so
+        // nothing is consumed, and nothing reported, until the drain has started.
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        for (var frame = 1; frame < 3; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
+        }
+
+        var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => Snapshot(progress).Count == 1, TestBudgets.Contended, "The drain start is reported before anything drains.");
+        AssertEx.Equal(0, fixture.Time.ArmedTimerCount, "A graceful drain arms no deadline.");
+
+        transcriber.Release();
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "Releasing the backlog lets the drain finish.");
+
+        AssertEx.Equal("catchup:3000,catchup:2000,catchup:1000,catchup:0,status", string.Join(',', Snapshot(progress)));
     }
 
     [Test]
@@ -584,93 +848,27 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
-    public async Task GracefulStop_AllowsBacklogBeyondFiveSecondsAndPreservesItsTail()
+    public async Task GracefulStop_WaitsForTheBacklogWithoutADeadlineAndPreservesItsTail()
     {
         var transcriber = new GatedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var id = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
         var segments = fixture.RecordSegments();
+        var progress = fixture.RecordCatchUp();
         await fixture.Registry.StartLiveSessionAsync(id, LiveOptions(), CancellationToken.None);
         await PushAsync(fixture.Registry, id, TranscriptChannel.Mono, 0, 1_500);
         await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        var before = Snapshot(progress).Count;
         var ending = fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended);
-        fixture.Time.Advance(TimeSpan.FromSeconds(10));
-        AssertEx.False(ending.IsCompleted, "A healthy backlog is not abandoned at the old five-second bound.");
+        await AssertEx.EventuallyAsync(() => Snapshot(progress).Count > before, TestBudgets.Contended, "The drain has started.");
+        fixture.Time.Advance(TimeSpan.FromHours(1));
+        AssertEx.False(ending.IsCompleted, "A healthy backlog is never abandoned on a clock.");
         transcriber.Release();
         await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "Releasing the backlog must allow finalization.");
         AssertEx.Equal("Completed", string.Join(',', Snapshot(statuses)));
         AssertEx.Equal(1_500L, Snapshot(segments)[^1].EndMs, "The sub-tick tail is committed by the final flush.");
         AssertEx.False(fixture.Registry.IsRegistered(id));
-    }
-
-    [Test]
-    public async Task GracefulStop_TwoBlockedLanesShareTheSameDeadline()
-    {
-        var transcriber = new GatedWhisperTranscriber(OneSegment);
-        await using var fixture = new RegistryFixture(transcriber);
-        var id = Guid.NewGuid();
-        var statuses = fixture.RecordStatuses();
-        await fixture.Registry.StartLiveSessionAsync(id, LiveOptions(channels: TwoLanes), CancellationToken.None);
-        await PushAsync(fixture.Registry, id, TranscriptChannel.You, 0, 1_000);
-        await PushAsync(fixture.Registry, id, TranscriptChannel.Others, 0, 1_000);
-        await AssertEx.EventuallyAsync(() => transcriber.CallCount == 2, TestBudgets.Contended);
-        var ending = fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended);
-        fixture.Time.Advance(GracefulFinalizationBound);
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "Two lanes do not receive two consecutive thirty-second budgets.");
-        AssertEx.Equal("Failed", string.Join(',', Snapshot(statuses)));
-        AssertEx.Equal(2, transcriber.CallCount, "Neither blocked lane is flushed concurrently with its pending push.");
-    }
-
-    [Test]
-    public async Task GracefulStop_DrainAndFlushShareOneThirtySecondDeadline()
-    {
-        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var transcriber = Substitute.For<IWhisperTranscriber>();
-        var scripted = new ScriptedWhisperTranscriber(OneSegment);
-        var calls = 0;
-        _ = transcriber.TranscribeAsync(Arg.Any<string>(), Arg.Any<WhisperTranscriptionRequest>(), Arg.Any<CancellationToken>())
-                       .Returns(async call =>
-                       {
-                           var token = call.ArgAt<CancellationToken>(2);
-                           if (Interlocked.Increment(ref calls) == 1)
-                           {
-                               _ = first.TrySetResult();
-                               await release.Task.WaitAsync(token);
-                           }
-                           else
-                           {
-                               _ = second.TrySetResult();
-                               await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                           }
-
-                           return await scripted.TranscribeAsync(call.ArgAt<string>(0), call.ArgAt<WhisperTranscriptionRequest>(1), token);
-                       });
-        await using var fixture = new RegistryFixture(transcriber);
-        var id = Guid.NewGuid();
-        var statuses = fixture.RecordStatuses();
-        await fixture.Registry.StartLiveSessionAsync(id, LiveOptions(), CancellationToken.None);
-        // The zero-guard first tick commits its whole window. A queued half-tick must remain for the final flush.
-        await PushAsync(fixture.Registry, id, TranscriptChannel.Mono, 0, 1_500);
-        await first.Task.WaitAsync(TestBudgets.Contended);
-        var ending = fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended);
-        fixture.Time.Advance(TimeSpan.FromSeconds(20));
-        _ = release.TrySetResult();
-        await second.Task.WaitAsync(TestBudgets.Contended);
-        AssertEx.Equal(2, Volatile.Read(ref calls), "The second inference is the final flush of the remaining half-tick.");
-        AssertEx.Equal("[0,1000)", string.Join(';', scripted.Windows));
-        fixture.Time.Advance(TimeSpan.FromSeconds(9));
-        AssertEx.False(ending.IsCompleted, "The flush still has one second of the shared budget.");
-        fixture.Time.Advance(TimeSpan.FromSeconds(1));
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "The flush cannot start a fresh thirty-second budget.");
-        AssertEx.Equal("Failed", string.Join(',', Snapshot(statuses)));
-        await fixture.Service.Received(1).CompleteLiveAsync(id, TranscriptionSessionStatus.Failed, Arg.Any<long>(),
-            Arg.Any<string?>(), "live-flush-failed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -722,6 +920,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
             await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "The original Stop caller joins the escalated end.");
             AssertEx.Equal("Cancelled", string.Join(',', Snapshot(statuses)));
+            AssertEx.Equal(1, transcriber.CallCount, "Cancel does not flush a lane still inside its submission.");
             await fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
             AssertEx.Equal(1, Snapshot(statuses).Count, "Replayed Stop must not publish another outcome.");
         }
@@ -774,74 +973,33 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
-    public async Task GracefulFlushThatIgnoresCancellation_TimesOutAndRejectsItsLateCommit()
-    {
-        var transcriber = new GatedWhisperTranscriber(OneSegment)
-        {
-            IgnoresCancellation = true
-        };
-        await using var fixture = new RegistryFixture(transcriber);
-        var id = Guid.NewGuid();
-        var statuses = fixture.RecordStatuses();
-        var segments = fixture.RecordSegments();
-        await fixture.Registry.StartLiveSessionAsync(id, LiveOptions(), CancellationToken.None);
-        await PushAsync(fixture.Registry, id, TranscriptChannel.Mono, 0, 500);
-        var ending = fixture.Registry.EndAsync(id, LiveEndReason.Completed, CancellationToken.None);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
-        fixture.Time.Advance(GracefulFinalizationBound);
-        try
-        {
-            await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A non-cooperative final inference must not extend the deadline.");
-            AssertEx.Equal("Failed", string.Join(',', Snapshot(statuses)));
-        }
-        finally
-        {
-            transcriber.Release();
-        }
-
-        await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining("Dropping a") > 0 || Snapshot(segments).Count > 0,
-            TestBudgets.Contended);
-        AssertEx.Empty(Snapshot(segments));
-    }
-
-    [Test]
-    public async Task EndAsync_WithALaneThatWillNotDrain_SkipsItsFlushAndFinalizesFailed()
+    public async Task GracefulStop_WithALaneThatWillNotDrain_WaitsUntilCancelledAndNeverFlushesIt()
     {
         var transcriber = new GatedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
+        var progress = fixture.RecordCatchUp();
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
         await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
-        // A graceful end does NOT cancel the in-flight submission, so this lane is still inside PushAsync when the
-        // drain bound runs out. The segmenter is single-threaded by contract: flushing it now would run a second
-        // call against the buffer the first one is still rewriting.
+        // A graceful end does NOT cancel the in-flight submission, and nothing but Cancel ends the wait. The segmenter
+        // is single-threaded by contract: flushing it while that call runs would rewrite the buffer under it.
+        var before = Snapshot(progress).Count;
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The drain bound must be armed before the clock is moved past it.");
+        await AssertEx.EventuallyAsync(() => Snapshot(progress).Count > before, TestBudgets.Contended, "The drain has started.");
+        fixture.Time.Advance(TimeSpan.FromHours(1));
+        AssertEx.False(ending.IsCompleted, "Stop waits for the lane, however long it takes.");
 
-        fixture.Time.Advance(GracefulFinalizationBound);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
 
-        // Failed, not Completed: the operator's last window never reached the model and the retained audio is gone,
-        // so reporting success would hand them a whole-looking transcript that is missing its final seconds.
-        await WaitForEndAsync(statuses, LiveEndReason.Failed);
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A lane that will not drain must be abandoned, never allowed to hold the session open.");
+        await WaitForEndAsync(statuses, LiveEndReason.Cancelled);
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "Cancel is the escape hatch from a drain.");
         AssertEx.Equal(expected: 1, transcriber.CallCount,
             "The undrained lane was flushed anyway, which is a second concurrent call into a segmenter that is not thread-safe.");
-        AssertEx.Empty(Snapshot(statuses).Where(static status => status == LiveEndReason.Completed),
-            "Completed must never be published for an end that could not finalize.");
-        await fixture.Service.Received(1)
-                     .CompleteLiveAsync(sessionId,
-                         TranscriptionSessionStatus.Failed,
-                         Arg.Any<long>(),
-                         Arg.Any<string?>(),
-                         "live-flush-failed",
-                         Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>());
-        AssertEx.False(fixture.Registry.IsLive(sessionId));
+        AssertEx.Equal("Cancelled", string.Join(',', Snapshot(statuses)));
 
         transcriber.Release();
     }
@@ -913,10 +1071,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The drain bound must be armed before the clock is moved past it.");
-        fixture.Time.Advance(GracefulFinalizationBound);
-        await WaitForEndAsync(statuses, LiveEndReason.Failed);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
+        await WaitForEndAsync(statuses, LiveEndReason.Cancelled);
         await ending;
 
         // Now let the abandoned inference answer. Its commit is real; it is simply too late to exist.
@@ -958,26 +1114,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The blocked lane's drain bound must be armed before the clock is moved past it.");
-        await WaitForSegmentsAsync(published, count: 1);
-        fixture.Time.Advance(GracefulFinalizationBound);
 
-        // The blocked lane is abandoned and the session is Failed because of it. The healthy lane is a different
-        // lane: cancelling the session-wide token here would throw away speech that was ready to commit.
-        await WaitForEndAsync(statuses, LiveEndReason.Failed);
+        // Lanes finalize independently: the healthy lane flushes while its sibling is still wedged.
+        await WaitForSegmentsAsync(published, count: 1);
+        AssertEx.False(ending.IsCompleted, "The wedged lane is still being waited for.");
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
+
+        await WaitForEndAsync(statuses, LiveEndReason.Cancelled);
         await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "The end still finishes.");
 
         AssertEx.Equal("1|Others|0-500|w0-500", string.Join(';', Snapshot(published).Select(Describe)),
-            "One lane missing its drain deadline must not take the other lane's flushable speech with it.");
-        await fixture.Service.Received(1)
-                     .CompleteLiveAsync(sessionId,
-                         TranscriptionSessionStatus.Failed,
-                         Arg.Any<long>(),
-                         Arg.Any<string?>(),
-                         "live-flush-failed",
-                         Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>());
+            "One wedged lane must not hold back the other lane's flushable speech.");
 
         transcriber.Release();
     }
@@ -1609,7 +1756,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         private readonly ServiceProvider _provider;
 
-        public RegistryFixture(IWhisperTranscriber transcriber)
+        public RegistryFixture(IWhisperTranscriber transcriber, int maxBufferedAudioMb = 512)
         {
             Service = Substitute.For<ITranscriptionService>();
             Publisher = Substitute.For<ITranscriptionEventPublisher>();
@@ -1625,7 +1772,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
                 _provider.GetRequiredService<IServiceScopeFactory>(),
                 Options.Create(new TranscriptionOptions
                 {
-                    AbandonedSessionGraceSeconds = GraceSeconds
+                    AbandonedSessionGraceSeconds = GraceSeconds,
+                    MaxBufferedAudioMb = maxBufferedAudioMb
                 }),
                 Time,
                 Logger);
@@ -1698,6 +1846,39 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
                              return Task.CompletedTask;
                          });
+            return recorded;
+        }
+
+        /// <summary>Captures every catch-up report as <c>catchup:{bufferedMs}</c>, in publication order.</summary>
+        public List<string> RecordCatchUp()
+        {
+            var recorded = new List<string>();
+            _ = Publisher.PublishCatchUpAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             lock (recorded)
+                             {
+                                 recorded.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}"));
+                             }
+
+                             return Task.CompletedTask;
+                         });
+            return recorded;
+        }
+
+        /// <summary>
+        ///     One ordered log of <c>admission-closed</c>, <c>catchup:{bufferedMs}</c> and <c>status</c>, because the
+        ///     admission-closed assertions are about its order against the other two.
+        /// </summary>
+        public List<string> RecordAdmissionClosed()
+        {
+            var recorded = new List<string>();
+            _ = Publisher.PublishAdmissionClosedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                         .Returns(_ => Note(recorded, "admission-closed"));
+            _ = Publisher.PublishCatchUpAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                         .Returns(call => Note(recorded, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}")));
+            _ = Publisher.PublishStatusAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>())
+                         .Returns(_ => Note(recorded, "status"));
             return recorded;
         }
 
@@ -1889,7 +2070,7 @@ internal sealed class RecordingAudioProducer : ILiveAudioProducer
 /// <summary>Captures formatted log messages so a test can wait on a code path that has no other observable effect.</summary>
 internal sealed class RecordingLogger<T> : ILogger<T>
 {
-    private readonly List<string> _messages = [];
+    private readonly List<(LogLevel Level, string Message)> _messages = [];
 
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull =>
@@ -1904,16 +2085,16 @@ internal sealed class RecordingLogger<T> : ILogger<T>
 
         lock (_messages)
         {
-            _messages.Add(formatter(state, exception));
+            _messages.Add((logLevel, formatter(state, exception)));
         }
     }
 
-    /// <summary>How many messages contain <paramref name="fragment" />.</summary>
-    public int CountContaining(string fragment)
+    /// <summary>How many messages contain <paramref name="fragment" />, at <paramref name="level" /> when one is given.</summary>
+    public int CountContaining(string fragment, LogLevel? level = null)
     {
         lock (_messages)
         {
-            return _messages.Count(message => message.Contains(fragment, StringComparison.Ordinal));
+            return _messages.Count(entry => (level is null || entry.Level == level) && entry.Message.Contains(fragment, StringComparison.Ordinal));
         }
     }
 }

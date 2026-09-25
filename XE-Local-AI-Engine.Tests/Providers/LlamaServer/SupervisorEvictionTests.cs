@@ -287,6 +287,28 @@ public sealed class SupervisorEvictionTests
         AssertEx.True(deadHandle.WasDisposed, "The pruned exited process should have been torn down, not leaked.");
     }
 
+    [Test]
+    public async Task ListRunningProcesses_ReportsLiveProcessesWithLastUse_AndDropsAnExitedOne()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, TimeSpan.FromHours(1)), timeProvider: time);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Embedding, CancellationToken.None);
+
+        var running = supervisor.ListRunningProcesses().OrderBy(static process => process.LastUsedUtc).ToArray();
+
+        AssertEx.Equal(2, running.Length);
+        AssertEx.Equal("model-a", running[0].ModelName);
+        AssertEx.Equal(ModelRole.Embedding, running[1].Role);
+        AssertEx.True(running[1].LastUsedUtc > running[0].LastUsedUtc, "The later ensure must carry the later last-use stamp.");
+
+        launcher.Handles.OrderBy(static handle => handle.ProcessId).First().SimulateExit();
+
+        AssertEx.Equal("model-b", supervisor.ListRunningProcesses().Single().ModelName);
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
         return new LlamaServerSupervisorOptions

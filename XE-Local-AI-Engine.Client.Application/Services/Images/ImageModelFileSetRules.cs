@@ -26,6 +26,12 @@ public static class ImageModelFileSetRules
             return "The file-set must include a diffusion part.";
         }
 
+        // A Diffusers-layout component or shard downloads fine and then kills sd-server at load ("get sd version from file failed").
+        if (parts.Any(static part => part.Role == ImageModelPartRole.Diffusion && ImageWeightLayout.IsUnloadableDiffusionFile(part.FileName)))
+        {
+            return ImageWeightLayout.DiffusersLayoutUnsupportedMessage;
+        }
+
         var duplicateRole = parts.GroupBy(static part => part.Role).FirstOrDefault(static group => group.Count() > 1);
 
         return duplicateRole is null ? null : $"The file-set declares the '{duplicateRole.Key}' part more than once.";

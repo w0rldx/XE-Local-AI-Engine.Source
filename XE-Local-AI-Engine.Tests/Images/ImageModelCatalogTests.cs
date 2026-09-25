@@ -52,20 +52,26 @@ public sealed class ImageModelCatalogTests
     }
 
     [Test]
-    public void BundledCatalog_QwenImageEntry_SpansTwoRepositories()
+    public void BundledCatalog_QwenImage21Entry_SpansThreeRepositories()
     {
-        // The reason ImageModelPartRequest carries a per-part RepoId at all: the Qwen-Image diffusion transformer and
-        // VAE ship in one repository while the Qwen2.5-VL text encoder ships in another. A catalog entry that assumed
-        // one repo could not install this model at all.
+        // The reason ImageModelPartRequest carries a per-part RepoId at all: Qwen-Image 2.1's diffusion transformer, its VAE and its
+        // Qwen3-VL text encoder ship from three different repositories. A catalog entry that assumed one repo could not install it.
         var document = new ImageModelCatalog(NullLogger<ImageModelCatalog>.Instance).GetDocument();
 
-        var qwen = document.Models.Single(static entry => entry.Id == "qwen-image");
-        var encoder = qwen.Parts.Single(static part => string.Equals(part.Role, "Llm", StringComparison.Ordinal));
+        var qwen = document.Models.Single(static entry => entry.Id == "qwen-image-2.1");
 
-        AssertEx.NotNull(encoder.RepoId);
-        AssertEx.NotEqual(qwen.RepoId, encoder.RepoId!);
-        AssertEx.Null(qwen.Parts.Single(static part => string.Equals(part.Role, "Diffusion", StringComparison.Ordinal)).RepoId,
-            "A part in the set's own repo must leave repoId null rather than repeat it.");
+        AssertEx.Equal("leejet/Qwen-Image-2.1-GGUF", qwen.RepoId);
+        AssertEx.Equal("QwenImage", qwen.Family);
+        AssertEx.Equal("qwen-research", qwen.License);
+        AssertEx.Null(RepoOf(qwen, "Diffusion"), "A part in the set's own repo must leave repoId null rather than repeat it.");
+        AssertEx.Equal("Comfy-Org/Qwen-Image-2.1", RepoOf(qwen, "Vae"));
+        AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "Llm"));
+        AssertEx.False(document.Models.Any(static entry => entry.Id == "qwen-image"), "The 2.1 set replaces the original Qwen-Image entry.");
+    }
+
+    private static string? RepoOf(ImageModelCatalogEntry entry, string role)
+    {
+        return entry.Parts.Single(part => string.Equals(part.Role, role, StringComparison.Ordinal)).RepoId;
     }
 
     [Test]

@@ -190,9 +190,13 @@ describe("TranscriptionPage", () => {
 	// configured for — and it has to be keyed by the session, not by the operator. A single global slot let the
 	// session created second decide what the session created first captured from.
 	it("remembers the microphone against the session it created, not globally", async () => {
+		const bodies: Record<string, unknown>[] = [];
 		server.use(
 			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
-			jsonRoute("post", "transcription/sessions", detail()),
+			http.post(localApiPath("transcription/sessions"), async ({ request }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json(detail());
+			}),
 			...runtimeRoutes(),
 		);
 		renderPage();
@@ -206,6 +210,9 @@ describe("TranscriptionPage", () => {
 			expect(navigate).toHaveBeenCalledWith({ to: "/transcription/$sessionId", params: { sessionId } });
 		});
 		expect(useTranscriptionCaptureStore.getState().deviceIdBySession).toEqual({ [sessionId]: null });
+		// The capture window is no longer chosen here: the request leaves the field out and the node applies its default.
+		expect(bodies).toHaveLength(1);
+		expect(bodies[0]).not.toHaveProperty("maxWindowSeconds");
 	});
 
 	// The pid is chosen in the dialog but only reaches the node once the session is live, so the create path is the one

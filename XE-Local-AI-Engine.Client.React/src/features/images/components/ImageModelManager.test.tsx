@@ -521,6 +521,16 @@ describe("ImageModelManager", () => {
 			expect(screen.getByTestId("image-model-catalog-fit-qwen-image").textContent).toContain("Fit unknown");
 		});
 
+		it("badges a research-only licence and leaves a permissive one unbadged", () => {
+			catalogEntries = [catalogEntry({ license: "qwen-research" }), catalogEntry({ id: "sd-1.5" })];
+			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+
+			expect(screen.getByTestId("image-model-catalog-research-license-qwen-image").textContent).toBe(
+				"Non-commercial research license",
+			);
+			expect(screen.queryByTestId("image-model-catalog-research-license-sd-1.5")).toBeNull();
+		});
+
 		it("warns when the download does not fit the free disk", () => {
 			catalogEntries = [catalogEntry({ fitsOnDisk: false })];
 			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);

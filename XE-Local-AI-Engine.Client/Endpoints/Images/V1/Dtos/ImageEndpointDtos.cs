@@ -473,6 +473,12 @@ public sealed class ImageRepositoryFileResponse
     ///     <c>Llm</c>/<c>LlmVision</c>). A pre-selection for the picker, not a fact — the operator can change it.
     /// </summary>
     public required string SuggestedRole { get; init; }
+
+    /// <summary>
+    ///     <c>diffusers_layout_unsupported</c> when this file cannot be installed as the Diffusion part (a Diffusers-layout
+    ///     component or shard); <see langword="null" /> when it can. The download endpoint refuses such a Diffusion part.
+    /// </summary>
+    public string? UnsupportedReason { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET images/models/inspect</c>.</summary>

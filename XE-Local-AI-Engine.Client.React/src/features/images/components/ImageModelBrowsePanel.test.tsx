@@ -203,4 +203,49 @@ describe("ImageModelBrowsePanel", () => {
 			screen.getByTestId("image-model-browse-file-role-flux1-schnell-Q4_0.gguf"),
 		);
 	});
+
+	// A Diffusers-layout file cannot be the Diffusion part: the local runtime cannot load it. The backend flags it and
+	// refuses the download too; the picker stops the operator before that round trip.
+	it("keeps a flagged Diffusers file from being picked as the diffusion part and says why on its row", () => {
+		repositories = [repository()];
+		files = [
+			...fluxFiles,
+			{
+				fileName: "transformer/diffusion_pytorch_model.safetensors",
+				format: "Safetensors",
+				sizeBytes: 23_800_000_000,
+				suggestedRole: "Diffusion",
+				unsupportedReason: "diffusers_layout_unsupported",
+			},
+		];
+		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		search();
+		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
+
+		const flagged = "transformer/diffusion_pytorch_model.safetensors";
+		expect((screen.getByTestId(`image-model-browse-file-check-${flagged}`) as HTMLInputElement).disabled).toBe(true);
+		expect(screen.getByTestId(`image-model-browse-file-unsupported-${flagged}`).textContent).toContain("Diffusers layout");
+		// The usable files carry no warning and stay pickable, so the repo is still installable.
+		expect(screen.queryByTestId("image-model-browse-file-unsupported-ae.safetensors")).toBeNull();
+		expect(screen.queryByTestId("image-model-browse-files-unsupported")).toBeNull();
+		expect((screen.getByTestId("image-model-browse-file-check-flux1-schnell-Q4_0.gguf") as HTMLInputElement).disabled).toBe(
+			false,
+		);
+	});
+
+	it("explains once for the repo and disables install when every file is flagged", () => {
+		repositories = [repository()];
+		files = fluxFiles.map((file) => ({ ...file, unsupportedReason: "diffusers_layout_unsupported" }));
+		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		search();
+		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
+
+		expect(screen.getByTestId("image-model-browse-files-unsupported").textContent).toBe(
+			"This repository stores the model in Diffusers layout, which the local image runtime cannot load. Pick a single-file GGUF or safetensors checkpoint.",
+		);
+		// Said once, not on every row.
+		expect(screen.queryByTestId("image-model-browse-file-unsupported-ae.safetensors")).toBeNull();
+		fireEvent.click(screen.getByTestId("image-model-browse-file-check-ae.safetensors"));
+		expect((screen.getByTestId("image-model-browse-install") as HTMLButtonElement).disabled).toBe(true);
+	});
 });

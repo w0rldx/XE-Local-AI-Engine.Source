@@ -87,6 +87,9 @@ public sealed class ImageRepoFile
     public required string? Sha256 { get; init; }
 
     public required ImageModelPartRole SuggestedRole { get; init; }
+
+    /// <summary>Why this file cannot be the diffusion part (<see cref="ImageWeightLayout.DiffusersLayoutUnsupportedCode" />); null when it can.</summary>
+    public string? UnsupportedReason { get; init; }
 }
 
 /// <summary>One inspected image-model repo: gating/license plus every selectable weight file it ships.</summary>

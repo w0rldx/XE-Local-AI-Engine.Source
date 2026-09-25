@@ -28,6 +28,10 @@ public sealed record RuntimeDeviceAuditState
     /// <summary>The backend inference actually uses: <c>cuda</c> | <c>vulkan</c> | <c>cpu</c> | <c>unknown</c>.</summary>
     public required string InferenceBackend { get; init; }
 
+    /// <summary>The llama.cpp variant the audit ran against, or <see langword="null" /> when a caller built the state without one.</summary>
+    /// <remarks>Lets a reader tell "the CUDA build enumerated zero devices" from a CPU variant chosen on a GPU box; both read as backend <c>cpu</c>.</remarks>
+    public GpuVariant? SelectedVariant { get; init; }
+
     /// <summary><see langword="true" /> when the host advertises a usable GPU (a vendor GPU with known VRAM &gt; 0).</summary>
     public required bool GpuExpected { get; init; }
 

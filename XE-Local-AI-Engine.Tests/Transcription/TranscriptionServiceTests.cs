@@ -262,17 +262,18 @@ public sealed class TranscriptionServiceTests
     // Every row here is a session option that only matters if it survives the trip through the encrypted config
     // column and into the runtime request. The fake records what it was handed; nothing else can prove the mapping.
     [Test]
-    [Arguments("override", "de", false, WhisperLanguageMode.Explicit, "de", false, "an explicit language is forwarded verbatim")]
-    [Arguments("auto", null, false, WhisperLanguageMode.Auto, null, false, "auto detection carries no code")]
-    [Arguments("auto", null, true, WhisperLanguageMode.Auto, null, true, "translation is forwarded")]
-    [Arguments("override", null, false, WhisperLanguageMode.Auto, null, false, "override without a code degrades to auto")]
-    [Arguments("override", "   ", false, WhisperLanguageMode.Auto, null, false, "override with a blank code degrades to auto")]
+    [Arguments("override", "de", false, WhisperLanguageMode.Explicit, "de", false, false, "an explicit language is forwarded verbatim and never detected")]
+    [Arguments("auto", null, false, WhisperLanguageMode.Auto, null, false, true, "auto detection carries no code")]
+    [Arguments("auto", null, true, WhisperLanguageMode.Auto, null, true, true, "translation is forwarded")]
+    [Arguments("override", null, false, WhisperLanguageMode.Auto, null, false, true, "override without a code degrades to auto")]
+    [Arguments("override", "   ", false, WhisperLanguageMode.Auto, null, false, true, "override with a blank code degrades to auto")]
     public async Task TranscribeFile_MapsTheSessionLanguageOptionsOntoTheRuntimeRequest(string languageMode,
         string? languageOverride,
         bool translate,
         WhisperLanguageMode expectedMode,
         string? expectedCode,
         bool expectedTranslate,
+        bool expectedDetect,
         string because)
     {
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
@@ -296,6 +297,7 @@ public sealed class TranscriptionServiceTests
         AssertEx.Equal(expectedMode, harness.Transcriber.LastLanguageMode, $"Expected {expectedMode} because {because}.");
         AssertEx.Equal<string?>(expectedCode, harness.Transcriber.LastLanguageCode, $"Expected language code '{expectedCode}' because {because}.");
         AssertEx.Equal(expectedTranslate, harness.Transcriber.LastTranslate, $"Expected translate={expectedTranslate} because {because}.");
+        AssertEx.Equal(expectedDetect, harness.Transcriber.LastDetectLanguage, $"Expected detect-language={expectedDetect} because {because}.");
     }
 
     [Test]
@@ -495,7 +497,7 @@ public sealed class TranscriptionServiceTests
     public async Task StartLive_WarmsTheRuntimeBeforeRegisteringTheLanes()
     {
         // The file path warms the daemon before its first inference; the live path must too, or the first frames
-        // queue behind a process spawn and a model load and the session ends Overloaded seconds after it began.
+        // queue behind a process spawn and a model load before the first word is transcribed.
         var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);

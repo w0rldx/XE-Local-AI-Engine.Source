@@ -19,6 +19,8 @@ function renderControls(overrides: Partial<Parameters<typeof CaptureControls>[0]
 			connected={true}
 			subscribeFailed={null}
 			elapsedMs={0}
+			bufferedMs={null}
+			runtimeState={null}
 			onStart={onStart}
 			onStop={onStop}
 			onCancel={onCancel}
@@ -98,10 +100,45 @@ describe("CaptureControls", () => {
 		expect(screen.getByTestId("transcription-capture-error").textContent).toContain("The shared screen came back without audio.");
 	});
 
-	it("explains an overloaded node without claiming the transcript was lost", () => {
-		renderControls({ error: "overloaded" });
+	// B2: a node that falls behind buffers and catches up; the operator sees by how much instead of a stopped session.
+	it("says how far behind the transcription is while capturing", () => {
+		renderControls({ state: "capturing", bufferedMs: 4200 });
 
-		expect(screen.getByTestId("transcription-capture-error").textContent).toContain("Everything committed so far is kept.");
+		expect(screen.getByTestId("transcription-capture-behind").textContent).toBe("Transcribing… 5 s behind");
+		expect(screen.queryByTestId("transcription-capture-error")).toBeNull();
+	});
+
+	it("shows no behind counter once the node has caught up", () => {
+		renderControls({ state: "capturing", bufferedMs: 0 });
+
+		expect(screen.queryByTestId("transcription-capture-behind")).toBeNull();
+	});
+
+	// B2: Stop drains the whole backlog. The finalizing control counts it down; Cancel stays as the escape hatch.
+	it("counts down the backlog a stop is draining", () => {
+		const { onCancel } = renderControls({ state: "stopping", bufferedMs: 12_001 });
+
+		expect(screen.getByTestId("transcription-capture-finalizing").textContent).toBe("Finishing the last 13 s…");
+		fireEvent.click(screen.getByTestId("transcription-capture-cancel"));
+		expect(onCancel).toHaveBeenCalledTimes(1);
+	});
+
+	// A3: the first live start can spend a minute on the runtime download and model load. The line says which.
+	it.each([
+		{ runtimeState: "stopped" as const, expected: "Preparing the transcription runtime… this can take a minute on first use" },
+		{ runtimeState: "starting" as const, expected: "Loading the model…" },
+		{ runtimeState: "ready" as const, expected: "Starting…" },
+		{ runtimeState: null, expected: "Starting…" },
+	])("names what a pending start waits on when the runtime is $runtimeState", ({ runtimeState, expected }) => {
+		renderControls({ state: "starting", runtimeState });
+
+		expect(screen.getByTestId("transcription-capture-start-status").textContent).toBe(expected);
+	});
+
+	it("shows no start status once capture is running", () => {
+		renderControls({ state: "capturing", runtimeState: "stopped" });
+
+		expect(screen.queryByTestId("transcription-capture-start-status")).toBeNull();
 	});
 
 	// A node refusal is neither a browser capability nor a device problem; reporting it as "unsupported" would send the
@@ -176,9 +213,8 @@ describe("CaptureControls", () => {
 		);
 	});
 
-	// M2: a dead transport and a node that cannot keep up both stop capture, but only one of them is a performance
-	// problem — and the string is the whole of what the operator acts on.
-	it("distinguishes a lost connection from a node that could not keep up", () => {
+	// M2: a dead transport is the one thing that stops capture on its own, and the string says so.
+	it("names a lost connection as the reason capture stopped", () => {
 		renderControls({ error: "disconnected" });
 
 		expect(screen.getByTestId("transcription-capture-error").textContent).toContain("The live connection to this node was lost");
