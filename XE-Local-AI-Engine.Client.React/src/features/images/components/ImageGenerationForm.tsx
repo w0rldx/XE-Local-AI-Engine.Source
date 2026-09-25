@@ -6,6 +6,12 @@ import { useTranslation } from "react-i18next";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import {
+	clearImageFormOverrides,
+	imageFormValuesForModel,
+	readImageFormOverrides,
+	writeImageFormOverrides,
+} from "@/features/images/models/ImageFormOverrides";
+import {
 	type ImageGenerationFormValues,
 	type ImageModelView,
 	imageFormDefaultsForModel,
@@ -26,17 +32,18 @@ interface ImageGenerationFormProps {
 // sourced from the installed image models; with none installed the form disables so a job can't be enqueued modelless.
 export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmit }: ImageGenerationFormProps) {
 	const { t } = useTranslation();
-	const [values, setValues] = useState<ImageGenerationFormValues>(() => imageFormDefaultsForModel(models[0]));
+	const [values, setValues] = useState<ImageGenerationFormValues>(() => imageFormValuesForModel(models[0]));
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
 	// Picking a different model re-seeds the sampling parameters from ITS family, keeping the prompts. The families
 	// disagree sharply — FLUX-schnell wants ~4 steps at CFG 1.0 where SD1.5 wants 20 at 7.0 — and carrying one family's
 	// numbers into another produces a bad image rather than an error, which is far harder to diagnose than a failure.
+	// The operator's remembered override for that model (ImageFormOverrides) wins over the family numbers.
 	const handleModelChange = useCallback(
 		(modelName: string) => {
 			const model = models.find((candidate) => candidate.modelName === modelName);
 			setValues((current) => ({
-				...imageFormDefaultsForModel(model),
+				...imageFormValuesForModel(model),
 				modelName,
 				prompt: current.prompt,
 				negativePrompt: current.negativePrompt,
@@ -55,6 +62,19 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 	);
 
 	const hasModels = models.length > 0;
+
+	// Steps, CFG and sampler are remembered per model as the operator edits them; the other fields are not.
+	const updateSampling = (patch: Partial<Pick<ImageGenerationFormValues, "steps" | "cfgScale" | "sampler">>) => {
+		const next = { ...values, ...patch };
+		setValues(next);
+		writeImageFormOverrides(next.modelName, next);
+	};
+	const hasOverride = readImageFormOverrides(values.modelName) !== null;
+	const resetSampling = () => {
+		clearImageFormOverrides(values.modelName);
+		const { steps, cfgScale, sampler } = imageFormDefaultsForModel(models.find((model) => model.modelName === values.modelName));
+		setValues((current) => ({ ...current, steps, cfgScale, sampler }));
+	};
 
 	const handleSubmit = useCallback(() => {
 		// Ensure a model is selected even if the picker was never touched (first model auto-selected below via value).
@@ -176,7 +196,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					max={150}
 					allowDecimal={false}
 					error={fieldError(errors, "steps")}
-					onChange={(value) => setValues((current) => ({ ...current, steps: typeof value === "number" ? value : current.steps }))}
+					onChange={(value) => typeof value === "number" && updateSampling({ steps: value })}
 					data-testid="image-form-steps"
 				/>
 				<NumberInput
@@ -187,9 +207,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					step={0.5}
 					decimalScale={1}
 					error={fieldError(errors, "cfgScale")}
-					onChange={(value) =>
-						setValues((current) => ({ ...current, cfgScale: typeof value === "number" ? value : current.cfgScale }))
-					}
+					onChange={(value) => typeof value === "number" && updateSampling({ cfgScale: value })}
 					data-testid="image-form-cfg-scale"
 				/>
 			</Group>
@@ -204,9 +222,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					value={values.sampler}
 					allowDeselect={false}
 					error={fieldError(errors, "sampler")}
-					onChange={(value) =>
-						setValues((current) => ({ ...current, sampler: (value ?? current.sampler) as ImageGenerationFormValues["sampler"] }))
-					}
+					onChange={(value) => value && updateSampling({ sampler: value as ImageGenerationFormValues["sampler"] })}
 					data-testid="image-form-sampler"
 				/>
 				<NumberInput
@@ -220,6 +236,14 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					data-testid="image-form-seed"
 				/>
 			</SimpleGrid>
+
+			{hasOverride ? (
+				<Group justify="flex-end">
+					<Button variant="subtle" size="xs" onClick={resetSampling} data-testid="image-form-reset-sampling">
+						{t("pages.images.form.resetSampling", "Reset to model defaults")}
+					</Button>
+				</Group>
+			) : null}
 
 			{!hasModels ? (
 				<Alert color="yellow" data-testid="image-form-no-models">

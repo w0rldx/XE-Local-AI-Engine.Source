@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { ImageGenerationForm } from "@/features/images/components/ImageGenerationForm";
+import { imageFormOverridesKeyPrefix } from "@/features/images/models/ImageFormOverrides";
 import type { ImageModelView } from "@/features/images/models/ImageModels";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The sampler/seed pair is the one row whose left half carries a *name*: split two-up at 768px the Select was too
@@ -90,5 +92,89 @@ describe("ImageGenerationForm", () => {
 
 		expect(md).toBe(768);
 		expect(rules).not.toContain(mdQuery);
+	});
+});
+
+// The family default for Qwen-Image 2.1 is CFG 6.0; a manually imported original wants 2.5. The operator's edit must
+// survive a model switch and a reload, and be revertible.
+const qwen: ImageModelView = {
+	...model,
+	modelName: "qwen-image-original",
+	repoId: "Qwen/Qwen-Image",
+	family: "QwenImage",
+	defaultSteps: 40,
+	defaultCfgScale: 6,
+	defaultSampler: "euler",
+};
+
+const resetLabel = en.pages.images.form.resetSampling;
+
+function renderBoth() {
+	return renderWithProviders(
+		<ThemeProvider>
+			<ImageGenerationForm models={[qwen, model]} isSubmitting={false} onSubmit={vi.fn()} />
+		</ThemeProvider>,
+	);
+}
+
+function cfgInput(): HTMLInputElement {
+	return screen.getByTestId("image-form-cfg-scale") as HTMLInputElement;
+}
+
+async function pickModel(name: string) {
+	fireEvent.click(screen.getByTestId("image-form-model"));
+	fireEvent.click(await screen.findByRole("option", { name, hidden: true }));
+}
+
+describe("ImageGenerationForm per-model overrides", () => {
+	beforeEach(() => localStorage.clear());
+	afterEach(cleanup);
+
+	it("restores the edited CFG after switching to another model and back", async () => {
+		renderBoth();
+
+		fireEvent.change(cfgInput(), { target: { value: "2.5" } });
+		await pickModel("sd15");
+		expect(cfgInput().value).toBe("7");
+		await pickModel("qwen-image-original");
+
+		expect(cfgInput().value).toBe("2.5");
+	});
+
+	it("seeds a fresh mount from the stored override", () => {
+		localStorage.setItem(
+			`${imageFormOverridesKeyPrefix}qwen-image-original`,
+			JSON.stringify({ steps: 30, cfgScale: 2.5, sampler: "euler" }),
+		);
+
+		renderBoth();
+
+		expect(cfgInput().value).toBe("2.5");
+		expect((screen.getByTestId("image-form-steps") as HTMLInputElement).value).toBe("30");
+		expect(screen.getByRole("button", { name: resetLabel })).toBeTruthy();
+	});
+
+	it("reset clears the override, restores the family CFG and hides itself", () => {
+		renderBoth();
+		expect(screen.queryByRole("button", { name: resetLabel })).toBeNull();
+		fireEvent.change(cfgInput(), { target: { value: "2.5" } });
+
+		fireEvent.click(screen.getByRole("button", { name: resetLabel }));
+
+		expect(cfgInput().value).toBe("6");
+		expect(localStorage.getItem(`${imageFormOverridesKeyPrefix}qwen-image-original`)).toBeNull();
+		expect(screen.queryByRole("button", { name: resetLabel })).toBeNull();
+	});
+
+	it("ignores an invalid stored override and shows the family default", () => {
+		localStorage.setItem(
+			`${imageFormOverridesKeyPrefix}qwen-image-original`,
+			JSON.stringify({ steps: 30, cfgScale: 99, sampler: "euler" }),
+		);
+
+		renderBoth();
+
+		expect(cfgInput().value).toBe("6");
+		expect(screen.queryByRole("button", { name: resetLabel })).toBeNull();
 	});
 });

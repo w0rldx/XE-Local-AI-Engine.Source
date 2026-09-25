@@ -3934,6 +3934,7 @@
 					"dpmpp2s_a": "DPM++ 2S a",
 					"lcm": "LCM"
 				},
+				"resetSampling": "Reset to model defaults",
 				"noModels": "Install an image model below before generating.",
 				"submit": "Generate",
 				"error": "Could not start generation."

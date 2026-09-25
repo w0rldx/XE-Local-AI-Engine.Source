@@ -111,7 +111,8 @@ arrived in stable-diffusion.cpp PR #1994, so older pins cannot load this set.
 
 The `QwenImage` family defaults are 40 steps, CFG 6.0 and `euler`. CFG and sampler come from upstream
 `docs/qwen_image_2.1.md`, and the step count from the QwenLM model card. An import of the original Qwen-Image wants
-CFG 2.5, which the operator sets by hand.
+CFG 2.5, which the operator sets by hand. The generation form remembers steps, CFG and sampler per model in the
+browser (`ImageFormOverrides`), so that edit survives a model switch and a reload; "Reset to model defaults" drops it.
 
 ## Diffusers-layout files are refused as the diffusion part
 
