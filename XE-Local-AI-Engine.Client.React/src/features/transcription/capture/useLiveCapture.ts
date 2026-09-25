@@ -8,6 +8,7 @@ import {
 	type CaptureSource,
 } from "@/features/transcription/capture/CaptureSource";
 import { MicrophoneCaptureSource } from "@/features/transcription/capture/MicrophoneCaptureSource";
+import { TARGET_SAMPLE_RATE } from "@/features/transcription/capture/PcmCapture";
 import { SystemAudioCaptureSource } from "@/features/transcription/capture/SystemAudioCaptureSource";
 import { type TranscriptionSubscribeFailed, useTranscriptionHub } from "@/features/transcription/hooks/useTranscriptionHub";
 import {
@@ -66,6 +67,12 @@ export interface LiveCaptureHandle {
 	/** Non-null once the node refused the subscription, so the reason can be named instead of silently swallowed. */
 	readonly subscribeFailed: TranscriptionSubscribeFailed | null;
 	/**
+	 * Audio forwarded to the node by the current capture, in milliseconds, whether or not it held speech: the capture
+	 * timer counts it because silence commits no segment. The longest lane, never their sum, so two sources running
+	 * side by side count once. Zero again when a new capture starts.
+	 */
+	readonly capturedMs: number;
+	/**
 	 * MUST be invoked directly from the click handler, with nothing awaited between the user gesture and it (R39a).
 	 * Every display path calls `getDisplayMedia` synchronously inside this call, and the Screen Capture specification
 	 * requires the browser to reject a picker opened outside the transient-activation window — so routing this through
@@ -116,6 +123,9 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 	cancelSessionRef.current = cancelSession.mutateAsync;
 	const [state, setState] = useState<LiveCaptureState>("idle");
 	const [error, setError] = useState<LiveCaptureErrorCode | null>(null);
+	const [capturedMs, setCapturedMs] = useState(0);
+	// Samples forwarded per lane since the current start.
+	const capturedSamplesRef = useRef<Partial<Record<CaptureChannel, number>>>({});
 	const mountedRef = useRef(true);
 
 	// The state machine is read from inside promise continuations that outlive a render, so it is mirrored in a ref:
@@ -305,12 +315,19 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 			const acquired: CaptureSource[] = [];
 			sourcesRef.current = acquired;
 			forwardingRef.current = false;
+			capturedSamplesRef.current = {};
+			setCapturedMs(0);
 
 			// R31: a frame produced before the node accepted the session is dropped on the floor rather than sent. The
 			// picker may be open for a minute; what it captured in that minute is not this session's audio.
 			const onFrame = (frame: CaptureFrame): void => {
 				if (!forwardingRef.current) {
 					return;
+				}
+				const captured = capturedSamplesRef.current;
+				captured[frame.channel] = (captured[frame.channel] ?? 0) + frame.pcm.length;
+				if (mountedRef.current) {
+					setCapturedMs(Math.round((Math.max(...Object.values(captured)) * 1000) / TARGET_SAMPLE_RATE));
 				}
 				// R34a: a refused frame is never swallowed. A dead transport rejects, which means speech the node did not
 				// receive — so capture stops loudly instead of leaving a hole in the transcript.
@@ -489,5 +506,15 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 		};
 	}, []);
 
-	return { state, error, replayStalled: replayStalled !== null, connected, subscribeFailed, start, stop, cancel };
+	return {
+		state,
+		error,
+		replayStalled: replayStalled !== null,
+		connected,
+		subscribeFailed,
+		capturedMs,
+		start,
+		stop,
+		cancel,
+	};
 }

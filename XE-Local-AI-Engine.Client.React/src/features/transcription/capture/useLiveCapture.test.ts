@@ -1048,4 +1048,83 @@ describe("useLiveCapture", () => {
 		// Outstanding work stayed bounded: the rejected frame stopped capture rather than being retried.
 		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
 	});
+
+	// Item 7: the capture timer counts forwarded audio, silence included, because silence commits no segment.
+	describe("capturedMs", () => {
+		/** 4 000 samples at 16 kHz: one 250 ms worklet frame. */
+		const quarterSecond = () => new Int16Array(4000);
+
+		it("counts every forwarded frame", async () => {
+			liveStartOk();
+			const { factory, sources } = harness();
+			const { result } = renderCapture();
+
+			await startCapture(result, { kind: "microphone" }, factory);
+			expect(result.current.capturedMs).toBe(0);
+			act(() => {
+				sources.get("microphone")?.emit(quarterSecond());
+				sources.get("microphone")?.emit(quarterSecond());
+			});
+
+			expect(result.current.capturedMs).toBe(500);
+		});
+
+		// R31: audio captured while the session was still opening is dropped, so it must not be counted either.
+		it("does not count frames dropped before the node accepted the session", async () => {
+			const gate = liveStartGate();
+			const { factory, sources } = harness();
+			const { result } = renderCapture();
+
+			let started: Promise<void> = Promise.resolve();
+			await act(async () => {
+				started = result.current.start({ kind: "microphone" }, factory);
+				await vi.waitFor(() => expect(liveStartHits).toBe(1));
+			});
+			act(() => sources.get("microphone")?.emit(quarterSecond()));
+			expect(hub.pushFrame).not.toHaveBeenCalled();
+			expect(result.current.capturedMs).toBe(0);
+
+			await act(async () => {
+				gate.resolve(undefined);
+				await started;
+			});
+			act(() => sources.get("microphone")?.emit(quarterSecond()));
+
+			expect(result.current.capturedMs).toBe(250);
+		});
+
+		it("reports the longest lane, not the sum, when both sources run", async () => {
+			liveStartOk();
+			const { factory, sources } = harness();
+			const { result } = renderCapture();
+
+			await startCapture(result, { kind: "both" }, factory);
+			act(() => {
+				sources.get("microphone")?.emit(quarterSecond());
+				sources.get("systemAudio")?.emit(quarterSecond());
+			});
+			expect(result.current.capturedMs).toBe(250);
+
+			act(() => sources.get("systemAudio")?.emit(quarterSecond()));
+			expect(result.current.capturedMs).toBe(500);
+		});
+
+		it("starts again from zero on a new capture", async () => {
+			liveStartOk();
+			const first = harness();
+			const { result } = renderCapture();
+
+			await startCapture(result, { kind: "microphone" }, first.factory);
+			act(() => first.sources.get("microphone")?.emit(quarterSecond()));
+			expect(result.current.capturedMs).toBe(250);
+			await act(async () => {
+				await result.current.stop();
+			});
+
+			const second = harness();
+			await startCapture(result, { kind: "microphone" }, second.factory);
+
+			expect(result.current.capturedMs).toBe(0);
+		});
+	});
 });

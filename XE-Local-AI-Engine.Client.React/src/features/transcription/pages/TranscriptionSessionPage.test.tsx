@@ -46,6 +46,7 @@ vi.mock("@/features/transcription/hooks/useTranscriptionHub", async () => {
 // hook, which is where the session's own microphone is chosen.
 const liveCapture = vi.hoisted(() => ({
 	state: "idle" as "idle" | "starting" | "capturing" | "stopping",
+	capturedMs: 0,
 	start: vi.fn(() => Promise.resolve()),
 	stop: vi.fn(() => Promise.resolve()),
 	cancel: vi.fn(() => Promise.resolve()),
@@ -64,6 +65,7 @@ vi.mock("@/features/transcription/capture/useLiveCapture", async () => {
 				replayStalled: false,
 				connected: true,
 				subscribeFailed: null,
+				capturedMs: liveCapture.capturedMs,
 				start: liveCapture.start,
 				stop: liveCapture.stop,
 				cancel: liveCapture.cancel,
@@ -130,6 +132,7 @@ describe("TranscriptionSessionPage", () => {
 		navigate.mockClear();
 		liveCapture.start.mockClear();
 		liveCapture.state = "idle";
+		liveCapture.capturedMs = 0;
 		usePendingComposerTextStore.setState({ pendingText: "" });
 		useTranscriptionCaptureStore.setState({ deviceIdBySession: {}, processIdBySession: {} });
 	});
@@ -286,6 +289,20 @@ describe("TranscriptionSessionPage", () => {
 		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
 		pushLiveTranscript(queryClient, { ...liveView("Transcribing"), bufferedMs: 2500 });
 		expect((await screen.findByTestId("transcription-capture-behind")).textContent).toBe("Transcribing… 3 s behind");
+	});
+
+	// Item 7: silence commits no segment, so a timer read off the committed transcript sat at 00:00 while capturing.
+	it("times a running capture from the captured audio even with no committed segment", async () => {
+		liveCapture.state = "capturing";
+		liveCapture.capturedMs = 65_000;
+		server.use(
+			jsonRoute("get", `transcription/sessions/${sessionId}`, detail({ status: "Transcribing", sourceKind: "Microphone" }, [])),
+		);
+		const { queryClient } = renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		pushLiveTranscript(queryClient, liveView("Transcribing"));
+		expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("01:05");
 	});
 
 	// M3: two sessions created on two different microphones must each capture from their own. The device is never

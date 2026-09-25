@@ -8,7 +8,7 @@ import { CaptureError } from "@/features/transcription/capture/CaptureSource";
 import workletUrl from "@/features/transcription/capture/Pcm16DownsamplerWorklet.js?url";
 
 const WORKLET_NAME = "xe-pcm16-downsampler";
-const TARGET_SAMPLE_RATE = 16_000;
+export const TARGET_SAMPLE_RATE = 16_000;
 /** 4 000 samples = 8 000 bytes, well under the hub's 32 KB frame cap. */
 const FRAME_MS = 250;
 

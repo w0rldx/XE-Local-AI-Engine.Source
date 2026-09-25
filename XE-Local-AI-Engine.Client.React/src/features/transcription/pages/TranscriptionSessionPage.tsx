@@ -232,7 +232,11 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 							replayStalled={capture.replayStalled}
 							connected={capture.connected}
 							subscribeFailed={capture.subscribeFailed}
-							elapsedMs={(liveView?.committed ?? []).reduce((latest, segment) => Math.max(latest, segment.endMs), 0)}
+							// Captured audio counts silence; the transcript's end is the floor for a tab that joined a running session late.
+							elapsedMs={Math.max(
+								capture.capturedMs,
+								(liveView?.committed ?? []).reduce((latest, segment) => Math.max(latest, segment.endMs), 0),
+							)}
 							bufferedMs={liveView?.bufferedMs ?? null}
 							runtimeState={runtimeQuery.data?.state ?? null}
 							// R39a: start is called straight out of the click, with nothing awaited in between, or the browser

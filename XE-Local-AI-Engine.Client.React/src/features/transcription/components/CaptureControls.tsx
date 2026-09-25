@@ -16,7 +16,7 @@ interface CaptureControlsProps {
 	readonly connected: boolean;
 	/** Non-null once the node refused the subscription. */
 	readonly subscribeFailed: TranscriptionSubscribeFailed | null;
-	/** The end of the last committed segment — AUDIO time, which is the only clock the transcript itself keeps. */
+	/** Audio forwarded by the running capture, silence included — AUDIO time, not wall-clock time. */
 	readonly elapsedMs: number;
 	/** Audio the node has buffered but not yet transcribed; null until it has reported any. */
 	readonly bufferedMs: number | null;
@@ -30,9 +30,8 @@ interface CaptureControlsProps {
 /**
  * Formats captured audio as `mm:ss`.
  *
- * Wall-clock time and audio time diverge — the runtime lags, a pause produces no audio — and the transcript's own
- * clock is the honest one to show beside it: an operator comparing the counter to the last timestamp on screen should
- * see them agree.
+ * Audio time, not wall-clock time: a pause produces no audio. It counts silence too, which commits no segment, so it
+ * runs ahead of the last timestamp on screen while nothing is being said.
  */
 function formatElapsed(milliseconds: number): string {
 	const totalSeconds = Math.floor(Math.max(milliseconds, 0) / 1000);
