@@ -36,9 +36,11 @@ export function CompactButton({ percentUsed, disabled = false }: CompactButtonPr
 		// node default on the backend) instead of being forwarded as a literal model id that never matches.
 		mutationFn: (id: string) => nodeChatAdapter.compactConversation(id, toNodeChatRequestModel(selectedModel)),
 		onSuccess: async (result, id) => {
-			// Refetch the conversation (now carrying the synopsis) and the lists so any preview/state stays in sync.
+			// Refetch the conversation (now carrying the synopsis), the lists and the context-state panel (which is
+			// otherwise refetched only on reopen) so any preview/state stays in sync.
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(id), exact: true });
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() });
+			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationContextState(id), exact: true });
 			showOutcomeToast(result);
 		},
 		onError: () => {

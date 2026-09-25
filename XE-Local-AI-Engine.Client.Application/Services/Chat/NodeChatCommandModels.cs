@@ -295,14 +295,22 @@ public sealed class NodeChatSetConversationMemoryExcludedRequest
 
 /// <summary>
 ///     Writes (or clears) the conversation's non-destructive compaction synopsis. The summary is encrypted at rest; the
-///     covered sequence and timestamp are plaintext. A null <see cref="Summary" /> clears the synopsis (all three
-///     columns reset to NULL).
+///     covered sequence and timestamp are plaintext. A null <see cref="Summary" /> clears both but STAMPS the timestamp.
 /// </summary>
 public sealed class NodeChatSetCompactionSummaryRequest
 {
     public required Guid ConversationId { get; init; }
 
     public required string? Summary { get; init; }
+
+    /// <summary>
+    ///     When true the write only lands if <c>compaction_summary_updated_at_utc</c> still equals
+    ///     <see cref="ExpectedUpdatedAtUtc" /> (NULL-safe); a path change or variant mint in between restamps it and the
+    ///     write returns null instead of restoring a synopsis folded from the old path.
+    /// </summary>
+    public bool GuardUnchanged { get; init; }
+
+    public long? ExpectedUpdatedAtUtc { get; init; }
 
     public required int? CoversToSequence { get; init; }
 

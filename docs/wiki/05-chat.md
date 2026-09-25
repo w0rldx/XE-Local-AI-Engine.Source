@@ -470,7 +470,10 @@ together with the synopsis in the same statement, because a path change can chan
 clear nulls the state and its watermark but STAMPS `ConversationStateUpdatedAtUtc`: every distillation write is a
 compare-and-set on the stamp it last saw (`NodeChatSetConversationStateRequest.GuardUnchanged`), so a delta the model
 was still producing when the path changed is discarded (`ConversationStateDistillationStatus.Superseded`) instead of
-restoring state from the abandoned path. See [Data Model & Persistence](08-data-and-persistence.md).
+restoring state from the abandoned path. The synopsis write is the same compare-and-set: the clear stamps
+`CompactionSummaryUpdatedAtUtc` too, and a fold that read the row before the path change ends as
+`ConversationCompactionOutcome.Superseded` with the clear left standing (the context-state view reports the synopsis
+stamp only beside a synopsis). See [Data Model & Persistence](08-data-and-persistence.md).
 
 **Reading it back.** `GET chat/conversations/{conversationId}/context-state`
 (`LocalApiRoutes.LocalChat.ConversationContextState`,

@@ -3281,6 +3281,60 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var afterReselect = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
         AssertEx.Null(afterReselect.CompactionSummary);
         AssertEx.Null(afterReselect.CompactionSummaryCoversToSequence);
+        AssertEx.Equal<long?>(12, afterReselect.CompactionSummaryUpdatedAtUtc, "The clear is stamped so an in-flight compaction's guarded write is rejected.");
+    }
+
+    [Test]
+    public async Task SetCompactionSummaryAsync_WhenGuarded_LandsOnlyOnTheStampItRead()
+    {
+        await using var provider = await BuildProviderAsync("compaction-guard.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Compaction",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        var conversationId = conversation.ConversationId;
+
+        NodeChatSetCompactionSummaryRequest Write(string summary, long updatedAt, bool guard = false, long? expected = null) =>
+            new()
+            {
+                ConversationId = conversationId,
+                Summary = summary,
+                CoversToSequence = 3,
+                UpdatedAtUtc = updatedAt,
+                GuardUnchanged = guard,
+                ExpectedUpdatedAtUtc = expected
+            };
+
+        // Unguarded (the default) behaves as before, even over a never-compacted NULL stamp.
+        AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("FIRST", 20)));
+
+        var rejected = await service.SetCompactionSummaryAsync(Write("STALE", 30, guard: true, expected: 19));
+        AssertEx.Null(rejected, "A stale expected stamp must not write.");
+        var unchanged = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
+        AssertEx.Equal("FIRST", unchanged.CompactionSummary);
+        AssertEx.Equal<long?>(20, unchanged.CompactionSummaryUpdatedAtUtc);
+
+        var accepted = AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("SECOND", 30, guard: true, expected: 20)));
+        AssertEx.Equal("SECOND", accepted.CompactionSummary);
+        AssertEx.Equal<long?>(30, accepted.CompactionSummaryUpdatedAtUtc);
+
+        // A path change clears the synopsis and restamps it, so a fold that read stamp 30 is rejected afterwards.
+        await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+        {
+            ConversationId = conversationId,
+            SelectedPath = null,
+            UpdatedAtUtc = 40
+        });
+        AssertEx.Null(await service.SetCompactionSummaryAsync(Write("OLD PATH", 50, guard: true, expected: 30)));
+        var cleared = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
+        AssertEx.Null(cleared.CompactionSummary, "The clear stands over the late write.");
+        AssertEx.Equal<long?>(40, cleared.CompactionSummaryUpdatedAtUtc);
+
+        AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("UNGUARDED", 60)));
+        AssertEx.Equal("UNGUARDED", AssertEx.NotNull(await service.GetConversationAsync(conversationId)).CompactionSummary);
     }
 
     [Test]
@@ -3331,6 +3385,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         var afterVariant = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
         AssertEx.Null(afterVariant.CompactionSummary);
+        AssertEx.Equal<long?>(14, afterVariant.CompactionSummaryUpdatedAtUtc, "The clear is stamped so an in-flight compaction's guarded write is rejected.");
     }
 
     // resetDatabase:false reopens an existing DB file with fresh connections without wiping it — used to model a genuine

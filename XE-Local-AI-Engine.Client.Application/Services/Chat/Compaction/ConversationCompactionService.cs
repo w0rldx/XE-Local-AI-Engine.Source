@@ -87,16 +87,27 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
         if (result.Outcome == ConversationCompactionOutcome.Compacted)
         {
-            // Commit outside the generation deadline: expiry during the store's post-write read must not report
-            // TimedOut after the summary has already changed. Caller cancellation remains the store's authority.
-            await _persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+            // Commit outside the generation deadline (expiry during the post-write read must not report TimedOut after
+            // the row changed), compare-and-set on the stamp the fold read: a path change in between restamps it.
+            var written = await _persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
                 {
                     ConversationId = conversationId,
                     Summary = result.Summary,
                     CoversToSequence = result.CoversToSequence,
-                    UpdatedAtUtc = result.UpdatedAtUtc.GetValueOrDefault()
+                    UpdatedAtUtc = result.UpdatedAtUtc.GetValueOrDefault(),
+                    GuardUnchanged = true,
+                    ExpectedUpdatedAtUtc = result.ExpectedUpdatedAtUtc
                 },
                 cancellationToken);
+            if (written is null)
+            {
+                _logger.LogInformation("Compaction of conversation {ConversationId} was superseded by a path change; the synopsis was discarded.", conversationId);
+                return new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.Superseded
+                };
+            }
+
             _logger.LogInformation("Compacted conversation {ConversationId}: folded {Folded} message(s) up to sequence {Cutoff} into the synopsis.",
                 conversationId, result.MessagesFolded, result.CoversToSequence);
         }
@@ -255,7 +266,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             MessagesFolded = toFold.Count,
             UpdatedAtUtc = now,
             ModelUsed = model,
-            UsedFallbackModel = usedFallbackModel
+            UsedFallbackModel = usedFallbackModel,
+            ExpectedUpdatedAtUtc = conversation.CompactionSummaryUpdatedAtUtc
         };
     }
 }

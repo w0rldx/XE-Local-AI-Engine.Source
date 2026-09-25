@@ -592,7 +592,7 @@ public sealed class ConversationCompactionServiceTests
         {
             time.Advance(TimeSpan.FromSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds));
             call.Arg<CancellationToken>().ThrowIfCancellationRequested();
-            return (NodeChatConversationDto?)null;
+            return Conversation(CompletedMessages(12));
         });
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
@@ -607,11 +607,36 @@ public sealed class ConversationCompactionServiceTests
     }
 
     [Test]
+    public async Task CompactAsync_WhenAPathChangeRestampsTheRowDuringTheFold_ReportsSupersededAndDiscardsTheSynopsis()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>())
+                   .Returns(Conversation(CompletedMessages(12)) with { CompactionSummaryUpdatedAtUtc = 40 });
+        // The store rejects the compare-and-set: a path change restamped compaction_summary_updated_at_utc meanwhile.
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns((NodeChatConversationDto?)null);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("OLD PATH SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Superseded, result.Outcome);
+        AssertEx.Null(result.Summary, "A superseded fold reports no synopsis, so a checkpoint keeps its previous one.");
+        AssertEx.Null(result.CoversToSequence);
+        await persistence.Received(1)
+                         .SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.GuardUnchanged && request.ExpectedUpdatedAtUtc == 40),
+                             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task CompactAsync_DistilsUpToTheCutoffFirstAndHandsTheLiveStateToTheSummarizer()
     {
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -684,6 +709,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();

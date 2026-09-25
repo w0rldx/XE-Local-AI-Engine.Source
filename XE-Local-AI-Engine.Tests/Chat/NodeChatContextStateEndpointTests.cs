@@ -137,6 +137,42 @@ public sealed class NodeChatContextStateEndpointTests
         AssertEx.True(live.GetProperty("isLive").GetBoolean(), "The replacing entry is live.");
     }
 
+    [Test]
+    public async Task GetContextState_WhenTheSynopsisWasClearedByAPathChange_ReportsNoSynopsisStamp()
+    {
+        var persistence = Factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Cleared",
+            UserId = null,
+            CreatedAtUtc = 10
+        });
+        AssertEx.NotNull(await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        {
+            ConversationId = conversation.ConversationId,
+            Summary = "Old path synopsis.",
+            CoversToSequence = 4,
+            UpdatedAtUtc = 900
+        }));
+        // The clear keeps a stamp as the compare-and-set token; the view must still read "not compacted".
+        await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+        {
+            ConversationId = conversation.ConversationId,
+            SelectedPath = null,
+            UpdatedAtUtc = 950
+        });
+        AssertEx.Equal<long?>(950, AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId)).CompactionSummaryUpdatedAtUtc);
+
+        using var response = await SendAsync(conversation.ConversationId);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("synopsis").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("synopsisCoversToSequence").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("synopsisUpdatedAtUtc").ValueKind);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(Guid conversationId)
     {
         using var client = Factory.CreateClient();

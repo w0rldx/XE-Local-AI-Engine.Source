@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CompactButton } from "@/features/chat/components/CompactButton";
+import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // vi.mock factories are hoisted above the module, so the spies/state they close over must be created with vi.hoisted.
@@ -67,6 +68,18 @@ describe("CompactButton", () => {
 
 		await waitFor(() => expect(compactSpy).toHaveBeenCalledWith("conv-1", "user-model"));
 		await waitFor(() => expect(toastSpies.success).toHaveBeenCalledTimes(1));
+	});
+
+	it("invalidates the context-state panel query after a compaction so an open panel refreshes", async () => {
+		confirmSpy.mockResolvedValue(true);
+		compactSpy.mockResolvedValue({ outcome: "Compacted", messagesFolded: 3 });
+
+		const { queryClient } = renderWithProviders(<CompactButton />);
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+		fireEvent.click(screen.getByTestId("compact-conversation-button"));
+
+		await waitFor(() => expect(toastSpies.success).toHaveBeenCalledTimes(1));
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: nodeChatQueryKeys.conversationContextState("conv-1"), exact: true });
 	});
 
 	it("maps the local-default sentinel to undefined so the backend uses the node default", async () => {

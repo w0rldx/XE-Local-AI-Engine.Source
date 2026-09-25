@@ -25,7 +25,13 @@ public enum ConversationCompactionOutcome
     ///     The state distillation that runs before the fold failed or stopped short of the cutoff, so nothing was folded:
     ///     the synopsis never covers span the structured state does not.
     /// </summary>
-    DistillerReturnedNothing
+    DistillerReturnedNothing,
+
+    /// <summary>
+    ///     A selected-path change or variant mint cleared the synopsis while the fold ran, so the synopsis built from
+    ///     the old path was discarded and the clear stands.
+    /// </summary>
+    Superseded
 }
 
 /// <summary>Outcome of a compaction attempt. Carries the new synopsis + how much it covers, so the endpoint can echo it back.</summary>
@@ -46,6 +52,9 @@ public sealed class ConversationCompactionResult
     public string? ModelUsed { get; init; }
 
     public bool UsedFallbackModel { get; init; }
+
+    /// <summary>The synopsis stamp the fold read; the commit only lands while the row still carries it.</summary>
+    internal long? ExpectedUpdatedAtUtc { get; init; }
 }
 
 /// <summary>

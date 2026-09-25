@@ -219,7 +219,7 @@ internal sealed class NodeChatConversationCommands
                 // store-type mapping for DBNull. A path change also clears the synopsis and state built from the previous one.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText =
-                    "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL, conversation_state = NULL, conversation_state_covers_to_sequence = NULL, conversation_state_updated_at_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                    "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = $last_seen_utc, conversation_state = NULL, conversation_state_covers_to_sequence = NULL, conversation_state_updated_at_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$selected_path_json", SerializeSelectedPath(selectedPath));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
@@ -385,13 +385,17 @@ internal sealed class NodeChatConversationCommands
                 // Raw ADO.NET, because the summary blob and the covered sequence both write NULL when cleared and EF's
                 // raw-SQL parameter builder has no store-type mapping for DBNull. The summary is encrypted first.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                // Stamped on a clear too and optionally guarded, exactly like SetConversationStateAsync: a fold that read
+                // the row before a path change cannot write its stale synopsis over the clear.
                 command.CommandText =
-                    "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                    "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0 AND ($guard = 0 OR compaction_summary_updated_at_utc IS $expected_updated_at);";
                 AddParameter(command, "$summary", dbContext.EncryptConversationCompactionSummary(summary, request.ConversationId));
                 AddParameter(command, "$covers_to", summary is null ? null : request.CoversToSequence);
-                AddParameter(command, "$updated_at", summary is null ? null : request.UpdatedAtUtc);
+                AddParameter(command, "$updated_at", request.UpdatedAtUtc);
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
+                AddParameter(command, "$guard", request.GuardUnchanged ? 1 : 0);
+                AddParameter(command, "$expected_updated_at", request.ExpectedUpdatedAtUtc);
                 await OpenIfNeededAsync(command.Connection, token);
                 var updated = await command.ExecuteNonQueryAsync(token);
 

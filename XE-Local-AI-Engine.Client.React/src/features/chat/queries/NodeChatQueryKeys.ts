@@ -12,7 +12,7 @@ export const nodeChatQueryKeys = {
 	// loads that thread's own attachments and a brand-new conversation starts empty.
 	conversationFiles: (conversationId: string) => [...nodeChatQueryKeys.conversation(conversationId), "files"] as const,
 	// Distilled context state + synopsis (read-only panel). A child of the detail key, so a broad `conversations()`
-	// invalidation reaches it; the compact mutation's exact detail invalidation does not, hence the hook's staleTime 0.
+	// invalidation reaches it; the compact mutation invalidates it explicitly so an open panel refreshes after a fold.
 	conversationContextState: (conversationId: string) =>
 		[...nodeChatQueryKeys.conversation(conversationId), "context-state"] as const,
 };

@@ -29,7 +29,8 @@ internal static class ConversationContextStateMapper
             StateUpdatedAtUtc = conversation.ConversationStateUpdatedAtUtc,
             Synopsis = conversation.CompactionSummary,
             SynopsisCoversToSequence = conversation.CompactionSummaryCoversToSequence,
-            SynopsisUpdatedAtUtc = conversation.CompactionSummaryUpdatedAtUtc,
+            // A cleared synopsis keeps its stamp (the compare-and-set token), so the stamp is only reported beside a synopsis.
+            SynopsisUpdatedAtUtc = conversation.CompactionSummary is null ? null : conversation.CompactionSummaryUpdatedAtUtc,
             NextEntryNumber = document.NextEntryNumber
         };
     }

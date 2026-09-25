@@ -256,7 +256,7 @@ internal sealed class NodeChatVariantBranchService
                         await using var clearSummaryCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         clearSummaryCommand.Transaction = dbTransaction;
                         clearSummaryCommand.CommandText =
-                            "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL, conversation_state = NULL, conversation_state_covers_to_sequence = NULL, conversation_state_updated_at_utc = $cleared_at WHERE conversation_id = $conversation_id;";
+                            "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = $cleared_at, conversation_state = NULL, conversation_state_covers_to_sequence = NULL, conversation_state_updated_at_utc = $cleared_at WHERE conversation_id = $conversation_id;";
                         AddParameter(clearSummaryCommand, "$conversation_id", request.ConversationId);
                         AddParameter(clearSummaryCommand, "$cleared_at", request.CreatedAtUtc);
                         await clearSummaryCommand.ExecuteNonQueryAsync(token);
