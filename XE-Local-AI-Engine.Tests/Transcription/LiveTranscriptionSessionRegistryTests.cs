@@ -1418,8 +1418,15 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
 
+        // EndAsync awaits every lane's flush, but the lanes flush concurrently: whichever reaches the commit gate first
+        // takes seq 1. Pin what the contract fixes (one gap-free counter, published in order) apart from which lane won.
         var segments = Snapshot(published);
-        AssertEx.Equal("1|You|0-500|w0-500;2|Others|0-500|w0-500", string.Join(';', segments.Select(Describe)),
+        AssertEx.Equal("1,2", string.Join(',', segments.Select(static segment => segment.Seq)),
+            "Both flushed tails share one gap-free counter and are published in sequence order.");
+        AssertEx.Equal("You|0-500|w0-500;Others|0-500|w0-500",
+            string.Join(';',
+                segments.OrderBy(static segment => (int)segment.Channel)
+                        .Select(static segment => $"{segment.Channel}|{segment.StartMs}-{segment.EndMs}|{segment.Text}")),
             "Every lane is flushed, and the tail each one was holding back becomes durable.");
         await fixture.Service.Received(1)
                      .CompleteLiveAsync(sessionId,

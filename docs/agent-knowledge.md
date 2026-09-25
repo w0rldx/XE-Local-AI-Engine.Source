@@ -338,7 +338,8 @@ list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight pa
 entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the source named in the `HEAVY`
 header comment (2026-09-14: the per-run mean of CI runs 34861036286 and 34877183235 via
 `scripts/test-durations.py --heavy --runs 2`, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards;
-2026-09-25: one local no-coverage run, a stopgap until green CI runs replace it) and
+2026-09-25: CI run 36079796542, the first green run after the per-host EF provider change, one run
+until the next green run is folded in with `--runs 2`) and
 run 34730991540 (the timeout).
 
 ### A HEAVY weight from one CI run is noise, and no table can balance the legs better than runner speed allows
