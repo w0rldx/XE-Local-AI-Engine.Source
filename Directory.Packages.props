@@ -44,7 +44,7 @@
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.5.0" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.259" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.266" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
@@ -147,7 +147,7 @@
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.34.0.3385" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.12" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
-    <PackageVersion Include="TUnit" Version="1.68.4" />
+    <PackageVersion Include="TUnit" Version="1.68.17" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
