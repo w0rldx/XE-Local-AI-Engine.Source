@@ -268,6 +268,14 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             return null; // Already removed by a concurrent path.
         }
 
+        // Every deliberate removal detaches BEFORE it kills and registration follows readiness, so a child already dead here died outside the node. Logged
+        // here, after the winning TryRemove, so whichever path notices the exit (prune, same-key respawn, reaper, eject) leaves exactly one trace.
+        if (running.Handle.HasExited)
+        {
+            _logger.LogWarning("llama-server for model {ModelName} role {Role} (pid {ProcessId}) exited outside the supervisor's control with exit code {ExitCode}; it was not evicted by the node and is respawned on the next request.",
+                key.ModelName, key.Role, running.Handle.ProcessId, running.Handle.ExitCode);
+        }
+
         _layerPlacementReport.Remove(key.Role, key.ModelName);
         _ports.Release(running.Port);
         return running;

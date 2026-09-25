@@ -57,6 +57,9 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     }
 
     /// <inheritdoc />
+    public TimeSpan InferenceTimeout => _options.InferenceTimeout;
+
+    /// <inheritdoc />
     public async Task<WhisperTranscriptionResult> TranscribeAsync(string modelId, WhisperTranscriptionRequest request, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
@@ -127,7 +130,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new WhisperRuntimeException("The transcription did not finish within the allowed time.");
+            throw new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage);
         }
         catch (HttpRequestException exception)
         {

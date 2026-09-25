@@ -58,7 +58,7 @@ describe("graph-workflow vocabularies", () => {
 		expect(graphWorkflowPauseDecisionKinds).toEqual(["Approve", "Reject"]);
 		expect(graphWorkflowDefinitionKinds).toEqual(["Standard", "Chat"]);
 		expect(graphWorkflowDecisionProviders).toEqual(["llm"]);
-		expect(graphWorkflowFailureClasses).toHaveLength(9);
+		expect(graphWorkflowFailureClasses).toHaveLength(10);
 		expect(graphWorkflowConditionOperators).toEqual(["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"]);
 		expect(graphWorkflowEventTypes).toHaveLength(20);
 		expect(graphWorkflowTabs).toEqual(["editor", "runs", "events"]);

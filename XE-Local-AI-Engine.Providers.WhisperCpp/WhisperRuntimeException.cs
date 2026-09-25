@@ -9,6 +9,9 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 /// </remarks>
 public sealed class WhisperRuntimeException : Exception
 {
+    /// <summary>The message of a request that ran out of its inference budget, shared by every layer that enforces it.</summary>
+    public const string InferenceTimedOutMessage = "The transcription did not finish within the allowed time.";
+
     /// <summary>Creates the exception with a sanitized, display-safe message.</summary>
     public WhisperRuntimeException(string message)
         : base(message)

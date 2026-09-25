@@ -34,6 +34,8 @@ internal sealed partial class LinuxProcessGroupHandle : ILlamaServerProcessHandl
 
     public bool HasExited => SafeHasExited(_process);
 
+    public int? ExitCode => SafeExitCode(_process);
+
     public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
     {
         if (SafeHasExited(_process))
@@ -114,6 +116,19 @@ internal sealed partial class LinuxProcessGroupHandle : ILlamaServerProcessHandl
         catch (InvalidOperationException)
         {
             return true; // No associated process — treat as exited.
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            // No associated process, or the handle is already disposed: the code is unknown.
+            return null;
         }
     }
 

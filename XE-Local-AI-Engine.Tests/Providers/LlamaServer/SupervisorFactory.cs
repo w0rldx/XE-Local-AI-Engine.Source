@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -29,7 +30,8 @@ internal static class SupervisorFactory
         ILlamaServerCapabilityManifestProbe? capabilityManifestProbe = null,
         ILlamaServerLoadTelemetry? loadTelemetry = null,
         TaskScheduler? detachedSpawnScheduler = null,
-        ILlamaCppBinaryManager? binaryManager = null)
+        ILlamaCppBinaryManager? binaryManager = null,
+        ILogger<LlamaServerProcessSupervisor>? logger = null)
     {
         return new LlamaServerProcessSupervisor(binaryManager ?? new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -57,6 +59,7 @@ internal static class SupervisorFactory
             launchAdmissions: launchAdmissions,
             extraArgumentsResolver: extraArgumentsResolver,
             loadTelemetry: loadTelemetry,
-            detachedSpawnScheduler: detachedSpawnScheduler);
+            detachedSpawnScheduler: detachedSpawnScheduler,
+            logger: logger);
     }
 }

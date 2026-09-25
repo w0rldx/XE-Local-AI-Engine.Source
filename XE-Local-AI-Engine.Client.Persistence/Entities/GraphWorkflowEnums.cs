@@ -92,5 +92,11 @@ public enum GraphWorkflowFailureClass
     GateRejected,
     ValidationFailed,
     Cancelled,
-    Interrupted
+    Interrupted,
+
+    /// <summary>
+    ///     The capacity service refused the node's model. Not retryable: only the operator (ejecting a model or picking
+    ///     a loaded one) changes the answer, so a re-attempt repeats the same refusal.
+    /// </summary>
+    CapacityRejected
 }

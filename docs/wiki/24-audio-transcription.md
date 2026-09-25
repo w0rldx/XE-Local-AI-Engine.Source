@@ -318,7 +318,9 @@ calls into it per lane.
   with `ProcessExited` set — the supervisor sets it only on its "process exited" failures — `SubmitAsync` sends the same
   WAV bytes again. Nothing was freed before the failure, so it is the same uncommitted span, and the supervisor, which
   already tore the dead daemon down, respawns it for the retry (on CPU after a CUDA death, because the latch is set by
-  then). A second death propagates and fails the lane. No other runtime failure is retried: a timeout would double the
+  then). The retry shares the first attempt's budget: it runs under what is left of one `InferenceTimeout` measured
+  from the first attempt's start, and running out fails with the same "did not finish within the allowed time" error
+  as a first-attempt timeout, so a window never waits twice the timeout. A second death propagates and fails the lane. No other runtime failure is retried: a timeout would double the
   inference-timeout wait, and "not installed", "busy" or "rejected the audio" cannot succeed on a retry. The final
   flush submits through the same path.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with

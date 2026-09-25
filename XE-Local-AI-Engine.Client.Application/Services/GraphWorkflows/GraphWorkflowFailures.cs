@@ -15,8 +15,8 @@ internal static class GraphWorkflowFailures
     /// <summary>The three classes a re-attempt can change the answer to.</summary>
     /// <remarks>
     ///     Everything else is refused deliberately: a graph that no longer declares a node, an over-cap document, a
-    ///     refused gate and a cancelled run all produce the byte-identical answer next time, so retrying them is an
-    ///     infinite loop rather than resilience.
+    ///     refused gate, a capacity refusal and a cancelled run all produce the byte-identical answer next time, so
+    ///     retrying them is an infinite loop rather than resilience.
     /// </remarks>
     public static bool IsRetryable(GraphWorkflowFailureClass failureClass) =>
         failureClass is GraphWorkflowFailureClass.NodeFailed or GraphWorkflowFailureClass.Timeout or GraphWorkflowFailureClass.Interrupted;

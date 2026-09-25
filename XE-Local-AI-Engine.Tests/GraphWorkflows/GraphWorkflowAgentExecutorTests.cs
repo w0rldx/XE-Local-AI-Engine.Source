@@ -96,6 +96,24 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     [Test]
+    public async Task ALlmCall_TheCapacityServiceRefuses_FailsOnceAsCapacityRejectedWithItsReason()
+    {
+        const string prompt = "llm-capacity-refused";
+        const string model = $"llm-{GraphWorkflowModels.OvercommittedMarker}.gguf";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness,
+            LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }""", """, "maxAttempts": 2"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.CapacityRejected, analyze.FailureClass);
+        AssertEx.Equal(expected: 1, analyze.Attempt);
+        AssertEx.Equal(FakeGraphWorkflowCapacity.RejectionReason, analyze.Error);
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried));
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)));
+    }
+
+    [Test]
     public async Task ALlmCall_WithAMissingBinding_FailsBeforeCapacityAndInvocation()
     {
         const string prompt = "llm-missing-binding";
@@ -521,12 +539,12 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     A node the capacity service refuses fails with the refusal's own words and never reaches the runner. The
-    ///     refusal carries no reservation, which is the whole reason it is safe to return before the outermost finally
-    ///     has anything to release.
+    ///     A node the capacity service refuses fails once, as <c>CapacityRejected</c>, with the refusal's own words, and
+    ///     never reaches the runner. Only the operator can free room, so a re-attempt would repeat the same refusal.
     /// </summary>
+    /// <remarks>The refusal carries no reservation, which is why returning before the outermost finally has anything to release is safe.</remarks>
     [Test]
-    public async Task ANodeTheCapacityServiceRefuses_FailsWithItsReasonAndNeverReachesTheRunner()
+    public async Task ANodeTheCapacityServiceRefuses_FailsOnceWithItsReasonAndNeverReachesTheRunner()
     {
         const string instructions = "capacity-refuses-the-node";
 
@@ -534,8 +552,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string model = $"graph-local-{GraphWorkflowModels.OvercommittedMarker}";
         await using var harness = new GraphWorkflowHarness(Host);
 
-        // Two attempts, for the same reason the timeout test takes two: a refusal is NodeFailed, and the retryable
-        // class only stands still on the node.retried event.
+        // Two attempts declared, so a retry WOULD happen if the class were retryable: the budget is not what stops it.
         var runId = await StartToTheAgentAsync(harness,
             Graph(instructions,
                 $$"""
@@ -546,11 +563,11 @@ public sealed class GraphWorkflowAgentExecutorTests
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.CapacityRejected, analyze.FailureClass, "a capacity refusal is its own class, never AttemptsExhausted.");
+        AssertEx.Equal(expected: 1, analyze.Attempt, "and it failed on its first attempt with budget left.");
         AssertEx.Equal(FakeGraphWorkflowCapacity.RejectionReason, analyze.Error, "a capacity refusal is already operator-facing, so the row repeats it verbatim.");
-        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId))
-            .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
-            "a node that was merely refused for room is retryable, so the run tried again.");
-        AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            "only the operator can free room, so the run never tries again.");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
             "the refusal happens before any invocation exists.");
         AssertEx.Empty(Capacity(harness).ReservationsFor(model), "a refusal hands out no reservation, so there is nothing for the finally to leak.");

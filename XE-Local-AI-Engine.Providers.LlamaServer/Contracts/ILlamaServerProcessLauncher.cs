@@ -31,6 +31,9 @@ internal interface ILlamaServerProcessHandle : IDisposable
     /// <summary><see langword="true" /> once the process has exited (crash or clean stop).</summary>
     bool HasExited { get; }
 
+    /// <summary>The process exit code once it has exited; <see langword="null" /> while running or when the OS cannot report it.</summary>
+    int? ExitCode { get; }
+
     /// <summary>
     ///     Waits up to <paramref name="timeout" /> for the contained process to exit. Returns <see langword="false" />
     ///     only when the bound elapses; caller cancellation is propagated.

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -135,6 +136,26 @@ public sealed class GraphWorkflowRetryTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, (await harness.ReadNodeRunAsync(runId, "work")).Attempt);
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
+    }
+
+    /// <summary>A capacity refusal repeats until the operator frees room, so the retry stage leaves it failed.</summary>
+    [Test]
+    public async Task ACapacityRefusal_IsNeverRetried()
+    {
+        AssertEx.False(GraphWorkflowFailures.IsRetryable(GraphWorkflowFailureClass.CapacityRejected));
+        AssertEx.Equal(GraphWorkflowFailureClass.CapacityRejected, GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.CapacityRejected, attempt: 3, maxAttempts: 3),
+            "a non-retryable class keeps its name on the last attempt, never AttemptsExhausted.");
+
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.CapacityRejected);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        var work = await harness.ReadNodeRunAsync(runId, "work");
+        AssertEx.Equal(expected: 1, work.Attempt);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, work.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.CapacityRejected, work.FailureClass);
         AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 

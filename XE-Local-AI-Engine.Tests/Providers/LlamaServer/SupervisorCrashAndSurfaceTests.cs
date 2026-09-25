@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -35,6 +37,48 @@ public sealed class SupervisorCrashAndSurfaceTests
 
         _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task Admission_TrackedProcessExitedOutsideTheSupervisor_PrunesIt_AndLogsAWarningNamingTheModel()
+    {
+        // REGRESSION (tester round 3): a child killed from outside the node (another checkout's stale reaper) was pruned
+        // at the next admission with no log line, so the model vanished from "loaded models" without a trace.
+        var launcher = new FakeProcessLauncher();
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(launcher, logger: logger);
+        _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var handle = launcher.Handles.Single();
+        handle.SimulateExit(exitCode: 137);
+
+        // A different model's admission runs the prune; model-a's own re-ensure would take the respawn path instead.
+        _ = await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+
+        var warning = logger.Entries.Single(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("exited outside the supervisor's control", StringComparison.Ordinal));
+        AssertEx.Contains(warning.Message, "model-a", StringComparison.Ordinal);
+        AssertEx.Contains(warning.Message, $"pid {handle.ProcessId}", StringComparison.Ordinal);
+        AssertEx.Contains(warning.Message, "exit code 137", StringComparison.Ordinal);
+        AssertEx.True(handle.WasDisposed, "The pruned handle must still be torn down.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_DeadModelReRequested_RespawnsIt_AndLogsTheExitWarningExactlyOnce()
+    {
+        // The same-key respawn detaches the corpse through RemoveProcessAsync, not the admission prune, and must leave the same single trace.
+        var launcher = new FakeProcessLauncher();
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(launcher, logger: logger);
+        _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var handle = launcher.Handles.Single();
+        handle.SimulateExit(exitCode: 137);
+
+        _ = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        var warnings = logger.Entries.Where(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("exited outside the supervisor's control", StringComparison.Ordinal)).ToList();
+        AssertEx.Equal(expected: 1, warnings.Count);
+        AssertEx.Contains(warnings[0].Message, "model-a", StringComparison.Ordinal);
+        AssertEx.Contains(warnings[0].Message, $"pid {handle.ProcessId}", StringComparison.Ordinal);
     }
 
     [Test]

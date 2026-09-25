@@ -38,6 +38,8 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
 
     public bool HasExited => SafeHasExited(_process);
 
+    public int? ExitCode => SafeExitCode(_process);
+
     public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
     {
         if (SafeHasExited(_process))
@@ -174,6 +176,19 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         catch (InvalidOperationException)
         {
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            // No associated process, or the handle is already disposed: the code is unknown.
+            return null;
         }
     }
 

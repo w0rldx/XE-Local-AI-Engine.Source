@@ -148,6 +148,7 @@ export const graphWorkflowFailureClasses = [
 	"ValidationFailed",
 	"Cancelled",
 	"Interrupted",
+	"CapacityRejected",
 ] as const;
 export type GraphWorkflowFailureClass = (typeof graphWorkflowFailureClasses)[number];
 

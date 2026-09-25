@@ -282,6 +282,8 @@ public sealed class SupervisorGateScopeTests
 
         public bool HasExited => Volatile.Read(ref _exited) != 0;
 
+        public int? ExitCode => null;
+
         public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
         {
             try

@@ -94,6 +94,7 @@ public sealed class LiveTranscriptionSegmenter
     /// </remarks>
     private readonly List<byte> _tail = [];
 
+    private readonly TimeProvider _timeProvider;
     private readonly bool _translate;
     private readonly IWhisperTranscriber _transcriber;
     private long _audioEndMs;
@@ -114,12 +115,14 @@ public sealed class LiveTranscriptionSegmenter
     /// <param name="languageCode">A forced language, or <see langword="null" /> to let the model detect one.</param>
     /// <param name="translate">Whether the model translates to English.</param>
     /// <param name="settings">The window, guard and tick sizes.</param>
+    /// <param name="timeProvider">Measures the inference budget a daemon-death retry shares with its first attempt.</param>
     public LiveTranscriptionSegmenter(IWhisperTranscriber transcriber,
         TranscriptChannel channel,
         string modelId,
         string? languageCode,
         bool translate,
-        LiveSegmenterSettings settings)
+        LiveSegmenterSettings settings,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(transcriber);
         ArgumentNullException.ThrowIfNull(settings);
@@ -135,6 +138,7 @@ public sealed class LiveTranscriptionSegmenter
         _detectLanguage = _languageCode is null;
         _translate = translate;
         _settings = settings;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _maxWindowMs = settings.MaxWindowSeconds * 1_000;
         _nextTickMs = settings.TickMs;
     }
@@ -262,6 +266,7 @@ public sealed class LiveTranscriptionSegmenter
         var wav = WavPcm16.Wrap(CollectionsMarshal.AsSpan(_tail)[..(int)(uncommittedMs * WavPcm16.BytesPerMillisecond)]);
 
         WhisperTranscriptionResult result;
+        var startedAt = _timeProvider.GetTimestamp();
         try
         {
             result = await TranscribeWindowAsync(wav, cancellationToken);
@@ -270,7 +275,7 @@ public sealed class LiveTranscriptionSegmenter
         {
             // The daemon died under this window (the Windows cuBLAS crash). The supervisor already tore it down, so this
             // request respawns it, on CPU after a CUDA death. Nothing was freed, so it is the same span; a second death propagates.
-            result = await TranscribeWindowAsync(wav, cancellationToken);
+            result = await RetryWithinBudgetAsync(wav, _timeProvider.GetElapsedTime(startedAt), cancellationToken);
         }
 
         string? learnedLanguage = null;
@@ -284,6 +289,37 @@ public sealed class LiveTranscriptionSegmenter
 
         Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
         return learnedLanguage;
+    }
+
+    /// <summary>Resubmits a window under what is left of the one inference budget its first attempt started.</summary>
+    /// <remarks>
+    ///     A fresh budget per attempt would let one window wait twice the inference timeout. Running out surfaces exactly
+    ///     as the first attempt's own timeout does, never as a cancellation or a second "process exited".
+    /// </remarks>
+    private async Task<WhisperTranscriptionResult> RetryWithinBudgetAsync(byte[] wav, TimeSpan spent, CancellationToken cancellationToken)
+    {
+        var budget = _transcriber.InferenceTimeout;
+        if (budget == Timeout.InfiniteTimeSpan)
+        {
+            return await TranscribeWindowAsync(wav, cancellationToken);
+        }
+
+        var remaining = budget - spent;
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage);
+        }
+
+        using var deadline = new CancellationTokenSource(remaining, _timeProvider);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        try
+        {
+            return await TranscribeWindowAsync(wav, linked.Token);
+        }
+        catch (OperationCanceledException exception) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage, exception);
+        }
     }
 
     private async Task<WhisperTranscriptionResult> TranscribeWindowAsync(byte[] wav, CancellationToken cancellationToken)

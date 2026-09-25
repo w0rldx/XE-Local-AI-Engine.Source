@@ -104,7 +104,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                                        options.ModelId,
                                        options.Language,
                                        options.Translate,
-                                       options.Settings),
+                                       options.Settings,
+                                       _timeProvider),
                                    CancellationTokenSource.CreateLinkedTokenSource(abort.Token)));
 
         var session = new LiveSession

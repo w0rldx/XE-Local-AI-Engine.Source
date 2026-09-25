@@ -1089,6 +1089,18 @@ nothing. **Authority:** `TranscriptionSessionStoreTests.ReadRawSegmentTextAsync`
 
 ---
 
+### PROPOSED (awaiting operator approval): a path-scoped `git commit -- <paths>` silently skips an UNTRACKED file among those paths
+
+**Rule:** `git commit -- <path>...` commits the *tracked* changes under those paths and ignores an untracked file even
+when it is named explicitly; the commit succeeds, so nothing warns. In a shared worktree, where the shared index must
+never be staged (`AGENTS.md`), commit new files through the private-index recipe (`GIT_INDEX_FILE` + `read-tree` /
+`update-ref`) or check `git status --short -- <paths>` for `??` lines before and after the commit. **Failure prevented:**
+a "complete" workstream commit that lacks its new test file or new source file; the next gate or review finds the
+file missing and a fix-up commit follows. Tester round 3 paid two such fix-up commits on 2026-09-25. **Authority:** `git help commit` ("only from the named paths
+... already known to Git"); `Plans/tester-round3-2026-09-25/progress/REPORT.md`.
+
+---
+
 ## 2. Dev environment & local runtime
 
 ### The dev environment has a CUDA GPU — probe it, never infer it
@@ -1555,6 +1567,22 @@ Development surveys know the host workspace and call managed `WorkspaceFileScann
 ### PROPOSED (awaiting operator approval): an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
 
 **Rule:** when a live round isolates a host by pointing `XDG_DATA_HOME` at a scratch directory, export that tool-version manager's own data-directory variable at the real location alongside it, for *every* command of the round — `dev-start.sh`, `dev-status.sh`, `aspire logs`, `dev-stop.sh` — not just the one that starts the host. A per-user tool-version manager whose shims resolve installs from `XDG_DATA_HOME` finds an empty scratch directory instead of its toolchain, so the `aspire`/`python3` shim on `PATH` fails (and may silently re-install an interpreter into the scratch directory). **Failure prevented:** `dev_aspire_ps_json` in `scripts/dev-aspire-common.sh` runs `aspire ps` with `2>/dev/null`, so the shim's own error is discarded; the empty output fails the JSON parse, `dev_matching_app_json` returns 4, and `scripts/dev-start.sh` prints only `Could not query Aspire state safely; refusing to launch a possibly duplicate instance` — a refusal that names neither the shim nor the variable, and reads as a stale-AppHost problem. Diagnose it by running the state query **without** discarding stderr. **Authority:** `dev_aspire_ps_json` and `dev_matching_app_json` in `scripts/dev-aspire-common.sh`, and the `query_status -ne 3` branch in `scripts/dev-start.sh`; the W1 follow-up round, 2026-09-19.
+
+---
+
+### PROPOSED (awaiting operator approval): two hosts on one box must never share a llama-server BINARY PATH, or one host's reaper kills the other's models
+
+**Rule:** for a live round next to another running host, give the round its own copy of the llama-server build
+(e.g. `.tmp/<round>-data/llama-bin/`) and point the BYO override (`XE_LLAMACPP_SERVER_PATH`) there; never reuse another
+host's managed `source-build/active/build/bin/llama-server`. `StaleLlamaServerReaper` decides ownership by
+executable-path containment (a `llama-server` process whose binary lives under *my* managed directory is *my* orphan),
+not by process ancestry, so when host A restarts it reaps every llama-server launched from that path, including host
+B's resident model. **Failure prevented:** the 2026-09-25 tester-round-3 live host lost its resident 7B mid-round when
+the live-QA lab host restarted ("Reaping stale llama-server orphan (pid ...)" in the *lab's* log); the losing host
+logged nothing (the prune path was silent until the follow-up added a Warning), the next run spawned the node default,
+and the model-reuse evidence was void. Diagnose by grepping the *other* host's log for "Reaping stale". **Authority:**
+`StaleLlamaServerReaper` (`Providers.LlamaServer`), `LlamaServerIdleReaper.PruneExitedProcesses`;
+`Plans/tester-round3-2026-09-25/progress/live/ROUND.md`; memory `stale-reaper-kills-other-hosts-sharing-binary`.
 
 ---
 

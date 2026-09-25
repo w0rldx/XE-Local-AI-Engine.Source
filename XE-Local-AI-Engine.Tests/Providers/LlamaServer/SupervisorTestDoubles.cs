@@ -83,6 +83,8 @@ internal sealed class FakeProcessHandle : ILlamaServerProcessHandle
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
+    public int? ExitCode { get; private set; }
+
     public void TreeKill()
     {
         // Runs BEFORE the exit is signalled, so a test can hold a teardown open and observe the supervisor's state
@@ -114,8 +116,9 @@ internal sealed class FakeProcessHandle : ILlamaServerProcessHandle
     }
 
     /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
-    public void SimulateExit()
+    public void SimulateExit(int? exitCode = null)
     {
+        ExitCode = exitCode;
         Interlocked.Exchange(ref _exited, value: 1);
         _exitSignal.TrySetResult();
     }

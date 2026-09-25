@@ -5982,7 +5982,8 @@
 				"GateRejected": "An einer Pause abgelehnt",
 				"ValidationFailed": "Der Graph wurde abgelehnt",
 				"Cancelled": "Abgebrochen",
-				"Interrupted": "Durch einen Neustart unterbrochen"
+				"Interrupted": "Durch einen Neustart unterbrochen",
+				"CapacityRejected": "Nicht genügend Kapazität für das Modell"
 			},
 			"eventType": {
 				"run_created": "Lauf angelegt",

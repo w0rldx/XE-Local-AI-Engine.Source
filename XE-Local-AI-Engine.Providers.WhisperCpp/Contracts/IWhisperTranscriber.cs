@@ -103,4 +103,10 @@ public interface IWhisperTranscriber
     /// </exception>
     /// <exception cref="ArgumentException">The audio stream is not seekable.</exception>
     Task<WhisperTranscriptionResult> TranscribeAsync(string modelId, WhisperTranscriptionRequest request, CancellationToken ct);
+
+    /// <summary>
+    ///     The budget one <see cref="TranscribeAsync" /> call is allowed, or <see cref="Timeout.InfiniteTimeSpan" /> when
+    ///     the implementation enforces none. A caller that retries a call spends what is left of this, not a fresh one.
+    /// </summary>
+    TimeSpan InferenceTimeout => Timeout.InfiniteTimeSpan;
 }

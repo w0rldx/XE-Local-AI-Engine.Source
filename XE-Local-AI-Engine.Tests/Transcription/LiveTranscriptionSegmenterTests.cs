@@ -299,7 +299,7 @@ public sealed class LiveTranscriptionSegmenterTests
     public async Task OtherRuntimeFailure_IsNotRetried()
     {
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
-        transcriber.FailOnce.Enqueue(new WhisperRuntimeException("The transcription did not finish within the allowed time."));
+        transcriber.FailOnce.Enqueue(new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage));
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
         _ = await PushAsync(segmenter, 0, 750, 250);
 
@@ -307,6 +307,75 @@ public sealed class LiveTranscriptionSegmenterTests
             "A timeout would double its own wait if retried.");
 
         AssertEx.Equal(1, transcriber.CallCount);
+    }
+
+    [Test]
+    public async Task DaemonDeathRetry_TimesOutAtTheFirstAttemptsDeadline_NotAFreshBudgetLater()
+    {
+        var time = new ManualTimeProvider();
+        var retryEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
+        {
+            InferenceTimeout = TimeSpan.FromMinutes(10),
+            OnCall = async (call, ct) =>
+            {
+                if (call == 1)
+                {
+                    // The first attempt spends nine of its ten minutes before the daemon dies under it.
+                    time.Advance(TimeSpan.FromMinutes(9));
+                    return;
+                }
+
+                retryEntered.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+        };
+        transcriber.FailOnce.Enqueue(DaemonExited());
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5), time);
+        _ = await PushAsync(segmenter, 0, 750, 250);
+
+        var flush = segmenter.FlushAsync(CancellationToken.None).AsTask();
+        await retryEntered.Task;
+
+        time.Advance(TimeSpan.FromSeconds(59));
+        AssertEx.False(flush.IsCompleted, "The retry keeps the minute the first attempt left over.");
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(async () => await flush,
+            "At the original deadline the retry is cut off, not a full timeout later.");
+
+        AssertEx.Equal(WhisperRuntimeException.InferenceTimedOutMessage, exception.Message, "It fails as the first attempt's own timeout would.");
+        AssertEx.False(exception.ProcessExited, "A spent budget is not reported as a second daemon death.");
+        AssertEx.Equal(2, transcriber.CallCount);
+        AssertEx.Equal(0L, segmenter.CommittedEndMs, "Nothing was committed past the failed span.");
+    }
+
+    [Test]
+    public async Task DaemonDeathRetry_WithinTheRemainingBudget_Commits()
+    {
+        var time = new ManualTimeProvider();
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
+        {
+            InferenceTimeout = TimeSpan.FromMinutes(10),
+            OnCall = (call, _) =>
+            {
+                if (call == 1)
+                {
+                    time.Advance(TimeSpan.FromMinutes(9));
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+        transcriber.FailOnce.Enqueue(DaemonExited());
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5), time);
+        _ = await PushAsync(segmenter, 0, 750, 250);
+
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
+
+        AssertEx.Equal(2, transcriber.CallCount);
+        AssertEx.Equal(1, flush.Commits.Count, "A retry that answers inside the remaining budget reaches the transcript.");
+        AssertEx.Equal(0, time.ArmedTimerCount, "The retry's deadline is disarmed once it answered.");
     }
 
     private static WhisperRuntimeException DaemonExited() =>
@@ -649,8 +718,8 @@ public sealed class LiveTranscriptionSegmenterTests
             TickMs = tickMs
         };
 
-    private static LiveTranscriptionSegmenter Create(IWhisperTranscriber transcriber, LiveSegmenterSettings settings) =>
-        new(transcriber, TranscriptChannel.Mono, ModelId, languageCode: null, translate: false, settings);
+    private static LiveTranscriptionSegmenter Create(IWhisperTranscriber transcriber, LiveSegmenterSettings settings, TimeProvider? timeProvider = null) =>
+        new(transcriber, TranscriptChannel.Mono, ModelId, languageCode: null, translate: false, settings, timeProvider);
 
     /// <summary>One segment covering the whole submitted window, which is what a speaker talking without pause gives.</summary>
     private static IReadOnlyList<WhisperTranscriptSegment> ContinuousSpeech(SubmittedWindow window) =>
@@ -745,6 +814,12 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
     /// <summary>The code every answer reports, or <see langword="null" /> to report none.</summary>
     public string? DetectedLanguageCode { get; set; }
 
+    /// <inheritdoc />
+    public TimeSpan InferenceTimeout { get; init; } = Timeout.InfiniteTimeSpan;
+
+    /// <summary>Runs on every call with its 1-based number and token, after the window is recorded and before any answer or failure.</summary>
+    public Func<int, CancellationToken, Task>? OnCall { get; init; }
+
     public IReadOnlyList<SubmittedWindow> Windows => _windows;
 
     /// <summary>Whether each call asked for the language probabilities, in call order.</summary>
@@ -766,6 +841,11 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
         var window = LivePcm.Decode(WavPayload.Read(buffer.ToArray()));
         _windows.Add(window);
         _detectLanguageFlags.Add(request.DetectLanguage);
+
+        if (OnCall is not null)
+        {
+            await OnCall(_windows.Count, ct);
+        }
 
         if (FailOnce.TryDequeue(out var once))
         {

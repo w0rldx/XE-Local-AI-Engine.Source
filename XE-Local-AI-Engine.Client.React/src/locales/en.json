@@ -5982,7 +5982,8 @@
 				"GateRejected": "Rejected at a pause",
 				"ValidationFailed": "The graph was refused",
 				"Cancelled": "Cancelled",
-				"Interrupted": "Interrupted by a restart"
+				"Interrupted": "Interrupted by a restart",
+				"CapacityRejected": "Insufficient capacity for the model"
 			},
 			"eventType": {
 				"run_created": "Run created",

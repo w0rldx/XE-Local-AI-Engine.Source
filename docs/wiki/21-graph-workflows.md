@@ -363,7 +363,7 @@ pause as busy — the one thing the two statuses exist to tell apart.
 
 `GraphWorkflowFailureClass` records why: `None` — the default, carried by everything that has not failed — then
 `NodeFailed`, `Timeout`, `AttemptsExhausted`, `OutputTooLarge`, `GateRejected`, `ValidationFailed`, `Cancelled`,
-`Interrupted`. `GateRejected` narrows where a reader should look; it
+`Interrupted`, `CapacityRejected`. `GateRejected` narrows where a reader should look; it
 is not a causal proof, because a rejection can route into a branch that then runs perfectly well.
 
 ### 3.3 Node-run statuses and admission
@@ -386,7 +386,8 @@ Retry is **in place**: `Failed → Pending` is the one edge out of a terminal no
 the node's `maxAttempts` and the run's `MaxTotalAttempts` goes back to `Pending` with the attempt incremented, in one
 atomic write, and the `node.retried` event carries the failure the row cleared. Only `NodeFailed`, `Timeout` and
 `Interrupted` are retryable (`GraphWorkflowFailures.IsRetryable`) — an over-cap document, a refused gate, a cancelled
-run and a graph that no longer declares a node all produce the byte-identical answer next time.
+run, a graph that no longer declares a node and a capacity refusal (`CapacityRejected`: only the operator ejecting a
+model or picking a loaded one changes it) all produce the byte-identical answer next time.
 
 A consequence worth stating plainly: a node declaring `maxAttempts: 1` reports `AttemptsExhausted` on its only
 attempt, because the node's budget is genuinely why nothing will try again. What actually went wrong survives on the

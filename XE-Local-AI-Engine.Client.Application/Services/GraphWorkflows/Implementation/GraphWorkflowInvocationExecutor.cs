@@ -429,7 +429,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
-                return Failure(GraphWorkflowFailureClass.NodeFailed, decision.Reason);
+                return Failure(GraphWorkflowFailureClass.CapacityRejected, decision.Reason);
             }
 
             reservation = decision.Reservation;
@@ -559,7 +559,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
-                return Failure(GraphWorkflowFailureClass.NodeFailed, decision.Reason);
+                return Failure(GraphWorkflowFailureClass.CapacityRejected, decision.Reason);
             }
 
             reservation = decision.Reservation;
