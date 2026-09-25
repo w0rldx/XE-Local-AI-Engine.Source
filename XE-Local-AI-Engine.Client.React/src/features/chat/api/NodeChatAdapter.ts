@@ -7,6 +7,7 @@ import {
 	createNodeChatConversation,
 	deleteNodeChatConversation,
 	getNodeChatConversation,
+	getNodeChatConversationContextState,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
 	pinNodeChatConversation,
@@ -15,6 +16,7 @@ import {
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
+	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import {
@@ -85,6 +87,10 @@ export interface NodeChatAdapter {
 	deleteConversation(conversationId: string, purgeImmediately?: boolean, options?: RequestOptions): Promise<void>;
 	renameConversation(conversationId: string, title: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	compactConversation(conversationId: string, model?: string, options?: RequestOptions): Promise<ChatCompactionResult>;
+	getConversationContextState(
+		conversationId: string,
+		options?: RequestOptions,
+	): Promise<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse | null>;
 	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationMemoryExcluded(
@@ -210,6 +216,20 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			modelUsed: data.modelUsed ?? undefined,
 			usedFallbackModel: data.usedFallbackModel ?? false,
 		};
+	},
+	async getConversationContextState(conversationId, options) {
+		try {
+			const { data } = await callWithResponseValidation(
+				getNodeChatConversationContextState({ path: { conversationId }, signal: options?.signal, throwOnError: true }),
+			);
+			return data;
+		} catch (error) {
+			// An unknown (or not yet persisted) conversation has no state to show: null renders the empty panel.
+			if (error instanceof ApiError && error.statusCode === 404) {
+				return null;
+			}
+			throw error;
+		}
 	},
 	async setConversationPinned(conversationId, isPinned, options) {
 		const { data } = await callWithResponseValidation(

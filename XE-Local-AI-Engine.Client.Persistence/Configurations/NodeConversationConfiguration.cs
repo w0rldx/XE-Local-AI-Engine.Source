@@ -74,6 +74,16 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
         builder.Property(entity => entity.CompactionSummaryUpdatedAtUtc)
                .HasColumnName("compaction_summary_updated_at_utc");
 
+        // Distilled conversation state (encrypted JSON BLOB) + its anchor watermark + timestamp; same shape as above.
+        builder.Property(entity => entity.ConversationState)
+               .HasColumnName("conversation_state");
+
+        builder.Property(entity => entity.ConversationStateCoversToSequence)
+               .HasColumnName("conversation_state_covers_to_sequence");
+
+        builder.Property(entity => entity.ConversationStateUpdatedAtUtc)
+               .HasColumnName("conversation_state_updated_at_utc");
+
         // The conversation-list path, both variants, ordered by is_pinned then last_seen_utc descending under a limit. `archived` sorts LAST on purpose, so both
         // variants take the ordered reverse scan: docs/wiki/08-data-and-persistence.md ("The conversation-list index: why `archived` sorts last").
         builder.HasIndex(entity => new

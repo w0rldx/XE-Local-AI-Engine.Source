@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 internal static class AddNodeChatExtensions
@@ -42,6 +43,8 @@ internal static class AddNodeChatExtensions
                .ValidateDataAnnotations()
                .ValidateOnStart();
         builder.Services.AddSingleton<IConversationSummarizer, ConversationSummarizer>();
+        builder.Services.AddSingleton<IConversationStateDistiller, ConversationStateDistiller>();
+        builder.Services.AddScoped<IConversationStateDistillationService, ConversationStateDistillationService>();
         builder.Services.AddScoped<IConversationCompactionService, ConversationCompactionService>();
 
         // Automatic post-turn compaction: the chat hooks enqueue onto one bounded queue that a single background worker drains,

@@ -251,13 +251,14 @@ internal sealed class NodeChatVariantBranchService
                         await OpenIfNeededAsync(insertCommand.Connection, token);
                         await insertCommand.ExecuteNonQueryAsync(token);
 
-                        // Minting a sibling shifts the default selected path, so any compaction synopsis is cleared in
-                        // the same transaction. simplified: blunt clear, a covered-span hash would invalidate less often.
+                        // Minting a sibling shifts the default selected path, so any compaction synopsis and distilled
+                        // state are cleared in the same transaction. simplified: blunt clear, a covered-span hash would invalidate less often.
                         await using var clearSummaryCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         clearSummaryCommand.Transaction = dbTransaction;
                         clearSummaryCommand.CommandText =
-                            "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id;";
+                            "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL, conversation_state = NULL, conversation_state_covers_to_sequence = NULL, conversation_state_updated_at_utc = $cleared_at WHERE conversation_id = $conversation_id;";
                         AddParameter(clearSummaryCommand, "$conversation_id", request.ConversationId);
+                        AddParameter(clearSummaryCommand, "$cleared_at", request.CreatedAtUtc);
                         await clearSummaryCommand.ExecuteNonQueryAsync(token);
 
                         await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token);

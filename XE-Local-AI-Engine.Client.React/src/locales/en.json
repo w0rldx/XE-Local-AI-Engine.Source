@@ -1252,6 +1252,31 @@
 				"compactedLocalFallback": "Compacted {{count}} older message(s) locally with {{model}} to keep your chat on-device. Your originals are kept.",
 				"aLocalModel": "a local model"
 			},
+			"contextState": {
+				"tooltip": "Show what the conversation remembers",
+				"aria": "Show conversation context state",
+				"title": "Conversation context",
+				"error": "Couldn't load the context state.",
+				"empty": "Nothing distilled yet. Compact the conversation to build its context state.",
+				"notCompacted": "Not compacted yet",
+				"stateCoverage": "State covers up to sequence {{sequence}}, updated {{updatedAt}}",
+				"synopsisCoverage": "Synopsis covers up to sequence {{sequence}}, updated {{updatedAt}}",
+				"inactive": "Superseded and retired ({{count}})",
+				"synopsis": "Synopsis",
+				"sources": "From sequences {{sequences}}",
+				"replacedBy": "replaced by {{id}}",
+				"retiredAt": "retired at sequence {{sequence}}",
+				"categories": {
+					"Goal": "Goals",
+					"Correction": "Corrections",
+					"OpenQuestion": "Open questions",
+					"Decision": "Decisions",
+					"Constraint": "Constraints",
+					"Fact": "Facts",
+					"ToolOutcome": "Tool outcomes",
+					"CompletedWork": "Completed work"
+				}
+			},
 			"remoteImage": {
 				"load": "Load remote image"
 			},

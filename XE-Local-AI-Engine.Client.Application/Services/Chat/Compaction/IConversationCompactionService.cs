@@ -19,7 +19,13 @@ public enum ConversationCompactionOutcome
     SummarizerReturnedNothing,
 
     /// <summary>The operation exceeded the node's message-request budget; the previous synopsis was left untouched.</summary>
-    TimedOut
+    TimedOut,
+
+    /// <summary>
+    ///     The state distillation that runs before the fold failed or stopped short of the cutoff, so nothing was folded:
+    ///     the synopsis never covers span the structured state does not.
+    /// </summary>
+    DistillerReturnedNothing
 }
 
 /// <summary>Outcome of a compaction attempt. Carries the new synopsis + how much it covers, so the endpoint can echo it back.</summary>
@@ -56,15 +62,14 @@ public interface IConversationCompactionService
     /// <param name="requestedModel">The model to summarize with, if it is an installed LOCAL chat model.</param>
     /// <remarks>Anything else, including a blank, degrades to a node-local default, so content stays on-machine.</remarks>
     Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
-        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken);
 
-    /// <summary>
-    ///     The same compaction with an explicit keep window.
-    /// </summary>
+    /// <summary>The same compaction with an explicit keep window and an optional distillation step.</summary>
     /// <param name="recentMessagesToKeepVerbatim">
     ///     Overrides <see cref="ConversationCompactionOptions.RecentMessagesToKeepVerbatim" /> for this call only,
     ///     clamped to the same floor of 2; null keeps the configured window.
     /// </param>
+    /// <param name="distill">True distils the state up to the fold cutoff first; work sessions pass false (their state is rebuilt per step).</param>
     /// <remarks>
     ///     A caller that knows its conversation does not depend on verbatim history can fold down to the last
     ///     exchange. A work-session step is that caller: its state block is rebuilt from the database every step, so
@@ -73,5 +78,6 @@ public interface IConversationCompactionService
     Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
+        bool distill = true,
         CancellationToken cancellationToken = default);
 }

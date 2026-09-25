@@ -336,7 +336,8 @@ synopsis does not already cover, summarizes them, and persists the result on the
 (`CompactionSummary`, `CompactionSummaryCoversToSequence`, `CompactionSummaryUpdatedAtUtc` on
 `NodeConversation` — the summary column is encrypted like every other chat payload). **The original messages are
 never deleted; only what is *sent* on later turns changes.** The outcome is typed
-(`Compacted`, `NothingToCompact`, `NoLocalModel`, `SummarizerReturnedNothing`, `TimedOut`, `ConversationNotFound`).
+(`Compacted`, `NothingToCompact`, `NoLocalModel`, `SummarizerReturnedNothing`, `DistillerReturnedNothing`,
+`TimedOut`, `ConversationNotFound`).
 
 After loading node settings, `ConversationCompactionService` applies the existing
 `MaxMessageRequestTimeoutSeconds` as one cancellation deadline across history/model resolution and every
@@ -372,6 +373,130 @@ so a long conversation folds in few passes instead of many lossy ones). The per-
 system prompt plus the JSON frame plus one whole synopsis, and that floor is validated at startup: a small budget paired
 with a small cap that used to bind now **refuses to start the host** rather than failing every fold at run time. The
 shipped defaults clear it with room to spare.
+
+### Automatic compaction
+
+Compaction also runs without an operator click. `ChatCompactionTriggerHook` builds a post-turn hook that composes
+with the memory-extraction hook (each isolated — a hook's exception is logged by type name only and never reaches
+the pump). On a **Completed** terminal only, a cancelled or failed turn grows nothing, it enqueues a `Distill` job
+and a `Compact` job (`ConversationMaintenanceKind`) into `ConversationMaintenanceDispatcher` /
+`ConversationMaintenanceWorker` (`Services/Chat/Compaction/`) — the same bounded-`Channel`-plus-single-reader shape
+as `MemoryExtractionDispatcher`/`Worker`. The queue coalesces per `(conversationId, kind)`: a job already queued or
+running for that pair absorbs a second trigger as a no-op, and a full queue drops the newest with a warning rather
+than blocking the chat pump. On shutdown the worker drains what is buffered within
+`MaintenanceShutdownDrainTimeoutSeconds`, then cancels the running job and drops the rest; a dropped job simply
+runs at the next trigger. `Distill` is queued ahead of `Compact` for the same conversation: the single worker runs
+jobs FIFO, so by the time `Compact` is checked the state has already caught up and reconciled compaction (below)
+has less left to distil.
+
+The worker decides whether `Compact` is actually due: it projects the next turn's replayed history with
+`ConversationStepContextBound.Project` — the same projection a work-session's own bound uses — and compares it
+against `AutoCompactFraction` × (the turn's `ContextCapacityTokens` − `ReservedOutputTokens`), with the token
+estimator's observed correction applied to the threshold the same way `ConversationStepContextBound` applies it.
+Below the threshold, nothing runs. Automatic compaction folds on the node's default local model, like a
+work-session checkpoint, so it never gates the answer that just streamed.
+
+**Calibrated fold budget.** Both `ConversationSummarizer.ResolveRequestBudget` and the distiller's own copy of the
+same arithmetic (`ConversationStateDistiller.ResolveRequestBudget`) size a call's character budget as
+`min(MaxInputCharsPerSummarizationCall, effectiveContextTokens × divisor × 0.6)`, where the divisor comes from
+`ITokenEstimatorCalibrationStore.ResolveDivisor(model)` and the window is read back from `LocalRuntimeWarmer`
+against an **already-resident** llama.cpp server — resolving it never triggers a model load. An unknown window (no
+server currently warm for that model) keeps `MaxInputCharsPerSummarizationCall` as the ceiling. So the option reads
+as a ceiling, not the request size: a resident model with a smaller window folds in smaller, cheaper calls
+automatically.
+
+### Conversation state (distillation)
+
+Alongside the prose synopsis, a completed turn can also be distilled into a small structured **state**: short,
+durable statements the conversation may still need after the turns that produced them have left the sent window.
+`ConversationStateDocument` (`Services/Chat/Compaction/State/`) holds a flat list of `ConversationStateEntry`
+records, each with a short stable id (`e17`, minted by `ConversationStateReducer` and never reused even once its
+entry is dropped), a fixed `ConversationStateCategory` (`Goal`, `Decision`, `Constraint`, `Fact`, `Correction`,
+`OpenQuestion`, `ToolOutcome`, `CompletedWork`), a value, the anchor sequences it was distilled from, and
+provenance: `SupersededById` when a later statement replaced it, or `RetiredAtSequence` when it was dropped without
+a replacement (a lifted constraint, an abandoned goal, a resolved open question). An entry is never edited in
+place — a correction keeps both the old and the new value visible until the budget below drops the superseded one.
+
+**Delta, not rewrite.** `IConversationStateDistiller.DistillAsync` runs one forced-JSON call on a node-local model
+at temperature 0 (`ConversationStateDistiller`) over the current live state plus the completed messages since the
+state's watermark — assistant messages carry a compact rendering of their tool calls (name, a ≤400-character
+argument excerpt, a ≤400-character result excerpt) so `ToolOutcome` entries can be minted — and returns a
+`ConversationStateDelta`: entries to add (each optionally superseding existing ids), retirements, and resolved
+open-question ids. The model never rewrites the whole document; `ConversationStateReducer.Apply` is pure code that
+assigns ids, links supersessions, and enforces the budget (`MaxStateEntries`, `MaxStateChars`): it drops
+superseded/retired entries first, then the oldest `Fact`/`ToolOutcome`/`CompletedWork`, and never a live
+`Goal`/`Decision`/`Constraint`/`Correction`/`OpenQuestion` unless those alone exceed the cap.
+`ConversationStateDeltaParser` reads the model's reply tolerantly (a code fence, mixed category casing, missing
+arrays); an item it cannot read is dropped rather than failing the whole delta.
+
+**When it runs.** `ConversationMaintenanceWorker`'s `Distill` handling fires when the completed messages after
+`ConversationStateCoversToSequence` reach `DistillEveryMessages` **or** their estimated tokens reach
+`DistillEveryTokens`, whichever comes first — an OR, so a burst of short tool-heavy messages distils on count even
+below the token threshold.
+
+**Reconciled with compaction.** A manual or automatic compaction first calls
+`IConversationStateDistillationService.DistillPendingAsync` up to its own fold cutoff, under compaction's own
+deadline rather than the distiller's independent schedule, so the state is guaranteed to cover everything the
+synopsis is about to fold before the fold itself runs. A distillation call that reports `DistillerReturnedNothing`
+or times out before reaching the cutoff aborts the fold with outcome `DistillerReturnedNothing`: coverage never
+advances over a span the state has not processed. The summarizer is then told what the state already holds
+(`ConversationSummarizerInput.AlreadyCaptured`, fit to the same per-call budget) so the synopsis it writes carries
+narrative, not a restatement of facts already in the state. Work-session call sites (`ConversationStepContextBound`,
+`WorkSessionCheckpointComposer`) pass `distill: false` on their `CompactAsync` call, so a work-session step's own
+compaction cost is unchanged.
+
+**Injection.** `CompactionContextResolver.Resolve` renders the live state (`ConversationStateRenderer.RenderForContext`,
+grouped by category — Goals, Corrections, Open questions, Decisions, Constraints, Facts, Tool outcomes, Completed
+work, in that order, superseded/retired entries omitted) into the same synthetic
+`[Summary of the earlier conversation, …]` user message as the synopsis, state block first, **only once a synopsis
+exists** — before the first compaction the raw history is still sent verbatim and a state block would just repeat
+it. Both the state block and the synopsis are fenced as untrusted data with the same guidance never to follow
+instructions found inside them.
+
+**Privacy and scope.** Distillation is node-local only, exactly like the summarizer: `ConversationStateDistiller`
+resolves an installed local model through `ILocalModelProviderResolver` and never a cloud client; with none
+installed, distillation reports `NoLocalModel` and the turn is otherwise unaffected. A `MemoryExcluded`
+conversation is still distilled — memory exclusion governs the cross-conversation adaptive-memory extraction, not
+what a single conversation keeps of itself, so its own state survives independently of that flag.
+`ConversationMaintenanceWorker` runs one job at a time regardless of kind, because a fold and a distillation call
+both take the node's single llama-server inference slot; `Distill` and `Compact` therefore queue rather than run
+concurrently.
+
+**Persistence.** The state lives on `NodeConversation.ConversationState` (encrypted, AAD `conversation_state`)
+alongside `ConversationStateCoversToSequence` — an anchor-space watermark in the same space as
+`CompactionSummaryCoversToSequence` — and `ConversationStateUpdatedAtUtc`, added by migration
+`AddConversationState`. Selecting a different message path or minting a regenerate variant clears the state
+together with the synopsis in the same statement, because a path change can change which turns are even live. The
+clear nulls the state and its watermark but STAMPS `ConversationStateUpdatedAtUtc`: every distillation write is a
+compare-and-set on the stamp it last saw (`NodeChatSetConversationStateRequest.GuardUnchanged`), so a delta the model
+was still producing when the path changed is discarded (`ConversationStateDistillationStatus.Superseded`) instead of
+restoring state from the abandoned path. See [Data Model & Persistence](08-data-and-persistence.md).
+
+**Reading it back.** `GET chat/conversations/{conversationId}/context-state`
+(`LocalApiRoutes.LocalChat.ConversationContextState`,
+`GetNodeChatConversationContextStateEndpoint`, operator-policy like the compact endpoint) returns every entry
+(including superseded/retired ones, so the UI can show what a correction replaced), both watermarks, and both
+timestamps. `ContextStatePanel`, a read-only Mantine drawer opened beside `CompactButton` in
+`ChatComposerToolbar`, groups the entries by category, marks superseded/retired ones, and shows the synopsis text
+alongside the coverage the two watermarks report.
+
+Configuration (`Agent:ConversationCompaction`), current defaults:
+
+| Option | Default | What it controls |
+|---|---|---|
+| `AutoCompactEnabled` | `true` | Kill switch for the post-turn automatic `Compact` trigger |
+| `AutoCompactFraction` | `0.75` | Share of the turn's usable window (capacity − reserved output) the projected next-turn history may fill before auto-compaction queues |
+| `MaintenanceQueueCapacity` | `64` | Bound on queued `Compact`/`Distill` jobs; a full queue drops the newest with a warning |
+| `MaintenanceShutdownDrainTimeoutSeconds` | `10` | How long shutdown waits for queued/running jobs before cancelling them |
+| `DistillEnabled` | `true` | Kill switch for both the adaptive `Distill` trigger and the reconciled distill-before-fold step |
+| `DistillEveryTokens` | `3000` | Estimated new tokens since the state watermark that trigger a distillation pass |
+| `DistillEveryMessages` | `6` | New completed messages since the watermark that trigger a pass even below the token threshold |
+| `MaxStateEntries` | `60` | Upper bound on entries kept (live + superseded/retired); the reducer drops the least valuable first |
+| `MaxStateChars` | `6000` | Upper bound on the summed characters of all entry values |
+| `DistillerMaxOutputTokens` | `1024` | Output-token cap for one distiller call |
+
+`RecentMessagesToKeepVerbatim`, `MaxSummaryChars` and `MaxInputCharsPerSummarizationCall` (above) apply to the
+summarizer, and — for `MaxInputCharsPerSummarizationCall` — to the distiller's own budget arithmetic too.
 
 ## Chat workflow mode
 
@@ -517,7 +642,7 @@ Organized by concern:
 | Folder | Highlights |
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine), `useNodeChatConnectionReadiness` |
-| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `MessageFeedbackControl`, `LocalToolsOverview` |
+| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl`, `LocalToolsOverview` |
 | `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation`, and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping |
 | `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters/options |
 | `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions` |

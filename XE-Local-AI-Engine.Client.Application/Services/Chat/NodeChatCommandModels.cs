@@ -310,6 +310,30 @@ public sealed class NodeChatSetCompactionSummaryRequest
 }
 
 /// <summary>
+///     Writes (or clears) the conversation's distilled state JSON: encrypted state, plaintext watermark and timestamp. A
+///     null <see cref="State" /> clears state and watermark but STAMPS the timestamp, which is what a guarded writer compares.
+/// </summary>
+public sealed class NodeChatSetConversationStateRequest
+{
+    public required Guid ConversationId { get; init; }
+
+    public required string? State { get; init; }
+
+    /// <summary>
+    ///     When true the write only lands if <c>conversation_state_updated_at_utc</c> still equals
+    ///     <see cref="ExpectedUpdatedAtUtc" /> (NULL-safe); a path change or variant mint in between restamps it and the
+    ///     write returns null instead of restoring state distilled from the old path.
+    /// </summary>
+    public bool GuardUnchanged { get; init; }
+
+    public long? ExpectedUpdatedAtUtc { get; init; }
+
+    public required int? CoversToSequence { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>
 ///     Conversation branch: clones the source conversation's messages up to and including <see cref="MessageId" />
 ///     into a NEW conversation. The new conversation is Origin=Local and records
 ///     <c>branch_of_conversation_id</c> = source for provenance.

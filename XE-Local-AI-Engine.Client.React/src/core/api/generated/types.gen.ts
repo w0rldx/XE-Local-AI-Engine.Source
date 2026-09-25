@@ -3638,6 +3638,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationR
 	purgeImmediately?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = {
 	[key: string]: never;
 };
@@ -3679,6 +3683,27 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageRespon
 	requestId: string;
 	status: string;
 	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse = {
+	id: string;
+	category: string;
+	value: string;
+	sourceSequences: Array<number>;
+	supersededById?: string | null;
+	retiredAtSequence?: number | null;
+	createdAtSequence?: number;
+	isLive?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse = {
+	entries: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse>;
+	stateCoversToSequence?: number | null;
+	stateUpdatedAtUtc?: number | null;
+	synopsis?: string | null;
+	synopsisCoversToSequence?: number | null;
+	synopsisUpdatedAtUtc?: number | null;
+	nextEntryNumber?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = {
@@ -9512,6 +9537,36 @@ export type CompactNodeChatConversationResponses = {
 
 export type CompactNodeChatConversationResponse =
 	CompactNodeChatConversationResponses[keyof CompactNodeChatConversationResponses];
+
+export type GetNodeChatConversationContextStateData = {
+	body?: never;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/context-state";
+};
+
+export type GetNodeChatConversationContextStateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetNodeChatConversationContextStateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse;
+};
+
+export type GetNodeChatConversationContextStateResponse =
+	GetNodeChatConversationContextStateResponses[keyof GetNodeChatConversationContextStateResponses];
 
 export type SetNodeChatConversationMemoryExcludedData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;

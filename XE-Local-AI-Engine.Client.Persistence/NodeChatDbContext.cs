@@ -274,6 +274,34 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
+    ///     Encrypts the distilled conversation-state JSON for raw-SQL persistence, returning null when the state is null
+    ///     so the database column writes NULL.
+    /// </summary>
+    /// <remarks>AAD mirrors <see cref="EncryptConversationCompactionSummary" /> under the column name <c>conversation_state</c>.</remarks>
+    public byte[]? EncryptConversationState(string? json, Guid conversationId)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+
+        var plaintext = Encoding.UTF8.GetBytes(json);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, conversationId, conversationId, "conversation_state");
+    }
+
+    /// <summary>Decrypts a raw conversation-state blob back to its JSON. Returns null when the blob is null.</summary>
+    public string? DecryptConversationState(byte[]? encrypted, Guid conversationId)
+    {
+        if (encrypted is null)
+        {
+            return null;
+        }
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, conversationId, "conversation_state");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
     ///     Encrypts a message content string into the versioned at-rest envelope for the raw-ADO persistence path. AAD =
     ///     conversationId + messageId + "content", matching the interceptors and <see cref="DecryptMessageContent" />.
     /// </summary>

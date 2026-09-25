@@ -4,7 +4,13 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 public enum ConversationMaintenanceKind
 {
     /// <summary>Fold older turns into the synopsis when the next turn's projected history crosses the auto-compact threshold.</summary>
-    Compact
+    Compact,
+
+    /// <summary>
+    ///     Distil the completed messages after the state watermark into the structured state once enough of them
+    ///     (<c>DistillEveryMessages</c>) or enough estimated tokens (<c>DistillEveryTokens</c>) have accumulated.
+    /// </summary>
+    Distill
 }
 
 /// <summary>One queued conversation-maintenance job; content-free, the worker reloads the conversation itself.</summary>

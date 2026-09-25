@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { CompactButton } from "@/features/chat/components/CompactButton";
+import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { AgentOption, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
@@ -260,6 +261,7 @@ export function ChatComposerToolbar({
 							// driving the local runtime — disable compaction in both cases, mirroring the composer.
 							disabled={disabled || isSending}
 						/>
+						<ContextStateButton />
 					</Group>
 				) : null}
 			</Group>

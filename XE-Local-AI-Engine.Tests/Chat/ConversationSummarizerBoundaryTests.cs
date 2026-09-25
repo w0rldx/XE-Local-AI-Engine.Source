@@ -351,11 +351,11 @@ public sealed class ConversationSummarizerBoundaryTests
     public async Task SummarizeAsync_WhenAHanBatchFitsOnlyUnderRelaxedEscaping_SendsItAsOneRequest()
     {
         // 200 Han characters, at this test's maxSummaryChars of 300 (so the prompt renders "under 150 characters" and
-        // is 1,399 chars, one shorter than the 1,400 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
-        // plus the SERIALIZED request: a 63-char JSON frame plus the content. Relaxed, that is 1,399 + 63 + 200 =
-        // 1,662, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
-        // so the same batch is 1,399 + 63 + 1,200 = 2,662 and does not, and one short message would be fragmented.
-        // The 63 here is this request's own frame, NOT the FrameOverhead constant: that one probes with an emoji, whose
+        // is 1,568 chars, one shorter than the 1,569 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
+        // plus the SERIALIZED request: an 86-char JSON frame plus the content. Relaxed, that is 1,568 + 86 + 200 =
+        // 1,854, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
+        // so the same batch is 1,568 + 86 + 1,200 = 2,854 and does not, and one short message would be fragmented.
+        // The 86 here is this request's own frame, NOT the FrameOverhead constant: that one probes with an emoji, whose
         // supplementary scalar the relaxed encoder still writes as two escapes, and it is charged only by
         // GetMinimumRequestBudget. This pins that RequestFitsBudget measures the relaxed form the request carries.
         const int requestBudget = 2000;
@@ -413,6 +413,68 @@ public sealed class ConversationSummarizerBoundaryTests
             + "the clamp then tail-cuts on every later fold.");
         AssertEx.Equal(ConversationSummarizer.RenderSystemPrompt(maxSummaryChars).Length, systemPrompt.Length,
             "Sending and budget validation must charge one rendering; a drift between them invalidates every budget decision.");
+    }
+
+    [Test]
+    public async Task SummarizeAsync_SendsTheAlreadyCapturedStateWithTheDoNotRepeatRule()
+    {
+        const string captured = "Decisions:\n- [e1] use SQLite";
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars: 300);
+
+        _ = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            AlreadyCaptured = captured,
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = "we chose SQLite"
+                }
+            ],
+            ModelName = "model"
+        });
+
+        var request = client.Requests.Single();
+        using var prompt = JsonDocument.Parse(request.Single(static message => message.Role == ChatRole.User).Text);
+        AssertEx.Equal(captured, prompt.RootElement.GetProperty("alreadyCaptured").GetString());
+        var systemPrompt = request.Single(static message => message.Role == ChatRole.System).Text;
+        AssertEx.Contains(systemPrompt, "Facts listed under \"alreadyCaptured\" are kept as structured state elsewhere: do NOT repeat them.");
+    }
+
+    [Test]
+    public async Task SummarizeAsync_WhenTheCapturedStateCannotFit_TrimsWholeLinesAndKeepsEveryRequestInBudget()
+    {
+        const int maxSummaryChars = 300;
+        var requestBudget = (int)ConversationSummarizer.GetMinimumRequestBudget(maxSummaryChars) + 100;
+        var captured = string.Join('\n', Enumerable.Range(1, 10).Select(static index => $"- [e{index}] {new string('x', 33)}"));
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget, maxSummaryChars);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            AlreadyCaptured = captured,
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = new string('m', 400)
+                }
+            ],
+            ModelName = "model"
+        });
+
+        AssertEx.NotNull(result);
+        AssertEx.True(client.Requests.All(request => request.Sum(message => message.Text?.Length ?? 0) <= requestBudget),
+            "The captured state is charged against the same total request budget.");
+        using var prompt = JsonDocument.Parse(client.Requests[0].Single(static message => message.Role == ChatRole.User).Text);
+        var sent = prompt.RootElement.GetProperty("alreadyCaptured").GetString() ?? string.Empty;
+        AssertEx.True(sent.Length > 0 && sent.Length < captured.Length && captured.StartsWith(sent + "\n", StringComparison.Ordinal),
+            "An oversized state is trimmed to its leading whole lines, never cut mid-entry.");
     }
 
     private static ConversationSummarizer CreateSummarizer(CapturingChatClient client,

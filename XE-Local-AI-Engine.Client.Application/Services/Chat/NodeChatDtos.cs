@@ -66,6 +66,14 @@ public sealed record NodeChatConversationDto
     public int? CompactionSummaryCoversToSequence { get; init; }
 
     public long? CompactionSummaryUpdatedAtUtc { get; init; }
+
+    // The decrypted distilled-state JSON plus its ANCHOR watermark, same space as the synopsis. Null until distilled.
+    public string? ConversationState { get; init; }
+
+    public int? ConversationStateCoversToSequence { get; init; }
+
+    // Also stamped when a path change or variant mint clears the state, so a stale distillation write can be rejected.
+    public long? ConversationStateUpdatedAtUtc { get; init; }
 }
 
 /// <summary>

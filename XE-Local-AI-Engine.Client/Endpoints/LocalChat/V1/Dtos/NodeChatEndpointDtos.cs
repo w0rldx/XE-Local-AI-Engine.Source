@@ -108,7 +108,8 @@ public sealed class CompactNodeChatConversationRequest
 /// </summary>
 /// <remarks>
 ///     <see cref="Outcome" /> is one of the <c>ConversationCompactionOutcome</c> names ("Compacted",
-///     "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "TimedOut", "ConversationNotFound"); the remaining fields
+///     "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "DistillerReturnedNothing", "TimedOut",
+///     "ConversationNotFound"); the remaining fields
 ///     are populated only when a synopsis was produced.
 /// </remarks>
 public sealed class CompactNodeChatConversationResponse
@@ -128,6 +129,61 @@ public sealed class CompactNodeChatConversationResponse
 
     /// <summary>True when the user's selected model was a cloud/unknown model and summarization ran on a node-local model instead.</summary>
     public bool UsedFallbackModel { get; init; }
+}
+
+public sealed class GetNodeChatConversationContextStateRequest
+{
+    public Guid ConversationId { get; init; }
+}
+
+/// <summary>
+///     The conversation's distilled state and synopsis, read-only.
+/// </summary>
+/// <remarks>
+///     <see cref="Entries" /> lists every entry, superseded and retired ones included, so a correction shows both
+///     values. A missing or unreadable state reads as no entries. The compact endpoint maintains this state; its
+///     outcome "DistillerReturnedNothing" means the state was left unchanged.
+/// </remarks>
+public sealed class NodeChatConversationContextStateResponse
+{
+    public required IReadOnlyList<NodeChatConversationContextStateEntryResponse> Entries { get; init; }
+
+    /// <summary>Highest anchor sequence the state covers; null until distilled.</summary>
+    public int? StateCoversToSequence { get; init; }
+
+    public long? StateUpdatedAtUtc { get; init; }
+
+    /// <summary>The compaction synopsis text; null until compacted.</summary>
+    public string? Synopsis { get; init; }
+
+    public int? SynopsisCoversToSequence { get; init; }
+
+    public long? SynopsisUpdatedAtUtc { get; init; }
+
+    /// <summary>The number the next minted entry id takes.</summary>
+    public int NextEntryNumber { get; init; }
+}
+
+/// <summary>One distilled statement with its provenance.</summary>
+public sealed class NodeChatConversationContextStateEntryResponse
+{
+    public required string Id { get; init; }
+
+    /// <summary>A <c>ConversationStateCategory</c> name ("Goal", "Decision", "Constraint", "Fact", ...).</summary>
+    public required string Category { get; init; }
+
+    public required string Value { get; init; }
+
+    public required IReadOnlyList<int> SourceSequences { get; init; }
+
+    public string? SupersededById { get; init; }
+
+    public int? RetiredAtSequence { get; init; }
+
+    public int CreatedAtSequence { get; init; }
+
+    /// <summary>False once superseded or retired.</summary>
+    public bool IsLive { get; init; }
 }
 
 public sealed class CancelNodeChatMessageRequest

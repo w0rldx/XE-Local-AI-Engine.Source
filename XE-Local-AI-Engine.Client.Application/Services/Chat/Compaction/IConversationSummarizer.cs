@@ -13,6 +13,12 @@ public sealed class ConversationSummarizerInput
 {
     public required string? PriorSummary { get; init; }
 
+    /// <summary>
+    ///     The rendered live structured state: facts kept elsewhere that the synopsis must not repeat. Null sends none;
+    ///     the summarizer trims it by whole lines when it would not leave room for progress.
+    /// </summary>
+    public string? AlreadyCaptured { get; init; }
+
     public required IReadOnlyList<ConversationSummarizerMessage> Messages { get; init; }
 
     public required string ModelName { get; init; }

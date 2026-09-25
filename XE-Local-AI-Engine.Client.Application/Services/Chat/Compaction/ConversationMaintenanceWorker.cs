@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
@@ -99,6 +101,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             var work = job.Kind switch
             {
                 ConversationMaintenanceKind.Compact => CompactWhenOverThresholdAsync(scope.ServiceProvider, job, cancellationToken),
+                ConversationMaintenanceKind.Distill => DistillWhenDueAsync(scope.ServiceProvider, job, cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(job), job.Kind, "Unknown conversation maintenance kind.")
             };
             await work;
@@ -171,6 +174,53 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             threshold,
             result.Outcome,
             result.MessagesFolded);
+    }
+
+    /// <summary>
+    ///     Distils when the completed messages after the state watermark reach <see cref="ConversationCompactionOptions.DistillEveryMessages" />
+    ///     or their estimated tokens reach <see cref="ConversationCompactionOptions.DistillEveryTokens" />.
+    /// </summary>
+    private async Task DistillWhenDueAsync(IServiceProvider services, ConversationMaintenanceJob job, CancellationToken cancellationToken)
+    {
+        var options = _options.Value;
+        if (!options.DistillEnabled)
+        {
+            _logger.LogDebug("Distillation is disabled; conversation {ConversationId} was not checked.", job.ConversationId);
+            return;
+        }
+
+        var conversation = await services.GetRequiredService<INodeChatPersistenceService>().GetConversationForTurnAsync(job.ConversationId, cancellationToken);
+        if (conversation is null)
+        {
+            return;
+        }
+
+        var pending = ConversationStateDistillationService.PendingMessages(conversation, upToAnchorSequence: null);
+        // Only the span after the watermark is projected, with the same estimator and turn model as the compact check.
+        var tokens = pending.Count == 0
+            ? 0
+            : services.GetRequiredService<ITokenEstimator>()
+                      .EstimateTokens(pending.Select(static pair => new ChatMessage(string.Equals(pair.Message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
+                                                 pair.Message.Content))
+                                             .ToList(),
+                          job.ModelName);
+        if (pending.Count < options.DistillEveryMessages && tokens < options.DistillEveryTokens)
+        {
+            _logger.LogDebug("Conversation {ConversationId} has {Pending} undistilled message(s) (~{Tokens} token(s)); distillation is not due.",
+                job.ConversationId, pending.Count, tokens);
+            return;
+        }
+
+        var outcome = await services.GetRequiredService<IConversationStateDistillationService>()
+                                    .DistillPendingAsync(job.ConversationId, requestedModel: null, upToAnchorSequence: null, cancellationToken);
+        _logger.LogInformation(
+            "Conversation {ConversationId} had {Pending} undistilled message(s) (~{Tokens} token(s)); distillation reported {Status} after {Calls} call(s), state now covers sequence {CoversTo}.",
+            job.ConversationId,
+            pending.Count,
+            tokens,
+            outcome.Status,
+            outcome.Calls,
+            outcome.CoversToSequence);
     }
 
     /// <summary>Cancels the running job after the drain window elapsed; false when it ignored cancellation past the grace.</summary>

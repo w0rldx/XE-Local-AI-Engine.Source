@@ -56,6 +56,7 @@ public sealed class ConversationStepContextBoundTests
         AssertEx.Equal(ConversationStepContextBound.SessionKeepVerbatim,
             forced[0].KeepVerbatim,
             "The forced fold keeps one step verbatim, not the configured chat window.");
+        AssertEx.False(compaction.DistillRequested, "Work-session folds pass distill:false, so the state distiller never runs for them.");
     }
 
     [Test]
@@ -768,11 +769,16 @@ public sealed class ConversationStepContextBoundTests
         /// </summary>
         public Func<int>? SendsSoFar { get; set; }
 
+        /// <summary>True once any caller asked for the distil-first fold; the step boundary never may.</summary>
+        public bool DistillRequested { get; private set; }
+
         public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
+            bool distill = true,
             CancellationToken cancellationToken = default)
         {
+            DistillRequested |= distill;
             Calls.Add((conversationId, recentMessagesToKeepVerbatim, SendsSoFar?.Invoke() ?? 0));
             return Task.FromResult(new ConversationCompactionResult
             {

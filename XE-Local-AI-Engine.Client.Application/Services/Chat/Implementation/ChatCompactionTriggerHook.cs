@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Builds the post-turn automatic-compaction hook the pump fires on a terminal, and composes it with the
-///     adaptive-memory hook.
+///     Builds the post-turn maintenance hook (distil, then compact) the pump fires on a terminal, and composes it
+///     with the adaptive-memory hook.
 /// </summary>
 /// <remarks>
 ///     The hook only enqueues: the worker reloads the conversation, projects the next turn's history and decides, so
@@ -26,14 +26,19 @@ internal static class ChatCompactionTriggerHook
                 return;
             }
 
-            dispatcher.Dispatch(new ConversationMaintenanceJob
+            // Distil first: the single worker runs FIFO, so the compaction queued behind it folds over a state that has
+            // already caught up and has less left to distil under its own deadline.
+            foreach (var kind in (ReadOnlySpan<ConversationMaintenanceKind>)[ConversationMaintenanceKind.Distill, ConversationMaintenanceKind.Compact])
             {
-                ConversationId = conversationId,
-                Kind = ConversationMaintenanceKind.Compact,
-                ModelName = state.ModelUsed,
-                ContextCapacityTokens = capacity,
-                ReservedOutputTokens = state.ReservedOutputTokens ?? 0
-            });
+                dispatcher.Dispatch(new ConversationMaintenanceJob
+                {
+                    ConversationId = conversationId,
+                    Kind = kind,
+                    ModelName = state.ModelUsed,
+                    ContextCapacityTokens = capacity,
+                    ReservedOutputTokens = state.ReservedOutputTokens ?? 0
+                });
+            }
         };
     }
 

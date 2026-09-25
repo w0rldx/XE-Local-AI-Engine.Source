@@ -18,6 +18,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class NodeChatTurnReadCapTests : IDisposable
 {
+    private const string StateJson = "{\"version\":1,\"entries\":[]}";
+
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -44,12 +46,27 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             CoversToSequence = 3,
             UpdatedAtUtc = 60
         });
+        await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        {
+            ConversationId = built.ConversationId,
+            State = StateJson,
+            CoversToSequence = 3,
+            UpdatedAtUtc = 61
+        });
 
         var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
         var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
 
         AssertEx.True(full.CompactionSummaryCoversToSequence == 3, "The full read must report the covered sequence.");
         AssertEx.True(turn.CompactionSummaryCoversToSequence == 3, "The turn read must report the same covered sequence.");
+
+        // The turn read transfers the distilled state exactly like the synopsis.
+        foreach (var read in new[] { full, turn })
+        {
+            AssertEx.Equal(StateJson, read.ConversationState);
+            AssertEx.Equal<int?>(3, read.ConversationStateCoversToSequence);
+            AssertEx.Equal<long?>(61, read.ConversationStateUpdatedAtUtc);
+        }
 
         // 1. STRUCTURE is byte-identical, so every input the selected-path resolver reads is intact.
         AssertEx.Equal(full.Messages.Count, turn.Messages.Count);
@@ -113,10 +130,21 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         var service = CreateService(provider);
         var built = await BuildBranchedConversationAsync(service);
 
+        // A distilled state with a watermark but no synopsis must NOT arm the cap: only the synopsis gates it.
+        await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        {
+            ConversationId = built.ConversationId,
+            State = StateJson,
+            CoversToSequence = 3,
+            UpdatedAtUtc = 61
+        });
+
         var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
         var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
 
         AssertEx.Null(turn.CompactionSummary);
+        AssertEx.Equal(StateJson, turn.ConversationState);
+        AssertEx.Equal<int?>(3, turn.ConversationStateCoversToSequence);
         AssertEx.Equal(full.Messages.Count, turn.Messages.Count);
         for (var index = 0; index < full.Messages.Count; index++)
         {

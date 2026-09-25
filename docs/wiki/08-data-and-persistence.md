@@ -65,7 +65,7 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 
 | Entity | Encrypted column(s) | AAD (conversationId, recordId, column) |
 |---|---|---|
-| `NodeConversation` | `title` (optional) | (ConversationId, ConversationId, `title`) |
+| `NodeConversation` | `title` (optional), `compaction_summary` (optional), `conversation_state` (optional) | (ConversationId, ConversationId, `title` / `compaction_summary` / `conversation_state`) |
 | `NodeMessage` | `content` (required), `metadata_json` (optional) | (ConversationId, MessageId, …) |
 | `NodeToolEvent` | `plaintext_args`, `plaintext_result` (both optional) | (ConversationId, ToolCallId, …) |
 | `NodeSelectedFolder` | `host_path` (required) | (`Guid.Empty`, Id, `host_path`) — node-scoped |
@@ -109,7 +109,7 @@ Entities live in `Entities/` with mapping in the matching `Configurations/*Confi
 
 | Entity | Table | Area | Notes |
 |---|---|---|---|
-| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title` and compaction summary encrypted; pin/archive/selected-path + compaction coverage columns added by later migrations |
+| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title`, compaction summary and distilled conversation state (migration `AddConversationState`) all encrypted; pin/archive/selected-path + compaction/state coverage columns added by later migrations. Selecting a path or minting a regenerate variant clears the compaction summary AND the conversation state together in one statement; the state's timestamp is stamped, not nulled, so a guarded distillation write (`GuardUnchanged`) from before the clear is rejected |
 | `NodeMessage` | messages | Chat | `content` encrypted (BLOB); `metadata_json` encrypted; lifecycle + branch/variant + `agent_definition_id` columns |
 | `NodeToolEvent` | tool events | Chat | encrypted tool args/result |
 | `NodeMessageFeedback` | feedback | Chat | 👍/👎 per message; carries agent attribution |

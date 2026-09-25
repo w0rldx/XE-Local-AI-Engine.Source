@@ -5523,6 +5523,51 @@
         ]
       }
     },
+    "/api/local/v1/chat/conversations/{conversationId}/context-state": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "getNodeChatConversationContextState",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/conversations/{conversationId}/memory-excluded": {
       "patch": {
         "tags": [
@@ -37445,6 +37490,10 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationRequest": {
         "type": "object",
         "additionalProperties": false
@@ -37551,6 +37600,91 @@
           },
           "cancelled": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "value",
+          "sourceSequences"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "sourceSequences": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "supersededById": {
+            "type": "string",
+            "nullable": true
+          },
+          "retiredAtSequence": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "createdAtSequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isLive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse"
+            }
+          },
+          "stateCoversToSequence": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "stateUpdatedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "synopsis": {
+            "type": "string",
+            "nullable": true
+          },
+          "synopsisCoversToSequence": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "synopsisUpdatedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nextEntryNumber": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

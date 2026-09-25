@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 
@@ -30,6 +31,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         _ = services.AddSingleton(Persistence);
         _ = services.AddSingleton<ITokenEstimator>(Estimator);
         _ = services.AddScoped<IConversationCompactionService>(_ => new RecordingCompactionService(this));
+        _ = services.AddScoped<IConversationStateDistillationService>(_ => new RecordingDistillationService(this));
         _provider = services.BuildServiceProvider(new ServiceProviderOptions
         {
             ValidateScopes = true
@@ -52,14 +54,18 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
     /// <summary>Every compaction the worker asked for, with the scoped service instance that served it.</summary>
     public ConcurrentQueue<(Guid ConversationId, string? RequestedModel, RecordingCompactionService Instance)> Compactions { get; } = new();
 
+    /// <summary>Every distillation the worker asked for.</summary>
+    public ConcurrentQueue<Guid> Distillations { get; } = new();
+
     /// <summary>Runs inside each compaction before it returns; a test parks, throws or observes the token here.</summary>
     public Func<Guid, CancellationToken, Task>? OnCompact { get; set; }
 
-    public static ConversationMaintenanceJob Job(Guid conversationId, string? modelName = "local-model", int capacity = 8_192, int reserved = 1_024) =>
+    public static ConversationMaintenanceJob Job(Guid conversationId, string? modelName = "local-model", int capacity = 8_192, int reserved = 1_024,
+        ConversationMaintenanceKind kind = ConversationMaintenanceKind.Compact) =>
         new()
         {
             ConversationId = conversationId,
-            Kind = ConversationMaintenanceKind.Compact,
+            Kind = kind,
             ModelName = modelName,
             ContextCapacityTokens = capacity,
             ReservedOutputTokens = reserved
@@ -147,6 +153,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
+            bool distill = true,
             CancellationToken cancellationToken = default)
         {
             _harness.Compactions.Enqueue((conversationId, requestedModel, this));
@@ -160,6 +167,27 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
                 Outcome = ConversationCompactionOutcome.Compacted,
                 MessagesFolded = 1
             };
+        }
+    }
+
+    internal sealed class RecordingDistillationService : IConversationStateDistillationService
+    {
+        private readonly ConversationMaintenanceHarness _harness;
+
+        public RecordingDistillationService(ConversationMaintenanceHarness harness)
+        {
+            _harness = harness;
+        }
+
+        public Task<ConversationStateDistillationOutcome> DistillPendingAsync(Guid conversationId, string? requestedModel, int? upToAnchorSequence,
+            CancellationToken cancellationToken = default)
+        {
+            _harness.Distillations.Enqueue(conversationId);
+            return Task.FromResult(new ConversationStateDistillationOutcome
+            {
+                Status = ConversationStateDistillationStatus.Distilled,
+                Calls = 1
+            });
         }
     }
 }

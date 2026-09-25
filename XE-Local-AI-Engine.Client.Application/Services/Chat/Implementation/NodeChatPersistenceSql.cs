@@ -109,7 +109,7 @@ internal static class NodeChatPersistenceSql
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
-                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc
+                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc, conversation_state, conversation_state_covers_to_sequence, conversation_state_updated_at_utc
                               FROM conversations
                               WHERE conversation_id = $conversation_id;
                               """;
@@ -144,7 +144,12 @@ internal static class NodeChatPersistenceSql
                 await reader.IsDBNullAsync(ordinal: 12, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 12, cancellationToken),
                 conversationId),
             CompactionSummaryCoversToSequence = await reader.IsDBNullAsync(ordinal: 13, cancellationToken) ? null : reader.GetInt32(13),
-            CompactionSummaryUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetInt64(14)
+            CompactionSummaryUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetInt64(14),
+            ConversationState = dbContext.DecryptConversationState(
+                await reader.IsDBNullAsync(ordinal: 15, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 15, cancellationToken),
+                conversationId),
+            ConversationStateCoversToSequence = await reader.IsDBNullAsync(ordinal: 16, cancellationToken) ? null : reader.GetInt32(16),
+            ConversationStateUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 17, cancellationToken) ? null : reader.GetInt64(17)
         };
     }
 

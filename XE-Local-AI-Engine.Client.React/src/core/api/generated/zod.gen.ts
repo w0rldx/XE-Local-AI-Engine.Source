@@ -3897,6 +3897,11 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversatio
 	purgeImmediately: z.boolean().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = z.record(z.string(), z.never());
@@ -3926,6 +3931,52 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResp
 	requestId: z.guid(),
 	status: z.string(),
 	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse = z.object({
+	id: z.string(),
+	category: z.string(),
+	value: z.string(),
+	sourceSequences: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	supersededById: z.string().nullish(),
+	retiredAtSequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	createdAtSequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	isLive: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse = z.object({
+	entries: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse),
+	stateCoversToSequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	stateUpdatedAtUtc: z.int().nullish(),
+	synopsis: z.string().nullish(),
+	synopsisCoversToSequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	synopsisUpdatedAtUtc: z.int().nullish(),
+	nextEntryNumber: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = z.object({
@@ -8753,6 +8804,16 @@ export const zCompactNodeChatConversationPath = z.object({
  * Success
  */
 export const zCompactNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1CompactNodeChatConversationResponse;
+
+export const zGetNodeChatConversationContextStatePath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetNodeChatConversationContextStateResponse =
+	zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse;
 
 export const zSetNodeChatConversationMemoryExcludedBody =
 	zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;

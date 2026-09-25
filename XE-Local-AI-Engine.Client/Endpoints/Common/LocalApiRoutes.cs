@@ -37,6 +37,9 @@ public static class LocalApiRoutes
         // Non-destructive compaction: summarize the older turns into a synopsis sent in their place. POST (an action that
         // mutates derived state), distinct literal "compact" segment.
         public const string CompactConversation = "chat/conversations/{conversationId}/compact";
+
+        // Read-only view of the distilled state and the synopsis the compaction path maintains. GET, literal "context-state" segment.
+        public const string ConversationContextState = "chat/conversations/{conversationId}/context-state";
         public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";

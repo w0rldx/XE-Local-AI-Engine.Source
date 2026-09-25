@@ -757,6 +757,7 @@ internal sealed class RecordingCompactionService : IConversationCompactionServic
     public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
+        bool distill = true,
         CancellationToken cancellationToken = default)
     {
         Calls.Add((conversationId, recentMessagesToKeepVerbatim));

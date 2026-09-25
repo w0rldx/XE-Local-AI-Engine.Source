@@ -95,6 +95,25 @@ internal sealed record class NodeConversation
     /// <summary>When <see cref="CompactionSummary" /> was last (re)generated. Plaintext Unix-ms; null when no summary exists.</summary>
     public long? CompactionSummaryUpdatedAtUtc { get; set; }
 
+    /// <summary>
+    ///     Derived, distilled conversation state: a JSON document of goals, decisions, constraints and facts the
+    ///     distiller extracts from the turns. Null until the first distillation.
+    /// </summary>
+    /// <remarks>
+    ///     UTF-8 JSON encrypted at rest under AAD column name <c>conversation_state</c>, the same posture as
+    ///     <see cref="CompactionSummary" />.
+    /// </remarks>
+    public byte[]? ConversationState { get; set; }
+
+    /// <summary>
+    ///     The highest ANCHOR message <c>Sequence</c> folded into <see cref="ConversationState" />, in the same space as
+    ///     <see cref="CompactionSummaryCoversToSequence" />. Plaintext; null when no state exists.
+    /// </summary>
+    public int? ConversationStateCoversToSequence { get; set; }
+
+    /// <summary>When <see cref="ConversationState" /> was last updated. Plaintext Unix-ms; null when no state exists.</summary>
+    public long? ConversationStateUpdatedAtUtc { get; set; }
+
     public List<NodeMessage> Messages { get; } = [];
 
     public List<NodeToolEvent> ToolEvents { get; } = [];

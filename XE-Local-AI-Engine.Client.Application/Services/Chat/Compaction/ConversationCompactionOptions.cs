@@ -82,6 +82,32 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     [Range(1, int.MaxValue)]
     public int MaintenanceShutdownDrainTimeoutSeconds { get; set; } = 10;
 
+    /// <summary>
+    ///     Whether completed turns are distilled into the conversation's structured state (goals, decisions,
+    ///     corrections, open questions) that is injected into later turns alongside the synopsis.
+    /// </summary>
+    public bool DistillEnabled { get; set; } = true;
+
+    /// <summary>Estimated tokens of new completed messages that trigger a distillation pass.</summary>
+    [Range(500, int.MaxValue)]
+    public int DistillEveryTokens { get; set; } = 3000;
+
+    /// <summary>Count of new completed messages that triggers a distillation pass even below the token threshold.</summary>
+    [Range(1, int.MaxValue)]
+    public int DistillEveryMessages { get; set; } = 6;
+
+    /// <summary>Upper bound on entries kept in a conversation's state; the reducer drops the least valuable first.</summary>
+    [Range(10, 500)]
+    public int MaxStateEntries { get; set; } = 60;
+
+    /// <summary>Upper bound on the summed characters of all entry values in a conversation's state.</summary>
+    [Range(1000, 50_000)]
+    public int MaxStateChars { get; set; } = 6000;
+
+    /// <summary>Output-token cap for one distiller call, so a runaway model cannot emit an unbounded delta.</summary>
+    [Range(256, 8192)]
+    public int DistillerMaxOutputTokens { get; set; } = 1024;
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (MaxSummaryChars > 0

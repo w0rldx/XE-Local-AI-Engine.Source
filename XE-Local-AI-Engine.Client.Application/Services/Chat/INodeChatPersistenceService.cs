@@ -99,6 +99,12 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Writes (or clears with a null state) the conversation's distilled state JSON. Returns the updated
+    ///     conversation, or null if not found.
+    /// </summary>
+    Task<NodeChatConversationDto?> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Branches a conversation, cloning every message up to and including the target into a NEW Origin=Local
     ///     conversation whose <c>branch_of_conversation_id</c> records the source, or null when either is missing.
     /// </summary>

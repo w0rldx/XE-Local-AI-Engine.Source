@@ -97,6 +97,7 @@ internal sealed class WorkSessionCheckpointComposer
         var result = await _compaction.CompactAsync(conversationId,
             requestedModel: null,
             ConversationStepContextBound.SessionKeepVerbatim,
+            distill: false,
             cancellationToken);
 
         // Any non-blank synopsis wins, not only a freshly folded one: the step boundary often leaves nothing to fold,

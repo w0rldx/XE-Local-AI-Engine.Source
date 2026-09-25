@@ -162,6 +162,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _conversations.SetCompactionSummaryAsync(request, cancellationToken);
     }
 
+    public Task<NodeChatConversationDto?> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default)
+    {
+        return _conversations.SetConversationStateAsync(request, cancellationToken);
+    }
+
     public Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
     {
         return _variants.BranchConversationAsync(request, cancellationToken);

@@ -31,6 +31,62 @@ public sealed class ChatCompactionTriggerTests
     }
 
     [Test]
+    public void Hook_OnACompletedTurn_EnqueuesDistillBeforeCompact()
+    {
+        var dispatcher = Substitute.For<IConversationMaintenanceDispatcher>();
+
+        ChatCompactionTriggerHook.Build(dispatcher, Guid.NewGuid())(State(InvocationStatus.Completed), Terminal());
+
+        var kinds = dispatcher.ReceivedCalls().Select(static call => ((ConversationMaintenanceJob)call.GetArguments()[0]!).Kind).ToList();
+        AssertEx.Equal("Distill,Compact", string.Join(',', kinds), "The FIFO worker must distil before it folds.");
+    }
+
+    [Test]
+    [Arguments(6, 10, true)]
+    [Arguments(1, 3_000, true)]
+    [Arguments(5, 2_999, false)]
+    public async Task DistillJob_IsDueByMessageCountOrByTokens(int pendingMessages, int projectedTokens, bool due)
+    {
+        await using var harness = new ConversationMaintenanceHarness(projectedTokens: projectedTokens);
+        var conversationId = Guid.NewGuid();
+        harness.Persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<NodeChatConversationDto?>(ConversationWith(conversationId, pendingMessages, stateCoversTo: null)));
+
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(conversationId, kind: ConversationMaintenanceKind.Distill), CancellationToken.None);
+
+        AssertEx.Equal(due ? 1 : 0, harness.Distillations.Count);
+        AssertEx.Equal(expected: 0, harness.Compactions.Count, "A distill job never folds.");
+    }
+
+    [Test]
+    public async Task DistillJob_CountsOnlyMessagesAfterTheStateWatermark()
+    {
+        // Eight completed messages, six of them already distilled: two pending is below the six-message trigger.
+        await using var harness = new ConversationMaintenanceHarness(projectedTokens: 10);
+        var conversationId = Guid.NewGuid();
+        harness.Persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<NodeChatConversationDto?>(ConversationWith(conversationId, messages: 8, stateCoversTo: 5)));
+
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(conversationId, kind: ConversationMaintenanceKind.Distill), CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, harness.Distillations.Count);
+    }
+
+    [Test]
+    public async Task DistillJob_WhenDisabled_NeitherReadsNorDistils()
+    {
+        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions
+        {
+            DistillEnabled = false
+        });
+
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(Guid.NewGuid(), kind: ConversationMaintenanceKind.Distill), CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, harness.Distillations.Count);
+        await harness.Persistence.DidNotReceiveWithAnyArgs().GetConversationForTurnAsync(Guid.Empty, CancellationToken.None);
+    }
+
+    [Test]
     [Arguments(InvocationStatus.Failed)]
     [Arguments(InvocationStatus.Cancelled)]
     [Arguments(InvocationStatus.Running)]
@@ -144,6 +200,36 @@ public sealed class ChatCompactionTriggerTests
 
         AssertEx.Equal(expected: 0, harness.Compactions.Count);
     }
+
+    private static NodeChatConversationDto ConversationWith(Guid conversationId, int messages, int? stateCoversTo) =>
+        new()
+        {
+            ConversationId = conversationId,
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 0,
+            LastSeenUtc = 0,
+            Purged = false,
+            ConversationStateCoversToSequence = stateCoversTo,
+            Messages = Enumerable.Range(0, messages)
+                                 .Select(sequence => new NodeChatPersistedMessageDto
+                                 {
+                                     MessageId = Guid.NewGuid(),
+                                     ConversationId = conversationId,
+                                     RequestId = null,
+                                     Sequence = sequence,
+                                     Role = sequence % 2 == 0 ? "user" : "assistant",
+                                     Content = $"message-{sequence}",
+                                     Reasoning = null,
+                                     Status = NodeChatMessageStatusValues.Completed,
+                                     CreatedAtUtc = sequence,
+                                     UpdatedAtUtc = sequence,
+                                     Model = null,
+                                     Error = null,
+                                     MetadataJson = null
+                                 })
+                                 .ToList()
+        };
 
     private static InvocationState State(InvocationStatus status) =>
         new()

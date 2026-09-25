@@ -84,6 +84,7 @@ public sealed class WorkSessionCheckpointTests
         AssertEx.Equal<int?>(ConversationStepContextBound.SessionKeepVerbatim,
             compaction.LastKeepVerbatim,
             "The checkpoint folds with the session window, not the configured chat default.");
+        AssertEx.Equal<bool?>(false, compaction.LastDistill, "The checkpoint fold passes distill:false, so the state distiller never runs for it.");
         AssertEx.Equal("Two steps in, one document read.",
             (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId)).Single().Summary);
     }
@@ -251,12 +252,16 @@ public sealed class WorkSessionCheckpointTests
 
         public int? LastKeepVerbatim { get; private set; }
 
+        public bool? LastDistill { get; private set; }
+
         public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
+            bool distill = true,
             CancellationToken cancellationToken = default)
         {
             LastKeepVerbatim = recentMessagesToKeepVerbatim;
+            LastDistill = distill;
             return Task.FromResult(ResultByKeepVerbatim is null ? Result : ResultByKeepVerbatim(recentMessagesToKeepVerbatim));
         }
     }

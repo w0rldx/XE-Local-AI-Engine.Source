@@ -5857,6 +5857,18 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("compaction_summary_updated_at_utc");
 
+                    b.Property<byte[]>("ConversationState")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("conversation_state");
+
+                    b.Property<int?>("ConversationStateCoversToSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("conversation_state_covers_to_sequence");
+
+                    b.Property<long?>("ConversationStateUpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("conversation_state_updated_at_utc");
+
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");

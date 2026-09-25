@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
@@ -1993,6 +1994,131 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(expected: 0, context[0].SortOrder);
         AssertEx.Equal(recentUserId, context[1].Id);
         AssertEx.True(context.All(message => message.Id != oldUserId && message.Id != oldAssistantId), "Covered messages must not be re-sent verbatim.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_RendersTheDistilledStateAsOfItsCutoff_NeverFactsFromTheAnswerBeingReplaced()
+    {
+        // The state block rides inside the synopsis message; distillation may have advanced it through the very answer
+        // being regenerated, so it is rendered as of the regeneration cutoff like the synopsis watermark is checked.
+        await using var provider = await BuildProviderAsync("regeneration-state-cutoff.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Regen",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "ancient question",
+            CreatedAtUtc = 11
+        });
+        var oldAssistantId = Guid.NewGuid();
+        var oldCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = oldAssistantId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = oldAssistantId,
+            RequestId = oldCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = oldCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "ancient answer",
+            Model = "model-x"
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 14
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 15,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 16,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
+        var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
+        var replacedSequence = seeded.Messages.Single(message => message.MessageId == originalId).Sequence;
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        {
+            ConversationId = conversation.ConversationId,
+            Summary = "ancient synopsis",
+            CoversToSequence = coveredSequence,
+            UpdatedAtUtc = 17
+        });
+        // Distillation ran through the answer being regenerated: one fact from the covered span, one from that answer.
+        await persistence.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        {
+            ConversationId = conversation.ConversationId,
+            State = ConversationStateSerializer.Serialize(new ConversationStateDocument
+            {
+                NextEntryNumber = 3,
+                Entries =
+                [
+                    new ConversationStateEntry
+                    {
+                        Id = "e1", Category = ConversationStateCategory.Fact, Value = "ancient fact", SourceSequences = [coveredSequence], CreatedAtSequence = replacedSequence
+                    },
+                    new ConversationStateEntry
+                    {
+                        Id = "e2", Category = ConversationStateCategory.Fact, Value = "the answer was four", SourceSequences = [replacedSequence], CreatedAtSequence = replacedSequence
+                    }
+                ]
+            }),
+            CoversToSequence = replacedSequence,
+            UpdatedAtUtc = 18
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.True(context[0].Content.Contains("[e1] ancient fact", StringComparison.Ordinal), "State from the covered span is injected with the synopsis.");
+        AssertEx.False(context[0].Content.Contains("the answer was four", StringComparison.Ordinal),
+            "A fact distilled from the answer being regenerated must not steer its replacement.");
     }
 
     [Test]

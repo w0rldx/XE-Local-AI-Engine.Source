@@ -56,6 +56,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                                                   "priorSummary" if this input has no user turn.
                                                 - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
                                                 - Do NOT answer or continue the conversation, and do NOT add information that is not in the input.
+                                                - Facts listed under "alreadyCaptured" are kept as structured state elsewhere: do NOT repeat them. The
+                                                  synopsis carries the narrative and everything not listed there.
                                                 - Output ONLY the synopsis text — no preamble, no headings, no code fences.
                                                 """;
 
@@ -75,7 +77,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
     // The smallest request the summarizer can send: an empty prior summary and one message holding one rune. The
     // fragmenting loop never splits a surrogate pair, so a budget that fits this frame can always make progress.
-    private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty,
+    private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty, alreadyCaptured: null,
     [
         new ConversationSummarizerMessage
         {
@@ -127,6 +129,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         // fragments. A pass yielding nothing aborts everything, or the covered sequence advances past lost messages.
         var budget = ResolveRequestBudget(input);
         var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
+        var alreadyCaptured = FitAlreadyCaptured(input.AlreadyCaptured, budget);
         var batch = new List<ConversationSummarizerMessage>();
 
         foreach (var message in input.Messages)
@@ -139,7 +142,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                     Role = message.Role,
                     Content = remainingContent
                 };
-                if (RequestFitsBudget(running, [.. batch, wholeRemainder], budget))
+                if (RequestFitsBudget(running, alreadyCaptured, [.. batch, wholeRemainder], budget))
                 {
                     batch.Add(wholeRemainder);
                     break;
@@ -147,7 +150,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
                 if (batch.Count > 0)
                 {
-                    running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
+                    running = await FoldAsync(chatClient, running, alreadyCaptured, batch, input.SupportsThinking, cancellationToken);
                     if (running is null)
                     {
                         return null;
@@ -157,7 +160,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                     continue;
                 }
 
-                var prefixLength = FindLargestFittingPrefix(message.Role, remainingContent, running, budget);
+                var prefixLength = FindLargestFittingPrefix(message.Role, remainingContent, running, alreadyCaptured, budget);
                 if (prefixLength == 0)
                 {
                     _logger.LogWarning("Conversation summarization request overhead exceeded the configured {Budget}-character total request budget; aborting without advancing coverage.", budget);
@@ -173,7 +176,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
                 // A fragment was necessary, so flush it before considering the rest. The returned synopsis becomes
                 // the prior summary of the next request and is included in that request's budget calculation.
-                running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
+                running = await FoldAsync(chatClient, running, alreadyCaptured, batch, input.SupportsThinking, cancellationToken);
                 if (running is null)
                 {
                     return null;
@@ -185,7 +188,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
         if (batch.Count > 0)
         {
-            running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
+            running = await FoldAsync(chatClient, running, alreadyCaptured, batch, input.SupportsThinking, cancellationToken);
         }
 
         return string.IsNullOrWhiteSpace(running) ? null : running;
@@ -195,6 +198,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
     // caller aborts the whole summarization rather than advancing coverage over a batch that was never summarized.
     private async Task<string?> FoldAsync(IChatClient chatClient,
         string? priorSummary,
+        string? alreadyCaptured,
         IReadOnlyList<ConversationSummarizerMessage> batch,
         bool supportsThinking,
         CancellationToken cancellationToken)
@@ -202,7 +206,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         List<ChatMessage> messages =
         [
             new(ChatRole.System, _systemPrompt),
-            new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions))
+            new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(priorSummary, alreadyCaptured, batch), SerializerOptions))
         ];
 
         var chatOptions = new ChatOptions
@@ -274,7 +278,28 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
     internal static long GetMinimumRequestBudget(int maxSummaryChars) =>
         RenderSystemPrompt(maxSummaryChars).Length + FrameOverhead + (long)Math.Max(0, maxSummaryChars);
 
-    private int FindLargestFittingPrefix(string role, string content, string? priorSummary, int budget)
+    // Keeps whole leading lines of the state while the minimum request (full-size running summary, one rune) still
+    // fits beside it, so progress stays guaranteed; a line trimmed away only means the synopsis may repeat that fact.
+    private string? FitAlreadyCaptured(string? alreadyCaptured, int budget)
+    {
+        var room = budget - GetMinimumRequestBudget(_options.MaxSummaryChars);
+        var text = string.IsNullOrWhiteSpace(alreadyCaptured) ? string.Empty : alreadyCaptured;
+        while (text.Length > 0 && JsonSerializer.Serialize(text, SerializerOptions).Length > room)
+        {
+            var cut = text.LastIndexOf('\n');
+            text = cut < 0 ? string.Empty : text[..cut];
+        }
+
+        if (text.Length < (alreadyCaptured?.Length ?? 0))
+        {
+            _logger.LogDebug("Trimmed the already-captured state from {Original} to {Kept} characters to fit the {Budget}-character fold budget.",
+                alreadyCaptured!.Length, text.Length, budget);
+        }
+
+        return text.Length == 0 ? null : text;
+    }
+
+    private int FindLargestFittingPrefix(string role, string content, string? priorSummary, string? alreadyCaptured, int budget)
     {
         var low = 1;
         var high = content.Length;
@@ -294,7 +319,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
                 Role = role,
                 Content = content[..candidateLength]
             };
-            if (RequestFitsBudget(priorSummary, [candidate], budget))
+            if (RequestFitsBudget(priorSummary, alreadyCaptured, [candidate], budget))
             {
                 best = candidateLength;
                 low = midpoint + 1;
@@ -328,17 +353,18 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             : index;
     }
 
-    private bool RequestFitsBudget(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)
+    private bool RequestFitsBudget(string? priorSummary, string? alreadyCaptured, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)
     {
-        var serializedPrompt = JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions);
+        var serializedPrompt = JsonSerializer.Serialize(ToPromptModel(priorSummary, alreadyCaptured, batch), SerializerOptions);
         return _systemPrompt.Length + serializedPrompt.Length <= budget;
     }
 
-    private static object ToPromptModel(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> messages)
+    private static object ToPromptModel(string? priorSummary, string? alreadyCaptured, IReadOnlyList<ConversationSummarizerMessage> messages)
     {
         return new
         {
             PriorSummary = priorSummary,
+            AlreadyCaptured = alreadyCaptured,
             Messages = messages.Select(static message => new
             {
                 message.Role,

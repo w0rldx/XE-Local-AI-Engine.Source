@@ -1252,6 +1252,31 @@
 				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} verdichtet, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
 				"aLocalModel": "einem lokalen Modell"
 			},
+			"contextState": {
+				"tooltip": "Zeigen, was sich die Unterhaltung merkt",
+				"aria": "Kontextzustand der Unterhaltung anzeigen",
+				"title": "Kontext der Unterhaltung",
+				"error": "Der Kontextzustand konnte nicht geladen werden.",
+				"empty": "Noch nichts verdichtet. Verdichte die Unterhaltung, um ihren Kontextzustand aufzubauen.",
+				"notCompacted": "Noch nicht verdichtet",
+				"stateCoverage": "Zustand deckt bis Sequenz {{sequence}} ab, aktualisiert {{updatedAt}}",
+				"synopsisCoverage": "Zusammenfassung deckt bis Sequenz {{sequence}} ab, aktualisiert {{updatedAt}}",
+				"inactive": "Ersetzt und zurückgezogen ({{count}})",
+				"synopsis": "Zusammenfassung",
+				"sources": "Aus Sequenzen {{sequences}}",
+				"replacedBy": "ersetzt durch {{id}}",
+				"retiredAt": "zurückgezogen bei Sequenz {{sequence}}",
+				"categories": {
+					"Goal": "Ziele",
+					"Correction": "Korrekturen",
+					"OpenQuestion": "Offene Fragen",
+					"Decision": "Entscheidungen",
+					"Constraint": "Einschränkungen",
+					"Fact": "Fakten",
+					"ToolOutcome": "Tool-Ergebnisse",
+					"CompletedWork": "Erledigte Arbeit"
+				}
+			},
 			"remoteImage": {
 				"load": "Externes Bild laden"
 			},

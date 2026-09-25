@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -16,6 +17,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 {
     private readonly INodeChatPersistenceService _persistence;
     private readonly IConversationSummarizer _summarizer;
+    private readonly IConversationStateDistillationService _distillation;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly LocalRuntimeWarmer _localRuntimeWarmer;
@@ -26,6 +28,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
     public ConversationCompactionService(INodeChatPersistenceService persistence,
         IConversationSummarizer summarizer,
+        IConversationStateDistillationService distillation,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
         IModelCapabilityResolver modelCapabilityResolver,
         LocalRuntimeWarmer localRuntimeWarmer,
@@ -38,6 +41,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         _persistence = persistence;
         ArgumentNullException.ThrowIfNull(summarizer);
         _summarizer = summarizer;
+        ArgumentNullException.ThrowIfNull(distillation);
+        _distillation = distillation;
         ArgumentNullException.ThrowIfNull(localDefaultChatModelResolver);
         _localDefaultChatModelResolver = localDefaultChatModelResolver;
         ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
@@ -54,11 +59,12 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     }
 
     public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
-        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken);
 
     public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
+        bool distill = true,
         CancellationToken cancellationToken = default)
     {
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
@@ -68,7 +74,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         ConversationCompactionResult result;
         try
         {
-            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, nodeSettings, operation.Token);
+            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, distill, nodeSettings, operation.Token);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -101,6 +107,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private async Task<ConversationCompactionResult> CompactCoreAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
+        bool distill,
         StoredNodeSettings nodeSettings,
         CancellationToken cancellationToken)
     {
@@ -165,6 +172,27 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             };
         }
 
+        // Reconciled compaction: the state first catches up to the cutoff under the SAME deadline, so the fold never
+        // advances over span the state does not cover, and the summarizer is told what the state already holds.
+        string? alreadyCaptured = null;
+        if (distill)
+        {
+            var distilled = await _distillation.DistillPendingAsync(conversationId, requestedModel, upToAnchorSequence: cutoffSequence, cancellationToken);
+            if (distilled.Status is ConversationStateDistillationStatus.DistillerReturnedNothing or ConversationStateDistillationStatus.TimedOut or ConversationStateDistillationStatus.Superseded
+                || (distilled.Status == ConversationStateDistillationStatus.Distilled && distilled.CoversToSequence < cutoffSequence))
+            {
+                _logger.LogInformation("Compaction of conversation {ConversationId} stopped: distillation reported {Status} before the cutoff {Cutoff}.",
+                    conversationId, distilled.Status, cutoffSequence);
+                return new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.DistillerReturnedNothing
+                };
+            }
+
+            var state = distilled.Document ?? ConversationStateSerializer.Deserialize(conversation.ConversationState);
+            alreadyCaptured = state is null ? null : ConversationStateRenderer.RenderForContext(state);
+        }
+
         // Summarize with the user's model only when it is an installed LOCAL chat model: anything else degrades to a
         // node-local default, so conversation content never leaves the machine.
         var preferred = string.IsNullOrWhiteSpace(requestedModel) ? nodeSettings.DefaultModelName : requestedModel;
@@ -197,6 +225,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             .SummarizeAsync(new ConversationSummarizerInput
                 {
                     PriorSummary = conversation.CompactionSummary,
+                    AlreadyCaptured = alreadyCaptured,
                     Messages = toFold,
                     ModelName = model,
                     SupportsThinking = capabilities.SupportsThinking,

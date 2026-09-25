@@ -217,6 +217,7 @@ import {
 	getModelCatalogInfo,
 	getModelLaunchArguments,
 	getNodeChatConversation,
+	getNodeChatConversationContextState,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
 	getRunningLocalModels,
@@ -959,6 +960,8 @@ import type {
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
+	GetNodeChatConversationContextStateData,
+	GetNodeChatConversationContextStateResponse,
 	GetNodeChatConversationData,
 	GetNodeChatConversationError,
 	GetNodeChatConversationResponse,
@@ -3774,6 +3777,28 @@ export const compactNodeChatConversationMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getNodeChatConversationContextStateQueryKey = (options: Options<GetNodeChatConversationContextStateData>) =>
+	createQueryKey("getNodeChatConversationContextState", options);
+
+export const getNodeChatConversationContextStateOptions = (options: Options<GetNodeChatConversationContextStateData>) =>
+	queryOptions<
+		GetNodeChatConversationContextStateResponse,
+		AxiosError<DefaultError>,
+		GetNodeChatConversationContextStateResponse,
+		ReturnType<typeof getNodeChatConversationContextStateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeChatConversationContextState({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeChatConversationContextStateQueryKey(options),
+	});
 
 export const setNodeChatConversationMemoryExcludedMutation = (
 	options?: Partial<Options<SetNodeChatConversationMemoryExcludedData>>,

@@ -39,6 +39,23 @@ public sealed class ConversationMaintenanceDispatcherTests
     }
 
     [Test]
+    public void Dispatch_ADistillAndACompactForOneConversation_QueueSeparatelyInOrder()
+    {
+        var dispatcher = Create();
+        var conversationId = Guid.NewGuid();
+
+        dispatcher.Dispatch(Job(conversationId, ConversationMaintenanceKind.Distill));
+        dispatcher.Dispatch(Job(conversationId));
+        dispatcher.Dispatch(Job(conversationId, ConversationMaintenanceKind.Distill));
+
+        AssertEx.True(dispatcher.Reader.TryRead(out var first));
+        AssertEx.True(dispatcher.Reader.TryRead(out var second));
+        AssertEx.Equal(ConversationMaintenanceKind.Distill, first!.Kind);
+        AssertEx.Equal(ConversationMaintenanceKind.Compact, second!.Kind);
+        AssertEx.Equal(expected: 0, dispatcher.Reader.Count, "Coalescing is per (conversation, kind): the second distill folds into the first.");
+    }
+
+    [Test]
     public void Dispatch_WhileTheJobIsRunning_CoalescesUntilTheWorkerCompletesIt()
     {
         var dispatcher = Create();
@@ -93,11 +110,11 @@ public sealed class ConversationMaintenanceDispatcherTests
     private static ConversationMaintenanceDispatcher Create() =>
         new(Options.Create(new ConversationCompactionOptions()), NullLogger<ConversationMaintenanceDispatcher>.Instance);
 
-    private static ConversationMaintenanceJob Job(Guid conversationId) =>
+    private static ConversationMaintenanceJob Job(Guid conversationId, ConversationMaintenanceKind kind = ConversationMaintenanceKind.Compact) =>
         new()
         {
             ConversationId = conversationId,
-            Kind = ConversationMaintenanceKind.Compact,
+            Kind = kind,
             ModelName = "local-model",
             ContextCapacityTokens = 8_192,
             ReservedOutputTokens = 1_024

@@ -627,6 +627,9 @@ import type {
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsErrors,
 	GetModelLaunchArgumentsResponses,
+	GetNodeChatConversationContextStateData,
+	GetNodeChatConversationContextStateErrors,
+	GetNodeChatConversationContextStateResponses,
 	GetNodeChatConversationData,
 	GetNodeChatConversationErrors,
 	GetNodeChatConversationResponses,
@@ -1759,6 +1762,8 @@ import {
 	zGetModelCatalogInfoResponse,
 	zGetModelLaunchArgumentsPath,
 	zGetModelLaunchArgumentsResponse,
+	zGetNodeChatConversationContextStatePath,
+	zGetNodeChatConversationContextStateResponse,
 	zGetNodeChatConversationPath,
 	zGetNodeChatConversationResponse,
 	zGetNodeChatMessageFeedbackPath,
@@ -5126,6 +5131,40 @@ export const compactNodeChatConversation = <ThrowOnError extends boolean = false
 			"Content-Type": "*/*",
 			...options.headers,
 		},
+	});
+
+export const getNodeChatConversationContextState = <ThrowOnError extends boolean = false>(
+	options: Options<GetNodeChatConversationContextStateData, ThrowOnError>,
+): RequestResult<GetNodeChatConversationContextStateResponses, GetNodeChatConversationContextStateErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetNodeChatConversationContextStateResponses,
+		GetNodeChatConversationContextStateErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetNodeChatConversationContextStatePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetNodeChatConversationContextStateResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/context-state",
+		...options,
 	});
 
 export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boolean = false>(
