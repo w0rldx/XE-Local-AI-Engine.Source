@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Images.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     Wires the local image-generation stack (jobs, store, hub publisher) on top of the image-model store and the
@@ -27,6 +28,9 @@ internal static class AddNodeImagesExtensions
         // Image-model file-set store + registry (reuses the Hugging Face download client) and the sd-server
         // runtime adapter (binary manager, backend selector, supervisor, job client, IImageRuntime facade).
         builder.Services.AddHuggingFaceImageModelStore(configuration);
+        // Registered BEFORE the provider modules: both TryAdd a bare default, so this is the only place the
+        // StableDiffusionRuntime config section (port range, TTL, cap, TextEncoderOnGpu, ...) reaches the supervisor.
+        builder.Services.AddSingleton(BindStableDiffusionRuntimeOptions(configuration));
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();
 
@@ -65,5 +69,13 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddHostedService<ImageJobStartupReconciler>();
 
         return builder;
+    }
+
+    /// <summary>The sd-server runtime options from the <c>StableDiffusionRuntime</c> section over the class defaults.</summary>
+    internal static StableDiffusionRuntimeOptions BindStableDiffusionRuntimeOptions(IConfiguration configuration)
+    {
+        var options = new StableDiffusionRuntimeOptions();
+        configuration.GetSection(StableDiffusionRuntimeOptions.SectionName).Bind(options);
+        return options;
     }
 }

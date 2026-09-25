@@ -136,12 +136,31 @@ public sealed class ImageServerArgumentBuilderTests
     }
 
     [Test]
-    [Arguments(SdGpuBackend.Cpu, "cpu")]
-    [Arguments(SdGpuBackend.Cuda, "diffusion=cuda0,te=cpu,vae=cpu")]
-    [Arguments(SdGpuBackend.Vulkan, "diffusion=vulkan0,te=cpu,vae=cpu")]
-    public void BuildBackendSpec_MapsBackendToDeviceString(SdGpuBackend backend, string expected)
+    [Arguments(SdGpuBackend.Cpu, false, "cpu")]
+    [Arguments(SdGpuBackend.Cpu, true, "cpu")]
+    [Arguments(SdGpuBackend.Cuda, false, "diffusion=cuda0,te=cpu,vae=cpu")]
+    [Arguments(SdGpuBackend.Cuda, true, "diffusion=cuda0,te=cuda0,vae=cpu")]
+    [Arguments(SdGpuBackend.Vulkan, false, "diffusion=vulkan0,te=cpu,vae=cpu")]
+    [Arguments(SdGpuBackend.Vulkan, true, "diffusion=vulkan0,te=vulkan0,vae=cpu")]
+    public void BuildBackendSpec_MapsBackendToDeviceString(SdGpuBackend backend, bool textEncoderOnGpu, string expected)
     {
-        AssertEx.Equal(expected, ImageServerArgumentBuilder.BuildBackendSpec(backend));
+        AssertEx.Equal(expected, ImageServerArgumentBuilder.BuildBackendSpec(backend, textEncoderOnGpu));
+    }
+
+    /// <summary>The operator knob reaches the launch line through <see cref="ImageServerArgumentBuilder.Build" />, not only the helper.</summary>
+    [Test]
+    public void Build_TextEncoderOnGpu_PlacesTextEncoderOnTheGpuDevice()
+    {
+        IReadOnlyList<ImageModelPart> parts =
+        [
+            Part(ImageModelPartRole.Diffusion, "qwen-image-Q4_K_M.gguf", "/models/qwen/qwen-image-Q4_K_M.gguf"),
+            Part(ImageModelPartRole.Llm, "Qwen3-VL-8B.gguf", "/models/qwen/Qwen3-VL-8B.gguf")
+        ];
+        var options = new StableDiffusionRuntimeOptions { TextEncoderOnGpu = true };
+
+        var spec = ImageServerArgumentBuilder.Build("qwen-image", "/bin/sd-server", parts, SdGpuBackend.Cuda, 18201, options, threads: 16);
+
+        AssertEx.Equal("diffusion=cuda0,te=cuda0,vae=cpu", spec.Arguments[IndexOf(spec.Arguments, "--backend") + 1]);
     }
 
     private static ImageModelPart Part(ImageModelPartRole role, string fileName, string localPath)

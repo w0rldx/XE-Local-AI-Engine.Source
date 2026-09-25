@@ -51,10 +51,10 @@ internal static class ImageServerArgumentBuilder
 
         AppendModelArgs(args, parts);
 
-        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag, per spike section 4A). A GPU build keeps the text encoder and VAE on CPU to conserve VRAM because
-        // the diffusion transformer dominates the memory budget (section 4.3). The CPU floor passes the bare cpu device.
+        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag, per spike section 4A). A GPU build keeps the text encoder and VAE on CPU by default (model-fit
+        // charges only the diffusion part, section 4.3); TextEncoderOnGpu moves the text encoder to the GPU for measurement rounds. The CPU floor passes the bare cpu device and ignores the knob.
         args.Add("--backend");
-        args.Add(BuildBackendSpec(backend));
+        args.Add(BuildBackendSpec(backend, options.TextEncoderOnGpu));
 
         args.Add("-t");
         args.Add(threads.ToString(CultureInfo.InvariantCulture));
@@ -129,12 +129,12 @@ internal static class ImageServerArgumentBuilder
     }
 
     /// <summary>Maps the selected backend to the sd-server <c>--backend</c> component=device string.</summary>
-    internal static string BuildBackendSpec(SdGpuBackend backend)
+    internal static string BuildBackendSpec(SdGpuBackend backend, bool textEncoderOnGpu)
     {
         return backend switch
         {
-            SdGpuBackend.Cuda => $"diffusion=cuda0,{TextEncoderBackendKey}=cpu,vae=cpu",
-            SdGpuBackend.Vulkan => $"diffusion=vulkan0,{TextEncoderBackendKey}=cpu,vae=cpu",
+            SdGpuBackend.Cuda => $"diffusion=cuda0,{TextEncoderBackendKey}={(textEncoderOnGpu ? "cuda0" : "cpu")},vae=cpu",
+            SdGpuBackend.Vulkan => $"diffusion=vulkan0,{TextEncoderBackendKey}={(textEncoderOnGpu ? "vulkan0" : "cpu")},vae=cpu",
             _ => "cpu"
         };
     }

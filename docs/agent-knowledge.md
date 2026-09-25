@@ -2101,6 +2101,22 @@ any row mutation) accepted during the drain after Stop and then raced by a late 
 
 ---
 
+### PROPOSED (awaiting operator approval): a provider's `TryAddSingleton(new XOptions())` binds NOTHING; prove a config key end to end before measuring with it
+
+**Rule:** a provider module that registers its options as `services.TryAddSingleton(new XOptions())` gives the host a
+bare default; the `SectionName` on the class is a promise the HOST has to keep by binding the section first
+(`configuration.GetSection(XOptions.SectionName).Bind(options)` registered before the provider module, as
+`AddNodeImages` now does for `StableDiffusionRuntime`). Before a live round relies on a config/env knob, prove the
+value reached the process: `ps -o args -C <child>` for a launch flag, or a log line for anything else. A unit test that
+hands the options object straight to the consumer proves the consumer, not the binding. **Failure prevented:** the
+2026-09-25 text-encoder round set `StableDiffusionRuntime__TextEncoderOnGpu=true`, saw it in the node's environment,
+and sd-server still launched with `te=cpu`: no `StableDiffusionRuntime:*` key (port range, TTL, cap) had ever reached
+the supervisor since the section was introduced. Phase B of the round was void until the host bound the section.
+**Authority:** `AddNodeImagesExtensions.BindStableDiffusionRuntimeOptions` + `StableDiffusionRuntimeOptionsBindingTests`;
+`Plans/tester-round3-2026-09-25/progress/live-te/ROUND.md`.
+
+---
+
 ## 4. Agent Mode, MAF, sandbox, cloud providers
 
 ### Sandbox: the two guards are mandatory *together*

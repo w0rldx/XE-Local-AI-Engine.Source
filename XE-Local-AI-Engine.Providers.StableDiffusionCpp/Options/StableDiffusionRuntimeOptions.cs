@@ -91,4 +91,14 @@ public sealed class StableDiffusionRuntimeOptions
     ///     failed spawn hang effectively forever.
     /// </summary>
     public TimeSpan MaxReadinessTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    ///     Places the text encoder on the GPU (<c>te=cuda0</c> / <c>te=vulkan0</c>) instead of the CPU. A measurement
+    ///     and operator knob, default off; config only, never surfaced in node settings or the SPA.
+    /// </summary>
+    /// <remarks>
+    ///     Applies to the managed GPU backends only; the CPU floor ignores it and the VAE stays on the CPU either way.
+    ///     Model-fit still charges only the diffusion part against VRAM, so with this on the fit verdict undercounts.
+    /// </remarks>
+    public bool TextEncoderOnGpu { get; set; }
 }
