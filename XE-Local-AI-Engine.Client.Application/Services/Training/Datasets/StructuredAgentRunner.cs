@@ -41,6 +41,7 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
         ArgumentNullException.ThrowIfNull(serviceProvider);
         _capabilityResolver = capabilityResolver;
         _loggerFactory = loggerFactory;
+        _logger = loggerFactory.CreateLogger<StructuredAgentRunner>();
         _serviceProvider = serviceProvider;
     }
 
@@ -64,7 +65,11 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
     /// </remarks>
     internal static readonly TimeSpan TurnTimeout = TrainingAiClientPolicy.TurnTimeout;
 
+    /// <summary>Output budget for a reasoning teacher: its thinking counts against the budget before the record does.</summary>
+    internal const int ReasoningMaxOutputTokens = 8192;
+
     private readonly IModelCapabilityResolver _capabilityResolver;
+    private readonly ILogger<StructuredAgentRunner> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
 
@@ -104,11 +109,16 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
 
         List<ChatMessage> seed =
         [
-            new(ChatRole.System, request.SystemInstructions),
+            new(ChatRole.System, ComposeSystemMessage(request)),
             new(ChatRole.User, request.UserPrompt)
         ];
 
         var chatOptions = TrainingAiClientPolicy.CreateOptions(request.ModelName, request.Temperature);
+        if (supportsThinking)
+        {
+            // Live-found: a reasoning teacher spent the shared budget thinking and returned no answer at all.
+            chatOptions.MaxOutputTokens = ReasoningMaxOutputTokens;
+        }
         if (TryParseSeed(request.Seed, out var seedValue))
         {
             chatOptions.Seed = seedValue;
@@ -129,12 +139,19 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
             }, turnCancellation.Token);
             activity?.SetStatus(ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
+            var reasoningLength = response.Messages.SelectMany(message => message.Contents).OfType<TextReasoningContent>().Sum(content => content.Text.Length);
+            // Shape only, never content: generated text is training data and stays out of the logs.
+            _logger.LogDebug("Teacher turn for {ModelName} returned {TextLength} answer characters and {ReasoningLength} reasoning characters.",
+                request.ModelName, text.Length, reasoningLength);
+            var emptyReason = reasoningLength > 0
+                ? $"The teacher returned reasoning but no answer; it may have spent its {chatOptions.MaxOutputTokens} token output budget thinking."
+                : "The teacher returned an empty completion.";
             return string.IsNullOrWhiteSpace(text)
                 ? new StructuredAgentResult
                 {
                     Success = false,
                     Text = string.Empty,
-                    FailureReason = "The teacher returned an empty completion."
+                    FailureReason = emptyReason
                 }
                 : new StructuredAgentResult
                 {
@@ -164,6 +181,20 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
             };
         }
     }
+
+    /// <summary>
+    ///     In <see cref="TeacherOutputMode.ValidateAfter" /> nothing constrains decoding, so the schema the pipeline
+    ///     validates against has to be in the prompt: without it the teacher invents its own property names.
+    /// </summary>
+    private static string ComposeSystemMessage(StructuredAgentRequest request) =>
+        request.OutputMode == TeacherOutputMode.Constrained
+            ? request.SystemInstructions
+            : $"""
+               {request.SystemInstructions}
+
+               Answer with exactly one JSON object and nothing else. It must conform to this JSON schema and use exactly these property names:
+               {request.ResponseSchema.GetRawText()}
+               """;
 
     private static bool TryParseSeed(string? seed, out long value)
     {

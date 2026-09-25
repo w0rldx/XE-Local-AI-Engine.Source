@@ -151,6 +151,27 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     }
 
     [Test]
+    public async Task DispatchAsync_WhenHandlerRejectsItsParameters_RecordsTheValidationMessageVerbatim()
+    {
+        // F-60: a fire-time parameter rejection names the fix on the run row instead of the generic constant.
+        const string reason = "The scheduled matrix must name between 1 and 10 models.";
+        var handler = new ConfigurableHandler((_, _) => throw new ScheduledJobValidationException(reason));
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-invalid", Now, Now, CancellationToken.None);
+
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
+            ScheduledRunStatus.Failed,
+            Arg.Any<long?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Is<string?>(message => message == reason),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task DispatchAsync_WhenHandlerThrowsGenericException_StillRecordsGenericMessage()
     {
         var handler = new ConfigurableHandler((_, _) => throw new InvalidOperationException("raw internal detail"));

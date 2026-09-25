@@ -78,11 +78,12 @@ public sealed class SeedAssemblyContractTests
         _ = await runner.RunAsync(chatClient, TeacherRequest(FirstTurn));
         _ = await runner.RunAsync(chatClient, TeacherRequest(SecondTurn));
 
-        AssertSeedContract(chatClient);
+        // ValidateAfter has no grammar, so the runner appends the record schema after the instructions (F-57).
+        AssertSeedContract(chatClient, TeacherSchema.GetRawText());
     }
 
     // The shared contract, asserted identically for all three sites against the messages the provider actually saw.
-    private static void AssertSeedContract(RecordingChatClient chatClient)
+    private static void AssertSeedContract(RecordingChatClient chatClient, string? systemSuffix = null)
     {
         AssertEx.Equal(expected: 2, chatClient.Calls.Count, "each site must have reached the provider once per run.");
 
@@ -98,8 +99,18 @@ public sealed class SeedAssemblyContractTests
             AssertEx.Equal(expected: 2, messages.Count,
                 "the outbound prompt is exactly the leading system message plus this run's turns — nothing else is injected.");
             AssertEx.Equal(ChatRole.System, messages[0].Role, "the instructions must be the LEADING message.");
-            AssertEx.Equal(Instructions, messages[0].Text);
-            AssertEx.Equal(expected: 1, messages.Count(message => message.Role == ChatRole.System && string.Equals(message.Text, Instructions, StringComparison.Ordinal)),
+            var systemText = messages[0].Text;
+            if (systemSuffix is null)
+            {
+                AssertEx.Equal(Instructions, systemText);
+            }
+            else
+            {
+                AssertEx.True(systemText.StartsWith(Instructions, StringComparison.Ordinal), "the instructions lead the system message.");
+                AssertEx.True(systemText.EndsWith(systemSuffix, StringComparison.Ordinal), "the schema block follows the instructions.");
+            }
+
+            AssertEx.Equal(expected: 1, messages.Sum(message => message.Role == ChatRole.System ? CountOccurrences(message.Text, Instructions) : 0),
                 "the instructions must be delivered exactly once — a non-null ChatClientAgent ctor instructions argument would double-send them.");
 
             var outboundInstructions = options?.Instructions ?? string.Empty;
@@ -110,6 +121,17 @@ public sealed class SeedAssemblyContractTests
             AssertEx.Equal(expectedTurns[index], messages[1].Text,
                 "each run must send its own turn; a persisted session would replay the previous run's history here.");
         }
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        for (var index = text.IndexOf(value, StringComparison.Ordinal); index >= 0; index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     private static InvocationAgentDefinition Definition(string userTurn)

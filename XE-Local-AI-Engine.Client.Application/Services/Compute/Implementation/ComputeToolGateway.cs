@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
@@ -39,6 +41,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// <summary>The marker every capped stream in this product ends with, so a model reads one convention.</summary>
     private const string Marker = "…[output truncated]";
 
+    private const string StderrLabel = "\nstderr:\n";
+
     /// <summary>
     ///     The jail subdirectory the sandbox presents as <see cref="SandboxIsolatedPaths.Home" />, named here as the
     ///     sandbox-relative path the provider's reset operation takes.
@@ -60,6 +64,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     private readonly ILogger<ComputeToolGateway> _logger;
     private readonly LocalContainerOptions _nodeOptions;
     private readonly ComputeOptions _options;
+    private readonly int _maxToolResultCharacters;
     private readonly IAgentSandboxRuntimeProvider _provider;
 
     public ComputeToolGateway(IAgentSandboxRuntimeProvider provider,
@@ -67,6 +72,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         IComputePythonEnvironment environment,
         IOptions<ComputeOptions> options,
         IOptions<LocalContainerOptions> nodeOptions,
+        IOptions<AgentToolPipelineOptions> pipelineOptions,
         ILogger<ComputeToolGateway> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -76,6 +82,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         _options = options.Value;
         ArgumentNullException.ThrowIfNull(nodeOptions);
         _nodeOptions = nodeOptions.Value;
+        ArgumentNullException.ThrowIfNull(pipelineOptions);
+        _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -161,7 +169,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             }
 
             await EnsureScratchAsync(handle, cancellationToken);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId), cancellationToken);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId, request.TimeoutSeconds), cancellationToken);
             return ComputeExecutionOutcome.Executed(result);
         }
         catch (ComputeEnvironmentException exception)
@@ -269,8 +277,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string invocationId)
+    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string invocationId, int? requestedTimeoutSeconds)
     {
+        var timeoutSeconds = requestedTimeoutSeconds is { } requested && requested > 0 && requested < _options.TimeoutSeconds
+            ? requested
+            : _options.TimeoutSeconds;
         return new SandboxCommandRequest
         {
             ExecutionId = "compute-" + invocationId,
@@ -282,7 +293,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             Arguments = ["-I", "-"],
             StandardInput = code,
             Environment = BuildEnvironment(),
-            Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds)
+            Timeout = TimeSpan.FromSeconds(timeoutSeconds)
         };
     }
 
@@ -319,6 +330,12 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     Renders the outcome in the same shape <c>HostProcessExecutor.FormatResult</c> produces for a custom Command
     ///     tool, including the truncation marker, so a model that has learned to read one command result reads both.
     /// </summary>
+    /// <remarks>
+    ///     The WHOLE rendering fits <see cref="ComputeOptions.MaxOutputBytes" /> (or a tighter tool-result
+    ///     budget), because the tool-result pipeline clips the END of anything longer, and the end is where the stderr
+    ///     traceback is (F-61). Stderr may claim half the stream budget and keeps its TAIL; stdout keeps its head and
+    ///     is trimmed first. Bytes bound characters, so a byte budget also fits the pipeline's character budget.
+    /// </remarks>
     private string FormatResult(SandboxCommandResult result)
     {
         var builder = new StringBuilder();
@@ -330,20 +347,63 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
         builder.Append(CultureInfo.InvariantCulture, $"exit_code: {result.ExitCode}\n");
         builder.Append("stdout:\n");
-        builder.Append(Cap(result.StandardOutput, result.StandardOutputTruncated));
-        builder.Append("\nstderr:\n");
-        builder.Append(Cap(result.StandardError, result.StandardErrorTruncated));
+
+        var budget = Math.Min(Math.Min(_options.MaxOutputBytes, _maxToolResultCharacters), ToolResultBudgetScope.Current ?? int.MaxValue);
+        var streamBudget = Math.Max(0,
+            budget - Encoding.UTF8.GetByteCount(builder.ToString()) - Encoding.UTF8.GetByteCount(StderrLabel) - (3 * (Encoding.UTF8.GetByteCount(Marker) + 1)));
+        var stdoutBytes = Encoding.UTF8.GetByteCount(result.StandardOutput);
+        var stderrBytes = Encoding.UTF8.GetByteCount(result.StandardError);
+        var stdoutAllowed = Math.Min(stdoutBytes, streamBudget - Math.Min(stderrBytes, streamBudget / 2));
+        var stderrAllowed = Math.Min(stderrBytes, streamBudget - stdoutAllowed);
+
+        if (stdoutBytes > stdoutAllowed)
+        {
+            builder.Append(TruncateToUtf8ByteBudget(result.StandardOutput, stdoutAllowed)).Append(Marker);
+        }
+        else
+        {
+            builder.Append(result.StandardOutput);
+            if (result.StandardOutputTruncated)
+            {
+                builder.Append(Marker);
+            }
+        }
+
+        builder.Append(StderrLabel);
+        if (stderrBytes > stderrAllowed)
+        {
+            builder.Append(Marker).Append('\n').Append(KeepUtf8Tail(result.StandardError, stderrAllowed));
+        }
+        else
+        {
+            builder.Append(result.StandardError);
+        }
+
+        if (result.StandardErrorTruncated)
+        {
+            builder.Append(Marker);
+        }
+
         return builder.ToString();
     }
 
-    private string Cap(string value, bool providerTruncated)
+    /// <summary>Keeps the TAIL of a stream within a BYTE budget without ever splitting a rune.</summary>
+    private static string KeepUtf8Tail(string value, int budget)
     {
-        if (Encoding.UTF8.GetByteCount(value) <= _options.MaxOutputBytes)
+        var excess = Encoding.UTF8.GetByteCount(value) - budget;
+        var charIndex = 0;
+        foreach (var rune in value.EnumerateRunes())
         {
-            return providerTruncated ? value + Marker : value;
+            if (excess <= 0)
+            {
+                break;
+            }
+
+            excess -= rune.Utf8SequenceLength;
+            charIndex += rune.Utf16SequenceLength;
         }
 
-        return TruncateToUtf8ByteBudget(value, _options.MaxOutputBytes) + Marker;
+        return value[charIndex..];
     }
 
     /// <summary>

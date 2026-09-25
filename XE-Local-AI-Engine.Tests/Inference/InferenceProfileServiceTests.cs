@@ -55,8 +55,10 @@ public sealed class InferenceProfileServiceTests
         AssertEx.Equal(8192, profile.CtxSize);
         AssertEx.Equal<int?>(33, profile.NGpuLayers);
         AssertEx.Equal("Explored", profile.Status);
+        AssertEx.Equal("Q4_K_M", profile.Quant, "The registry quant label wins over the header's numeric general.file_type.");
         await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(
-            Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == 33 && input.Backend == "cuda" && input.LlamacppBuild == Build),
+            Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == 33 && input.Backend == "cuda" && input.LlamacppBuild == Build
+                                                   && input.Quant == "Q4_K_M"),
             Arg.Any<CancellationToken>());
     }
 
@@ -623,6 +625,18 @@ public sealed class InferenceProfileServiceTests
                      .GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await fixture.ProfileStore.DidNotReceive()
                      .MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ListProfiles_WhenARowRecordedTheNumericFileType_ShowsTheRegistryQuantLabel()
+    {
+        var fixture = new ServiceFixture();
+        _ = fixture.ProfileStore.ListAsync(Arg.Any<CancellationToken>())
+                   .Returns<IReadOnlyList<InferenceProfileRecord>>([ExploredRecord() with { Quant = "15" }]);
+
+        var profiles = await fixture.CreateService().ListProfilesAsync(CancellationToken.None);
+
+        AssertEx.Equal("Q4_K_M", profiles[0].Quant, "A legacy row carrying general.file_type 15 must not render as '15'.");
     }
 
     private static InferenceProfileRecord ExploredRecord()

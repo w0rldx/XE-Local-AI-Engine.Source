@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Compute;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
@@ -559,6 +560,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             environment,
             Options.Create(Enabled(options: null)),
             Options.Create(new LocalContainerOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
             NullLogger<ComputeToolGateway>.Instance);
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
@@ -579,6 +581,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             _environment,
             Options.Create(Enabled(options)),
             Options.Create(new LocalContainerOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

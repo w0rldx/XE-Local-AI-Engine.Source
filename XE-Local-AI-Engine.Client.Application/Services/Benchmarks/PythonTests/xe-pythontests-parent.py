@@ -11,10 +11,10 @@
 import base64
 import builtins
 import ctypes
-import io
 import json
 import os
 import select
+import signal
 import subprocess
 import sys
 import threading
@@ -67,6 +67,34 @@ if not _harden():
 
 class _CandidateError(Exception):
     """What a child-named exception becomes when it is not a builtins Exception subclass."""
+
+
+class _TestDeadline(BaseException):
+    """The criterion's deadline on the whole test phase. BaseException, so a test's `except Exception` cannot absorb it."""
+
+
+# "hit" is the verdict's own record that the deadline fired: unittest may file the raise under a test decorated
+# expectedFailure and count nothing as failed, so its bookkeeping cannot be what decides the outcome.
+_deadline = {"armed": False, "hit": False, "result": None}
+_DEADLINE_MESSAGE = "the tests did not finish within " + format(_CALL_TIMEOUT, "g") + "s"
+
+
+def _on_deadline(signum, frame):
+    # One-shot: the per-call deadline only bounds a candidate CALL, so a test body that sleeps or loops in this
+    # process is bounded here. unittest records the raise as that test's error, so the result is stopped too,
+    # which keeps the remaining tests from running past the deadline.
+    if not _deadline["armed"]:
+        return
+    _deadline["armed"] = False
+    _deadline["hit"] = True
+    if _deadline["result"] is not None:
+        _deadline["result"].stop()
+    raise _TestDeadline(_DEADLINE_MESSAGE)
+
+
+def _disarm():
+    _deadline["armed"] = False
+    signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 class _Boundary:
@@ -212,6 +240,9 @@ try:
     # An operator's print() is evidence, not protocol. fd 1 stays reserved for the single marker line.
     sys.stdout = sys.stderr
     _verdict["phase"] = "tests"
+    signal.signal(signal.SIGALRM, _on_deadline)
+    _deadline["armed"] = True
+    signal.setitimer(signal.ITIMER_REAL, _CALL_TIMEOUT)
     exec(compile(base64.b64decode(_TESTS_B64), "<tests>", "exec"), _namespace)
 
     _cases = [value for value in _namespace.values()
@@ -220,7 +251,10 @@ try:
         _verdict["phase"] = "run"
         _suite = unittest.TestSuite(
             [unittest.defaultTestLoader.loadTestsFromTestCase(case) for case in _cases])
-        _result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(_suite)
+        _result = unittest.TestResult()
+        _deadline["result"] = _result
+        _suite.run(_result)
+        _disarm()
         _verdict["collected"] = _result.testsRun
         _verdict["failed"] = len(_result.failures) + len(_result.errors)
         if _result.failures or _result.errors:
@@ -230,6 +264,7 @@ try:
         # alternative -- parsing a framework's textual output -- would couple the scorer to a runner's format.
         _verdict["collected"] = 1
         _verdict["failed"] = 0
+    _disarm()
     _verdict["passed"] = _verdict["collected"] - _verdict["failed"]
 except BaseException as _error:  # noqa: BLE001 - a BaseException escaping the tests must still reach the verdict line
     _verdict["collected"] = max(1, _verdict["collected"])
@@ -237,6 +272,7 @@ except BaseException as _error:  # noqa: BLE001 - a BaseException escaping the t
     _verdict["passed"] = _verdict["collected"] - _verdict["failed"]
     _verdict["error"] = type(_error).__name__ + ": " + str(_error)[:500]
 finally:
+    _disarm()
     sys.stdout = _stdout
     if _BOUNDARY is not None:
         _child_stdout, _child_stderr = _BOUNDARY.transcript()
@@ -244,6 +280,12 @@ finally:
         sys.stderr.write("\n--- candidate stderr ---\n" + _child_stderr + "\n")
         if _child_stdout:
             sys.stderr.write("--- candidate stdout ---\n" + _child_stdout + "\n")
+    if _deadline["hit"]:
+        # A timed-out criterion never scores, whatever unittest recorded for the interrupted test.
+        _verdict["collected"] = max(1, _verdict["collected"])
+        _verdict["failed"] = max(1, _verdict["failed"])
+        _verdict["passed"] = _verdict["collected"] - _verdict["failed"]
+        _verdict["error"] = "_TestDeadline: " + _DEADLINE_MESSAGE
     # There is no path through this process that skips the marker, which is what makes "0 markers implies 0" a
     # statement about the SANDBOX rather than about the tests.
     _emit()

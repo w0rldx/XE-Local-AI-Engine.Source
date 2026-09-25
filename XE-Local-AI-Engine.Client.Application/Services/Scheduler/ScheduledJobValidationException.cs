@@ -1,9 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Thrown when a scheduled-job create/update/trigger request fails validation in
-///     <see cref="IScheduledJobManagementService" />. The message is safe to surface to callers — it never echoes raw
-///     job parameters or any other secret material.
+///     Thrown when a request to <see cref="IScheduledJobManagementService" /> or a handler's parameter check fails
+///     validation. The message is safe to surface to callers — it never echoes raw job parameters or secrets.
 /// </summary>
 public sealed class ScheduledJobValidationException : Exception
 {

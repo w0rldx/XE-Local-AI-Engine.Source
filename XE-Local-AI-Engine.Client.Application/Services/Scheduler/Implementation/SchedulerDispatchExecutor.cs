@@ -209,10 +209,10 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 run.Id,
                 fireInstanceId);
 
-            // Only a handler-declared, already-operator-safe ScheduledJobExecutionException widens the UI-visible
-            // message; every other exception type keeps the generic constant so no raw message or stack text leaks.
-            var errorMessage = exception is ScheduledJobExecutionException safe
-                ? safe.Message
+            // Only the two operator-safe exception types widen the UI-visible message, since a parameter rejection never
+            // echoes raw values. Every other type keeps the generic constant so no raw message or stack text leaks.
+            var errorMessage = exception is ScheduledJobExecutionException or ScheduledJobValidationException
+                ? exception.Message
                 : "The scheduled job failed during execution.";
 
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,

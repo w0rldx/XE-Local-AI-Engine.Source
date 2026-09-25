@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
 using System.Globalization;
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
@@ -420,21 +423,166 @@ public sealed class ComputeToolGatewayTests
     {
         var provider = new RecordingSandboxProvider(Contained)
         {
-            Result = Completed(exitCode: 0, standardOutput: new string('a', 500), standardError: string.Empty)
+            Result = Completed(exitCode: 0, standardOutput: new string('a', 5_000), standardError: string.Empty)
         };
         var gateway = CreateGateway(provider, new ComputeOptions
         {
-            MaxOutputBytes = 100
+            MaxOutputBytes = ComputeOptions.MinOutputBytes
         });
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {
-            Code = "print('a' * 500)"
+            Code = "print('a' * 5000)"
         });
 
         AssertEx.Contains(rendered, "…[output truncated]");
-        AssertEx.False(rendered.Contains(new string('a', 200), StringComparison.Ordinal),
+        AssertEx.False(rendered.Contains(new string('a', ComputeOptions.MinOutputBytes), StringComparison.Ordinal),
             "the capped stream must not carry more than the configured budget");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenStdoutFillsTheCapAndTheScriptFails_KeepsTheTracebackTailWithinTheWholeBudget()
+    {
+        // F-61: stdout at the cap pushed the rendering past the same-sized tool-result budget, which clipped the END —
+        // the stderr section and its traceback.
+        var stderr = "Traceback (most recent call last):\n" + new string('w', 50_000) + "\nValueError: boom\n";
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode: 1, standardOutput: new string('a', 70_000), standardError: stderr)
+        };
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print('a' * 70000); raise ValueError('boom')"
+        });
+
+        AssertEx.True(Encoding.UTF8.GetByteCount(rendered) <= new ComputeOptions().MaxOutputBytes,
+            "the whole rendering must fit the budget, or the tool-result pipeline clips its end");
+        AssertEx.Contains(rendered, "exit_code: 1");
+        AssertEx.Contains(rendered, "\nstderr:\n…[output truncated]\n");
+        AssertEx.True(rendered.EndsWith("ValueError: boom\n", StringComparison.Ordinal), "the traceback's last line must survive");
+        AssertEx.Contains(rendered, new string('a', 20_000), message: "stdout keeps the head it can fit");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenATighterToolResultBudgetIsInScope_FitsThatBudgetInstead()
+    {
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode: 1, standardOutput: new string('a', 10_000), standardError: new string('w', 10_000) + "KeyError: x\n")
+        };
+        var gateway = CreateGateway(provider);
+
+        string rendered;
+        using (ToolResultBudgetScope.BeginScope(2_000))
+        {
+            rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+            {
+                Code = "raise KeyError('x')"
+            });
+        }
+
+        AssertEx.True(rendered.Length <= 2_000, $"rendered {rendered.Length} chars");
+        AssertEx.True(rendered.EndsWith("KeyError: x\n", StringComparison.Ordinal), "the traceback's last line must survive");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheToolPipelineBudgetIsBelowTheOutputCap_FitsThePipelineBudget()
+    {
+        // An operator-set pipeline budget below Compute:MaxOutputBytes would otherwise clip the tail again.
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode: 1, standardOutput: new string('a', 10_000), standardError: new string('w', 10_000) + "KeyError: x\n")
+        };
+        var gateway = CreateGateway(provider, pipelineOptions: new AgentToolPipelineOptions
+        {
+            MaxToolResultCharacters = 2_000
+        });
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "raise KeyError('x')"
+        });
+
+        AssertEx.True(rendered.Length <= 2_000, $"rendered {rendered.Length} chars");
+        AssertEx.True(rendered.EndsWith("KeyError: x\n", StringComparison.Ordinal), "the traceback's last line must survive");
+    }
+
+    [Test]
+    [Arguments(5, 5)]
+    [Arguments(500, 30)]
+    [Arguments(null, 30)]
+    public async Task ExecuteDetailedAsync_ACallerTimeoutCanOnlyTightenTheNodeCeiling(int? requested, int expectedSeconds)
+    {
+        // F-62: a pythonTests criterion's timeout must bound the sandbox itself; it may never buy more than the node grants.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            TimeoutSeconds = 30
+        });
+
+        _ = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)",
+            TimeoutSeconds = requested
+        }, requireResourceLimits: false);
+
+        AssertEx.Equal(TimeSpan.FromSeconds(expectedSeconds), AssertEx.NotNull(provider.CommandRequest).Timeout);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AtTheMinimumBudget_StaysWithinItAndKeepsTheHeadingsAndTheTracebackTail()
+    {
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = -1,
+                Completed = false,
+                StandardOutput = new string('a', 100_000),
+                StandardError = new string('w', 100_000) + "\nRuntimeError: late\n"
+            }
+        };
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            MaxOutputBytes = ComputeOptions.MinOutputBytes
+        });
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print('a' * 100000)"
+        });
+
+        AssertEx.True(Encoding.UTF8.GetByteCount(rendered) <= ComputeOptions.MinOutputBytes, $"rendered {Encoding.UTF8.GetByteCount(rendered)} bytes");
+        AssertEx.Contains(rendered, "did not finish within");
+        AssertEx.Contains(rendered, "stdout:\n");
+        AssertEx.Contains(rendered, "\nstderr:\n…[output truncated]\n");
+        AssertEx.True(rendered.EndsWith("RuntimeError: late\n", StringComparison.Ordinal), "the traceback's last line must survive");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheBudgetLeavesNoRoomForEitherStream_RendersOnlyTheHeadingsAndMarkers()
+    {
+        // A per-run scope can be seeded below the framing overhead; the result then says both streams were cut
+        // rather than pretending either was empty.
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = Completed(exitCode: 1, standardOutput: "out", standardError: "err")
+        };
+        var gateway = CreateGateway(provider);
+
+        string rendered;
+        using (ToolResultBudgetScope.BeginScope(10))
+        {
+            rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+            {
+                Code = "print(1)"
+            });
+        }
+
+        AssertEx.Equal("exit_code: 1\nstdout:\n…[output truncated]\nstderr:\n…[output truncated]\n", rendered);
     }
 
     [Test]
@@ -503,6 +651,7 @@ public sealed class ComputeToolGatewayTests
             environment,
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
             NullLogger<ComputeToolGateway>.Instance);
 
         var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
@@ -646,7 +795,8 @@ public sealed class ComputeToolGatewayTests
     private static ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider,
         ComputeOptions? options = null,
         IComputePythonEnvironment? environment = null,
-        IAgentHomeIdentityProvider? identityProvider = null)
+        IAgentHomeIdentityProvider? identityProvider = null,
+        AgentToolPipelineOptions? pipelineOptions = null)
     {
         options ??= new ComputeOptions();
         // Every test in this suite is about a node that has OPTED IN. ComputeOptions.Enabled defaults to false — the
@@ -659,6 +809,7 @@ public sealed class ComputeToolGatewayTests
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options),
             Options.Create(new LocalContainerOptions()),
+            Options.Create(pipelineOptions ?? new AgentToolPipelineOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

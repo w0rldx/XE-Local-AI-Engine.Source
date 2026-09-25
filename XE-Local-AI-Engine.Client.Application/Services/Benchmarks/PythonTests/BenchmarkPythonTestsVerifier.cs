@@ -29,6 +29,12 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
 {
     private const int EvidenceChars = 2048;
 
+    /// <summary>
+    ///     How far the sandbox wall clock trails the harness's per-call deadline, so a hanging candidate call reports its
+    ///     structured per-test verdict before the jail is killed.
+    /// </summary>
+    private const int SandboxGraceSeconds = 2;
+
     private readonly IComputeToolGateway _gateway;
     private readonly ILogger<BenchmarkPythonTestsVerifier> _logger;
     private readonly ComputeOptions _options;
@@ -80,7 +86,10 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         // and process count is refused rather than run. Strictly tighter than run_python, which a human approves call by call and which deliberately still runs there.
         var outcome = await _gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
         {
-            Code = composed.Program
+            Code = composed.Program,
+            // The harness enforces the criterion deadline on the whole test phase itself; the grace is only for its
+            // teardown and verdict, so the structured timeout wins over the jail kill. Still capped at the node ceiling.
+            TimeoutSeconds = Math.Min(timeout + SandboxGraceSeconds, _options.TimeoutSeconds)
         }, requireResourceLimits: true, cancellationToken);
         if (outcome.Result is not { } result)
         {
@@ -106,7 +115,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         return new BenchmarkJudgeVerifierResultV1(criterion.Id,
             BenchmarkJudgeCriterionKinds.PythonTests,
             verdict.Scored,
-            Detail(verdict, result, candidate));
+            Detail(verdict, result, candidate, timeout));
     }
 
     private static BenchmarkJudgeVerifierResultV1 Fail(BenchmarkJudgeRubricCriterionV1 criterion, string reason, string candidate) =>
@@ -134,14 +143,14 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
     ///     case. The child's stderr is where a candidate's traceback lands and is labelled candidate-controlled; the
     ///     parent's raw STDOUT is never included, because that is the channel the verdict is read from.
     /// </remarks>
-    private static string Detail(BenchmarkPythonTestsVerdict verdict, SandboxCommandResult result, string candidate)
+    private static string Detail(BenchmarkPythonTestsVerdict verdict, SandboxCommandResult result, string candidate, int timeoutSeconds)
     {
         var builder = new StringBuilder();
         if (verdict.MarkerCount == 0)
         {
             builder.Append(result.Completed
                 ? "The harness printed no verdict, so the candidate denied one (it killed the harness, or the jail was terminated). "
-                : $"The execution did not finish within {result.Duration.TotalSeconds:F0}s and its process tree was terminated. ");
+                : $"The execution did not finish within {timeoutSeconds}s and its process tree was terminated. ");
         }
         else if (verdict.MarkerCount > 1)
         {

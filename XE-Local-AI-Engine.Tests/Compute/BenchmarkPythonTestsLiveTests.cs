@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Compute;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -161,6 +162,63 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
                                        """, DoublingTests, criterionTimeoutSeconds: 5, computeTimeoutSeconds: 60);
 
         AssertEx.False(result.Passed);
+        // A structured verdict, not a jail kill: the test-phase deadline or the per-call deadline, whichever fires first.
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "within 5");
+    }
+
+    [Test]
+    public async Task PythonTests_HangingTestBody_IsBoundedByTheCriterionTimeout_NotTheNodeCeiling()
+    {
+        // F-62: the harness's per-call deadline cannot reach a test body that hangs in the parent itself.
+        var result = await VerifyAsync("def solve(n):\n    return n * 2\n",
+            "import time\ntime.sleep(120)\n",
+            criterionTimeoutSeconds: 5,
+            computeTimeoutSeconds: 60);
+
+        AssertEx.False(result.Passed);
+        // The harness's own deadline reports it as a structured per-test verdict, not a jail kill.
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "did not finish within 5s");
+    }
+
+    [Test]
+    public async Task PythonTests_TestBodyThatOutlivesTheCriterionTimeout_FailsEvenThoughItWouldPass()
+    {
+        // Codex P2: with only per-call deadlines and a sandbox grace, a 6 s body under a 5 s criterion PASSED.
+        var result = await VerifyAsync("def solve(n):\n    return n * 2\n",
+            "import time\ntime.sleep(6)\nassert solve(10) == 20\n",
+            criterionTimeoutSeconds: 5,
+            computeTimeoutSeconds: 60);
+
+        AssertEx.False(result.Passed, $"detail was: {result.Detail}");
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "did not finish within 5s");
+    }
+
+    [Test]
+    public async Task PythonTests_DeadlineInsideAnExpectedFailure_StillScores0InTheRealJail()
+    {
+        // Codex round 2: a deadline that unittest files as an expected failure must still fail the criterion.
+        var result = await VerifyAsync("def solve(n):\n    return n * 2\n", """
+                                                                          import time
+                                                                          import unittest
+
+
+                                                                          class Deadline(unittest.TestCase):
+                                                                              @unittest.expectedFailure
+                                                                              def test_a_sleeps_past_the_deadline(self):
+                                                                                  time.sleep(30)
+
+                                                                              def test_b_would_fail(self):
+                                                                                  assert solve(10) == 21
+                                                                          """,
+            criterionTimeoutSeconds: 3,
+            computeTimeoutSeconds: 60);
+
+        AssertEx.False(result.Passed, $"detail was: {result.Detail}");
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "did not finish within 3s");
     }
 
     [Test]
@@ -257,6 +315,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
             _environment,
             Options.Create(options),
             Options.Create(new LocalContainerOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
             NullLogger<ComputeToolGateway>.Instance);
         return new BenchmarkPythonTestsVerifier(gateway, Options.Create(options), NullLogger<BenchmarkPythonTestsVerifier>.Instance);
     }

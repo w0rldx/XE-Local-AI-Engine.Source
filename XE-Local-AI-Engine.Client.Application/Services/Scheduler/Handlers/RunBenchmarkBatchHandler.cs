@@ -137,6 +137,8 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         HistoryDetailLevel = HistoryDetailLevel.Detailed
     };
 
+    public void ValidateParameters(string? parametersJson) => _ = ParseAndValidate(parametersJson);
+
     public async Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);

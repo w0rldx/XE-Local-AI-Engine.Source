@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
@@ -15,10 +16,21 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// </remarks>
 internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 {
-    private readonly string _cacheRoot;
+    internal static readonly TimeSpan GroupLeaderTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan GroupLeaderPollInterval = TimeSpan.FromMilliseconds(10);
 
-    public LinuxTrainingProcessSpawner(string? cacheRoot = null)
+    private readonly string _cacheRoot;
+    private readonly ILogger<LinuxTrainingProcessSpawner> _logger;
+    private readonly TimeProvider _timeProvider;
+
+    public LinuxTrainingProcessSpawner(TimeProvider timeProvider,
+        ILogger<LinuxTrainingProcessSpawner> logger,
+        string? cacheRoot = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        _timeProvider = timeProvider;
+        _logger = logger;
         _cacheRoot = string.IsNullOrWhiteSpace(cacheRoot) ? TrainingRuntimeLayout.DefaultCacheRoot() : cacheRoot;
     }
 
@@ -38,12 +50,13 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
             throw new TrainingRuntimeException("The Python training runtime is available on Linux only.");
         }
 
-        return SpawnLinux(request, _cacheRoot);
+        return SpawnLinux(request);
     }
 
     [SupportedOSPlatform("linux")]
-    private static ITrainingProcessHandle SpawnLinux(TrainingSpawnRequest request, string cacheRoot)
+    private LinuxTrainingProcessHandle SpawnLinux(TrainingSpawnRequest request)
     {
+        var cacheRoot = _cacheRoot;
         foreach (var directory in TrainingRuntimeEnvironment.TrainEnvironmentDirectories(cacheRoot, request.WorkingDirectory))
         {
             _ = Directory.CreateDirectory(directory);
@@ -51,8 +64,8 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 
         var startInfo = new ProcessStartInfo
         {
-            // setsid puts the child in its own session and process group, so kill(-pgid) reaps every dataloader worker
-            // and compile subprocess too. It leaves PPID alone, so the child stays in dev-stop's descendant closure.
+            // setsid gives the child its own session and group, so kill(-pgid) reaps its workers too. util-linux forks only
+            // when the caller already leads a group; a fresh child does not, so setsid(2) runs in place and keeps pid and PPID.
             FileName = SetsidLocator.ResolveAbsolutePath(),
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
@@ -94,23 +107,83 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 #pragma warning restore CA2000
         try
         {
-            // Identity is read from /proc, not assumed: setsid execs in place when pgid == pid but forks when this host
-            // already leads a session, and the reaper's guarantees rest on the recorded pgid being the signalled one.
-            var stat = LinuxTrainingProcessInspector.TryReadStat(process.Id);
+            // Process.Start returns once setsid is exec'd, before it has called setsid(2): until then the child sits in
+            // THIS host's group, so the pgid is only trusted once the child leads its own group.
+            var launcherPath = ResolveFinalPath(startInfo.FileName);
+            var (stat, leadsGroup, executablePath) = AwaitTrainerIdentity(process.Id,
+                LinuxTrainingProcessInspector.TryReadStat,
+                LinuxTrainingProcessInspector.ResolveExecutablePath,
+                launcherPath,
+                timeout => process.WaitForExit(timeout),
+                _timeProvider);
+            if (!leadsGroup)
+            {
+                _logger.LogWarning("Trainer pid {Pid} did not become its own process-group leader (pgid {Pgid}); it will be signalled by pid only.",
+                    process.Id, stat?.Pgid);
+            }
+            else if (executablePath is null)
+            {
+                _logger.LogWarning("Trainer pid {Pid} had not exec'd past setsid in time; its receipt records no executable path.", process.Id);
+            }
+
             var receipt = new TrainingLaunchReceipt
             {
                 Pid = process.Id,
-                Pgid = stat?.Pgid ?? process.Id,
-                ExecutablePath = LinuxTrainingProcessInspector.ResolveExecutablePath(process.Id),
+                Pgid = stat?.Pgid ?? 0,
+                ExecutablePath = executablePath,
                 StartTicks = stat?.StartTicks ?? 0,
                 RunToken = request.RunToken
             };
-            return new LinuxTrainingProcessHandle(process, receipt, output);
+            return new LinuxTrainingProcessHandle(process, receipt, output, _logger);
         }
         catch
         {
             process.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Polls <c>/proc</c> until <paramref name="pid" /> leads its own group AND has exec'd past the launcher, the child
+    ///     exits, or the timeout passes. setsid(2) runs before the exec, so group leadership alone still reads setsid's path.
+    /// </summary>
+    /// <param name="waitForExit">Blocks up to the given interval and returns true once the child has exited.</param>
+    internal static (TrainingProcessStat? Stat, bool LeadsGroup, string? ExecutablePath) AwaitTrainerIdentity(int pid,
+        Func<int, TrainingProcessStat?> readStat,
+        Func<int, string?> readExecutable,
+        string launcherPath,
+        Func<TimeSpan, bool> waitForExit,
+        TimeProvider timeProvider)
+    {
+        var deadline = timeProvider.GetUtcNow() + GroupLeaderTimeout;
+        while (true)
+        {
+            var stat = readStat(pid);
+            var leadsGroup = stat is { } current && current.Pgid == pid;
+            var executable = readExecutable(pid);
+            if (leadsGroup && executable is not null && !string.Equals(executable, launcherPath, StringComparison.Ordinal))
+            {
+                return (stat, true, executable);
+            }
+
+            // Unconfirmed: a path read now may still be setsid's, and pinning it would make the reaper reject the trainer.
+            if (stat is null || timeProvider.GetUtcNow() >= deadline || waitForExit(GroupLeaderPollInterval))
+            {
+                return (stat, leadsGroup, null);
+            }
+        }
+    }
+
+    /// <summary>The symlink-resolved path, matching how <c>/proc/[pid]/exe</c> reports it.</summary>
+    private static string ResolveFinalPath(string path)
+    {
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? Path.GetFullPath(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return Path.GetFullPath(path);
         }
     }
 

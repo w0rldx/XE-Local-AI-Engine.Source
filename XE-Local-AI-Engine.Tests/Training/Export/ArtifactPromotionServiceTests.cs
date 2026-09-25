@@ -186,6 +186,19 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Promote_WhenTheNameIsNotARegistryBaseName_StatesTheRuleAndTheAppendedQuantization()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        _ = harness.Preflight.ResolveAndReserveAsync(Arg.Any<GgufAcquisitionIntent>(), Arg.Any<CancellationToken>())
+                   .Returns<PreparedGgufAcquisition>(static _ => throw new ArgumentException("invalid"));
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "no ':' suffix", StringComparison.Ordinal);
+        AssertEx.Contains(failure.Message, "'my-model' registers as 'my-model:", StringComparison.Ordinal);
+    }
+
+    [Test]
     [Arguments("different-digest", 4L)]
     [Arguments(null, 5L)]
     public async Task Promote_WhenPreparedIdentityDoesNotMatchDecision_DiscardsWithoutCommit(string? sha256, long sizeBytes)
@@ -276,6 +289,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         }
 
         public ITrainingRunStore Store { get; }
+        public IGgufAcquisitionPreflight Preflight { get; private set; } = null!;
         public IGgufModelImporter Importer { get; }
         public string StagedPath { get; }
         public GgufImportDestination? Destination { get; private set; }
@@ -389,7 +403,8 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             var harness = new Harness(store, importer, stagedPath)
             {
                 _artifact = artifact,
-                _run = run
+                _run = run,
+                Preflight = preflight
             };
             _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(_ => harness._artifact);
             _ = store.SetArtifactQualityDecisionAsync(ArtifactId, Arg.Any<long>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(),

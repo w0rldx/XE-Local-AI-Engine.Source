@@ -216,7 +216,7 @@ public sealed class InferenceBenchmarkHarnessTests
 
         AssertEx.False(metrics.Success);
         AssertEx.True(metrics.ExternalPressureDetected);
-        AssertEx.Contains(metrics.FailureReason!, $"global free {globalFree} bytes");
+        AssertEx.Contains(metrics.FailureReason!, "global free 6.4 GiB, process budget 28.6 GiB");
         AssertEx.Contains(metrics.FailureReason!, "Close other GPU workloads and retry");
         AssertEx.Equal(0, handler.PostPaths.Count);
     }

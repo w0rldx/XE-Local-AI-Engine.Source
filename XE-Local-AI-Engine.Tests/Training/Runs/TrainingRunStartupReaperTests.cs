@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -122,6 +123,7 @@ public sealed class TrainingRunStartupReaperTests
 
         AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count, "A fully matching receipt is an orphan this host must reap.");
         AssertEx.Equal(Receipt.Pgid, inspector.SignalledGroups[0]);
+        AssertEx.Equal(Receipt.StartTicks, inspector.SignalledStartTicks[0], "The kill must stay bound to the validated identity.");
         await store.Received(1).SetLaunchReceiptAsync(runId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
             Arg.Any<CancellationToken>());
     }
@@ -201,6 +203,147 @@ public sealed class TrainingRunStartupReaperTests
         _ = await store.Received(1).RecoverOnStartupAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Reap_WhenTheRecordedGroupIsTheHostsOwn_SignalsOnlyThePid()
+    {
+        var hostGroup = Receipt with
+        {
+            Pgid = 777
+        };
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = Guid.NewGuid(),
+                LaunchReceiptJson = Serialize(hostGroup)
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts() with
+        {
+            Pgid = 777
+        })
+        {
+            HostProcessGroupId = 777
+        };
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(inspector.SignalledGroups, "The host's own process group must never be signalled; that kills the node.");
+        AssertEx.Equal(expected: 1, inspector.SignalledProcesses.Count, "The orphan itself is still reaped, by pid.");
+        AssertEx.Equal(hostGroup.Pid, inspector.SignalledProcesses[0]);
+    }
+
+    [Test]
+    public void Matches_WhenTheReceiptRecordsNoExecutable_MatchesOnStartTimeAndRunToken()
+    {
+        var receipt = Receipt with
+        {
+            ExecutablePath = null
+        };
+
+        AssertEx.True(TrainingRunStartupReaper.Matches(receipt, LiveFacts()), "A timed-out receipt still identifies its trainer.");
+        AssertEx.False(TrainingRunStartupReaper.Matches(receipt, LiveFacts() with
+        {
+            StartTicks = 1
+        }), "Without a path, the start time and run token carry the identity alone.");
+        AssertEx.False(TrainingRunStartupReaper.Matches(receipt, LiveFacts() with
+        {
+            RunToken = "different"
+        }));
+    }
+
+    [Test]
+    public async Task Reap_WhenTheReceiptRecordsNoExecutable_SignalsTheGroupTheLiveTrainerLeads()
+    {
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = Guid.NewGuid(),
+                LaunchReceiptJson = Serialize(Receipt with
+                {
+                    ExecutablePath = null
+                })
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts());
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count, "The live python trainer is matched by start time and token, then reaped.");
+        AssertEx.Equal(Receipt.Pid, inspector.SignalledGroups[0]);
+        AssertEx.Empty(inspector.SignalledProcesses);
+    }
+
+    [Test]
+    public async Task Reap_WhenAnOldReceiptRecordedTheHostGroupButTheTrainerNowLeadsItsOwn_SignalsTheTrainerGroup()
+    {
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = Guid.NewGuid(),
+                LaunchReceiptJson = Serialize(Receipt with
+                {
+                    Pgid = 777
+                })
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts() with
+        {
+            Pgid = Receipt.Pid
+        })
+        {
+            HostProcessGroupId = 777
+        };
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count, "The orphan leads its own group now, so that group is reaped.");
+        AssertEx.Equal(Receipt.Pid, inspector.SignalledGroups[0]);
+        AssertEx.False(inspector.SignalledGroups.Contains(777), "The host group recorded in the receipt must never be signalled.");
+        AssertEx.Empty(inspector.SignalledProcesses);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(5000)]
+    public async Task Reap_WhenTheTrainerDoesNotLeadItsRecordedGroup_SignalsOnlyThePid(int pgid)
+    {
+        var receipt = Receipt with
+        {
+            Pgid = pgid
+        };
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = Guid.NewGuid(),
+                LaunchReceiptJson = Serialize(receipt)
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts() with
+        {
+            Pgid = pgid
+        });
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(inspector.SignalledGroups, "A group the trainer does not lead belongs to someone else.");
+        AssertEx.Equal(expected: 1, inspector.SignalledProcesses.Count, "The orphan itself is still reaped, by pid.");
+        AssertEx.Equal(receipt.Pid, inspector.SignalledProcesses[0]);
+    }
+
+    [Test]
+    public async Task Reap_WhenRecoveryFailsInterruptedRuns_LogsHowManyWereFailed()
+    {
+        var store = StoreWith([]);
+        _ = store.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([Guid.NewGuid(), Guid.NewGuid()]);
+        var logger = new RecordingLogger<TrainingRunStartupReaper>();
+
+        await Reaper(store, new FakeTrainingProcessInspector(facts: null), logger).StartAsync(CancellationToken.None);
+
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "Marked 2 training runs interrupted by the previous shutdown as failed"),
+            "An interrupted run is failed, not recovered, and the log has to say how many.");
+    }
+
     private static IEnumerable<TrainingProcessFacts?> Mismatches() =>
     [
         null,
@@ -241,7 +384,9 @@ public sealed class TrainingRunStartupReaperTests
         return store;
     }
 
-    private static TrainingRunStartupReaper Reaper(ITrainingRunStore store, ITrainingProcessInspector inspector)
+    private static TrainingRunStartupReaper Reaper(ITrainingRunStore store,
+        ITrainingProcessInspector inspector,
+        ILogger<TrainingRunStartupReaper>? logger = null)
     {
         var services = new ServiceCollection();
         _ = services.AddScoped(_ => store);
@@ -250,7 +395,8 @@ public sealed class TrainingRunStartupReaperTests
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         using var keyHolder = new FixedNodeSqliteKeyHolder(new byte[32]);
         var workspace = new TrainingRunWorkspace(new FixedNodeDataDirectory(root), keyHolder);
-        return new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System, NullLogger<TrainingRunStartupReaper>.Instance);
+        return new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System,
+            logger ?? NullLogger<TrainingRunStartupReaper>.Instance);
     }
 
     private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store, Guid RunId) Build(TrainingProcessFacts? facts)

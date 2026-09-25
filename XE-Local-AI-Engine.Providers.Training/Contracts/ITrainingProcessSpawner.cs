@@ -9,7 +9,10 @@ public sealed class TrainingLaunchReceipt
     /// <summary>The spawned process id.</summary>
     public required int Pid { get; init; }
 
-    /// <summary>Its process-group id, read from <c>/proc</c> rather than assumed equal to the pid.</summary>
+    /// <summary>
+    ///     Its process-group id, read from <c>/proc</c>. Signalled as a group only when it equals <see cref="Pid" />; any other
+    ///     value (the host's group before <c>setsid</c> ran, or 0 when unreadable) means the pid alone is signalled.
+    /// </summary>
     public required int Pgid { get; init; }
 
     /// <summary>The resolved <c>/proc/[pid]/exe</c> target at spawn time.</summary>
@@ -95,6 +98,15 @@ public interface ITrainingProcessInspector
     /// <summary>The current facts for <paramref name="processId" />, or null when it is gone or unreadable.</summary>
     TrainingProcessFacts? Inspect(int processId);
 
-    /// <summary>SIGTERM then SIGKILL to <paramref name="processGroupId" />. Only ever called after a full receipt match.</summary>
-    Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default);
+    /// <summary>The host's own process group, which no trainer signal may ever target.</summary>
+    int HostProcessGroupId { get; }
+
+    /// <summary>
+    ///     SIGTERM then SIGKILL to <paramref name="processGroupId" />, each sent only while its leader still has
+    ///     <paramref name="expectedStartTicks" />. Only ever called after a full receipt match.
+    /// </summary>
+    Task KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default);
+
+    /// <summary>SIGTERM then SIGKILL to <paramref name="processId" /> while it still has <paramref name="expectedStartTicks" />.</summary>
+    Task KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default);
 }

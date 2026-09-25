@@ -393,6 +393,72 @@ public sealed class SchedulerEndpointTests
     }
 
     [Test]
+    public async Task CreateJob_WhenBenchmarkMatrixNamesNoModels_ReturnsBadRequestNamingTheRule()
+    {
+        // F-60: accepted at create, this job failed every fire with only a generic message on the run row.
+        var payload = await PostJobExpectingBadRequestAsync(new
+        {
+            templateId = "run-benchmark-batch",
+            displayName = "Empty matrix",
+            scheduleKind = "Manual",
+            timeZoneId = "UTC",
+            parameters = """{"projectId":"6b88994a-5afe-4be8-8486-407d05ca58eb","models":[]}"""
+        });
+
+        AssertEx.Contains(payload, "The scheduled matrix must name between 1 and 10 models.");
+    }
+
+    [Test]
+    public async Task CreateJob_WhenStartTimeIsOutOfRange_ReturnsBadRequestRatherThanAServerError()
+    {
+        // F-60: nanoseconds sent where Unix milliseconds belong used to reach DateTimeOffset and surface as a 500.
+        var payload = await PostJobExpectingBadRequestAsync(new
+        {
+            templateId = "run-benchmark-batch",
+            displayName = "Out-of-range start",
+            scheduleKind = "OneShot",
+            startAtUtc = 1790351870371985142L,
+            timeZoneId = "UTC",
+            parameters = """{"projectId":"6b88994a-5afe-4be8-8486-407d05ca58eb","models":["m"]}"""
+        });
+
+        AssertEx.Contains(payload, "Start time must be a UTC time in Unix milliseconds");
+    }
+
+    [Test]
+    public async Task CreateJob_WhenACronStartsAfter2099_ReturnsBadRequestRatherThanAServerError()
+    {
+        // Quartz cron ends at 2099: a later start "will never fire" and ScheduleJob threw an unmapped 500.
+        var payload = await PostJobExpectingBadRequestAsync(new
+        {
+            templateId = "run-benchmark-batch",
+            displayName = "Far-future cron",
+            scheduleKind = "Cron",
+            cronExpression = "0 0 * * * ?",
+            startAtUtc = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            timeZoneId = "UTC",
+            parameters = """{"projectId":"6b88994a-5afe-4be8-8486-407d05ca58eb","models":["m"]}"""
+        });
+
+        AssertEx.Contains(payload, "the end of year 2099");
+    }
+
+    private async Task<string> PostJobExpectingBadRequestAsync(object body)
+    {
+        using var client = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
+        {
+            Content = JsonContent.Create(body)
+        };
+        Factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        var payload = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"body was: {payload}");
+        return payload;
+    }
+
+    [Test]
     public async Task CreateJob_WithBlankDisplayName_ReturnsBadRequest()
     {
         var factory = Factory;

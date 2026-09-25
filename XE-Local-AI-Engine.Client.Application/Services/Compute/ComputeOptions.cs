@@ -14,13 +14,16 @@ public sealed class ComputeOptions
 {
     public const string SectionName = "Compute";
 
+    /// <summary>The smallest <see cref="MaxOutputBytes" /> the validator accepts: room for the headings and markers.</summary>
+    public const int MinOutputBytes = 1024;
+
     /// <summary>Whether the sandboxed <c>run_python</c> tool may execute on this node. Off unless explicitly enabled.</summary>
     public bool Enabled { get; set; }
 
     /// <summary>Wall-clock ceiling for a single script, after which the process tree is killed. Defaults to 30 seconds.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 
-    /// <summary>Per-stream byte ceiling on the model-facing stdout/stderr, truncated with a marker. Defaults to 65536.</summary>
+    /// <summary>Byte ceiling on the whole model-facing result (stdout head plus stderr tail), truncated with a marker. Defaults to 65536.</summary>
     public int MaxOutputBytes { get; set; } = 65536;
 
     /// <summary>Resident-memory ceiling for the sandbox, applied only where the host can enforce it. Defaults to 2048 MB.</summary>

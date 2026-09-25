@@ -52,6 +52,22 @@ public sealed class ComputeOptionsValidatorTests
     }
 
     [Test]
+    public void Validate_WhenMaxOutputBytesIsBelowTheFramingMinimum_ReturnsFailureNamingTheMinimum()
+    {
+        var below = _validator.Validate(name: null, new ComputeOptions
+        {
+            MaxOutputBytes = ComputeOptions.MinOutputBytes - 1
+        });
+        var atMinimum = _validator.Validate(name: null, new ComputeOptions
+        {
+            MaxOutputBytes = ComputeOptions.MinOutputBytes
+        });
+
+        AssertEx.Contains(below.Failures, failure => failure.Contains("at least 1024 bytes", StringComparison.Ordinal));
+        AssertEx.False(atMinimum.Failed, "the minimum itself is a valid budget");
+    }
+
+    [Test]
     public void Validate_WhenTheJailDiskCeilingIsNotPositive_ReturnsFailure()
     {
         // Zero disables the node-wide LocalContainer watchdog, but it cannot mean that here: this value only ever

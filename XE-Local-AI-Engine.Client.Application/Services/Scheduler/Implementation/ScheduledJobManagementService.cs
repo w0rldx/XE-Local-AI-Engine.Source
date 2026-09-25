@@ -441,6 +441,9 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
     }
 
+    private static readonly long LatestScheduleTimeUtcMs =
+        new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds() - 1;
+
     private ScheduledJobTemplateDescriptor Validate(ScheduledJobManagementInput input)
     {
         if (string.IsNullOrWhiteSpace(input.DisplayName))
@@ -469,6 +472,11 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         ValidateScheduleFields(input);
         ValidateTimeZone(input.TimeZoneId);
 
+        if (_templateRegistry.TryGetHandler(input.TemplateId, out var handler))
+        {
+            handler.ValidateParameters(input.Parameters);
+        }
+
         if (input.MaxRuntimeSeconds is <= 0)
         {
             throw new ScheduledJobValidationException("Maximum runtime, when set, must be greater than zero seconds.");
@@ -479,6 +487,10 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
     private static void ValidateScheduleFields(ScheduledJobManagementInput input)
     {
+        // Out of range, DateTimeOffset.FromUnixTimeMilliseconds throws while scheduling, which surfaced as a 500 (F-60).
+        ValidateUnixMilliseconds(input.StartAtUtc, "Start time");
+        ValidateUnixMilliseconds(input.EndAtUtc, "End time");
+
         switch (input.ScheduleKind)
         {
             case ScheduleKind.Cron:
@@ -522,6 +534,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
             default:
                 throw new ScheduledJobValidationException($"Schedule kind '{input.ScheduleKind}' is not supported.");
+        }
+    }
+
+    /// <summary>
+    ///     Quartz cron stops at 2099: a later start never fires and <c>ScheduleJob</c> throws, and an interval trigger near
+    ///     year 9999 overflows computing its next fire, so the accepted range ends with 2099.
+    /// </summary>
+    private static void ValidateUnixMilliseconds(long? value, string field)
+    {
+        if (value is { } milliseconds && (milliseconds < DateTimeOffset.MinValue.ToUnixTimeMilliseconds() || milliseconds > LatestScheduleTimeUtcMs))
+        {
+            throw new ScheduledJobValidationException($"{field} must be a UTC time in Unix milliseconds between year 0001 and the end of year 2099.");
         }
     }
 

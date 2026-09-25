@@ -70,6 +70,17 @@ public sealed class RunPythonToolHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_NeverTakesATimeoutFromTheModelsArguments()
+    {
+        var gateway = new StubGateway("ran");
+        var handler = new RunPythonToolHandler(gateway);
+
+        _ = await handler.ExecuteAsync("""{"code":"print(1)","timeoutSeconds":1}""");
+
+        AssertEx.Null(AssertEx.NotNull(gateway.LastRequest).TimeoutSeconds, "the timeout is a programmatic caller's lever only");
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
         var gateway = new StubGateway("run reached the gateway");

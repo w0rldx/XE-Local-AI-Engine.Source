@@ -61,6 +61,43 @@ public sealed class StructuredAgentRunnerTests
     }
 
     [Test]
+    public async Task ValidateAfter_ShowsTheTeacherTheRecordSchema_ConstrainedLeavesItToTheGrammar()
+    {
+        // Live-found (F-57): unconstrained, a reasoning teacher never saw the property names and invented its own, so
+        // every record failed "Required property 'userMessage' is missing."
+        using var validateAfter = new RecordingChatClient(SampleJson);
+        _ = await CreateRunner(supportsThinking: true).RunAsync(validateAfter, Request(TeacherOutputMode.ValidateAfter));
+        var system = validateAfter.LastMessages.First(message => message.Role == ChatRole.System).Text;
+        AssertEx.Contains(system, "system");
+        AssertEx.Contains(system, "\"userMessage\"");
+
+        using var constrained = new RecordingChatClient(SampleJson);
+        _ = await CreateRunner(supportsThinking: false).RunAsync(constrained, Request(TeacherOutputMode.Constrained));
+        AssertEx.Equal("system", constrained.LastMessages.First(message => message.Role == ChatRole.System).Text);
+    }
+
+    [Test]
+    public async Task ReasoningTeacher_GetsTheLargerOutputBudget()
+    {
+        using var client = new RecordingChatClient(SampleJson);
+
+        _ = await CreateRunner(supportsThinking: true).RunAsync(client, Request(TeacherOutputMode.ValidateAfter));
+
+        AssertEx.Equal(StructuredAgentRunner.ReasoningMaxOutputTokens, client.LastOptions!.MaxOutputTokens!.Value);
+    }
+
+    [Test]
+    public async Task ReasoningOnlyCompletion_FailsWithAReasonThatNamesTheBudget()
+    {
+        using var client = new RecordingChatClient(new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("thinking about rivers")]));
+
+        var result = await CreateRunner(supportsThinking: true).RunAsync(client, Request(TeacherOutputMode.ValidateAfter));
+
+        AssertEx.False(result.Success);
+        AssertEx.Contains(result.FailureReason!, "reasoning but no answer");
+    }
+
+    [Test]
     public async Task ProviderFailure_IsSanitizedBeforeItLeavesTheTrainingPolicyBoundary()
     {
         const string secret = "Authorization: Bearer provider-secret";
@@ -160,16 +197,22 @@ public sealed class StructuredAgentRunnerTests
     /// <summary>Minimal node-local client stand-in that records the options the runner composed.</summary>
     private sealed class RecordingChatClient : IChatClient
     {
-        private readonly string _responseText;
+        private readonly ChatMessage _response;
 
-        public RecordingChatClient(string responseText)
+        public RecordingChatClient(string responseText) : this(new ChatMessage(ChatRole.Assistant, responseText))
         {
-            _responseText = responseText;
+        }
+
+        public RecordingChatClient(ChatMessage response)
+        {
+            _response = response;
         }
 
         public bool WasCalled { get; private set; }
 
         public ChatOptions? LastOptions { get; private set; }
+
+        public IReadOnlyList<ChatMessage> LastMessages { get; private set; } = [];
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
@@ -177,7 +220,8 @@ public sealed class StructuredAgentRunnerTests
         {
             WasCalled = true;
             LastOptions = options;
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseText)));
+            LastMessages = messages.ToList();
+            return Task.FromResult(new ChatResponse(_response));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

@@ -24,4 +24,13 @@ public interface IScheduledJobHandler
     ///     <see cref="OperationCanceledException" /> is allowed to propagate — the dispatcher does not swallow it.
     /// </summary>
     Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Validates stored parameter JSON when a job is created or updated, throwing
+    ///     <see cref="ScheduledJobValidationException" /> so the request is a 400 rather than a job that fails every fire.
+    ///     The default checks nothing; <see cref="ExecuteAsync" /> still validates at fire time.
+    /// </summary>
+    void ValidateParameters(string? parametersJson)
+    {
+    }
 }

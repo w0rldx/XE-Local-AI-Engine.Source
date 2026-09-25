@@ -206,7 +206,8 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
                 _events.EvictPlaintext(runId);
             }
 
-            _logger.LogInformation("Recovered {RunCount} interrupted training runs.", recovered.Count);
+            // The startup reaper normally runs recovery first, so a zero here is expected, not "nothing was interrupted".
+            _logger.LogInformation("Queue startup recovery marked {RunCount} further interrupted training runs as failed.", recovered.Count);
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

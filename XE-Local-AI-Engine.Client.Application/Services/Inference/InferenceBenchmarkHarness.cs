@@ -638,8 +638,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         }
 
         return string.Create(CultureInfo.InvariantCulture,
-            $"Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance (global free {globalFree} bytes, process budget {processBudget} bytes, pressure above baseline {pressureAboveBaseline} bytes). Close other GPU workloads and retry, or use the explicit pre-spawn pressure override.");
+            $"Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance (global free {Gib(globalFree)}, process budget {Gib(processBudget)}, pressure above baseline {Gib(pressureAboveBaseline)}). Close other GPU workloads and retry, or use the explicit pre-spawn pressure override.");
     }
+
+    private static string Gib(long bytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024d * 1024 * 1024):0.0} GiB");
 
     private static bool VectorsEqual(IReadOnlyList<IReadOnlyList<double>> expected,
         IReadOnlyList<IReadOnlyList<double>> actual,

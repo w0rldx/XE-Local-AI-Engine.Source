@@ -79,7 +79,7 @@ Unlike AgentHome and Coder, compute asks that provider for its **opt-in filesyst
        - **It covers the scratch too**, because `HOME` and `TMPDIR` are directories inside the jail.
        - **It is create-time, with later-command tightening on attach.** Compute keys its jail per invocation, so every call takes the create path; a caller that reuses an attach key attaches instead, and a *stricter* ceiling on that attach lowers the live sandbox's ceiling for every command started afterwards. A looser one, or none, changes nothing, and a command already running keeps the ceiling it started under.
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
-     - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
+     - **Output byte cap**: the whole rendered result (exit code, stdout, stderr) fits `MaxOutputBytes` (default 64 KiB); stdout is trimmed first and keeps its head, stderr may take up to half and keeps its tail so a traceback survives, each cut carrying the marker `…[output truncated]`.
 
 5. **Teardown** (`finally`): The jail is killed, which is what makes the statelessness above real rather than advertised — the jail root is the only place a script can write, scratch included, so one kill reclaims all of it and there is no second directory a cancelled call could leave behind. It runs on failure and cancellation too, since that is when a script is most likely to have left something behind. The provisioned venv sits outside the jail and is never touched, so a fresh jail per call costs a directory create, not a re-provision. Covered by `ComputeSandboxLiveTests.RunPython_CannotSeeWhatAnEarlierCallWrote` (write in call 1, assert absent in call 2).
 
@@ -175,7 +175,7 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 |---------|------|---------|-------|
 | `Enabled` | `bool` | `false` | Master kill-switch. Off unless explicitly set to `true`. Short-circuits before any venv/sandbox work. |
 | `TimeoutSeconds` | `int` | `30` | Wall-clock ceiling per script. Shorter than AgentHome's (which can be minutes for workspace operations) because research loops call this many times. |
-| `MaxOutputBytes` | `int` | `65536` | Byte ceiling per stream (stdout/stderr independently). Truncated with `…[output truncated]`. |
+| `MaxOutputBytes` | `int` | `65536` | Byte ceiling for the whole rendered result; stdout trimmed first (head kept), stderr keeps its tail. Cuts carry `…[output truncated]`. |
 | `MemoryMb` | `int` | `2048` | Resident-memory ceiling for the sandbox, applied where the host can enforce it. |
 | `CpuCount` | `double` | `2` | CPU-core ceiling for the sandbox, applied where the host can enforce it. |
 | `PidsLimit` | `int` | `64` | Process/thread ceiling for the sandbox, applied where the host can enforce it. |

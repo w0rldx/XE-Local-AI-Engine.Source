@@ -428,7 +428,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ResolvedLaunchArguments? draft,
         CancellationToken ct)
     {
-        var quant = string.IsNullOrWhiteSpace(metadata.QuantType) ? UnknownQuant : metadata.QuantType;
+        var quant = QuantLabel(modelName, metadata.QuantType);
         var ctxSize = draft?.CtxSize ?? ClampToInt(metadata.ContextLength) ?? DefaultExploreCtxSize;
         var fingerprint = await _launchPolicyFingerprintProvider.CaptureAsync(new InferenceProfileFingerprintInput
             {
@@ -575,7 +575,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
             Role = record.Role,
             Backend = record.Backend,
             LlamacppBuild = record.LlamacppBuild,
-            Quant = record.Quant,
+            Quant = QuantLabel(record.ModelName, record.Quant),
             CtxSize = record.CtxSize,
             NGpuLayers = record.NGpuLayers,
             TensorSplit = record.TensorSplit,
@@ -595,6 +595,22 @@ public sealed class InferenceProfileService : IInferenceProfileService
             GlobalFreeVramAtFreezeBytes = record.GlobalFreeVramAtFreezeBytes,
             ProcessBudgetVramAtFreezeBytes = record.ProcessBudgetVramAtFreezeBytes
         };
+    }
+
+    /// <summary>The registry's quant label when <paramref name="recorded" /> is blank or the header's numeric <c>general.file_type</c>.</summary>
+    private static string QuantLabel(string modelName, string? recorded)
+    {
+        if (!string.IsNullOrWhiteSpace(recorded) && !recorded.All(char.IsAsciiDigit))
+        {
+            return recorded;
+        }
+
+        if (GgufModelName.Parse(modelName).Quant is { Length: > 0 } registryQuant)
+        {
+            return registryQuant;
+        }
+
+        return string.IsNullOrWhiteSpace(recorded) ? UnknownQuant : recorded;
     }
 
     private static int? ClampToInt(long? value)

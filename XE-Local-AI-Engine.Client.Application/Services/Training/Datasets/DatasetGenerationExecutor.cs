@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -50,6 +51,25 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
                                                                           }
                                                                           """).RootElement.Clone();
 
+    /// <summary>The per-sample teacher instruction: {0} = 1-based sample number, {1} = kind, {2} = "correct"/"incorrect".</summary>
+    private const string TeacherPromptTemplate =
+        "Produce training example {0} of kind '{1}'. It must demonstrate {2} behaviour. Emit only the JSON record.";
+
+    private const int ReportedRejectionReasons = 3;
+
+    private static readonly CompositeFormat TeacherPromptFormat = CompositeFormat.Parse(TeacherPromptTemplate);
+
+    /// <summary>
+    ///     Matches a user turn that restates the teacher instruction, built from the template's first sentence so a
+    ///     reworded prompt moves the check with it. Live-found: a 7B teacher copied the instruction in as the "user" turn.
+    /// </summary>
+    private static readonly Regex TeacherPromptEcho = new(
+        "^" + string.Join(".+?", TeacherPromptTemplate[..(TeacherPromptTemplate.IndexOf(". ", StringComparison.Ordinal) + 1)]
+                                     .Split(["{0}", "{1}", "{2}"], StringSplitOptions.None)
+                                     .Select(Regex.Escape)),
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
     private readonly TrainingRunCancellationRegistry _cancellations;
     private readonly IDatasetGenerationEventBuffer _events;
     private readonly ILogger<DatasetGenerationExecutor> _logger;
@@ -90,12 +110,17 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         var generationToken = cancellation.Token;
         try
         {
-            await GenerateAsync(work, generationToken);
-            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+            var tally = await GenerateAsync(work, generationToken);
+            if (tally.Accepted == 0)
             {
-                State = nameof(TrainingDatasetStatus.Ready)
-            });
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken);
+                // Live-found: a run that rejected every sample read Ready/Succeeded with zero samples.
+                var failure = NoUsableSamplesReason(tally);
+                _logger.LogWarning("Dataset {DatasetId} produced no usable samples: {Reason}", work.DatasetId, failure);
+                await CommitThenPublishAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, TrainingDatasetStatus.Failed, failure, generationToken);
+                return;
+            }
+
+            await CommitThenPublishAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, TrainingDatasetStatus.Ready, reason: null, generationToken);
         }
         catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
         {
@@ -126,7 +151,40 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         }
     }
 
-    private async Task GenerateAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Commits the terminal outcome, then publishes it. A cancel that lands during the commit throws before anything
+    ///     is published, so the hub never announces an outcome the store did not keep.
+    /// </summary>
+    private async Task CommitThenPublishAsync(Guid datasetId,
+        DatasetGenerationWorkStatus workStatus,
+        TrainingDatasetStatus state,
+        string? reason,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = await _store.CompleteGenerationAsync(datasetId, workStatus, reason, cancellationToken);
+        _ = _events.Append(datasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+        {
+            State = state.ToString(),
+            Reason = reason
+        });
+    }
+
+    /// <summary>True when a generated user turn restates the teacher instruction instead of posing a request.</summary>
+    internal static bool EchoesTeacherPrompt(string userMessage) =>
+        TeacherPromptEcho.IsMatch(userMessage.Trim());
+
+    private static string NoUsableSamplesReason(GenerationTally tally)
+    {
+        var reasons = tally.RejectionReasons
+                           .OrderByDescending(pair => pair.Value)
+                           .Take(ReportedRejectionReasons)
+                           .Select(pair => string.Create(CultureInfo.InvariantCulture, $"{pair.Key} ({pair.Value}x)"));
+        return string.Create(CultureInfo.InvariantCulture,
+            $"No usable samples: all {tally.Rejected} generated samples were rejected. Most frequent reasons: {string.Join("; ", reasons)}");
+    }
+
+    private async Task<GenerationTally> GenerateAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
     {
         // The PINNED body, not the live definition row: an edit between the dataset's creation and this run would otherwise
         // swap the teacher, the tool snapshot or the instructions while the dataset still claims its DefinitionVersion.
@@ -153,6 +211,9 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             State = nameof(TrainingDatasetStatus.Generating)
         });
 
+        var tally = new GenerationTally();
+        // One set per run: the pipeline refuses a user turn this generation already produced.
+        var acceptedUserMessages = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < plan.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -173,7 +234,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             var completion = await _runner.RunAsync(teacherClient, request, cancellationToken);
             if (!completion.Success)
             {
-                await RejectAsync(work.DatasetId, completion.FailureReason, cancellationToken);
+                await RejectAsync(work.DatasetId, completion.FailureReason, tally, cancellationToken);
                 continue;
             }
 
@@ -184,12 +245,13 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
                     Kind = target.Kind,
                     RequestedLabel = target.Label,
                     RecordSchema = RecordSchema,
-                    CriticChatClient = criticClient
+                    CriticChatClient = criticClient,
+                    AcceptedUserMessages = acceptedUserMessages
                 },
                 cancellationToken);
             if (!outcome.Accepted || outcome.Content is null)
             {
-                await RejectAsync(work.DatasetId, outcome.RejectionReason, cancellationToken);
+                await RejectAsync(work.DatasetId, outcome.RejectionReason, tally, cancellationToken);
                 continue;
             }
 
@@ -205,6 +267,14 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
                     SourceHash = SourceHash(contentJson)
                 },
                 cancellationToken);
+            if (append.Duplicate)
+            {
+                tally.Count(DuplicateSampleReason);
+            }
+            else
+            {
+                tally.Accepted++;
+            }
 
             _ = _events.Append(work.DatasetId,
                 append.Duplicate ? DatasetGenerationEventKind.Rejected : DatasetGenerationEventKind.SampleAdded,
@@ -217,10 +287,15 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
                     Reason = append.Duplicate ? "duplicate" : null
                 });
         }
+
+        return tally;
     }
 
-    private async Task RejectAsync(Guid datasetId, string? reason, CancellationToken cancellationToken)
+    private const string DuplicateSampleReason = "An identical sample already exists in this dataset.";
+
+    private async Task RejectAsync(Guid datasetId, string? reason, GenerationTally tally, CancellationToken cancellationToken)
     {
+        tally.Count(reason ?? "(no reason recorded)");
         await _store.RecordRejectedSampleAsync(datasetId, cancellationToken);
         _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload
         {
@@ -285,8 +360,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
     }
 
     private static string ComposeUserPrompt(DatasetSampleKindTargetV1 target, int index) =>
-        string.Create(CultureInfo.InvariantCulture,
-            $"Produce training example {index + 1} of kind '{target.Kind}'. It must demonstrate {(target.Label == TrainingSampleLabel.Good ? "correct" : "incorrect")} behaviour. Emit only the JSON record.");
+        string.Format(CultureInfo.InvariantCulture, TeacherPromptFormat, index + 1, target.Kind, target.Label == TrainingSampleLabel.Good ? "correct" : "incorrect");
 
     private static string? OffsetSeed(string? baseSeed, int index)
     {
@@ -301,4 +375,20 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 
     private static string SourceHash(ReadOnlySpan<byte> contentJson) =>
         Convert.ToHexStringLower(SHA256.HashData(contentJson));
+
+    /// <summary>What one run produced, so a run that accepted nothing terminalizes as a failure with its reasons.</summary>
+    private sealed class GenerationTally
+    {
+        public int Accepted { get; set; }
+
+        public int Rejected { get; private set; }
+
+        public Dictionary<string, int> RejectionReasons { get; } = new(StringComparer.Ordinal);
+
+        public void Count(string reason)
+        {
+            Rejected++;
+            RejectionReasons[reason] = RejectionReasons.GetValueOrDefault(reason) + 1;
+        }
+    }
 }

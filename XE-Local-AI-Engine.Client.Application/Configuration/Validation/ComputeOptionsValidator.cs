@@ -12,8 +12,9 @@ public sealed class ComputeOptionsValidator : IValidateOptions<ComputeOptions>
         var errors = Enumerable.Empty<string>()
                                .AppendIf(options.TimeoutSeconds <= 0,
                                    "Compute:TimeoutSeconds must be greater than zero.")
-                               .AppendIf(options.MaxOutputBytes <= 0,
-                                   "Compute:MaxOutputBytes must be greater than zero.")
+                               // Below this the result's fixed headings and truncation markers alone could exceed the ceiling.
+                               .AppendIf(options.MaxOutputBytes < ComputeOptions.MinOutputBytes,
+                                   $"Compute:MaxOutputBytes must be at least {ComputeOptions.MinOutputBytes} bytes, the room the result's headings and truncation markers need.")
                                .AppendIf(options.MemoryMb <= 0,
                                    "Compute:MemoryMb must be greater than zero.")
                                .AppendIf(options.CpuCount <= 0,

@@ -154,6 +154,23 @@ public sealed class TrainingRunEndpointTests
     }
 
     [Test]
+    public async Task CancelRun_WithAnEmptyJsonBody_StillBindsTheRouteId()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/{Guid.NewGuid()}/cancel")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("Origin", "http://localhost");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "A '{}' body must not turn the route-bound id into a 400.");
+    }
+
+    [Test]
     public async Task RunCreate_WithoutLicenseConfirmation_Rejected()
     {
         var factory = Factory;

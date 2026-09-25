@@ -69,6 +69,29 @@ public sealed class RunBenchmarkBatchHandlerTests
     }
 
     [Test]
+    public void ValidateParameters_WhenModelsAreEmpty_RejectsAtCreateTimeWithTheFireTimeText()
+    {
+        // F-60: the create path calls this through the interface, so an empty matrix is a 400 instead of a job that fails every fire.
+        IScheduledJobHandler handler = new Harness().Handler;
+
+        var exception = AssertEx.Throws<ScheduledJobValidationException>(() =>
+            handler.ValidateParameters($$"""{ "projectId": "{{ProjectIdString}}", "models": [] }"""));
+
+        AssertEx.Equal("The scheduled matrix must name between 1 and 10 models.", exception.Message);
+    }
+
+    [Test]
+    public void ValidateParameters_WhenMatrixIsValid_Accepts()
+    {
+        var harness = new Harness();
+        IScheduledJobHandler handler = harness.Handler;
+
+        handler.ValidateParameters(TwoByTwoMatrix());
+
+        AssertEx.Equal(expected: 0, harness.FreezeCalls.Count, "create-time validation must never freeze anything");
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenMatrixIsValid_EnqueuesEveryCellAndChainsTheProjectVersion()
     {
         var harness = new Harness();

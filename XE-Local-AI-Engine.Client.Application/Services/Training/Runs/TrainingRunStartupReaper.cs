@@ -70,9 +70,11 @@ public sealed class TrainingRunStartupReaper : IHostedService
     {
         ArgumentNullException.ThrowIfNull(receipt);
         return facts is not null
-               && facts.Pgid == receipt.Pgid
+               // The live group may be the pid itself: a receipt read before setsid(2) ran recorded the host's group.
+               && (facts.Pgid == receipt.Pgid || facts.Pgid == receipt.Pid)
                && facts.StartTicks == receipt.StartTicks
-               && string.Equals(facts.ExecutablePath, receipt.ExecutablePath, StringComparison.Ordinal)
+               // No recorded path means the spawn timed out before the exec; start ticks survive exec, so identity still holds.
+               && (string.IsNullOrEmpty(receipt.ExecutablePath) || string.Equals(facts.ExecutablePath, receipt.ExecutablePath, StringComparison.Ordinal))
                && string.Equals(facts.RunToken, receipt.RunToken, StringComparison.Ordinal)
                && receipt.RunToken.Length > 0;
     }
@@ -89,7 +91,12 @@ public sealed class TrainingRunStartupReaper : IHostedService
             await ReapOneAsync(store, entry, cancellationToken);
         }
 
-        _ = await store.RecoverOnStartupAsync(cancellationToken);
+        var failed = await store.RecoverOnStartupAsync(cancellationToken);
+        if (failed.Count > 0)
+        {
+            _logger.LogWarning("Marked {RunCount} training runs interrupted by the previous shutdown as failed; interrupted runs are never resumed.",
+                failed.Count);
+        }
     }
 
     /// <summary>Inspects one receipt and clears it only once it is safe to.</summary>
@@ -107,15 +114,22 @@ public sealed class TrainingRunStartupReaper : IHostedService
                 // A receipt this host cannot parse can never be matched, so it can only ever block its own removal.
                 _logger.LogWarning("The recorded trainer receipt for run {RunId} could not be read; it was cleared.", entry.RunId);
             }
-            else if (!Matches(receipt, _inspector.Inspect(receipt.Pid)))
+            else if (_inspector.Inspect(receipt.Pid) is not { } facts || !Matches(receipt, facts))
             {
                 _logger.LogInformation("A recorded trainer receipt for pid {Pid} no longer matches a live process; nothing was signalled.",
                     receipt.Pid);
             }
+            else if (TrainingProcessGroupGuard.MaySignalGroup(receipt.Pid, facts.Pgid, _inspector.HostProcessGroupId))
+            {
+                _logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", facts.Pgid);
+                await _inspector.KillProcessGroupAsync(facts.Pgid, receipt.StartTicks, cancellationToken);
+            }
             else
             {
-                _logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", receipt.Pgid);
-                await _inspector.KillProcessGroupAsync(receipt.Pgid, cancellationToken);
+                // A trainer that never led its own group shares one with a host or launcher; only its pid is safe.
+                _logger.LogWarning("Reaping trainer pid {Pid} left behind by a previous host process; its group {Pgid} is not its own, so only the pid is signalled.",
+                    receipt.Pid, receipt.Pgid);
+                await _inspector.KillProcessAsync(receipt.Pid, receipt.StartTicks, cancellationToken);
             }
 
             await store.SetLaunchReceiptAsync(entry.RunId, launchReceiptJson: null, cancellationToken);

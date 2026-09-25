@@ -164,6 +164,145 @@ public sealed class SampleValidationPipelineTests
             "An unnamed tool part is a result echo, not a second call.");
     }
 
+    [Test]
+    public async Task ReasoningStyleCompletion_ThinkBlockProseAndFence_YieldsTheRecord()
+    {
+        // F-57: a reasoning teacher's answer can carry an inline think block and prose, both with braces of their own.
+        const string completion = """
+                                  <think>The user wants a {kind} example. Draft: {"userMessage": "draft"} no, better one below.</think>
+                                  Here is the record you asked for (format: {json}):
+                                  ```json
+                                  {"userMessage":"Which river flows through Cairo?","assistantText":"The Nile flows through Cairo.","toolName":"","toolArgumentsJson":""}
+                                  ```
+                                  Let me know if you need {more}.
+                                  """;
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(completion, Context());
+
+        AssertEx.True(outcome.Accepted, outcome.RejectionReason ?? "accepted");
+        AssertEx.Equal("Which river flows through Cairo?", AssertEx.NotNull(outcome.Content).Parts[0].Content);
+    }
+
+    [Test]
+    public async Task SchemaFailure_NamesThePropertiesTheRecordCarried()
+    {
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync("""{"question":"q","answer":"a"}""", Context());
+
+        AssertEx.False(outcome.Accepted);
+        AssertEx.Contains(outcome.RejectionReason!, "userMessage");
+        AssertEx.Contains(outcome.RejectionReason!, "The record carried: question, answer.");
+    }
+
+    [Test]
+    [Arguments("Produce training example 11 of kind 'rivers'.")]
+    [Arguments("  produce training example 15 of kind 'rivers'. It must demonstrate correct behaviour.")]
+    public async Task UserTurnThatEchoesTheGenerationInstruction_IsRejected(string userMessage)
+    {
+        // F-58: a 7B teacher copied its own instruction in as the user turn and every layer reported passed.
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(Record(userMessage), Context());
+
+        AssertEx.False(outcome.Accepted);
+        AssertEx.Equal("The user message repeats the generation instruction instead of posing a request.", outcome.RejectionReason!);
+        AssertEx.Contains(outcome.Validation.Layers, layer => layer.ScoredBy == "critic:deterministic" && !layer.Passed);
+    }
+
+    [Test]
+    public async Task UserTurnAboutProducingExamples_IsNotAnEcho()
+    {
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(Record("How do I produce training examples for my model?"), Context());
+
+        AssertEx.True(outcome.Accepted);
+    }
+
+    [Test]
+    public async Task DuplicateUserTurnWithinOneGeneration_IsRejected_AfterNormalisation()
+    {
+        // F-58: the same teacher produced "What is the capital of France?" seven times out of eight.
+        var pipeline = Create(out _);
+        var context = Context();
+
+        var first = await pipeline.ValidateAsync(Record("What is the capital of France?"), context);
+        var repeat = await pipeline.ValidateAsync(Record("  what is  the capital\nof FRANCE? "), context);
+        var otherRun = await pipeline.ValidateAsync(Record("What is the capital of France?"), Context());
+
+        AssertEx.True(first.Accepted);
+        AssertEx.False(repeat.Accepted);
+        AssertEx.Equal("The user message duplicates one already accepted in this generation with the same label.", repeat.RejectionReason!);
+        AssertEx.True(otherRun.Accepted, "The duplicate check is scoped to one generation's set.");
+    }
+
+    [Test]
+    public async Task SharedUserTurnAcrossLabels_IsAContrastivePair_AndADemotedSampleCountsUnderBad()
+    {
+        var pipeline = Create(out _);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        var good = await pipeline.ValidateAsync(Record("Read the readme"), Context(TrainingSampleLabel.Good, seen));
+        var bad = await pipeline.ValidateAsync(Record("Read the readme"), Context(TrainingSampleLabel.Bad, seen));
+
+        AssertEx.True(good.Accepted);
+        AssertEx.True(bad.Accepted, "A Good and a Bad sample may share one prompt.");
+
+        // Requested Good but demoted to Bad by the tool-name layer: it must be keyed under the label it ends with.
+        var demotedSeen = new HashSet<string>(StringComparer.Ordinal);
+        var demoted = await pipeline.ValidateAsync(
+            """{"userMessage":"Delete it","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
+            Context(TrainingSampleLabel.Good, demotedSeen));
+        var laterBad = await pipeline.ValidateAsync(Record("Delete it"), Context(TrainingSampleLabel.Bad, demotedSeen));
+        var laterGood = await pipeline.ValidateAsync(Record("Delete it"), Context(TrainingSampleLabel.Good, demotedSeen));
+
+        AssertEx.Equal(TrainingSampleLabel.Bad, demoted.Label);
+        AssertEx.False(laterBad.Accepted, "The demoted sample already holds the Bad slot for this prompt.");
+        AssertEx.True(laterGood.Accepted, "The Good slot for this prompt is still free.");
+    }
+
+    [Test]
+    [Arguments("""{"userMessage":"Use {curly} and \"quotes\" in JSON?","assistantText":"Yes."}""", "Use {curly} and \"quotes\" in JSON?")]
+    [Arguments("""Here { is the record: {"userMessage":"Q after a stray brace?","assistantText":"A."}""", "Q after a stray brace?")]
+    [Arguments("""{"userMessage":"What does </think> mean?","assistantText":"A closing tag."}""", "What does </think> mean?")]
+    [Arguments("""<think>plan {draft}</think>{"userMessage":"What does </think> mean?","assistantText":"A tag."}""", "What does </think> mean?")]
+    public async Task Extraction_EdgeCases_YieldTheRecordIntact(string completion, string expectedUserMessage)
+    {
+        // A literal closing think tag inside a record string is preserved: only a LEADING think block is ever dropped.
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(completion, Context());
+
+        AssertEx.True(outcome.Accepted, outcome.RejectionReason ?? "accepted");
+        AssertEx.Equal(expectedUserMessage, AssertEx.NotNull(outcome.Content).Parts[0].Content);
+    }
+
+    [Test]
+    [Arguments("I cannot help with that.", "The completion contains no JSON object.")]
+    [Arguments("<think>only thinking {\"userMessage\":\"draft\"}</think> and then nothing", "The completion contains no JSON object.")]
+    [Arguments("""{"draft":{"userMessage":"What is 2+2?","assistantText":"5"},"final":""", "The completion's JSON record is incomplete.")]
+    [Arguments("""Here is the record: {"userMessage":"Which river is longest?","assistantText":"The Ni""", "The completion's JSON record is incomplete.")]
+    public async Task Extraction_WithoutARecord_IsRejectedWithAReason(string completion, string expectedReason)
+    {
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(completion, Context());
+
+        AssertEx.False(outcome.Accepted);
+        AssertEx.Equal(expectedReason, outcome.RejectionReason!);
+    }
+
+    private static string Record(string userMessage) =>
+        JsonSerializer.Serialize(new
+        {
+            userMessage,
+            assistantText = "Paris.",
+            toolName = "",
+            toolArgumentsJson = ""
+        });
+
     private static ISampleValidationPipeline Create(out IHeadlessToolExecutor executor)
     {
         executor = Substitute.For<IHeadlessToolExecutor>();
@@ -178,6 +317,9 @@ public sealed class SampleValidationPipelineTests
     }
 
     private static SampleValidationContext Context() =>
+        Context(TrainingSampleLabel.Good, new HashSet<string>(StringComparer.Ordinal));
+
+    private static SampleValidationContext Context(TrainingSampleLabel requestedLabel, ISet<string> acceptedUserMessages) =>
         new()
         {
             Definition = new DatasetDefinitionBodyV1
@@ -188,8 +330,9 @@ public sealed class SampleValidationPipelineTests
                 Tools = [new DatasetToolSnapshotV1("read_file", "Reads a file.", ToolSchema, RequiresApproval: false, ToolCategory.ReadLocal)]
             },
             Kind = "tool-call",
-            RequestedLabel = TrainingSampleLabel.Good,
+            RequestedLabel = requestedLabel,
             RecordSchema = RecordSchema,
-            CriticChatClient = null
+            CriticChatClient = null,
+            AcceptedUserMessages = acceptedUserMessages
         };
 }

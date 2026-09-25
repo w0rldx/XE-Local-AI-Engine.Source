@@ -158,9 +158,10 @@ public sealed class BenchmarkPythonTestsVerifierTests
     }
 
     [Test]
-    public async Task PythonTests_CandidateInfiniteLoop_Scores0_ViaPerCallDeadline()
+    public async Task PythonTests_CandidateInfiniteLoop_Scores0_ViaAHarnessDeadline()
     {
-        // The PARENT's own read deadline fires first; the gateway's wall clock is the outer belt, not the mechanism.
+        // One of the PARENT's own deadlines fires first, either the per-call read or the test-phase alarm. The
+        // gateway's wall clock is the outer belt, not the mechanism.
         var result = await RunLocallyAsync("""
                                            def solve(n):
                                                while True:
@@ -168,7 +169,20 @@ public sealed class BenchmarkPythonTestsVerifierTests
                                            """, DoublingTests, timeoutSeconds: 3);
 
         AssertEx.False(result.Passed);
-        AssertEx.Contains(result.Detail, "did not answer within");
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "within 3");
+    }
+
+    [Test]
+    public async Task PythonTests_DeadlineInsideAnExpectedFailure_StillScores0()
+    {
+        // Codex round 2: unittest filed the deadline under expectedFailure, stopped the run before the failing test,
+        // and counted nothing as failed, so a timed-out criterion scored a pass.
+        var result = await RunLocallyAsync("def solve(n):\n    return n * 2\n", ExpectedFailureDeadlineTests, timeoutSeconds: 3);
+
+        AssertEx.False(result.Passed, $"detail was: {result.Detail}");
+        AssertEx.Contains(result.Detail, "collected cases passed");
+        AssertEx.Contains(result.Detail, "did not finish within 3s");
     }
 
     [Test]
@@ -488,6 +502,20 @@ public sealed class BenchmarkPythonTestsVerifierTests
             Completed = true,
             StandardOutput = standardOutput
         });
+
+    private const string ExpectedFailureDeadlineTests = """
+                                                        import time
+                                                        import unittest
+
+
+                                                        class Deadline(unittest.TestCase):
+                                                            @unittest.expectedFailure
+                                                            def test_a_sleeps_past_the_deadline(self):
+                                                                time.sleep(30)
+
+                                                            def test_b_would_fail(self):
+                                                                assert solve(10) == 21
+                                                        """;
 
     private static async Task<BenchmarkJudgeVerifierResultV1> RunLocallyAsync(string candidate,
         string testCode,

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -157,20 +158,23 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
         return TrainingFootprintEstimator.Estimate(parameterCount, config, options);
     }
 
-    private static void Validate(TrainingRunOptionsV1 options)
+    internal static void Validate(TrainingRunOptionsV1 options)
     {
         // Boundary validation, not taste: every one of these reaches a subprocess argument or a tensor shape.
-        if (options.MaxSeqLength is < 128 or > 32768
-            || options.LoraR is < 1 or > 256
-            || options.LoraAlpha is < 1 or > 512
-            || options.LoraDropout is < 0 or > 0.5
-            || options.PerDeviceTrainBatchSize is < 1 or > 64
-            || options.GradientAccumulationSteps is < 1 or > 256
-            || options.LearningRate is <= 0 or > 1
-            || options.WarmupRatio is < 0 or > 0.5
-            || options.Epochs is < 1 or > 50)
+        var problem = OutOfRange("maxSeqLength", options.MaxSeqLength, 128, 32768)
+                      ?? OutOfRange("loraR", options.LoraR, 1, 256)
+                      ?? OutOfRange("loraAlpha", options.LoraAlpha, 1, 512)
+                      ?? OutOfRange("loraDropout", options.LoraDropout, 0, 0.5)
+                      ?? OutOfRange("perDeviceTrainBatchSize", options.PerDeviceTrainBatchSize, 1, 64)
+                      ?? OutOfRange("gradientAccumulationSteps", options.GradientAccumulationSteps, 1, 256)
+                      ?? (options.LearningRate is <= 0 or > 1
+                          ? string.Create(CultureInfo.InvariantCulture, $"learningRate is {options.LearningRate}; it must be greater than 0 and at most 1.")
+                          : null)
+                      ?? OutOfRange("warmupRatio", options.WarmupRatio, 0, 0.5)
+                      ?? OutOfRange("epochs", options.Epochs, 1, 50);
+        if (problem is not null)
         {
-            throw new TrainingRunRejectedException("One or more training options are outside their supported range.");
+            throw new TrainingRunRejectedException("The training option " + problem);
         }
 
         if (!string.Equals(options.Optimizer, "adamw_8bit", StringComparison.Ordinal))
@@ -178,6 +182,11 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
             throw new TrainingRunRejectedException("Only the adamw_8bit optimizer is supported.");
         }
     }
+
+    private static string? OutOfRange(string name, double value, double min, double max) =>
+        value < min || value > max
+            ? string.Create(CultureInfo.InvariantCulture, $"{name} is {value}; it must be between {min} and {max}.")
+            : null;
 
     private static TrainingRunOptionsV1 Seed(long parameterCount) =>
         new()

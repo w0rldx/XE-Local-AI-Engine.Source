@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
@@ -19,6 +20,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
+    private readonly ILogger _logger;
     private readonly Process _process;
     private readonly Channel<string> _output;
 
@@ -26,8 +28,10 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 
     public LinuxTrainingProcessHandle(Process process,
         TrainingLaunchReceipt receipt,
-        Channel<string> output)
+        Channel<string> output,
+        ILogger logger)
     {
+        _logger = logger;
         _process = process;
         Receipt = receipt;
         _output = output;
@@ -51,7 +55,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
             return;
         }
 
-        _ = Kill(-Receipt.Pgid, Sigterm);
+        SignalIfSameProcess(SignalTarget(), Sigterm);
     }
 
     public void KillGroup()
@@ -61,10 +65,11 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
             return;
         }
 
-        _ = Kill(-Receipt.Pgid, Sigterm);
+        var target = SignalTarget();
+        SignalIfSameProcess(target, Sigterm);
         if (!_process.WaitForExit(2000))
         {
-            _ = Kill(-Receipt.Pgid, Sigkill);
+            SignalIfSameProcess(target, Sigkill);
         }
     }
 
@@ -84,6 +89,30 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
             _ = _output.Writer.TryComplete();
             _process.Dispose();
         }
+    }
+
+    /// <summary>The negated group when the receipt proves the trainer leads a group of its own, else the bare pid.</summary>
+    private int SignalTarget()
+    {
+        if (TrainingProcessGroupGuard.MaySignalGroup(Receipt.Pid, Receipt.Pgid, LinuxTrainingProcessInspector.HostProcessGroupId))
+        {
+            return -Receipt.Pgid;
+        }
+
+        _logger.LogWarning("Refusing to signal process group {Pgid} for trainer pid {Pid}; signalling the pid only.", Receipt.Pgid, Receipt.Pid);
+        return Receipt.Pid;
+    }
+
+    /// <summary>Sends <paramref name="signal" /> only while the trainer pid still has the receipt's start time.</summary>
+    private void SignalIfSameProcess(int target, int signal)
+    {
+        if (Receipt.StartTicks > 0 && LinuxTrainingProcessInspector.TryReadStat(Receipt.Pid)?.StartTicks != Receipt.StartTicks)
+        {
+            _logger.LogWarning("Trainer pid {Pid} no longer carries its recorded start time; signal {Signal} was not sent.", Receipt.Pid, signal);
+            return;
+        }
+
+        _ = Kill(target, signal);
     }
 
     private bool HasExited()

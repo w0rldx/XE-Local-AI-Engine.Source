@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Training.Runs.V1;
 
+using FastEndpoints;
+
 /// <summary>Hyper-parameters as the wire carries them. Omitted entirely means "use the computed defaults".</summary>
 public sealed class TrainingRunOptionsPayload
 {
@@ -39,6 +41,7 @@ public sealed class CreateTrainingRunRequest
 
 public sealed class TrainingRunByIdRequest
 {
+    [RouteParam]
     public required Guid RunId { get; init; }
 }
 

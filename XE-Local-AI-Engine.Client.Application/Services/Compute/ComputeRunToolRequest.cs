@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Compute;
 
+using System.Text.Json.Serialization;
+
 /// <summary>
 ///     Typed projection of the <c>run_python</c> JSON arguments.
 /// </summary>
@@ -10,6 +12,13 @@ namespace XE_Local_AI_Engine.Client.Services.Compute;
 internal sealed record ComputeRunToolRequest
 {
     public string? Code { get; init; }
+
+    /// <summary>
+    ///     A programmatic caller's wall clock for this call, which can only TIGHTEN <see cref="ComputeOptions.TimeoutSeconds" />.
+    ///     Never read from the model's JSON arguments.
+    /// </summary>
+    [JsonIgnore]
+    public int? TimeoutSeconds { get; init; }
 }
 
 /// <summary>Validates a <see cref="ComputeRunToolRequest" /> against the compute tool constraints.</summary>

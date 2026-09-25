@@ -194,12 +194,26 @@ internal sealed class FakeTrainingProcessInspector : ITrainingProcessInspector
 
     public List<int> SignalledGroups { get; } = [];
 
+    public List<int> SignalledProcesses { get; } = [];
+
+    public int HostProcessGroupId { get; init; } = 777;
+
     public TrainingProcessFacts? Inspect(int processId) =>
         _facts;
 
-    public Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default)
+    public List<long> SignalledStartTicks { get; } = [];
+
+    public Task KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
     {
         SignalledGroups.Add(processGroupId);
+        SignalledStartTicks.Add(expectedStartTicks);
+        return Task.CompletedTask;
+    }
+
+    public Task KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    {
+        SignalledProcesses.Add(processId);
+        SignalledStartTicks.Add(expectedStartTicks);
         return Task.CompletedTask;
     }
 }
