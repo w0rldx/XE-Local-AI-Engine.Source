@@ -40,6 +40,10 @@ while (($#)); do
   esac
 done
 printf 'max=%s html=%s filter=%s\n' "$max" "${TUNIT_DISABLE_HTML_REPORTER:-}" "$filter" >>"$FAKE_LOG"
+# The template pre-warm names one test; the real one publishes the migrated template next to the binary.
+if [[ "$filter" == */TestServerWebAppFactoryTemplateSweepTests/* && -z "${FAKE_NO_TEMPLATE:-}" ]]; then
+  mkdir -p "$(dirname "$0")/sqlite-templates" && : >"$(dirname "$0")/sqlite-templates/fake.sqlite"
+fi
 if [[ -n "$coverage" ]]; then
   mkdir -p "$results"
   printf '<coverage><packages><package><classes><class /></classes></package></packages></coverage>\n' \
@@ -119,10 +123,23 @@ run_case grouped env TEST_GROUPS=1
 grep -Fqx 'max=1 html=1 filter=/*/(XE_Local_AI_Engine.Tests.DevWorkflows|XE_Local_AI_Engine.Tests.Ordinary)/*/*' \
   "$TMP/grouped.log"
 
+# Coverage mode pre-warms the migrated template once, by name, before the slot clones; a run that leaves no
+# template behind fails loudly instead of letting every slot process build its own.
 write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows
 run_case coverage env COVERAGE_DIR="$TMP/coverage"
 grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.DevWorkflows/*/*' "$TMP/coverage.log"
 grep -q '<class' "$TMP/coverage/XE_Local_AI_Engine.Tests.DevWorkflows/coverage.cobertura.xml"
+[[ "$(grep -c 'TestServerWebAppFactoryTemplateSweepTests' "$TMP/coverage.log")" -eq 1 ]]
+[[ "$(head -n 1 "$TMP/coverage.log")" == *TestServerWebAppFactoryTemplateSweepTests* ]]
+rm -rf "$BIN/sqlite-templates"
+set +e
+prewarm_output="$(FAKE_LOG="$TMP/prewarm-missing.log" FAKE_NO_TEMPLATE=1 NO_BUILD=1 JOBS=1 COVERAGE_DIR="$TMP/coverage2" \
+  "$FAKE/scripts/run-tests-memory-safe.sh" 2>&1)"
+prewarm_status=$?
+set -e
+[[ "$prewarm_status" -eq 1 ]]
+grep -Fq 'ERROR: template pre-warm failed' <<<"$prewarm_output"
+[[ "$(wc -l <"$TMP/prewarm-missing.log")" -eq 1 ]]
 
 write_namespaces XE_Local_AI_Engine.Tests.Ordinary
 set +e
