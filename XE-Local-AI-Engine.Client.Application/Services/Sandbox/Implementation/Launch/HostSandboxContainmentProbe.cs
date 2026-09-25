@@ -33,6 +33,10 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         "/sbin"
     ];
 
+    // The default path's measurement, shared process-wide so each new host does not re-run systemd-run/unshare/bwrap. The first
+    // instance publishes its Lazy and its logger writes the one probe line.
+    private static Lazy<SandboxContainment>? processContainment;
+
     private readonly Lazy<SandboxContainment> _containment;
     private readonly Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> _filesystemProbe;
     private readonly ILogger<HostSandboxContainmentProbe> _logger;
@@ -41,10 +45,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     public HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger = null)
         : this(logger, HostSandboxFilesystemIsolationProbe.Measure)
     {
+        var own = _containment;
+        _containment = LazyInitializer.EnsureInitialized(ref processContainment, () => own);
     }
 
     // The filesystem-isolation probe is injectable for one reason: a test must be able to make it FAIL and show the resource-limit and
-    // network results survive intact. That independence is a contract, not an implementation detail, so it is testable.
+    // network results survive intact. Instances built here keep their own cache, never the process-wide one.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
     {

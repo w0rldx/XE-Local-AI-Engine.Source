@@ -66,20 +66,35 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<NodeSqliteConnectionInterceptor>();
         builder.Services.AddSingleton<NodeSqliteCommandInterceptor>();
 
+        // Production keeps EF's static provider cache (one host, one entry). Test hosts set this false and own ONE internal EF provider,
+        // disposed with the host: no immortal ~20 MB cache entry, no rebuild per DbContext scope (docs/agent-knowledge.md §1).
+        var efServiceProviderCaching = configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true);
+        if (!efServiceProviderCaching)
+        {
+            builder.Services.AddSingleton<NodeEfInternalServices>();
+        }
+
         builder.Services.AddDbContext<NodeChatDbContext>((serviceProvider, options) =>
         {
             var connectionString = configuration.GetConnectionString("node-sqlite")
                                    ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
 
             options.UseSqlite(connectionString)
-                   .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   // EF's STATIC ServiceProviderCache keys on the options (incl. this connection string) and each entry roots the whole
-                   // ServiceProvider: one host means one entry, while test hosts set this false to bypass the cache (docs/agent-knowledge.md §1).
-                   .EnableServiceProviderCaching(configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>(),
-                       serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
-                       serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+                       serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>());
+
+            // EF refuses singleton interceptors and per-context warning settings with an internal provider, so NodeEfInternalServices
+            // holds the interceptor there; the ignore stops cached test hosts tripping EF's throwing twenty-provider warning.
+            if (efServiceProviderCaching)
+            {
+                options.ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                       .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+            }
+            else
+            {
+                options.UseInternalServiceProvider(serviceProvider.GetRequiredService<NodeEfInternalServices>().Provider);
+            }
         });
 
         builder.Services.AddDbContext<NodeIdentityDbContext>((serviceProvider, options) =>
@@ -89,10 +104,12 @@ internal static class AddNodeModelRuntimeExtensions
 
             options.UseSqlite(connectionString,
                        sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
-                   // Same static-cache rooting consideration as the NodeChatDbContext registration above.
-                   .EnableServiceProviderCaching(configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>());
+            if (!efServiceProviderCaching)
+            {
+                options.UseInternalServiceProvider(serviceProvider.GetRequiredService<NodeEfInternalServices>().Provider);
+            }
         });
 
         // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the provider by PlaybookRetrievalOptions

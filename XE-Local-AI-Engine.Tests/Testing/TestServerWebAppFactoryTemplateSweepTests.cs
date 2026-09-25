@@ -1,9 +1,23 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>Guards the stale-template sweep in <see cref="TestServerWebAppFactory" />.</summary>
+/// <summary>Guards the migrated SQLite template in <see cref="TestServerWebAppFactory" />: where it is published and the stale sweep.</summary>
 [Category(TestCategories.Integration)]
 public sealed class TestServerWebAppFactoryTemplateSweepTests
 {
+    // scripts/run-tests-memory-safe.sh runs exactly this test, by name, to pre-warm the template in the base output tree
+    // before it clones the per-slot coverage trees. Renaming it breaks that pre-warm loudly (zero-match filter), not silently.
+    [Test]
+    public void EnsureMigratedTemplate_PublishesTheTemplateUnderThisBuildsOutputDirectory()
+    {
+        var template = TestServerWebAppFactory.EnsureMigratedTemplate();
+
+        AssertEx.True(File.Exists(template), $"The migrated template must exist after it was built: {template}");
+        AssertEx.Equal(
+            Path.Combine(AppContext.BaseDirectory, "sqlite-templates"),
+            Path.GetDirectoryName(template),
+            "The template must live under this build's output directory, where a copied output tree carries it along.");
+    }
+
     [Test]
     public void SweepStaleTemplates_DeletesAnotherBuildsTemplateAndKeepsTheCurrentOne()
     {

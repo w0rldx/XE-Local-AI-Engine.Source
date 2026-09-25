@@ -281,9 +281,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
                 ["NodeData:Directory"] = _nodeDataDirectory,
-                // Keep this host out of EF's static ServiceProviderCache: its per-host connection string would add an
-                // immortal cache entry strongly rooting this host's whole ServiceProvider (the measured ~20 MB/host
-                // leak — see the EnableServiceProviderCaching seam in AddNodeModelRuntimeExtensions).
+                // Keep this host out of EF's static ServiceProviderCache: an immortal entry would root this host's
+                // whole ServiceProvider (the measured ~20 MB/host leak). The host owns one EF internal provider
+                // instead, disposed with it (NodeEfInternalServices, docs/agent-knowledge.md §1).
                 ["EntityFramework:ServiceProviderCaching"] = "false"
             };
             if (EnableDevelopmentMode is { } developmentEnabled)

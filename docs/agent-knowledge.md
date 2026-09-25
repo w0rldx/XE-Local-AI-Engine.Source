@@ -335,9 +335,10 @@ table was also missing `GraphWorkflows` (503 s) and `Integrations` (366 s) entir
 weighs 1 — so the pack was balancing on numbers that described a different machine. **Authority:** the `HEAVY`
 list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight parse in
 `scripts/run-tests-memory-safe.sh`; the four `XE_Local_AI_Engine.Tests.DevWorkflows[.Execution|.Materialization|.Dispatch]`
-entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the CI runs named in the `HEAVY`
-header comment (as of 2026-09-14 the per-run mean of 34861036286 and 34877183235 via
-`scripts/test-durations.py --heavy --runs 2`, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards) and
+entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the source named in the `HEAVY`
+header comment (2026-09-14: the per-run mean of CI runs 34861036286 and 34877183235 via
+`scripts/test-durations.py --heavy --runs 2`, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards;
+2026-09-25: one local no-coverage run, a stopgap until green CI runs replace it) and
 run 34730991540 (the timeout).
 
 ### A HEAVY weight from one CI run is noise, and no table can balance the legs better than runner speed allows
@@ -693,6 +694,8 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 
 `TestServerWebAppFactory` is more than a rename. The replacement closed four process-lifetime roots: a per-host MEAI function-descriptor cache key, rate-limiter timers/closures in Testing, EF service-provider caching for per-host connection strings, and SQLite pool groups. Keep the per-host JSON options, Testing rate-limiter bypass, `EntityFramework:ServiceProviderCaching=false` fixture setting, and `SqliteConnection.ClearAllPools()` teardown. Reintroducing `WebApplicationFactory<Program>` restores the top-level-entry-point `HostingListener` root.
 
+**A test host owns ONE EF internal service provider; never let it use EF's static cache, never let it rebuild per scope (2026-09-25).** `EntityFramework:ServiceProviderCaching=false` (set by `TestServerWebAppFactory` and `ServiceProviderValidationTests`) makes `AddNodeModelRuntimeExtensions` register `NodeEfInternalServices`, a host singleton built from `AddEntityFrameworkSqlite()` plus the host `ILoggerFactory` and the singleton materialization interceptor, and both `NodeChatDbContext` and `NodeIdentityDbContext` call `UseInternalServiceProvider` on it; production keeps the default `true` and EF's own cached provider. EF 10's cache key includes the root application service provider, so a cached test host leaves an immortal ~20 MB entry, and the old `EnableServiceProviderCaching(false)` escape rebuilt EF's whole provider on every DbContext scope. With the internal provider, EF refuses a singleton interceptor passed through the options and refuses per-context differences in provider-constant options such as `ConfigureWarnings`; keep those in the holder or on the cached branch only. **Prevents:** the per-host leak (`Endpoints.Benchmarks.V1` at width 1 peaked at 3.3 GB cached, 674 MB now) and the per-scope rebuild (`DevWorkflows.Materialization` at width 1 took 463 s uncached, 55 s now), both measured 2026-09-25 on a loaded box. **Authority:** `NodeEfInternalServices`, `AddNodeModelRuntimeExtensions.AddNodeModelRuntime` and the two width-1 scoped probes above (`/usr/bin/time` peak RSS of the test host).
+
 **Shared per-class host eligibility is narrow:** TUnit runs those tests concurrently against one host and one SQLite database. Share only when tests are read-only or write exclusively Guid-named entities. Do **not** share a class that:
 
 - asserts list counts, empty/global state, or shared-substitute `Received`/`DidNotReceive` calls;
@@ -746,7 +749,7 @@ this file with a bare `SaveAsync` composed from an earlier `LoadAsync`.
 
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 
-**Rule:** the MVID-keyed migrated SQLite templates (`TestServerWebAppFactory.BuildMigratedTemplate` and its twin `MigratedDatabaseTemplate.BuildAsync`) intentionally survive teardown, in `<test bin>/sqlite-templates/` of their own project. They are atomically published and invalidate on migration/seed assembly rebuild, and each build sweeps that directory of other-MVID files. Delete the directory, or `bin/`, to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves. Never move them back to a directory two worktrees share: the sweep is safe only because the directory is per worktree and per build output, and the assembly guard forbids a build while tests run. **Prevents:** the old `/tmp` location, where every rebuild orphaned the whole set and nothing could sweep it safely (943 files, 790 MB of tmpfs across 20 builds). **Authority:** the disk-hygiene pass, 2026-09-24.
+**Rule:** the MVID-keyed migrated SQLite templates (`TestServerWebAppFactory.BuildMigratedTemplate` and its twin `MigratedDatabaseTemplate.BuildAsync`) intentionally survive teardown, in `<test bin>/sqlite-templates/` of their own project. They are atomically published and invalidate on migration/seed assembly rebuild, and each build sweeps that directory of other-MVID files. Delete the directory, or `bin/`, to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves. A copied output tree inherits whatever template its source had, so `scripts/run-tests-memory-safe.sh` builds it once in the base tree (`prewarm_template`, one run of the test that exists for it) before cloning the coverage slots; otherwise every slot process on a fresh CI tree pays the build again. Never move them back to a directory two worktrees share: the sweep is safe only because the directory is per worktree and per build output, and the assembly guard forbids a build while tests run. **Prevents:** the old `/tmp` location, where every rebuild orphaned the whole set and nothing could sweep it safely (943 files, 790 MB of tmpfs across 20 builds). **Authority:** the disk-hygiene pass, 2026-09-24.
 
 ### Layering is mechanically frozen
 
