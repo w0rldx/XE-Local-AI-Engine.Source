@@ -1491,6 +1491,10 @@ Both no-ops answer as an absent daemon, not as an error, because that is the sha
 
 Latent and deliberately not fixed here: `OllamaProviderMapBackfillCoordinator.ListInstalledNamesAsync` is called once outside any `try` and once inside one whose only non-cancellation catch is `InvalidOperationException or IOException`, so a real dead daemon's `HttpRequestException` from that list probe escapes the backfill. The gate-off path does not reach it, because the no-op answers the probe with an empty list rather than throwing.
 
+### The post-turn maintenance queue shares the chat's single llama-server slot, so its cost lands on the NEXT turn
+
+`ConversationMaintenanceWorker` runs the queued Distill and Compact jobs on the same llama-server slot as the chat (every spawn pins `--parallel 1` per model and role), so the first token of the next user turn waits for whatever job the previous turn enqueued: ~5 s after a Distill (every `DistillEveryMessages` = 6 messages), 20–30 s while a multi-pass compaction fold runs (27B Q4 on an RTX 5090; longer on weaker hardware). Prevents reading a 20 s first-token delay right after a long turn as a regression, or tuning `DistillEveryMessages` / `AutoCompactFraction` without knowing that the cost is paid by the *next* turn, not by the one that triggered the job. Authority: the 2026-09-25 live round (40 turns, 13 Distill jobs, 3 automatic compactions under a `numCtx=8192` per-send override); per-turn first-token timings against the host log, 02:45–02:55.
+
 ### A work session is chat turns in a loop, and it takes the node's only invocation slot
 
 - Drive `INodeChatStreamService.SendMessageAsync`, not `IInvocationRunner`, so conversation persistence, approvals, resume, and terminalization remain intact.
