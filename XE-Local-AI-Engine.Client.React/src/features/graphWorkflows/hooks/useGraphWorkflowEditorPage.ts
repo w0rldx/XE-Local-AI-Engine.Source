@@ -31,6 +31,7 @@ import {
 	useUpdateGraphWorkflowDefinition,
 	useValidateGraphWorkflowDefinition,
 } from "@/features/graphWorkflows/queries/useGraphWorkflows";
+import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 
 /** What a brand-new workflow starts as: the smallest graph the server accepts, already laid out. */
 const STARTER_GRAPH: GraphWorkflowGraph = {
@@ -228,7 +229,7 @@ export function useGraphWorkflowEditorPage(
 		definitionQuery.refetch().catch(() => undefined);
 	};
 
-	const handleMetaSubmit = (values: { name: string; description: string | null }): void => {
+	const handleMetaSubmit = (values: { name: string; description: string | null; sampleId: string | null }): void => {
 		const mode = metaDialog;
 		if (mode === undefined) {
 			return;
@@ -252,10 +253,10 @@ export function useGraphWorkflowEditorPage(
 				.catch(failed);
 			return;
 		}
+		const sample = GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === values.sampleId);
+		const graph = mode === "saveAs" ? editor.graph : (sample?.graph ?? STARTER_GRAPH);
 		createMutation
-			.mutateAsync({
-				body: { name: values.name, description: values.description, graph: mode === "saveAs" ? editor.graph : STARTER_GRAPH },
-			})
+			.mutateAsync({ body: { name: values.name, description: values.description, graph } })
 			.then((created) => {
 				done();
 				if (created.id) {

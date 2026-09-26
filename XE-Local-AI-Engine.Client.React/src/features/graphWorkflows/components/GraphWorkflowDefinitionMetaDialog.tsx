@@ -2,12 +2,13 @@
 // a workflow and to rename one ("Save as" reuses it with a different title and submit label), so it owns no mutation
 // and no query: the page decides which of the two a submit means.
 
-import { Button, Group, Stack, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 
 /** `GraphWorkflowRequestLimits.MaxNameLength`, verbatim; the message is a full i18n key, like the graph schemas'. */
 const metaSchema = z.object({
@@ -19,13 +20,18 @@ const metaSchema = z.object({
 	description: z.string(),
 });
 
+/** The Select's value for "no sample"; a Select option needs a non-empty value. */
+const BLANK = "blank";
+
 export interface GraphWorkflowDefinitionMetaDialogProps {
 	readonly opened: boolean;
 	readonly initial?: { readonly name: string; readonly description?: string | null };
 	readonly title: string;
 	readonly submitLabel: string;
 	readonly isSubmitting?: boolean;
-	readonly onSubmit: (values: { name: string; description: string | null }) => void;
+	/** Shows the "Start from" sample picker. Only a create has no graph of its own to start from. */
+	readonly offerSamples?: boolean;
+	readonly onSubmit: (values: { name: string; description: string | null; sampleId: string | null }) => void;
 	readonly onClose: () => void;
 }
 
@@ -35,6 +41,7 @@ export function GraphWorkflowDefinitionMetaDialog({
 	title,
 	submitLabel,
 	isSubmitting = false,
+	offerSamples = false,
 	onSubmit,
 	onClose,
 }: GraphWorkflowDefinitionMetaDialogProps) {
@@ -42,6 +49,10 @@ export function GraphWorkflowDefinitionMetaDialog({
 	const [name, setName] = useState(initial?.name ?? "");
 	const [description, setDescription] = useState(initial?.description ?? "");
 	const [error, setError] = useState<string | undefined>(undefined);
+	const [sampleId, setSampleId] = useState<string | null>(null);
+	// What the last pick wrote into the two fields. A field still holding that value (or nothing) is the sample's to
+	// replace; anything else is the operator's typing and is left alone.
+	const [prefilled, setPrefilled] = useState({ name: "", description: "" });
 
 	// Reseeded on every OPEN, so a cancelled edit does not survive into the next one and a "Save as" opened over a
 	// renamed definition starts from the name it has now.
@@ -51,8 +62,27 @@ export function GraphWorkflowDefinitionMetaDialog({
 			setName(initial?.name ?? "");
 			setDescription(initial?.description ?? "");
 			setError(undefined);
+			setSampleId(null);
+			setPrefilled({ name: "", description: "" });
 		}
 	}, [opened]);
+
+	const pickSample = (value: string | null): void => {
+		const sample = GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === value);
+		const next = sample
+			? { name: t(sample.nameKey, sample.defaultName), description: t(sample.descriptionKey, sample.defaultDescription) }
+			: { name: "", description: "" };
+		if (name === "" || name === prefilled.name) {
+			setName(next.name);
+		}
+		if (description === "" || description === prefilled.description) {
+			setDescription(next.description);
+		}
+		setPrefilled(next);
+		setSampleId(sample?.id ?? null);
+	};
+
+	const selectedSample = GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === sampleId);
 
 	const handleSubmit = (): void => {
 		const result = metaSchema.safeParse({ name, description });
@@ -62,7 +92,7 @@ export function GraphWorkflowDefinitionMetaDialog({
 		}
 		setError(undefined);
 		const trimmed = result.data.description.trim();
-		onSubmit({ name: result.data.name, description: trimmed.length > 0 ? trimmed : null });
+		onSubmit({ name: result.data.name, description: trimmed.length > 0 ? trimmed : null, sampleId });
 	};
 
 	return (
@@ -83,6 +113,27 @@ export function GraphWorkflowDefinitionMetaDialog({
 			}
 		>
 			<Stack gap="md">
+				{offerSamples ? (
+					<Select
+						label={t("pages.graphWorkflows.samples.startFromLabel", "Start from")}
+						description={
+							selectedSample
+								? t(selectedSample.descriptionKey, selectedSample.defaultDescription)
+								: t(
+										"pages.graphWorkflows.samples.startFromDescription",
+										"A sample is a complete workflow you can run right away with any installed chat model.",
+									)
+						}
+						data={[
+							{ value: BLANK, label: t("pages.graphWorkflows.samples.blank", "Blank workflow") },
+							...GRAPH_WORKFLOW_SAMPLES.map((sample) => ({ value: sample.id, label: t(sample.nameKey, sample.defaultName) })),
+						]}
+						value={sampleId ?? BLANK}
+						allowDeselect={false}
+						onChange={pickSample}
+						data-testid="gw-definition-meta-sample"
+					/>
+				) : null}
 				<TextInput
 					label={t("pages.graphWorkflows.definitions.nameLabel", "Name")}
 					placeholder={t("pages.graphWorkflows.definitions.namePlaceholder", "Nightly triage")}

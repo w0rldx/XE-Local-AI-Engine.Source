@@ -1035,6 +1035,7 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 | `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed, the several-node-runs read (`useSettledGraphWorkflowNodeRuns`) and the two chat routes (`useGraphWorkflowConversationRuns`, `useSendGraphWorkflowChatMessage`). |
 | `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause or ChatInput on connect — §4.6) and `useGraphWorkflowRunHub`. |
 | `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput). |
+| `samples/` | The sample graphs the New workflow dialog can start from, and their index `GraphWorkflowSamples.ts` (see **Samples** below). |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
 | `api/` | `GraphWorkflowConflict.ts`, which reads the `NodeConflictProblemType` members by name — the three run/definition/gate refusals and the three chat-send ones (`GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`). |
 | `features/chat/workflow/` (the chat side, not this folder) | `useChatWorkflow` (the chat page's workflow mode: picker state, send routing, 409 handling, the live bound run's hub subscription), `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels.ts` (taken path by layout rank, activity rows), `ChatWorkflowStore` (UI state only). It imports this feature's queries, hub hook, layout, models, status badge and conflict reader — ten reviewed `no-cross-feature` fingerprints in `config/dependency-baseline.json`. See [Chat](05-chat.md#chat-workflow-mode-in-the-client). |
@@ -1053,6 +1054,17 @@ JSON text with a **string quoted**, since that text is exactly what a save parse
 the invalid-JSON complaint on a `defaultInput` the server had accepted. And the client's dot-path mirror refuses an
 EMPTY segment the way `GraphWorkflowTokens.IsDotPath` does, so `a..b` cannot read green in the drawer and then 400
 on save.
+
+**Samples.** The New workflow dialog offers "Start from" with a blank workflow or one of the samples in
+`features/graphWorkflows/samples/`: one wire graph per `<id>.json`, indexed by `GraphWorkflowSamples.ts` with an i18n
+name and description. Picking one prefills the name and description (never over text the operator typed), and the
+create call posts the sample's graph instead of the Start → End starter, so a created sample is an ordinary definition
+with no link back to its file. Every sample must run on any installed node-managed GGUF chat model and nothing else:
+no `Tool`, `Agent` or `ChatInput` node, no `model` pin, a `Standard` graph, and a Start `defaultInput` so the Start Run
+dialog is one click. Prompts inside the graphs are model-facing config and stay English. `GraphWorkflowSamples.test.ts`
+holds the client half (validator, lossless canvas round trip, bundle keys), and
+`XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowSampleContractTests.cs` parses every file through the real
+`GraphWorkflowGraph.Parse` and also refuses any warning, so a sample never opens with a note the operator did not cause.
 
 `useUnsavedChangesGuard` is set with `allowSameRoute`, so writing a search param — selecting a node or a tab — does
 not trigger the leave prompt, while a real route change still does.

@@ -268,6 +268,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 						: t("pages.graphWorkflows.page.create", "Create")
 				}
 				isSubmitting={createMutation.isPending || updateMutation.isPending}
+				offerSamples={metaDialog === "create"}
 				onSubmit={handleMetaSubmit}
 				onClose={() => setMetaDialog(undefined)}
 			/>

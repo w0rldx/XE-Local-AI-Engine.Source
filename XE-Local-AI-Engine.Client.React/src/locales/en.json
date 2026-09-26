@@ -6343,6 +6343,27 @@
 				"kindHelp": "A Chat workflow runs inside a conversation and may ask the user questions.",
 				"acceptsAttachments": "Accepts attachments",
 				"requireRerunConfirmation": "Confirm before running again"
+			},
+			"samples": {
+				"startFromLabel": "Start from",
+				"startFromDescription": "A sample is a complete workflow you can run right away with any installed chat model.",
+				"blank": "Blank workflow",
+				"summarizeWithApproval": {
+					"name": "Summarize with approval",
+					"description": "Summarizes a document, then waits for a person to approve or reject the summary."
+				},
+				"triageAndRoute": {
+					"name": "Triage and route",
+					"description": "Classifies a customer message as a bug, a feature request or a question, and writes the matching reply."
+				},
+				"parallelPerspectives": {
+					"name": "Parallel perspectives",
+					"description": "Reviews a proposal from three angles at once and merges them into one decision memo."
+				},
+				"briefWithReviewLoop": {
+					"name": "Brief with review loop",
+					"description": "Drafts a brief, has it checked for accuracy and clarity in parallel, revises it, and asks a person only when the model is unsure."
+				}
 			}
 		},
 		"integrations": {

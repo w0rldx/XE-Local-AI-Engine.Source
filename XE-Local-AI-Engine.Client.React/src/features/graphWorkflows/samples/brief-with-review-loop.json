@@ -1,0 +1,324 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"topic": "Passkeys: what they are, and why our shop will offer them as a sign-in option from next month. Passwords keep working; passkeys are optional.",
+					"audience": "Customers of a small online bookshop. Most are not technical, many shop on their phone, and some worry about losing access to their account."
+				}
+			}
+		},
+		{
+			"key": "draft",
+			"kind": "LlmCall",
+			"label": "Draft brief",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a skilled writer who explains technical topics in plain language.",
+				"prompt": "Write a one-page brief about the subject in the `topic` data block for the readers described in the `audience` data block. Use a title, a two-sentence summary, three to five short sections with headings, and a closing \"What this means for you\" paragraph. Aim for 300 to 400 words.",
+				"inputBindings": {
+					"topic": "run.input.topic",
+					"audience": "run.input.audience"
+				}
+			}
+		},
+		{
+			"key": "fanout",
+			"kind": "Parallel",
+			"label": "Two reviews",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {}
+		},
+		{
+			"key": "critic_accuracy",
+			"kind": "LlmCall",
+			"label": "Check accuracy",
+			"position": {
+				"x": 840,
+				"y": 0
+			},
+			"config": {
+				"systemPrompt": "You are a meticulous fact-checker.",
+				"prompt": "Review the brief in the `draft` data block for accuracy against the subject in the `topic` data block. Flag claims that are wrong, unsupported, overstated or missing an important caveat. Give a score from 1 (unreliable) to 5 (accurate and well supported), and list each issue as one short, actionable sentence. Return an empty issues list when there is nothing to fix.",
+				"inputBindings": {
+					"draft": "input.output.text",
+					"topic": "run.input.topic"
+				},
+				"responseJsonSchema": {
+					"type": "object",
+					"properties": {
+						"score": {
+							"type": "integer"
+						},
+						"issues": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"required": ["score", "issues"],
+					"additionalProperties": false
+				}
+			}
+		},
+		{
+			"key": "critic_clarity",
+			"kind": "LlmCall",
+			"label": "Check clarity",
+			"position": {
+				"x": 840,
+				"y": 260
+			},
+			"config": {
+				"systemPrompt": "You are an editor who cares about readers.",
+				"prompt": "Review the brief in the `draft` data block for clarity, structure and tone for the readers described in the `audience` data block. Flag jargon, long sentences, missing explanations and anything that could worry or confuse them. Give a score from 1 (hard to follow) to 5 (clear and well organised), and list each issue as one short, actionable sentence. Return an empty issues list when there is nothing to fix.",
+				"inputBindings": {
+					"draft": "input.output.text",
+					"audience": "run.input.audience"
+				},
+				"responseJsonSchema": {
+					"type": "object",
+					"properties": {
+						"score": {
+							"type": "integer"
+						},
+						"issues": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"required": ["score", "issues"],
+					"additionalProperties": false
+				}
+			}
+		},
+		{
+			"key": "merge",
+			"kind": "Join",
+			"label": "Collect reviews",
+			"position": {
+				"x": 1120,
+				"y": 130
+			},
+			"config": {}
+		},
+		{
+			"key": "revise",
+			"kind": "LlmCall",
+			"label": "Revise brief",
+			"position": {
+				"x": 1400,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a skilled writer who explains technical topics in plain language.",
+				"prompt": "Revise the brief in the `draft` data block. The `accuracy` and `clarity` data blocks each hold a reviewer's score from 1 to 5 and a list of issues. Fix every issue that is valid, keep what already works, and keep the structure and length suitable for the readers in the `audience` data block. Return only the revised brief, with no notes about what you changed.",
+				"inputBindings": {
+					"draft": "upstream.draft.output.text",
+					"accuracy": "upstream.merge.output.critic_accuracy.output.json",
+					"clarity": "upstream.merge.output.critic_clarity.output.json",
+					"audience": "run.input.audience"
+				}
+			}
+		},
+		{
+			"key": "gate",
+			"kind": "DecisionModel",
+			"label": "Ready to publish?",
+			"position": {
+				"x": 1680,
+				"y": 130
+			},
+			"config": {
+				"question": "Is the brief in the `brief` data block ready to publish as it is? Answer publish only if it is accurate, clear and complete. Answer review if anything is uncertain, sensitive or unfinished.",
+				"labels": ["publish", "review"],
+				"inputBindings": {
+					"brief": "input.output.text"
+				}
+			}
+		},
+		{
+			"key": "end_published",
+			"kind": "End",
+			"label": "Published",
+			"position": {
+				"x": 1960,
+				"y": 0
+			},
+			"config": {
+				"outcome": "published",
+				"resultPath": "upstream.revise.output.text"
+			}
+		},
+		{
+			"key": "review",
+			"kind": "Pause",
+			"label": "Human review",
+			"position": {
+				"x": 1960,
+				"y": 260
+			},
+			"config": {
+				"prompt": "The model asked for a human review of the revised brief. Read it in the Revise brief node's output, then approve it to publish, or reject it and say in the comment what needs to change.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "end_approved",
+			"kind": "End",
+			"label": "Approved",
+			"position": {
+				"x": 2240,
+				"y": 130
+			},
+			"config": {
+				"outcome": "approved",
+				"resultPath": "upstream.revise.output.text"
+			}
+		},
+		{
+			"key": "end_rejected",
+			"kind": "End",
+			"label": "Rejected",
+			"position": {
+				"x": 2240,
+				"y": 390
+			},
+			"config": {
+				"outcome": "rejected",
+				"resultPath": "upstream.review.output.comment"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "draft"
+		},
+		{
+			"key": "e2",
+			"from": "draft",
+			"to": "fanout"
+		},
+		{
+			"key": "e3",
+			"from": "fanout",
+			"to": "critic_accuracy"
+		},
+		{
+			"key": "e4",
+			"from": "fanout",
+			"to": "critic_clarity"
+		},
+		{
+			"key": "e5",
+			"from": "critic_accuracy",
+			"to": "merge"
+		},
+		{
+			"key": "e6",
+			"from": "critic_clarity",
+			"to": "merge"
+		},
+		{
+			"key": "e7",
+			"from": "merge",
+			"to": "revise"
+		},
+		{
+			"key": "e8",
+			"from": "draft",
+			"to": "revise",
+			"label": "context"
+		},
+		{
+			"key": "e9",
+			"from": "revise",
+			"to": "gate"
+		},
+		{
+			"key": "e10",
+			"from": "gate",
+			"to": "end_published",
+			"label": "publish",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "publish"
+			}
+		},
+		{
+			"key": "e11",
+			"from": "revise",
+			"to": "end_published",
+			"label": "context"
+		},
+		{
+			"key": "e12",
+			"from": "gate",
+			"to": "review",
+			"label": "review",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "review"
+			}
+		},
+		{
+			"key": "e13",
+			"from": "review",
+			"to": "end_approved",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e14",
+			"from": "revise",
+			"to": "end_approved",
+			"label": "context"
+		},
+		{
+			"key": "e15",
+			"from": "review",
+			"to": "end_rejected",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e16",
+			"from": "revise",
+			"to": "end_rejected",
+			"label": "context"
+		}
+	]
+}

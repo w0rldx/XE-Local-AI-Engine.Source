@@ -84,6 +84,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { GraphWorkflowsPage } from "@/features/graphWorkflows/pages/GraphWorkflowsPage";
+import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 import {
 	eightNodeGraph,
 	graphWorkflowDefinition,
@@ -95,6 +96,7 @@ import {
 	graphWorkflowTools,
 	pendingPauseNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import en from "@/locales/en.json";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -207,6 +209,52 @@ describe("GraphWorkflowsPage", () => {
 
 		// Exactly this, with no run and no node carried over: picking a workflow opens ITS editor.
 		expect(onSelectionChange).toHaveBeenCalledWith({ definitionId });
+	});
+
+	describe("New workflow", () => {
+		/** Captures the create body and answers a new definition, so the page can open what it created. */
+		function createRoute(): { readonly posted: () => { name: string; graph: GraphWorkflowGraph } | undefined } {
+			let body: { name: string; graph: GraphWorkflowGraph } | undefined;
+			server.use(
+				http.post(localApiPath("graph-workflows/definitions"), async ({ request }) => {
+					body = (await request.json()) as { name: string; graph: GraphWorkflowGraph };
+					return HttpResponse.json(graphWorkflowDefinition({ name: body.name, graph: body.graph }));
+				}),
+			);
+			return { posted: () => body };
+		}
+
+		it("posts the picked sample's graph and opens the definition it created", async () => {
+			server.use(...editorRoutes());
+			const { posted } = createRoute();
+			const { onSelectionChange } = renderPage({});
+			const sample = en.pages.graphWorkflows.samples.parallelPerspectives;
+
+			fireEvent.click(await screen.findByTestId("gw-definition-create"));
+			fireEvent.click(await screen.findByTestId("gw-definition-meta-sample"));
+			fireEvent.click(await screen.findByRole("option", { name: sample.name, hidden: true }));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			await waitFor(() => {
+				expect(onSelectionChange).toHaveBeenCalledWith({ definitionId });
+			});
+			expect(posted()?.name).toBe(sample.name);
+			expect(posted()?.graph).toEqual(GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === "parallel-perspectives")?.graph);
+		});
+
+		it("posts the Start-to-End starter graph when no sample was picked", async () => {
+			server.use(...editorRoutes());
+			const { posted } = createRoute();
+			renderPage({});
+
+			fireEvent.click(await screen.findByTestId("gw-definition-create"));
+			fireEvent.change(await screen.findByTestId("gw-definition-meta-name"), { target: { value: "Scratch" } });
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			await waitFor(() => {
+				expect(posted()?.graph.nodes?.map((node) => node.kind)).toEqual(["Start", "End"]);
+			});
+		});
 	});
 
 	it("loads the definition into the editor clean, and only enables Save once the canvas differs", async () => {

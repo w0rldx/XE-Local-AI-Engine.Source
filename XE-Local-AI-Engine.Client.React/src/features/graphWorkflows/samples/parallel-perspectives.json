@@ -1,0 +1,167 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"proposal": "Move our customer support team to a four-day work week (32 hours, same pay) for a three-month pilot starting next quarter. Support has 12 agents covering weekdays from 08:00 to 18:00, with a first-response target of two hours. Agents would rotate their day off so every weekday stays covered, and we would track response times, customer satisfaction and sick days against the previous quarter."
+				}
+			}
+		},
+		{
+			"key": "fanout",
+			"kind": "Parallel",
+			"label": "Three reviews",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {}
+		},
+		{
+			"key": "optimist",
+			"kind": "LlmCall",
+			"label": "Optimist",
+			"position": {
+				"x": 560,
+				"y": 0
+			},
+			"config": {
+				"systemPrompt": "You are an enthusiastic strategist who looks for upside, but you stay realistic.",
+				"prompt": "Assess the proposal in the `proposal` data block from an optimistic angle. Name its three strongest benefits, the best realistic outcome, and what would have to go right to get there. Be concrete and stay under 150 words.",
+				"inputBindings": {
+					"proposal": "run.input.proposal"
+				}
+			}
+		},
+		{
+			"key": "skeptic",
+			"kind": "LlmCall",
+			"label": "Skeptic",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a careful risk analyst who stress-tests plans.",
+				"prompt": "Assess the proposal in the `proposal` data block from a skeptical angle. Name the three biggest risks or weak assumptions, what failure would look like, and one early warning sign for each. Be concrete and stay under 150 words.",
+				"inputBindings": {
+					"proposal": "run.input.proposal"
+				}
+			}
+		},
+		{
+			"key": "pragmatist",
+			"kind": "LlmCall",
+			"label": "Pragmatist",
+			"position": {
+				"x": 560,
+				"y": 260
+			},
+			"config": {
+				"systemPrompt": "You are an experienced delivery lead who turns ideas into plans.",
+				"prompt": "Assess the proposal in the `proposal` data block from a practical angle. Describe the smallest version that could be tried first, what it would cost in people and time, and how success would be measured. Stay under 150 words.",
+				"inputBindings": {
+					"proposal": "run.input.proposal"
+				}
+			}
+		},
+		{
+			"key": "merge",
+			"kind": "Join",
+			"label": "Collect reviews",
+			"position": {
+				"x": 840,
+				"y": 130
+			},
+			"config": {}
+		},
+		{
+			"key": "synthesize",
+			"kind": "LlmCall",
+			"label": "Synthesize",
+			"position": {
+				"x": 1120,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a neutral facilitator who writes short decision memos.",
+				"prompt": "Write a decision memo about the proposal in the `proposal` data block. Weigh the three reviews in the `optimist`, `skeptic` and `pragmatist` data blocks: where they agree, where they conflict, and which concerns matter most. End with a clear recommendation (go, go with conditions, or no-go) and the next three steps. Stay under 300 words.",
+				"inputBindings": {
+					"proposal": "run.input.proposal",
+					"optimist": "input.output.optimist.output.text",
+					"skeptic": "input.output.skeptic.output.text",
+					"pragmatist": "input.output.pragmatist.output.text"
+				}
+			}
+		},
+		{
+			"key": "end",
+			"kind": "End",
+			"label": "Memo",
+			"position": {
+				"x": 1400,
+				"y": 130
+			},
+			"config": {
+				"outcome": "synthesized",
+				"resultPath": "input.output.text"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "fanout"
+		},
+		{
+			"key": "e2",
+			"from": "fanout",
+			"to": "optimist"
+		},
+		{
+			"key": "e3",
+			"from": "fanout",
+			"to": "skeptic"
+		},
+		{
+			"key": "e4",
+			"from": "fanout",
+			"to": "pragmatist"
+		},
+		{
+			"key": "e5",
+			"from": "optimist",
+			"to": "merge"
+		},
+		{
+			"key": "e6",
+			"from": "skeptic",
+			"to": "merge"
+		},
+		{
+			"key": "e7",
+			"from": "pragmatist",
+			"to": "merge"
+		},
+		{
+			"key": "e8",
+			"from": "merge",
+			"to": "synthesize"
+		},
+		{
+			"key": "e9",
+			"from": "synthesize",
+			"to": "end"
+		}
+	]
+}

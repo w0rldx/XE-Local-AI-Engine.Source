@@ -6343,6 +6343,27 @@
 				"kindHelp": "Ein Chat-Workflow läuft in einer Unterhaltung und kann dem Benutzer Fragen stellen.",
 				"acceptsAttachments": "Nimmt Anhänge an",
 				"requireRerunConfirmation": "Vor erneutem Ausführen bestätigen"
+			},
+			"samples": {
+				"startFromLabel": "Beginnen mit",
+				"startFromDescription": "Eine Vorlage ist ein vollständiger Workflow, den Sie sofort mit jedem installierten Chatmodell ausführen können.",
+				"blank": "Leerer Workflow",
+				"summarizeWithApproval": {
+					"name": "Zusammenfassen mit Freigabe",
+					"description": "Fasst ein Dokument zusammen und wartet dann, bis eine Person die Zusammenfassung freigibt oder ablehnt."
+				},
+				"triageAndRoute": {
+					"name": "Sichten und weiterleiten",
+					"description": "Ordnet eine Kundennachricht als Fehler, Funktionswunsch oder Frage ein und schreibt die passende Antwort."
+				},
+				"parallelPerspectives": {
+					"name": "Parallele Perspektiven",
+					"description": "Prüft einen Vorschlag gleichzeitig aus drei Blickwinkeln und führt sie in einer Entscheidungsvorlage zusammen."
+				},
+				"briefWithReviewLoop": {
+					"name": "Kurzinfo mit Prüfschleife",
+					"description": "Entwirft eine Kurzinfo, lässt sie parallel auf Richtigkeit und Verständlichkeit prüfen, überarbeitet sie und fragt nur dann eine Person, wenn das Modell unsicher ist."
+				}
 			}
 		},
 		"integrations": {

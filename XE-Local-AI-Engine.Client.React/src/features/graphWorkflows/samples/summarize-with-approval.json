@@ -1,0 +1,124 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"document": "Incident review: checkout outage on 12 March.\n\nBetween 09:40 and 10:25 UTC, about 18% of checkout attempts failed with a payment timeout. The cause was a configuration change that lowered the connection pool of the payment service from 200 to 20 connections. The change was meant for the staging environment but was applied to production by a deployment script that read the wrong environment variable.\n\nOn-call engineers noticed the error rate at 09:52 from an alert, rolled back the configuration at 10:18, and checkout recovered fully by 10:25. Roughly 1,400 orders failed; 1,100 customers retried successfully within the hour. Support received 86 tickets.\n\nFollow-up actions agreed in the review: the deployment script will refuse to run when the target environment does not match the branch; connection-pool size gets its own alert; and support will email the 300 customers who did not complete their order, with a 10% voucher. Owners are the platform team for the first two items and the support lead for the email, all due by 26 March."
+				}
+			}
+		},
+		{
+			"key": "summarize",
+			"kind": "LlmCall",
+			"label": "Summarize",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a precise editor. You write clear, faithful summaries and never add facts that are not in the source.",
+				"prompt": "Summarize the text in the `document` data block for a busy reader. Start with a one-sentence overview, then give three to five bullet points with the key facts, numbers, decisions and owners. Stay under 150 words and use only information from `document`.",
+				"inputBindings": {
+					"document": "run.input.document"
+				}
+			}
+		},
+		{
+			"key": "review",
+			"kind": "Pause",
+			"label": "Review summary",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"prompt": "Read the summary in the Summarize node's output. Approve it to finish the run with the summary as its result, or reject it and say in the comment what is wrong.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "end_approved",
+			"kind": "End",
+			"label": "Approved",
+			"position": {
+				"x": 840,
+				"y": 0
+			},
+			"config": {
+				"outcome": "approved",
+				"resultPath": "upstream.summarize.output.text"
+			}
+		},
+		{
+			"key": "end_rejected",
+			"kind": "End",
+			"label": "Rejected",
+			"position": {
+				"x": 840,
+				"y": 260
+			},
+			"config": {
+				"outcome": "rejected",
+				"resultPath": "upstream.review.output.comment"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "summarize"
+		},
+		{
+			"key": "e2",
+			"from": "summarize",
+			"to": "review"
+		},
+		{
+			"key": "e3",
+			"from": "review",
+			"to": "end_approved",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e4",
+			"from": "summarize",
+			"to": "end_approved",
+			"label": "context"
+		},
+		{
+			"key": "e5",
+			"from": "review",
+			"to": "end_rejected",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e6",
+			"from": "summarize",
+			"to": "end_rejected",
+			"label": "context"
+		}
+	]
+}

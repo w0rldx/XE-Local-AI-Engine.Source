@@ -1,0 +1,153 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"message": "Hi, since the update to version 2.4 yesterday, exporting a report as PDF just shows a spinner forever. CSV export still works. I'm on Windows 11 with Chrome 128, and a colleague on a Mac sees the same thing. We need these PDFs for our board meeting on Monday. Is there a workaround?"
+				}
+			}
+		},
+		{
+			"key": "classify",
+			"kind": "DecisionModel",
+			"label": "Classify request",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {
+				"question": "What kind of request is the customer message in the `message` data block? Answer bug when something that should work is broken, feature when the customer asks for something the product does not do yet, and question when they want information or help using the product.",
+				"labels": ["bug", "feature", "question"],
+				"inputBindings": {
+					"message": "run.input.message"
+				}
+			}
+		},
+		{
+			"key": "bug_report",
+			"kind": "LlmCall",
+			"label": "Write bug report",
+			"position": {
+				"x": 560,
+				"y": 0
+			},
+			"config": {
+				"systemPrompt": "You are a support engineer who writes bug reports developers can act on.",
+				"prompt": "Turn the customer message in the `message` data block into a bug report for the engineering team. Use these sections: Title (one line), Summary, Steps to reproduce, Expected behaviour, Actual behaviour, Environment, Customer impact. Write \"Unknown\" where the message does not say, and do not invent details.",
+				"inputBindings": {
+					"message": "run.input.message"
+				}
+			}
+		},
+		{
+			"key": "feature_brief",
+			"kind": "LlmCall",
+			"label": "Write feature brief",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a product manager who captures customer requests faithfully.",
+				"prompt": "Turn the customer request in the `message` data block into a short feature brief for the product team with these sections: Problem (what the customer is trying to do), Requested capability, Who benefits, Open questions. Stay under 200 words and do not promise a delivery date.",
+				"inputBindings": {
+					"message": "run.input.message"
+				}
+			}
+		},
+		{
+			"key": "answer",
+			"kind": "LlmCall",
+			"label": "Draft answer",
+			"position": {
+				"x": 560,
+				"y": 260
+			},
+			"config": {
+				"systemPrompt": "You are a friendly, knowledgeable support agent.",
+				"prompt": "Write a concise reply to the customer question in the `message` data block. Answer directly in two or three short paragraphs. If the answer depends on details the message does not give, say which details you need instead of guessing.",
+				"inputBindings": {
+					"message": "run.input.message"
+				}
+			}
+		},
+		{
+			"key": "end",
+			"kind": "End",
+			"label": "Handled",
+			"position": {
+				"x": 840,
+				"y": 130
+			},
+			"config": {
+				"outcome": "handled",
+				"resultPath": "input.output.text"
+			},
+			"joinPolicy": "Any"
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "classify"
+		},
+		{
+			"key": "e2",
+			"from": "classify",
+			"to": "bug_report",
+			"label": "bug",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "bug"
+			}
+		},
+		{
+			"key": "e3",
+			"from": "classify",
+			"to": "feature_brief",
+			"label": "feature",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "feature"
+			}
+		},
+		{
+			"key": "e4",
+			"from": "classify",
+			"to": "answer",
+			"label": "question",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "question"
+			}
+		},
+		{
+			"key": "e5",
+			"from": "bug_report",
+			"to": "end"
+		},
+		{
+			"key": "e6",
+			"from": "feature_brief",
+			"to": "end"
+		},
+		{
+			"key": "e7",
+			"from": "answer",
+			"to": "end"
+		}
+	]
+}
