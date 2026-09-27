@@ -101,6 +101,13 @@ describe("ToolCallCard", () => {
 		expect(badge.getAttribute("data-requires-approval")).toBe("true");
 	});
 
+	it("renders no category badge while the catalog is still loading, rather than a fail-closed Unknown", () => {
+		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
+		renderWithProviders(<ToolCallCard part={toolPart({ name: "web_search", state: "waiting" })} />);
+
+		expect(screen.queryByTestId(/^tool-category-badge-/)).toBeNull();
+	});
+
 	it("shows the tool name and a live label while requesting", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "requesting", args: '{"tz":"utc"}' })} />);
 

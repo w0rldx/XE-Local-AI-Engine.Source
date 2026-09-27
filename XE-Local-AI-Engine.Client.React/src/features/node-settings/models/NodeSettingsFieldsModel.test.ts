@@ -207,6 +207,13 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body).toEqual({ toolRelevanceEnabled: true });
 	});
 
+	it("sends a cleared Ollama endpoint as an empty string, the explicit clear back to the default", () => {
+		const configured = { ...baseline, ollamaEndpoint: "http://127.0.0.1:11500" };
+		const { body, errors } = buildNodeSettingsRequest({ ...configured, ollamaEndpoint: "  " }, configured, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ ollamaEndpoint: "" });
+	});
+
 	it("sends the web-access switch only when toggled, and never restart-gates it", () => {
 		const { body, errors } = buildNodeSettingsRequest({ ...baseline, webAccessEnabled: true }, baseline, bounds, false);
 		expect(errors).toEqual({});

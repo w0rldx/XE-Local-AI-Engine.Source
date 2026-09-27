@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using AngleSharp.Dom;
+using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
 using SmartReader;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -29,6 +31,12 @@ internal sealed class WebFetchService
     public const int MaxBodyBytes = 2 * 1024 * 1024;
 
     public const int MaxContentChars = 12_000;
+
+    /// <summary>The largest page, in elements, handed to SmartReader; see <see cref="ExtractHtmlAsync" />.</summary>
+    internal const int MaxReadabilityElements = 8_000;
+
+    /// <summary>The deepest element nesting handed to SmartReader; see <see cref="ExtractHtmlAsync" />.</summary>
+    internal const int MaxReadabilityDepth = 64;
 
     public static readonly TimeSpan TimeBudget = TimeSpan.FromSeconds(20);
 
@@ -322,23 +330,51 @@ internal sealed class WebFetchService
 
     /// <summary>
     ///     Main-content extraction: SmartReader's Readability port first, the whole visible body text when it finds no
-    ///     article (a short page, a listing).
+    ///     article (a short page, a listing) or when the page is too large for it.
     /// </summary>
+    /// <remarks>
+    ///     SmartReader cannot be cancelled and its cost grows with element count and nesting depth (0.11.1: 16 KiB of
+    ///     1,600-deep divs took 11 s, 1 MiB of flat divs 97 s). So AngleSharp's cancellable parse runs first and SmartReader
+    ///     only sees a page within <see cref="MaxReadabilityElements" /> and <see cref="MaxReadabilityDepth" /> (worst
+    ///     measured shape about 1 s); a larger page gets the body text.
+    /// </remarks>
     internal static async Task<(string? Title, string Text)> ExtractHtmlAsync(Uri url, string html, CancellationToken cancellationToken)
     {
-        var article = ParseArticle(url, html);
-        if (article.IsReadable && !string.IsNullOrWhiteSpace(article.TextContent))
+        using var document = await new HtmlParser().ParseDocumentAsync(html, cancellationToken);
+        if (FitsReadability(document))
         {
-            return (NullIfBlank(article.Title), article.TextContent);
+            var article = ParseArticle(url, html);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (article.IsReadable && !string.IsNullOrWhiteSpace(article.TextContent))
+            {
+                return (NullIfBlank(article.Title), article.TextContent);
+            }
         }
 
-        using var document = await new HtmlParser().ParseDocumentAsync(html, cancellationToken);
         foreach (var element in document.QuerySelectorAll("script, style, noscript, template"))
         {
             element.Remove();
         }
 
         return (NullIfBlank(document.Title), document.Body?.TextContent ?? string.Empty);
+    }
+
+    private static bool FitsReadability(IHtmlDocument document) =>
+        document.All.Length <= MaxReadabilityElements && document.All.All(static element => IsWithinReadabilityDepth(element));
+
+    // Walks up with an early exit, so a hostile nesting costs at most MaxReadabilityDepth steps per element.
+    private static bool IsWithinReadabilityDepth(IElement element)
+    {
+        var depth = 0;
+        for (var parent = element.ParentElement; parent is not null; parent = parent.ParentElement)
+        {
+            if (++depth > MaxReadabilityDepth)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // Synchronous on purpose: the reader already holds the page text, so this is in-memory parsing, and SmartReader's

@@ -196,7 +196,11 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 								<Badge size="xs" variant="light" color={stateColor(part.state)} radius="sm">
 									{stateLabel}
 								</Badge>
-								<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
+								{/* No badge while the catalog loads: the first card of a page mounts the catalog query, and badging that
+								    wait as fail-closed Unknown mislabels a known tool (N1). A settled miss still badges Unknown. */}
+								{catalogQuery.isLoading ? null : (
+									<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
+								)}
 								{isLiveState(part.state) ? (
 									<Text size="xs" c="dimmed">
 										{t("chat.toolCall.live", "live")}

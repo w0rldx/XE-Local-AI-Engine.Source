@@ -191,4 +191,14 @@ describe("Chat web content review mode on the wire", () => {
 		// (conversationId, messageId, effort, tools, knowledgeBase, selectedPath, sampling, autoAcceptWebContent, signal)
 		expect(call?.[7]).toBe(expected);
 	});
+
+	it("removes the conversation's stored review mode once the conversation is deleted", async () => {
+		renderChat(reviewConversation.id);
+
+		fireEvent.click(await screen.findByTestId(`conversation-actions-${autoConversation.id}`));
+		fireEvent.click(await screen.findByTestId(`conversation-delete-${autoConversation.id}`), { shiftKey: true });
+
+		await waitFor(() => expect(adapter.deleteConversation).toHaveBeenCalledWith(autoConversation.id));
+		await waitFor(() => expect(localStorage.getItem("xe-node-chat-web-auto:conversation-auto")).toBeNull());
+	});
 });

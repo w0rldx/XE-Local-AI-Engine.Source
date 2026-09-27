@@ -571,7 +571,9 @@ export function buildNodeSettingsRequest(
 		if (endpoint.error) {
 			errors["ollamaEndpoint"] = endpoint.error;
 		} else {
-			body.ollamaEndpoint = endpoint.value ?? null;
+			// Null-preserving PUT, as for the SearXNG URL: a blank field is sent as "", which the node stores as unset and
+			// resolves to its default endpoint. Null would keep the old value.
+			body.ollamaEndpoint = endpoint.value ?? "";
 		}
 	}
 

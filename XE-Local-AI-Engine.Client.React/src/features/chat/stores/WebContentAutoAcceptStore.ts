@@ -53,6 +53,15 @@ export function isWebContentAutoAccepted(conversationId: string): boolean {
 	return useWebContentAutoAcceptStore.getState().byConversation[conversationId] ?? readStored(conversationId);
 }
 
+/** Drops a deleted conversation's choice, so its storage key does not outlive it. */
+export function forgetWebContentAutoAccept(conversationId: string): void {
+	writeStored(conversationId, false);
+	useWebContentAutoAcceptStore.setState((state) => {
+		const { [conversationId]: _forgotten, ...rest } = state.byConversation;
+		return { byConversation: rest };
+	});
+}
+
 export function useWebContentAutoAccept(conversationId: string): boolean {
 	const inMemory = useWebContentAutoAcceptStore((state) => (conversationId ? state.byConversation[conversationId] : false));
 	return inMemory ?? readStored(conversationId);

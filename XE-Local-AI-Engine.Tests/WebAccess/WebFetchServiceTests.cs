@@ -299,6 +299,48 @@ public sealed class WebFetchServiceTests
     }
 
     [Test]
+    public async Task ExtractHtmlAsync_WithinTheReadabilityCaps_StripsTheChrome()
+    {
+        var (_, text) = await WebFetchService.ExtractHtmlAsync(new Uri(PageUrl), ReadFixture("article.html"), CancellationToken.None);
+
+        AssertEx.Contains(text, "tide");
+        AssertEx.False(text.Contains("NAVIGATION-SHOULD-NOT-APPEAR", StringComparison.Ordinal),
+            "the control: under the caps SmartReader runs and drops the navigation");
+    }
+
+    [Test]
+    public async Task ExtractHtmlAsync_WhenThePageHasTooManyElements_SkipsSmartReaderForTheBodyText()
+    {
+        var padding = string.Concat(Enumerable.Repeat("<span></span>", WebFetchService.MaxReadabilityElements));
+        var html = ReadFixture("article.html").Replace("</body>", padding + "</body>", StringComparison.Ordinal);
+
+        var (_, text) = await WebFetchService.ExtractHtmlAsync(new Uri(PageUrl), html, CancellationToken.None);
+
+        AssertEx.True(text.Contains("NAVIGATION-SHOULD-NOT-APPEAR", StringComparison.Ordinal), "an over-cap page is read as body text, never handed to SmartReader");
+    }
+
+    [Test]
+    public async Task ExtractHtmlAsync_WhenThePageIsNestedTooDeep_SkipsSmartReaderForTheBodyText()
+    {
+        var depth = WebFetchService.MaxReadabilityDepth + 1;
+        var nesting = string.Concat(Enumerable.Repeat("<div>", depth)) + "deep" + string.Concat(Enumerable.Repeat("</div>", depth));
+        var html = ReadFixture("article.html").Replace("</body>", nesting + "</body>", StringComparison.Ordinal);
+
+        var (_, text) = await WebFetchService.ExtractHtmlAsync(new Uri(PageUrl), html, CancellationToken.None);
+
+        AssertEx.True(text.Contains("NAVIGATION-SHOULD-NOT-APPEAR", StringComparison.Ordinal), "an over-deep page is read as body text, never handed to SmartReader");
+    }
+
+    [Test]
+    public async Task ExtractHtmlAsync_WhenTheBudgetHasRunOut_ThrowsInsteadOfExtracting()
+    {
+        using var budget = new CancellationTokenSource();
+        await budget.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => WebFetchService.ExtractHtmlAsync(new Uri(PageUrl), ReadFixture("article.html"), budget.Token));
+    }
+
+    [Test]
     public async Task ExtractHtmlAsync_WhenNoArticleIsFound_FallsBackToTheVisibleBodyText()
     {
         const string Html = "<html><head><title>Status</title><script>var hidden = 1;</script></head><body><p>All systems normal.</p></body></html>";

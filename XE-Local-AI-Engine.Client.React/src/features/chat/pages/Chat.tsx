@@ -31,6 +31,7 @@ import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
@@ -439,6 +440,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				setRequestedConversationId("");
 			}
 			forgetConversationTitle(conversationId);
+			forgetWebContentAutoAccept(conversationId);
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
 		},
 	});
