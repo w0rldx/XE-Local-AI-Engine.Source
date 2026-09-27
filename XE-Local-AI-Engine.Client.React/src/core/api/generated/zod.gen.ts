@@ -7669,11 +7669,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
-	maxMessageRequestTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	maxMessageRequestTimeoutSeconds: z.int().gte(5).lte(3600).nullish(),
 	defaultModelName: z.string().nullish(),
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
@@ -7689,181 +7685,53 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	toolCapableModels: z.array(z.string()).nullish(),
 	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
-	llamaMaxLoadedProcesses: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaIdleTimeToLiveSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	llamaMaxLoadedProcesses: z.int().gte(1).lte(16).nullish(),
+	llamaIdleTimeToLiveSeconds: z.int().gte(30).lte(86400).nullish(),
 	keepModelWarmEnabled: z.boolean().nullish(),
 	keepModelWarmModelName: z.string().nullish(),
-	keepModelWarmIntervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	maxResponseSizeMb: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	keepModelWarmIntervalSeconds: z.int().gte(5).lte(3600).nullish(),
+	maxResponseSizeMb: z.int().gte(1).lte(100).nullish(),
 	recommendedLlamaCppTag: z.string().nullish(),
-	chatCacheReuse: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	chatCacheReuse: z.int().gte(0).lte(8192).nullish(),
 	speculativeMode: z.string().nullish(),
 	kvCacheType: z.string().nullish(),
 	containerRuntimeSelection: z.string().nullish(),
 	speculativeDraftModelName: z.string().nullish(),
-	speculativeDraftMaxTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	speculativeDraftGpuLayers: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	speculativeDraftMaxTokens: z.int().gte(0).lte(16).nullish(),
+	speculativeDraftGpuLayers: z.int().gte(0).lte(1000).nullish(),
 	rerankerModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
-	huggingFaceDiskMarginBytes: z.int().nullish(),
-	orchestrationIdleTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	agentHomePrepareTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	agentHomeCommandTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	agentHomeMaxSelectedFolderBytes: z.int().nullish(),
-	agentHomeMaxPatchBytes: z.int().nullish(),
-	maxPendingToolCallAgeMinutes: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	detachedGraceSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	huggingFaceDiskMarginBytes: z.int().gte(1).lte(1099511627776).nullish(),
+	orchestrationIdleTimeoutSeconds: z.int().gte(1).lte(3600).nullish(),
+	agentHomePrepareTimeoutSeconds: z.int().gte(1).lte(86400).nullish(),
+	agentHomeCommandTimeoutSeconds: z.int().gte(1).lte(86400).nullish(),
+	agentHomeMaxSelectedFolderBytes: z.int().gt(0).nullish(),
+	agentHomeMaxPatchBytes: z.int().gt(0).nullish(),
+	maxPendingToolCallAgeMinutes: z.int().gte(1).lte(60).nullish(),
+	detachedGraceSeconds: z.int().gte(0).lte(86400).nullish(),
 	voiceFeatureEnabled: z.boolean().nullish(),
 	defaultVoiceProfile: z.string().nullish(),
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
-	transcriptionIdleTimeoutMinutes: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaReadinessTimeoutCapSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaChatHttpTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaEmbeddingHttpTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaChatCacheRamMiB: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaCpuThreadReserve: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaGpuReservePercent: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	llamaRamReservePercent: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	imageIdleTimeToLiveSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	modelFitSafetyMarginPercent: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	maxProviderCallsPerInvocation: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	customToolMaxTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	webFetchTimeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	webFetchMaxContentChars: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	knowledgeSearchDefaultResults: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	knowledgeSearchMaxResults: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	huggingFaceDownloadConnections: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	transcriptionInferenceTimeoutMinutes: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	agentHomeMaxRunSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	agentHomeRunRetentionDays: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	transcriptionIdleTimeoutMinutes: z.int().gte(1).lte(240).nullish(),
+	llamaReadinessTimeoutCapSeconds: z.int().gte(120).lte(3600).nullish(),
+	llamaChatHttpTimeoutSeconds: z.int().gte(60).lte(86400).nullish(),
+	llamaEmbeddingHttpTimeoutSeconds: z.int().gte(10).lte(3600).nullish(),
+	llamaChatCacheRamMiB: z.int().gte(-1).lte(131072).nullish(),
+	llamaCpuThreadReserve: z.int().gte(0).lte(64).nullish(),
+	llamaGpuReservePercent: z.int().gte(0).lte(50).nullish(),
+	llamaRamReservePercent: z.int().gte(0).lte(75).nullish(),
+	imageIdleTimeToLiveSeconds: z.int().gte(30).lte(86400).nullish(),
+	modelFitSafetyMarginPercent: z.int().gte(0).lte(50).nullish(),
+	maxProviderCallsPerInvocation: z.int().gte(10).lte(2000).nullish(),
+	customToolMaxTimeoutSeconds: z.int().gte(30).lte(3600).nullish(),
+	webFetchTimeoutSeconds: z.int().gte(5).lte(120).nullish(),
+	webFetchMaxContentChars: z.int().gte(1000).lte(100000).nullish(),
+	knowledgeSearchDefaultResults: z.int().gte(1).lte(20).nullish(),
+	knowledgeSearchMaxResults: z.int().gte(1).lte(20).nullish(),
+	huggingFaceDownloadConnections: z.int().gte(1).lte(16).nullish(),
+	transcriptionInferenceTimeoutMinutes: z.int().gte(1).lte(480).nullish(),
+	agentHomeMaxRunSeconds: z.int().gte(60).lte(86400).nullish(),
+	agentHomeRunRetentionDays: z.int().gte(1).lte(365).nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat = z.enum(["Jsonl", "Hermes"]);

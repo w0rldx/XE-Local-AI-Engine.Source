@@ -8,8 +8,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     Boundary validation for <see cref="SaveNodeSettingsRequest" />.
 /// </summary>
 /// <remarks>
-///     Every migrated field is optional, so a rule fires only <c>When</c> the field is supplied (a
-///     <see langword="null" /> keeps the current stored value). Range and format violations are rejected with a 400 and
+///     Every migrated field is optional, so a rule fires only when the field is supplied (a <see langword="null" /> keeps
+///     the current stored value; range rules bind the nullable property itself, so they skip null and report the plain
+///     field name). Range and format violations are rejected with a 400 and
 ///     a clear message before anything is persisted; the store's <c>Normalize</c> remains the second,
 ///     defense-in-depth clamp.
 /// </remarks>
@@ -17,9 +18,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
 {
     public SaveNodeSettingsRequestValidator()
     {
-        RuleFor(static request => request.MaxMessageRequestTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds, StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds)
-            .When(static request => request.MaxMessageRequestTimeoutSeconds is not null);
+        RuleFor(static request => request.MaxMessageRequestTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds, StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds);
 
         RuleFor(static request => request.OllamaEndpoint!)
             .Must(BeAbsoluteHttpUrl)
@@ -62,25 +62,20 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.UpdateChannel is not null)
             .WithMessage("Update channel must be stable, preview or development.");
 
-        RuleFor(static request => request.LlamaMaxLoadedProcesses!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses)
-            .When(static request => request.LlamaMaxLoadedProcesses is not null);
+        RuleFor(static request => request.LlamaMaxLoadedProcesses)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses);
 
-        RuleFor(static request => request.LlamaIdleTimeToLiveSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds)
-            .When(static request => request.LlamaIdleTimeToLiveSeconds is not null);
+        RuleFor(static request => request.LlamaIdleTimeToLiveSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds);
 
-        RuleFor(static request => request.KeepModelWarmIntervalSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinKeepModelWarmIntervalSeconds, StoredNodeSettings.MaxKeepModelWarmIntervalSeconds)
-            .When(static request => request.KeepModelWarmIntervalSeconds is not null);
+        RuleFor(static request => request.KeepModelWarmIntervalSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinKeepModelWarmIntervalSeconds, StoredNodeSettings.MaxKeepModelWarmIntervalSeconds);
 
-        RuleFor(static request => request.MaxResponseSizeMb!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb)
-            .When(static request => request.MaxResponseSizeMb is not null);
+        RuleFor(static request => request.MaxResponseSizeMb)
+            .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb);
 
-        RuleFor(static request => request.ChatCacheReuse!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse)
-            .When(static request => request.ChatCacheReuse is not null);
+        RuleFor(static request => request.ChatCacheReuse)
+            .InclusiveBetween(StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse);
 
         RuleFor(static request => request.SpeculativeMode)
             .Must(StoredNodeSettings.IsValidSpeculativeMode)
@@ -99,13 +94,11 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.ContainerRuntimeSelection is not null)
             .WithMessage("Unknown container runtime selection. Use 'auto' or 'docker'.");
 
-        RuleFor(static request => request.SpeculativeDraftMaxTokens!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens)
-            .When(static request => request.SpeculativeDraftMaxTokens is not null);
+        RuleFor(static request => request.SpeculativeDraftMaxTokens)
+            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens);
 
-        RuleFor(static request => request.SpeculativeDraftGpuLayers!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers)
-            .When(static request => request.SpeculativeDraftGpuLayers is not null);
+        RuleFor(static request => request.SpeculativeDraftGpuLayers)
+            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers);
 
         // Cross-field: a draft-* mode needs a draft model. This boundary rule fires when the request itself sets a draft-* SpeculativeMode, catching "pick draft mode, forget
         // the model" with an immediate 400; it cannot see the CURRENT stored mode, so the endpoint re-checks the merged result — together, no draft-* mode persists modelless.
@@ -114,117 +107,89 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
             .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
 
-        RuleFor(static request => request.HuggingFaceDiskMarginBytes!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes)
-            .When(static request => request.HuggingFaceDiskMarginBytes is not null);
+        RuleFor(static request => request.HuggingFaceDiskMarginBytes)
+            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes);
 
-        RuleFor(static request => request.OrchestrationIdleTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds, StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds)
-            .When(static request => request.OrchestrationIdleTimeoutSeconds is not null);
+        RuleFor(static request => request.OrchestrationIdleTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds, StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomePrepareTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds)
-            .When(static request => request.AgentHomePrepareTimeoutSeconds is not null);
+        RuleFor(static request => request.AgentHomePrepareTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomeCommandTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds)
-            .When(static request => request.AgentHomeCommandTimeoutSeconds is not null);
+        RuleFor(static request => request.AgentHomeCommandTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomeMaxSelectedFolderBytes!.Value)
-            .GreaterThan(0)
-            .When(static request => request.AgentHomeMaxSelectedFolderBytes is not null);
+        RuleFor(static request => request.AgentHomeMaxSelectedFolderBytes)
+            .GreaterThan(0);
 
-        RuleFor(static request => request.AgentHomeMaxPatchBytes!.Value)
-            .GreaterThan(0)
-            .When(static request => request.AgentHomeMaxPatchBytes is not null);
+        RuleFor(static request => request.AgentHomeMaxPatchBytes)
+            .GreaterThan(0);
 
-        RuleFor(static request => request.MaxPendingToolCallAgeMinutes!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes)
-            .When(static request => request.MaxPendingToolCallAgeMinutes is not null);
+        RuleFor(static request => request.MaxPendingToolCallAgeMinutes)
+            .InclusiveBetween(StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes);
 
-        RuleFor(static request => request.DetachedGraceSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
-            .When(static request => request.DetachedGraceSeconds is not null);
+        RuleFor(static request => request.DetachedGraceSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds);
 
-        RuleFor(static request => request.TranscriptionIdleTimeoutMinutes!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes, StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes)
-            .When(static request => request.TranscriptionIdleTimeoutMinutes is not null);
+        RuleFor(static request => request.TranscriptionIdleTimeoutMinutes)
+            .InclusiveBetween(StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes, StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes);
 
-        RuleFor(static request => request.LlamaReadinessTimeoutCapSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds)
-            .When(static request => request.LlamaReadinessTimeoutCapSeconds is not null);
+        RuleFor(static request => request.LlamaReadinessTimeoutCapSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds);
 
-        RuleFor(static request => request.LlamaChatHttpTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds)
-            .When(static request => request.LlamaChatHttpTimeoutSeconds is not null);
+        RuleFor(static request => request.LlamaChatHttpTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds);
 
-        RuleFor(static request => request.LlamaEmbeddingHttpTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds)
-            .When(static request => request.LlamaEmbeddingHttpTimeoutSeconds is not null);
+        RuleFor(static request => request.LlamaEmbeddingHttpTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds);
 
-        RuleFor(static request => request.LlamaChatCacheRamMiB!.Value)
-            .InclusiveBetween(StoredNodeSettings.LlamaChatCacheRamMiBAuto, StoredNodeSettings.MaxLlamaChatCacheRamMiB)
-            .When(static request => request.LlamaChatCacheRamMiB is not null);
+        RuleFor(static request => request.LlamaChatCacheRamMiB)
+            .InclusiveBetween(StoredNodeSettings.LlamaChatCacheRamMiBAuto, StoredNodeSettings.MaxLlamaChatCacheRamMiB);
 
-        RuleFor(static request => request.LlamaCpuThreadReserve!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve)
-            .When(static request => request.LlamaCpuThreadReserve is not null);
+        RuleFor(static request => request.LlamaCpuThreadReserve)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve);
 
-        RuleFor(static request => request.LlamaGpuReservePercent!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent)
-            .When(static request => request.LlamaGpuReservePercent is not null);
+        RuleFor(static request => request.LlamaGpuReservePercent)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent);
 
-        RuleFor(static request => request.LlamaRamReservePercent!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent)
-            .When(static request => request.LlamaRamReservePercent is not null);
+        RuleFor(static request => request.LlamaRamReservePercent)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent);
 
-        RuleFor(static request => request.ImageIdleTimeToLiveSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds)
-            .When(static request => request.ImageIdleTimeToLiveSeconds is not null);
+        RuleFor(static request => request.ImageIdleTimeToLiveSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds);
 
-        RuleFor(static request => request.ModelFitSafetyMarginPercent!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent)
-            .When(static request => request.ModelFitSafetyMarginPercent is not null);
+        RuleFor(static request => request.ModelFitSafetyMarginPercent)
+            .InclusiveBetween(StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent);
 
-        RuleFor(static request => request.MaxProviderCallsPerInvocation!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation)
-            .When(static request => request.MaxProviderCallsPerInvocation is not null);
+        RuleFor(static request => request.MaxProviderCallsPerInvocation)
+            .InclusiveBetween(StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation);
 
-        RuleFor(static request => request.CustomToolMaxTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds)
-            .When(static request => request.CustomToolMaxTimeoutSeconds is not null);
+        RuleFor(static request => request.CustomToolMaxTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds);
 
-        RuleFor(static request => request.WebFetchTimeoutSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds)
-            .When(static request => request.WebFetchTimeoutSeconds is not null);
+        RuleFor(static request => request.WebFetchTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds);
 
-        RuleFor(static request => request.WebFetchMaxContentChars!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars)
-            .When(static request => request.WebFetchMaxContentChars is not null);
+        RuleFor(static request => request.WebFetchMaxContentChars)
+            .InclusiveBetween(StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars);
 
-        RuleFor(static request => request.KnowledgeSearchDefaultResults!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)
-            .When(static request => request.KnowledgeSearchDefaultResults is not null);
+        RuleFor(static request => request.KnowledgeSearchDefaultResults)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
-        RuleFor(static request => request.KnowledgeSearchMaxResults!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)
-            .When(static request => request.KnowledgeSearchMaxResults is not null);
+        RuleFor(static request => request.KnowledgeSearchMaxResults)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
-        RuleFor(static request => request.HuggingFaceDownloadConnections!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections)
-            .When(static request => request.HuggingFaceDownloadConnections is not null);
+        RuleFor(static request => request.HuggingFaceDownloadConnections)
+            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections);
 
-        RuleFor(static request => request.TranscriptionInferenceTimeoutMinutes!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes)
-            .When(static request => request.TranscriptionInferenceTimeoutMinutes is not null);
+        RuleFor(static request => request.TranscriptionInferenceTimeoutMinutes)
+            .InclusiveBetween(StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes);
 
-        RuleFor(static request => request.AgentHomeMaxRunSeconds!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds)
-            .When(static request => request.AgentHomeMaxRunSeconds is not null);
+        RuleFor(static request => request.AgentHomeMaxRunSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds);
 
-        RuleFor(static request => request.AgentHomeRunRetentionDays!.Value)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays)
-            .When(static request => request.AgentHomeRunRetentionDays is not null);
+        RuleFor(static request => request.AgentHomeRunRetentionDays)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays);
 
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
         // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.

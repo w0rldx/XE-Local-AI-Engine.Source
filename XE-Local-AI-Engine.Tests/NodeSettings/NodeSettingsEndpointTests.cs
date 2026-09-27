@@ -389,6 +389,9 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // The error names the wire field itself, never the nullable's ".Value" member.
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("llamaChatCacheRamMiB", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
@@ -409,6 +412,9 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // The error names the wire field itself, never the nullable's ".Value" member.
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("huggingFaceDiskMarginBytes", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
