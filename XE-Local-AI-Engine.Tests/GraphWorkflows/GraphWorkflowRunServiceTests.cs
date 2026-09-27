@@ -163,7 +163,8 @@ public sealed class GraphWorkflowRunServiceTests
 
         // The graph carries no Tool node, so the tool gate never reads the catalog: the substitute is here to satisfy
         // the constructor, and a call on it would be a bug this test would rather fail on than hide.
-        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(), Options.Create(new GraphWorkflowOptions()), Options.Create(new SecurityOptions()));
+        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(), Options.Create(new GraphWorkflowOptions()),
+            Options.Create(new SecurityOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
             runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));

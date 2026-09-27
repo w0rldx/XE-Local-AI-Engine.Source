@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -78,9 +80,9 @@ public sealed class ExternalOpenAiChatClientWireTests
                   + "data: [DONE]\n\n";
         var recorder = new OpenAiWireRecorder
         {
-            Responder = _ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(sse, System.Text.Encoding.UTF8, "text/event-stream")
+                Content = new StringContent(sse, Encoding.UTF8, "text/event-stream")
             }
         };
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());

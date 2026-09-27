@@ -76,7 +76,12 @@ internal static class TrainingRuntimeTestInfrastructure
     /// <summary>Seeds the per-feature <c>uv</c>, <c>pythons</c> and <c>uv-cache</c> a root kept before the shared store.</summary>
     public static void SeedLegacyToolchain(string featureRoot)
     {
-        foreach (var name in new[] { "uv", "pythons", "uv-cache" })
+        foreach (var name in new[]
+                 {
+                     "uv",
+                     "pythons",
+                     "uv-cache"
+                 })
         {
             var directory = Directory.CreateDirectory(Path.Combine(featureRoot, name, "nested"));
             File.WriteAllText(Path.Combine(directory.FullName, "marker"), name);

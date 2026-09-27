@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.TrainingRuntimeTestInfrastructure;
+using static Providers.Training.TrainingRuntimeTestInfrastructure;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>

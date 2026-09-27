@@ -45,11 +45,11 @@ public sealed class GraphWorkflowSampleContractTests
             AssertEx.Empty(offending, $"{name} carries a node that needs more than a local chat model.");
 
             var pinned = graph.Nodes.Values.Where(static node => node.Config switch
-                                          {
-                                              GraphWorkflowLlmCallConfig config => config.Model is not null,
-                                              GraphWorkflowDecisionModelConfig config => config.Model is not null,
-                                              _ => false
-                                          })
+                              {
+                                  GraphWorkflowLlmCallConfig config => config.Model is not null,
+                                  GraphWorkflowDecisionModelConfig config => config.Model is not null,
+                                  _ => false
+                              })
                               .Select(static node => node.NodeKey);
             AssertEx.Empty(pinned, $"{name} pins a model; samples must use the local default.");
         }
@@ -65,12 +65,12 @@ public sealed class GraphWorkflowSampleContractTests
         foreach (var (name, graph) in Samples())
         {
             var paths = graph.Nodes.Values.SelectMany(static node => node.Config switch
-                                          {
-                                              GraphWorkflowLlmCallConfig config => config.InputBindings.Values,
-                                              GraphWorkflowDecisionModelConfig config => config.InputBindings.Values,
-                                              GraphWorkflowEndConfig { ResultPath: { } resultPath } => [resultPath],
-                                              _ => []
-                                          })
+                             {
+                                 GraphWorkflowLlmCallConfig config => config.InputBindings.Values,
+                                 GraphWorkflowDecisionModelConfig config => config.InputBindings.Values,
+                                 GraphWorkflowEndConfig { ResultPath: { } resultPath } => [resultPath],
+                                 _ => []
+                             })
                              .Concat(graph.Edges.Where(static edge => edge.Condition is not null).Select(static edge => edge.Condition!.Path))
                              .ToArray();
 

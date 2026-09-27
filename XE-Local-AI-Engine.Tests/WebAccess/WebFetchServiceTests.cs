@@ -267,7 +267,13 @@ public sealed class WebFetchServiceTests
         AssertEx.Contains(content, "title: Tidal Energy Arrives in the Harbour");
         AssertEx.Contains(content, "enough electricity for roughly six hundred homes");
         AssertEx.Contains(content, "decide on a second turbine next spring");
-        foreach (var boilerplate in new[] { "SCRIPT-SHOULD-NOT-APPEAR", "NAVIGATION-SHOULD-NOT-APPEAR", "SIDEBAR-SHOULD-NOT-APPEAR", "FOOTER-SHOULD-NOT-APPEAR" })
+        foreach (var boilerplate in new[]
+                 {
+                     "SCRIPT-SHOULD-NOT-APPEAR",
+                     "NAVIGATION-SHOULD-NOT-APPEAR",
+                     "SIDEBAR-SHOULD-NOT-APPEAR",
+                     "FOOTER-SHOULD-NOT-APPEAR"
+                 })
         {
             AssertEx.False(content.Contains(boilerplate, StringComparison.Ordinal), $"'{boilerplate}' is page chrome, not the article");
         }
@@ -545,11 +551,14 @@ public sealed class WebFetchServiceTests
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     // A body that never ends and counts what the reader pulled from it.
@@ -582,10 +591,13 @@ public sealed class WebFetchServiceTests
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }

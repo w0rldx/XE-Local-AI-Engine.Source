@@ -90,8 +90,7 @@ public sealed class WebSearchServiceTests
         AssertEx.Null(outcome.ErrorCode);
         AssertEx.Equal(WebSearchService.DuckDuckGoBackend, outcome.Backend);
         var results = AssertEx.NotNull(outcome.Results);
-        AssertEx.Equal(Lines(
-            [
+        AssertEx.Equal(Lines([
                 "https://en.wikipedia.org/wiki/Tidal_power",
                 "https://earth.org/what-is-tidal-energy/?ref=ddg&lang=en",
                 "https://www.eia.gov/energyexplained/hydropower/tidal-power.php",
@@ -102,8 +101,7 @@ public sealed class WebSearchServiceTests
             Lines(results.Select(static result => result.Url)),
             "the y.js ad and the DuckDuckGo-internal link are dropped, the uddg click-through is unwrapped");
         AssertEx.Equal("Tidal power - Wikipedia", results[0].Title);
-        AssertEx.Equal(
-            "Tidal power or tidal energy is harnessed by converting energy from tides into useful forms of power, mainly electricity.",
+        AssertEx.Equal("Tidal power or tidal energy is harnessed by converting energy from tides into useful forms of power, mainly electricity.",
             results[0].Snippet);
     }
 
@@ -208,8 +206,7 @@ public sealed class WebSearchServiceTests
 
         AssertEx.Equal(WebSearchService.SearxngBackend, outcome.Backend);
         var results = AssertEx.NotNull(outcome.Results);
-        AssertEx.Equal(Lines(
-            [
+        AssertEx.Equal(Lines([
                 "https://en.wikipedia.org/wiki/Tidal_power",
                 "https://www.eia.gov/energyexplained/hydropower/tidal-power.php",
                 "https://www.pnnl.gov/explainer-articles/tidal-energy"
@@ -237,8 +234,7 @@ public sealed class WebSearchServiceTests
         AssertEx.Equal(8888, uri.Port);
         AssertEx.Equal("/searx/search", uri.AbsolutePath, "the query cannot climb out of the configured path");
         AssertEx.Equal(string.Empty, uri.Fragment);
-        AssertEx.Equal(
-            "?q=..%2F..%2Fadmin%3Fformat%3Dhtml%23frag%20http%3A%2F%2Fevil.example%2F&format=json",
+        AssertEx.Equal("?q=..%2F..%2Fadmin%3Fformat%3Dhtml%23frag%20http%3A%2F%2Fevil.example%2F&format=json",
             uri.Query,
             "the whole model input lands escaped in q; format stays json");
     }
@@ -313,7 +309,8 @@ public sealed class WebSearchServiceTests
         AssertEx.Equal("error\nmessage", Lines(result.RootElement.EnumerateObject().Select(static p => p.Name)));
     }
 
-    private static string Lines(IEnumerable<string> values) => string.Join('\n', values);
+    private static string Lines(IEnumerable<string> values) =>
+        string.Join('\n', values);
 
     private static async Task<string> SearchJsonAsync(WebSearchService service, string? query, int? maxResults = null) =>
         WebSearchService.Serialize(await service.SearchAsync(query, maxResults));
@@ -341,9 +338,11 @@ public sealed class WebSearchServiceTests
     private static string ReadFixture(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "WebAccess", name));
 
-    private static HttpResponseMessage Html(string body, HttpStatusCode status = HttpStatusCode.OK) => Body(body, "text/html", status);
+    private static HttpResponseMessage Html(string body, HttpStatusCode status = HttpStatusCode.OK) =>
+        Body(body, "text/html", status);
 
-    private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) => Body(body, "application/json", status);
+    private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>
+        Body(body, "application/json", status);
 
     private static HttpResponseMessage Body(string body, string mediaType, HttpStatusCode status)
     {

@@ -497,7 +497,12 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.False(events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested));
 
         var folded = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
-        folded.PendingApproval = bare.PendingApproval with { CallId = "call-9", ToolName = "run_command", SessionScopeEligible = true };
+        folded.PendingApproval = bare.PendingApproval with
+        {
+            CallId = "call-9",
+            ToolName = "run_command",
+            SessionScopeEligible = true
+        };
         RaiseState(dispatcher, folded);
         await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(5));
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));

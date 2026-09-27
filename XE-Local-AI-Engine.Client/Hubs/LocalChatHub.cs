@@ -111,8 +111,7 @@ public sealed class LocalChatHub : Hub
         bool autoAcceptWebContent,
         CancellationToken cancellationToken)
     {
-        return TrackAttachment(
-            RejectInvalidRequest(() =>
+        return TrackAttachment(RejectInvalidRequest(() =>
                 _regenerationService.RegenerateAsync(conversationId,
                     originalMessageId,
                     reasoningEffort,

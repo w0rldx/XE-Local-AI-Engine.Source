@@ -41,8 +41,7 @@ public static class ManagedPythonPins
     public static ManagedPythonUvAsset Current => Resolve(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture);
 
     /// <summary>True when <see cref="Current" /> resolves; lets a status read skip the store instead of throwing.</summary>
-    public static bool IsCurrentPlatformSupported =>
-        TryResolve(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture) is not null;
+    public static bool IsCurrentPlatformSupported => TryResolve(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture) is not null;
 
     internal static ManagedPythonUvAsset Resolve(bool isWindows, bool isLinux, Architecture architecture)
     {

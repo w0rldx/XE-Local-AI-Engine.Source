@@ -1655,7 +1655,10 @@ public sealed class InvocationRunnerTests
     {
         // A throw neither service maps (here from the handler itself) must become that call's refusal: the segment's
         // Task.WhenAll would otherwise fault the whole turn, taking the search review and the question down with it.
-        using var server = new WebReviewTestServer { PageFailure = new InvalidOperationException("stub parser blew up") };
+        using var server = new WebReviewTestServer
+        {
+            PageFailure = new InvalidOperationException("stub parser blew up")
+        };
         var (dispatcher, cards) = WebReviewDispatcher();
         UserQuestionLifecyclePayload? question = null;
         dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
@@ -5431,7 +5434,10 @@ public sealed class InvocationRunnerTests
     // Stands in for the framework executing the approved call in the resumed segment, inside the runner's review scope.
     private static async IAsyncEnumerable<AgentResponseUpdate> ExecuteWebFetchHandlerUpdates(ConcurrentQueue<string> results)
     {
-        results.Enqueue(await new WebFetchToolHandler { ResolveCallId = static () => "call-web-fetch" }.ExecuteAsync("{}"));
+        results.Enqueue(await new WebFetchToolHandler
+        {
+            ResolveCallId = static () => "call-web-fetch"
+        }.ExecuteAsync("{}"));
         yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
     }
 
@@ -5448,7 +5454,12 @@ public sealed class InvocationRunnerTests
         var registry = new ClientLocalToolRegistry([new AskUserToolHandler(stash), new WebFetchToolHandler(), new WebSearchToolHandler()],
             Options.Create(new AgentToolPipelineOptions()));
         var tools = new List<AITool>();
-        foreach (var name in new[] { WebFetchToolDefinition.ToolName, WebSearchToolDefinition.ToolName, AskUserTool.ToolName })
+        foreach (var name in new[]
+                 {
+                     WebFetchToolDefinition.ToolName,
+                     WebSearchToolDefinition.ToolName,
+                     AskUserTool.ToolName
+                 })
         {
             AssertEx.True(registry.TryResolve(name, out var tool));
             tools.Add(tool!);
@@ -5504,8 +5515,14 @@ public sealed class InvocationRunnerTests
 
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
             [
-                new FunctionCallContent(FetchCallId, WebFetchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal) { ["url"] = WebReviewTestServer.PageUrl }),
-                new FunctionCallContent(SearchCallId, WebSearchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal) { ["query"] = "tidal power" }),
+                new FunctionCallContent(FetchCallId, WebFetchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["url"] = WebReviewTestServer.PageUrl
+                }),
+                new FunctionCallContent(SearchCallId, WebSearchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["query"] = "tidal power"
+                }),
                 new FunctionCallContent(AskCallId, AskUserTool.ToolName, ValidAskUserArguments())
             ])));
         }

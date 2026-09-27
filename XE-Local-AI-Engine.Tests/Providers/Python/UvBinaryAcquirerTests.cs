@@ -305,7 +305,10 @@ public sealed class UvBinaryAcquirerTests : IDisposable
 
     private static ManagedPythonUvAsset WindowsAsset(byte[] archive)
     {
-        return ManagedPythonPins.WindowsX64 with { Sha256 = Sha256(archive) };
+        return ManagedPythonPins.WindowsX64 with
+        {
+            Sha256 = Sha256(archive)
+        };
     }
 
     private static byte[] BuildZip(params (string Name, string Content)[] entries)

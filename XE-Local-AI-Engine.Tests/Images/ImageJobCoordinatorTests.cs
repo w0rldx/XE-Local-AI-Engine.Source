@@ -195,7 +195,10 @@ public sealed class ImageJobCoordinatorTests
     public async Task RunJob_ImageServerDiedUnderTheJob_FailsWithTheRuntimesExplanation()
     {
         const string explanation = "The image server stopped unexpectedly (exit code 137). It restarts with the next generation.";
-        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(explanation) { ProcessExited = true });
+        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(explanation)
+        {
+            ProcessExited = true
+        });
 
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("daemon dies"), CancellationToken.None);
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);

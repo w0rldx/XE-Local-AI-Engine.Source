@@ -288,7 +288,10 @@ public sealed class ToolApprovalCoordinatorTests
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
         var (dispatcher, cards) = LifecycleRecordingDispatcher();
         var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
-        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
 
         var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
@@ -312,7 +315,10 @@ public sealed class ToolApprovalCoordinatorTests
         await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, ApprovalDecisions.Approve);
 
         // Session scope asked for, never honoured: the next review of the same tool parks again.
-        var second = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl }, "call-2"));
+        var second = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        }, "call-2"));
         await AssertEx.EventuallyAsync(() => cards.Count == 2, TimeSpan.FromSeconds(5));
         AssertEx.False(second.IsCompleted);
         coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
@@ -331,7 +337,10 @@ public sealed class ToolApprovalCoordinatorTests
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
         var (dispatcher, cards) = LifecycleRecordingDispatcher();
         var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
-        var request = WebRequest(WebSearchToolDefinition.ToolName, new { query = "tidal power" });
+        var request = WebRequest(WebSearchToolDefinition.ToolName, new
+        {
+            query = "tidal power"
+        });
 
         var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
@@ -357,7 +366,10 @@ public sealed class ToolApprovalCoordinatorTests
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
         var (dispatcher, cards) = LifecycleRecordingDispatcher();
         var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
-        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
 
         await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -377,7 +389,10 @@ public sealed class ToolApprovalCoordinatorTests
         var settings = StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build();
         settings.GetWebAccessEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => webAccessEnabled);
         var coordinator = CreateCoordinator(dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever(), runtimeSettings: settings);
-        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
 
         var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
         await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
@@ -402,7 +417,10 @@ public sealed class ToolApprovalCoordinatorTests
         using var scope = WebReviewResultScope.BeginScope();
         var coordinator = CreateCoordinator(webReviewRetriever: server.CreateRetriever(),
             runtimeSettings: StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).WithWebAccessEnabled(false).Build());
-        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
 
         await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -418,7 +436,10 @@ public sealed class ToolApprovalCoordinatorTests
         using var scope = WebReviewResultScope.BeginScope();
         var (dispatcher, cards) = LifecycleRecordingDispatcher();
         var coordinator = CreateCoordinator(dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
-        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
 
         await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AsUnattended().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -449,13 +470,22 @@ public sealed class ToolApprovalCoordinatorTests
     [Test]
     public async Task RetrieveWebContentAsync_RunsTheSegmentsWebCallsConcurrently()
     {
-        using var server = new WebReviewTestServer { ConcurrentRequestsBeforeRelease = 2 };
+        using var server = new WebReviewTestServer
+        {
+            ConcurrentRequestsBeforeRelease = 2
+        };
         var coordinator = CreateCoordinator(webReviewRetriever: server.CreateRetriever());
         ToolApprovalRequestContent[] requests =
         [
-            WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl }, "call-1"),
+            WebRequest(WebFetchToolDefinition.ToolName, new
+            {
+                url = WebReviewTestServer.PageUrl
+            }, "call-1"),
             new ToolApprovalRequestContent("approval-ask", new FunctionCallContent("call-ask", AskUserTool.ToolName)),
-            WebRequest(WebSearchToolDefinition.ToolName, new { query = "tidal" }, "call-2")
+            WebRequest(WebSearchToolDefinition.ToolName, new
+            {
+                query = "tidal"
+            }, "call-2")
         ];
 
         // Each stubbed request waits until BOTH are in flight, so a sequential retrieval would never finish.
@@ -474,7 +504,10 @@ public sealed class ToolApprovalCoordinatorTests
     }
 
     private static Task<string> HandlerResultAsync(ToolApprovalRequestContent request) =>
-        new WebFetchToolHandler { ResolveCallId = () => request.ToolCall.CallId }.ExecuteAsync("{}");
+        new WebFetchToolHandler
+        {
+            ResolveCallId = () => request.ToolCall.CallId
+        }.ExecuteAsync("{}");
 
     private static ToolApprovalRequestContent WebRequest(string toolName, object arguments, string callId = "call-1") =>
         new($"approval-{callId}", WebReviewToolHandlerTests.Call(toolName, arguments, callId));

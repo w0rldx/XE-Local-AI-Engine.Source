@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
@@ -93,7 +94,7 @@ public sealed class WindowsPythonToolRunner : IPythonToolRunner
         {
             process.Kill(entireProcessTree: true);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
             // Already exited, or a child exited or refused between the snapshot and the kill (AggregateException).
         }

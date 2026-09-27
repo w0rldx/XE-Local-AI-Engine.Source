@@ -379,8 +379,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
         AssertEx.False(fixture.Registry.IsLive(sessionId), "A session nothing ever feeds must end by itself.");
         AssertEx.Equal(1, fixture.Logger.CountContaining("received no audio frame and no producer attached within the 00:01:00 producer-attachment timeout", LogLevel.Warning),
             "One Warning names the timeout, so a browser that never delivered audio leaves a trace on the node.");
-        await AssertEx.EventuallyAsync(
-            () => fixture.Logger.CountContaining($"session {sessionId} ended: reason NeverAttached, status Cancelled, audio received 0.0 s, consumed 0.0 s, 0 segments committed",
+        await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining(
+                $"session {sessionId} ended: reason NeverAttached, status Cancelled, audio received 0.0 s, consumed 0.0 s, 0 segments committed",
                 LogLevel.Information) == 1,
             TestBudgets.Contended, "The end line reports the reason and that nothing arrived.");
     }

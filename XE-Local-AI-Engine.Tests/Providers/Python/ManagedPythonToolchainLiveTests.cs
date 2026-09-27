@@ -53,7 +53,11 @@ public sealed class ManagedPythonToolchainLiveTests : IDisposable
 
         // Two DIFFERENT projects that need the same interpreter and the same wheel, so both processes race to install
         // one CPython and to populate one cache entry.
-        var syncs = new[] { "alpha", "beta" }.Select(async name =>
+        var syncs = new[]
+        {
+            "alpha",
+            "beta"
+        }.Select(async name =>
         {
             var project = Path.Combine(_root, name);
             var home = Directory.CreateDirectory(Path.Combine(project, ".work", ".home")).FullName;

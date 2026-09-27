@@ -58,10 +58,10 @@ public sealed class ManagedPythonToolchain
         }
 
         return new DirectoryInfo(PythonInstallDirectory).EnumerateDirectories()
-                                                         .Where(static directory => directory.LinkTarget is null && !directory.Name.StartsWith('.'))
-                                                         .Select(static directory => directory.Name)
-                                                         .Order(StringComparer.Ordinal)
-                                                         .ToArray();
+                                                        .Where(static directory => directory.LinkTarget is null && !directory.Name.StartsWith('.'))
+                                                        .Select(static directory => directory.Name)
+                                                        .Order(StringComparer.Ordinal)
+                                                        .ToArray();
     }
 
     /// <summary>A venv's interpreter: <c>bin/python</c> on Unix, <c>Scripts\python.exe</c> on Windows.</summary>
@@ -89,8 +89,7 @@ public sealed class ManagedPythonToolchain
     {
         if (OperatingSystem.IsWindows() && ExceedsWindowsPathBudget(storeRoot, isWindows: true, WindowsLongPathsEnabled()))
         {
-            throw new ManagedPythonException(
-                "The Python toolchain folder path is too long for Windows without long-path support. Enable long paths in Windows or use a shorter data directory.");
+            throw new ManagedPythonException("The Python toolchain folder path is too long for Windows without long-path support. Enable long paths in Windows or use a shorter data directory.");
         }
     }
 
@@ -207,8 +206,8 @@ public sealed class ManagedPythonToolchain
         try
         {
             var directories = new DirectoryInfo(root).EnumerateDirectories("*", SearchOption.AllDirectories)
-                                                    .Append(new DirectoryInfo(root))
-                                                    .Where(static directory => directory.LinkTarget is null);
+                                                     .Append(new DirectoryInfo(root))
+                                                     .Where(static directory => directory.LinkTarget is null);
             foreach (var directory in directories)
             {
                 directory.UnixFileMode |= UnixFileMode.UserWrite;

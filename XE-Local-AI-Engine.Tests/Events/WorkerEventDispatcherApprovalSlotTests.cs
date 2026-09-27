@@ -121,7 +121,12 @@ public sealed class WorkerEventDispatcherApprovalSlotTests
             Description = "A tool call requires approval.",
             Arguments = "{\"url\":\"https://example.com/\"}",
             SessionScopeEligible = false,
-            WebReview = new WebReviewPreview { ToolName = "web_fetch", Url = "https://example.com/", Text = "Example Domain" }
+            WebReview = new WebReviewPreview
+            {
+                ToolName = "web_fetch",
+                Url = "https://example.com/",
+                Text = "Example Domain"
+            }
         });
 
         await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(10));

@@ -105,7 +105,10 @@ public sealed class WebReviewToolHandlerTests
     {
         using var server = new WebReviewTestServer();
 
-        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl }), CancellationToken.None);
+        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        }), CancellationToken.None);
 
         AssertEx.Equal(WebReviewTestServer.PageUrl, AssertEx.NotNull(server.Requests.Single()).AbsoluteUri, "the chat path is an open fetch: no allow-list refused the URL");
         var preview = AssertEx.NotNull(retrieval.Preview);
@@ -119,7 +122,10 @@ public sealed class WebReviewToolHandlerTests
     {
         using var server = new WebReviewTestServer();
 
-        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebSearchToolDefinition.ToolName, new { query = "tidal power" }), CancellationToken.None);
+        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebSearchToolDefinition.ToolName, new
+        {
+            query = "tidal power"
+        }), CancellationToken.None);
 
         var preview = AssertEx.NotNull(retrieval.Preview);
         AssertEx.Equal("searxng", preview.Backend);
@@ -131,7 +137,10 @@ public sealed class WebReviewToolHandlerTests
     {
         using var server = new WebReviewTestServer();
 
-        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebFetchToolDefinition.ToolName, new { url = 5 }), CancellationToken.None);
+        var retrieval = await server.CreateRetriever().RetrieveAsync(Call(WebFetchToolDefinition.ToolName, new
+        {
+            url = 5
+        }), CancellationToken.None);
 
         AssertEx.Equal("invalid-arguments", ErrorCode(retrieval.ModelText));
         AssertEx.Null(retrieval.Preview);
@@ -149,6 +158,12 @@ public sealed class WebReviewToolHandlerTests
 
     private static IClientLocalToolHandler Handler(string toolName, string callId) =>
         string.Equals(toolName, WebSearchToolDefinition.ToolName, StringComparison.Ordinal)
-            ? new WebSearchToolHandler { ResolveCallId = () => callId }
-            : new WebFetchToolHandler { ResolveCallId = () => callId };
+            ? new WebSearchToolHandler
+            {
+                ResolveCallId = () => callId
+            }
+            : new WebFetchToolHandler
+            {
+                ResolveCallId = () => callId
+            };
 }

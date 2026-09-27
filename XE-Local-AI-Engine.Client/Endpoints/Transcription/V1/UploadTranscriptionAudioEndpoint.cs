@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1;
 
 using FastEndpoints;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
@@ -41,7 +42,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         Post(LocalApiRoutes.Transcription.SessionFile);
         AllowFileUploads(dontAutoBindFormData: true);
         // Kestrel's own 30 MB default would otherwise refuse (or, below it, pre-empt) the configured cap with an unreadable answer.
-        Options(builder => builder.WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes)));
+        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
         // Form auto-binding is off, so nothing infers the media type from the DTO any more. Declare it explicitly —
         // the same line PreviewSkillImportEndpoint carries, for the same reason.

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Python;
 
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
@@ -21,7 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </remarks>
 [RunOn(OS.Windows)]
 [SupportedOSPlatform("windows")]
-[Category(TestCategories.ExternalInfra)]
+[TUnit.Core.Category(TestCategories.ExternalInfra)]
 public sealed class ManagedPythonWindowsLiveTests : IDisposable
 {
     private const string EnabledVariable = "XE_COMPUTE_LIVE";
@@ -140,7 +141,7 @@ public sealed class ManagedPythonWindowsLiveTests : IDisposable
                         survivors.Add($"{process.ProcessName}#{process.Id}");
                     }
                 }
-                catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+                catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
                 {
                     // Another user's process, or one that exited while being read.
                 }

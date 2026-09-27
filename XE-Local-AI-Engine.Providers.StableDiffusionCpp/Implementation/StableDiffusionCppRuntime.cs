@@ -162,8 +162,14 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             ? string.Create(CultureInfo.InvariantCulture, $"The image server stopped unexpectedly (exit code {code}). It restarts with the next generation.")
             : "The image server stopped unexpectedly. It restarts with the next generation.";
         return cause is null
-            ? new StableDiffusionRuntimeException(message) { ProcessExited = true }
-            : new StableDiffusionRuntimeException(message, cause) { ProcessExited = true };
+            ? new StableDiffusionRuntimeException(message)
+            {
+                ProcessExited = true
+            }
+            : new StableDiffusionRuntimeException(message, cause)
+            {
+                ProcessExited = true
+            };
     }
 
     private static ImageGenerationResult BuildResult(ImageGenerationRequest request, SdJobState state, long startedTimestamp)

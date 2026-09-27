@@ -344,7 +344,12 @@ public sealed class TrainingRuntimeServiceTests
         using var restarted = harness.Restart();
         restarted.Service.Recover();
 
-        foreach (var name in new[] { "uv", "pythons", "uv-cache" })
+        foreach (var name in new[]
+                 {
+                     "uv",
+                     "pythons",
+                     "uv-cache"
+                 })
         {
             AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, name, "nested", "marker")),
                 $"An installed runtime built before the shared store still runs on its own {name}.");

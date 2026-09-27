@@ -43,7 +43,10 @@ public sealed class UvBinaryAcquirer
 
     /// <summary>Test seam: this platform's asset with the digest a synthetic archive carries.</summary>
     internal UvBinaryAcquirer(HttpClient httpClient, string expectedSha256)
-        : this(httpClient, ManagedPythonPins.Current with { Sha256 = ThrowIfBlank(expectedSha256) })
+        : this(httpClient, ManagedPythonPins.Current with
+        {
+            Sha256 = ThrowIfBlank(expectedSha256)
+        })
     {
     }
 

@@ -46,7 +46,11 @@ public sealed class TranscriptionSessionLifecycleServiceTests : IDisposable
 
         await NewService(scopeFactory, Substitute.For<ILiveTranscriptionSessionRegistry>()).StartAsync(CancellationToken.None);
 
-        foreach (var interruptedId in new[] { batchId, liveId })
+        foreach (var interruptedId in new[]
+                 {
+                     batchId,
+                     liveId
+                 })
         {
             var row = AssertEx.NotNull(await GetAsync(scopeFactory, interruptedId));
             AssertEx.Equal(TranscriptionSessionStatus.Failed, row.Status);

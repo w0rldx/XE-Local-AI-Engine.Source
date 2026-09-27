@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ManagedPython;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using TUnit.Core.Enums;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
@@ -12,7 +13,7 @@ using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.TrainingRuntimeTestInfrastructure;
+using static Providers.Training.TrainingRuntimeTestInfrastructure;
 
 /// <summary>
 ///     State derivation of the Managed Python status surface over temp directories and a substituted Training service:
@@ -54,7 +55,12 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
     [Test]
     public async Task Training_WhileAnInstallOrRemoveRuns_IsProvisioning()
     {
-        foreach (var phase in new[] { TrainingRuntimePhase.AcquiringUv, TrainingRuntimePhase.InstallingPackages, TrainingRuntimePhase.Removing })
+        foreach (var phase in new[]
+                 {
+                     TrainingRuntimePhase.AcquiringUv,
+                     TrainingRuntimePhase.InstallingPackages,
+                     TrainingRuntimePhase.Removing
+                 })
         {
             _training.GetStatus().Returns(TrainingStatus(phase, isRunning: true));
 
@@ -207,7 +213,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
     }
 
     [Test]
-    [RunOn(TUnit.Core.Enums.OS.Linux)]
+    [RunOn(OS.Linux)]
     public async Task Toolchain_ReportsThePinnedUvAndTheRealCPythonInstalls_SkippingAliasesAndLocks()
     {
         using var compute = CreateCompute();
@@ -232,7 +238,11 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
     {
         var minor = Version.Parse(ManagedPythonPins.PythonMinor);
         var expected = $"requires-python = \">={minor.Major}.{minor.Minor},<{minor.Major}.{minor.Minor + 1}\"";
-        foreach (var profile in new[] { "tools/training/pyproject.toml", "tools/compute/pyproject.toml" })
+        foreach (var profile in new[]
+                 {
+                     "tools/training/pyproject.toml",
+                     "tools/compute/pyproject.toml"
+                 })
         {
             AssertEx.Contains(await File.ReadAllTextAsync(RepositoryPaths.Combine(profile)), expected, message: profile);
         }
