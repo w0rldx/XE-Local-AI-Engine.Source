@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
@@ -21,6 +22,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private readonly IAgentSkillStore _agentSkillStore;
     private readonly ICustomToolStore _customToolStore;
     private readonly IAgentInstructionProvider _instructionProvider;
+    private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
@@ -40,6 +42,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
         IToolApprovalPolicy toolApprovalPolicy,
+        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<AgentDefinitionResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -53,6 +56,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
+        ArgumentNullException.ThrowIfNull(knowledgeOptions);
+        _knowledgeOptions = knowledgeOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -93,7 +98,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             ? activeModelIsCloud
             : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken)).IsCloud;
         var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken);
-        var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken);
+        var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
         var skills = await ResolveSkillsAsync(definition, cancellationToken);
         var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken);
 
@@ -307,9 +312,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     blank scaffold resource, skips the prepend entirely, so its resolved prompt and config hash are
     ///     byte-identical to the persona-only path.
     /// </remarks>
-    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
+    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud, CancellationToken cancellationToken)
     {
-        var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, cancellationToken);
+        var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
         return definition.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
@@ -319,15 +324,23 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled.
     /// </summary>
     /// <remarks>
-    ///     Disabled, the query is skipped entirely and the base Instructions flow through unchanged, keeping prompt
-    ///     and config hash byte-identical. Above the retrieval threshold with a non-blank
+    ///     Disabled, or withheld from a cloud effective model without <c>KnowledgeBase:AllowCloudModelAccess</c>
+    ///     (playbook memory is node-local data learned from conversations, gated like knowledge), the query is skipped
+    ///     entirely and the base Instructions flow through unchanged, keeping prompt and config hash byte-identical. Above the retrieval threshold with a non-blank
     ///     <paramref name="retrievalQuery" /> only the top-k most relevant actions are injected; at or below it, or
-    ///     with a blank query, the full static prepend keeps the prompt byte-identical as well.
+    ///     with a blank query, the budget-capped static prepend keeps a within-budget prompt byte-identical as well.
     /// </remarks>
-    private async Task<string> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
+    private async Task<string> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud, CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
         {
+            return definition.Instructions;
+        }
+
+        if (effectiveModelIsCloud && !_knowledgeOptions.AllowCloudModelAccess)
+        {
+            _logger.LogInformation("Playbook memory for agent {AgentDefinitionId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
+                definition.Id);
             return definition.Instructions;
         }
 

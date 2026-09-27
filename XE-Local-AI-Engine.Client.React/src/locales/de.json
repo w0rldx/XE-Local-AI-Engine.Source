@@ -3249,7 +3249,8 @@
 						"label": "Verhalten",
 						"description": "Anweisungstext, der an den System-Prompt des Agenten angehängt wird.",
 						"placeholder": "Gib immer deine Quellen an…",
-						"required": "Verhalten ist erforderlich"
+						"required": "Verhalten ist erforderlich",
+						"tooLong": "Verhalten darf höchstens {{max}} Zeichen lang sein"
 					},
 					"scope": {
 						"label": "Geltungsbereich",
@@ -3265,7 +3266,8 @@
 					"triggerCondition": {
 						"label": "Auslösebedingung",
 						"description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
-						"placeholder": "Wenn der Nutzer nach… fragt"
+						"placeholder": "Wenn der Nutzer nach… fragt",
+						"tooLong": "Auslösebedingung darf höchstens {{max}} Zeichen lang sein"
 					}
 				},
 				"delete": {

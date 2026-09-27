@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Memory;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -235,6 +237,33 @@ public sealed class MemoryExtractionServiceTests
     }
 
     [Test]
+    [Arguments(PlaybookActionOptions.MaxBehaviorLength + 1, 0)]
+    [Arguments(10, PlaybookActionOptions.MaxTriggerConditionLength + 1)]
+    public async Task MemoryExtraction_WhenProposalOverLengthLimit_DropsAndCountsItAsRejected(int behaviorLength, int triggerLength)
+    {
+        // An over-length proposal is dropped whole (never truncated) and counted with the other rejections, while an
+        // in-limit proposal in the same run still persists; the boundary length itself is accepted.
+        var agentId = Guid.NewGuid();
+        var agent = new FakeExtractionAgent(_ =>
+        [
+            Candidate(new string('b', behaviorLength), MemoryScope.Procedural, trigger: triggerLength == 0 ? null : new string('t', triggerLength)),
+            Candidate(new string('k', PlaybookActionOptions.MaxBehaviorLength), MemoryScope.Procedural, trigger: new string('t', PlaybookActionOptions.MaxTriggerConditionLength))
+        ]);
+        var logger = new RecordingLogger<MemoryExtractionService>();
+        var service = CreateService(out var store, agent, logger: logger);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
+
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "Only the in-limit proposal persists.");
+        AssertEx.Equal(PlaybookActionOptions.MaxBehaviorLength, outcome.CreatedCandidates[0].Behavior.Length);
+        await store.Received(1).AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+        AssertEx.True(logger.HasEntry(LogLevel.Information, "rejected (secret or over-length) 1."), "The dropped proposal is counted as rejected.");
+    }
+
+    [Test]
     public async Task MemoryExtraction_WhenCleanProposal_PersistsUnmodified()
     {
         var agentId = Guid.NewGuid();
@@ -255,7 +284,8 @@ public sealed class MemoryExtractionServiceTests
     private static MemoryExtractionService CreateService(out IPlaybookActionStore store,
         IMemoryExtractionAgent agent,
         MemoryExtractionOptions? options = null,
-        IMemorySemanticDeduplicator? semanticDeduplicator = null)
+        IMemorySemanticDeduplicator? semanticDeduplicator = null,
+        ILogger<MemoryExtractionService>? logger = null)
     {
         store = Substitute.For<IPlaybookActionStore>();
         return new MemoryExtractionService(agent,
@@ -268,7 +298,7 @@ public sealed class MemoryExtractionServiceTests
             {
                 ExtractionModelName = "qwen3:8b"
             }),
-            NullLogger<MemoryExtractionService>.Instance);
+            logger ?? NullLogger<MemoryExtractionService>.Instance);
     }
 
     private static void EchoAddedAction(IPlaybookActionStore store)

@@ -110,10 +110,15 @@ const editableStateSchema = z.enum(["Enabled", "Disabled"]);
 // constrained to Enabled|Disabled (the only states this form authors); priority is any integer (ties broken
 // server-side by CreatedAtUtc).
 // triggerCondition/scope are free-text advisory fields, optional.
+// Per-action length limits, mirroring the backend PlaybookActionOptions.MaxBehaviorLength /
+// MaxTriggerConditionLength consts that every write path enforces (the injected text is budget-bound).
+export const PLAYBOOK_BEHAVIOR_MAX_LENGTH = 1000;
+export const PLAYBOOK_TRIGGER_CONDITION_MAX_LENGTH = 500;
+
 export const playbookActionFormSchema = z.object({
-	behavior: z.string().trim().min(1).max(20000),
+	behavior: z.string().trim().min(1).max(PLAYBOOK_BEHAVIOR_MAX_LENGTH),
 	state: editableStateSchema,
-	triggerCondition: z.string().max(2000),
+	triggerCondition: z.string().max(PLAYBOOK_TRIGGER_CONDITION_MAX_LENGTH),
 	scope: z.string().max(200),
 	priority: z.number().int(),
 });

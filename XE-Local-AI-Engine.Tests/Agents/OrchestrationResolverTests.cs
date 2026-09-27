@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -180,6 +181,7 @@ public sealed class OrchestrationResolverTests
             capabilityResolver,
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -219,6 +221,28 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_WithholdsPlaybookFromThatParticipantOnly()
+    {
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false);
+
+        AssertEx.NotNull(resolved);
+        var localTriage = resolved!.Spec.Participants.Single(participant => participant.Name == "Triage");
+        var cloudSpecialist = resolved.Spec.Participants.Single(participant => participant.Name == "Specialist");
+        AssertEx.Equal("Instructions for Triage\n\n## Operating Playbook\n- Stay terse.", localTriage.Instructions);
+        AssertEx.Equal("Instructions for Specialist", cloudSpecialist.Instructions);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_AndOperatorOptedIn_InjectsPlaybook()
+    {
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: true);
+
+        AssertEx.NotNull(resolved);
+        var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");
+        AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Stay terse.", cloudSpecialist.Instructions);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAnyParticipantIsCloud_SurfacesAggregateAndNamesCloudModel()
     {
         // Blocker 1: the caller gates the SHARED orchestration seed's attachment content on this aggregate (a cloud
@@ -251,14 +275,15 @@ public sealed class OrchestrationResolverTests
 
     private static async Task<ResolvedOrchestration?> ResolveWithCloudPinnedParticipantAsync(bool allowCloudKnowledgeAccess)
     {
-        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: [KnowledgeSearchToolName]);
-        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel, allowedTools: [KnowledgeSearchToolName]);
+        // Both participants carry one enabled playbook action, so the playbook egress gate is observable per participant.
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: [KnowledgeSearchToolName], playbookEnabled: true);
+        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel, allowedTools: [KnowledgeSearchToolName], playbookEnabled: true);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
 
         var store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+                     .Returns(callInfo => Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(callInfo.ArgAt<Guid>(0), "Stay terse.", priority: 1)]));
 
         // REAL offer provider so the actual withholding is observed. BOTH participant models are tool-capable, so the
         // knowledge tools WOULD be offered but for the per-participant locality gate.
@@ -285,6 +310,10 @@ public sealed class OrchestrationResolverTests
             capabilityResolver,
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions
+            {
+                AllowCloudModelAccess = allowCloudKnowledgeAccess
+            }),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -642,6 +671,7 @@ public sealed class OrchestrationResolverTests
                 BaseScaffold = scaffold
             },
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -688,6 +718,7 @@ public sealed class OrchestrationResolverTests
             capabilityResolver ?? NonThinkingCapabilityResolver(),
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -731,7 +762,7 @@ public sealed class OrchestrationResolverTests
             TopK = topK
         });
         return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(),
-            new PermissiveToolApprovalPolicy(), NullLogger<OrchestrationResolver>.Instance);
+            new PermissiveToolApprovalPolicy(), Options.Create(new KnowledgeBaseOptions()), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -855,6 +886,7 @@ public sealed class OrchestrationResolverTests
             NonThinkingCapabilityResolver(),
             new FakeAgentInstructionProvider(),
             toolApprovalPolicy,
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 

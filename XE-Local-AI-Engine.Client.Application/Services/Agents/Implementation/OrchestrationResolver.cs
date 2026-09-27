@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 
@@ -25,6 +26,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private const int MinimumCapableParticipants = 2;
     private const int DefaultMaxTurnsPerAgent = 8;
     private readonly IAgentInstructionProvider _instructionProvider;
+    private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<OrchestrationResolver> _logger;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
@@ -45,6 +47,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         IModelCapabilityResolver modelCapabilityResolver,
         IAgentInstructionProvider instructionProvider,
         IToolApprovalPolicy toolApprovalPolicy,
+        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -57,6 +60,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
+        ArgumentNullException.ThrowIfNull(knowledgeOptions);
+        _knowledgeOptions = knowledgeOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -207,14 +212,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                 continue;
             }
 
-            // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
-            // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
-            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken);
-
             // THIS participant's thinking capability and locality, from its OWN effective model: a non-thinking pin
-            // never reaches the think wire, and a cloud pin loses the knowledge tools even on a local turn.
+            // never reaches the think wire, and a cloud pin loses the knowledge tools and playbook memory even on a local turn.
             var participantCapabilities = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken);
             var (supportsThinking, _, participantIsCloud) = participantCapabilities;
+
+            // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
+            // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
+            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
             capable[participant.Id] = new ResolvedParticipant
             {
                 Definition = participant,
@@ -237,24 +242,32 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     blank-scaffold case, skips the prepend, keeping the prompt byte-identical to the persona-only path.
     ///     Without this a participant ran with NO base scaffold, unlike every direct agent send.
     /// </remarks>
-    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
+    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud, CancellationToken cancellationToken)
     {
-        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, cancellationToken);
+        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
         return participant.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
     }
 
-    private async Task<string> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
+    private async Task<string> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud, CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
         {
             return participant.Instructions;
         }
 
+        // The same egress gate as the single-agent path, keyed on THIS participant's effective model only.
+        if (participantIsCloud && !_knowledgeOptions.AllowCloudModelAccess)
+        {
+            _logger.LogInformation("Playbook memory for participant {ParticipantId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
+                participant.Id);
+            return participant.Instructions;
+        }
+
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken);
         // The SAME relevance-retrieval decision as the single-agent path (PlaybookRetrievalSelector), applied per
-        // participant: below the threshold or with a blank query the full static prepend is kept byte-identical.
+        // participant: below the threshold or with a blank query the budget-capped static prepend is kept.
         var selected = await PlaybookRetrievalSelector.SelectAsync(_retrievalRanker,
             retrievalQuery,
             enabled,

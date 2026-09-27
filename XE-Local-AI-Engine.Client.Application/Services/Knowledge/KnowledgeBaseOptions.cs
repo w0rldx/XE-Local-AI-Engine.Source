@@ -81,11 +81,11 @@ public sealed class KnowledgeBaseOptions
     ///     The single opt-in governing whether a CLOUD-hosted model may receive ANY node-local private data.
     /// </summary>
     /// <remarks>
-    ///     Covers the read-only knowledge-base tools, the coder workspace file tools (<c>list_files</c>, <c>read_file</c>,
-    ///     <c>search_text</c>) and conversation attachments, inlined or staged. Default <see langword="false" />: all of it is
-    ///     offered only for a node-local effective model; for a cloud effective model the tools are withheld and attachments
-    ///     are neither staged nor inlined, with a visible turn notice. The gate keys on the EFFECTIVE model after any
-    ///     agent/profile pin. Scope: <c>docs/wiki/15-knowledge-base.md</c>. Independent of <see cref="AgentToolsEnabled" />.
+    ///     Covers the knowledge-base tools, the coder workspace file tools, conversation attachments and injected playbook
+    ///     memory. Default <see langword="false" />: all of it reaches only a node-local effective model; for a cloud one the
+    ///     tools are withheld, attachments are not staged or inlined (with a turn notice) and playbook memory is left out
+    ///     of the prompt. The gate keys on the EFFECTIVE model after any agent/profile pin. Scope:
+    ///     <c>docs/wiki/15-knowledge-base.md</c>. Independent of <see cref="AgentToolsEnabled" />.
     /// </remarks>
     public bool AllowCloudModelAccess { get; set; }
 

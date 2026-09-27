@@ -15,7 +15,7 @@ internal static class AddNodePlaybookRetrievalAndMonitoringExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         // Playbook relevance retrieval runs only when an agent's Enabled set exceeds the retrieval threshold and the send carries a query.
-        // Below that the byte-identical static prepend is used. The deterministic lexical ranker is the fallback, the embedding one the interface, needing EmbeddingModelName.
+        // Below that the static prepend is used, budget-capped and byte-identical when within budget. The deterministic lexical ranker is the fallback, the embedding one the interface, needing EmbeddingModelName.
         builder.Services.AddSingleton<LexicalPlaybookRetrievalRanker>();
         builder.Services.AddSingleton<IPlaybookRetrievalRanker, EmbeddingPlaybookRetrievalRanker>();
         builder.Services.AddOptions<PlaybookRetrievalOptions>()

@@ -938,6 +938,121 @@ public sealed class PlaybookActionServiceTests
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    [Arguments(PlaybookActionOptions.MaxBehaviorLength + 1, 0)]
+    [Arguments(1, PlaybookActionOptions.MaxTriggerConditionLength + 1)]
+    public async Task CreateAsync_WithOverLengthText_ThrowsValidationAndDoesNotPersist(int behaviorLength, int triggerLength)
+    {
+        var service = CreateService(out var store, out _, agentExists: true);
+        var input = WithText(CreateInput(), behaviorLength, triggerLength);
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CreateAsync_AtLengthLimits_PersistsThroughStore()
+    {
+        var service = CreateService(out var store, out _, agentExists: true);
+        var input = WithText(CreateInput(), PlaybookActionOptions.MaxBehaviorLength, PlaybookActionOptions.MaxTriggerConditionLength);
+        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
+
+        _ = await service.CreateAsync(input);
+
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(PlaybookActionOptions.MaxBehaviorLength + 1, 0)]
+    [Arguments(1, PlaybookActionOptions.MaxTriggerConditionLength + 1)]
+    public async Task UpdateAsync_WithOverLengthText_ThrowsValidationAndDoesNotUpdate(int behaviorLength, int triggerLength)
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        var input = WithText(CreateInput(agentId, PlaybookActionState.Disabled), behaviorLength, triggerLength);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateInput(agentId, PlaybookActionState.Disabled)) with
+        {
+            Id = actionId
+        });
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateAsync(actionId, input));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(PlaybookActionOptions.MaxBehaviorLength + 1, 0)]
+    [Arguments(1, PlaybookActionOptions.MaxTriggerConditionLength + 1)]
+    public async Task CreateAnalysisSuggestionAsync_WithOverLengthText_ThrowsValidationAndDoesNotPersist(int behaviorLength, int triggerLength)
+    {
+        var service = CreateService(out var store, out _, agentExists: true);
+        var input = CreateSuggestionInput(Guid.NewGuid(), [Guid.NewGuid()], confidence: 0.5d) with
+        {
+            Behavior = new string('b', behaviorLength),
+            TriggerCondition = triggerLength == 0 ? null : new string('t', triggerLength)
+        };
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(PlaybookActionOptions.MaxBehaviorLength + 1, 0)]
+    [Arguments(1, PlaybookActionOptions.MaxTriggerConditionLength + 1)]
+    public async Task UpdateSuggestedAsync_WithOverLengthText_ThrowsValidationAndDoesNotUpdate(int behaviorLength, int triggerLength)
+    {
+        // The approve-with-edit path: an operator edit of a pending suggestion is held to the same limits.
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(agentId, actionId));
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateSuggestedAsync(SuggestedEdit(agentId, actionId, behaviorLength, triggerLength)));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateSuggestedAsync_AtLengthLimits_DelegatesToStore()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        var pending = CreateSuggestedRecord(agentId, actionId);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
+        store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).Returns(pending);
+
+        var result = await service.UpdateSuggestedAsync(SuggestedEdit(agentId, actionId, PlaybookActionOptions.MaxBehaviorLength, PlaybookActionOptions.MaxTriggerConditionLength));
+
+        AssertEx.NotNull(result);
+        await store.Received(1).UpdateAsync(actionId,
+            Arg.Is<PlaybookActionInput>(stored => stored.Behavior.Length == PlaybookActionOptions.MaxBehaviorLength
+                                                  && stored.TriggerCondition!.Length == PlaybookActionOptions.MaxTriggerConditionLength),
+            Arg.Any<CancellationToken>());
+    }
+
+    // A zero trigger length means no trigger condition at all.
+    private static PlaybookActionInput WithText(PlaybookActionInput input, int behaviorLength, int triggerLength)
+    {
+        return input with
+        {
+            Behavior = new string('b', behaviorLength),
+            TriggerCondition = triggerLength == 0 ? null : new string('t', triggerLength)
+        };
+    }
+
+    private static SuggestedActionEditInput SuggestedEdit(Guid agentId, Guid actionId, int behaviorLength, int triggerLength)
+    {
+        return new SuggestedActionEditInput
+        {
+            AgentDefinitionId = agentId,
+            ActionId = actionId,
+            Behavior = new string('b', behaviorLength),
+            TriggerCondition = triggerLength == 0 ? null : new string('t', triggerLength),
+            Scope = null,
+            Priority = 1
+        };
+    }
+
     private static PlaybookAnalysisSuggestionInput CreateSuggestionInput(Guid agentDefinitionId,
         IReadOnlyList<Guid> feedbackIds,
         double confidence)

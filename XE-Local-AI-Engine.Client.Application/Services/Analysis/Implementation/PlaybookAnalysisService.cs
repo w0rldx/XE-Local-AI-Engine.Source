@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 
 internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
@@ -88,7 +89,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
             {
                 rejected++;
                 // An action with no (or invented) evidence hallucinates a root cause; drop it, never store it.
-                _logger.LogWarning("Rejected an analysis proposal for agent {AgentId} (missing/invalid evidence or confidence).", agentDefinitionId);
+                _logger.LogWarning("Rejected an analysis proposal for agent {AgentId} (missing/invalid evidence or confidence, or over-length text).", agentDefinitionId);
                 continue;
             }
 
@@ -131,7 +132,8 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
 
     private static bool IsValidProposal(ProposedPlaybookAction proposal, HashSet<Guid> evidenceIds)
     {
-        if (string.IsNullOrWhiteSpace(proposal.Behavior))
+        // Over-length text is dropped here rather than thrown by the service, so one oversized proposal cannot fail the run.
+        if (string.IsNullOrWhiteSpace(proposal.Behavior) || !PlaybookActionService.IsWithinLengthLimits(proposal.Behavior, proposal.TriggerCondition))
         {
             return false;
         }

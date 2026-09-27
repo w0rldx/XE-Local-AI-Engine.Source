@@ -9,8 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     Both <see cref="AgentDefinitionResolver" /> and the per-participant <see cref="OrchestrationResolver" /> route
 ///     through it, so the threshold gate, the top-k selection, the token-budget trim and the deterministic re-order
-///     are applied identically and never duplicated. Below the threshold, or with a blank query, the caller's full
-///     Enabled set comes back unchanged, keeping prompt and config hash byte-identical to the static prepend.
+///     are applied identically and never duplicated. Below the threshold, or with a blank query, the caller's Enabled
+///     set comes back in store order, capped only by the token budgets: a set that fits comes back unchanged, keeping
+///     prompt and config hash byte-identical to the static prepend.
 /// </remarks>
 internal static class PlaybookRetrievalSelector
 {
@@ -19,10 +20,10 @@ internal static class PlaybookRetrievalSelector
     /// </summary>
     /// <remarks>
     ///     At or below <paramref name="retrievalThreshold" />, or with a blank <paramref name="retrievalQuery" />, the
-    ///     set comes back as-is WITHOUT invoking the ranker, so the fast path never constructs an embedding client.
-    ///     Otherwise the <paramref name="ranker" /> takes the top <paramref name="topK" />, the result is trimmed to
-    ///     the token budgets lowest-ranked first, and is re-ordered by Priority then CreatedAtUtc for the composer's
-    ///     store-order contract. The trim engages ONLY here, so the fast path stays byte-identical to any budget.
+    ///     set is NOT ranked, so the fast path never constructs an embedding client; it is trimmed to the token budgets
+    ///     from the tail of the store order, and a set within budget comes back byte-identical. Otherwise the
+    ///     <paramref name="ranker" /> takes the top <paramref name="topK" />, the result is trimmed to the budgets
+    ///     lowest-ranked first, and is re-ordered by Priority then CreatedAtUtc for the composer's store-order contract.
     /// </remarks>
     /// <param name="maxInjectedMemoryTokens">Soft total token budget for the injected memory; <c>0</c> is unbounded.</param>
     /// <param name="maxInjectedFailureMemoryTokens">Soft sub-budget for Failure-scope memory; <c>0</c> is no cap.</param>
@@ -42,7 +43,9 @@ internal static class PlaybookRetrievalSelector
 
         if (enabled.Count <= retrievalThreshold || string.IsNullOrWhiteSpace(retrievalQuery))
         {
-            return enabled;
+            // No ranking, so the store order stands in for relevance: the trim drops from its tail, and the survivors
+            // are already in the composer's order.
+            return TrimToBudget(enabled, maxInjectedMemoryTokens, maxInjectedFailureMemoryTokens, logger);
         }
 
         // The ranker returns the top-k in RELEVANCE order (most relevant first). Trim to the token budget here, while the
@@ -60,7 +63,7 @@ internal static class PlaybookRetrievalSelector
     }
 
     /// <summary>
-    ///     Trims a relevance-ordered selection to the soft token budgets, dropping the lowest-ranked items first.
+    ///     Trims a relevance- or store-ordered selection to the soft token budgets, dropping the last items first.
     /// </summary>
     /// <remarks>
     ///     The Failure-scope sub-budget applies first, so negative guidance cannot crowd out positive, and the

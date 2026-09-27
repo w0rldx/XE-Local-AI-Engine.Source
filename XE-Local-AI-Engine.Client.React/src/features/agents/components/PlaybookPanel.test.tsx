@@ -272,6 +272,35 @@ describe("PlaybookPanel", () => {
 		expect(screen.getByText("Behavior is required")).toBeTruthy();
 	});
 
+	it("caps behavior and trigger condition at the backend length limits", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-add-button"));
+		expect((screen.getByTestId("playbook-form-behavior") as HTMLTextAreaElement).maxLength).toBe(1000);
+		expect((screen.getByTestId("playbook-form-trigger") as HTMLTextAreaElement).maxLength).toBe(500);
+	});
+
+	it("blocks saving a stored action whose behavior exceeds the length limit", () => {
+		// A pre-existing over-length row is not migrated; editing it must name the limit rather than save a 400.
+		const updateMutation = makeMutation();
+		hooksMock.useUpdatePlaybookAction.mockReturnValue(updateMutation);
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction({ behavior: "x".repeat(1001) })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-edit-action-1"));
+		fireEvent.click(screen.getByTestId("playbook-form-submit"));
+
+		expect(updateMutation.mutate).not.toHaveBeenCalled();
+		expect(screen.getByText("Behavior must be 1000 characters or fewer")).toBeTruthy();
+	});
+
 	it("surfaces a load error", () => {
 		hooksMock.usePlaybookActions.mockReturnValue({ data: undefined, isLoading: false, error: new Error("boom") });
 

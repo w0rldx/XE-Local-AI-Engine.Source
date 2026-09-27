@@ -21,7 +21,7 @@ public interface IAgentDefinitionResolver
     /// </summary>
     /// <remarks>
     ///     <paramref name="retrievalQuery" /> relevance-gates playbook injection: above the configured action
-    ///     threshold and non-blank only the top-k actions are injected, and otherwise the full static prepend keeps
+    ///     threshold and non-blank only the top-k actions are injected, and otherwise the in-budget static prepend keeps
     ///     prompt and hash byte-identical. A false <paramref name="supportsTools" /> withholds ALL offers, whatever
     ///     the <c>ToolCapableModels</c> allow-list says, and a false <paramref name="honorModelProfile" /> suppresses
     ///     the definition's pin so the caller's pick wins and the resolved profile comes back <c>null</c>.

@@ -3,7 +3,12 @@ import { IconX } from "@tabler/icons-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type PlaybookActionFormValues, playbookActionFormSchema } from "@/features/agents/models/PlaybookActionModels";
+import {
+	PLAYBOOK_BEHAVIOR_MAX_LENGTH,
+	PLAYBOOK_TRIGGER_CONDITION_MAX_LENGTH,
+	type PlaybookActionFormValues,
+	playbookActionFormSchema,
+} from "@/features/agents/models/PlaybookActionModels";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
@@ -64,7 +69,16 @@ export function PlaybookActionForm({
 					required={true}
 					autosize={true}
 					minRows={2}
-					error={fieldErrors.behavior ? t("pages.agents.playbook.form.behavior.required", "Behavior is required") : undefined}
+					maxLength={PLAYBOOK_BEHAVIOR_MAX_LENGTH}
+					error={
+						fieldErrors.behavior
+							? values.behavior.length > PLAYBOOK_BEHAVIOR_MAX_LENGTH
+								? t("pages.agents.playbook.form.behavior.tooLong", "Behavior must be {{max}} characters or fewer", {
+										max: PLAYBOOK_BEHAVIOR_MAX_LENGTH,
+									})
+								: t("pages.agents.playbook.form.behavior.required", "Behavior is required")
+							: undefined
+					}
 					onChange={(event) => {
 						const value = event.currentTarget.value;
 						setValues((current) => ({ ...current, behavior: value }));
@@ -119,6 +133,18 @@ export function PlaybookActionForm({
 					value={values.triggerCondition}
 					autosize={true}
 					minRows={1}
+					maxLength={PLAYBOOK_TRIGGER_CONDITION_MAX_LENGTH}
+					error={
+						fieldErrors.triggerCondition
+							? t(
+									"pages.agents.playbook.form.triggerCondition.tooLong",
+									"Trigger condition must be {{max}} characters or fewer",
+									{
+										max: PLAYBOOK_TRIGGER_CONDITION_MAX_LENGTH,
+									},
+								)
+							: undefined
+					}
 					onChange={(event) => {
 						const value = event.currentTarget.value;
 						setValues((current) => ({ ...current, triggerCondition: value }));

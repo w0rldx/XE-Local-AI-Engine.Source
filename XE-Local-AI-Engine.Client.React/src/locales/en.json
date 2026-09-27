@@ -3249,7 +3249,8 @@
 						"label": "Behavior",
 						"description": "Instruction text appended to the agent's system prompt.",
 						"placeholder": "Always cite your sources…",
-						"required": "Behavior is required"
+						"required": "Behavior is required",
+						"tooLong": "Behavior must be {{max}} characters or fewer"
 					},
 					"scope": {
 						"label": "Scope",
@@ -3265,7 +3266,8 @@
 					"triggerCondition": {
 						"label": "Trigger condition",
 						"description": "Optional advisory note describing when this applies (display-only in this phase).",
-						"placeholder": "When the user asks for…"
+						"placeholder": "When the user asks for…",
+						"tooLong": "Trigger condition must be {{max}} characters or fewer"
 					}
 				},
 				"delete": {

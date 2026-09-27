@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -1103,6 +1104,48 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    [Arguments(false, false, true)]
+    [Arguments(true, false, false)]
+    [Arguments(true, true, true)]
+    public async Task ResolveAsync_PlaybookInjection_FollowsTheCloudEgressGate(bool activeModelIsCloud, bool allowCloudModelAccess, bool expectInjected)
+    {
+        // Playbook memory is node-local data learned from conversations, so it follows KnowledgeBase:AllowCloudModelAccess
+        // like knowledge and attachments: a cloud effective model gets the bare Instructions unless the operator opted in.
+        var resolver = CreateResolverWithPlaybookEgressGate(out var store, out var playbookStore, allowCloudModelAccess);
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: null, playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", priority: 1)]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud);
+
+        AssertEx.NotNull(resolved);
+        var expected = expectInjected ? SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first." : SystemPrompt;
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+        if (!expectInjected)
+        {
+            await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        }
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAgentPinnedToCloudModel_OnLocalActiveTurn_WithholdsPlaybookMemory()
+    {
+        // The gate keys on the EFFECTIVE model: a cloud pin withholds the playbook even though the turn's active model is local.
+        var resolver = CreateResolverWithPlaybookEgressGate(out var store, out var playbookStore, allowCloudModelAccess: false);
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: CloudPinnedModel, playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", priority: 1)]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Retrieval_WhenConversationMemoryExcluded_StillInjects()
     {
         // write-only suppression invariant: the memory-excluded (temporary-chat) flag suppresses EXTRACTION only,
@@ -1475,6 +1518,24 @@ public sealed class AgentDefinitionResolverTests
         return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
     }
 
+    // The playbook egress-gate tests: CloudPinnedModel classifies as cloud, every other model as local.
+    private static AgentDefinitionResolver CreateResolverWithPlaybookEgressGate(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        bool allowCloudModelAccess)
+    {
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                          .Returns(callInfo => Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false,
+                              SupportsTools: true,
+                              IsCloud: string.Equals(callInfo.ArgAt<string?>(0), CloudPinnedModel, StringComparison.Ordinal))));
+        return BuildResolver(out store,
+            out playbookStore,
+            onGetOffered: null,
+            [OfferTool("GetCurrentTime")],
+            capabilityResolver: capabilityResolver,
+            allowCloudModelAccess: allowCloudModelAccess);
+    }
+
     // Exposes both the definition store and a real (stubbable) skill store so the skill-resolution tests can configure
     // the enabled-by-ids fast path and assert the resolver drops missing/disabled assignments.
     private static AgentDefinitionResolver CreateResolverWithSkills(out IAgentDefinitionStore store,
@@ -1499,6 +1560,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1572,6 +1634,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             capabilityResolver,
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1580,7 +1643,9 @@ public sealed class AgentDefinitionResolverTests
         Action<string?>? onGetOffered,
         AllowedToolDto[] offeredTools,
         IAgentInstructionProvider? instructionProvider = null,
-        IToolApprovalPolicy? toolApprovalPolicy = null)
+        IToolApprovalPolicy? toolApprovalPolicy = null,
+        IModelCapabilityResolver? capabilityResolver = null,
+        bool allowCloudModelAccess = false)
     {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -1615,8 +1680,12 @@ public sealed class AgentDefinitionResolverTests
             // "no scaffold" — so every pre-existing tool/playbook/hash test above keeps asserting the bare persona
             // prompt unchanged. Scaffold composition itself is covered by the dedicated tests below.
             instructionProvider ?? new FakeAgentInstructionProvider(),
-            Substitute.For<IModelCapabilityResolver>(),
+            capabilityResolver ?? Substitute.For<IModelCapabilityResolver>(),
             toolApprovalPolicy ?? new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions
+            {
+                AllowCloudModelAccess = allowCloudModelAccess
+            }),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1690,6 +1759,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
+            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

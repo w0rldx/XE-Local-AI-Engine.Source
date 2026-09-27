@@ -104,6 +104,30 @@ public sealed class PlaybookAnalysisServiceTests
     }
 
     [Test]
+    public async Task AnalyzeAsync_WhenProposalOverLengthLimit_RejectsItInsteadOfFailingTheRun()
+    {
+        // The service would throw on an over-length Behavior; the analysis run drops and counts it instead, so one
+        // oversized model proposal cannot fail the whole run.
+        var agentId = Guid.NewGuid();
+        var exemplar = Exemplar();
+        var insightsResult = BuildInsights(agentId, meetsThreshold: true, [exemplar]);
+
+        var agent = new FakeAnalysisAgent(_ => [Proposal([exemplar.MessageId], confidence: 0.7d, new string('b', PlaybookActionOptions.MaxBehaviorLength + 1))]);
+        var service = CreateService(out var insights, out var actionService, agent);
+        insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+        actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoCreatedSuggestion(actionService);
+
+        var outcome = await service.AnalyzeAsync(agentId);
+
+        AssertEx.Equal(expected: 1, outcome.RejectedCount);
+        await actionService.DidNotReceive()
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task AnalyzeAsync_WhenProposalHasNoEvidence_RejectsAndNeverPersistsIt()
     {
         var agentId = Guid.NewGuid();

@@ -1379,17 +1379,20 @@ prompt. Their promotion is governed so that nothing reaches the live prompt with
 
 ### 3.1 Relevance retrieval at prompt-compose time
 
-In `AgentDefinitionResolver.ComposePromptAsync`: when the playbook is **disabled** the
-base instructions flow through unchanged (keeping the runtime config hash byte-identical). When
-enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
+In `AgentDefinitionResolver.ComposePromptAsync`: when the playbook is **disabled**, or the effective
+model is cloud and `KnowledgeBase:AllowCloudModelAccess` is off (orchestration participants: per
+participant), the base instructions flow through unchanged (keeping the runtime config hash
+byte-identical). When enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
 
-- **At/below `RetrievalThreshold`, or a blank query** → the full static prepend (byte-identical to the
-  pre-retrieval path).
+- **At/below `RetrievalThreshold`, or a blank query** → the static prepend in store order, trimmed from
+  its tail to the token budgets; a set within budget is byte-identical to the pre-retrieval path.
 - **Above the threshold with a non-blank query** → only the top-k most relevant actions, ranked by
   `IPlaybookRetrievalRanker`. The default ranker is **`EmbeddingPlaybookRetrievalRanker`** (cosine over
   embeddings via `ILocalModelProvider.CreateEmbeddingGenerator`), with **`LexicalPlaybookRetrievalRanker`**
   as a fallback. `PlaybookPromptComposer.Compose` then folds the selection into the prompt. Token
-  budgets (`MaxInjectedMemoryTokens`, `MaxInjectedFailureMemoryTokens`) bound the injection. See
+  budgets (`MaxInjectedMemoryTokens`, `MaxInjectedFailureMemoryTokens`) bound the injection on both
+  paths; every write path also caps `Behavior` at 1000 and `TriggerCondition` at 500 characters
+  (`PlaybookActionOptions`), dropping an over-length model proposal rather than truncating it. See
   [Local Runtime & Providers](03-local-runtime-and-providers.md) and [Data & Persistence](08-data-and-persistence.md)
   for embeddings and storage.
 

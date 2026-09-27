@@ -6,7 +6,8 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 /// <remarks>
 ///     Above <see cref="RetrievalThreshold" /> Enabled actions, and with a non-blank query on the send, the resolver
 ///     injects only the top <see cref="TopK" /> most relevant actions instead of the full static prepend. At or below
-///     the threshold, or with a blank query, the static prepend is preserved byte-for-byte.
+///     the threshold, or with a blank query, the static prepend is kept in store order, capped only by the token
+///     budgets, so a set within budget is preserved byte-for-byte.
 /// </remarks>
 public sealed class PlaybookRetrievalOptions
 {
@@ -38,8 +39,8 @@ public sealed class PlaybookRetrievalOptions
     /// </summary>
     /// <remarks>
     ///     After the top-K selection the lowest-ranked actions are trimmed until the estimate lands at or below this;
-    ///     <c>0</c> is unbounded. The trim engages only on the retrieval path, leaving the static-prepend fast path
-    ///     byte-identical. The estimate is a deterministic char-based heuristic (see <c>PlaybookRetrievalSelector</c>),
+    ///     on the static-prepend fast path the last actions in store order are. <c>0</c> is unbounded. A set within
+    ///     budget is never trimmed, so its prompt stays byte-identical. The estimate is a deterministic char-based heuristic (see <c>PlaybookRetrievalSelector</c>),
     ///     not a tokenizer: a soft guard against prompt bloat, not a correctness property.
     /// </remarks>
     public int MaxInjectedMemoryTokens { get; set; } = 2000;
@@ -51,7 +52,7 @@ public sealed class PlaybookRetrievalOptions
     /// <remarks>
     ///     Failure-scope items are trimmed to this sub-budget first, lowest-ranked dropped first, then the surviving
     ///     set is trimmed to the total. <c>0</c> removes the separate cap and lets Failure compete on equal footing.
-    ///     Like the total budget it is a soft guard and engages only on the retrieval path.
+    ///     Like the total budget it is a soft guard and applies on both the retrieval and the fast path.
     /// </remarks>
     public int MaxInjectedFailureMemoryTokens { get; set; } = 600;
 }

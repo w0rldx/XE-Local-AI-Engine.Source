@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionService" />: it asks the node-local agent for candidate memories, drops
@@ -126,6 +127,14 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             var behavior = behaviorScan.RedactedContent ?? proposal.Behavior;
             var triggerCondition = proposal.TriggerCondition is null ? null : (triggerScan.RedactedContent ?? proposal.TriggerCondition);
 
+            // Checked on the text that would be persisted; an over-length proposal is dropped whole, never truncated.
+            if (!PlaybookActionService.IsWithinLengthLimits(behavior, triggerCondition))
+            {
+                _logger.LogDebug("Memory extraction for agent {AgentId} dropped a proposal over the playbook-action length limit.", run.AgentDefinitionId);
+                rejected++;
+                continue;
+            }
+
             if (!dedupKeys.Add(ToDedupKey(behavior, proposal.Scope)))
             {
                 // Matches an existing Suggested/Enabled memory (or an earlier candidate in this same run) — skip it.
@@ -185,7 +194,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             created.Add(record);
         }
 
-        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
+        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), rejected (secret or over-length) {Rejected}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
         return new MemoryExtractionOutcome

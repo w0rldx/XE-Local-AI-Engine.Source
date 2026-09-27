@@ -108,10 +108,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        if (string.IsNullOrWhiteSpace(input.Behavior))
-        {
-            throw new PlaybookActionValidationException("Behavior is required.");
-        }
+        ValidateText(input.Behavior, input.TriggerCondition);
 
         // An analysis proposal with no cited evidence is rejected, never stored.
         if (input.SourceFeedbackIds is null || input.SourceFeedbackIds.Count == 0)
@@ -341,10 +338,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        if (string.IsNullOrWhiteSpace(input.Behavior))
-        {
-            throw new PlaybookActionValidationException("Behavior is required.");
-        }
+        ValidateText(input.Behavior, input.TriggerCondition);
 
         var pending = await LoadPendingSuggestionAsync(input.AgentDefinitionId, input.ActionId, cancellationToken);
         if (pending is null)
@@ -443,12 +437,40 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         }
     }
 
-    private async Task ValidateAsync(PlaybookActionInput input, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Whether the injected text fits the per-field length limits.
+    /// </summary>
+    /// <remarks>
+    ///     Shared with the model-driven write paths (analysis, memory extraction), which drop and count an over-length
+    ///     proposal rather than fail the run. Existing longer rows are not migrated; the retrieval budget bounds them.
+    /// </remarks>
+    internal static bool IsWithinLengthLimits(string behavior, string? triggerCondition)
     {
-        if (string.IsNullOrWhiteSpace(input.Behavior))
+        return behavior.Length <= PlaybookActionOptions.MaxBehaviorLength
+               && (triggerCondition is null || triggerCondition.Length <= PlaybookActionOptions.MaxTriggerConditionLength);
+    }
+
+    private static void ValidateText(string? behavior, string? triggerCondition)
+    {
+        if (string.IsNullOrWhiteSpace(behavior))
         {
             throw new PlaybookActionValidationException("Behavior is required.");
         }
+
+        if (behavior.Length > PlaybookActionOptions.MaxBehaviorLength)
+        {
+            throw new PlaybookActionValidationException($"Behavior must be {PlaybookActionOptions.MaxBehaviorLength} characters or fewer.");
+        }
+
+        if (triggerCondition?.Length > PlaybookActionOptions.MaxTriggerConditionLength)
+        {
+            throw new PlaybookActionValidationException($"TriggerCondition must be {PlaybookActionOptions.MaxTriggerConditionLength} characters or fewer.");
+        }
+    }
+
+    private async Task ValidateAsync(PlaybookActionInput input, CancellationToken cancellationToken)
+    {
+        ValidateText(input.Behavior, input.TriggerCondition);
 
         // Manual authoring creates only manual actions; Analysis is reserved for the deferred self-improvement phase.
         if (input.Source != PlaybookActionSource.Manual)
