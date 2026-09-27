@@ -126,6 +126,20 @@ describe("UpdateDialog", () => {
 		});
 	});
 
+	it("says the update started, not that it finished, when the node admits it", async () => {
+		// The 202 admits the update; the instance still reads Updating and the update can yet fail.
+		server.use(jsonRoute("get", previewPath, externalAppUpdatePreview()));
+		captureUpdate();
+		toastMock.success.mockClear();
+		const { onClose } = renderDialog();
+		await reachResources();
+
+		fireEvent.click(screen.getByTestId("external-app-update-confirm"));
+
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("ntfy is being updated."));
+		expect(onClose).toHaveBeenCalled();
+	});
+
 	it("blocks Continue until a newly required target variable is filled in", async () => {
 		server.use(
 			jsonRoute(

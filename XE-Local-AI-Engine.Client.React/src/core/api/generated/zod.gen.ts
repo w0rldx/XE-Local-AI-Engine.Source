@@ -5867,6 +5867,7 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeS
 	loadedModelId: z.string().nullish(),
 	selectedModelId: z.string().nullish(),
 	recommendedModelId: z.string(),
+	effectiveModelId: z.string(),
 	supportsTranscode: z.boolean(),
 	idleTimeoutMinutes: z
 		.int()

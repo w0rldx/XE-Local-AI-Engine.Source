@@ -153,7 +153,8 @@ export function UpdateDialog({ instance, opened, onClose }: UpdateDialogProps) {
 			},
 			{
 				onSuccess: () => {
-					toast.success(t(`${keyPrefix}.succeeded`, { name }));
+					// A 202 admits the update; it has not finished. Worded like the start/stop/restart admissions.
+					toast.success(t("pages.externalApps.actions.updated", { name }));
 					close();
 				},
 				onError: (error) => handleUpdateError(error),

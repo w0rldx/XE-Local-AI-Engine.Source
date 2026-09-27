@@ -1498,7 +1498,6 @@ XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/ImageServerSupervisorTests
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/ImageSupervisorTestDoubles.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/SdProgressObservationTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppRuntimeResilienceTests.cs|run|1
-XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppRuntimeTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppRuntimeTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppSourceBuildTransportTests.cs|run|3
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppSourceBuildTransportTests.cs|summary|2

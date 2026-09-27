@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Diagnostics;
+using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -57,6 +58,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             while (true)
             {
                 jobLease?.Touch();
+
+                // Checked before each poll so a known-dead daemon fails the job now, not after the GET's retry window.
+                if (jobLease?.HasDaemonExited(out var exitCode) == true)
+                {
+                    throw DaemonExited(exitCode, cause: null);
+                }
+
                 var state = await _jobClient.GetJobAsync(endpoint.BaseAddress, jobId, ct).ConfigureAwait(false);
 
                 // Drives the tracker's attribution gate: only a job the daemon says it is generating may claim the
@@ -101,6 +109,10 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
                 await Task.Delay(PollInterval, ct).ConfigureAwait(false);
             }
         }
+        catch (HttpRequestException ex) when (jobLease?.HasDaemonExited(out var exitCode) == true)
+        {
+            throw DaemonExited(exitCode, ex);
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Close the epoch FIRST. The cleanup below may fail to stop the daemon (the cancel POST can throw an HttpRequestException, and the restart can be refused while the spawn gate is busy), in
@@ -142,6 +154,16 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         {
             await _supervisor.RestartAsync(modelName, CancellationToken.None).ConfigureAwait(false);
         }
+    }
+
+    private static StableDiffusionRuntimeException DaemonExited(int? exitCode, Exception? cause)
+    {
+        var message = exitCode is { } code
+            ? string.Create(CultureInfo.InvariantCulture, $"The image server stopped unexpectedly (exit code {code}). It restarts with the next generation.")
+            : "The image server stopped unexpectedly. It restarts with the next generation.";
+        return cause is null
+            ? new StableDiffusionRuntimeException(message) { ProcessExited = true }
+            : new StableDiffusionRuntimeException(message, cause) { ProcessExited = true };
     }
 
     private static ImageGenerationResult BuildResult(ImageGenerationRequest request, SdJobState state, long startedTimestamp)

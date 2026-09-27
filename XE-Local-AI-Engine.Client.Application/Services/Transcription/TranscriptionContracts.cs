@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
 using System.Buffers;
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -70,7 +71,13 @@ public enum TranscribeFileOutcome
     Cancelled = 3,
 
     /// <summary>The runtime or the transcode step failed. The session records the sanitized reason.</summary>
-    RuntimeFailed = 4
+    RuntimeFailed = 4,
+
+    /// <summary>The upload holds no audio (an empty file or a header-only WAV); the row is left untouched.</summary>
+    NoAudio = 5,
+
+    /// <summary>The session had already reached a terminal state; the row is left untouched.</summary>
+    SessionFinished = 6
 }
 
 /// <summary>
@@ -85,7 +92,7 @@ public sealed record TranscribeFileResult
     /// <summary>What happened.</summary>
     public required TranscribeFileOutcome Outcome { get; init; }
 
-    /// <summary>The finished session with its transcript; set only when <see cref="Outcome" /> is succeeded.</summary>
+    /// <summary>The session; set when <see cref="Outcome" /> is succeeded (with its transcript) or session-finished.</summary>
     public TranscriptionSessionDetailView? Session { get; init; }
 
     /// <summary>What the bytes actually were; set only for an unsupported container.</summary>
@@ -117,6 +124,21 @@ public sealed record TranscribeFileResult
         new()
         {
             Outcome = TranscribeFileOutcome.SessionNotFound
+        };
+
+    internal static TranscribeFileResult NoAudio(string message) =>
+        new()
+        {
+            Outcome = TranscribeFileOutcome.NoAudio,
+            ErrorCode = "no-audio",
+            ErrorMessage = message
+        };
+
+    internal static TranscribeFileResult SessionFinished(TranscriptionSessionDetailView session) =>
+        new()
+        {
+            Outcome = TranscribeFileOutcome.SessionFinished,
+            Session = session
         };
 
     internal static TranscribeFileResult Cancelled() =>
@@ -158,6 +180,10 @@ public sealed class TranscriptionUploadTooLargeException : Exception
     public TranscriptionUploadTooLargeException(string message) : base(message)
     {
     }
+
+    /// <summary>The one refusal text for an upload past <paramref name="maxBytes" />, whichever layer refused it.</summary>
+    public static string MessageFor(long maxBytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"The uploaded audio is larger than the {maxBytes / (1024 * 1024)} MB this node accepts.");
 }
 
 /// <summary>Raised when engine-side transcoding could not produce a WAV. The message is sanitized for display.</summary>
@@ -251,7 +277,7 @@ public sealed class TranscriptionUploadSlot : IAsyncDisposable
                     {
                         // Stop reading here rather than draining the body: the bytes already written are deleted by
                         // DisposeAsync, and the caller answers before the client can send any more of them.
-                        throw new TranscriptionUploadTooLargeException($"The uploaded audio exceeds the maximum of {maxBytes} bytes.");
+                        throw new TranscriptionUploadTooLargeException(TranscriptionUploadTooLargeException.MessageFor(maxBytes));
                     }
 
                     await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);

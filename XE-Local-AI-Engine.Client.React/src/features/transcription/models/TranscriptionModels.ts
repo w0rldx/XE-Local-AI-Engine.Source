@@ -191,6 +191,8 @@ export interface TranscriptionRuntimeView {
 	binaryVersion: string | null;
 	selectedModelId: string | null;
 	recommendedModelId: string;
+	/** What a new session would use: the pin, else the recommendation if installed, else the closest installed model. */
+	effectiveModelId: string;
 	vadInstalled: boolean;
 	supportsTranscode: boolean;
 	managedRuntimeValidity: string | null;
@@ -207,6 +209,7 @@ export function toTranscriptionRuntimeView(dto: TranscriptionRuntimeStatusRespon
 		binaryVersion: dto.binaryVersion ?? null,
 		selectedModelId: dto.selectedModelId ?? null,
 		recommendedModelId: dto.recommendedModelId,
+		effectiveModelId: dto.effectiveModelId,
 		vadInstalled: dto.vadInstalled,
 		supportsTranscode: dto.supportsTranscode,
 		managedRuntimeValidity: dto.managedRuntime?.validity ?? null,
@@ -259,7 +262,12 @@ export function isSessionTranscribingRefusal(error: unknown): boolean {
 export interface UnsupportedContainerDetail {
 	supportedContainers: readonly string[];
 	ffmpegRequired: boolean;
+	/** What the node found, named as the extension the operator uploaded (ogg, m4a, webm); null when unrecognised. */
+	detectedContainer: string | null;
 }
+
+// The wire carries the sniffer's enum name; the operator knows these containers by their file extension.
+const containerExtensions: Readonly<Record<string, string>> = { Mp4: "m4a", Matroska: "webm" };
 
 /**
  * Reads the upload endpoint's typed 415 body off a thrown error.
@@ -280,5 +288,13 @@ export function unsupportedContainerDetail(error: unknown): UnsupportedContainer
 	return {
 		supportedContainers: containers.filter((value): value is string => typeof value === "string"),
 		ffmpegRequired: body?.["ffmpegRequired"] === true,
+		detectedContainer: detectedContainerName(body?.["detectedContainer"]),
 	};
+}
+
+function detectedContainerName(value: unknown): string | null {
+	if (typeof value !== "string" || value.length === 0 || value === "Unknown") {
+		return null;
+	}
+	return containerExtensions[value] ?? value.toLowerCase();
 }

@@ -96,6 +96,9 @@ internal static class AddNodeTranscriptionExtensions
         // and it opens its own scope per store operation. It takes the registry, which resolves it lazily, so the two close no ctor cycle.
         builder.Services.AddSingleton<ITranscriptionService, TranscriptionService>();
 
+        // Terminalizes rows a dead process left Transcribing, and ends live sessions on a graceful stop before the container is disposed.
+        builder.Services.AddHostedService<TranscriptionSessionLifecycleService>();
+
         return builder;
     }
 }

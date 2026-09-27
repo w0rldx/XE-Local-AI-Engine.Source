@@ -11,7 +11,7 @@
       "family": "Sd15",
       "license": "creativeml-openrail-m",
       "recommended": true,
-      "notes": "Single 1.8 GB file, runs on CPU. The fastest way to confirm image generation works end to end.",
+      "notes": "Single 1.6 GB file, runs on CPU. The fastest way to confirm image generation works end to end.",
       "parts": [
         {
           "role": "Diffusion",
@@ -83,7 +83,7 @@
       "family": "QwenImage",
       "license": "qwen-research",
       "recommended": false,
-      "notes": "Qwen Research License: non-commercial research use only. Spans three repositories: the diffusion transformer from leejet, the Qwen-Image 2.1 VAE from Comfy-Org and the Qwen3-VL-8B text encoder from Qwen. About 10 GB in total.",
+      "notes": "Qwen Research License: non-commercial research use only. Spans three repositories: the diffusion transformer from leejet, the Qwen-Image 2.1 VAE from Comfy-Org and the Qwen3-VL-8B text encoder from Qwen. About 9 GB in total.",
       "parts": [
         {
           "role": "Diffusion",

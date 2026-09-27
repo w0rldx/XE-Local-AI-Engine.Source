@@ -29,6 +29,7 @@ public sealed class TranscriptionService : ITranscriptionService
     private const int MaxPageSize = 200;
     private const int MinConfigWindowSeconds = 2;
     private const int MaxConfigWindowSeconds = 10;
+    private const int CanonicalWavHeaderBytes = 44;
 
     // A file is one channel. The array exists so the transcription loop below is the same shape the live capture
     // slices reuse when they feed it two.
@@ -212,13 +213,30 @@ public sealed class TranscriptionService : ITranscriptionService
         {
             // Read and validated UNDER the guard, so the status this run acts on cannot change beneath it.
             var session = await GetSessionAsync(slot.SessionId, cancellationToken);
-            if (session is null || IsTerminal(session.Status))
+            if (session is null)
             {
                 return TranscribeFileResult.SessionNotFound();
             }
 
+            if (IsTerminal(session.Status))
+            {
+                return TranscribeFileResult.SessionFinished(session);
+            }
+
             // Sniffed before the runtime is touched: a container this node cannot handle is an answer, not a daemon error.
+            var length = new FileInfo(slot.SourcePath).Length;
+            if (length == 0)
+            {
+                return TranscribeFileResult.NoAudio("The uploaded file is empty.");
+            }
+
             var container = await DetectContainerAsync(slot.SourcePath, cancellationToken);
+            // Only the canonical 44-byte header is caught here; a WAV with extra chunks and an empty data chunk still reaches the runtime.
+            if (container == AudioContainer.Wav && length <= CanonicalWavHeaderBytes)
+            {
+                return TranscribeFileResult.NoAudio("The WAV file contains no audio.");
+            }
+
             var refusal = RefuseIfUnsupported(container);
             if (refusal is not null)
             {

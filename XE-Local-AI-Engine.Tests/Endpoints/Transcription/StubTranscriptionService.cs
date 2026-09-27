@@ -70,7 +70,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
     public Guid LastStartLiveSessionId { get; private set; }
 
     /// <summary>Inserts a session directly, for the tests that need one to exist without going through the API.</summary>
-    public Guid SeedSession()
+    public Guid SeedSession(TranscriptionSessionStatus status = TranscriptionSessionStatus.Created)
     {
         var session = new TranscriptionSessionDetailView
         {
@@ -78,7 +78,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             Title = "seeded",
             CreatedAtUtc = 1_700_000_000_000,
             UpdatedAtUtc = 1_700_000_000_000,
-            Status = TranscriptionSessionStatus.Created,
+            Status = status,
             SourceKind = TranscriptionSourceKind.File,
             ModelId = "ggml-tiny",
             ConfigJson = "{\"languageMode\":\"auto\"}",

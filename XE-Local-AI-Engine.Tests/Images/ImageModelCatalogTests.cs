@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Images;
 
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog.Implementation;
@@ -67,6 +69,32 @@ public sealed class ImageModelCatalogTests
         AssertEx.Equal("Comfy-Org/Qwen-Image-2.1", RepoOf(qwen, "Vae"));
         AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "Llm"));
         AssertEx.False(document.Models.Any(static entry => entry.Id == "qwen-image"), "The 2.1 set replaces the original Qwen-Image entry.");
+    }
+
+    [Test]
+    public void BundledCatalog_SizeQuotedInANote_MatchesTheSizeTheCardShows()
+    {
+        // The card renders the byte total through the SPA's shared formatter (1024^3 per "GB"), right next to the note.
+        // A note quoting decimal gigabytes put "1.6 GB" beside "Single 1.8 GB file" for the same download.
+        var document = new ImageModelCatalog(NullLogger<ImageModelCatalog>.Instance).GetDocument();
+
+        var checkedNotes = 0;
+        foreach (var entry in document.Models)
+        {
+            var quoted = Regex.Match(entry.Notes ?? string.Empty, @"(\d+(?:\.(\d))?) GB");
+            if (!quoted.Success)
+            {
+                continue;
+            }
+
+            var shownGb = entry.Parts.Sum(static part => part.SizeBytes) / (double)(1L << 30);
+            var decimals = quoted.Groups[2].Success ? 1 : 0;
+            AssertEx.Equal(Math.Round(shownGb, decimals), double.Parse(quoted.Groups[1].Value, CultureInfo.InvariantCulture),
+                $"Catalog entry '{entry.Id}' quotes a size its card does not show.");
+            checkedNotes++;
+        }
+
+        AssertEx.True(checkedNotes > 0, "No catalog note quotes a size, so this guard checked nothing.");
     }
 
     private static string? RepoOf(ImageModelCatalogEntry entry, string role)

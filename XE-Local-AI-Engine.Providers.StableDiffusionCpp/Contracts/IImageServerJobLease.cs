@@ -15,4 +15,10 @@ public interface IImageServerJobLease : IDisposable
 {
     /// <summary>Refreshes the leased daemon's last-used timestamp so a long generation never drifts past the idle window.</summary>
     void Touch();
+
+    /// <summary>
+    ///     Whether the leased daemon has exited on its own, with its exit code when the OS reported one. The supervisor
+    ///     logs such an exit once, whichever of this call, a respawn or the reaper notices it first.
+    /// </summary>
+    bool HasDaemonExited(out int? exitCode);
 }

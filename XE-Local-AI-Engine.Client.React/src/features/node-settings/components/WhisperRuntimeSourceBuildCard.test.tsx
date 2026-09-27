@@ -71,6 +71,7 @@ function runtimeRoute(overrides: { managed?: ReturnType<typeof managedRuntime> |
 		loadedModelId: null,
 		selectedModelId: null,
 		recommendedModelId: "base",
+		effectiveModelId: "base",
 		supportsTranscode: true,
 		idleTimeoutMinutes: 10,
 		vadInstalled: true,

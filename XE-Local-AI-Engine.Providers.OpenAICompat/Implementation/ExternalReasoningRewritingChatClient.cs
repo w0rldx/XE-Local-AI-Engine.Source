@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 
+using System.ClientModel.Primitives;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -22,6 +23,8 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
     private static ReadOnlySpan<byte> NonStreamingReasoningPath => "$.choices[0].message.reasoning"u8;
 
     private static ReadOnlySpan<byte> StreamingReasoningPath => "$.choices[0].delta.reasoning"u8;
+
+    private static ReadOnlySpan<byte> ChoicesPath => "$.choices"u8;
 
     public ExternalReasoningRewritingChatClient(IChatClient innerClient)
         : base(innerClient)
@@ -171,10 +174,9 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
         }
 
         // SCME0001: the SDK model's JsonPatch is [Experimental], but it is the only place a server's unmapped fields
-        // survive deserialization and reading it is strictly additive, so the suppression is scoped to this one call.
+        // survive deserialization and reading it is strictly additive, so the suppression is scoped to these reads.
 #pragma warning disable SCME0001
-        return completion.Patch.TryGetJson(NonStreamingReasoningPath, out var raw) ? ReadJsonString(raw) : null;
-#pragma warning restore SCME0001
+        return ReadFirstChoiceString(ref completion.Patch, NonStreamingReasoningPath);
     }
 
     private static string? TryReadReasoning(StreamingChatCompletionUpdate? update)
@@ -184,9 +186,26 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
             return null;
         }
 
-#pragma warning disable SCME0001 // See TryReadReasoning(ChatCompletion).
-        return update.Patch.TryGetJson(StreamingReasoningPath, out var raw) ? ReadJsonString(raw) : null;
+        return ReadFirstChoiceString(ref update.Patch, StreamingReasoningPath);
+    }
+
+    // The SDK resolves a choices[0] path by indexing its choice list unchecked, so a payload with "choices": [] (the
+    // include_usage terminal chunk) must never reach that read; the empty list is checked first.
+    private static string? ReadFirstChoiceString(ref JsonPatch patch, ReadOnlySpan<byte> path)
+    {
+        if (!patch.TryGetJson(ChoicesPath, out var choices) || !HasFirstElement(choices.Span))
+        {
+            return null;
+        }
+
+        return patch.TryGetJson(path, out var raw) ? ReadJsonString(raw) : null;
+    }
 #pragma warning restore SCME0001
+
+    private static bool HasFirstElement(ReadOnlySpan<byte> json)
+    {
+        var reader = new Utf8JsonReader(json);
+        return reader.Read() && reader.TokenType == JsonTokenType.StartArray && reader.Read() && reader.TokenType != JsonTokenType.EndArray;
     }
 
     /// <summary>

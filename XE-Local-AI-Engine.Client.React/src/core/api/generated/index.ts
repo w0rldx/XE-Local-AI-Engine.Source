@@ -588,6 +588,7 @@ export type {
 	CancelTranscriptionModelDownloadResponse,
 	CancelTranscriptionModelDownloadResponses,
 	CancelTranscriptionSessionData,
+	CancelTranscriptionSessionError,
 	CancelTranscriptionSessionErrors,
 	CancelTranscriptionSessionResponse,
 	CancelTranscriptionSessionResponses,

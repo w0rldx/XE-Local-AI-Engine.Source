@@ -64,6 +64,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             ManagedRuntime = managedRuntime,
             SelectedModelId = NormalizeSelection(settings.TranscriptionSelectedModelId),
             RecommendedModelId = recommended.Id,
+            EffectiveModelId = NormalizeSelection(settings.TranscriptionSelectedModelId) ?? ResolveUnpinned(recommended),
             // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from Transcription:IdleTimeoutMinutes when no operator value is
             // stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout), so the bare default would report 15 while the reaper fires at the configured value.
             IdleTimeoutMinutes = settings.TranscriptionIdleTimeoutMinutes
@@ -127,7 +128,24 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             return selected;
         }
 
-        return (await GetRecommendedModelAsync(ct)).Id;
+        return ResolveUnpinned(await GetRecommendedModelAsync(ct));
+    }
+
+    /// <summary>
+    ///     With nothing pinned: the recommendation when it is installed, else the largest installed row not above it, else
+    ///     the smallest installed row, else the recommendation (nothing installed, so the download prompt names it).
+    /// </summary>
+    private string ResolveUnpinned(WhisperModelEntry recommended)
+    {
+        var models = WhisperModelCatalog.Models;
+        var recommendedIndex = models.ToList().IndexOf(recommended);
+        var installed = models.Select((entry, index) => (entry, index)).Where(row => _pathResolver.IsInstalled(row.entry)).ToList();
+        if (installed.Count == 0)
+        {
+            return recommended.Id;
+        }
+
+        return installed.LastOrDefault(row => row.index <= recommendedIndex).entry?.Id ?? installed[0].entry.Id;
     }
 
     private TranscriptionModelCatalogView BuildCatalogView(string? selectedModelId, string recommendedModelId)

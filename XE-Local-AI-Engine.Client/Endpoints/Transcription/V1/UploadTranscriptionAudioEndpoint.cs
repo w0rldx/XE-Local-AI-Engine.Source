@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
@@ -22,6 +23,9 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 /// </remarks>
 public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscriptionAudioRequest, TranscriptionSessionDetailResponse>
 {
+    // Room for the multipart boundary and part headers around the file, so a file right at the cap is not refused for its envelope.
+    private const long MultipartEnvelopeBytes = 64 * 1024;
+
     private readonly ITranscriptionService _sessions;
     private readonly long _maxUploadBytes;
 
@@ -36,6 +40,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
     {
         Post(LocalApiRoutes.Transcription.SessionFile);
         AllowFileUploads(dontAutoBindFormData: true);
+        // Kestrel's own 30 MB default would otherwise refuse (or, below it, pre-empt) the configured cap with an unreadable answer.
+        Options(builder => builder.WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
         // Form auto-binding is off, so nothing infers the media type from the DTO any more. Declare it explicitly —
         // the same line PreviewSkillImportEndpoint carries, for the same reason.
@@ -43,9 +49,10 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
                                .Accepts<UploadTranscriptionAudioRequest>("multipart/form-data")
                                .Produces<TranscriptionSessionDetailResponse>(StatusCodes.Status200OK)
                                // This endpoint has no validator, so nothing declares its 400 for it — and it has
-                               // three of its own: no file, an unusable file name, and a body past the size cap.
+                               // its own: no file, an unusable file name, a body past the size cap, and a file with no audio.
                                .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces(StatusCodes.Status404NotFound)
+                               .ProducesProblemFE(StatusCodes.Status409Conflict)
                                .Produces<TranscriptionUnsupportedContainerResponse>(StatusCodes.Status415UnsupportedMediaType));
     }
 
@@ -55,9 +62,25 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
 
         // Checked BEFORE a byte of the body is read: otherwise an upload to a session that does not exist is refused only after the whole file has streamed to disk, and the
         // node writes and deletes a file it was never going to use. The outcome mapping below keeps the same answer for the race where the session disappears after this read.
-        if (await _sessions.GetSessionAsync(req.SessionId, ct) is null)
+        var existing = await _sessions.GetSessionAsync(req.SessionId, ct);
+        if (existing is null)
         {
             await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        if (existing.Status is TranscriptionSessionStatus.Completed or TranscriptionSessionStatus.Failed or TranscriptionSessionStatus.Cancelled)
+        {
+            await SendFinishedAsync(existing.Status, ct);
+            return;
+        }
+
+        // A declared length past the cap is refused before a byte is read; the host would otherwise fail the first read and the
+        // body would look like it carried no file at all.
+        if (HttpContext.Request.ContentLength > _maxUploadBytes + MultipartEnvelopeBytes)
+        {
+            AddError(TranscriptionUploadTooLargeException.MessageFor(_maxUploadBytes));
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -148,6 +171,19 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
             return;
         }
 
+        if (result.Outcome == TranscribeFileOutcome.NoAudio)
+        {
+            AddError(result.ErrorMessage ?? "The uploaded file contains no audio.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
+
+        if (result.Outcome == TranscribeFileOutcome.SessionFinished && result.Session is not null)
+        {
+            await SendFinishedAsync(result.Session.Status, ct);
+            return;
+        }
+
         if (result.Outcome == TranscribeFileOutcome.SessionNotFound)
         {
             await Send.NotFoundAsync(ct);
@@ -184,6 +220,12 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
     // the multipart reader ran off the end of. A cancellation is neither, and must keep propagating.
     private static bool IsMalformedBody(Exception exception) =>
         exception is IOException or InvalidDataException;
+
+    private async Task SendFinishedAsync(TranscriptionSessionStatus status, CancellationToken ct)
+    {
+        AddError($"This session has already finished ({status}). Create a new session to transcribe another file.");
+        await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
+    }
 
     private Task SendUnsupportedContainerAsync(TranscribeFileResult result) =>
         Send.ResultAsync(Results.Json(new TranscriptionUnsupportedContainerResponse

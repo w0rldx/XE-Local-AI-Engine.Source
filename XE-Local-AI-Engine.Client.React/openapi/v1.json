@@ -22870,6 +22870,16 @@
           },
           "404": {
             "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -23058,6 +23068,16 @@
           },
           "404": {
             "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
           },
           "415": {
             "description": "",
@@ -45342,6 +45362,7 @@
           "enabled",
           "state",
           "recommendedModelId",
+          "effectiveModelId",
           "supportsTranscode",
           "idleTimeoutMinutes",
           "vadInstalled",
@@ -45384,6 +45405,9 @@
             "nullable": true
           },
           "recommendedModelId": {
+            "type": "string"
+          },
+          "effectiveModelId": {
             "type": "string"
           },
           "supportsTranscode": {

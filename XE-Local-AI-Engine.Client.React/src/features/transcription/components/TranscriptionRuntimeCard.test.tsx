@@ -56,7 +56,15 @@ function modelList(models: readonly unknown[], selectedModelId: string | null = 
 	return { models, selectedModelId, recommendedModelId };
 }
 
-function runtimeBody(overrides: { selectedModelId?: string | null; vadInstalled?: boolean; backend?: "cpu" | "cuda" } = {}) {
+function runtimeBody(
+	overrides: {
+		selectedModelId?: string | null;
+		recommendedModelId?: string;
+		effectiveModelId?: string;
+		vadInstalled?: boolean;
+		backend?: "cpu" | "cuda";
+	} = {},
+) {
 	return {
 		enabled: true,
 		state: "stopped",
@@ -65,7 +73,8 @@ function runtimeBody(overrides: { selectedModelId?: string | null; vadInstalled?
 		binaryVersion: null,
 		loadedModelId: null,
 		selectedModelId: overrides.selectedModelId ?? null,
-		recommendedModelId: "base",
+		recommendedModelId: overrides.recommendedModelId ?? "base",
+		effectiveModelId: overrides.effectiveModelId ?? overrides.selectedModelId ?? "base",
 		supportsTranscode: true,
 		idleTimeoutMinutes: 10,
 		vadInstalled: overrides.vadInstalled ?? false,
@@ -121,6 +130,45 @@ describe("TranscriptionRuntimeCard", () => {
 		expect(screen.getByTestId("transcription-models-empty-download").textContent).toBe(
 			copy.downloadRecommended.replace("{{model}}", "base"),
 		);
+	});
+
+	// A CUDA build flips the recommendation to a model that is not on disk; the card must name the installed model the
+	// node actually uses instead of the recommendation every session would otherwise fail on.
+	it("names the installed fallback when the recommendation is not installed", async () => {
+		server.use(
+			jsonRoute("get", "transcription/runtime", runtimeBody({ recommendedModelId: "large-v3-turbo", effectiveModelId: "small" })),
+			recommendationRoute("cuda"),
+			jsonRoute(
+				"get",
+				"transcription/models",
+				modelList(
+					[model("small", 487_601_967, { installed: true }), model("large-v3-turbo", 1_624_555_275)],
+					null,
+					"large-v3-turbo",
+				),
+			),
+		);
+		renderWithProviders(<TranscriptionRuntimeCard />);
+
+		expect((await screen.findByTestId("transcription-runtime-model")).textContent).toContain("small");
+		expect((await screen.findByTestId("transcription-runtime-model-fallback")).textContent).toContain("large-v3-turbo");
+		expect(screen.queryByTestId("transcription-runtime-model-missing")).toBeNull();
+	});
+
+	it("warns when the model every session resolves to is not installed", async () => {
+		server.use(
+			jsonRoute("get", "transcription/runtime", runtimeBody({ selectedModelId: "base" })),
+			recommendationRoute(),
+			jsonRoute(
+				"get",
+				"transcription/models",
+				modelList([model("tiny", 77_691_713, { installed: true }), model("base", 147_951_465)], "base"),
+			),
+		);
+		renderWithProviders(<TranscriptionRuntimeCard />);
+
+		const warning = await screen.findByTestId("transcription-runtime-model-missing");
+		expect(warning.textContent).toContain("base");
 	});
 
 	// The hint has to say WHY, from the endpoint's own figures — the backend it was sized for and the resident

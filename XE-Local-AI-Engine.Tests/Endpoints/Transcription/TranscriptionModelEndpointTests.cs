@@ -415,6 +415,7 @@ public sealed class TranscriptionModelEndpointTests
                 ManagedRuntime = null,
                 SelectedModelId = Catalog.SelectedModelId,
                 RecommendedModelId = Catalog.RecommendedModelId,
+                EffectiveModelId = Catalog.SelectedModelId ?? Catalog.RecommendedModelId,
                 IdleTimeoutMinutes = 15,
                 VadInstalled = true,
                 ProcessCaptureSupported = false

@@ -147,6 +147,9 @@ public sealed class TranscriptionRuntimeStatusResponse
 
     public required string RecommendedModelId { get; init; }
 
+    /// <summary>The model a new session would use: the pin, else the recommendation if installed, else the closest installed model.</summary>
+    public required string EffectiveModelId { get; init; }
+
     /// <summary>
     ///     Whether <c>ffmpeg</c> is on this node's PATH. It describes an ENGINE capability — transcoding the
     ///     containers the daemon cannot decode natively — and never a daemon flag: the daemon is deliberately never

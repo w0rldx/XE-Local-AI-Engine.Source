@@ -59,7 +59,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         CancellationToken cancellationToken = default)
     {
         var (client, model) = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
-        return await client.GetResponseAsync(messages, ExternalReasoningEffort.Apply(options, model), cancellationToken).ConfigureAwait(false);
+        return await client.GetResponseAsync(messages, ToWireOptions(options, model), cancellationToken).ConfigureAwait(false);
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -68,7 +68,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         CancellationToken cancellationToken = default)
     {
         var (client, model) = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
-        var patched = ExternalReasoningEffort.Apply(options, model);
+        var patched = ToWireOptions(options, model);
         await foreach (var update in client.GetStreamingResponseAsync(messages, patched, cancellationToken).ConfigureAwait(false))
         {
             yield return update;
@@ -163,6 +163,19 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         {
             throw new ExternalProviderBindingChangedException();
         }
+    }
+
+    // The caller's ModelId is the node's namespaced ext: id, and the adapter sends it in place of its wire-id default, so
+    // every send pins the wire id on a clone; the caller's options object is never mutated.
+    private static ChatOptions? ToWireOptions(ChatOptions? options, ExternalProviderModelDescriptor model)
+    {
+        if (options?.ModelId is { } modelId && !string.Equals(modelId, model.WireId, StringComparison.Ordinal))
+        {
+            options = options.Clone();
+            options.ModelId = model.WireId;
+        }
+
+        return ExternalReasoningEffort.Apply(options, model);
     }
 
     // Assembles the per-connection stack: hardened transport, endpoint guard, chat-completions adapter, reasoning

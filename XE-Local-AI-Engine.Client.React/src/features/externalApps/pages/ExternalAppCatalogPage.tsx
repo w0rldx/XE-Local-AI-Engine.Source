@@ -36,9 +36,10 @@ export function ExternalAppCatalogPage() {
 
 	const applications = catalogQuery.data?.applications ?? [];
 	const runtimeReady = runtimeQuery.data?.ready === true;
-	// The server says so when the online catalog could not be reached. Without this line a failed refresh shows stale
-	// bundled data on a page that looks entirely successful.
-	const refreshFailureMessage = catalogQuery.data?.refreshFailureMessage ?? null;
+	// `lastRefreshFailure`, not `refreshFailureMessage`: the GET never attempts a refresh, so only the snapshot's
+	// most-recent-failure field says the catalog shown is stale. Without this line a refused refresh shows the
+	// last-good catalog on a page that looks entirely successful.
+	const refreshFailureMessage = catalogQuery.data?.lastRefreshFailure ?? null;
 
 	const openInstance = (instanceId: string): void => {
 		navigate({ to: "/external-apps/instances/$instanceId", params: { instanceId } });
@@ -48,7 +49,11 @@ export function ExternalAppCatalogPage() {
 		refresh.mutate(
 			{},
 			{
-				onSuccess: () => toast.success(t("pages.externalApps.catalog.refreshed")),
+				// A refused fetch is still a 200 carrying the last-good catalog; THIS click's failure rides on the body.
+				onSuccess: (response) =>
+					response.refreshFailureMessage
+						? toast.error(t("pages.externalApps.catalog.refreshFailureNotice", { message: response.refreshFailureMessage }))
+						: toast.success(t("pages.externalApps.catalog.refreshed")),
 				onError: (error) => toast.error(apiErrorMessage(error, t("pages.externalApps.catalog.refreshFailed"))),
 			},
 		);

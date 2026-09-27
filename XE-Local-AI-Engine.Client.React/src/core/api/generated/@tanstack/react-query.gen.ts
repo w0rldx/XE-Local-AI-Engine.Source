@@ -536,6 +536,7 @@ import type {
 	CancelTranscriptionModelDownloadError,
 	CancelTranscriptionModelDownloadResponse,
 	CancelTranscriptionSessionData,
+	CancelTranscriptionSessionError,
 	CancelTranscriptionSessionResponse,
 	CancelWhisperCppSourceBuildData,
 	CancelWhisperCppSourceBuildResponse,
@@ -10967,10 +10968,14 @@ export const getTranscriptionSessionOptions = (options: Options<GetTranscription
 
 export const cancelTranscriptionSessionMutation = (
 	options?: Partial<Options<CancelTranscriptionSessionData>>,
-): UseMutationOptions<CancelTranscriptionSessionResponse, AxiosError<DefaultError>, Options<CancelTranscriptionSessionData>> => {
+): UseMutationOptions<
+	CancelTranscriptionSessionResponse,
+	AxiosError<CancelTranscriptionSessionError>,
+	Options<CancelTranscriptionSessionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CancelTranscriptionSessionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CancelTranscriptionSessionError>,
 		Options<CancelTranscriptionSessionData>
 	> = {
 		mutationFn: async (fnOptions) => {

@@ -6774,7 +6774,7 @@
 				"refresh": "Katalog aktualisieren",
 				"refreshed": "Katalog aktualisiert.",
 				"refreshFailed": "Der Katalog konnte nicht aktualisiert werden.",
-				"refreshFailureNotice": "Es werden die mit XE gelieferten Anwendungen angezeigt; der Online-Katalog war nicht erreichbar. {{message}}",
+				"refreshFailureNotice": "Der Online-Katalog konnte nicht aktualisiert werden, daher sind die angezeigten Anwendungen möglicherweise veraltet. {{message}}",
 				"testedVersion": "Getestete Version {{version}}",
 				"license": "Lizenz: {{license}}",
 				"homepage": "Projektseite",
@@ -6817,7 +6817,7 @@
 					"waiting": "Warten, bis die Anwendung bereit ist…",
 					"keepsRunning": "Sie können dieses Fenster schließen; die Installation läuft weiter."
 				},
-				"succeeded": "{{name}} ist installiert.",
+				"started": "{{name}} wird installiert.",
 				"failed": "{{name}} konnte nicht installiert werden."
 			},
 			"conflict": {
@@ -6887,7 +6887,6 @@
 					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten.",
 					"BridgeUnavailable": "Die neue Version benötigt die Container-Bridge, die dieser Knoten nicht geöffnet hat. Aktivieren Sie die Container-Bridge in der Konfiguration des Knotens (ContainerBridge:Enabled) und versuchen Sie es erneut."
 				},
-				"succeeded": "{{name}} wurde aktualisiert.",
 				"failed": "{{name}} konnte nicht aktualisiert werden."
 			},
 			"actions": {
@@ -7055,6 +7054,7 @@
 				"unsupportedContainer": "Dieser Node kann diesen Audio-Container nicht lesen. Unterstützt: {{containers}}.",
 				"uploadProgress": "Upload-Fortschritt",
 				"unsupportedContainerFfmpeg": "Dieser Node benötigt ffmpeg, um diesen Audio-Container zu lesen. Installiere ffmpeg und versuche es erneut oder verwende eines von {{containers}}.",
+				"unsupportedContainerFfmpegDetected": "Dieser Node benötigt ffmpeg, um {{detected}}-Audio zu lesen. Installiere ffmpeg und versuche es erneut oder verwende eines von {{containers}}.",
 				"deviceLabel": "Mikrofon",
 				"deviceDefault": "Systemstandard",
 				"deviceUnnamed": "Mikrofon {{index}}",
@@ -7080,6 +7080,8 @@
 				"backendNotStarted": "Das Backend steht fest, sobald die Laufzeit zum ersten Mal startet.",
 				"model": "Modell: {{model}}",
 				"modelRecommended": "Es wird das empfohlene Modell verwendet — es ist keines festgelegt.",
+				"modelFallback": "Das empfohlene Modell {{recommended}} ist nicht installiert, daher wird das installierte Modell {{model}} verwendet. Lade {{recommended}} herunter oder lege unten ein Modell fest.",
+				"modelNotInstalled": "Das Modell {{model}} ist nicht installiert, daher schlägt die Transkription fehl. Lade es unten herunter oder verwende ein installiertes Modell.",
 				"vadInstalled": "Sprachaktivitätserkennung installiert.",
 				"vadMissing": "Sprachaktivitätserkennung ist nicht installiert.",
 				"managed": {

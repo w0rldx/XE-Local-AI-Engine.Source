@@ -108,7 +108,7 @@ public sealed class ExternalProviderProbeEndpointTests
     }
 
     [Test]
-    public async Task Probe_WhenTheConnectionIsUnknown_Returns404()
+    public async Task Probe_WhenTheConnectionIsUnknown_Returns404ProblemDetailsSayingSo()
     {
         var probeService = Substitute.For<IExternalProviderProbeService>();
         probeService.ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>())
@@ -125,8 +125,10 @@ public sealed class ExternalProviderProbeEndpointTests
             ConnectionId = "not-configured"
         });
         using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Contains(body, ExternalProviderProbeResult.UnknownConnectionError);
     }
 
     [Test]

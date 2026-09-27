@@ -136,9 +136,10 @@ environment, `CapAdd`, `ReadOnlyRootFilesystem`, `Ports`, `Storage`, `Files`, `H
   drift is a red test rather than a runtime "incompatible" answer to a valid manifest.
 - **Variable types** are `string`, `secret`, `integer`, `boolean` and `enum`. A `secret` never ships a default
   (decision D11). The reserved prefix `XE_` is refused for any declared variable name.
-- **Substitution.** An environment value may reference `${NAME}` for a declared variable or one of four built-ins:
-  `XE_UID`, `XE_GID`, `XE_INSTANCE_ID` and the `XE_UI_HOST_PORT_<service>` family. A malformed token or an
-  undeclared name is a validation error, never a silent empty string.
+- **Substitution.** An environment value may reference `${NAME}` for a declared variable or one of the built-ins:
+  `XE_UID`, `XE_GID`, `XE_INSTANCE_ID`, the `XE_UI_HOST_PORT_<service>` family, and the container-bridge pair
+  `XE_BRIDGE_ENDPOINT` / `XE_BRIDGE_TOKEN` (§5). A malformed token or an undeclared name is a validation error,
+  never a silent empty string.
 - **Assets.** `files[]` entries are inlined base64 bodies with their own sha256, capped at 64 KiB each, materialised
   read-only into the instance's `files/` tree. Their bodies never cross the wire on any catalog route.
 - **The fingerprint binds acceptance.** `ExternalAppManifestFingerprint.Compute` is the lowercase-hex SHA-256 of the
@@ -192,7 +193,9 @@ papers over nothing there. The engine now opens one guarded, non-loopback listen
 ([ADR 0011](../adr/0011-container-bridge-listener.md), [Wiki 12 §3.5](12-security-and-privacy.md)): a same-host peer
 guard, then a mandatory per-instance bearer token, then `/llm/v1/*` forwarded to the same model proxy the loopback
 surface uses. The container is told where and with what through the built-ins `XE_BRIDGE_ENDPOINT` and
-`XE_BRIDGE_TOKEN`. An application that *discovers* model hosts rather than being configured with one cannot use it
+`XE_BRIDGE_TOKEN`. `XE_BRIDGE_ENDPOINT` is a bare `host:port` with no scheme and no path (`ContainerBridgeGrant`), so
+a manifest composes the URL itself, e.g. `OPENAI_BASE_URL: "http://${XE_BRIDGE_ENDPOINT}/llm/v1"`; a sample's
+`XE_MODEL_BRIDGE_URL` is such a composed value, not the built-in. An application that *discovers* model hosts rather than being configured with one cannot use it
 unattended — the token is required on every route and discovery probes are unauthenticated — which is why the
 odysseus sample surfaces the pair as `XE_MODEL_BRIDGE_URL` / `XE_MODEL_BRIDGE_TOKEN` for the user to register once.
 **Verified live on a rootless daemon** by `ContainerBridgeRealDaemonTests`. That is the whole of what is validated:

@@ -49,6 +49,7 @@ public sealed class TranscriptionRuntimeEndpointTests
                 ManagedRuntime = null,
                 SelectedModelId = "large-v3-turbo",
                 RecommendedModelId = "large-v3-turbo-q8_0",
+                EffectiveModelId = "large-v3-turbo",
                 IdleTimeoutMinutes = 20,
                 VadInstalled = true,
                 ProcessCaptureSupported = false
@@ -65,6 +66,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         AssertEx.Equal("base", body.GetProperty("loadedModelId").GetString());
         AssertEx.Equal("large-v3-turbo", body.GetProperty("selectedModelId").GetString());
         AssertEx.Equal("large-v3-turbo-q8_0", body.GetProperty("recommendedModelId").GetString());
+        AssertEx.Equal("large-v3-turbo", body.GetProperty("effectiveModelId").GetString());
         AssertEx.Equal(expected: 20, body.GetProperty("idleTimeoutMinutes").GetInt32());
         AssertEx.True(body.GetProperty("enabled").GetBoolean());
     }
@@ -373,6 +375,7 @@ public sealed class TranscriptionRuntimeEndpointTests
             ManagedRuntime = null,
             SelectedModelId = null,
             RecommendedModelId = "base",
+            EffectiveModelId = "base",
             IdleTimeoutMinutes = 15,
             VadInstalled = true,
             ProcessCaptureSupported = false

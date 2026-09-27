@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -51,9 +52,15 @@ function useUnsupportedMessage(): (error: unknown) => string | null {
 			return null;
 		}
 		const containers = unsupported.supportedContainers.join(", ");
-		return unsupported.ffmpegRequired
+		if (!unsupported.ffmpegRequired) {
+			return t("pages.transcription.dialog.unsupportedContainer", { containers });
+		}
+		return unsupported.detectedContainer === null
 			? t("pages.transcription.dialog.unsupportedContainerFfmpeg", { containers })
-			: t("pages.transcription.dialog.unsupportedContainer", { containers });
+			: t("pages.transcription.dialog.unsupportedContainerFfmpegDetected", {
+					containers,
+					detected: unsupported.detectedContainer,
+				});
 	};
 }
 
@@ -117,6 +124,10 @@ export function TranscriptionPage() {
 							navigate({ to: nodeRoutePaths.transcriptionSession, params: { sessionId } });
 						})
 						.catch((error: unknown) => {
+							// A 400/415 refusal leaves the row Created and empty, so it goes; any other failure keeps the row and whatever it recorded.
+							if (error instanceof ApiError && (error.statusCode === 400 || error.statusCode === 415)) {
+								deleteMutation.mutate(sessionId);
+							}
 							setSubmitError(unsupportedMessage(error) ?? apiErrorMessage(error, t("pages.transcription.dialog.uploadFailed")));
 						});
 				},

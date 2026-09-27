@@ -42,7 +42,8 @@ public sealed class GetExternalProviderConnectionEndpoint : Endpoint<GetExternal
         var connection = config.Connections.FirstOrDefault(candidate => string.Equals(candidate.Id, connectionId, StringComparison.Ordinal));
         if (connection is null)
         {
-            await Send.NotFoundAsync(ct);
+            AddError(ExternalProviderProbeResult.UnknownConnectionError);
+            await Send.ErrorsAsync(StatusCodes.Status404NotFound, ct);
             return;
         }
 

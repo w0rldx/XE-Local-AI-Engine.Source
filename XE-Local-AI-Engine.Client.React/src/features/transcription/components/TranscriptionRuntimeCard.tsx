@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -8,6 +8,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { TranscriptionModelManager } from "@/features/transcription/components/TranscriptionModelManager";
 import {
 	useEjectTranscriptionRuntime,
+	useTranscriptionModels,
 	useTranscriptionRuntimeStatus,
 } from "@/features/transcription/queries/useTranscriptionQueries";
 
@@ -23,6 +24,7 @@ export function TranscriptionRuntimeCard() {
 	const runtimeQuery = useTranscriptionRuntimeStatus();
 	const runtime = runtimeQuery.data;
 	const ejectMutation = useEjectTranscriptionRuntime();
+	const modelsQuery = useTranscriptionModels();
 
 	if (runtimeQuery.isError) {
 		return (
@@ -65,13 +67,26 @@ export function TranscriptionRuntimeCard() {
 				</Text>
 			</Group>
 			<Stack gap={2}>
-				<Text size="sm">
-					{t("pages.transcription.runtime.model", { model: runtime.selectedModelId ?? runtime.recommendedModelId })}
+				<Text size="sm" data-testid="transcription-runtime-model">
+					{t("pages.transcription.runtime.model", { model: runtime.effectiveModelId })}
 				</Text>
-				{runtime.selectedModelId === null ? (
+				{runtime.selectedModelId !== null ? null : runtime.effectiveModelId === runtime.recommendedModelId ? (
 					<Text size="xs" c="dimmed">
 						{t("pages.transcription.runtime.modelRecommended")}
 					</Text>
+				) : (
+					<Text size="xs" c="dimmed" data-testid="transcription-runtime-model-fallback">
+						{t("pages.transcription.runtime.modelFallback", {
+							model: runtime.effectiveModelId,
+							recommended: runtime.recommendedModelId,
+						})}
+					</Text>
+				)}
+				{/* Every session resolves to this model, so a missing file fails each one; the list alert below only covers "nothing installed". */}
+				{modelsQuery.data?.models.some((model) => model.id === runtime.effectiveModelId && !model.installed) ? (
+					<Alert color="yellow" variant="light" data-testid="transcription-runtime-model-missing">
+						{t("pages.transcription.runtime.modelNotInstalled", { model: runtime.effectiveModelId })}
+					</Alert>
 				) : null}
 				<Text size="xs" c="dimmed">
 					{runtime.vadInstalled ? t("pages.transcription.runtime.vadInstalled") : t("pages.transcription.runtime.vadMissing")}

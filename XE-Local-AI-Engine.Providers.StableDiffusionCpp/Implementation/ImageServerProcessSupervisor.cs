@@ -234,7 +234,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         running.MarkUsed(_timeProvider.GetUtcNow());
-        return new ImageJobLease(running, _timeProvider);
+        return new ImageJobLease(this, modelName, running, _timeProvider);
     }
 
     /// <summary>
@@ -725,7 +725,29 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         ReleasePort(running.Port);
+        if (running.Handle.HasExited)
+        {
+            LogUnexpectedExit(key, running);
+        }
+
         return running;
+    }
+
+    /// <summary>
+    ///     Logs a registered daemon's own death once, whichever path notices it first: a job lease polling a dead daemon,
+    ///     a respawn or the reaper detaching the corpse. Mirrors the whisper supervisor's exit line.
+    /// </summary>
+    /// <remarks>
+    ///     Only a registered daemon can get here, and every deliberate teardown detaches before it kills, so an exit seen
+    ///     here was not ours. Without this line the operator's only trace was a generic job failure.
+    /// </remarks>
+    private void LogUnexpectedExit(string modelName, RunningServer running)
+    {
+        if (running.TryClaimUnexpectedExit())
+        {
+            _logger.LogWarning("sd-server for model {ModelName} (pid {ProcessId}) exited unexpectedly with exit code {ExitCode}; it is respawned on the next request. Last stderr: {StderrTail}",
+                modelName, running.Handle.ProcessId, running.Handle.ExitCode, running.Handle.StderrTail ?? "(none)");
+        }
     }
 
     /// <summary>
@@ -734,6 +756,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </summary>
     private static void KillDetachedProcess(RunningServer running)
     {
+        running.MarkTornDown();
         try
         {
             running.Handle.TreeKill();
@@ -839,6 +862,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // Lease/eviction state, mutated only by atomic CAS: >= 0 counts the in-flight generations holding this daemon, -1 is the terminal "evicting" latch the idle reaper / cap evictor sets. A lease
         // and an eviction decision transition the SAME word, so they can never both win. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
         private int _leaseState;
+
+        // 0 while running, 1 once it died on its own (and was logged), 2 once the supervisor tore it down on purpose.
+        private int _exitKind;
 
         public RunningServer(IImageServerProcessHandle handle,
             ImageServerEndpoint endpoint,
@@ -953,6 +979,21 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             return Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
         }
+
+        /// <summary>Whether this daemon died on its own rather than being torn down by the supervisor.</summary>
+        public bool ExitedUnexpectedly => Volatile.Read(ref _exitKind) == 1;
+
+        /// <summary>Claims the one log line an unexpected exit gets; refused once logged or once torn down on purpose.</summary>
+        public bool TryClaimUnexpectedExit()
+        {
+            return Interlocked.CompareExchange(ref _exitKind, value: 1, comparand: 0) == 0;
+        }
+
+        /// <summary>Records a deliberate teardown, unless the daemon had already died on its own.</summary>
+        public void MarkTornDown()
+        {
+            Interlocked.CompareExchange(ref _exitKind, value: 2, comparand: 0);
+        }
     }
 
     /// <summary>
@@ -961,12 +1002,16 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </summary>
     private sealed class ImageJobLease : IImageServerJobLease
     {
+        private readonly ImageServerProcessSupervisor _owner;
+        private readonly string _modelName;
         private readonly RunningServer _server;
         private readonly TimeProvider _timeProvider;
         private int _disposed;
 
-        public ImageJobLease(RunningServer server, TimeProvider timeProvider)
+        public ImageJobLease(ImageServerProcessSupervisor owner, string modelName, RunningServer server, TimeProvider timeProvider)
         {
+            _owner = owner;
+            _modelName = modelName;
             _server = server;
             _timeProvider = timeProvider;
         }
@@ -974,6 +1019,24 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         public void Touch()
         {
             _server.MarkUsed(_timeProvider.GetUtcNow());
+        }
+
+        public bool HasDaemonExited(out int? exitCode)
+        {
+            exitCode = null;
+            if (!_server.Handle.HasExited)
+            {
+                return false;
+            }
+
+            _owner.LogUnexpectedExit(_modelName, _server);
+            if (!_server.ExitedUnexpectedly)
+            {
+                return false;
+            }
+
+            exitCode = _server.Handle.ExitCode;
+            return true;
         }
 
         public void Dispose()

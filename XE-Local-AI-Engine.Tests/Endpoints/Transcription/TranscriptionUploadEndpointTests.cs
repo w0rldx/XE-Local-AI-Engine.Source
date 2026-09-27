@@ -5,6 +5,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Transcription;
@@ -40,8 +42,55 @@ public sealed class TranscriptionUploadEndpointTests
         using var response = await UploadAsync(factory, client, sessionId, "big.wav", new byte[2 * 1024 * 1024]);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // The size-cap text, never "A file is required.": a host that refuses the body on its first read made the file look absent.
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), TranscriptionUploadTooLargeException.MessageFor(1024 * 1024));
         AssertEx.Equal(expected: 0, transcriber.CallCount, "An oversize upload must never reach the runtime.");
         AssertEmptyUploadDirectory(factory);
+    }
+
+    [Test]
+    [Arguments(0, "The uploaded file is empty.")]
+    [Arguments(44, "The WAV file contains no audio.")]
+    public async Task Upload_WhenTheFileHoldsNoAudio_Returns400AndLeavesTheRowCreated(int length, string expectedText)
+    {
+        var transcriber = new FakeWhisperTranscriber();
+        await using var factory = FactoryWith(transcriber);
+        using var client = factory.CreateClient();
+        var sessionId = await CreateSessionAsync(factory, client);
+
+        // A canonical header and nothing after it: RIFF/WAVE with no samples, what a zero-second recording writes.
+        var bytes = new byte[length];
+        if (length >= 12)
+        {
+            "RIFF"u8.CopyTo(bytes);
+            "WAVE"u8.CopyTo(bytes.AsSpan(8));
+        }
+
+        using var response = await UploadAsync(factory, client, sessionId, "zero.wav", bytes);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), expectedText);
+        AssertEx.Equal(expected: 0, transcriber.CallCount);
+        AssertEmptyUploadDirectory(factory);
+    }
+
+    [Test]
+    public async Task Upload_RaisesTheHostBodyLimitToTheCapPlusTheMultipartEnvelope()
+    {
+        // The test server never enforces Kestrel's body limit, so the metadata the host reads is asserted directly.
+        await using var factory = FactoryWith(new FakeWhisperTranscriber());
+        using var client = factory.CreateClient();
+
+        var limits = factory.Services.GetRequiredService<EndpointDataSource>()
+                            .Endpoints
+                            .OfType<RouteEndpoint>()
+                            .Where(static endpoint => endpoint.RoutePattern.RawText?.EndsWith("transcription/sessions/{sessionId}/file", StringComparison.Ordinal) == true)
+                            .Select(static endpoint => endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize)
+                            .ToList();
+
+        var cap = new SecurityOptions().MaxUploadFileSizeMb * 1024L * 1024L;
+        AssertEx.Equal(expected: 1, limits.Count, "The upload route must be mapped exactly once.");
+        AssertEx.Equal(cap + (64 * 1024), limits[0]);
     }
 
     [Test]

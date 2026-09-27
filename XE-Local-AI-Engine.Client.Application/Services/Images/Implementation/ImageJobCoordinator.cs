@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
@@ -369,8 +370,9 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
         catch (Exception exception)
         {
-            // Sanitized: never surface the raw message (it may carry internal/model detail) and never log the prompt.
-            const string sanitizedError = "Image generation failed.";
+            // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
+            // death is the one runtime text passed through: it is fixed, display-safe and tells the operator what happened.
+            var sanitizedError = exception is StableDiffusionRuntimeException { ProcessExited: true } ? exception.Message : "Image generation failed.";
             await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
             PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: sanitizedError, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogWarning(exception, "Image job {JobId} failed during generation.", jobId);
@@ -396,14 +398,13 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
     private void OnRuntimeProgress(Guid jobId, ImageGenProgress update)
     {
-        // Terminal phases are driven by the run task after persistence; the runtime's non-terminal transitions flow
-        // through here. The coarse status stays Queued/Generating — the finer timeline rides alongside it.
-        if (update.Phase is ImageGenPhase.Completed or ImageGenPhase.Failed or ImageGenPhase.Cancelled)
+        // Terminal phases are pushed by the run task after persistence. The job holds the slot and is already Generating,
+        // so the daemon's own Queued (its submit, after a cold spawn's load lines) is dropped instead of rewinding the card.
+        if (update.Phase is ImageGenPhase.Queued or ImageGenPhase.Completed or ImageGenPhase.Failed or ImageGenPhase.Cancelled)
         {
             return;
         }
 
-        var status = update.Phase == ImageGenPhase.Queued ? ImageJobStatus.Queued : ImageJobStatus.Generating;
         var elapsedMs = (long)update.Elapsed.TotalMilliseconds;
         var detail = ToProgressDetail(update);
 
@@ -412,7 +413,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         var isMilestone = !_lastGenerationPhase.TryGetValue(jobId, out var lastPhase) || !string.Equals(lastPhase, phaseKey, StringComparison.Ordinal);
         _lastGenerationPhase[jobId] = phaseKey;
 
-        PushStatus(jobId, status, update.QueuePosition, elapsedMs, imageId: null, sanitizedError: null, detail, isMilestone);
+        PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs, imageId: null, sanitizedError: null, detail, isMilestone);
     }
 
     /// <summary>Projects a runtime observation onto the wire fields, every value passed through unchanged.</summary>

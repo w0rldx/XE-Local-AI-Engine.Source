@@ -6774,7 +6774,7 @@
 				"refresh": "Refresh catalog",
 				"refreshed": "Catalog updated.",
 				"refreshFailed": "The catalog could not be updated.",
-				"refreshFailureNotice": "Showing the applications XE ships with; the online catalog could not be reached. {{message}}",
+				"refreshFailureNotice": "The online catalog could not be refreshed, so the applications shown may be out of date. {{message}}",
 				"testedVersion": "Tested version {{version}}",
 				"license": "License: {{license}}",
 				"homepage": "Project page",
@@ -6817,7 +6817,7 @@
 					"waiting": "Waiting for the application to become ready…",
 					"keepsRunning": "You can close this window; the installation carries on."
 				},
-				"succeeded": "{{name}} is installed.",
+				"started": "{{name}} is being installed.",
 				"failed": "{{name}} could not be installed."
 			},
 			"conflict": {
@@ -6887,7 +6887,6 @@
 					"CatalogMissing": "This application is no longer offered in the catalog.",
 					"BridgeUnavailable": "The new version needs the container bridge, which this node has not opened. Enable the container bridge in the node's configuration (ContainerBridge:Enabled) and try again."
 				},
-				"succeeded": "{{name}} was updated.",
 				"failed": "{{name}} could not be updated."
 			},
 			"actions": {
@@ -7055,6 +7054,7 @@
 				"unsupportedContainer": "This node cannot read that audio container. Supported: {{containers}}.",
 				"uploadProgress": "Upload progress",
 				"unsupportedContainerFfmpeg": "This node needs ffmpeg to read that audio container. Install ffmpeg and try again, or use one of {{containers}}.",
+				"unsupportedContainerFfmpegDetected": "This node needs ffmpeg to read {{detected}} audio. Install ffmpeg and try again, or use one of {{containers}}.",
 				"deviceLabel": "Microphone",
 				"deviceDefault": "System default",
 				"deviceUnnamed": "Microphone {{index}}",
@@ -7080,6 +7080,8 @@
 				"backendNotStarted": "Backend resolves when the runtime first starts.",
 				"model": "Model: {{model}}",
 				"modelRecommended": "Using the recommended model — no model has been pinned.",
+				"modelFallback": "The recommended model {{recommended}} is not installed, so the installed {{model}} is used. Download {{recommended}} or pin a model below.",
+				"modelNotInstalled": "The model {{model}} is not installed, so transcription will fail. Download it below or use an installed model.",
 				"vadInstalled": "Voice-activity detection installed.",
 				"vadMissing": "Voice-activity detection is not installed.",
 				"managed": {

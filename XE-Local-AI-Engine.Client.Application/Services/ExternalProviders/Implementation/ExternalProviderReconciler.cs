@@ -50,7 +50,14 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
     {
         // Read the STORE's state, not just its contents. This pass DELETES every ext: map row, allow-list entry and node default the
         // configuration does not list, so a non-authoritative read repairs nothing: a config that merely looks empty would erase the operator's whole setup.
-        if (await _store.ReadForWriteAsync(cancellationToken) is not ExternalProviderLoadResult.Loaded loaded)
+        var config = await _store.ReadForWriteAsync(cancellationToken) switch
+        {
+            ExternalProviderLoadResult.Loaded loaded => loaded.Config,
+            // Authoritative: a fresh node or a quarantined store has no connections, exactly as the store's own writer reads it.
+            ExternalProviderLoadResult.Missing => new StoredExternalProviderConfig(),
+            _ => null
+        };
+        if (config is null)
         {
             _logger.LogWarning("Skipping external provider reconciliation: the connection store is not readable. Nothing was changed.");
             return new ExternalProviderReconciliationReport(0, 0, 0, 0, DefaultModelCleared: false);
@@ -58,7 +65,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
 
         // Project the configuration THIS pass loaded, never the registry: the registry re-reads the store through LoadAsync, which collapses an
         // Unreadable or unsupported-schema file to an EMPTY configuration — and an empty registration set is a mandate to erase everything.
-        var registrations = ExternalProviderConfigProjection.Project(loaded.Config).Registrations;
+        var registrations = ExternalProviderConfigProjection.Project(config).Registrations;
 
         // Ordinal: these ids came out of the registry, which is keyed by the canonical spelling the store minted.
         var registered = registrations.Select(registration => registration.ModelId).ToArray();

@@ -259,6 +259,7 @@ describe("TranscriptionSessionPage", () => {
 				enabled: true,
 				state: "starting",
 				recommendedModelId: "base",
+				effectiveModelId: "base",
 				supportsTranscode: true,
 				idleTimeoutMinutes: 10,
 				vadInstalled: true,

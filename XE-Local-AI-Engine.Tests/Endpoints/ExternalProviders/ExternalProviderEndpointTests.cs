@@ -50,7 +50,7 @@ public sealed class ExternalProviderEndpointTests
     }
 
     [Test]
-    public async Task GetConnection_WhenTheSlugIsNotStored_Returns404()
+    public async Task GetConnection_WhenTheSlugIsNotStored_Returns404ProblemDetailsSayingSo()
     {
         var store = Substitute.For<IExternalProviderStore>();
         store.LoadAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig());
@@ -59,8 +59,10 @@ public sealed class ExternalProviderEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ConnectionsRoute}/not-configured");
         using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Contains(body, ExternalProviderProbeResult.UnknownConnectionError);
     }
 
     [Test]

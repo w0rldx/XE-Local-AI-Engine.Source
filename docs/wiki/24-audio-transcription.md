@@ -71,6 +71,12 @@ so when the pinned CUDA daemon dies anyway (at load or after readiness) the supe
 bring-your-own or managed build is the operator's choice and never latches it. Full
 detail: [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime).
 
+**Which model a session uses.** A pinned model always wins. With nothing pinned, a session uses the recommended model
+when it is installed, else the largest installed model not above the recommendation, else the smallest installed one;
+the recommendation itself is used only when nothing is installed, so the download prompt names it
+(`TranscriptionRuntimeService.ResolveEffectiveModelIdAsync`). The runtime status reports the result as
+`effectiveModelId`, and the Transcription page warns when that model is not installed.
+
 ## Sessions and transcripts
 
 Two entities, both `internal sealed record class`, both mapped in `Configurations/`:
@@ -109,6 +115,11 @@ Segment `Text` is the one transcript column that changes after commit. `UpdateSe
 replaces its text, bumps the session's `UpdatedAtUtc` and saves, so the save interceptor re-encrypts it under the same
 `transcript_segment_text` AAD; it answers `Updated`, `SessionNotFound` or `SegmentNotFound`. Seq, timing and channel
 are never rewritten. The service refuses the edit while the session is still producing rows (see the endpoint below).
+
+**Restart recovery.** `TranscriptionSessionLifecycleService` fails every row left `Transcribing` at startup with error
+code `interrupted` and a content-free reason; an interrupted session is never resumed, because its audio is gone. On a
+graceful stop it ends live sessions while their rows can still be written (they end `Cancelled`); a graceful stop
+also cancels an in-flight batch upload, so only a batch upload whose process died is failed on the next boot.
 
 ## The batch upload path
 

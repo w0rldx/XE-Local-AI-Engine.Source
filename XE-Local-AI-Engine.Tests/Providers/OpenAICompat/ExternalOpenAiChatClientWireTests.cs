@@ -34,6 +34,66 @@ public sealed class ExternalOpenAiChatClientWireTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Send_WhenTheCallerOptionsCarryTheNamespacedId_SendsTheWireIdAndLeavesTheOptionsUntouched(bool streaming)
+    {
+        // Every chat, agent and work-session turn passes options whose ModelId is the node's ext: id; it used to
+        // override the adapter's wire-id default, so the endpoint was asked for a model it has never heard of.
+        var recorder = new OpenAiWireRecorder
+        {
+            Responder = _ => streaming ? OpenAiWireRecorder.Stream("{\"content\":\"ok\"}") : OpenAiWireRecorder.Completion("ok")
+        };
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+        var options = new ChatOptions
+        {
+            ModelId = ExternalProviderTestData.ModelId
+        };
+
+        if (streaming)
+        {
+            _ = await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], options, CancellationToken.None)
+                            .ToChatResponseAsync(CancellationToken.None);
+        }
+        else
+        {
+            _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options, CancellationToken.None);
+        }
+
+        using var body = JsonDocument.Parse(AssertEx.NotNull(recorder.LastRequest.Body));
+        AssertEx.Equal(ExternalProviderTestData.WireId, body.RootElement.GetProperty("model").GetString());
+        AssertEx.Equal(ExternalProviderTestData.ModelId, options.ModelId);
+    }
+
+    [Test]
+    public async Task Stream_EndingInTheUsageOnlyChunk_CompletesAndRecordsTheUsage()
+    {
+        // The standard include_usage terminal chunk carries "choices": [] plus "usage". Reading the reasoning patch path
+        // on it indexed choices[0] inside the SDK and failed the whole turn after the answer had already streamed.
+        const string Chunk = "{\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"m\",\"system_fingerprint\":\"b1\",";
+        var sse = "data: " + Chunk + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"pong\"}}]}\n\n"
+                  + "data: " + Chunk + "\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{}}]}\n\n"
+                  + "data: " + Chunk + "\"choices\":[],\"usage\":{\"completion_tokens\":8,\"prompt_tokens\":31,\"total_tokens\":39},\"timings\":{\"predicted_n\":8}}\n\n"
+                  + "data: [DONE]\n\n";
+        var recorder = new OpenAiWireRecorder
+        {
+            Responder = _ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(sse, System.Text.Encoding.UTF8, "text/event-stream")
+            }
+        };
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var response = await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None)
+                                   .ToChatResponseAsync(CancellationToken.None);
+
+        AssertEx.Equal("pong", response.Text);
+        AssertEx.Equal(39L, AssertEx.NotNull(response.Usage).TotalTokenCount);
+    }
+
+    [Test]
     public async Task Send_WithAConfiguredKey_CarriesTheBearerHeader_AndWithoutOneCarriesNoAuthorizationAtAll()
     {
         var keyed = new OpenAiWireRecorder();

@@ -21,6 +21,9 @@ import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
+
 setupMswServer();
 
 const applicationId = externalAppTestIds.application;
@@ -299,6 +302,19 @@ describe("InstallDialog", () => {
 		fireEvent.click(screen.getByTestId("external-app-install-confirm"));
 
 		await waitFor(() => expect(onInstalled).toHaveBeenCalledWith(externalAppTestIds.instance));
+	});
+
+	it("says the install started, not that it finished, when the node admits it", async () => {
+		// The 202 admits the install; the instance is still pulling and starting and can yet fail.
+		server.use(jsonRoute("get", previewPath, externalAppInstallPreview()));
+		captureInstall();
+		toastMock.success.mockClear();
+		renderDialog();
+
+		await advanceToResources();
+		fireEvent.click(screen.getByTestId("external-app-install-confirm"));
+
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("ntfy is being installed."));
 	});
 
 	it("moves focus to each step's primary action", async () => {

@@ -27,6 +27,7 @@ function runtimeBody(processCaptureSupported: boolean) {
 		loadedModelId: "base",
 		selectedModelId: "base",
 		recommendedModelId: "base",
+		effectiveModelId: "base",
 		supportsTranscode: true,
 		idleTimeoutMinutes: 10,
 		vadInstalled: true,

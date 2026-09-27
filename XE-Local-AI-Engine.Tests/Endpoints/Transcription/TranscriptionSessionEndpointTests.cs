@@ -277,6 +277,44 @@ public sealed class TranscriptionSessionEndpointTests
     }
 
     [Test]
+    public async Task CancelSession_WhenTheSessionIsNotRunning_Returns409WithAReason()
+    {
+        using var service = new StubTranscriptionService
+        {
+            CancelResult = false
+        };
+        var sessionId = service.SeedSession(TranscriptionSessionStatus.Cancelled);
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/cancel");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "nothing to cancel");
+    }
+
+    [Test]
+    public async Task Upload_WhenSessionAlreadyFinished_Returns409BeforeReadingTheBody()
+    {
+        using var service = new StubTranscriptionService();
+        var sessionId = service.SeedSession(TranscriptionSessionStatus.Completed);
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var form = new MultipartFormDataContent();
+        using var fileContent = new ByteArrayContent(new byte[1024]);
+        form.Add(fileContent, "file", "clip.wav");
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/file");
+        request.Content = form;
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "already finished (Completed)");
+        AssertEx.Equal(expected: 0, service.BeginUploadCallCount);
+    }
+
+    [Test]
     public async Task DeleteSession_WhenUnknown_ReturnsNotFound()
     {
         using var service = new StubTranscriptionService

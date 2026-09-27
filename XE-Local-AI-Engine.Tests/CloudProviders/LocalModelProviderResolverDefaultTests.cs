@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -26,6 +27,18 @@ public sealed class LocalModelProviderResolverDefaultTests
         var provider = await resolver.ResolveProviderNameForModelAsync("some-unmapped-gguf:Q4_K_M");
 
         AssertEx.Equal(LlamaServerProviderConstants.ProviderName, provider);
+    }
+
+    [Test]
+    public async Task UnmappedExternalModel_RoutesToTheExternalProvider_NotTheDefault()
+    {
+        // A dangling ext: pin (its connection was deleted) must fail with the external provider's "no longer registered"
+        // text; routed to the default runtime it failed as "The requested model is not installed."
+        var resolver = BuildResolver(new Dictionary<string, string>());
+
+        var provider = await resolver.ResolveProviderNameForModelAsync("ext:deleted-box/some-model");
+
+        AssertEx.Equal(ExternalProviderConstants.ProviderName, provider);
     }
 
     [Test]
@@ -58,7 +71,8 @@ public sealed class LocalModelProviderResolverDefaultTests
         ILocalModelProvider[] providers =
         [
             new StubProvider(LlamaServerProviderConstants.ProviderName),
-            new StubProvider(OllamaLocalModelProvider.OllamaProviderName)
+            new StubProvider(OllamaLocalModelProvider.OllamaProviderName),
+            new StubProvider(ExternalProviderConstants.ProviderName)
         ];
 
         return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, maxLoadedProcesses: 3, timeProvider: TimeProvider.System);

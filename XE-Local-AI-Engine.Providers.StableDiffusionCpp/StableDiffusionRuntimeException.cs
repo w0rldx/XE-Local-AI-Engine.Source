@@ -20,4 +20,10 @@ public sealed class StableDiffusionRuntimeException : Exception
         : base(message, innerException)
     {
     }
+
+    /// <summary>
+    ///     Whether the <c>sd-server</c> daemon died under the generation. The message then names that, and the next
+    ///     generation respawns the daemon.
+    /// </summary>
+    public bool ProcessExited { get; init; }
 }

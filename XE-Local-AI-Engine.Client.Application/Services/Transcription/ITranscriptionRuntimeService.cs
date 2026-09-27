@@ -50,6 +50,9 @@ public sealed record TranscriptionRuntimeView
     /// <summary>The hardware-fit recommendation.</summary>
     public required string RecommendedModelId { get; init; }
 
+    /// <summary>The model a new session would use, as <see cref="ITranscriptionRuntimeService.ResolveEffectiveModelIdAsync" /> resolves it.</summary>
+    public required string EffectiveModelId { get; init; }
+
     /// <summary>The effective idle time-to-live in minutes.</summary>
     public required int IdleTimeoutMinutes { get; init; }
 
@@ -91,7 +94,7 @@ public interface ITranscriptionRuntimeService
 
     /// <summary>
     ///     The model this node would actually load: the operator's choice when it is set and still valid, otherwise
-    ///     the recommendation.
+    ///     the recommendation if installed, otherwise the closest installed model — never an uninstalled one while one is installed.
     /// </summary>
     Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct);
 }

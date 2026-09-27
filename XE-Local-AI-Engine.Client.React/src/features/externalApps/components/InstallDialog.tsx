@@ -141,7 +141,8 @@ export function InstallDialog({ application, opened, onClose, onInstalled }: Ins
 			},
 			{
 				onSuccess: (data) => {
-					toast.success(t(`${keyPrefix}.succeeded`, { name: application.displayName ?? applicationId }));
+					// A 202 admits the install; it has not finished. Worded like the start/stop/restart admissions.
+					toast.success(t(`${keyPrefix}.started`, { name: application.displayName ?? applicationId }));
 					onInstalled(data.id ?? "");
 					close();
 				},

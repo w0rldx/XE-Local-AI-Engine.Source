@@ -352,6 +352,8 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 
 Anything that outlives that drain — a hard crash, a kill, a drain timeout — is terminalized by `ImageJobStartupReconciler` on the next boot. The coordinator's in-memory registry does not survive a restart, so without it a row left `Queued` or `Generating` would never be transitioned again and would show as stuck forever. The reconciler marks them `Failed` with a content-free reason (`ImageJobStartupReconciler.InterruptedReason` — never the prompt or a path) and pushes a status event so a connected UI updates.
 
+An sd-server that dies during a job is named, not hidden: the supervisor logs one Warning with the model, pid and exit code (a deliberate teardown never reads as a crash), and the job fails with "The image server stopped unexpectedly (exit code N). It restarts with the next generation." A death while a status poll is already in flight still waits out that poll's retry window first.
+
 **Interrupted jobs are never auto-retried.** Image generation is expensive and nondeterministic, so the operator resubmits explicitly. This mirrors the scheduler's stale-run reconciliation in `Program`.
 
 The ordering that makes the pass race-free: migrations are applied in `Program` before the host runs; hosted services then start in registration order; and the web host (Kestrel) starts after all of them. Since the create-job endpoint is the only production enqueue path, reconciliation always completes before a new job could race it.

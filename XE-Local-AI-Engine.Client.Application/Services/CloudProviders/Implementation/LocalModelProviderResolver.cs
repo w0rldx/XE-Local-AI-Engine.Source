@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
 ///     Default <see cref="ILocalModelProviderResolver" />. Holds the registered provider set keyed by provider name
@@ -145,8 +147,8 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
             var mapping = await mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken);
             var mapped = mapping?.ProviderName;
 
-            // An unmapped model routes to the configured default provider; a mapped row wins.
-            var resolved = string.IsNullOrWhiteSpace(mapped) ? _defaultProviderName : mapped;
+            // A mapped row wins; an unmapped model routes to the provider that owns its name.
+            var resolved = string.IsNullOrWhiteSpace(mapped) ? UnmappedProviderName(modelName) : mapped;
 
             if (cachingEnabled)
             {
@@ -168,6 +170,15 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
                 await acquiredLease.DisposeAsync();
             }
         }
+    }
+
+    // An unmapped ext: id (a dangling pin) goes to the external provider, which fails it closed with its own
+    // "no longer registered" text; every other unmapped model routes to the configured default provider.
+    private string UnmappedProviderName(string modelName)
+    {
+        return ExternalModelId.HasExternalScheme(modelName) && _providersByName.ContainsKey(ExternalProviderConstants.ProviderName)
+            ? ExternalProviderConstants.ProviderName
+            : _defaultProviderName;
     }
 
     /// <inheritdoc />

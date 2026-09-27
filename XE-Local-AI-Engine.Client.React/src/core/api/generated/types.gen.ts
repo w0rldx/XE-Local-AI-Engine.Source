@@ -5839,6 +5839,7 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeSta
 	loadedModelId?: string | null;
 	selectedModelId?: string | null;
 	recommendedModelId: string;
+	effectiveModelId: string;
 	supportsTranscode: boolean;
 	idleTimeoutMinutes: number;
 	vadInstalled: boolean;
@@ -20022,7 +20023,10 @@ export type CancelTranscriptionSessionErrors = {
 	 * Not Found
 	 */
 	404: unknown;
+	409: FastEndpointsErrorResponse;
 };
+
+export type CancelTranscriptionSessionError = CancelTranscriptionSessionErrors[keyof CancelTranscriptionSessionErrors];
 
 export type CancelTranscriptionSessionResponses = {
 	/**
@@ -20128,6 +20132,7 @@ export type UploadTranscriptionAudioErrors = {
 	 * Not Found
 	 */
 	404: unknown;
+	409: FastEndpointsErrorResponse;
 	415: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse;
 };
 

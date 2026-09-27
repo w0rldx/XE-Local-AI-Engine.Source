@@ -63,7 +63,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             return new ExternalProviderProbeResult
             {
                 Outcome = ExternalProviderProbeOutcome.UnknownConnection,
-                Error = "No external connection is stored under that id."
+                Error = ExternalProviderProbeResult.UnknownConnectionError
             };
         }
 

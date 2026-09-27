@@ -50,6 +50,9 @@ public enum ExternalProviderProbeOutcome
 /// <summary>The outcome of one probe.</summary>
 public sealed record ExternalProviderProbeResult
 {
+    /// <summary>The operator-facing text for a connection id that is not stored, shared by the probe and the read endpoint.</summary>
+    public const string UnknownConnectionError = "No external connection is stored under that id.";
+
     /// <summary>How far the probe got.</summary>
     public required ExternalProviderProbeOutcome Outcome { get; init; }
 

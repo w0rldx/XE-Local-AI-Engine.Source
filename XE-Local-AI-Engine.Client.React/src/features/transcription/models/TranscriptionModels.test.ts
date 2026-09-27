@@ -92,7 +92,11 @@ describe("unsupportedContainerDetail", () => {
 			ffmpegRequired: true,
 		} as unknown as ProblemDetails);
 
-		expect(unsupportedContainerDetail(error)).toEqual({ supportedContainers: ["Wav", "Mp3"], ffmpegRequired: true });
+		expect(unsupportedContainerDetail(error)).toEqual({
+			supportedContainers: ["Wav", "Mp3"],
+			ffmpegRequired: true,
+			detectedContainer: "webm",
+		});
 	});
 
 	it("returns null for any other failure so the caller falls back to the message", () => {

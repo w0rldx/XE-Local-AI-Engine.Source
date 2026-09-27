@@ -242,6 +242,53 @@ public sealed class StableDiffusionCppRuntimeTests
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
     }
 
+    [Test]
+    public async Task Generate_DaemonAlreadyDead_FailsNamingTheExitWithoutPollingIt()
+    {
+        // R8: a SIGKILLed sd-server failed the job only after the poll GET's ~8.5 s of connection-refused retries, as a
+        // bare "Image generation failed.". A daemon the supervisor already knows is dead fails the job at once, by name.
+        using var handler = new RuntimeHandler((_, route) => route == "img_gen"
+            ? Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}""")
+            : Status(HttpStatusCode.OK));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var lease = new FakeJobLease
+        {
+            ExitCode = 137,
+            Exited = true
+        };
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker());
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+
+        AssertEx.True(exception.ProcessExited);
+        AssertEx.Equal("The image server stopped unexpectedly (exit code 137). It restarts with the next generation.", exception.Message);
+        AssertEx.Equal(expected: 0, handler.GetJobCalls);
+    }
+
+    [Test]
+    public async Task Generate_PollRefusedBecauseTheDaemonDied_FailsNamingTheExit()
+    {
+        var lease = new FakeJobLease();
+        using var handler = new RuntimeHandler((_, route) =>
+        {
+            if (route == "img_gen")
+            {
+                return Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}""");
+            }
+
+            lease.Exited = true;
+            throw new HttpRequestException("Connection refused");
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker());
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+
+        AssertEx.True(exception.ProcessExited);
+        AssertEx.Equal("The image server stopped unexpectedly. It restarts with the next generation.", exception.Message);
+        AssertEx.True(exception.InnerException is HttpRequestException, "The refused poll stays attached as the cause.");
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode code, string json)
     {
         return new HttpResponseMessage(code)
@@ -259,10 +306,12 @@ public sealed class StableDiffusionCppRuntimeTests
     private sealed class FakeImageServerSupervisor : IImageServerSupervisor
     {
         private readonly Uri _baseAddress;
+        private readonly IImageServerJobLease? _lease;
 
-        public FakeImageServerSupervisor(Uri baseAddress)
+        public FakeImageServerSupervisor(Uri baseAddress, IImageServerJobLease? lease = null)
         {
             _baseAddress = baseAddress;
+            _lease = lease;
         }
 
         public int EnsureCount { get; private set; }
@@ -314,12 +363,33 @@ public sealed class StableDiffusionCppRuntimeTests
             });
         }
 
-        // The runtime now acquires a job lease across submit→poll→complete. This fake has no resident daemon
-        // to lease, so it returns null — the runtime then proceeds leaseless, exactly as it does against a genuinely
-        // absent daemon, keeping these runtime tests behaviour-identical.
+        // Null unless a test supplies a lease: the runtime then proceeds leaseless, exactly as against a genuinely absent daemon.
         public IImageServerJobLease? TryAcquireJobLease(string modelName)
         {
-            return null;
+            return _lease;
+        }
+    }
+
+    private sealed class FakeJobLease : IImageServerJobLease
+    {
+        public bool Exited { get; set; }
+
+        public int? ExitCode { get; init; }
+
+        public void Touch()
+        {
+            // Nothing to keep alive: the fake has no idle clock.
+        }
+
+        public bool HasDaemonExited(out int? exitCode)
+        {
+            exitCode = Exited ? ExitCode : null;
+            return Exited;
+        }
+
+        public void Dispose()
+        {
+            // Nothing held.
         }
     }
 

@@ -157,14 +157,43 @@ describe("ExternalAppCatalogPage", () => {
 		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Catalog updated."));
 	});
 
-	it("says the shown applications are the bundled ones when the online catalog could not be reached", async () => {
-		server.use(...baseRoutes(externalAppCatalog({ fromBundledSeed: true, refreshFailureMessage: "Host unreachable." })));
+	it("says the shown catalog may be out of date when the most recent refresh failed", async () => {
+		// The GET never attempts a refresh, so its `refreshFailureMessage` is always null; staleness is `lastRefreshFailure`.
+		server.use(...baseRoutes(externalAppCatalog({ lastRefreshFailure: "Host unreachable." })));
 		renderPage();
 
 		await waitFor(() => expect(screen.getByTestId("external-app-catalog-refresh-failure")).toBeDefined());
 		const notice = screen.getByTestId("external-app-catalog-refresh-failure");
-		expect(notice.textContent).toContain("the online catalog could not be reached");
+		expect(notice.textContent).toContain("could not be refreshed");
 		expect(notice.textContent).toContain("Host unreachable.");
+	});
+
+	it("reports a refused refresh instead of confirming it when the node keeps the last-good catalog", async () => {
+		// The live shape: a 200 carrying the last-good document, the click's failure on the POST body, and the
+		// following GET carrying the same sentence as the snapshot's most recent failure.
+		const failure = "Catalog refresh failed: the document failed validation (1 errors).";
+		let refused = false;
+		server.use(
+			jsonRoute("get", "external-apps/runtime", externalAppRuntime()),
+			http.get(localApiPath("external-apps/catalog"), () =>
+				HttpResponse.json(externalAppCatalog({ lastRefreshFailure: refused ? failure : null })),
+			),
+			http.post(localApiPath("external-apps/catalog/refresh"), () => {
+				refused = true;
+				return HttpResponse.json(externalAppCatalog({ refreshFailureMessage: failure, lastRefreshFailure: failure }));
+			}),
+		);
+		toastMock.success.mockClear();
+		toastMock.error.mockClear();
+		renderPage();
+
+		await waitFor(() => expect(screen.getByTestId(`external-app-card-${applicationId}`)).toBeDefined());
+		expect(screen.queryByTestId("external-app-catalog-refresh-failure")).toBeNull();
+		fireEvent.click(screen.getByTestId("external-app-catalog-refresh"));
+
+		await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining(failure)));
+		await waitFor(() => expect(screen.getByTestId("external-app-catalog-refresh-failure").textContent).toContain(failure));
+		expect(toastMock.success).not.toHaveBeenCalled();
 	});
 
 	it("renders no stale-catalog notice when the refresh succeeded", async () => {

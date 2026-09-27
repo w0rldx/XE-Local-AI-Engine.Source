@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalProviders;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -170,7 +171,7 @@ public sealed class ExternalProviderReconcilerTests
         // because the file is locked, it would erase the operator's whole external setup and report success.
         var fixture = new Fixture(existingAllowList: ["ext:unsloth-box/qwen3"],
             defaultModelName: "ext:unsloth-box/qwen3",
-            store: new UnreadableExternalProviderStore());
+            store: new FixedResultExternalProviderStore(new ExternalProviderLoadResult.Unreadable("locked")));
         fixture.MapStore.Seed("ext:unsloth-box/qwen3", "external");
 
         var report = await fixture.Reconciler.ReconcileAsync();
@@ -178,6 +179,22 @@ public sealed class ExternalProviderReconcilerTests
         AssertEx.False(report.Changed);
         AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
         AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenNoConnectionFileExists_ReconcilesAsEmptyWithoutWarning()
+    {
+        // A missing file is a fresh node (or a quarantined store) with no connections: authoritative, so a dangling ext:
+        // row is repaired, and it is no reason to warn on every boot that the store is unreadable.
+        var logger = new RecordingLogger<ExternalProviderReconciler>();
+        var fixture = new Fixture(store: new FixedResultExternalProviderStore(new ExternalProviderLoadResult.Missing()), logger: logger);
+        fixture.MapStore.Seed("ext:unsloth-box/qwen3", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(1, report.MapRowsRemoved);
+        AssertEx.Empty(fixture.MapStore.Mappings);
+        AssertEx.False(logger.Entries.Any(entry => entry.Level == LogLevel.Warning), "a missing connection file must not log a warning.");
     }
 
     [Test]
@@ -244,7 +261,8 @@ public sealed class ExternalProviderReconcilerTests
     {
         public Fixture(IReadOnlyList<string>? existingAllowList = null,
             string? defaultModelName = null,
-            IExternalProviderStore? store = null)
+            IExternalProviderStore? store = null,
+            ILogger<ExternalProviderReconciler>? logger = null)
         {
             SettingsStore = new RecordingNodeSettingsStore(new StoredNodeSettings
             {
@@ -259,7 +277,7 @@ public sealed class ExternalProviderReconcilerTests
                 ProviderResolver,
                 ChatClientCache,
                 SettingsStore,
-                NullLogger<ExternalProviderReconciler>.Instance);
+                logger ?? NullLogger<ExternalProviderReconciler>.Instance);
         }
 
         public IExternalProviderStore Store { get; }
@@ -323,9 +341,16 @@ public sealed class ExternalProviderReconcilerTests
         }
     }
 
-    /// <summary>A store whose file cannot be read this run — the state a writer must refuse to act on.</summary>
-    private sealed class UnreadableExternalProviderStore : IExternalProviderStore
+    /// <summary>A store whose authoritative read returns one fixed state, such as a locked or a missing file.</summary>
+    private sealed class FixedResultExternalProviderStore : IExternalProviderStore
     {
+        private readonly ExternalProviderLoadResult _result;
+
+        public FixedResultExternalProviderStore(ExternalProviderLoadResult result)
+        {
+            _result = result;
+        }
+
         public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new StoredExternalProviderConfig());
@@ -333,7 +358,7 @@ public sealed class ExternalProviderReconcilerTests
 
         public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Unreadable("locked"));
+            return Task.FromResult(_result);
         }
 
         public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request, CancellationToken cancellationToken = default)

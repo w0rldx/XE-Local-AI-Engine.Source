@@ -45,7 +45,8 @@ public sealed class ProbeExternalProviderEndpoint : Endpoint<ExternalProviderPro
             // Nothing was sent: the request named a connection that is not stored. A 404 rather than a
             // reachable:false, which would read as "your server is down".
             case ExternalProviderProbeOutcome.UnknownConnection:
-                await Send.NotFoundAsync(ct);
+                AddError(ExternalProviderProbeResult.UnknownConnectionError);
+                await Send.ErrorsAsync(StatusCodes.Status404NotFound, ct);
                 return;
 
             // Also nothing sent, but this one the operator can fix by editing the field they just typed.

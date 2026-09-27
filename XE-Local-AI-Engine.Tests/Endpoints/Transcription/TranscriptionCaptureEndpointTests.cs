@@ -248,6 +248,7 @@ public sealed class TranscriptionCaptureEndpointTests
                 ManagedRuntime = null,
                 SelectedModelId = null,
                 RecommendedModelId = "base",
+                EffectiveModelId = "base",
                 IdleTimeoutMinutes = 15,
                 VadInstalled = vadInstalled,
                 ProcessCaptureSupported = processCaptureSupported

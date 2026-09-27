@@ -327,6 +327,44 @@ public sealed class ImageServerSupervisorTests
     }
 
     [Test]
+    public async Task JobLease_DaemonKilledUnderIt_ReportsTheExitCodeAndLogsItOnce()
+    {
+        // R8: a SIGKILLed sd-server left no log line naming the death. The lease that notices it and the respawn that
+        // later detaches the corpse must produce exactly one Warning between them, carrying the exit code.
+        var launcher = new FakeImageProcessLauncher();
+        var logger = new RecordingLogger<ImageServerProcessSupervisor>();
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+
+        launcher.Handles.Single().SimulateExit(exitCode: 137);
+
+        AssertEx.True(lease.HasDaemonExited(out var exitCode));
+        AssertEx.Equal(expected: 137, exitCode);
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.Equal(expected: 1,
+            logger.Entries.Count(static entry => entry.Level == LogLevel.Warning
+                                                 && entry.Message.Contains("exited unexpectedly with exit code 137", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task JobLease_DaemonTornDownByTheSupervisor_IsNotReportedAsAnUnexpectedExit()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var logger = new RecordingLogger<ImageServerProcessSupervisor>();
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+
+        await supervisor.RestartAsync("sd15", CancellationToken.None);
+
+        AssertEx.True(launcher.Handles.Any(static handle => handle.WasTreeKilled), "The restart must have torn the first daemon down.");
+        AssertEx.False(lease.HasDaemonExited(out _));
+        AssertEx.False(logger.Entries.Any(static entry => entry.Message.Contains("exited unexpectedly", StringComparison.Ordinal)));
+    }
+
+    [Test]
     public async Task Dispose_DuringBlockedReadiness_TreeKillsSpawnedDaemon_NoOrphan()
     {
         // A spawn registers into _processes only after readiness, so a DisposeAsync that races the spawn tears

@@ -36,6 +36,7 @@ function runtimeRoutes() {
 			loadedModelId: "base",
 			selectedModelId: "base",
 			recommendedModelId: "base",
+			effectiveModelId: "base",
 			supportsTranscode: true,
 			idleTimeoutMinutes: 10,
 			vadInstalled: true,
@@ -254,6 +255,7 @@ describe("TranscriptionPage", () => {
 				supportedContainers: ["Wav", "Mp3"],
 				ffmpegRequired: false,
 			}),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => new HttpResponse(null, { status: 204 })),
 			...runtimeRoutes(),
 		);
 		renderPage();
@@ -306,6 +308,7 @@ describe("TranscriptionPage", () => {
 				supportedContainers: ["Wav", "Mp3"],
 				ffmpegRequired: true,
 			}),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => new HttpResponse(null, { status: 204 })),
 			...runtimeRoutes(),
 		);
 		renderPage();
@@ -317,6 +320,64 @@ describe("TranscriptionPage", () => {
 		const error = await screen.findByTestId("new-transcription-session-error");
 		expect(error.textContent).toContain("ffmpeg");
 		expect(error.textContent).toContain("Wav, Mp3");
+		// The operator uploaded a .webm; the node's detected type is named the way they know it.
+		expect(error.textContent).toContain("webm audio");
+	});
+
+	// The row exists only to receive this file, so a refused upload must not leave an empty Created session behind.
+	it("deletes the session it created when the upload is refused", async () => {
+		let deleteRequests = 0;
+		server.use(
+			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
+			jsonRoute("post", "transcription/sessions", detail()),
+			domainErrorRoute("post", `transcription/sessions/${sessionId}/file`, 400, {
+				title: "Bad Request",
+				status: 400,
+				detail: "The uploaded file is empty.",
+			}),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => {
+				deleteRequests += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+			...runtimeRoutes(),
+		);
+		renderPage();
+
+		fireEvent.click(await screen.findByTestId("transcription-create"));
+		await stageFile("empty.wav");
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		expect((await screen.findByTestId("new-transcription-session-error")).textContent).toContain("The uploaded file is empty.");
+		await waitFor(() => {
+			expect(deleteRequests).toBe(1);
+		});
+	});
+
+	// Only a 400/415 refusal leaves an empty Created row; a failure after the node accepted the audio keeps its row.
+	it("keeps the session when the upload fails for another reason", async () => {
+		let deleteRequests = 0;
+		server.use(
+			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
+			jsonRoute("post", "transcription/sessions", detail()),
+			domainErrorRoute("post", `transcription/sessions/${sessionId}/file`, 500, {
+				title: "Internal Server Error",
+				status: 500,
+				detail: "The transcription failed.",
+			}),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => {
+				deleteRequests += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+			...runtimeRoutes(),
+		);
+		renderPage();
+
+		fireEvent.click(await screen.findByTestId("transcription-create"));
+		await stageFile("meeting.wav");
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		await screen.findByTestId("new-transcription-session-error");
+		expect(deleteRequests).toBe(0);
 	});
 
 	// Every line of the runtime card states a fact about the runtime, so before the status loads it must state none:

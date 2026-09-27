@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -171,6 +172,35 @@ public sealed class ImageJobCoordinatorTests
         var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None));
         AssertEx.Equal(expected: 128, view.Width, "A succeeded job must report the produced width (128), not the requested one (100).");
         AssertEx.Equal(expected: 512, view.Height);
+    }
+
+    [Test]
+    public async Task RunJob_RuntimeReportsItsOwnQueueAfterLoading_NeverRewindsTheJobToQueued()
+    {
+        // R8: on a cold spawn the hub stream went Generating, Loading, Queued, Encoding: the daemon's queue after its
+        // submit rewound a job that already held the generation slot. Once Generating, a job only moves forward.
+        using var harness = Harness.Create(blockRuntime: false,
+            reportedPhases: [ImageGenPhase.Loading, ImageGenPhase.Queued, ImageGenPhase.Encoding, ImageGenPhase.Sampling]);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("cold spawn"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+
+        var phases = harness.Coordinator.SnapshotBufferedEvents(jobId).Select(static item => ((ImageJobStatusHubEvent)item.Payload).Phase).ToList();
+        var firstGenerating = phases.IndexOf(ImageJobStatus.Generating.ToString());
+        AssertEx.True(firstGenerating > 0, "The job must have been published Generating.");
+        AssertEx.False(phases.Skip(firstGenerating).Contains(ImageJobStatus.Queued.ToString()), $"The job was rewound to Queued: {string.Join(", ", phases)}");
+    }
+
+    [Test]
+    public async Task RunJob_ImageServerDiedUnderTheJob_FailsWithTheRuntimesExplanation()
+    {
+        const string explanation = "The image server stopped unexpectedly (exit code 137). It restarts with the next generation.";
+        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(explanation) { ProcessExited = true });
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("daemon dies"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+
+        AssertEx.Equal(explanation, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
     }
 
     [Test]
@@ -483,9 +513,11 @@ public sealed class ImageJobCoordinatorTests
         public static Harness Create(bool blockRuntime,
             bool admitJobs = true,
             (int Width, int Height)? producedSize = null,
-            IGpuWorkGate? gpuWorkGate = null)
+            IGpuWorkGate? gpuWorkGate = null,
+            ImageGenPhase[]? reportedPhases = null,
+            Exception? runtimeFailure = null)
         {
-            var runtime = new FakeImageRuntime(blockRuntime, producedSize);
+            var runtime = new FakeImageRuntime(blockRuntime, producedSize, reportedPhases, runtimeFailure);
             var store = new FakeImageJobStore();
             var images = new FakeGeneratedImageStore();
             var activityGate = new FakeImageRuntimeActivityGate(admitJobs);
@@ -606,12 +638,19 @@ public sealed class ImageJobCoordinatorTests
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly bool _blockUntilReleased;
         private readonly (int Width, int Height)? _producedSize;
+        private readonly ImageGenPhase[] _reportedPhases;
+        private readonly Exception? _failure;
         private int _callCount;
 
-        public FakeImageRuntime(bool blockUntilReleased, (int Width, int Height)? producedSize = null)
+        public FakeImageRuntime(bool blockUntilReleased,
+            (int Width, int Height)? producedSize = null,
+            ImageGenPhase[]? reportedPhases = null,
+            Exception? failure = null)
         {
             _blockUntilReleased = blockUntilReleased;
             _producedSize = producedSize;
+            _reportedPhases = reportedPhases ?? [ImageGenPhase.Generating];
+            _failure = failure;
         }
 
         public int CallCount => Volatile.Read(ref _callCount);
@@ -631,11 +670,19 @@ public sealed class ImageJobCoordinatorTests
             Prompts.Add(request.Prompt);
             _ = _started.TrySetResult();
 
-            progress.Report(new ImageGenProgress
+            foreach (var phase in _reportedPhases)
             {
-                Phase = ImageGenPhase.Generating,
-                Elapsed = TimeSpan.Zero
-            });
+                progress.Report(new ImageGenProgress
+                {
+                    Phase = phase,
+                    Elapsed = TimeSpan.Zero
+                });
+            }
+
+            if (_failure is not null)
+            {
+                throw _failure;
+            }
 
             try
             {

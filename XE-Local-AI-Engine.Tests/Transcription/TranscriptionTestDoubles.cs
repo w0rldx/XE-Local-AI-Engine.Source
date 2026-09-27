@@ -230,12 +230,13 @@ internal sealed class FakeTranscriptionRuntimeService : ITranscriptionRuntimeSer
 /// </summary>
 internal static class TranscriptionAudioFixtures
 {
-    /// <summary>A RIFF/WAVE header. The first sixteen bytes are all the sniffer ever reads.</summary>
+    /// <summary>A RIFF/WAVE header plus silent bytes: longer than a bare 44-byte header, which the service refuses as holding no audio.</summary>
     public static byte[] Wav =>
     [
         0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00,
         0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20,
-        0x10, 0x00, 0x00, 0x00
+        0x10, 0x00, 0x00, 0x00,
+        .. new byte[64]
     ];
 
     /// <summary>A distinct WAV header the transcode fake writes, so a test can tell the two files apart.</summary>

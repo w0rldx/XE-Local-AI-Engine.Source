@@ -20,6 +20,7 @@ internal static class TranscriptionRuntimeMapper
             LoadedModelId = view.Runtime.LoadedModelId,
             SelectedModelId = view.SelectedModelId,
             RecommendedModelId = view.RecommendedModelId,
+            EffectiveModelId = view.EffectiveModelId,
             SupportsTranscode = view.Runtime.SupportsTranscode,
             IdleTimeoutMinutes = view.IdleTimeoutMinutes,
             VadInstalled = view.VadInstalled,
