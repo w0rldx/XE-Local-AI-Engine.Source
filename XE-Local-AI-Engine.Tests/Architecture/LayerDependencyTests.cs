@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -38,7 +39,8 @@ public sealed class LayerDependencyTests
     // root namespace, so that single prefix covers both. Persistence lives under
     // the distinct "...Client.Persistence" sub-namespace.
     // Non-vacuity floors for the two build-file scans below, set under the counts measured on 2026-09-16 (6
-    // repository .props/.targets files, 20 production projects) so a planned addition or removal is not brittle.
+    // repository .props/.targets files, 20 production projects; 22 once Providers.Python joined on 2026-09-27) so a
+    // planned addition or removal is not brittle.
     // A floor equal to its measurement is not rounded down: deleting one .props file would turn a real regression
     // into a red herring about the floor.
     private const int RepositoryBuildCustomizationFileFloor = 5;
@@ -62,6 +64,8 @@ public sealed class LayerDependencyTests
     private const string CapabilitiesNamespace = "XE_Local_AI_Engine.Providers.Capabilities";
     private const string StableDiffusionCppNamespace = "XE_Local_AI_Engine.Providers.StableDiffusionCpp";
     private const string WhisperCppNamespace = "XE_Local_AI_Engine.Providers.WhisperCpp";
+    private const string TrainingNamespace = "XE_Local_AI_Engine.Providers.Training";
+    private const string PythonNamespace = "XE_Local_AI_Engine.Providers.Python";
     private const string AbstractionsNamespace = "XE_Local_AI_Engine.Providers.Abstractions";
     private const string AiAgentNamespace = "XE_Local_AI_Engine.AI.Agent";
 
@@ -76,6 +80,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly CapabilitiesAssembly = typeof(CapabilitiesServiceCollectionExtensions).Assembly;
     private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
     private static readonly Assembly TrainingAssembly = typeof(ITrainingRuntimeService).Assembly;
+    private static readonly Assembly PythonAssembly = typeof(ManagedPythonPins).Assembly;
     private static readonly Assembly WhisperCppAssembly = typeof(WhisperCppReleasePins).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
@@ -124,6 +129,8 @@ public sealed class LayerDependencyTests
                 // how the stored value and the pinned value would come to disagree. Note the ordering trap below: this
                 // name is a PREFIX of nothing, but "…Providers.OpenAICompat" IS a prefix of this one.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                // The compute tool provisions its venv through the shared uv machinery directly, not through Training.
+                "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.Providers.WhisperCpp",
@@ -160,8 +167,17 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] = [],
+            // The shared uv/Python machinery: a LEAF below every provider, but unlike the reference-free
+            // OpenAICompatible.Core it references Providers.Abstractions (for SetsidLocator).
+            ["XE-Local-AI-Engine.Providers.Python"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            // DELIBERATE, reviewed sibling edge (2026-09-27): Training installs through the uv pipeline it shares with
+            // the compute tool, and Providers.Python references no provider, so no provider reaches a sibling PROVIDER.
+            ["XE-Local-AI-Engine.Providers.Training"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.Python"
+            ],
             ["XE-Local-AI-Engine.Providers.WhisperCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
         };
 
@@ -313,6 +329,7 @@ public sealed class LayerDependencyTests
                 "Microsoft.Extensions.AI.Abstractions",
                 "Microsoft.Extensions.AI.OpenAI"
             ],
+            ["XE-Local-AI-Engine.Providers.Python"] = [],
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] =
             [
                 "Microsoft.Extensions.DependencyInjection.Abstractions",
@@ -402,6 +419,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.Providers.WhisperCpp",
@@ -441,8 +459,13 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             [OpenAICompatibleCoreAssembly] = [],
+            [PythonAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [StableDiffusionCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            [TrainingAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [TrainingAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.Python"
+            ],
             [WhisperCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ApplicationAssembly] =
             [
@@ -458,6 +481,8 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // See the project-reference list above for why the composition layer reaches the shared wire layer.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                // The compute tool provisions its venv through the shared uv machinery directly, not through Training.
+                "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.Providers.WhisperCpp",
@@ -476,6 +501,9 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.CodexOAuth",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
+                // The training runtime endpoints catch the shared layer's user-safe exception beside Training's own, and
+                // the reference is transitive through Client.Application, as WhisperCpp is below.
+                "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 // The Client ASSEMBLY acquires this reference because its transcription endpoints bind the provider's
@@ -763,6 +791,28 @@ public sealed class LayerDependencyTests
             CodexOAuthNamespace,
             CapabilitiesNamespace,
             StableDiffusionCppNamespace);
+    }
+
+    [Test]
+    public void ProvidersPython_DoesNotDependOnApplicationPersistenceHostOrAnyProvider()
+    {
+        AssertTypesScanned(PythonAssembly, PythonNamespace, 6);
+
+        // Training is named explicitly: it is the one provider that references this leaf, so it is the one edge most
+        // likely to be reversed by a helper that "just needs" a training type.
+        AssertNoDependency(PythonAssembly,
+            PythonNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            OpenAICompatNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
+            CapabilitiesNamespace,
+            StableDiffusionCppNamespace,
+            WhisperCppNamespace,
+            TrainingNamespace);
     }
 
     [Test]

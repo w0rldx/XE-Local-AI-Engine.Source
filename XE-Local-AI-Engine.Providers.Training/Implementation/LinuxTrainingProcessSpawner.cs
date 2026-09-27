@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>Spawn-and-return trainer launcher.</summary>
 /// <remarks>
-///     <see cref="LinuxTrainingProcessRunner" /> is run-to-completion and serves the installer; a training run instead
+///     <c>LinuxPythonToolRunner</c> is run-to-completion and serves the installer; a training run instead
 ///     needs the child's identity the instant it exists, because the launch receipt has to be durable before the first
 ///     byte of output arrives — a host that dies between spawn and receipt leaves an unreapable orphan holding the
 ///     whole GPU.

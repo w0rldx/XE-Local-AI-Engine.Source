@@ -2283,6 +2283,52 @@
 			"uiMode": {
 				"title": "Interface mode",
 				"description": "Simple shows the everyday pages only; Advanced shows every page this build offers. This changes the navigation and nothing else — every page stays reachable by its own address, and nothing is deleted."
+			},
+			"managedPython": {
+				"title": "Managed Python",
+				"description": "The shared uv toolchain and Python interpreters this node manages, and the feature environments built on them.",
+				"loading": "Loading Managed Python status…",
+				"loadError": "Could not load the Managed Python status.",
+				"uvVersion": "uv {{version}}",
+				"uvPresent": "Installed",
+				"uvMissing": "Not downloaded yet",
+				"pythonInstallsTitle": "Installed Python interpreters",
+				"noPythonInstalls": "None installed yet.",
+				"pythonMinor": "Python {{version}}",
+				"mismatchesTitle": "Out of date because of:",
+				"trainingLink": "Manage on the Training page",
+				"repair": "Repair",
+				"remove": "Remove",
+				"repairConfirmTitle": "Repair the Compute environment?",
+				"repairConfirmBody": "The Compute Python environment is rebuilt from its lockfile. The node refuses while a Python tool call is running; try again once it has finished.",
+				"repairConfirm": "Repair",
+				"removeConfirmTitle": "Remove the Compute environment?",
+				"removeConfirmBody": "The Compute Python environment is deleted, and the next Python tool call provisions it again, which downloads its packages. The node refuses while a Python tool call is running; try again once it has finished.",
+				"removeConfirm": "Remove",
+				"repairError": "Could not repair the Compute environment.",
+				"removeError": "Could not remove the Compute environment.",
+				"profiles": {
+					"training": "Training",
+					"compute": "Compute"
+				},
+				"states": {
+					"NotProvisioned": "Not provisioned",
+					"Provisioning": "Provisioning",
+					"Ready": "Ready",
+					"UpdateRequired": "Update required",
+					"RepairRequired": "Repair required",
+					"Failed": "Failed",
+					"Unsupported": "Unsupported"
+				},
+				"mismatches": {
+					"profileId": "Profile",
+					"pythonMinor": "Python version",
+					"lockfile": "Package lockfile",
+					"profileRevision": "Profile revision",
+					"rid": "Platform",
+					"probeContract": "Probe contract",
+					"toolchainStore": "Toolchain location"
+				}
 			}
 		},
 		"cloudSettings": {

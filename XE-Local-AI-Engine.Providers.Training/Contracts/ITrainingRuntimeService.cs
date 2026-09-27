@@ -92,6 +92,12 @@ public sealed class TrainingRuntimeStatus
     public required DateTimeOffset? StartedAtUtc { get; init; }
 
     public required DateTimeOffset? CompletedAtUtc { get; init; }
+
+    /// <summary>
+    ///     The SHA-256 of the lockfile this build ships, or <see langword="null" /> when it is missing from the installation.
+    ///     Compared with <see cref="InstalledTrainingRuntimeState.LockfileSha256" /> to tell an outdated runtime; never on the wire.
+    /// </summary>
+    public string? ShippedLockfileSha256 { get; init; }
 }
 
 /// <summary>

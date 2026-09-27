@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
-using XE_Local_AI_Engine.Providers.Training;
+using XE_Local_AI_Engine.Providers.Python;
+using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -50,14 +51,17 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task Probe_WhenNvidiaSmiIsAbsent_ReportsNoDriverRatherThanThrowing()
     {
-        // The runner throwing is what an absent nvidia-smi looks like: setsid cannot exec it.
-        var runner = new FakeProcessRunner((_, _, _) => throw new TrainingRuntimeException("The process did not start."));
+        // The runner throwing is what an absent nvidia-smi looks like: setsid cannot exec it. The shared runner throws
+        // ManagedPythonException, not TrainingRuntimeException, and the probe must still read it as "no driver".
+        var runner = new FakeProcessRunner((_, _, _) => throw new ManagedPythonException("A managed Python process did not start."));
 
         var report = await ProbeAsync(WithScripts(), runner);
 
         AssertEx.False(report.CanInstall);
-        AssertEx.Contains(report.Items,
-            static item => item.Key == TrainingRuntimePrerequisiteKeys.NvidiaDriver && !item.Satisfied);
+        var item = AssertEx.NotNull(report.Items.FirstOrDefault(static item => item.Key == TrainingRuntimePrerequisiteKeys.NvidiaDriver),
+            "The driver item must always be reported.");
+        AssertEx.False(item.Satisfied);
+        AssertEx.Contains(item.Detail, "No NVIDIA driver");
     }
 
     [Test]
@@ -96,7 +100,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
             "The probe script ships beside the lockfile.");
     }
 
-    private Task<TrainingRuntimePrerequisiteReport> ProbeAsync(string scriptsDirectory, ITrainingProcessRunner runner)
+    private Task<TrainingRuntimePrerequisiteReport> ProbeAsync(string scriptsDirectory, IPythonToolRunner runner)
     {
         return new TrainingRuntimePrerequisiteProbe(runner, Path.Combine(_root, "cache"), scriptsDirectory)
             .ProbeAsync(CancellationToken.None);

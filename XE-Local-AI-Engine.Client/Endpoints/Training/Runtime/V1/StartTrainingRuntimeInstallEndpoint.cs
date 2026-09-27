@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runtime;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
@@ -66,9 +67,9 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
                 Status = _runtime.GetStatus().ToResponse()
             }, ct);
         }
-        catch (TrainingRuntimeException exception)
+        catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException)
         {
-            // TrainingRuntimeException messages are user-safe by contract, so this surfaces verbatim.
+            // Both exception types carry user-safe messages by contract, so this surfaces verbatim.
             await BlockAsync("prerequisites", exception.Message, prerequisites: null);
         }
     }

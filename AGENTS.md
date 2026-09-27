@@ -44,7 +44,10 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
 - `XE-Local-AI-Engine.Client.Persistence` — EF Core + SQLite, encrypted columns; references only `Providers.Abstractions`.
 - `XE-Local-AI-Engine.AI.Agent` / `AI.Contracts` — Microsoft Agent Framework wiring / shared DTOs.
 - `XE-Local-AI-Engine.Providers.*` — runtimes and model sources; each depends only on `Providers.Abstractions`
-  (reviewed exception: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`).
+  (reviewed exceptions: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`;
+  `Training` also uses `Providers.Python`, which itself references only `Providers.Abstractions`).
+- `XE-Local-AI-Engine.Providers.Python` — shared managed-Python layer: pinned uv acquisition, uv environment
+  allowlist, scrubbed tree-killed runner (ADR 0016). No feature semantics.
 - `XE-Local-AI-Engine.AppHost` / `ServiceDefaults` — dev-only Aspire orchestration and telemetry defaults.
 - `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
 - `XE-Local-AI-Engine.Client.React` — the SPA. Has its own `AGENTS.md` for frontend-only rules.

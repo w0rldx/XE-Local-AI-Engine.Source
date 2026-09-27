@@ -615,6 +615,9 @@ import type {
 	GetLocalModelProxyApiKeyData,
 	GetLocalModelProxyApiKeyErrors,
 	GetLocalModelProxyApiKeyResponses,
+	GetManagedPythonStatusData,
+	GetManagedPythonStatusErrors,
+	GetManagedPythonStatusResponses,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyErrors,
 	GetMcpServerApiKeyResponses,
@@ -1071,6 +1074,9 @@ import type {
 	RejudgeBenchmarkRunData,
 	RejudgeBenchmarkRunErrors,
 	RejudgeBenchmarkRunResponses,
+	RemoveComputePythonEnvironmentData,
+	RemoveComputePythonEnvironmentErrors,
+	RemoveComputePythonEnvironmentResponses,
 	RemoveDevelopmentTemplateData,
 	RemoveDevelopmentTemplateErrors,
 	RemoveDevelopmentTemplateResponses,
@@ -1092,6 +1098,9 @@ import type {
 	ReorderBenchmarkTaskItemsData,
 	ReorderBenchmarkTaskItemsErrors,
 	ReorderBenchmarkTaskItemsResponses,
+	RepairComputePythonEnvironmentData,
+	RepairComputePythonEnvironmentErrors,
+	RepairComputePythonEnvironmentResponses,
 	ResetExternalAppData,
 	ResetExternalAppErrors,
 	ResetExternalAppResponses,
@@ -1761,6 +1770,7 @@ import {
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
 	zGetLocalModelProxyApiKeyResponse,
+	zGetManagedPythonStatusResponse,
 	zGetMcpServerApiKeyResponse,
 	zGetMcpServerPath,
 	zGetMcpServerResponse,
@@ -2036,6 +2046,7 @@ import {
 	zRejudgeBenchmarkRunBody,
 	zRejudgeBenchmarkRunPath,
 	zRejudgeBenchmarkRunResponse,
+	zRemoveComputePythonEnvironmentResponse,
 	zRemoveDevelopmentTemplatePath,
 	zRemoveDevelopmentTemplateResponse,
 	zRemoveLlamaCppSourceBuildResponse,
@@ -2050,6 +2061,7 @@ import {
 	zReorderBenchmarkTaskItemsBody,
 	zReorderBenchmarkTaskItemsPath,
 	zReorderBenchmarkTaskItemsResponse,
+	zRepairComputePythonEnvironmentResponse,
 	zResetExternalAppBody,
 	zResetExternalAppPath,
 	zResetExternalAppResponse,
@@ -12441,6 +12453,96 @@ export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = fal
 			},
 		],
 		url: "/api/local/v1/proxy/key",
+		...options,
+	});
+
+export const removeComputePythonEnvironment = <ThrowOnError extends boolean = false>(
+	options?: Options<RemoveComputePythonEnvironmentData, ThrowOnError>,
+): RequestResult<RemoveComputePythonEnvironmentResponses, RemoveComputePythonEnvironmentErrors, ThrowOnError> =>
+	(options?.client ?? client).post<RemoveComputePythonEnvironmentResponses, RemoveComputePythonEnvironmentErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveComputePythonEnvironmentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/python/environments/compute/remove",
+		...options,
+	});
+
+export const repairComputePythonEnvironment = <ThrowOnError extends boolean = false>(
+	options?: Options<RepairComputePythonEnvironmentData, ThrowOnError>,
+): RequestResult<RepairComputePythonEnvironmentResponses, RepairComputePythonEnvironmentErrors, ThrowOnError> =>
+	(options?.client ?? client).post<RepairComputePythonEnvironmentResponses, RepairComputePythonEnvironmentErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRepairComputePythonEnvironmentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/python/environments/compute/repair",
+		...options,
+	});
+
+export const getManagedPythonStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetManagedPythonStatusData, ThrowOnError>,
+): RequestResult<GetManagedPythonStatusResponses, GetManagedPythonStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetManagedPythonStatusResponses, GetManagedPythonStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetManagedPythonStatusResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/python/status",
 		...options,
 	});
 

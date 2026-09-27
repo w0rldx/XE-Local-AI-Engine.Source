@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Python;
 
 /// <summary>
 ///     Where the training runtime lives on disk, and where the pinned Python scripts are found.
@@ -55,7 +56,7 @@ internal static class TrainingRuntimeLayout
 
     public static string InterpreterPath(string venvDirectory)
     {
-        return Path.Combine(venvDirectory, ".venv", "bin", "python");
+        return ManagedPythonToolchain.VenvInterpreterPath(Path.Combine(venvDirectory, ".venv"));
     }
 
     /// <summary>Resolves the directory holding <c>probe.py</c>, <c>pyproject.toml</c> and <c>uv.lock</c>.</summary>

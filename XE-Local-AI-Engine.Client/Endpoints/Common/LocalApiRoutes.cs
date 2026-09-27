@@ -706,6 +706,14 @@ public static class LocalApiRoutes
         public const string Models = "proxy/v1/models";
     }
 
+    /// <summary>Managed Python status (the shared uv toolchain and each feature environment) and the Compute environment actions.</summary>
+    public static class Python
+    {
+        public const string Status = "python/status";
+        public const string ComputeRepair = "python/environments/compute/repair";
+        public const string ComputeRemove = "python/environments/compute/remove";
+    }
+
     /// <summary>
     ///     Training group routes. The dataset half (definitions, datasets, samples, mocks) is declared here; the
     ///     runtime and base-artifact halves append their own constants.

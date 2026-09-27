@@ -313,11 +313,11 @@ public sealed class ComputeToolGatewayTests
     {
         // The boundary is not a preference the provider may drop: a request naming it is rejected fail-closed by a
         // provider that cannot deliver it, which is what makes asking for it safe. The tree list is the other half —
-        // naming the compute cache root instead of these two would hand the script the uv download cache, the uv
-        // binary and the lockfile state marker along with the interpreter.
+        // naming the compute cache root or the shared toolchain store instead of these two would hand the script the uv
+        // cache, the uv binary and the lockfile state marker along with the interpreter.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider,
-            environment: new StubEnvironment("/provisioned/venv/bin/python", ["/provisioned/venv", "/provisioned/pythons"]));
+            environment: new StubEnvironment("/provisioned/compute-runtime/venv/.venv/bin/python", ["/provisioned/compute-runtime/venv/.venv", "/provisioned/python/pythons"]));
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {
@@ -328,8 +328,8 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Equal(SandboxIsolationMode.Filesystem, create.Isolation);
         var trees = AssertEx.NotNull(create.ReadOnlyTrees);
         AssertEx.Equal(expected: 2, trees.Count, "exactly the venv and the managed-CPython root it links into");
-        AssertEx.Contains(trees, "/provisioned/venv");
-        AssertEx.Contains(trees, "/provisioned/pythons");
+        AssertEx.Contains(trees, "/provisioned/compute-runtime/venv/.venv");
+        AssertEx.Contains(trees, "/provisioned/python/pythons");
         // No working directory is named: the sandbox's single writable tree IS the working directory.
         AssertEx.Null(AssertEx.NotNull(provider.CommandRequest).WorkingDirectory);
     }
@@ -625,6 +625,78 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_HoldsTheExecutionLeaseFromBeforeProvisioningUntilTheJailIsGone_AndReleasesItOnSuccess()
+    {
+        var environment = new StubEnvironment("/provisioned/python");
+        var heldDuringExecute = 0;
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            OnExecute = () => heldDuringExecute = environment.LeasesHeld
+        };
+
+        _ = await CreateGateway(provider, environment: environment).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.True(environment.LeaseHeldAtGetRuntime, "the lease is taken before the runtime, or a remove can slip between them");
+        AssertEx.Equal(expected: 1, heldDuringExecute);
+        AssertEx.Equal(expected: 0, environment.LeasesHeld);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ReleasesTheExecutionLease_WhenTheSandboxFails()
+    {
+        var environment = new StubEnvironment("/provisioned/python");
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            OnExecute = static () => throw new IOException("sandbox failed")
+        };
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() => CreateGateway(provider, environment: environment).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }));
+
+        AssertEx.Equal(expected: 0, environment.LeasesHeld);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ReleasesTheExecutionLease_WhenCancelledMidRun()
+    {
+        var environment = new StubEnvironment("/provisioned/python");
+        using var cancellation = new CancellationTokenSource();
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            OnExecute = () =>
+            {
+                cancellation.Cancel();
+                cancellation.Token.ThrowIfCancellationRequested();
+            }
+        };
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => CreateGateway(provider, environment: environment).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, cancellation.Token));
+
+        AssertEx.Equal(expected: 0, environment.LeasesHeld);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ReleasesTheExecutionLease_WhenProvisioningIsRefused()
+    {
+        var environment = new StubEnvironment(new ComputeEnvironmentException("The pinned compute runtime could not be provisioned on this node."));
+
+        _ = await CreateGateway(new RecordingSandboxProvider(Contained), environment: environment).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.Equal(expected: 0, environment.LeasesHeld);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
         var provider = new RecordingSandboxProvider(Contained);
@@ -747,7 +819,10 @@ public sealed class ComputeToolGatewayTests
             Path.Combine("Services", "Agents", "Implementation", "MathematicianAgentSeeder.cs"),
             // Not a reader at all: it takes ComputeOptions for the shared sandbox CEILING defaults, and its own
             // `.Enabled` is AgentHomeOptions'. Listed because the scan below is per file rather than per expression.
-            Path.Combine("Services", "AgentHome", "Implementation", "AgentHomeService.cs")
+            Path.Combine("Services", "AgentHome", "Implementation", "AgentHomeService.cs"),
+            // Not an execution gate: the Managed Python status reports a disabled node as Unsupported and refuses to
+            // repair or remove its venv. Nothing it does runs a script; the gateway still decides that.
+            Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs")
         };
         var application = Path.Combine(RepositoryPaths.Root, "XE-Local-AI-Engine.Client.Application");
         var readers = new List<string>();
@@ -833,13 +908,14 @@ public sealed class ComputeToolGatewayTests
     {
         private readonly ComputeEnvironmentException? _failure;
         private readonly ComputePythonRuntime _runtime;
+        private int _leasesHeld;
 
         public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null)
         {
             _runtime = new ComputePythonRuntime
             {
                 InterpreterPath = interpreter,
-                ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"]
+                ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/compute-runtime/venv/.venv", "/provisioned/python/pythons"]
             };
         }
 
@@ -859,11 +935,48 @@ public sealed class ComputeToolGatewayTests
         /// </summary>
         public bool Requested { get; private set; }
 
+        /// <summary>Execution leases currently held.</summary>
+        public int LeasesHeld => Volatile.Read(ref _leasesHeld);
+
+        /// <summary>Whether a lease was already held when the runtime was asked for, which is the order a remove relies on.</summary>
+        public bool LeaseHeldAtGetRuntime { get; private set; }
+
+        public IDisposable AcquireExecutionLease()
+        {
+            _ = Interlocked.Increment(ref _leasesHeld);
+            return new Release(this);
+        }
+
+        public void ReleaseLease()
+        {
+            _ = Interlocked.Decrement(ref _leasesHeld);
+        }
+
         public Task<ComputePythonRuntime> GetRuntimeAsync(CancellationToken cancellationToken = default)
         {
             Requested = true;
+            LeaseHeldAtGetRuntime = LeasesHeld > 0;
 
             return _failure is not null ? Task.FromException<ComputePythonRuntime>(_failure) : Task.FromResult(_runtime);
+        }
+    }
+
+    /// <summary>Hands a <see cref="StubEnvironment" /> lease back exactly once.</summary>
+    private sealed class Release : IDisposable
+    {
+        private StubEnvironment? _owner;
+
+        public Release(StubEnvironment owner)
+        {
+            _owner = owner;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _owner, null) is { } owner)
+            {
+                owner.ReleaseLease();
+            }
         }
     }
 
@@ -912,6 +1025,9 @@ public sealed class ComputeToolGatewayTests
             Completed = true
         };
 
+        /// <summary>Runs while the script "executes": a test reads state there, or throws to fail or cancel the call.</summary>
+        public Action? OnExecute { get; init; }
+
         public string ProviderName => "recording";
 
         public SandboxProviderCapabilities Capabilities { get; }
@@ -953,6 +1069,7 @@ public sealed class ComputeToolGatewayTests
         {
             CommandRequest = request;
             CommandRequests.Add(request);
+            OnExecute?.Invoke();
             return Task.FromResult(Result with
             {
                 ExecutionId = request.ExecutionId

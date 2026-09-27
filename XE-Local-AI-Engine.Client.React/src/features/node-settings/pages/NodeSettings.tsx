@@ -26,6 +26,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
+import { ManagedPythonCard } from "@/features/node-settings/components/ManagedPythonCard";
 import { NodeChangePasswordCard } from "@/features/node-settings/components/NodeChangePasswordCard";
 import {
 	NodeSettingsAuxiliaryPanels,
@@ -322,6 +323,8 @@ export function NodeSettings() {
 			<ImageRuntimeSourceBuildCard />
 
 			<WhisperRuntimeSourceBuildCard />
+
+			<ManagedPythonCard />
 
 			<NodeSettingsFieldsCard
 				form={fieldsForm}

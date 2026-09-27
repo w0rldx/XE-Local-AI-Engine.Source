@@ -212,6 +212,7 @@ import {
 	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
 	getLocalModelProxyApiKey,
+	getManagedPythonStatus,
 	getMcpServer,
 	getMcpServerApiKey,
 	getMcpServerTools,
@@ -365,6 +366,7 @@ import {
 	rejectSuggestedPlaybookAction,
 	rejudgeBenchmarkProject,
 	rejudgeBenchmarkRun,
+	removeComputePythonEnvironment,
 	removeDevelopmentTemplate,
 	removeLlamaCppSourceBuild,
 	removeStableDiffusionCppSourceBuild,
@@ -372,6 +374,7 @@ import {
 	removeWhisperCppSourceBuild,
 	renameNodeChatConversation,
 	reorderBenchmarkTaskItems,
+	repairComputePythonEnvironment,
 	resetExternalApp,
 	resolveToolApproval,
 	resolveUserQuestion,
@@ -954,6 +957,8 @@ import type {
 	GetLocalModelDetailsResponse,
 	GetLocalModelProxyApiKeyData,
 	GetLocalModelProxyApiKeyResponse,
+	GetManagedPythonStatusData,
+	GetManagedPythonStatusResponse,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyResponse,
 	GetMcpServerData,
@@ -1312,6 +1317,9 @@ import type {
 	RejudgeBenchmarkRunData,
 	RejudgeBenchmarkRunError,
 	RejudgeBenchmarkRunResponse,
+	RemoveComputePythonEnvironmentData,
+	RemoveComputePythonEnvironmentError,
+	RemoveComputePythonEnvironmentResponse,
 	RemoveDevelopmentTemplateData,
 	RemoveDevelopmentTemplateResponse,
 	RemoveLlamaCppSourceBuildData,
@@ -1332,6 +1340,9 @@ import type {
 	ReorderBenchmarkTaskItemsData,
 	ReorderBenchmarkTaskItemsError,
 	ReorderBenchmarkTaskItemsResponse,
+	RepairComputePythonEnvironmentData,
+	RepairComputePythonEnvironmentError,
+	RepairComputePythonEnvironmentResponse,
 	ResetExternalAppData,
 	ResetExternalAppError,
 	ResetExternalAppResponse,
@@ -8858,6 +8869,76 @@ export const generateLocalModelProxyApiKeyMutation = (
 	};
 	return mutationOptions;
 };
+
+export const removeComputePythonEnvironmentMutation = (
+	options?: Partial<Options<RemoveComputePythonEnvironmentData>>,
+): UseMutationOptions<
+	RemoveComputePythonEnvironmentResponse,
+	AxiosError<RemoveComputePythonEnvironmentError>,
+	Options<RemoveComputePythonEnvironmentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveComputePythonEnvironmentResponse,
+		AxiosError<RemoveComputePythonEnvironmentError>,
+		Options<RemoveComputePythonEnvironmentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeComputePythonEnvironment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const repairComputePythonEnvironmentMutation = (
+	options?: Partial<Options<RepairComputePythonEnvironmentData>>,
+): UseMutationOptions<
+	RepairComputePythonEnvironmentResponse,
+	AxiosError<RepairComputePythonEnvironmentError>,
+	Options<RepairComputePythonEnvironmentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RepairComputePythonEnvironmentResponse,
+		AxiosError<RepairComputePythonEnvironmentError>,
+		Options<RepairComputePythonEnvironmentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await repairComputePythonEnvironment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getManagedPythonStatusQueryKey = (options?: Options<GetManagedPythonStatusData>) =>
+	createQueryKey("getManagedPythonStatus", options);
+
+export const getManagedPythonStatusOptions = (options?: Options<GetManagedPythonStatusData>) =>
+	queryOptions<
+		GetManagedPythonStatusResponse,
+		AxiosError<DefaultError>,
+		GetManagedPythonStatusResponse,
+		ReturnType<typeof getManagedPythonStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getManagedPythonStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getManagedPythonStatusQueryKey(options),
+	});
 
 export const listScheduledJobsQueryKey = (options: Options<ListScheduledJobsData>) =>
 	createQueryKey("listScheduledJobs", options);

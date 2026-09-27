@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.Python</RootNamespace>
+    <!-- LibraryImport source generation for the libc kill(2) tree-kill of a uv subprocess group; same reason as the
+         LlamaServer, StableDiffusionCpp and Training providers, which carry their own process-group handles. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <!-- The shared uv/Python machinery (pinned uv acquisition, the scrubbed uv environment, the tree-killed subprocess
+       runner) that the training runtime and the compute tool both provision through. A leaf below the providers that
+       use it: unlike the reference-free OpenAICompatible.Core it takes Providers.Abstractions, for SetsidLocator. -->
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Tests serve a synthetic uv archive through the digest seam to drive the concurrent-acquirer race. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+</Project>

@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runtime;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Training;
 
 /// <summary>
@@ -49,7 +50,7 @@ public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<Train
                 return;
             }
         }
-        catch (TrainingRuntimeException exception)
+        catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException)
         {
             await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked("remove-failed", exception.Message));
             return;

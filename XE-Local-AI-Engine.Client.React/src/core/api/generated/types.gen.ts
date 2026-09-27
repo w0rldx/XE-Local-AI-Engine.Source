@@ -4738,6 +4738,38 @@ export type XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResp
 	endpointUrl: string;
 };
 
+export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonBlockedResponse = {
+	reason: string;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse = {
+	pythonMinor: string;
+	profileRevision: number;
+	rid: string;
+	probeContractVersion?: number | null;
+	uvVersion?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResponse = {
+	profileId: string;
+	state: string;
+	reason?: string | null;
+	installed?: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse | null;
+	mismatches: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse = {
+	toolchain: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonToolchainResponse;
+	environments: Array<XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonToolchainResponse = {
+	uvVersion: string;
+	uvPresent: boolean;
+	pythonInstalls: Array<string>;
+};
+
 export type XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = {
 	templateId: string;
 	displayName: string;
@@ -17022,6 +17054,97 @@ export type GenerateLocalModelProxyApiKeyResponses = {
 
 export type GenerateLocalModelProxyApiKeyResponse =
 	GenerateLocalModelProxyApiKeyResponses[keyof GenerateLocalModelProxyApiKeyResponses];
+
+export type RemoveComputePythonEnvironmentData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/python/environments/compute/remove";
+};
+
+export type RemoveComputePythonEnvironmentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonBlockedResponse;
+};
+
+export type RemoveComputePythonEnvironmentError =
+	RemoveComputePythonEnvironmentErrors[keyof RemoveComputePythonEnvironmentErrors];
+
+export type RemoveComputePythonEnvironmentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
+};
+
+export type RemoveComputePythonEnvironmentResponse =
+	RemoveComputePythonEnvironmentResponses[keyof RemoveComputePythonEnvironmentResponses];
+
+export type RepairComputePythonEnvironmentData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/python/environments/compute/repair";
+};
+
+export type RepairComputePythonEnvironmentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonBlockedResponse;
+};
+
+export type RepairComputePythonEnvironmentError =
+	RepairComputePythonEnvironmentErrors[keyof RepairComputePythonEnvironmentErrors];
+
+export type RepairComputePythonEnvironmentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
+};
+
+export type RepairComputePythonEnvironmentResponse =
+	RepairComputePythonEnvironmentResponses[keyof RepairComputePythonEnvironmentResponses];
+
+export type GetManagedPythonStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/python/status";
+};
+
+export type GetManagedPythonStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetManagedPythonStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
+};
+
+export type GetManagedPythonStatusResponse = GetManagedPythonStatusResponses[keyof GetManagedPythonStatusResponses];
 
 export type ListScheduledJobsData = {
 	body?: never;

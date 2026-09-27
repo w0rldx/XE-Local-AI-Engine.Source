@@ -2283,6 +2283,52 @@
 			"uiMode": {
 				"title": "Oberflächenmodus",
 				"description": "„Einfach“ zeigt nur die alltäglichen Seiten, „Erweitert“ jede Seite, die dieser Build anbietet. Das ändert nur die Navigation — jede Seite bleibt über ihre eigene Adresse erreichbar, und nichts wird gelöscht."
+			},
+			"managedPython": {
+				"title": "Verwaltetes Python",
+				"description": "Die gemeinsame uv-Toolchain und die Python-Interpreter, die dieser Knoten verwaltet, sowie die darauf aufbauenden Funktionsumgebungen.",
+				"loading": "Status von Verwaltetem Python wird geladen…",
+				"loadError": "Der Status von Verwaltetem Python konnte nicht geladen werden.",
+				"uvVersion": "uv {{version}}",
+				"uvPresent": "Installiert",
+				"uvMissing": "Noch nicht heruntergeladen",
+				"pythonInstallsTitle": "Installierte Python-Interpreter",
+				"noPythonInstalls": "Noch keine installiert.",
+				"pythonMinor": "Python {{version}}",
+				"mismatchesTitle": "Veraltet wegen:",
+				"trainingLink": "Auf der Trainingsseite verwalten",
+				"repair": "Reparieren",
+				"remove": "Entfernen",
+				"repairConfirmTitle": "Compute-Umgebung reparieren?",
+				"repairConfirmBody": "Die Python-Umgebung für Compute wird aus ihrer Lock-Datei neu aufgebaut. Solange ein Python-Werkzeugaufruf läuft, lehnt der Knoten das ab; versuche es erneut, sobald er beendet ist.",
+				"repairConfirm": "Reparieren",
+				"removeConfirmTitle": "Compute-Umgebung entfernen?",
+				"removeConfirmBody": "Die Python-Umgebung für Compute wird gelöscht; der nächste Python-Werkzeugaufruf richtet sie erneut ein und lädt dabei ihre Pakete herunter. Solange ein Python-Werkzeugaufruf läuft, lehnt der Knoten das ab; versuche es erneut, sobald er beendet ist.",
+				"removeConfirm": "Entfernen",
+				"repairError": "Die Compute-Umgebung konnte nicht repariert werden.",
+				"removeError": "Die Compute-Umgebung konnte nicht entfernt werden.",
+				"profiles": {
+					"training": "Training",
+					"compute": "Compute"
+				},
+				"states": {
+					"NotProvisioned": "Nicht eingerichtet",
+					"Provisioning": "Wird eingerichtet",
+					"Ready": "Bereit",
+					"UpdateRequired": "Aktualisierung nötig",
+					"RepairRequired": "Reparatur nötig",
+					"Failed": "Fehlgeschlagen",
+					"Unsupported": "Nicht unterstützt"
+				},
+				"mismatches": {
+					"profileId": "Profil",
+					"pythonMinor": "Python-Version",
+					"lockfile": "Paket-Lock-Datei",
+					"profileRevision": "Profilrevision",
+					"rid": "Plattform",
+					"probeContract": "Prüfvertrag",
+					"toolchainStore": "Speicherort der Toolchain"
+				}
 			}
 		},
 		"cloudSettings": {

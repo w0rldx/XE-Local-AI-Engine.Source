@@ -15,8 +15,9 @@ Two decisions shape everything on this page, both recorded in [ADR 0005](../adr/
 
 | Concern | Project / path |
 |---|---|
-| uv/venv/subprocess mechanics only (ADR 0005 §3) | `XE-Local-AI-Engine.Providers.Training/` — `Contracts/ITrainingRuntimeService.cs`, `Implementation/TrainingRuntimeService.cs`, `Implementation/UvBinaryAcquirer.cs`, `Implementation/TrainingRuntimeLayout.cs`, `TrainingRuntimePins.cs` |
-| Linux process spawn / group kill / inspect | `…/Providers.Training/Implementation/LinuxTrainingProcessSpawner.cs`, `…/LinuxTrainingProcessRunner.cs`, `…/LinuxTrainingProcessGroupHandle.cs`, `…/LinuxTrainingProcessInspector.cs` |
+| Training runtime mechanics (ADR 0005 §3, amended by ADR 0016) | `XE-Local-AI-Engine.Providers.Training/` — `Contracts/ITrainingRuntimeService.cs`, `Implementation/TrainingRuntimeService.cs`, `Implementation/TrainingRuntimeLayout.cs`, `Implementation/TrainingRuntimeEnvironment.cs`, `TrainingRuntimePins.cs` (probe contract) |
+| Shared uv mechanics Training consumes (ADR 0016) | `XE-Local-AI-Engine.Providers.Python/` — `ManagedPythonToolchain` (the shared store), `UvBinaryAcquirer`, `ManagedPythonPins`, `ManagedPythonEnvironment`, `IPythonToolRunner` / `LinuxPythonToolRunner` + `LinuxPythonProcessGroupHandle` / `WindowsPythonToolRunner` (picked by `PythonToolRunner.ForCurrentPlatform()`), `ManagedPythonException` |
+| Linux training process spawn / kill / inspect | `…/Providers.Training/Implementation/LinuxTrainingProcessSpawner.cs`, `…/LinuxTrainingProcessHandle.cs`, `…/LinuxTrainingProcessInspector.cs` |
 | Runtime endpoints' door onto the provider (endpoint-dependency rule) | `…/Services/Training/Runtime/TrainingRuntimeOrchestrationService.cs` — pass-through over `ITrainingRuntimeService` + `ITrainingRuntimePrerequisiteProbe`; the four `Endpoints/Training/Runtime/` endpoints inject it, never the provider contracts |
 | The node's single GPU admission point | `XE-Local-AI-Engine.Client.Application/Services/Training/GpuWorkGate.cs` (`IGpuWorkGate`) |
 | Dataset definitions, generation, review, export | `…/Services/Training/Datasets/` — `DatasetDefinitionService.cs`, `DatasetGenerationService.cs`, `DatasetGenerationExecutor.cs`, `StructuredAgentRunner.cs`, `SampleValidationPipeline.cs`, `ToolMockService.cs`, `DatasetExportService.cs` |
@@ -63,9 +64,9 @@ Operator (React /training, /training/datasets, /training/comparisons)
 
 ## 1. The Python runtime (uv, pinned, machine-global)
 
-`ITrainingRuntimeService` (`TrainingRuntimeService`) provisions the venv single-flight. It is **Linux-x64-only by gate** (`TrainingRuntimePrerequisiteKeys.Platform`), and the committed lockfile narrows resolution to the same platform via `tool.uv.environments`.
+`ITrainingRuntimeService` (`TrainingRuntimeService`) provisions the venv single-flight. It is **Linux-x64-only by gate** (`TrainingRuntimePrerequisiteKeys.Platform`), and the committed lockfile narrows resolution to the same platform via `tool.uv.environments`. The shared uv layer underneath is Windows-capable (ADR 0016 §5); Training stays Linux-only by profile and reports `Unsupported` on Windows.
 
-- `UvBinaryAcquirer` downloads the pinned `uv` release and verifies its SHA-256. Both live in `TrainingRuntimePins` (`UvVersion`, `UvAssetName`, `UvSha256`) — uv publishes a `.sha256` per asset, unlike llama.cpp, so a version bump re-fetches it rather than reading the Releases API.
+- `UvBinaryAcquirer` (`Providers.Python`) downloads the pinned `uv` release and verifies its SHA-256. Both live in `ManagedPythonPins` (`UvVersion` plus one `ManagedPythonUvAsset` per RID, `linux-x64` and `win-x64`; `Current` resolves this host's) — uv publishes a `.sha256` per asset, unlike llama.cpp, so a version bump re-fetches it rather than reading the Releases API.
 - Install phases are `TrainingRuntimePhase`: `Idle → AcquiringUv → ProvisioningPython → InstallingPackages → Verifying → Ready` (plus `Failed`, `Removing`). A refusal to start is a `TrainingRuntimeInstallOutcome` (`AlreadyRunning`, `InsufficientDisk`, `MissingPrerequisites`), not an exception.
 - `Verifying` runs `probe.py` inside the fresh venv and reads its one-line JSON handshake (`TrainingRuntimeProbeReport`). A probe whose `contractVersion` differs from `TrainingRuntimePins.ProbeContractVersion` is **rejected rather than adopted** — the scripts and the managed side are versioned together.
 - Adoption is **one rollback boundary** spanning both the directory swap and the `InstalledTrainingRuntimeStore` write (`TrainingRuntimeLayout` names `active` / `.staging` / `.backup` under `{LocalApplicationData}/XE-Local-AI-Engine/training-runtime`). The backup is consumed only after both steps succeed.
@@ -75,14 +76,18 @@ Operator (React /training, /training/datasets, /training/comparisons)
 
 ### The scrubbed environments, and the uv pipeline the compute tool shares
 
-`TrainingRuntimeEnvironment` builds the environments every training subprocess runs under, as an **allow-list**:
+`TrainingRuntimeEnvironment` builds the environments every training subprocess runs under, on top of the shared
+**allow-list** in `ManagedPythonEnvironment` (`Providers.Python`):
 only `PATH`, `LANG`, `LC_ALL`, `CUDA_HOME` and `CUDA_PATH` pass through. Everything else — `LD_PRELOAD`,
 `LD_LIBRARY_PATH`, proxy and credential variables, every node secret — is dropped by construction, and
-`LinuxTrainingProcessRunner` clears the inherited environment before applying the result.
+the runner clears the inherited environment before applying the result. On Windows the list adds `SystemRoot`,
+`SystemDrive`, `windir` and `PATHEXT`, and the uv environment maps its isolated home and temp onto `USERPROFILE`,
+`TEMP` and `TMP` (ADR 0016 §5).
 
-- **The uv environment** points uv at an isolated `HOME`/`TMPDIR` and at cache and interpreter directories
-  under the training cache root, so an install neither reads the operator's `~/.config/uv` — which could
-  redirect an index — nor scatters gigabytes into the user's home.
+- **The uv environment** (`ManagedPythonEnvironment.BuildUvEnvironment`) points uv at an isolated `HOME`/`TMPDIR` under
+  the training work directory and at the shared toolchain store's cache and interpreter directories, so an install
+  neither reads the operator's `~/.config/uv` — which could redirect an index — nor scatters gigabytes into the
+  user's home.
 - **The train environment** redirects every default cache this stack writes to (`~/.cache/huggingface`,
   `/tmp/torchinductor_<user>`, a CWD-relative `unsloth_compiled_cache`), none of which is writable or wanted
   under a scrubbed environment. The split is deliberate: run-scoped state — `HOME`, `TMPDIR`, the HF cache —
@@ -94,19 +99,55 @@ only `PATH`, `LANG`, `LC_ALL`, `CUDA_HOME` and `CUDA_PATH` pass through. Everyth
   conversion scripts resolve that package relative to the llama.cpp repository they normally live in, which
   the provisioned script tree deliberately is not.
 
-Three of these types are **public on purpose, and are not training-specific**. `UvBinaryAcquirer` is the shared
-uv acquisition for every uv-managed venv the engine provisions — the sandboxed compute tool provisions its own
-numpy/scipy/sympy closure through the same pipeline under its own cache root, and the caller supplies the
-cache root — so a second digest-pinned downloader would duplicate this one rather than add a capability. Its
-pipeline is download → SHA-256 verify → atomic extract into a version-keyed directory, mirroring
-`LlamaCppBinaryManager`, including the extract-to-sibling-then-move step that stops a partial extract
-masquerading as a warm cache. The digest is checked **before** anything is unpacked, never after, so an
-archive that fails verification is never written where a later step could find it, and a cache hit
-short-circuits the whole thing so a re-install performs no network I/O. `ITrainingProcessRunner` is public for
-the same reason: every uv-managed venv runs its `uv sync` through that one scrubbed, tree-killed spawn. So is
-`TrainingRuntimeEnvironment.BuildUvEnvironment`, which is the environment any uv install must run under.
+The uv pipeline is **not training-specific**, so it lives in `Providers.Python`
+([ADR 0016](../adr/0016-managed-python-shared-uv-layer.md)) rather than here. `UvBinaryAcquirer` is the shared
+uv acquisition for every uv-managed venv the engine provisions — the sandboxed compute tool provisions its
+numpy/scipy/sympy closure through the same pipeline — so a second digest-pinned downloader would duplicate this
+one rather than add a capability. Its pipeline is download → SHA-256 verify → atomic extract into a version-keyed
+directory, mirroring `LlamaCppBinaryManager`, including the extract-to-sibling-then-move step that stops a partial
+extract masquerading as a warm cache. The digest is checked **before** anything is unpacked, never after, and a
+cache hit short-circuits the whole thing so a re-install performs no network I/O. Every uv-managed venv runs its
+`uv sync` through the one scrubbed, tree-killed spawn, `IPythonToolRunner`, under
+`ManagedPythonEnvironment.BuildUvEnvironment`.
 
-`TrainingRuntimeException` carries a message that is user-safe **by contract**: every construction site
+### The shared toolchain store, and the migration off the per-feature one
+
+`ManagedPythonToolchain` names one machine-global store under `RuntimeCacheDirectory.Resolve()` that Training and
+the compute tool both provision against; only the **environments** stay in their feature roots:
+
+| Path under the runtime cache | Holds | Owner |
+|---|---|---|
+| `python/uv/<version>/…` | the pinned uv | shared |
+| `python/pythons/` | managed CPython installs (`UV_PYTHON_INSTALL_DIR`) | shared |
+| `python/cache/` | the uv cache (`UV_CACHE_DIR`) | shared |
+| `training-runtime/venv/{active,.staging,.backup}`, `.work/`, `installed-training-runtime.json` | the training venv and its state | Training |
+
+- **Nothing deletes under `python/`.** Several hosts and checkouts share the store and a venv's `pyvenv.cfg` `home`
+  points into it; removal is uv's own business (`uv python uninstall`, `uv cache clean`), never a directory delete.
+- **Concurrency.** uv locks its cache and its install directory (`python/pythons/.lock`). `UvBinaryAcquirer` runs
+  its check, download, rename-aside and move under an exclusive file lock (`python/uv/.acquire.lock`) and re-checks
+  inside it, so a second acquirer adopts the first one's tree; outside the lock (an older build on the same store) a
+  complete `uv/<version>` is still adopted, never replaced, and only a tree without the executable is renamed aside
+  and deleted. Replacing a complete tree was the root cause of the compute live suite's cold-start failures (ADR 0016).
+- **Legacy toolchain.** Before the store, `training-runtime/` held its own `uv/`, `pythons/` and `uv-cache/`. An
+  installed runtime built then keeps running against them — no forced reinstall. The next **install** provisions
+  against the store; `TrainingRuntimeService.SweepLegacyToolchain` deletes the three legacy dirs only when the
+  active venv's `pyvenv.cfg` `home` lies under `python/pythons` (positive evidence; no venv or no `home` keeps them).
+  It runs after `Ready`, outside the adopt rollback boundary, and again from the constructor and `Recover()`, which
+  covers a crash between adopt and sweep. **Remove** deletes `VenvRoot`, `.work` and the legacy dirs; it provisions
+  nothing and never touches the store.
+- **The Managed Python status row.** `GET python/status` ([API](09-api-and-hubs.md), ADR 0016 §4) reports Training as
+  the `training` environment, derived from `GetStatus()` without any format change to `installed-training-runtime.json`:
+  a running install or remove is `Provisioning`, phase `Failed` is `Failed` with the sanitized error, nothing installed
+  is `NotProvisioned`, a missing interpreter (`ResolveInterpreterPath()` null) is `RepairRequired`, and an installed
+  record whose lockfile digest (against `TrainingRuntimeStatus.ShippedLockfileSha256`, hashed once per process),
+  Python minor or probe contract version (against `TrainingRuntimePins.ProbeContractVersion`) differs is
+  `UpdateRequired`; otherwise `Ready`, carrying the sanitized error when a reinstall failed and the old runtime stayed.
+  The uv version is informational, off Linux the row is `Unsupported`, and the status offers no Training action — the
+  install flow stays on the Training page.
+
+`TrainingRuntimeException` — and `ManagedPythonException` from the shared layer, which Training's catch sites
+accept alongside it — carries a message that is user-safe **by contract**: every construction site
 phrases it for an operator and names no path, URL, token or environment value. The phase machine surfaces
 these verbatim as the sanitized error and collapses every other exception to a generic reason, so widening
 that guarantee silently widens what leaks to the UI.
@@ -221,7 +262,7 @@ The three hooks (`useDatasetGenerationHub`, `useTrainingRunHub`, `useTrainingRun
 
 ## 10. Tests and validation
 
-- **Backend integration** (`XE-Local-AI-Engine.Tests/`): `Training/` (dataset generation, queue, cancel, `GpuWorkGateTests`, headless tool executor, `Evaluation/`, `Export/`), `Endpoints/Training/V1/`, `Providers/Training/` (runtime service, prerequisite probe, probe parser, `UvBinaryAcquirerTests`, base-artifact/checkpoint stores).
+- **Backend integration** (`XE-Local-AI-Engine.Tests/`): `Training/` (dataset generation, queue, cancel, `GpuWorkGateTests`, headless tool executor, `Evaluation/`, `Export/`), `Endpoints/Training/V1/`, `Providers/Training/` (runtime service, prerequisite probe, probe parser, base-artifact/checkpoint stores), `Providers/Python/` (`UvBinaryAcquirerTests` incl. the extract race and the Windows zip's zip-slip refusal; `ManagedPythonPlatformTests`; Windows-only opt-in `ManagedPythonWindowsLiveTests`; opt-in `ManagedPythonToolchainLiveTests`: two real `uv sync` processes on one empty store under `XE_COMPUTE_LIVE=1`).
 - **Persistence** (`XE-Local-AI-Engine.Client.Persistence.Tests/Training/`): the five `AddTraining*MigrationTests`, the store tests, and the encryption tests (`TrainingEncryptionTests`, `TrainingRunEncryptionTests`, `TrainingEvaluationEncryptionTests`, `TrainingStoreNullBlobTests`).
 - **Frontend** (Vitest): `features/training/**/*.test.ts(x)` — model parsers, the definition-editor dialog, and `I18nParity.test.ts`.
 - **Python**: `tools/training/test_trainlib.py` and `test_exportlib.py`, run by `scripts/python-validation.sh` and the CI `python-quality` job (ruff / pyrefly / pytest / bandit) from the **root** `pyproject.toml`.

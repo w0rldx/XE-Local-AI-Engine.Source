@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
@@ -55,6 +56,10 @@ public sealed class RuntimeCacheDirectoryTests
             Environment.SetEnvironmentVariable(RuntimeCacheDirectory.EnvironmentVariable, root);
             AssertEx.Equal(root, RuntimeCacheDirectory.Resolve());
             AssertEx.Equal(Path.Combine(root, "training-runtime"), TrainingRuntimeLayout.DefaultCacheRoot());
+            var toolchain = ManagedPythonToolchain.Default();
+            AssertEx.Equal(Path.Combine(root, "python"), toolchain.Root);
+            AssertEx.Equal(Path.Combine(root, "python", "pythons"), toolchain.PythonInstallDirectory);
+            AssertEx.Equal(Path.Combine(root, "python", "cache"), toolchain.CacheDirectory);
             AssertEx.Equal(Path.Combine(root, "benchmarks", "kld-base"), new BenchmarkKldBaseCache(Substitute.For<IFreeSpaceProbe>()).Root);
             AssertEx.Equal(Path.Combine(root, "llama.cpp"), LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot());
             AssertEx.Equal(Path.Combine(root, "stable-diffusion.cpp"), StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot());
@@ -81,6 +86,7 @@ public sealed class RuntimeCacheDirectoryTests
             AssertEx.Throws<InvalidOperationException>(() => _ = new StableDiffusionInstalledRuntimeStore());
             AssertEx.Throws<InvalidOperationException>(() => _ = new WhisperInstalledRuntimeStore());
             AssertEx.Throws<InvalidOperationException>(() => TrainingRuntimeLayout.DefaultCacheRoot());
+            AssertEx.Throws<InvalidOperationException>(() => ManagedPythonToolchain.Default());
             AssertEx.Throws<InvalidOperationException>(() => _ = new BenchmarkKldBaseCache(Substitute.For<IFreeSpaceProbe>()));
             using var http = new HttpClient();
             AssertEx.Throws<InvalidOperationException>(() =>

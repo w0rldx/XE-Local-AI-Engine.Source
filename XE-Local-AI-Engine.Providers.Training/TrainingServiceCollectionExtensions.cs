@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Training;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 
@@ -26,7 +27,7 @@ public static class TrainingServiceCollectionExtensions
         services.AddHttpClient(nameof(TrainingRuntimeService));
 
         services.TryAddSingleton<ITrainingRuntimePrerequisiteProbe>(static _ =>
-            new TrainingRuntimePrerequisiteProbe(new LinuxTrainingProcessRunner(),
+            new TrainingRuntimePrerequisiteProbe(PythonToolRunner.ForCurrentPlatform(),
                 TrainingRuntimeLayout.DefaultCacheRoot(),
                 TrainingRuntimeLayout.ResolveScriptsDirectory()));
 

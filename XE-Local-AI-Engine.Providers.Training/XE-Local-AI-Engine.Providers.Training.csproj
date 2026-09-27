@@ -14,6 +14,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <!-- The shared uv acquisition, scrubbed uv environment and subprocess runner, which the compute tool provisions
+         through too; a reviewed sibling edge onto a leaf that no provider but this one references. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Python\XE-Local-AI-Engine.Providers.Python.csproj"/>
   </ItemGroup>
   <ItemGroup>
     <!-- Tests drive the internal phase machine and the uv acquisition against a fake process runner and a stubbed

@@ -1,8 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
-using XE_Local_AI_Engine.Providers.Training;
+using XE_Local_AI_Engine.Providers.Python;
+using XE_Local_AI_Engine.Providers.Python.Contracts;
+using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
-using XE_Local_AI_Engine.Providers.Training.Implementation;
 
 /// <summary>
 ///     Shared fakes for the training-runtime tests. No test here spawns a process, touches the network, or provisions a
@@ -32,19 +33,22 @@ internal static class TrainingRuntimeTestInfrastructure
     /// </summary>
     public static void SeedCachedUv(string cacheRoot)
     {
-        var directory = Path.Combine(cacheRoot, "uv", TrainingRuntimePins.UvVersion, TrainingRuntimePins.UvArchiveRootDirectory);
+        var directory = Path.Combine(cacheRoot, "uv", ManagedPythonPins.UvVersion, ManagedPythonPins.Current.ArchiveRootDirectory);
         _ = Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, TrainingRuntimePins.UvExecutableName), "#!/bin/sh\n");
+        File.WriteAllText(Path.Combine(directory, ManagedPythonPins.Current.ExecutableName), "#!/bin/sh\n");
     }
 
-    /// <summary>The default runner script: uv sync creates the venv interpreter, then the probe emits a valid handshake.</summary>
+    /// <summary>
+    ///     The default runner script: uv sync creates the venv interpreter and a <c>pyvenv.cfg</c> whose <c>home</c> lies
+    ///     under <c>UV_PYTHON_INSTALL_DIR</c>, as real uv writes it; then the probe emits a valid handshake.
+    /// </summary>
     public static FakeProcessRunner SucceedingRunner(string handshake = ValidHandshake)
     {
-        return new FakeProcessRunner((file, args, logSink) =>
+        return new FakeProcessRunner((file, args, environment, logSink) =>
         {
-            if (file.EndsWith(TrainingRuntimePins.UvExecutableName, StringComparison.Ordinal))
+            if (file.EndsWith(ManagedPythonPins.Current.ExecutableName, StringComparison.Ordinal))
             {
-                CreateInterpreter(args);
+                CreateInterpreter(args, environment.GetValueOrDefault("UV_PYTHON_INSTALL_DIR"));
                 logSink("Resolved 102 packages");
                 return 0;
             }
@@ -56,7 +60,30 @@ internal static class TrainingRuntimeTestInfrastructure
         });
     }
 
-    private static void CreateInterpreter(IReadOnlyList<string> args)
+    /// <summary>Lays out a venv the way uv leaves one: <c>bin/python</c> plus a <c>pyvenv.cfg</c> naming the CPython it runs on.</summary>
+    public static void WriteVenv(string venvDirectory, string? pythonInstallDirectory)
+    {
+        var binDirectory = Path.Combine(venvDirectory, ".venv", "bin");
+        _ = Directory.CreateDirectory(binDirectory);
+        File.WriteAllText(Path.Combine(binDirectory, "python"), "#!/bin/sh\n");
+        if (pythonInstallDirectory is not null)
+        {
+            File.WriteAllText(Path.Combine(venvDirectory, ".venv", "pyvenv.cfg"),
+                $"home = {Path.Combine(pythonInstallDirectory, "cpython-3.13-linux-x86_64-gnu", "bin")}\nversion_info = 3.13\n");
+        }
+    }
+
+    /// <summary>Seeds the per-feature <c>uv</c>, <c>pythons</c> and <c>uv-cache</c> a root kept before the shared store.</summary>
+    public static void SeedLegacyToolchain(string featureRoot)
+    {
+        foreach (var name in new[] { "uv", "pythons", "uv-cache" })
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(featureRoot, name, "nested"));
+            File.WriteAllText(Path.Combine(directory.FullName, "marker"), name);
+        }
+    }
+
+    private static void CreateInterpreter(IReadOnlyList<string> args, string? pythonInstallDirectory)
     {
         var projectIndex = args.ToList().IndexOf("--project");
         if (projectIndex < 0 || projectIndex + 1 >= args.Count)
@@ -64,18 +91,21 @@ internal static class TrainingRuntimeTestInfrastructure
             return;
         }
 
-        var binDirectory = Path.Combine(args[projectIndex + 1], ".venv", "bin");
-        _ = Directory.CreateDirectory(binDirectory);
-        File.WriteAllText(Path.Combine(binDirectory, "python"), "#!/bin/sh\n");
+        WriteVenv(args[projectIndex + 1], pythonInstallDirectory);
     }
 
     /// <summary>Records every invocation and answers from a caller-supplied script.</summary>
-    internal sealed class FakeProcessRunner : ITrainingProcessRunner
+    internal sealed class FakeProcessRunner : IPythonToolRunner
     {
         private readonly List<Invocation> _invocations = [];
-        private readonly Func<string, IReadOnlyList<string>, Action<string>, int> _handler;
+        private readonly Func<string, IReadOnlyList<string>, IReadOnlyDictionary<string, string>, Action<string>, int> _handler;
 
         public FakeProcessRunner(Func<string, IReadOnlyList<string>, Action<string>, int> handler)
+            : this((file, args, _, logSink) => handler(file, args, logSink))
+        {
+        }
+
+        public FakeProcessRunner(Func<string, IReadOnlyList<string>, IReadOnlyDictionary<string, string>, Action<string>, int> handler)
         {
             _handler = handler;
         }
@@ -98,7 +128,7 @@ internal static class TrainingRuntimeTestInfrastructure
                 Environment = environment,
                 WorkingDirectory = workingDirectory
             });
-            return Task.FromResult(_handler(file, args, logSink));
+            return Task.FromResult(_handler(file, args, environment, logSink));
         }
 
         internal sealed class Invocation

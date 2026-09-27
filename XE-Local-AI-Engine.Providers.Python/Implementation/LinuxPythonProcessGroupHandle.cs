@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Training.Implementation;
+namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -6,20 +6,20 @@ using System.Runtime.Versioning;
 
 /// <summary>Linux process handle whose tree-kill signals the child's whole process group.</summary>
 /// <remarks>
-///     The child is started under <c>setsid</c> (see <see cref="LinuxTrainingProcessRunner" />), so its pid is also
+///     The child is started under <c>setsid</c> (see <see cref="LinuxPythonToolRunner" />), so its pid is also
 ///     its process-group id and <c>kill(-pid)</c> reaps uv plus everything it forked — a uv install spawns build
 ///     backends and downloaders, and killing only uv would orphan them. Mirrors the LlamaServer and
 ///     StableDiffusionCpp handles; each provider owns its own because only <c>SetsidLocator</c> is shared.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxTrainingProcessGroupHandle : IDisposable
+internal sealed partial class LinuxPythonProcessGroupHandle : IDisposable
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
 
     private int _disposed;
 
-    private LinuxTrainingProcessGroupHandle(Process process)
+    private LinuxPythonProcessGroupHandle(Process process)
     {
         Process = process;
     }
@@ -61,12 +61,12 @@ internal sealed partial class LinuxTrainingProcessGroupHandle : IDisposable
     }
 
     /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static LinuxTrainingProcessGroupHandle Wrap(Process process)
+    public static LinuxPythonProcessGroupHandle Wrap(Process process)
     {
         ArgumentNullException.ThrowIfNull(process);
         try
         {
-            return new LinuxTrainingProcessGroupHandle(process);
+            return new LinuxPythonProcessGroupHandle(process);
         }
         catch
         {

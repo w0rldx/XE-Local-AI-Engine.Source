@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Python;
+using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
@@ -28,10 +30,10 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
     // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
     private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
     private readonly string _cacheRoot;
-    private readonly ITrainingProcessRunner _processRunner;
+    private readonly IPythonToolRunner _processRunner;
     private readonly string _scriptsDirectory;
 
-    public TrainingRuntimePrerequisiteProbe(ITrainingProcessRunner processRunner, string cacheRoot, string scriptsDirectory)
+    public TrainingRuntimePrerequisiteProbe(IPythonToolRunner processRunner, string cacheRoot, string scriptsDirectory)
     {
         _cacheRoot = !string.IsNullOrWhiteSpace(cacheRoot)
             ? cacheRoot
@@ -203,7 +205,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         {
             throw;
         }
-        catch (Exception exception) when (exception is TrainingRuntimeException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException or IOException or UnauthorizedAccessException)
         {
             return new TrainingRuntimePrerequisiteItem
             {

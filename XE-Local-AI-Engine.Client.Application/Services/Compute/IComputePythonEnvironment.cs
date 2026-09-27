@@ -19,6 +19,12 @@ internal interface IComputePythonEnvironment
     ///     that names no host path.
     /// </exception>
     Task<ComputePythonRuntime> GetRuntimeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Marks a script execution as using the environment until disposed; a repair or remove is refused while any is held.
+    ///     Take it BEFORE <see cref="GetRuntimeAsync" />, so a remove either sees it or has already dropped the cached runtime.
+    /// </summary>
+    IDisposable AcquireExecutionLease();
 }
 
 /// <summary>

@@ -53,7 +53,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 ### Providers (`/Src/Providers/`)
 
-Provider projects reference `Providers.Abstractions` and, for the two that speak the OpenAI wire protocol, the leaf `Providers.OpenAICompatible.Core` transport library. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`). Enforced for OllamaSharp: `Providers.Ollama`'s `OllamaSharp` reference is `PrivateAssets="compile"`, so no consumer can compile against the SDK even though it references the project, and `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` catches a direct re-add of the package in a consumer csproj. Docker and Azure remain source-scan-only, with no compile-asset boundary yet. No provider references a sibling provider.
+Provider projects reference `Providers.Abstractions` and, for the two that speak the OpenAI wire protocol, the leaf `Providers.OpenAICompatible.Core` transport library; `Providers.Training` also references the leaf-like `Providers.Python` uv layer ([ADR 0016](../adr/0016-managed-python-shared-uv-layer.md)). SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`). Enforced for OllamaSharp: `Providers.Ollama`'s `OllamaSharp` reference is `PrivateAssets="compile"`, so no consumer can compile against the SDK even though it references the project, and `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` catches a direct re-add of the package in a consumer csproj. Docker and Azure remain source-scan-only, with no compile-asset boundary yet. Apart from those two shared layers, no provider references a sibling provider.
 
 | Project | Role | Key symbols |
 |---|---|---|
@@ -67,7 +67,8 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 | `XE-Local-AI-Engine.Providers.Capabilities` | Sanitized hardware profiling (CPU/RAM/GPU/VRAM/disk) behind `IHardwareProfiler`, consumed by model-fit and runtime auditing. | `HardwareProfiler`, `CapabilitiesServiceCollectionExtensions` |
 | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | Local image-generation provider and supervised `sd-server` runtime. | — |
 | `XE-Local-AI-Engine.Providers.WhisperCpp` | Local speech-to-text provider and supervised `whisper-server` runtime: pinned binary acquisition, one resident daemon on its own loopback range (18300-18399), health-route readiness, idle-TTL reaping and the static Whisper weight catalogue. Implements neither `ILocalModelProvider` nor `IChatClient` — it publishes `IWhisperTranscriber` and `IWhisperServerSupervisor`. | `WhisperServerProcessSupervisor.cs`, `WhisperCppReleasePins.cs` |
-| `XE-Local-AI-Engine.Providers.Training` | Local fine-tuning runtime (Linux only): provisions a uv-managed Python environment and spawns/supervises the training process behind `ITrainingRuntimeService` / `ITrainingProcessSpawner`, with its own libc tree-kill process-group handle. Implements neither `ILocalModelProvider` nor `IChatClient`. See [18-training.md](18-training.md). | `TrainingRuntimeService.cs`, `UvBinaryAcquirer.cs`, `LinuxTrainingProcessSpawner.cs` |
+| `XE-Local-AI-Engine.Providers.Python` | Shared managed-Python layer ([ADR 0016](../adr/0016-managed-python-shared-uv-layer.md)), consumed by `Providers.Training` and by the compute tool in `Client.Application`: pinned, digest-verified uv acquisition (`UvBinaryAcquirer`, `ManagedPythonPins`), the uv environment allow-list (`ManagedPythonEnvironment`), the scrubbed, tree-killed spawn (`IPythonToolRunner` / `LinuxPythonToolRunner`) and the user-safe `ManagedPythonException`. Owns no feature semantics. Leaf-like: references only `Providers.Abstractions` (`SetsidLocator`, `RuntimeCacheDirectory`). | `UvBinaryAcquirer.cs`, `ManagedPythonPins.cs`, `LinuxPythonToolRunner.cs` |
+| `XE-Local-AI-Engine.Providers.Training` | Local fine-tuning runtime (Linux only): provisions a uv-managed Python environment through `Providers.Python` and spawns/supervises the training process behind `ITrainingRuntimeService` / `ITrainingProcessSpawner`, with its own libc tree-kill process-group handle. Implements neither `ILocalModelProvider` nor `IChatClient`. See [18-training.md](18-training.md). | `TrainingRuntimeService.cs`, `TrainingRuntimeEnvironment.cs`, `LinuxTrainingProcessSpawner.cs` |
 
 ### Tests & support
 
@@ -98,12 +99,13 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │  │  └────► AI.Agent ◄─────────┘  │  │  │  │
             │  └───────► Client.Persistence ◄──┘  │  │  │
             │                                      │  │  │
-            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training,WhisperCpp}
+            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Python,Training,WhisperCpp}
                                   ▼                │  │  │
                        Providers.Abstractions ◄────┴──┴──┘ ◄── Client.Persistence (benchmark contracts)
                                   ▲
-  Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training / WhisperCpp
-     (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf)
+  Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / Python / StableDiffusionCpp / Training / WhisperCpp
+     (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf;
+      Training also ► Python, which itself references only Abstractions)
 
 AppHost ──► Client            (orchestrates; not referenced back)
 WindowsLauncher ── child process ──► published Client executable
@@ -116,9 +118,9 @@ orchestration dependencies; provider implementations converge on `Providers.Abst
 
 Notable edges:
 
-- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Training`, `WhisperCpp`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
+- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `Python`, `StableDiffusionCpp`, `Training`, `WhisperCpp`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
 - **`Client` (Web) references a narrower set** — `AI.Agent`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, `ServiceDefaults`, `AI.Contracts`. It reaches the other providers transitively through `Client.Application`; only `Ollama` is referenced directly at the web layer (legacy direct dependency).
-- **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `StableDiffusionCpp`, `Training`, and `WhisperCpp`), with ONE reviewed exception: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice. `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
+- **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `Python`, `StableDiffusionCpp`, and `WhisperCpp`), with TWO reviewed exceptions: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice; and `Training` also references `Providers.Python` so uv acquisition, the uv environment allow-list and the scrubbed runner exist once for Training and the compute tool ([ADR 0016](../adr/0016-managed-python-shared-uv-layer.md)). `Providers.Python` is leaf-like, not a leaf: its one reference is `Providers.Abstractions`. Apart from those two reviewed edges, `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
 - **`Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering. `Client.Persistence` sits one step above: its only project reference is `Providers.Abstractions`.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
 - **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.

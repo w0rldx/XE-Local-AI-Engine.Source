@@ -1,12 +1,12 @@
-namespace XE_Local_AI_Engine.Providers.Training.Implementation;
+namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.Python.Contracts;
 
 /// <summary>
-///     The production <see cref="ITrainingProcessRunner" />: spawns a tool by argv (no shell) under <c>setsid -w</c>,
+///     The production <see cref="IPythonToolRunner" />: spawns a tool by argv (no shell) under <c>setsid -w</c>,
 ///     streams stdout and stderr line-by-line to a sink, awaits exit, and tree-kills on cancellation or timeout.
 /// </summary>
 /// <remarks>
@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     reused: it is internal to that assembly and this project references <c>Providers.Abstractions</c> only
 ///     (ADR 0005 decision 3).
 /// </remarks>
-public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
+public sealed class LinuxPythonToolRunner : IPythonToolRunner
 {
     public Task<int> RunAsync(string file,
         IReadOnlyList<string> args,
@@ -30,7 +30,7 @@ public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
         // unconditionally; every caller already refuses on non-Linux well before reaching a subprocess.
         if (!OperatingSystem.IsLinux())
         {
-            throw new TrainingRuntimeException("The Python training runtime is available on Linux only.");
+            throw new ManagedPythonException("Managed Python tooling is available on Linux only.");
         }
 
         return RunLinuxAsync(file, args, environment, workingDirectory, logSink, timeout, ct);
@@ -77,7 +77,7 @@ public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
         }
 
 #pragma warning disable CA2000 // Ownership transferred to the handle (Wrap disposes on a construction failure); the using disposes the handle.
-        using var handle = LinuxTrainingProcessGroupHandle.Wrap(StartStreaming(startInfo, logSink));
+        using var handle = LinuxPythonProcessGroupHandle.Wrap(PythonToolRunner.StartStreaming(startInfo, logSink));
 #pragma warning restore CA2000
         var process = handle.Process;
 
@@ -96,49 +96,7 @@ public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
             handle.TreeKill();
-            throw new TrainingRuntimeException("The training runtime install step exceeded its time budget and was stopped.");
+            throw new ManagedPythonException("A managed Python step exceeded its time budget and was stopped.");
         }
-    }
-
-    private static Process StartStreaming(ProcessStartInfo startInfo, Action<string> logSink)
-    {
-        var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.OutputDataReceived += (_, e) => Forward(e.Data, logSink);
-        process.ErrorDataReceived += (_, e) => Forward(e.Data, logSink);
-
-        try
-        {
-            if (!process.Start())
-            {
-                throw new TrainingRuntimeException("The training runtime install process did not start.");
-            }
-
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            return process;
-        }
-        catch (TrainingRuntimeException)
-        {
-            process.Dispose();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            process.Dispose();
-            throw new TrainingRuntimeException("The training runtime install process could not be started.", ex);
-        }
-    }
-
-    private static void Forward(string? line, Action<string> logSink)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return;
-        }
-
-        logSink(line);
     }
 }

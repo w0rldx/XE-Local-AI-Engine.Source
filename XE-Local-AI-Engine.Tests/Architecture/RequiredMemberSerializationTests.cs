@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -53,6 +54,7 @@ public sealed class RequiredMemberSerializationTests
         typeof(IStableDiffusionManagedSourceBuildSignal).Assembly,
         typeof(GgufMetadataReaderServiceCollectionExtensions).Assembly,
         typeof(ITrainingProcessHandle).Assembly,
+        typeof(ManagedPythonPins).Assembly,
         typeof(RunningModelSnapshotMapper).Assembly,
         typeof(ICodexAuthService).Assembly,
         typeof(CapabilitiesServiceCollectionExtensions).Assembly,

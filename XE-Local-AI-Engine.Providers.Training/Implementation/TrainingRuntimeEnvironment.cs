@@ -1,45 +1,18 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
+using XE_Local_AI_Engine.Providers.Python.Implementation;
+
 /// <summary>
-///     Builds the scrubbed, allow-listed environments the training subprocesses run under: ONLY the keys named here
-///     pass through, and everything else is dropped by construction.
+///     Builds the scrubbed environments the training subprocesses run under, each on top of
+///     <see cref="ManagedPythonEnvironment.BuildAllowlisted" />: ONLY the allow-listed keys and the ones named here pass
+///     through, and everything else is dropped by construction.
 /// </summary>
 /// <remarks>
-///     <see cref="LinuxTrainingProcessRunner" /> clears the inherited environment before applying the result. Public
-///     for <see cref="BuildUvEnvironment" /> alone, which is not training-specific — it is the environment any uv
-///     install must run under. See docs/wiki/18-training.md ("The scrubbed environments, and the uv pipeline the
-///     compute tool shares").
+///     The environment uv itself runs under is <see cref="ManagedPythonEnvironment.BuildUvEnvironment" />. See
+///     docs/wiki/18-training.md ("The scrubbed environments, and the uv pipeline the compute tool shares").
 /// </remarks>
-public static class TrainingRuntimeEnvironment
+internal static class TrainingRuntimeEnvironment
 {
-    private static readonly string[] Allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
-
-    /// <summary>The environment for uv itself.</summary>
-    /// <remarks>
-    ///     uv is pointed at isolated HOME/TMPDIR and cache/interpreter directories under the training cache root, so
-    ///     the install neither reads the operator's <c>~/.config/uv</c> — which could redirect an index — nor scatters
-    ///     gigabytes into the user's home.
-    /// </remarks>
-    public static Dictionary<string, string> BuildUvEnvironment(string isolatedHome, string isolatedTmp, string uvCacheDirectory, string pythonInstallDirectory)
-    {
-        var scrubbed = BuildAllowlisted();
-        scrubbed["HOME"] = isolatedHome;
-        scrubbed["TMPDIR"] = isolatedTmp;
-        scrubbed["UV_CACHE_DIR"] = uvCacheDirectory;
-        scrubbed["UV_PYTHON_INSTALL_DIR"] = pythonInstallDirectory;
-
-        // Ignore any uv.toml / user configuration on the box: the committed pyproject.toml is the only configuration
-        // this install is allowed to obey, and a stray index override would silently change what gets installed.
-        scrubbed["UV_NO_CONFIG"] = "1";
-
-        // uv must provision its own interpreter (ADR 0005: the host's Python is not usable).
-        scrubbed["UV_PYTHON_PREFERENCE"] = "only-managed";
-
-        // Progress bars are drawn with carriage returns; without this the streamed log fills with control characters.
-        scrubbed["UV_NO_PROGRESS"] = "1";
-        return scrubbed;
-    }
-
     /// <summary>
     ///     The environment for short read-only probes (<c>nvidia-smi</c>, <c>probe.py</c>). <paramref name="isolatedHome" />
     ///     must be a directory this process owns — never the shared temp directory, which any local user could plant a
@@ -49,7 +22,7 @@ public static class TrainingRuntimeEnvironment
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(isolatedHome);
 
-        var scrubbed = BuildAllowlisted();
+        var scrubbed = ManagedPythonEnvironment.BuildAllowlisted();
 
         // Keeps torch/unsloth from writing compilation caches wherever HOME happens to point; an absent HOME makes some
         // libraries fall back to the current working directory instead.
@@ -73,7 +46,7 @@ public static class TrainingRuntimeEnvironment
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(workDirectory);
 
-        var scrubbed = BuildAllowlisted();
+        var scrubbed = ManagedPythonEnvironment.BuildAllowlisted();
         scrubbed["HOME"] = Path.Combine(workDirectory, ".home");
         scrubbed["TMPDIR"] = Path.Combine(workDirectory, ".tmp");
         scrubbed["HF_HOME"] = Path.Combine(workDirectory, "hf-cache");
@@ -128,19 +101,4 @@ public static class TrainingRuntimeEnvironment
         Path.Combine(workDirectory, "hf-cache"),
         Path.Combine(cacheRoot, "caches")
     ];
-
-    private static Dictionary<string, string> BuildAllowlisted()
-    {
-        var scrubbed = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var key in Allowlist)
-        {
-            var value = Environment.GetEnvironmentVariable(key);
-            if (!string.IsNullOrEmpty(value))
-            {
-                scrubbed[key] = value;
-            }
-        }
-
-        return scrubbed;
-    }
 }

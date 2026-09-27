@@ -5,6 +5,7 @@
 - **Scope:** The Training group (dataset generation, fine-tuning runs, export, evaluation). Nothing else.
 - **Authority:** Locked decisions 1, 13 and 14 of the 2026-08-15 training-module plan. Decision 1 was made by the maintainer on 2026-08-15; decisions 13 and 14 were closed by review evidence in the same round and confirmed by the maintainer. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
 - **Relates to:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) — unchanged and unamended by this record. See "Relationship to ADR 0004" below.
+- **Amended by:** [ADR 0016](0016-managed-python-shared-uv-layer.md) (2026-09-27) — Decision §3 only: the generic uv mechanics (uv acquisition and pin, the uv environment allowlist, the scrubbed runner) move to a shared `Providers.Python` that `Providers.Training` references. The text below is unchanged.
 
 ## Context
 

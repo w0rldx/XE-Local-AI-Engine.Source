@@ -152,6 +152,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         // wrote, scratch included. The provisioned venv lives under the compute cache root, read-only to the script, so it survives untouched.
         var invocationId = Guid.NewGuid().ToString("N");
         SandboxHandle? handle = null;
+        // Held until the jail is gone: a repair or remove must not delete the venv a script is running from.
+        using var lease = _environment.AcquireExecutionLease();
         try
         {
             var runtime = await _environment.GetRuntimeAsync(cancellationToken);

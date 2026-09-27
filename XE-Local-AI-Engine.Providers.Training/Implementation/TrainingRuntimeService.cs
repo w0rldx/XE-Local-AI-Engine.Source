@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Python;
+using XE_Local_AI_Engine.Providers.Python.Contracts;
+using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
@@ -30,13 +33,15 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     private readonly ILogger<TrainingRuntimeService> _logger;
     private readonly ITrainingRuntimeEventPublisher _publisher;
     private readonly ITrainingRuntimePrerequisiteProbe _prerequisiteProbe;
-    private readonly ITrainingProcessRunner _processRunner;
+    private readonly IPythonToolRunner _processRunner;
     private readonly string _scriptsDirectory;
     private readonly InstalledTrainingRuntimeStore _stateStore;
     private readonly Lock _publishLock = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly Lock _stateLock = new();
     private readonly TimeProvider _timeProvider;
+    private readonly ManagedPythonToolchain _toolchain;
+    private readonly Lazy<string?> _shippedLockfileSha256;
 
     private Task? _activeTask;
     private CancellationTokenSource? _cts;
@@ -59,22 +64,24 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         : this(prerequisiteProbe,
             publisher,
             new UvBinaryAcquirer(httpClient),
-            new LinuxTrainingProcessRunner(),
+            PythonToolRunner.ForCurrentPlatform(),
             logger,
             TrainingRuntimeLayout.DefaultCacheRoot(),
             TrainingRuntimeLayout.ResolveScriptsDirectory(),
-            timeProvider)
+            timeProvider,
+            ManagedPythonToolchain.Default())
     {
     }
 
     internal TrainingRuntimeService(ITrainingRuntimePrerequisiteProbe prerequisiteProbe,
         ITrainingRuntimeEventPublisher publisher,
         UvBinaryAcquirer acquirer,
-        ITrainingProcessRunner processRunner,
+        IPythonToolRunner processRunner,
         ILogger<TrainingRuntimeService> logger,
         string cacheRoot,
         string scriptsDirectory,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ManagedPythonToolchain toolchain)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
@@ -82,11 +89,13 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(scriptsDirectory);
         _cacheRoot = cacheRoot;
         _scriptsDirectory = scriptsDirectory;
         _stateStore = new InstalledTrainingRuntimeStore(TrainingRuntimeLayout.StatePath(cacheRoot));
+        _shippedLockfileSha256 = new Lazy<string?>(ComputeShippedLockfileSha256);
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
         // Forced sync: a constructor cannot await, and the installed state must be present before the synchronous
         // public GetStatus() read can answer; there is no async initialisation seam on this service.
@@ -94,6 +103,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         _installed = _stateStore.ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
 #pragma warning restore MA0045
         _phase = _installed is not null ? TrainingRuntimePhase.Ready : TrainingRuntimePhase.Idle;
+        SweepLegacyToolchain();
     }
 
     private string WorkDirectory => Path.Combine(_cacheRoot, ".work");
@@ -215,7 +225,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 SanitizedError = _sanitizedError,
                 Installed = _installed,
                 StartedAtUtc = _startedAtUtc,
-                CompletedAtUtc = _completedAtUtc
+                CompletedAtUtc = _completedAtUtc,
+                ShippedLockfileSha256 = _shippedLockfileSha256.Value
             };
         }
     }
@@ -262,6 +273,9 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             DeleteDirectoryRequired(TrainingRuntimeLayout.VenvRoot(_cacheRoot));
             TryDeleteDirectory(WorkDirectory);
             _stateStore.Delete();
+
+            // No environment is left to point into the pre-shared-store toolchain. The shared store itself is never touched.
+            _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot);
 
             lock (_stateLock)
             {
@@ -316,10 +330,11 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     /// <remarks>
     ///     A <c>.staging</c> venv is by definition unadopted and the work tree holds nothing durable, so both go
     ///     unconditionally; a <c>.backup</c> present without an <c>active</c> means the swap died between the two
-    ///     moves, so that backup is restored rather than discarded.
+    ///     moves, so that backup is restored rather than discarded. It also retries the legacy-toolchain sweep.
     /// </remarks>
     internal void Recover()
     {
+        SweepLegacyToolchain();
         TryDeleteDirectory(WorkDirectory);
         TryDeleteDirectory(TrainingRuntimeLayout.StagingVenv(_cacheRoot));
 
@@ -359,14 +374,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             var isolatedTmp = Path.Combine(workDir, ".tmp");
             CreateOwnerOnlyDirectory(isolatedHome);
             CreateOwnerOnlyDirectory(isolatedTmp);
-            var environment = TrainingRuntimeEnvironment.BuildUvEnvironment(isolatedHome,
+            var environment = ManagedPythonEnvironment.BuildUvEnvironment(isolatedHome,
                 isolatedTmp,
-                Path.Combine(_cacheRoot, "uv-cache"),
-                Path.Combine(_cacheRoot, "pythons"));
+                _toolchain.CacheDirectory,
+                _toolchain.PythonInstallDirectory);
 
             // 1. Acquire the pinned uv (download → digest verify → atomic extract; a cache hit skips the network).
             SetPhase(TrainingRuntimePhase.AcquiringUv);
-            var uv = await _acquirer.EnsureUvAsync(_cacheRoot, AppendLog, ct).ConfigureAwait(false);
+            var uv = await _acquirer.EnsureUvAsync(_toolchain.Root, AppendLog, ct).ConfigureAwait(false);
 
             // 2. Stage the project files: uv resolves beside the pyproject it is pointed at, so the committed pair is
             //    copied into staging rather than using the shipped read-only scripts directory as a working tree.
@@ -411,8 +426,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 Directory.Move(staging, active);
                 swapped = true;
 
-                var state = new InstalledTrainingRuntimeState(TrainingRuntimePins.UvVersion,
-                    TrainingRuntimePins.UvSha256,
+                var state = new InstalledTrainingRuntimeState(ManagedPythonPins.UvVersion,
+                    ManagedPythonPins.Current.Sha256,
                     probeReport.PythonVersion ?? "unknown",
                     lockfileSha,
                     probeReport.ContractVersion,
@@ -433,6 +448,9 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 await RollbackAdoptAsync(parked, swapped, previousState, staging, active, backup).ConfigureAwait(false);
                 throw;
             }
+
+            // Strictly after Ready and outside the rollback boundary: a failed delete must never cost the adopted runtime.
+            SweepLegacyToolchain();
         }
         catch (OperationCanceledException)
         {
@@ -440,7 +458,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             TryDeleteDirectory(staging);
             await TerminalizeFailureAsync("The training runtime install was cancelled.").ConfigureAwait(false);
         }
-        catch (TrainingRuntimeException exception)
+        catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException)
         {
             _logger.LogWarning(exception, "The training runtime install failed.");
             TryDeleteDirectory(workDir);
@@ -526,6 +544,73 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         await SetTerminalAsync(TrainingRuntimePhase.Failed, sanitizedError, installed: null).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Deletes the pre-shared-store <c>uv</c>, <c>pythons</c> and <c>uv-cache</c> under the cache root once the active
+    ///     venv no longer runs on them. Idempotent, best-effort, never throws.
+    /// </summary>
+    /// <remarks>
+    ///     The only evidence trusted is positive: the active venv's <c>pyvenv.cfg</c> <c>home</c> lies under the shared
+    ///     store (uv writes <c>UV_PYTHON_INSTALL_DIR</c> verbatim there). Anything else — no venv, no <c>home</c>, a legacy
+    ///     one — leaves the legacy dirs alone: a runtime built before the store keeps working until a reinstall or remove.
+    /// </remarks>
+    internal void SweepLegacyToolchain()
+    {
+        try
+        {
+            // An unresolved .backup may be the runtime Recover() restores, and it may still run on the legacy CPython.
+            if (!ManagedPythonToolchain.HasLegacyToolchain(_cacheRoot) || Directory.Exists(TrainingRuntimeLayout.BackupVenv(_cacheRoot)))
+            {
+                return;
+            }
+
+            var home = ReadVenvHome(TrainingRuntimeLayout.ActiveVenv(_cacheRoot));
+            if (home is null || !IsUnder(home, _toolchain.PythonInstallDirectory))
+            {
+                return;
+            }
+
+            if (ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot))
+            {
+                _logger.LogInformation("Removed the training runtime's legacy uv toolchain; the runtime now uses the shared toolchain store.");
+            }
+            else
+            {
+                _logger.LogWarning("The training runtime's legacy uv toolchain could not be fully removed; nothing uses it any more.");
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "Checking the training runtime's legacy uv toolchain failed; it stays on disk.");
+        }
+    }
+
+    private static string? ReadVenvHome(string venvDirectory)
+    {
+        var config = Path.Combine(venvDirectory, ".venv", "pyvenv.cfg");
+        if (!File.Exists(config))
+        {
+            return null;
+        }
+
+        foreach (var line in File.ReadLines(config))
+        {
+            var separator = line.IndexOf('=', StringComparison.Ordinal);
+            if (separator > 0 && string.Equals(line[..separator].Trim(), "home", StringComparison.Ordinal))
+            {
+                var value = line[(separator + 1)..].Trim();
+                return value.Length > 0 && Path.IsPathFullyQualified(value) ? value : null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsUnder(string path, string directory)
+    {
+        return Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar,
+            StringComparison.Ordinal);
+    }
+
     private InstalledTrainingRuntimeState? ReadInstalledState()
     {
         lock (_stateLock)
@@ -553,6 +638,24 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
         await using var stream = new FileStream(lockfile, FileMode.Open, FileAccess.Read, FileShare.Read);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+    }
+
+    /// <summary>The shipped lockfile's digest, hashed once: the scripts directory does not change under a running process.</summary>
+    private string? ComputeShippedLockfileSha256()
+    {
+        var lockfile = Path.Combine(_scriptsDirectory, TrainingRuntimeLayout.LockfileName);
+        try
+        {
+            // Sync by contract: GetStatus() is synchronous, and this runs once per process on a file of a few hundred KB.
+#pragma warning disable MA0045
+            using var stream = new FileStream(lockfile, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
+#pragma warning restore MA0045
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     [SupportedOSPlatform("linux")]
@@ -749,6 +852,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
     private static void CreateOwnerOnlyDirectory(string path)
     {
+        // On Windows the directory inherits the per-user %LOCALAPPDATA% ACL; no ACL code of its own (ADR 0016).
         Directory.CreateDirectory(path);
         if (!OperatingSystem.IsWindows())
         {

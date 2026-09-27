@@ -4756,6 +4756,45 @@ export const zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusRe
 	endpointUrl: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse = z.object({
+	pythonMinor: z.string(),
+	profileRevision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	rid: z.string(),
+	probeContractVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	uvVersion: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResponse = z.object({
+	profileId: z.string(),
+	state: z.string(),
+	reason: z.string().nullish(),
+	installed: zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse.nullish(),
+	mismatches: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonToolchainResponse = z.object({
+	uvVersion: z.string(),
+	uvPresent: z.boolean(),
+	pythonInstalls: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse = z.object({
+	toolchain: zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonToolchainResponse,
+	environments: z.array(zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResponse),
+});
+
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = z.record(z.string(), z.never());
@@ -10830,6 +10869,21 @@ export const zGetLocalModelProxyApiKeyResponse = zXeLocalAiEngineClientEndpoints
  */
 export const zGenerateLocalModelProxyApiKeyResponse =
 	zXeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse;
+
+/**
+ * Success
+ */
+export const zRemoveComputePythonEnvironmentResponse = zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
+
+/**
+ * Success
+ */
+export const zRepairComputePythonEnvironmentResponse = zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetManagedPythonStatusResponse = zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonStatusResponse;
 
 export const zListScheduledJobsQuery = z.object({
 	includeDeleted: z.boolean(),

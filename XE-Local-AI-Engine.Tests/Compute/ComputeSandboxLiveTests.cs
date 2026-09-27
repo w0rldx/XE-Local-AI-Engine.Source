@@ -12,6 +12,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -459,10 +461,11 @@ public sealed class ComputeSandboxLiveTests : IDisposable
 
         var homeCanary = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             $".xe-compute-canary-{Guid.NewGuid():N}");
-        var dataCanary = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine",
-            "compute-runtime",
-            $"canary-{Guid.NewGuid():N}");
+        // The runtime cache the provision actually used, so an XE_RUNTIME_DATA_DIR scratch run probes its own store.
+        var runtimeCache = RuntimeCacheDirectory.Resolve();
+        var dataCanary = Path.Combine(runtimeCache, "compute-runtime", $"canary-{Guid.NewGuid():N}");
+        var uvCacheMarker = Path.Combine(runtimeCache, "python", "cache", "CACHEDIR.TAG");
+        var uvBinary = ManagedPythonPins.Current.ExecutablePath(Path.Combine(runtimeCache, "python"));
         await File.WriteAllTextAsync(homeCanary, "host-home");
         Directory.CreateDirectory(Path.GetDirectoryName(dataCanary)!);
         await File.WriteAllTextAsync(dataCanary, "host-data");
@@ -483,7 +486,8 @@ public sealed class ComputeSandboxLiveTests : IDisposable
 
                         probe("HOME_CANARY", {ToPythonLiteral(homeCanary)})
                         probe("DATA_CANARY", {ToPythonLiteral(dataCanary)})
-                        probe("UV_CACHE", {ToPythonLiteral(Path.Combine(Path.GetDirectoryName(dataCanary)!, "uv-cache"))})
+                        probe("UV_CACHE", {ToPythonLiteral(uvCacheMarker)})
+                        probe("UV_BINARY", {ToPythonLiteral(uvBinary)})
                         probe("PASSWD_SHADOW", "/etc/shadow")
                         accounts = [line.split(":")[0] for line in pathlib.Path("/etc/passwd").read_text().splitlines()]
                         print("ETC_ACCOUNTS", ",".join(sorted(accounts)))
@@ -493,9 +497,10 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             AssertEx.Contains(rendered, "exit_code: 0");
             AssertEx.Contains(rendered, "HOME_CANARY DENIED ENOENT");
             AssertEx.Contains(rendered, "DATA_CANARY DENIED ENOENT");
-            // The compute cache root is the PARENT of the two bound trees, and it also holds the uv download cache
-            // and the lockfile state. Binding it instead of its two children would have handed all of that over.
+            // The shared toolchain store is the PARENT of the bound CPython root, and it also holds the uv cache and the
+            // uv binary. Binding it instead of its pythons child would have handed both over.
             AssertEx.Contains(rendered, "UV_CACHE DENIED ENOENT");
+            AssertEx.Contains(rendered, "UV_BINARY DENIED ENOENT");
             AssertEx.Contains(rendered, "PASSWD_SHADOW DENIED ENOENT");
             // The /etc the script does see is the INVENTED one — root plus the single synthetic account the jail maps
             // — and not the machine's account database, which a plain read-only bind of the host /etc would have been.
@@ -509,6 +514,8 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             // never having written the canaries at all, which is the way a boundary assertion goes quietly green.
             AssertEx.True(File.Exists(homeCanary), "the canary must be invisible inside the sandbox, not deleted");
             AssertEx.True(File.Exists(dataCanary));
+            AssertEx.True(File.Exists(uvCacheMarker), "the provision must have populated the shared uv cache the probe is denied");
+            AssertEx.True(File.Exists(uvBinary));
         }
         finally
         {
@@ -735,10 +742,23 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         }
     }
 
+    /// <summary>This suite never removes the environment, so there is nothing for a lease to hold off.</summary>
+    private sealed class NoLease : IDisposable
+    {
+        public void Dispose()
+        {
+        }
+    }
+
     /// <summary>Records whether provisioning was asked for — the cost the early refusal exists to avoid.</summary>
     private sealed class RecordingEnvironment : IComputePythonEnvironment
     {
         public bool Requested { get; private set; }
+
+        public IDisposable AcquireExecutionLease()
+        {
+            return new NoLease();
+        }
 
         public Task<ComputePythonRuntime> GetRuntimeAsync(CancellationToken cancellationToken = default)
         {

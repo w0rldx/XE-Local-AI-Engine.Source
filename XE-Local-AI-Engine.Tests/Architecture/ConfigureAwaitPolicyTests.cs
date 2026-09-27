@@ -34,6 +34,7 @@ public sealed class ConfigureAwaitPolicyTests
         "XE-Local-AI-Engine.Providers.Ollama",
         "XE-Local-AI-Engine.Providers.OpenAICompat",
         "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+        "XE-Local-AI-Engine.Providers.Python",
         "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
         "XE-Local-AI-Engine.Providers.Training",
         "XE-Local-AI-Engine.Providers.WhisperCpp"

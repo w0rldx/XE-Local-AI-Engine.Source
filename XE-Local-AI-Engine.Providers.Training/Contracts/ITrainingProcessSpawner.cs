@@ -50,7 +50,7 @@ public sealed class TrainingSpawnRequest
 }
 
 /// <summary>
-///     A spawned, still-running trainer. Distinct from <c>ITrainingProcessRunner</c>, which is run-to-completion and
+///     A spawned, still-running trainer. Distinct from <c>IPythonToolRunner</c>, which is run-to-completion and
 ///     cannot serve a launch receipt: the receipt has to be persisted the instant the child exists, long before it
 ///     exits.
 /// </summary>
