@@ -324,6 +324,8 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(StoredNodeSettings.MaxLlamaChatCacheRamMiB, settings.MaxAllowedLlamaChatCacheRamMiB);
         AssertEx.Equal(StoredNodeSettings.MaxKnowledgeSearchResults, settings.MaxAllowedKnowledgeSearchResults);
         AssertEx.Equal(StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes, settings.MaxAllowedTranscriptionIdleTimeoutMinutes);
+        AssertEx.Equal(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, settings.MinHuggingFaceDiskMarginBytes);
+        AssertEx.Equal(StoredNodeSettings.MaxHuggingFaceDiskMarginBytes, settings.MaxAllowedHuggingFaceDiskMarginBytes);
     }
 
     [Test]
@@ -383,6 +385,26 @@ public sealed class NodeSettingsEndpointTests
         request.Content = JsonContent.Create(new SaveNodeSettingsRequest
         {
             LlamaChatCacheRamMiB = cacheRamMiB
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(0L)]
+    [Arguments(StoredNodeSettings.MaxHuggingFaceDiskMarginBytes + 1)]
+    public async Task SaveNodeSettings_WhenTheDiskMarginIsOutOfRange_ReturnsValidationProblem(long marginBytes)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            HuggingFaceDiskMarginBytes = marginBytes
         });
         using var response = await client.SendAsync(request);
 

@@ -115,7 +115,7 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
 
         RuleFor(static request => request.HuggingFaceDiskMarginBytes!.Value)
-            .GreaterThan(0)
+            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes)
             .When(static request => request.HuggingFaceDiskMarginBytes is not null);
 
         RuleFor(static request => request.OrchestrationIdleTimeoutSeconds!.Value)

@@ -991,4 +991,27 @@ describe("curated tunables", () => {
 		expect(fromServer.tunables.knowledgeSearchMaxResults).toEqual({ min: 2, max: 15 });
 		expect(bounds.tunables.llamaChatHttpTimeoutSeconds).toEqual({ min: 60, max: 86400 });
 	});
+
+	it("bounds the disk margin at 1 TiB, preferring the server's range", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		expect(bounds.huggingFaceDiskMarginBytes).toEqual({ min: 1, max: 1024 ** 4 });
+		expect(buildNodeSettingsRequest({ ...baseline, huggingFaceDiskMarginBytes: 1024 }, baseline, bounds, false).body).toEqual({
+			huggingFaceDiskMarginBytes: 1024 ** 4,
+		});
+		expect(
+			buildNodeSettingsRequest({ ...baseline, huggingFaceDiskMarginBytes: 1025 }, baseline, bounds, false).errors[
+				"huggingFaceDiskMarginBytes"
+			],
+		).toBe("range");
+
+		const fromServer = toNodeSettingsFieldBounds({
+			minHuggingFaceDiskMarginBytes: 1,
+			maxAllowedHuggingFaceDiskMarginBytes: 4 * 1024 ** 3,
+		});
+		expect(
+			buildNodeSettingsRequest({ ...baseline, huggingFaceDiskMarginBytes: 5 }, baseline, fromServer, false).errors[
+				"huggingFaceDiskMarginBytes"
+			],
+		).toBe("range");
+	});
 });

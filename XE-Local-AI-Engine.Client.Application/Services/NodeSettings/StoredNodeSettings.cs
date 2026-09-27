@@ -32,6 +32,10 @@ public sealed partial record StoredNodeSettings
 
     public const long DefaultHuggingFaceDiskMarginBytes = 1L * 1024 * 1024 * 1024;
 
+    public const long MinHuggingFaceDiskMarginBytes = 1;
+
+    public const long MaxHuggingFaceDiskMarginBytes = 1024L * 1024 * 1024 * 1024;
+
     public const int DefaultLlamaMaxLoadedProcesses = 3;
 
     public const int MinLlamaMaxLoadedProcesses = 1;

@@ -2277,6 +2277,7 @@
 					"title": "AgentHome-Arbeitsbereiche (Entwickler)"
 				},
 				"secondsShort": "s",
+				"bytesShort": "B",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome-Laufzeitlimit",
 					"description": "Die maximale Dauer eines ganzen Laufs; mindestens das Befehls-Timeout. Gilt ab dem nächsten Lauf."
@@ -2308,7 +2309,8 @@
 					"description": "Was der Modellstarter beim Dimensionieren eines Modells für den Rest des Rechners frei lässt."
 				},
 				"llamaCpuThreadReserve": {
-					"label": "Reservierte CPU-Threads"
+					"label": "Reservierte CPU-Threads",
+					"description": "Gilt nur, wenn ein Modell auf der CPU-Laufzeit läuft. Auf einer GPU-Laufzeit wählt llama.cpp die Thread-Anzahl selbst."
 				},
 				"llamaGpuReservePercent": {
 					"label": "Reservierter GPU-Speicher"

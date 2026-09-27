@@ -28,9 +28,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private const string ManagedServerFileName = "llama-server";
     private const string ManifestFileName = ".source-build-manifest.json";
 
-    // Conservative fallback compute-architecture set when nvidia-smi's compute_cap can't be read/validated. [secMED-1]
-    private const string DefaultCudaArchitectures = "75;86;89;120";
-
     // The number of streamed log lines retained for the status GET (the hub streams every line live).
     private const int LogRingCapacity = 400;
 
@@ -981,7 +978,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 ct).ConfigureAwait(false);
             if (exit != 0)
             {
-                return DefaultCudaArchitectures;
+                return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
             return ParseCudaArchitectures(output);
@@ -992,7 +989,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
         catch (Exception)
         {
-            return DefaultCudaArchitectures;
+            return SourceBuildPolicy.DefaultCudaArchitectures;
         }
     }
 
@@ -1006,19 +1003,19 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 || !int.TryParse(match.Groups["major"].Value, out var major)
                 || !int.TryParse(match.Groups["minor"].Value, out var minor))
             {
-                return DefaultCudaArchitectures;
+                return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
             var architecture = major * 10 + minor;
             if (!IsSupportedCudaArchitecture(architecture))
             {
-                return DefaultCudaArchitectures;
+                return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
             values.Add(architecture);
         }
 
-        return values.Count == 0 ? DefaultCudaArchitectures : string.Join(';', values);
+        return values.Count == 0 ? SourceBuildPolicy.DefaultCudaArchitectures : string.Join(';', values);
     }
 
     private static bool IsSupportedCudaArchitecture(int architecture)

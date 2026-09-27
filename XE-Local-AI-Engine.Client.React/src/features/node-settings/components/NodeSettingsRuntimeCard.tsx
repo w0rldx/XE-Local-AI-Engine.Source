@@ -182,6 +182,10 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						{...field}
 						field="llamaCpuThreadReserve"
 						label={t("pages.nodeSettings.fields.llamaCpuThreadReserve.label", "Reserved CPU threads")}
+						description={t(
+							"pages.nodeSettings.fields.llamaCpuThreadReserve.description",
+							"Only applies when a model runs on the CPU runtime. On a GPU runtime, llama.cpp picks its own thread count.",
+						)}
 						bounds={bounds.tunables.llamaCpuThreadReserve}
 						testId="node-settings-llama-cpu-thread-reserve"
 					/>

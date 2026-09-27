@@ -175,13 +175,25 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
-    public async Task DiskMarginBytes_NonPositive_FallsBackToNull()
+    [Arguments(0L)]
+    [Arguments(StoredNodeSettings.MaxHuggingFaceDiskMarginBytes + 1)]
+    public async Task DiskMarginBytes_OutOfRange_FallsBackToNull(long value)
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings
         {
-            HuggingFaceDiskMarginBytes = 0
+            HuggingFaceDiskMarginBytes = value
         });
         AssertEx.Null(loaded.HuggingFaceDiskMarginBytes);
+    }
+
+    [Test]
+    public async Task DiskMarginBytes_AtTheUpperBound_RoundTrips()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            HuggingFaceDiskMarginBytes = StoredNodeSettings.MaxHuggingFaceDiskMarginBytes
+        });
+        AssertEx.Equal(StoredNodeSettings.MaxHuggingFaceDiskMarginBytes, loaded.HuggingFaceDiskMarginBytes);
     }
 
     [Test]

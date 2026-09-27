@@ -293,7 +293,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             OllamaEndpoint = NormalizeAbsoluteUrl(settings.OllamaEndpoint),
             WebSearchSearxngUrl = NormalizeAbsoluteUrl(settings.WebSearchSearxngUrl),
             HuggingFaceDefaultQuant = TrimToNull(settings.HuggingFaceDefaultQuant),
-            HuggingFaceDiskMarginBytes = ClampPositiveLong(settings.HuggingFaceDiskMarginBytes),
+            HuggingFaceDiskMarginBytes = ClampToRange(settings.HuggingFaceDiskMarginBytes,
+                StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes),
             LlamaMaxLoadedProcesses = ClampToRange(settings.LlamaMaxLoadedProcesses,
                 StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses),
             LlamaIdleTimeToLiveSeconds = ClampToRange(settings.LlamaIdleTimeToLiveSeconds,
@@ -436,6 +437,16 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     private static int? ClampToRange(int? value, int min, int max)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return value < min || value > max ? null : value;
+    }
+
+    private static long? ClampToRange(long? value, long min, long max)
     {
         if (value is null)
         {

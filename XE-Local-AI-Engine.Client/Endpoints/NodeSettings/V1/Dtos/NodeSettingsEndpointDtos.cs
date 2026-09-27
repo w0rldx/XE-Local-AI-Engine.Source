@@ -199,6 +199,10 @@ public sealed record NodeSettingsResponse
 
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
+    public long MinHuggingFaceDiskMarginBytes { get; init; }
+
+    public long MaxAllowedHuggingFaceDiskMarginBytes { get; init; }
+
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
 
     public int MinOrchestrationIdleTimeoutSeconds { get; init; }

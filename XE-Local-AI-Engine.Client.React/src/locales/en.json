@@ -2277,6 +2277,7 @@
 					"title": "AgentHome workspaces (developer)"
 				},
 				"secondsShort": "s",
+				"bytesShort": "B",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome run time limit",
 					"description": "The longest a whole run may take; at least the command timeout. Applies to the next run."
@@ -2308,7 +2309,8 @@
 					"description": "What the model launcher leaves free for the rest of the machine when it sizes a model."
 				},
 				"llamaCpuThreadReserve": {
-					"label": "Reserved CPU threads"
+					"label": "Reserved CPU threads",
+					"description": "Only applies when a model runs on the CPU runtime. On a GPU runtime, llama.cpp picks its own thread count."
 				},
 				"llamaGpuReservePercent": {
 					"label": "Reserved GPU memory"

@@ -7304,6 +7304,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	rerankerModelName: z.string().nullish(),
 	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
+	minHuggingFaceDiskMarginBytes: z.int().optional(),
+	maxAllowedHuggingFaceDiskMarginBytes: z.int().optional(),
 	orchestrationIdleTimeoutSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

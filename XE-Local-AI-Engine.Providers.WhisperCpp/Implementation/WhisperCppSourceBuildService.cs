@@ -22,10 +22,6 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     private const int MaxLogLines = 500;
     private const int PublishQueueCapacity = 128;
 
-    // Conservative fallback set when nvidia-smi's compute_cap cannot be read or validated, matching the llama.cpp
-    // managed build's choice so two managed lanes on one box do not disagree about what they target.
-    private const string DefaultCudaArchitectures = "75;86;89;120";
-
     private static readonly string[] GitHardeningArguments =
     [
         "-c", "protocol.allow=never",
@@ -442,7 +438,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         ];
         if (backend == WhisperBackend.Cuda)
         {
-            arguments.Add($"-DCMAKE_CUDA_ARCHITECTURES={cudaArchitectures ?? DefaultCudaArchitectures}");
+            arguments.Add($"-DCMAKE_CUDA_ARCHITECTURES={cudaArchitectures ?? SourceBuildPolicy.DefaultCudaArchitectures}");
         }
 
         return arguments;
@@ -506,19 +502,19 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 || !int.TryParse(match.Groups["major"].Value, out var major)
                 || !int.TryParse(match.Groups["minor"].Value, out var minor))
             {
-                return DefaultCudaArchitectures;
+                return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
             var architecture = (major * 10) + minor;
             if (!IsSupportedCudaArchitecture(architecture))
             {
-                return DefaultCudaArchitectures;
+                return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
             _ = values.Add(architecture);
         }
 
-        return values.Count == 0 ? DefaultCudaArchitectures : string.Join(';', values);
+        return values.Count == 0 ? SourceBuildPolicy.DefaultCudaArchitectures : string.Join(';', values);
     }
 
     private async Task<BuildCompletion> RunBuildAsync(WhisperCppSourceBuildDescriptor descriptor, CancellationToken ct)
@@ -689,7 +685,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                                           captureOutput: true,
                                           ct)
                                       .ConfigureAwait(false);
-            return result.ExitCode == 0 ? ParseCudaArchitectures(result.StandardOutput) : DefaultCudaArchitectures;
+            return result.ExitCode == 0 ? ParseCudaArchitectures(result.StandardOutput) : SourceBuildPolicy.DefaultCudaArchitectures;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -698,7 +694,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         catch (Exception exception) when (exception is TimeoutException or IOException or InvalidOperationException)
         {
             // A driver probe that cannot answer is not a reason to fail a build: the conservative set still compiles.
-            return DefaultCudaArchitectures;
+            return SourceBuildPolicy.DefaultCudaArchitectures;
         }
     }
 

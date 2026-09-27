@@ -4650,6 +4650,8 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	rerankerModelName?: string | null;
 	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
+	minHuggingFaceDiskMarginBytes?: number;
+	maxAllowedHuggingFaceDiskMarginBytes?: number;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	minOrchestrationIdleTimeoutSeconds?: number;
 	maxAllowedOrchestrationIdleTimeoutSeconds?: number;

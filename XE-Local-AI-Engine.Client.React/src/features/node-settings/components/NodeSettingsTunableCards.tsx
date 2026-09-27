@@ -134,9 +134,9 @@ export function NodeSettingsDownloadLimitsCard({ bounds, ...field }: NodeSetting
 					"pages.nodeSettings.fields.huggingFaceDiskMarginBytes.description",
 					"A download is refused if it would leave less free space than this.",
 				)}
-				bounds={{ min: 0, max: Number.MAX_SAFE_INTEGER }}
+				bounds={bounds.huggingFaceDiskMarginBytes}
 				unit="GB"
-				hideRange={true}
+				wireUnit={t("pages.nodeSettings.fields.bytesShort", "B")}
 				testId="node-settings-hf-disk-margin"
 			/>
 		</TunableCard>

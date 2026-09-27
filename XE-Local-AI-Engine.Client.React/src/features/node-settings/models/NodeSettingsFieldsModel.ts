@@ -59,6 +59,7 @@ const nodeSettingsFieldBounds = {
 	transcriptionInferenceTimeoutMinutes: { min: 1, max: 480 },
 	agentHomeMaxRunSeconds: { min: 60, max: 86400 },
 	agentHomeRunRetentionDays: { min: 1, max: 365 },
+	huggingFaceDiskMarginBytes: { min: 1, max: 1024 ** 4 },
 } as const satisfies Record<string, NumericBounds>;
 
 // Speculative-decoding modes, each mapped to its capability class — mirrors the backend SpeculativeModeClass, and the
@@ -552,6 +553,7 @@ export interface NodeSettingsFieldBounds {
 	readonly llamaChatCacheRamMiB: NumericBounds;
 	readonly agentHomeMaxRunSeconds: NumericBounds;
 	readonly agentHomeRunRetentionDays: NumericBounds;
+	readonly huggingFaceDiskMarginBytes: NumericBounds;
 	readonly tunables: Readonly<Record<TunableField, NumericBounds>>;
 }
 
@@ -562,6 +564,7 @@ const responseBoundKeys = {
 	llamaChatCacheRamMiB: ["minLlamaChatCacheRamMiB", "maxAllowedLlamaChatCacheRamMiB"],
 	agentHomeMaxRunSeconds: ["minAgentHomeMaxRunSeconds", "maxAllowedAgentHomeMaxRunSeconds"],
 	agentHomeRunRetentionDays: ["minAgentHomeRunRetentionDays", "maxAllowedAgentHomeRunRetentionDays"],
+	huggingFaceDiskMarginBytes: ["minHuggingFaceDiskMarginBytes", "maxAllowedHuggingFaceDiskMarginBytes"],
 	llamaReadinessTimeoutCapSeconds: ["minLlamaReadinessTimeoutCapSeconds", "maxAllowedLlamaReadinessTimeoutCapSeconds"],
 	llamaChatHttpTimeoutSeconds: ["minLlamaChatHttpTimeoutSeconds", "maxAllowedLlamaChatHttpTimeoutSeconds"],
 	llamaEmbeddingHttpTimeoutSeconds: ["minLlamaEmbeddingHttpTimeoutSeconds", "maxAllowedLlamaEmbeddingHttpTimeoutSeconds"],
@@ -649,6 +652,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 		llamaChatCacheRamMiB: responseBounds(response, "llamaChatCacheRamMiB"),
 		agentHomeMaxRunSeconds: responseBounds(response, "agentHomeMaxRunSeconds"),
 		agentHomeRunRetentionDays: responseBounds(response, "agentHomeRunRetentionDays"),
+		huggingFaceDiskMarginBytes: responseBounds(response, "huggingFaceDiskMarginBytes"),
 		tunables: Object.fromEntries(tunableFields.map((field) => [field, responseBounds(response, field)])) as Record<
 			TunableField,
 			NumericBounds
@@ -1035,10 +1039,12 @@ export function buildNodeSettingsRequest(
 		);
 	}
 
-	collectPositiveLong(
+	collectBoundedInt(
 		form.huggingFaceDiskMarginBytes,
 		baseline.huggingFaceDiskMarginBytes,
+		bounds.huggingFaceDiskMarginBytes,
 		"huggingFaceDiskMarginBytes",
+		body,
 		errors,
 		(v) => {
 			body.huggingFaceDiskMarginBytes = v;

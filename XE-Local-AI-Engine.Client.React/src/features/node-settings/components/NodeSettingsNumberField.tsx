@@ -31,8 +31,6 @@ interface Props {
 	readonly errors: Readonly<Record<string, string>>;
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 	readonly disabled?: boolean;
-	// For a field with no meaningful upper bound (a positive size): no range sentence and no max.
-	readonly hideRange?: boolean;
 	readonly testId: string;
 }
 
@@ -48,12 +46,11 @@ export function NodeSettingsNumberField({
 	errors,
 	onChange,
 	disabled,
-	hideRange = false,
 	testId,
 }: Props) {
 	const { t } = useTranslation();
 	const scale = nodeSettingsScaleOf(field);
-	const range = hideRange ? "" : nodeSettingsAllowedRange(t, bounds, unit, scale, wireUnit);
+	const range = nodeSettingsAllowedRange(t, bounds, unit, scale, wireUnit);
 
 	return (
 		<NumberInput
@@ -61,7 +58,7 @@ export function NodeSettingsNumberField({
 			description={description === undefined ? range : [range, description].filter((part) => part !== "").join(" ")}
 			suffix={unit === "" ? undefined : unit === "%" ? " %" : ` ${unit}`}
 			min={bounds.min / scale}
-			max={hideRange ? undefined : bounds.max / scale}
+			max={bounds.max / scale}
 			allowDecimal={scale !== 1}
 			decimalScale={scale === 1 ? undefined : 2}
 			disabled={disabled}

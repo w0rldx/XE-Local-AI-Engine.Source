@@ -41289,6 +41289,12 @@
             "type": "integer",
             "nullable": true
           },
+          "minHuggingFaceDiskMarginBytes": {
+            "type": "integer"
+          },
+          "maxAllowedHuggingFaceDiskMarginBytes": {
+            "type": "integer"
+          },
           "orchestrationIdleTimeoutSeconds": {
             "type": "integer",
             "format": "int32",

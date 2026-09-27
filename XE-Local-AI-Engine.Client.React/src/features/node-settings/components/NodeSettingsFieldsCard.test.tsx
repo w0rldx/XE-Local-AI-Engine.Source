@@ -2,6 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -15,6 +16,7 @@ import {
 	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
+import { nonEnglishLocales } from "@/test/Locales";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation applied) so the human copy is
@@ -593,6 +595,9 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 	it("shows the disk margin in GB and the chat request timeout in minutes", () => {
 		renderCard({ section: "models" });
 		expect((screen.getByTestId("node-settings-hf-disk-margin") as HTMLInputElement).value).toBe("1 GB");
+		expect(
+			screen.getByText("Allowed range: 1 B–1024 GB. A download is refused if it would leave less free space than this."),
+		).toBeTruthy();
 		cleanup();
 
 		renderCard({ section: "runtime" });
@@ -600,5 +605,17 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 		expect(
 			screen.getByText("Allowed range: 1–1440 minutes. The network timeout for one chat request to llama-server."),
 		).toBeTruthy();
+		// The real i18next instance (initialised in setup) holds the shipped bundles; react-i18next is mocked above.
+		const cpuReserveKey = "pages.nodeSettings.fields.llamaCpuThreadReserve.description";
+		const cpuReserveEn = i18next.getFixedT("en")(cpuReserveKey);
+		expect(cpuReserveEn).toBe(
+			"Only applies when a model runs on the CPU runtime. On a GPU runtime, llama.cpp picks its own thread count.",
+		);
+		// Only en is loaded into the test instance; de is read from its shipped bundle file.
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
+		expect(cpuReserveKey.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], de)).toBe(
+			"Gilt nur, wenn ein Modell auf der CPU-Laufzeit läuft. Auf einer GPU-Laufzeit wählt llama.cpp die Thread-Anzahl selbst.",
+		);
+		expect(screen.getByText(`Allowed range: 0–64. ${cpuReserveEn}`)).toBeTruthy();
 	});
 });

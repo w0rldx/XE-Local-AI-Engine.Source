@@ -64,6 +64,8 @@ internal static class NodeSettingsEndpointDtoMapper
             RerankerModelName = settings.RerankerModelName,
             AutoEffortFastModelName = settings.AutoEffortFastModelName,
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
+            MinHuggingFaceDiskMarginBytes = StoredNodeSettings.MinHuggingFaceDiskMarginBytes,
+            MaxAllowedHuggingFaceDiskMarginBytes = StoredNodeSettings.MaxHuggingFaceDiskMarginBytes,
             OrchestrationIdleTimeoutSeconds = settings.OrchestrationIdleTimeoutSeconds,
             MinOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds,
             MaxAllowedOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds,
