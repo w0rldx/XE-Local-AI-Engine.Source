@@ -78,6 +78,9 @@ export interface SendMessageRequest {
 	attachmentFileIds?: string[];
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields null.
 	samplingOptions?: WireSamplingOptions;
+	// The conversation's web content review mode: true lets web_fetch/web_search results reach the model unreviewed.
+	// Omitted when off (the server default), keeping the wire payload byte-identical to the review path.
+	autoAcceptWebContent?: boolean;
 }
 
 export interface NodeChatAdapter {
@@ -129,6 +132,8 @@ export interface NodeChatAdapter {
 		// Developer-mode per-turn sampling overrides, the same ones a send carries. Undefined when developer mode is
 		// off or nothing is set — the hub then receives null and the rerun keeps the model defaults.
 		samplingOptions: WireSamplingOptions | undefined,
+		// The conversation's web content review mode (true = results reach the model without a review card).
+		autoAcceptWebContent: boolean,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
 	resumeConversation(conversationId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
@@ -156,6 +161,7 @@ export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequ
 		attachmentFileIds: request.attachmentFileIds && request.attachmentFileIds.length > 0 ? request.attachmentFileIds : undefined,
 		// Forward sampling overrides only when present; omitted when developer mode is off or nothing set.
 		samplingOptions: request.samplingOptions,
+		autoAcceptWebContent: request.autoAcceptWebContent === true ? true : undefined,
 	};
 }
 
@@ -325,13 +331,15 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		useKnowledgeBase,
 		selectedPath,
 		samplingOptions,
+		autoAcceptWebContent,
 		signal,
 	) {
 		// Server mints the sibling variant + drives the run (assistant revision flow); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
 		// current reasoning + local-tools + knowledge-base selection, the active conversation-tree path, and the
 		// developer-mode sampling overrides via the hub args (RegenerateMessage(conversationId, messageId, effort,
-		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions)). Absent selection/overrides ride as null.
+		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent)). Absent selection/overrides
+		// ride as null. The hub binds by position and count, so the web review mode is always sent; false = review.
 		return guardNodeChatStream(
 			streamNodeChatEvents(
 				{
@@ -344,6 +352,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 						useKnowledgeBase,
 						selectedPath ?? null,
 						samplingOptions ?? null,
+						autoAcceptWebContent,
 					],
 				},
 				signal,

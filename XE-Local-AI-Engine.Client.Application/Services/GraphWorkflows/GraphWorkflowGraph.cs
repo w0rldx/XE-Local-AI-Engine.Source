@@ -64,7 +64,7 @@ internal sealed class GraphWorkflowGraph
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput"],
         [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions", "publishToChat", "includeAttachments"],
-        [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings"],
+        [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings", "allowedUrls"],
         [GraphWorkflowNodeKind.Condition] = ["path"],
         [GraphWorkflowNodeKind.Parallel] = [],
         [GraphWorkflowNodeKind.Join] = [],
@@ -559,7 +559,10 @@ internal sealed class GraphWorkflowGraph
             },
             GraphWorkflowNodeKind.Tool => new GraphWorkflowToolConfig(RequiredString(config, "toolName", owner),
                 OptionalObject(config, "arguments", nodeKey),
-                ParseArgumentBindings(config, nodeKey)),
+                ParseArgumentBindings(config, nodeKey))
+            {
+                AllowedUrls = ParseAllowedUrls(config, nodeKey)
+            },
             GraphWorkflowNodeKind.Condition => new GraphWorkflowConditionConfig(ParseDotPath(config, "path", nodeKey)),
             GraphWorkflowNodeKind.Pause => new GraphWorkflowPauseConfig(RequiredString(config, "prompt", owner),
                 ParseAllowedDecisions(config, nodeKey),
@@ -679,6 +682,25 @@ internal sealed class GraphWorkflowGraph
         return string.Equals(type, "object", StringComparison.Ordinal)
             ? schema
             : throw new GraphWorkflowValidationException($"The 'responseJsonSchema' on node '{nodeKey}' must be an object schema — its 'type' must be \"object\".");
+    }
+
+    /// <summary>
+    ///     A Tool node's <c>allowedUrls</c>: an array of strings, trimmed. Only its shape is checked here; what a valid
+    ///     entry is, and which tool may carry the list at all, is <c>GraphWorkflowToolGate</c>'s keyed answer.
+    /// </summary>
+    private static IReadOnlyList<string> ParseAllowedUrls(JsonElement config, string nodeKey)
+    {
+        if (!config.TryGetProperty("allowedUrls", out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return [];
+        }
+
+        if (value.ValueKind != JsonValueKind.Array || value.EnumerateArray().Any(static entry => entry.ValueKind != JsonValueKind.String))
+        {
+            throw new GraphWorkflowValidationException($"The 'allowedUrls' on node '{nodeKey}' must be an array of URL strings.");
+        }
+
+        return [.. value.EnumerateArray().Select(static entry => entry.GetString()!.Trim())];
     }
 
     private static IReadOnlyDictionary<string, string> ParseArgumentBindings(JsonElement config, string nodeKey) =>

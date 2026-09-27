@@ -44,6 +44,29 @@ export interface NodeChatStreamRequestDto {
 		stop?: string[];
 		numCtx?: number;
 	};
+	// The conversation's web result review mode (PLAN web-access §1.6): true lets retrieved web content reach the model
+	// without a review card. Absent/false = review. Hand-typed SignalR stream DTO field (not generated).
+	autoAcceptWebContent?: boolean;
+}
+
+export interface NodeChatWebSearchResultDto {
+	title: string;
+	url: string;
+	snippet: string;
+}
+
+// `web_fetch` fills the page fields; `web_search` fills `backend` and `results`. All but `toolName` and `url` are
+// server-controlled text.
+export interface NodeChatWebReviewPreviewDto {
+	toolName: string;
+	url?: string | null;
+	finalUrl?: string | null;
+	title?: string | null;
+	contentType?: string | null;
+	truncated?: boolean | null;
+	text?: string | null;
+	backend?: string | null;
+	results?: NodeChatWebSearchResultDto[] | null;
 }
 
 export interface NodeChatStreamEventDto {
@@ -115,6 +138,10 @@ export interface NodeChatStreamEventDto {
 	// runner answers from the same memo-key resolution that would honour the decision, so it sees the per-call
 	// narrowings the tool catalog cannot — `ToolCallCard` prefers it and falls back to the catalog flag when absent.
 	sessionScopeEligible?: boolean | null;
+	// The web result review preview: present on an `approval-requested` event for `web_fetch`/`web_search` only, and on
+	// its reconnect replay. Display data for the user (never the fenced model text); Accept = approve, Reject = deny, and
+	// the card must not offer approve-for-session (`sessionScopeEligible` is false).
+	webReview?: NodeChatWebReviewPreviewDto | null;
 	// The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
 	// timeout" as the backend resolved it into the run's TimeoutSettings.InvocationTimeoutSeconds. Present on
 	// `assistant-queued` and `assistant-streaming` only. `NodeChatStreamGuard` is the only reader: it derives its own

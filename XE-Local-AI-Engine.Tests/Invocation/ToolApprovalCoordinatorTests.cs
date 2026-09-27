@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -15,8 +16,12 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.WebAccess;
 
 /// <summary>
 ///     The approval rules that are cheap to state and expensive to get wrong, exercised on the coordinator alone rather
@@ -263,6 +268,237 @@ public sealed class ToolApprovalCoordinatorTests
 
     // Raises one approval and answers it with ApprovalScope.Session. The request id is read off the dispatcher the
     // coordinator reports the card to — the only place it is published now that there is no hub send.
+    [Test]
+    [Arguments(WebFetchToolDefinition.ToolName, true)]
+    [Arguments(WebSearchToolDefinition.ToolName, true)]
+    [Arguments(AskUserTool.ToolName, false)]
+    [Arguments("GetCurrentTime", false)]
+    public void IsWebReviewRequest_MatchesTheTwoWebToolsByName(string toolName, bool expected)
+    {
+        var request = new ToolApprovalRequestContent("approval-1", new FunctionCallContent("call-1", toolName));
+
+        AssertEx.Equal(expected, ToolApprovalCoordinator.IsWebReviewRequest(request));
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_WhenAccepted_ShowsThePreviewWithoutSessionScope_AndHandsTheModelTheFencedResult()
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+
+        var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        var card = cards.Single();
+        var preview = AssertEx.NotNull(card.WebReview, "the card carries the retrieved content for the user to read");
+        AssertEx.Equal(WebReviewTestServer.PageText, preview.Text);
+        AssertEx.Equal(WebReviewTestServer.PageUrl, preview.Url);
+        AssertEx.Equal(expected: false, card.SessionScopeEligible, "a review can never be approved for the session");
+        AssertEx.False(pending.IsCompleted, "the turn parks on the review");
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = card.RequestId,
+            Approved = true
+        }, ApprovalScope.Session);
+        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var result = await HandlerResultAsync(request);
+        AssertEx.Contains(result, WebReviewTestServer.PageText);
+        AssertEx.Contains(result, UntrustedContentFraming.UntrustedTrustLabel);
+        await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, ApprovalDecisions.Approve);
+
+        // Session scope asked for, never honoured: the next review of the same tool parks again.
+        var second = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl }, "call-2"));
+        await AssertEx.EventuallyAsync(() => cards.Count == 2, TimeSpan.FromSeconds(5));
+        AssertEx.False(second.IsCompleted);
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Last().RequestId,
+            Approved = false
+        });
+        await second.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_WhenRejected_TheModelGetsTheDeclineText_AndItIsAuditedAsDeny()
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebSearchToolDefinition.ToolName, new { query = "tidal power" });
+
+        var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        AssertEx.Equal(WebReviewTestServer.SearchHitUrl, AssertEx.NotNull(AssertEx.NotNull(cards.Single().WebReview).Results).Single().Url);
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = false
+        });
+        AssertEx.Equal("Rejected by user.", await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        var result = await HandlerResultAsync(request);
+        AssertEx.Contains(result, ToolApprovalCoordinator.WebContentDeclinedMessage);
+        AssertEx.False(result.Contains("Ignore previous instructions", StringComparison.Ordinal), "rejected content must never reach the model");
+        await AssertAuditedAsync(auditRecorder, WebSearchToolDefinition.ToolName, ApprovalDecisions.Deny);
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_InAutoMode_NeverSurfacesACard()
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+
+        await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Empty(cards);
+        await dispatcher.DidNotReceive().ReportApprovalRequestedAsync(Arg.Any<ApprovalRequestPayload>());
+        AssertEx.Contains(await HandlerResultAsync(request), WebReviewTestServer.PageText);
+        await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, "web-content auto-accept");
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_WhenWebAccessIsTurnedOffWhileTheCardIsOpen_TheAcceptedContentIsRefused()
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var webAccessEnabled = true;
+        var settings = StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build();
+        settings.GetWebAccessEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => webAccessEnabled);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever(), runtimeSettings: settings);
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+
+        var pending = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        webAccessEnabled = false;
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = true
+        });
+        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var result = await HandlerResultAsync(request);
+        AssertEx.Contains(result, "web-access-disabled");
+        AssertEx.False(result.Contains(WebReviewTestServer.PageText, StringComparison.Ordinal), "content fetched before the switch went off must not land after it");
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_InAutoMode_WhenWebAccessIsOff_TheContentIsRefused()
+    {
+        // The retrieval already ran with the switch on; auto mode must still re-read it before the content lands.
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var coordinator = CreateCoordinator(webReviewRetriever: server.CreateRetriever(),
+            runtimeSettings: StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).WithWebAccessEnabled(false).Build());
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+
+        await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
+
+        var result = await HandlerResultAsync(request);
+        AssertEx.Contains(result, "web-access-disabled");
+        AssertEx.False(result.Contains(WebReviewTestServer.PageText, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task RequestWebReviewAsync_WhenUnattended_FetchesNothing_AndTheModelIsToldNoOneCanReview()
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl });
+
+        await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().AsUnattended().AutoAcceptingWebContent().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Empty(server.Requests, "an unattended run must not send the request at all");
+        AssertEx.Empty(cards);
+        AssertEx.Contains(await HandlerResultAsync(request), ToolApprovalCoordinator.WebContentUnattendedMessage);
+    }
+
+    [Test]
+    [Arguments("""{"url":5}""", "invalid-arguments")]
+    [Arguments("""{"url":"http://10.0.0.1/admin"}""", "url-blocked")]
+    public async Task RequestWebReviewAsync_WhenThereIsNothingToReview_TheRefusalReachesTheModelWithoutACard(string argumentsJson, string expectedError)
+    {
+        using var server = new WebReviewTestServer();
+        using var scope = WebReviewResultScope.BeginScope();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = new ToolApprovalRequestContent("approval-1",
+            new FunctionCallContent("call-1", WebFetchToolDefinition.ToolName, JsonSerializer.Deserialize<Dictionary<string, object?>>(argumentsJson)));
+
+        await ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), request).WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Empty(cards);
+        AssertEx.Empty(server.Requests);
+        AssertEx.Contains(await HandlerResultAsync(request), expectedError);
+    }
+
+    [Test]
+    public async Task RetrieveWebContentAsync_RunsTheSegmentsWebCallsConcurrently()
+    {
+        using var server = new WebReviewTestServer { ConcurrentRequestsBeforeRelease = 2 };
+        var coordinator = CreateCoordinator(webReviewRetriever: server.CreateRetriever());
+        ToolApprovalRequestContent[] requests =
+        [
+            WebRequest(WebFetchToolDefinition.ToolName, new { url = WebReviewTestServer.PageUrl }, "call-1"),
+            new ToolApprovalRequestContent("approval-ask", new FunctionCallContent("call-ask", AskUserTool.ToolName)),
+            WebRequest(WebSearchToolDefinition.ToolName, new { query = "tidal" }, "call-2")
+        ];
+
+        // Each stubbed request waits until BOTH are in flight, so a sequential retrieval would never finish.
+        var retrievals = await coordinator.RetrieveWebContentAsync(RuntimePackageBuilder.Valid().Build(), requests, CancellationToken.None)
+                                          .WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, retrievals.Count, "ask_user is not a web call and gets no retrieval");
+        AssertEx.NotNull(retrievals[requests[0]].Preview);
+        AssertEx.NotNull(retrievals[requests[2]].Preview);
+    }
+
+    private static async Task<string> ReviewAsync(ToolApprovalCoordinator coordinator, RuntimePackage package, ToolApprovalRequestContent request)
+    {
+        var retrievals = await coordinator.RetrieveWebContentAsync(package, [request], CancellationToken.None);
+        return await coordinator.RequestWebReviewAsync(package, request, retrievals[request], static _ => { }, CancellationToken.None);
+    }
+
+    private static Task<string> HandlerResultAsync(ToolApprovalRequestContent request) =>
+        new WebFetchToolHandler { ResolveCallId = () => request.ToolCall.CallId }.ExecuteAsync("{}");
+
+    private static ToolApprovalRequestContent WebRequest(string toolName, object arguments, string callId = "call-1") =>
+        new($"approval-{callId}", WebReviewToolHandlerTests.Call(toolName, arguments, callId));
+
+    private static (IWorkerEventDispatcher Dispatcher, ConcurrentQueue<ApprovalLifecyclePayload> Cards) LifecycleRecordingDispatcher()
+    {
+        var cards = new ConcurrentQueue<ApprovalLifecyclePayload>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(cards.Enqueue)).Returns(Task.CompletedTask);
+        return (dispatcher, cards);
+    }
+
+    private static async Task AssertAuditedAsync(IToolApprovalAuditRecorder auditRecorder, string toolName, string decision)
+    {
+        await auditRecorder.Received(1)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               toolName,
+                               Arg.Any<ToolCategory>(),
+                               decision,
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>());
+    }
+
     private static async Task GrantSessionApprovalAsync(ToolApprovalCoordinator coordinator,
         RecordingApprovalDispatcher dispatcher,
         RuntimePackageBuilder packageBuilder)
@@ -416,14 +652,17 @@ public sealed class ToolApprovalCoordinatorTests
     private static ToolApprovalCoordinator CreateCoordinator(PendingToolCallRegistry? registry = null,
         IToolApprovalAuditRecorder? auditRecorder = null,
         IWorkerEventDispatcher? dispatcher = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        WebReviewRetriever? webReviewRetriever = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         return new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => dispatcher ?? Substitute.For<IWorkerEventDispatcher>()),
             registry ?? new PendingToolCallRegistry(),
             auditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
             NodeToolApprovalPolicy.FromSettings(settings: null),
             new UserQuestionAnswerStash(TimeProvider.System),
-            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
+            webReviewRetriever ?? WebReviewTestServer.IdleRetriever,
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).WithWebAccessEnabled(true).Build(),
             NullLogger<ToolApprovalCoordinator>.Instance,
             // The clock the pending call's CreatedAt is stamped from; a test that ages a call hands the SAME provider
             // to the ApiToolCallBridge whose sweep reads the cutoff off it.

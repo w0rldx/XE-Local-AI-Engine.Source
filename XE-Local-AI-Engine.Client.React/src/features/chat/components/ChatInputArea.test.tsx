@@ -10,6 +10,14 @@ import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapability
 import type { ChatUiCapabilities, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
+// The web review switch reads node settings and tutorial state through TanStack Query; its own behaviour is covered in
+// WebContentAutoAcceptToggle.test.tsx. Here it is a marker, so these tests can assert WHERE the composer places it.
+vi.mock("@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle", () => ({
+	WebContentAutoAcceptToggle: ({ conversationId }: { conversationId: string }) => (
+		<span data-testid="chat-web-auto-accept-slot" data-conversation-id={conversationId} />
+	),
+}));
+
 function renderWithProviders(ui: ReactElement) {
 	return render(
 		<MantineProvider env="test" theme={testMantineTheme}>
@@ -134,6 +142,35 @@ describe("ChatInputArea local tools toggle", () => {
 		);
 
 		expect(screen.getByTestId("chat-local-tools-toggle").getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("offers the web content review mode for the open conversation only while local tools are on", () => {
+		const { rerender } = renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				conversationId="conversation-7"
+				toolsEnabled={false}
+				onToggleTools={vi.fn()}
+			/>,
+		);
+		expect(screen.queryByTestId("chat-web-auto-accept-slot")).toBeNull();
+
+		rerender(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<ChatInputArea
+					{...baseProps()}
+					capabilities={toolsCapabilities()}
+					activeModelToolCapable={true}
+					conversationId="conversation-7"
+					toolsEnabled={true}
+					onToggleTools={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		expect(screen.getByTestId("chat-web-auto-accept-slot").getAttribute("data-conversation-id")).toBe("conversation-7");
 	});
 
 	it("disables the toggle while a message is sending", () => {

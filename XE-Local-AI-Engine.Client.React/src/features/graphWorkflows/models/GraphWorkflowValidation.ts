@@ -704,22 +704,87 @@ export const llmCallConfigSchema = z.object({
 		}),
 });
 
-export const toolConfigSchema = z.object({
-	toolName: z
-		.string()
-		.nullable()
-		.refine((value) => (value ?? "").trim().length > 0, { message: messageKey("toolName", "required") }),
-	argumentsJson: jsonObjectText("argumentsJson"),
-	argumentBindings: z.array(
-		z.object({
-			parameter: z.string(),
-			path: z
-				.string()
-				.trim()
-				.min(1, { message: messageKey("argumentBindings", "pathRequired") }),
-		}),
-	),
-});
+/** The one tool a Tool node may run against a link allow-list (ADR 0017); the server's save gate says the same. */
+export const webFetchToolName = "web_fetch";
+
+/** An absolute http or https URL, parsed; `undefined` for anything else. */
+function parseHttpUrl(value: string): URL | undefined {
+	try {
+		const url = new URL(value.trim());
+		return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** An allowed link as the server's gate reads it: an absolute http or https URL. */
+function isHttpUrl(value: string): boolean {
+	return parseHttpUrl(value) !== undefined;
+}
+
+/**
+ * `WebFetchService.IsAllowed`: same scheme, host and port, and a path under an entry's path on a segment boundary, so
+ * "/docs" admits "/docs" and "/docs/x" but not "/docs-private".
+ */
+function isUnderAllowedUrl(url: URL, allowedUrls: readonly string[]): boolean {
+	return allowedUrls.some((entry) => {
+		const allowed = parseHttpUrl(entry);
+		if (!allowed || allowed.protocol !== url.protocol || allowed.hostname !== url.hostname || allowed.port !== url.port) {
+			return false;
+		}
+		const prefix = allowed.pathname;
+		const path = url.pathname;
+		return path.startsWith(prefix) && (path.length === prefix.length || prefix.endsWith("/") || path[prefix.length] === "/");
+	});
+}
+
+/** The literal `url` argument the author typed, or `undefined` when there is none (or the JSON does not parse). */
+function literalUrlArgument(argumentsJson: string | null | undefined): { value: unknown } | undefined {
+	try {
+		const parsed: unknown = JSON.parse((argumentsJson ?? "").trim());
+		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) && "url" in parsed
+			? { value: (parsed as { url: unknown }).url }
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+export const toolConfigSchema = z
+	.object({
+		toolName: z
+			.string()
+			.nullable()
+			.refine((value) => (value ?? "").trim().length > 0, { message: messageKey("toolName", "required") }),
+		argumentsJson: jsonObjectText("argumentsJson"),
+		argumentBindings: z.array(
+			z.object({
+				parameter: z.string(),
+				path: z
+					.string()
+					.trim()
+					.min(1, { message: messageKey("argumentBindings", "pathRequired") }),
+			}),
+		),
+		allowedUrls: z.array(z.string()),
+	})
+	.superRefine((node, context) => {
+		// Mirrors the save gate's web_fetch rules so the node shows them before a save round-trip does.
+		if (node.toolName !== webFetchToolName) {
+			return;
+		}
+		if (node.allowedUrls.length === 0) {
+			context.addIssue({ code: "custom", path: ["allowedUrls"], message: messageKey("allowedUrls", "required") });
+		} else if (!node.allowedUrls.every(isHttpUrl)) {
+			context.addIssue({ code: "custom", path: ["allowedUrls"], message: messageKey("allowedUrls", "invalid") });
+		} else {
+			const literal = literalUrlArgument(node.argumentsJson);
+			const url = typeof literal?.value === "string" ? parseHttpUrl(literal.value) : undefined;
+			if (literal && !(url && isUnderAllowedUrl(url, node.allowedUrls))) {
+				context.addIssue({ code: "custom", path: ["allowedUrls"], message: messageKey("allowedUrls", "literalUrlNotAllowed") });
+			}
+		}
+	});
 
 export const conditionConfigSchema = z.object({ path: optionalDotPath("path") });
 

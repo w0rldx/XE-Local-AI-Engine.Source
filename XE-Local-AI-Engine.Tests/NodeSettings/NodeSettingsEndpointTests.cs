@@ -765,6 +765,52 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public void NodeSettings_WebAccessFields_RoundTripKeepAndClear()
+    {
+        var stored = new SaveNodeSettingsRequest
+        {
+            WebAccessEnabled = true,
+            WebSearchSearxngUrl = "  https://searx.example.org/  "
+        }.ToStoredSettings(new StoredNodeSettings());
+
+        AssertEx.Equal(expected: true, stored.WebAccessEnabled);
+        AssertEx.Equal("https://searx.example.org/", stored.WebSearchSearxngUrl);
+        var response = stored.ToResponse();
+        AssertEx.Equal(expected: true, response.WebAccessEnabled);
+        AssertEx.Equal("https://searx.example.org/", response.WebSearchSearxngUrl);
+
+        // Omitted on a later save: both kept. ToStoredSettings builds a FRESH record, so an omission here would erase them.
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal(expected: true, merged.WebAccessEnabled);
+        AssertEx.Equal("https://searx.example.org/", merged.WebSearchSearxngUrl);
+
+        // An empty string clears the URL (Normalize maps blank to null), and false turns web access off.
+        var cleared = new SaveNodeSettingsRequest
+        {
+            WebAccessEnabled = false,
+            WebSearchSearxngUrl = string.Empty
+        }.ToStoredSettings(stored);
+        AssertEx.Equal(expected: false, cleared.WebAccessEnabled);
+        AssertEx.Equal(string.Empty, cleared.WebSearchSearxngUrl);
+    }
+
+    [Test]
+    [Arguments("not a url", false)]
+    [Arguments("ftp://searx.example.org", false)]
+    [Arguments("https://searx.example.org", true)]
+    [Arguments("http://127.0.0.1:8888", true)]
+    [Arguments("", true)]
+    public void SaveNodeSettings_SearxngUrlValidation(string url, bool expectedValid)
+    {
+        var result = new SaveNodeSettingsRequestValidator().Validate(new SaveNodeSettingsRequest
+        {
+            WebSearchSearxngUrl = url
+        });
+
+        AssertEx.Equal(expectedValid, result.IsValid);
+    }
+
+    [Test]
     public void SaveNodeSettings_UsageRateValidation_RejectsNegativeAndBlank_AcceptsValid()
     {
         // Boundary validation for the usage-rate map (host-independent — exercises the FluentValidation rule directly, so

@@ -62,6 +62,8 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (same reason as IsUnattended): it describes how the model
             // was CHOSEN, not the agent's configuration, so a menu pick and the node default hash identically.
             AllowAutoModelSwap = request.AllowAutoModelSwap,
+            // Not hashed either: the review mode is a per-send choice, so toggling it never invalidates a resume.
+            AutoAcceptWebContent = request.AutoAcceptWebContent,
             RequireNodeManagedLlama = request.RequireNodeManagedLlama,
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,

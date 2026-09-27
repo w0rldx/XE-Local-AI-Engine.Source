@@ -424,7 +424,7 @@ treat them uniformly.
 | Registry | Interface / impl | Source of tools | Notes |
 |---|---|---|---|
 | Built-in catalog | `IAgentToolRegistry` / `Tools/Implementation/LocalAgentToolRegistry.cs` | `AIFunctionFactory.Create` over in-process methods (`GetCurrentTime`, `Calculate`) | Descriptors are derived **from** the generated `AIFunction.JsonSchema` so the offered contract can't drift from what executes. Their catalog approval default is false, but the effective node policy can tighten it. |
-| ClientLocal (server-driven) | `IClientLocalToolRegistry` / `Tools/Implementation/ClientLocalToolRegistry.cs` | `IClientLocalToolHandler` implementations registered by the application layer (e.g. `run_in_agent_home`, `spawn_subagent`) | In-process handlers, **not** SignalR. The registry holds the handler-backed tools; the worker app layer registers the handlers. |
+| ClientLocal (server-driven) | `IClientLocalToolRegistry` / `Tools/Implementation/ClientLocalToolRegistry.cs` | `IClientLocalToolHandler` implementations registered by the application layer (e.g. `run_in_agent_home`, `spawn_subagent`, `web_fetch`, `web_search`) | In-process handlers, **not** SignalR. The registry holds the handler-backed tools; the worker app layer registers the handlers. |
 | MCP | `IMcpToolRegistry` / `Tools/Implementation/McpToolRegistry.cs` | An immutable `AITool` snapshot pushed in by the MCP connection manager as servers connect | The registry is MCP-agnostic (only holds `AITool`); the application layer owns the MCP client lifecycle. See [Chat](05-chat.md) and [API & Hubs](09-api-and-hubs.md). |
 | Custom Tools | `ICustomToolCatalog` / `Services/CustomTools/Implementation/CustomToolCatalog.cs` | Enabled, acknowledged `custom__*` definitions read live from SQLite on every offer/resolve | HTTP-fetch and host-command tools. The node kill-switch defaults off, each tool must be assigned to the agent, and every executable is unconditionally wrapped in `ApprovalRequiredAIFunction`. |
 
@@ -829,7 +829,11 @@ capability-gated offer. **Every other definition is intersected** down to its `A
 selected agent's offer is never widened beyond its allowed set, except by `ask_user` on an interactive turn
 and by the four work-session state tools inside a work-session step (§5.4). `spawn_subagent`, `run_python` and
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
-non-tool-capable model gets an **empty** offer before per-name gating. See [Chat](05-chat.md) for how
+non-tool-capable model gets an **empty** offer before per-name gating. `web_search` and `web_fetch` join the
+*default* offer only while the node's Web access setting is on, never for a model outside the trust boundary; a
+bound agent gets them only through `AllowedToolNames`. Both are approval-flagged like `ask_user`: the flag is the
+pause the result review uses, so unattended paths strip them, and orchestration participants and agentic MCP scope
+are never offered them ([Security and privacy](12-security-and-privacy.md), ADR 0017). See [Chat](05-chat.md) for how
 the selected agent surfaces as per-message attribution.
 
 #### The resolved runtime projection

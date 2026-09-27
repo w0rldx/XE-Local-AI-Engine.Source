@@ -44,6 +44,22 @@ public sealed record NodeSettingsResponse
     public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
+    ///     Node switch for the built-in web tools (<c>web_fetch</c>, <c>web_search</c>). <see langword="null" /> reads
+    ///     as off (default).
+    /// </summary>
+    /// <remarks>
+    ///     When on, a tool-capable node-local model may send search queries to DuckDuckGo (or the configured SearXNG)
+    ///     and download public web pages. What they retrieve is shown to the user for review before it reaches the
+    ///     model, unless the conversation's auto-accept is on.
+    /// </remarks>
+    public bool? WebAccessEnabled { get; init; }
+
+    /// <summary>
+    ///     The SearXNG base URL that replaces DuckDuckGo for <c>web_search</c>; <see langword="null" /> uses DuckDuckGo.
+    /// </summary>
+    public string? WebSearchSearxngUrl { get; init; }
+
+    /// <summary>
     ///     Which external-access preset was last applied: <c>recommended</c>, <c>offline</c>, <c>custom</c> (the
     ///     switches no longer match a preset), <c>pending</c> (an administrator exists and nobody has chosen yet), or
     ///     <see langword="null" /> (undecided, with no administrator).
@@ -263,6 +279,18 @@ public sealed record SaveNodeSettingsRequest
     ///     Off by default; a per-agent opt-out still wins when it is on.
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
+
+    /// <summary>
+    ///     Node switch for the built-in web tools. <see langword="null" /> keeps the current stored value. Retrieved web
+    ///     content is reviewed by the user before it reaches the model; a conversation can auto-accept instead.
+    /// </summary>
+    public bool? WebAccessEnabled { get; init; }
+
+    /// <summary>
+    ///     The SearXNG base URL (absolute http or https) for <c>web_search</c>. <see langword="null" /> keeps the current
+    ///     stored value; an empty string clears it, so DuckDuckGo is used again.
+    /// </summary>
+    public string? WebSearchSearxngUrl { get; init; }
 
     /// <summary>
     ///     Apply an external-access preset: <c>recommended</c> or <c>offline</c> ONLY.

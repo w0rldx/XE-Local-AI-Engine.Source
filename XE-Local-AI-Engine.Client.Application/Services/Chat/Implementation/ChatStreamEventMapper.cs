@@ -317,7 +317,8 @@ internal static class ChatStreamEventMapper
             ToolName = NullIfBlank(payload.ToolName),
             Arguments = payload.Arguments,
             ApprovalRequestId = payload.RequestId,
-            SessionScopeEligible = payload.SessionScopeEligible
+            SessionScopeEligible = payload.SessionScopeEligible,
+            WebReview = payload.WebReview
         };
     }
 

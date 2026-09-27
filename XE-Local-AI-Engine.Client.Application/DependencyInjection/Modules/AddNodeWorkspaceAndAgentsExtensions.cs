@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using System.Net;
 using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -13,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -52,6 +54,43 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
                    // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
                    PooledConnectionLifetime = TimeSpan.FromMinutes(1)
                });
+        // web_fetch (ADR 0017): its own client on the same SSRF pin, redirects followed by hand so each hop is re-validated.
+        // Unlike the custom-tool client it decompresses, because the 2 MiB cap is measured on the decompressed stream.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
+        // Aspire-installed standard pipeline: its retries and attempt timeout would re-send a model-chosen request
+        // outside the service's own 20-second budget. A no-op outside Aspire.
+        builder.Services.AddHttpClient(WebFetchService.HttpClientName, static client => client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; XE-Local-AI-Engine web_fetch)"))
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   AllowAutoRedirect = false,
+                   UseCookies = false,
+                   UseProxy = false,
+                   AutomaticDecompression = DecompressionMethods.All,
+                   ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
+                   PooledConnectionLifetime = TimeSpan.FromMinutes(1)
+               })
+               .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        builder.Services.AddSingleton<WebFetchService>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, WebFetchToolHandler>();
+        // web_search: DuckDuckGo rides the web_fetch client above; SearXNG is operator-configured and usually on localhost or
+        // the LAN, so its client carries NO private-address pin. The model supplies only the escaped query string.
+#pragma warning disable EXTEXP0001 // As for the web_fetch client above.
+        builder.Services.AddHttpClient(WebSearchService.SearxngHttpClientName)
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   AllowAutoRedirect = false,
+                   UseCookies = false,
+                   UseProxy = false,
+                   AutomaticDecompression = DecompressionMethods.All
+               })
+               .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        builder.Services.AddSingleton<WebSearchService>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, WebSearchToolHandler>();
+        // The review gate's retriever (PLAN §1.6): the ONLY chat path to the two services. Internal constructor, hence the factory.
+        builder.Services.AddSingleton(static services => new WebReviewRetriever(services.GetRequiredService<WebFetchService>(),
+            services.GetRequiredService<WebSearchService>(), services.GetRequiredService<ILogger<WebReviewRetriever>>()));
         builder.Services.AddSingleton(static _ => new CustomToolConcurrencyLimiter());
         // Executors + catalog are SINGLETON: the invocation stack consuming the catalog is singleton, so a scoped catalog would be a
         // captive dependency (ValidateOnBuild fails it); CustomToolCatalog reads its scoped store through a fresh scope per call instead.

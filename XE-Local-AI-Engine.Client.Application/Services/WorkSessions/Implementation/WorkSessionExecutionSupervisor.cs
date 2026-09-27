@@ -402,8 +402,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // off the run's PINNED graph, so no mid-run edit widens it. The send decides — only it sees the real offer.
             RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
             // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
-            // question could only ever go unanswered — see the flag's own comment for what that costs.
-            SuppressAskUser: state.Session.Kind == AgentWorkSessionKind.Workflow);
+            // question or a web result review could only ever go unanswered — see the flag's own comment.
+            SuppressOperatorTools: state.Session.Kind == AgentWorkSessionKind.Workflow);
 
         // Seeded BEFORE the enumeration so it flows into the invocation's async context. The node-wide budget is larger
         // than read_document's 50,000-character cap, so without this nothing clips a knowledge-base read.

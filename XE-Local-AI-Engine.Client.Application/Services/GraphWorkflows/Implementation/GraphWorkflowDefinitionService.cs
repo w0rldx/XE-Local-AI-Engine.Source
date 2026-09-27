@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -16,21 +17,26 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     private readonly IToolInvocationService _tools;
 
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
     private readonly ILocalModelProviderResolver _providers;
 
     private readonly IOptions<GraphWorkflowOptions> _options;
 
     public GraphWorkflowDefinitionService(IGraphWorkflowStore store,
         IToolInvocationService tools,
+        INodeRuntimeSettings runtimeSettings,
         ILocalModelProviderResolver providers,
         IOptions<GraphWorkflowOptions> options)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(providers);
         ArgumentNullException.ThrowIfNull(options);
         _store = store;
         _tools = tools;
+        _runtimeSettings = runtimeSettings;
         _providers = providers;
         _options = options;
     }
@@ -101,6 +107,9 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     public Task DeleteAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
         _store.DeleteDefinitionAsync(definitionId, cancellationToken);
 
+    public Task<IReadOnlyList<InvocableToolDescriptor>> ListToolsAsync(CancellationToken cancellationToken = default) =>
+        GraphWorkflowToolGate.ListAsync(_tools, _runtimeSettings, cancellationToken);
+
     /// <summary>The one place the option-bearing half of validation lives.</summary>
     /// <remarks>
     ///     A blank document becomes the same structured refusal every other whole-document failure produces, so
@@ -117,7 +126,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
 
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition);
-        var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken);
+        var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken);
         return toolErrors.Count == 0
             ? graph
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(toolErrors));

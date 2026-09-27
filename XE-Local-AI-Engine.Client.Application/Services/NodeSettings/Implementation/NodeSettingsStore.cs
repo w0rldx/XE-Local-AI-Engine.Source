@@ -291,6 +291,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             DefaultModelName = TrimToNull(settings.DefaultModelName),
             ToolCapableModels = NormalizeStringList(settings.ToolCapableModels),
             OllamaEndpoint = NormalizeAbsoluteUrl(settings.OllamaEndpoint),
+            WebSearchSearxngUrl = NormalizeAbsoluteUrl(settings.WebSearchSearxngUrl),
             HuggingFaceDefaultQuant = TrimToNull(settings.HuggingFaceDefaultQuant),
             HuggingFaceDiskMarginBytes = ClampPositiveLong(settings.HuggingFaceDiskMarginBytes),
             LlamaMaxLoadedProcesses = ClampToRange(settings.LlamaMaxLoadedProcesses,

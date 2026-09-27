@@ -206,6 +206,20 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
+    ///     Web tools and their link allow-list are Graph Workflows only (ADR 0017): a Dev Workflow Tool node runs
+    ///     validation commands, so a named tool or <c>allowedUrls</c> here is refused rather than silently ignored.
+    /// </summary>
+    [Test]
+    [Arguments("\"toolName\":\"web_fetch\"")]
+    [Arguments("\"allowedUrls\":[\"https://docs.example.com/\"]")]
+    public void Parse_ANamedToolOrAllowedLinks_AreRefused(string member)
+    {
+        var json = $$"""{"schemaVersion":1,"nodes":[{"nodeKey":"check","nodeType":"Tool",{{member}}}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, "exist only in Graph Workflows");
+    }
+
+    /// <summary>
     ///     The reason beside a capability is a one-line justification a reviewer reads next to the node, and the whole
     ///     graph document is encrypted and rewritten on every materialization — so it is bounded where it is authored
     ///     rather than where it is stored.

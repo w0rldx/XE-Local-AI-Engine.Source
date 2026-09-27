@@ -20,6 +20,7 @@ public sealed class RuntimePackageBuilder
     private string? _modelProfile = "qwen3.5:0.8b";
     private string? _reasoningEffort;
     private bool _allowAutoModelSwap;
+    private bool _autoAcceptWebContent;
     private OrchestrationSpec? _orchestrationSpec;
     private string _resolvedSystemPrompt = "You are helpful.";
     private SamplingOptions? _samplingOptions;
@@ -277,11 +278,19 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    /// <summary>The conversation's web result review is set to auto: retrieved web content skips the review card.</summary>
+    public RuntimePackageBuilder AutoAcceptingWebContent()
+    {
+        _autoAcceptWebContent = true;
+        return this;
+    }
+
     public RuntimePackage Build()
     {
         return new RuntimePackage
         {
             IsUnattended = _isUnattended,
+            AutoAcceptWebContent = _autoAcceptWebContent,
             ReasoningEffort = _reasoningEffort,
             AllowAutoModelSwap = _allowAutoModelSwap,
             Skills = _skills,

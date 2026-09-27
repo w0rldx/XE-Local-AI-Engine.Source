@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+
 /// <summary>A single tool-approval request surfaced for the in-flight invocation.</summary>
 /// <remarks>
 ///     Mirrors <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot drift. Distinct
@@ -41,4 +43,7 @@ public sealed record ApprovalLifecyclePayload
     ///     reconnect replay rebuilt from <c>InvocationApprovalState</c>), in which case the client keeps its catalog fallback.
     /// </remarks>
     public bool? SessionScopeEligible { get; init; }
+
+    /// <summary>The retrieved web content a result review shows before it reaches the model; null for every other approval.</summary>
+    public WebReviewPreview? WebReview { get; init; }
 }

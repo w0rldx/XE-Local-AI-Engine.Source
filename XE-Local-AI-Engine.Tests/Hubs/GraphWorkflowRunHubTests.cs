@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The subscription side of the graph-workflow run hub. The hub reads its replay through
@@ -476,7 +477,7 @@ public sealed class GraphWorkflowRunHubTests
         // internal, which NSubstitute cannot proxy, and nothing a subscription does signals the dispatcher anyway.
         return CreateHub(new GraphWorkflowRunService(store,
                 new RecordingGraphWorkflowDispatcherSignal(),
-                Substitute.For<IToolInvocationService>(),
+                Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
                 options,
                 Options.Create(new SecurityOptions())),
             registry ?? Substitute.For<IInvocationResumeRegistry>(),

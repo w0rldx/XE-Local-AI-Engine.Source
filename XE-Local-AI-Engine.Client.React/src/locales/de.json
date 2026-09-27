@@ -226,7 +226,20 @@
 			"toolsFiltered": "Tools gefiltert",
 			"effortDispatched": "Reasoning-Aufwand aufgelöst"
 		},
-		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
+		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
+		"webReview": {
+			"heading": "Webinhalt prüfen, bevor das Modell ihn liest",
+			"backend": "Suchmaschine: {{backend}}",
+			"noResults": "Die Suche hat keine Ergebnisse geliefert.",
+			"redirectedTo": "Weitergeleitet zu {{url}}",
+			"truncated": "Gekürzt",
+			"textLabel": "Abgerufener Seitentext",
+			"accept": "Zur Unterhaltung hinzufügen",
+			"reject": "Ablehnen",
+			"resultsLabel": "Suchergebnisse",
+			"missingPreview": "Laden Sie die Seite neu, um diesen Webinhalt zu prüfen, bevor das Modell ihn liest.",
+			"reload": "Neu laden"
+		}
 	},
 	"pages": {
 		"development": {
@@ -1348,6 +1361,17 @@
 					"capReached": "Dieser Knoten wurde bereits so oft wie möglich gesteuert."
 				},
 				"lockedHintSteer": "Workflow läuft — greife ein oder stoppe ihn."
+			},
+			"webAutoAccept": {
+				"label": "Webinhalte automatisch übernehmen",
+				"needsConversation": "Senden Sie eine erste Nachricht, um festzulegen, wie Webinhalte behandelt werden",
+				"on": "Webinhalte gehen ungeprüft an das Modell",
+				"off": "Webinhalte werden Ihnen zuerst zur Prüfung angezeigt",
+				"noticeTitle": "Webinhalte automatisch übernehmen?",
+				"noticeInjection": "Webseiten und Suchergebnisse können versteckte Anweisungen enthalten (Prompt-Injection), die das Modell dazu bringen sollen, Ihre Daten preiszugeben oder Aktionen auszuführen, um die Sie nicht gebeten haben.",
+				"noticeUnreviewed": "Mit automatischer Übernahme gehen abgerufene Inhalte in dieser Unterhaltung an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
+				"noticeReversible": "Sie können die Funktion jederzeit wieder ausschalten.",
+				"confirm": "Automatische Übernahme aktivieren"
 			}
 		},
 		"clientNodes": {
@@ -2060,6 +2084,17 @@
 				"customToolsEnabled": {
 					"label": "Benutzerdefinierte Tools aktivieren",
 					"description": "Erlaubt Agenten, benutzerdefinierte Tools auszuführen, die Host-Befehle ausführen, Programme starten und Netzwerkanfragen stellen. Standardmäßig deaktiviert. Jeder Aufruf erfordert weiterhin Ihre Genehmigung."
+				},
+				"webAccess": {
+					"title": "Webzugriff"
+				},
+				"webAccessEnabled": {
+					"label": "Websuche und Abruf von Webseiten erlauben",
+					"description": "Wenn aktiviert, kann das Modell Suchanfragen an DuckDuckGo oder SearXNG senden und öffentliche Webseiten herunterladen. Abgerufene Inhalte werden Ihnen zur Prüfung angezeigt, bevor das Modell sie sieht. Standardmäßig deaktiviert."
+				},
+				"webSearchSearxngUrl": {
+					"label": "SearXNG-URL",
+					"description": "Leer lassen, um DuckDuckGo zu verwenden (ohne Gewähr). Für eine zuverlässige Suche auf eine eigene SearXNG-Instanz mit aktiviertem JSON-Format verweisen."
 				},
 				"toolRelevanceEnabled": {
 					"label": "Tools nach Relevanz filtern",
@@ -6088,6 +6123,11 @@
 				"argumentsJson": {
 					"notObject": "Geben Sie ein JSON-Objekt mit Argumenten ein oder lassen Sie das Feld leer."
 				},
+				"allowedUrls": {
+					"required": "Mindestens einen erlaubten Link hinzufügen. Ein web_fetch-Knoten ruft nur Seiten unter seinen erlaubten Links ab.",
+					"invalid": "Jeder erlaubte Link muss eine absolute http- oder https-URL sein.",
+					"literalUrlNotAllowed": "Das feste url-Argument liegt unter keinem der erlaubten Links dieses Knotens."
+				},
 				"argumentBindings": {
 					"pathRequired": "Geben Sie den Pfad an, aus dem dieses Argument gelesen wird."
 				},
@@ -6165,6 +6205,14 @@
 				"includeUpstreamOutputs": "Ausgaben vorgelagerter Knoten mitgeben",
 				"includeUpstreamOutputsHelp": "Übergibt diesem Agenten zusätzlich zur Laufeingabe, was die Knoten davor erzeugt haben.",
 				"tool": "Werkzeug",
+				"allowedUrls": "Erlaubte Links",
+				"allowedUrlsHelp": "web_fetch liest nur Seiten unter diesen Links: gleiches Schema, gleicher Host und Port und ein Pfad auf oder unter dem Pfad des Links. Private und lokale Adressen bleiben gesperrt, auch wenn sie aufgeführt sind.",
+				"addAllowedUrl": "Link hinzufügen",
+				"removeAllowedUrl": "Link entfernen",
+				"noAllowedUrls": "Noch keine. Der Knoten kann nichts abrufen, bis ein Link hinzugefügt ist.",
+				"allowlistNoticeTitle": "Seiten unter diesen Links erreichen das Modell ungeprüft",
+				"allowlistNoticeBody": "Ein Workflow-Lauf ruft diese Seiten ab, ohne jemanden zu fragen, und ihr Text geht direkt an das nächste Modell. Eine Seite kann Anweisungen enthalten, die dieses Modell in die Irre führen sollen. Nur vertrauenswürdige Seiten aufführen.",
+				"allowlistNoticeAcknowledge": "Verstanden",
 				"toolPlaceholder": "Werkzeug auswählen",
 				"arguments": "Argumente (JSON)",
 				"argumentBindings": "Argumentbindungen",

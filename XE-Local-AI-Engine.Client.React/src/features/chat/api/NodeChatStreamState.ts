@@ -158,6 +158,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				requiresApproval: part.requiresApproval,
 				pendingApprovalRequestId: part.pendingApprovalRequestId,
 				pendingApprovalSessionScopeEligible: part.pendingApprovalSessionScopeEligible,
+				pendingWebReview: part.pendingWebReview,
 				pendingQuestion: part.pendingQuestion,
 			});
 		} else if (part.kind === "text") {
@@ -277,6 +278,7 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalRequestId,
 					pendingApprovalSessionScopeEligible:
 						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalSessionScopeEligible,
+					pendingWebReview: toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingWebReview,
 					// Same rule for an `ask_user` question: once the tool call resolves, the answer has been consumed
 					// (or the wait timed out), so the inline question card must not survive on the resolved card.
 					pendingQuestion: toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingQuestion,
@@ -297,7 +299,10 @@ function mergePendingPromptIntoToolEntries(
 	callId: string | undefined,
 	toolName: string | undefined,
 	sequence: number,
-	prompt: Pick<ToolEntryInput, "args" | "pendingApprovalRequestId" | "pendingApprovalSessionScopeEligible" | "pendingQuestion">,
+	prompt: Pick<
+		ToolEntryInput,
+		"args" | "pendingApprovalRequestId" | "pendingApprovalSessionScopeEligible" | "pendingWebReview" | "pendingQuestion"
+	>,
 ): ToolEntryInput[] {
 	const normalizedCallId = callId?.trim() || undefined;
 	const normalizedToolName = toolName?.trim() || undefined;
@@ -431,6 +436,7 @@ function clearPendingPromptWaitingCards(parts: ChatMessagePart[] | undefined): C
 				state: "failed" as const,
 				pendingApprovalRequestId: undefined,
 				pendingApprovalSessionScopeEligible: undefined,
+				pendingWebReview: undefined,
 				pendingQuestion: undefined,
 			};
 		}
@@ -622,6 +628,7 @@ export function applyNodeChatStreamEvent(
 						args: event.arguments || undefined,
 						pendingApprovalRequestId: event.approvalRequestId ?? undefined,
 						pendingApprovalSessionScopeEligible: event.sessionScopeEligible ?? undefined,
+						pendingWebReview: event.webReview ?? undefined,
 					},
 		);
 		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, textSegments, noticeEntries);

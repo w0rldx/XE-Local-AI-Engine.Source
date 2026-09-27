@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
@@ -26,9 +27,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     private readonly IGraphWorkflowStore _store;
     private readonly IToolInvocationService _tools;
 
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
     public GraphWorkflowRunService(IGraphWorkflowStore store,
         IGraphWorkflowDispatcherSignal signal,
         IToolInvocationService tools,
+        INodeRuntimeSettings runtimeSettings,
         IOptions<GraphWorkflowOptions> options,
         IOptions<SecurityOptions> security)
     {
@@ -40,6 +44,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         _store = store;
         ArgumentNullException.ThrowIfNull(tools);
         _tools = tools;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
@@ -671,7 +677,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     /// </remarks>
     private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
-        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken);
+        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken);
         if (errors.Count > 0)
         {
             throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));

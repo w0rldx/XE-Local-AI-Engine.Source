@@ -568,7 +568,9 @@ describe("config form schemas", () => {
 				includeUpstreamOutputs: true,
 			}).success,
 		).toBe(true);
-		expect(toolConfigSchema.safeParse({ toolName: "read_file", argumentsJson: "", argumentBindings: [] }).success).toBe(true);
+		expect(
+			toolConfigSchema.safeParse({ toolName: "read_file", argumentsJson: "", argumentBindings: [], allowedUrls: [] }).success,
+		).toBe(true);
 		expect(conditionConfigSchema.safeParse({ path: "output.json.requiresReview" }).success).toBe(true);
 		// The server's `IsDotPath` accepts any segment without whitespace or wildcard punctuation, and a JSON property
 		// really can be hyphenated — refusing one it accepts would block a save the node would have taken.
@@ -683,5 +685,58 @@ describe("config form schemas", () => {
 	it("takes no value for Exists and NotExists, which have no operand", () => {
 		expect(edgeConditionSchema.safeParse({ op: "Exists", value: "" }).success).toBe(true);
 		expect(edgeConditionSchema.safeParse({ op: "NotExists", value: "" }).success).toBe(true);
+	});
+});
+
+describe("toolConfigSchema — web_fetch allow-list (mirrors the server save gate)", () => {
+	const node = (toolName: string, allowedUrls: readonly string[]) => ({
+		toolName,
+		argumentsJson: "",
+		argumentBindings: [],
+		allowedUrls,
+	});
+	const issue = (toolName: string, allowedUrls: readonly string[]) => {
+		const result = toolConfigSchema.safeParse(node(toolName, allowedUrls));
+		return result.success ? undefined : result.error.issues.find((entry) => entry.path[0] === "allowedUrls")?.message;
+	};
+
+	it("requires at least one link on web_fetch", () => {
+		expect(issue("web_fetch", [])).toBe("pages.graphWorkflows.form.allowedUrls.required");
+	});
+
+	it("refuses a link that is not an absolute http or https URL", () => {
+		for (const entry of ["ftp://files.example.com/", "/docs", "   "]) {
+			expect(issue("web_fetch", ["https://docs.example.com/", entry])).toBe("pages.graphWorkflows.form.allowedUrls.invalid");
+		}
+	});
+
+	it("refuses a literal url argument that is not under any allowed link, on a path-segment boundary", () => {
+		const literalIssue = (url: unknown, allowedUrls: readonly string[] = ["https://docs.example.com/guide"]) => {
+			const result = toolConfigSchema.safeParse({ ...node("web_fetch", allowedUrls), argumentsJson: JSON.stringify({ url }) });
+			return result.success ? undefined : result.error.issues.find((entry) => entry.path[0] === "allowedUrls")?.message;
+		};
+		const refused = "pages.graphWorkflows.form.allowedUrls.literalUrlNotAllowed";
+
+		expect(literalIssue("https://docs.example.com/guide")).toBeUndefined();
+		expect(literalIssue("https://docs.example.com/guide/intro")).toBeUndefined();
+		expect(literalIssue("https://DOCS.example.com:443/guide/x")).toBeUndefined();
+		expect(literalIssue("https://docs.example.com/any", ["https://docs.example.com"])).toBeUndefined();
+		expect(literalIssue("https://docs.example.com/guide-private")).toBe(refused);
+		expect(literalIssue("https://docs.example.com/guide/../admin")).toBe(refused);
+		expect(literalIssue("http://docs.example.com/guide")).toBe(refused);
+		expect(literalIssue("https://docs.example.com:8443/guide")).toBe(refused);
+		expect(literalIssue("https://evil.example.com/guide")).toBe(refused);
+		expect(literalIssue(42)).toBe(refused);
+		// No literal url (the model or a binding supplies it at run time) asks nothing.
+		const bound = toolConfigSchema.safeParse({
+			...node("web_fetch", ["https://docs.example.com/"]),
+			argumentsJson: '{"maxChars":100}',
+		});
+		expect(bound.success).toBe(true);
+	});
+
+	it("accepts http and https links, and asks nothing of another tool", () => {
+		expect(issue("web_fetch", ["https://docs.example.com/guide", "http://status.example.com"])).toBeUndefined();
+		expect(issue("read_file", [])).toBeUndefined();
 	});
 });

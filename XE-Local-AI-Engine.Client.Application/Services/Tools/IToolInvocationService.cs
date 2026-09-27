@@ -38,6 +38,12 @@ public sealed class InvocableToolDescriptor
     public required string Description { get; init; }
 
     public required string ParameterSchema { get; init; }
+
+    /// <summary>
+    ///     Set only on the graph Tool-node feed's <c>web_fetch</c> entry, which this service never lists: the node must
+    ///     carry a link allow-list, and the graph executor calls the fetch service itself (ADR 0017, decision 6).
+    /// </summary>
+    public bool RequiresAllowedUrls { get; init; }
 }
 
 /// <summary>The calling node run, for logging and correlation.</summary>

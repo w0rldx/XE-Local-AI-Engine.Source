@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -313,6 +314,18 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
     }
 
     [Test]
+    [Arguments(WebFetchToolDefinition.ToolName, WebFetchToolDefinition.ParameterSchema)]
+    [Arguments(WebSearchToolDefinition.ToolName, WebSearchToolDefinition.ParameterSchema)]
+    public void WebToolSchemas_CompileWithoutTheSanitizingPass(string toolName, string parameterSchema)
+    {
+        // Authored grammar-safe like run_python's: no maxLength, the service owns every real bound.
+        var schema = MetadataToolFunction.ParseSchema(parameterSchema);
+
+        AssertEx.False(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(schema),
+            $"the {toolName} schema must compile into GBNF as authored, with no sanitizing rewrite");
+    }
+
+    [Test]
     public async Task ProductionToolOffer_SerializesWithoutAnOversizedBound_OnTheRealWireBody()
     {
         // End-to-end through the REAL MEAI OpenAI adapter (the same client DeferredLlamaServerChatClient builds), so the
@@ -334,6 +347,8 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         // Sanity: the offer really did reach the wire, so the assertion above is not passing over an empty array.
         var names = tools.EnumerateArray().Select(static tool => tool.GetProperty("function").GetProperty("name").GetString() ?? string.Empty).ToList();
         AssertEx.Contains(names, "run_in_agent_home");
+        AssertEx.Contains(names, WebFetchToolDefinition.ToolName);
+        AssertEx.Contains(names, WebSearchToolDefinition.ToolName);
 
         // F-12: emit_output is the one offer an EXTERNAL caller can reach, and the profile offer excludes it by design
         // (IntegrationExecutionCoordinator unions it in at run time). Pinned by name here so the union in

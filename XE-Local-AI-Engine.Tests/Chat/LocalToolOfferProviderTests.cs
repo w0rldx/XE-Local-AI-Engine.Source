@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
@@ -14,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -695,6 +697,78 @@ public sealed class LocalToolOfferProviderTests
 
         var entry = AssertEx.NotNull(known.SingleOrDefault(tool => tool.Name == "custom__weather"));
         AssertEx.Equal("custom", entry.Source);
+    }
+
+    [Test]
+    [Arguments(WebFetchToolDefinition.ToolName)]
+    [Arguments(WebSearchToolDefinition.ToolName)]
+    public async Task GetOfferedToolsAsync_WhenWebAccessOn_OffersTheWebToolInTheWholeOffer(string toolName)
+    {
+        var provider = CreateProviderWithWebAccess(webAccessEnabled: true);
+
+        var offered = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false);
+
+        // The WHOLE offer, not the profile pool, which is what the seeded Default Assistant receives.
+        var webTool = AssertEx.NotNull(offered.SingleOrDefault(tool => tool.Name == toolName));
+        AssertEx.Equal(ToolCategory.Network, webTool.Category);
+        AssertEx.Equal(ToolLocation.ClientLocal, webTool.Location);
+        AssertEx.True(webTool.RequiresApproval, $"{toolName} is offered approval-gated, like ask_user");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenWebAccessOff_OmitsTheWebToolsEverywhere()
+    {
+        var provider = CreateProviderWithWebAccess(webAccessEnabled: false);
+
+        AssertEx.False((await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false)).Any(IsWebTool));
+        AssertEx.False((await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false)).Any(IsWebTool),
+            "off means absent from the profile pool too, so no AllowedToolNames entry can reach it");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenModelIsOutsideTheTrustBoundary_OmitsTheWebTools()
+    {
+        var provider = CreateProviderWithWebAccess(webAccessEnabled: true);
+
+        AssertEx.False((await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: true)).Any(IsWebTool),
+            "a cloud model never gets the web tools, like custom tools");
+        AssertEx.False((await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true)).Any(IsWebTool));
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenModelIsNotToolCapable_OmitsTheWebTools()
+    {
+        var provider = CreateProviderWithWebAccess(webAccessEnabled: true);
+
+        AssertEx.False((await provider.GetOfferedToolsAsync("tiny-model", isCloudModel: false)).Any(IsWebTool));
+    }
+
+    [Test]
+    [Arguments(WebFetchToolDefinition.ToolName)]
+    [Arguments(WebSearchToolDefinition.ToolName)]
+    public void KnownTools_ListTheWebTool_UngatedByTheNodeSwitch(string toolName)
+    {
+        // The picker and AllowedToolNames validation must accept the name even while web access is off.
+        var provider = CreateProviderWithWebAccess(webAccessEnabled: false);
+
+        AssertEx.Contains(provider.GetKnownToolNames(), toolName);
+        var entry = AssertEx.NotNull(provider.GetKnownTools().SingleOrDefault(tool => tool.Name == toolName));
+        AssertEx.Equal("builtin", entry.Source);
+        AssertEx.Equal(ToolCategory.Network, entry.Category);
+    }
+
+    private static bool IsWebTool(AllowedToolDto tool) =>
+        string.Equals(tool.Name, WebFetchToolDefinition.ToolName, StringComparison.Ordinal)
+        || string.Equals(tool.Name, WebSearchToolDefinition.ToolName, StringComparison.Ordinal);
+
+    private static LocalToolOfferProvider CreateProviderWithWebAccess(bool webAccessEnabled)
+    {
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithWebAccessEnabled(webAccessEnabled).Build(),
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
+            allowCloudKnowledgeAccess: false);
     }
 
     private static readonly LocalChatToolDescriptor CustomWeatherDescriptor =

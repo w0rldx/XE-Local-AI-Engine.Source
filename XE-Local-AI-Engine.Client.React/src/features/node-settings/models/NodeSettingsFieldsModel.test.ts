@@ -15,7 +15,7 @@ import {
 	toUsageRateRows,
 	type UsageRateRow,
 	validateLlamaCppTag,
-	validateOllamaEndpoint,
+	validateOptionalHttpUrl,
 	validateToolCapableModels,
 	validateUsageRates,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -36,11 +36,11 @@ describe("NodeSettingsFieldsModel validators", () => {
 	});
 
 	it("accepts http/https Ollama endpoints and rejects non-URLs", () => {
-		expect(validateOllamaEndpoint("http://127.0.0.1:11434")).toEqual({ value: "http://127.0.0.1:11434" });
-		expect(validateOllamaEndpoint("https://ollama.local")).toEqual({ value: "https://ollama.local" });
-		expect(validateOllamaEndpoint("")).toEqual({});
-		expect(validateOllamaEndpoint("not-a-url")).toEqual({ error: "url" });
-		expect(validateOllamaEndpoint("ftp://host")).toEqual({ error: "url" });
+		expect(validateOptionalHttpUrl("http://127.0.0.1:11434")).toEqual({ value: "http://127.0.0.1:11434" });
+		expect(validateOptionalHttpUrl("https://ollama.local")).toEqual({ value: "https://ollama.local" });
+		expect(validateOptionalHttpUrl("")).toEqual({});
+		expect(validateOptionalHttpUrl("not-a-url")).toEqual({ error: "url" });
+		expect(validateOptionalHttpUrl("ftp://host")).toEqual({ error: "url" });
 	});
 
 	it("cleans tool-capable model lists and flags invalid entries", () => {
@@ -156,6 +156,7 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(nodeSettingsFieldDefaults.enableTools).toBe(true);
 		expect(nodeSettingsFieldDefaults.customToolsEnabled).toBe(false);
 		expect(nodeSettingsFieldDefaults.toolRelevanceEnabled).toBe(false); // DefaultToolRelevanceEnabled
+		expect(nodeSettingsFieldDefaults.webAccessEnabled).toBe(false); // DefaultWebAccessEnabled
 		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3);
 		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900);
 		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
@@ -204,6 +205,36 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors).toEqual({});
 		expect(body).toEqual({ toolRelevanceEnabled: true });
+	});
+
+	it("sends the web-access switch only when toggled, and never restart-gates it", () => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, webAccessEnabled: true }, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ webAccessEnabled: true });
+		expect(restartGatedNodeSettingsFields.has("webAccessEnabled")).toBe(false);
+		expect(restartGatedNodeSettingsFields.has("webSearchSearxngUrl")).toBe(false);
+	});
+
+	it("sends a trimmed absolute SearXNG URL and rejects a relative one", () => {
+		const valid = buildNodeSettingsRequest(
+			{ ...baseline, webSearchSearxngUrl: " http://localhost:8888 " },
+			baseline,
+			bounds,
+			false,
+		);
+		expect(valid.errors).toEqual({});
+		expect(valid.body).toEqual({ webSearchSearxngUrl: "http://localhost:8888" });
+
+		const relative = buildNodeSettingsRequest({ ...baseline, webSearchSearxngUrl: "/search" }, baseline, bounds, false);
+		expect(relative.errors).toEqual({ webSearchSearxngUrl: "url" });
+		expect(relative.body.webSearchSearxngUrl).toBeUndefined();
+	});
+
+	it("sends an empty string to clear the SearXNG URL, because null would keep the stored one", () => {
+		const stored = { ...baseline, webSearchSearxngUrl: "https://searx.example" };
+		const { body, errors } = buildNodeSettingsRequest({ ...stored, webSearchSearxngUrl: "  " }, stored, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ webSearchSearxngUrl: "" });
 	});
 
 	it("omits the tool-relevance switch when it is unchanged", () => {

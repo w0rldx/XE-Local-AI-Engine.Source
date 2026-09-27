@@ -425,9 +425,9 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 sequence + events.Count));
         }
 
-        // The approval slot's CallId and ToolName are optional, since a platform-hub approval carries neither; the
-        // mapper maps a blank to null, so the client renders the prompt unattached to any tool-call card.
-        if (state.PendingApproval is { } approval && replayedPrompts.Add(approval.RequestId))
+        // A slot published before the lifecycle fold (CallId null) is skipped WITHOUT consuming its id, or the dedupe drops
+        // the folded publish and the client gets a bare "tool" card: no arguments, no web preview, a blind Approve.
+        if (state.PendingApproval is { CallId: not null } approval && replayedPrompts.Add(approval.RequestId))
         {
             events.Add(ChatStreamEventMapper.ApprovalRequestedEvent(state.ConversationId,
                 state.InvocationId,
@@ -442,7 +442,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     Description = approval.Description,
                     // Fail CLOSED on a slot that never recorded the runner's answer: a replayed card must not offer a
                     // session scope the node cannot honor, and a one-off approval still works.
-                    SessionScopeEligible = approval.SessionScopeEligible ?? false
+                    SessionScopeEligible = approval.SessionScopeEligible ?? false,
+                    WebReview = approval.WebReview
                 },
                 timestampMs,
                 sequence + events.Count));

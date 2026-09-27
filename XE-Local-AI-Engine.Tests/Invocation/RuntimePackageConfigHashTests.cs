@@ -6,6 +6,8 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -67,6 +69,32 @@ public sealed class RuntimePackageConfigHashTests
     // canonical JSON and digest the pre-skills payload produced (and that the server MixedEnvelopeConfigHashService
     // still reproduces). The skill field is emitted WhenWritingNull, so the JSON ends at "timeouts" exactly as the
     // shared vector above. If this drifts, every encrypted invocation fails runtime-package-config-hash-mismatch.
+    [Test]
+    public void ConfigHash_AutoAcceptWebContent_IsNotHashed()
+    {
+        // The review mode is a per-send choice, so switching a conversation to auto must never invalidate a resume.
+        var builder = new LocalChatRuntimePackageBuilder();
+
+        static LocalChatRuntimePackageRequest Request(bool autoAccept) =>
+            new()
+            {
+                InvocationId = Guid.Empty,
+                ConversationId = Guid.Empty,
+                ResolvedSystemPrompt = "You are helpful.",
+                ConversationContext = [],
+                ModelProfile = "qwen3.5:0.8b",
+                AgentDefinitionVersion = 1,
+                AutoAcceptWebContent = autoAccept
+            };
+
+        var review = builder.Build(Request(autoAccept: false));
+        var auto = builder.Build(Request(autoAccept: true));
+
+        AssertEx.Equal(review.ConfigHash, auto.ConfigHash);
+        AssertEx.False(review.AutoAcceptWebContent, "review mode is the default");
+        AssertEx.True(auto.AutoAcceptWebContent);
+    }
+
     [Test]
     public void ConfigHash_NoSkills_ByteIdenticalToPreSkillsDigest()
     {

@@ -18,7 +18,8 @@ internal static class GraphWorkflowToolMapper
         {
             Name = value.Name,
             Description = value.Description,
-            ParameterSchema = value.ParameterSchema
+            ParameterSchema = value.ParameterSchema,
+            RequiresAllowedUrls = value.RequiresAllowedUrls
         };
     }
 }

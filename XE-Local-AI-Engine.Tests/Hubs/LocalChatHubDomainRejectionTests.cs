@@ -79,6 +79,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                Arg.Any<bool>(),
                                Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
                                Arg.Any<SamplingOptions?>(),
+                               Arg.Any<bool>(),
                                Arg.Any<CancellationToken>())
                            .Returns(_ => ThrowsReadOnly(conversationId));
 
@@ -93,6 +94,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                useKnowledgeBase: false,
                                selectedPath: null,
                                samplingOptions: null,
+                               autoAcceptWebContent: false,
                                CancellationToken.None))
             {
                 // The guard throws before the first event, so the body never runs.
@@ -166,6 +168,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                Arg.Any<bool>(),
                                Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
                                Arg.Any<SamplingOptions?>(),
+                               Arg.Any<bool>(),
                                Arg.Any<CancellationToken>())
                            .Returns(_ => throw new NodeChatInvalidRequestException("bad seed"));
 
@@ -180,6 +183,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                useKnowledgeBase: false,
                                selectedPath: null,
                                samplingOptions: null,
+                               autoAcceptWebContent: false,
                                CancellationToken.None))
             {
                 // The request is rejected before a stream exists, so the body never runs.
@@ -221,6 +225,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                Arg.Any<bool>(),
                                Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
                                Arg.Any<SamplingOptions?>(),
+                               Arg.Any<bool>(),
                                Arg.Any<CancellationToken>())
                            .Returns(_ => ThrowsAsync(rejection));
 
@@ -235,6 +240,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                useKnowledgeBase: false,
                                selectedPath: null,
                                samplingOptions: null,
+                               autoAcceptWebContent: false,
                                CancellationToken.None))
             {
                 // The rejection is thrown before the first event, so the body never runs.

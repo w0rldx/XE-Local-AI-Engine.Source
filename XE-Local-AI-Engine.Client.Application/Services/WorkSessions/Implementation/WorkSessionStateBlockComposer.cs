@@ -138,7 +138,7 @@ internal static class WorkSessionStateBlockComposer
         var footer = "\nContinue the objective. Record what you learn with record_finding, keep the plan current with "
                      + "update_work_plan, and call complete_work_session when the objective is met.";
 
-        // The send withdraws ask_user here (NodeChatStreamRequest.SuppressAskUser) while the seeded personas' saved
+        // The send withdraws ask_user here (NodeChatStreamRequest.SuppressOperatorTools) while the seeded personas' saved
         // instructions still point at it, so say so — otherwise the model loops on it until the provider-call cap.
         if (state.Session.Kind == AgentWorkSessionKind.Workflow)
         {

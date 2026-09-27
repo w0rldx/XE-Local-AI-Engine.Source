@@ -12,6 +12,7 @@ import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
+import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
 import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
@@ -34,6 +35,7 @@ interface ChatComposerToolbarProps {
 	reasoningMenuDisabled: boolean;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	showLocalToolControls: boolean;
+	conversationId: string;
 	toolsEnabled: boolean;
 	onToggleTools?: () => void;
 	showKnowledgeBaseControls: boolean;
@@ -82,6 +84,7 @@ export function ChatComposerToolbar({
 	reasoningMenuDisabled,
 	onReasoningEffortChange,
 	showLocalToolControls,
+	conversationId,
 	toolsEnabled,
 	onToggleTools,
 	showKnowledgeBaseControls,
@@ -170,6 +173,10 @@ export function ChatComposerToolbar({
 							<IconDeviceDesktop size={15} />
 						</ActionIcon>
 					</Tooltip>
+				) : null}
+				{/* The web tools are local tools, so their review mode is only meaningful while those are on. */}
+				{showLocalToolControls && toolsEnabled ? (
+					<WebContentAutoAcceptToggle conversationId={conversationId} disabled={disabled || isSending} />
 				) : null}
 				{showKnowledgeBaseControls ? (
 					<Tooltip

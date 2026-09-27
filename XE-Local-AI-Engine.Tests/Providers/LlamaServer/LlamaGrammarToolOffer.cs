@@ -11,6 +11,7 @@ using OpenAI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -56,7 +57,10 @@ internal static class LlamaGrammarToolOffer
             .. provider.GetOfferedToolsForProfile(Model)
                        .Concat(provider.GetIntegrationOutputOffer())
                        .Where(static tool => !string.IsNullOrWhiteSpace(tool.ParameterSchema))
-                       .Select(static tool => BuildTool(tool.Name, tool.ParameterSchema!))
+                       .Select(static tool => BuildTool(tool.Name, tool.ParameterSchema!)),
+            // The web tools are off by default, so the synchronous profile pool omits them; they join here so the
+            // offline gates and the live smoke compile their schemas as the web-access-on offer would.
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => BuildTool(descriptor.Name, descriptor.ParameterSchema!))
         ];
     }
 

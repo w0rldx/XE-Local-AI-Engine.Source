@@ -50,7 +50,11 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
 
     /// <summary>An agent host of this test's own, for a test that must not share the class's runner script.</summary>
     public static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
-        GraphWorkflowHostFixture.NewFactory(static services =>
+        NewFactory(configureServices: null, configuration);
+
+    /// <summary>The same host with one more registration pass, run after every fake below so it may replace any of them.</summary>
+    public static TestServerWebAppFactory NewFactory(Action<IServiceCollection>? configureServices, params (string Key, string Value)[] configuration) =>
+        GraphWorkflowHostFixture.NewFactory(services =>
             {
                 services.RemoveAll<IInvocationRunner>();
                 services.AddSingleton<IInvocationRunner>(provider => new FakeGraphWorkflowInvocation(provider));
@@ -106,6 +110,7 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
                 // The executor's own logger, so the stripped-offer warning is assertable rather than assumed.
                 services.AddSingleton<RecordingLogger<GraphWorkflowInvocationExecutor>>();
                 services.AddSingleton<ILogger<GraphWorkflowInvocationExecutor>>(provider => provider.GetRequiredService<RecordingLogger<GraphWorkflowInvocationExecutor>>());
+                configureServices?.Invoke(services);
             },
 
             // The concurrency cap counts LIVE runs across the whole database, and a shared host is a shared database.

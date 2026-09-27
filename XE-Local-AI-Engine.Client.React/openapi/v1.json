@@ -34936,7 +34936,8 @@
         "required": [
           "name",
           "description",
-          "parameterSchema"
+          "parameterSchema",
+          "requiresAllowedUrls"
         ],
         "properties": {
           "name": {
@@ -34947,6 +34948,9 @@
           },
           "parameterSchema": {
             "type": "string"
+          },
+          "requiresAllowedUrls": {
+            "type": "boolean"
           }
         }
       },
@@ -40981,6 +40985,14 @@
             "type": "boolean",
             "nullable": true
           },
+          "webAccessEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "webSearchSearxngUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "externalAccessProfile": {
             "type": "string",
             "nullable": true
@@ -41255,6 +41267,14 @@
           },
           "toolRelevanceEnabled": {
             "type": "boolean",
+            "nullable": true
+          },
+          "webAccessEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "webSearchSearxngUrl": {
+            "type": "string",
             "nullable": true
           },
           "externalAccessProfile": {

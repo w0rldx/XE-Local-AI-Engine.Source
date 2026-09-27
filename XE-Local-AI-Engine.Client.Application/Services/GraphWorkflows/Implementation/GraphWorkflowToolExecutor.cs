@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 
 /// <summary>
 ///     The <c>Tool</c> lane: ONE named engine tool per node run, invoked in process through
@@ -34,8 +36,12 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     private readonly ILogger<GraphWorkflowToolExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
     private readonly IToolInvocationService _tools;
+    private readonly WebFetchService _webFetch;
 
-    public GraphWorkflowToolExecutor(IToolInvocationService tools, IOptions<GraphWorkflowOptions> options, ILogger<GraphWorkflowToolExecutor> logger)
+    public GraphWorkflowToolExecutor(IToolInvocationService tools,
+        WebFetchService webFetch,
+        IOptions<GraphWorkflowOptions> options,
+        ILogger<GraphWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -43,6 +49,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // Injected as the singleton it is registered as. Unlike the agent lane there is nothing scoped behind it: the
         // service opens whatever scope its own catalog read needs, per call and on purpose.
         _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+        _webFetch = webFetch ?? throw new ArgumentNullException(nameof(webFetch));
         _options = options.Value;
 
         // No discard hook: a tool call is an in-process await, so a cancelled token is the whole of what unwinds one.
@@ -142,7 +149,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         var flight = await _lane.TryStartAsync(nodeRun.Id,
             nodeRun.Attempt,
             Guid.Empty,
-            (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config.ToolName, argumentsJson, leaseAcquired, token),
+            (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config, argumentsJson, leaseAcquired, token),
             cancellationToken);
 
         // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it is
@@ -264,7 +271,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     private async Task<ToolInvocationOutcome> InvokeAsync(Guid runId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
-        string toolName,
+        GraphWorkflowToolConfig config,
         string argumentsJson,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
@@ -280,7 +287,15 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.
         var timeout = TimeSpan.FromSeconds(node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds);
-        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext
+
+        // The one tool the invocation service refuses and this lane runs itself (ADR 0017, decision 6): the gate admitted
+        // it on the node's allow-list, and it is THIS call that hands the list to the fetch, for the bound URL too.
+        if (string.Equals(config.ToolName, WebFetchToolDefinition.ToolName, StringComparison.Ordinal))
+        {
+            return await FetchAsync(runId, node, config, argumentsJson, timeout, cancellationToken);
+        }
+
+        return await _tools.InvokeAsync(config.ToolName, argumentsJson, new ToolInvocationContext
         {
             RunId = runId,
             NodeRunId = nodeRunId,
@@ -288,6 +303,101 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             Timeout = timeout
         }, cancellationToken);
     }
+
+    /// <summary>
+    ///     A <c>web_fetch</c> node's call against the node's own allow-list, which is never <see langword="null" />, so an
+    ///     empty list fails closed. Like the invocation service it never throws.
+    /// </summary>
+    /// <remarks>
+    ///     The kill switch and a URL outside the list, blocked or malformed fail the node <c>ValidationFailed</c>: that is
+    ///     this node's envelope. Any other refusal is the tool's answer about the page and succeeds carrying it, as
+    ///     <c>read_file</c>'s own refusal does. The node's budget is its own deadline, so a spent one is a retryable timeout.
+    /// </remarks>
+    private async Task<ToolInvocationOutcome> FetchAsync(Guid runId,
+        GraphWorkflowGraphNode node,
+        GraphWorkflowToolConfig config,
+        string argumentsJson,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadUrl(argumentsJson, out var url, out var invalid))
+        {
+            return Outcome(ToolInvocationOutcomeKind.InvalidArguments, invalid);
+        }
+
+        using var deadline = new CancellationTokenSource();
+        try
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+            if (timeout <= TimeSpan.Zero)
+            {
+                await deadline.CancelAsync();
+            }
+            else
+            {
+                deadline.CancelAfter(timeout);
+            }
+
+            var fetched = await _webFetch.FetchAsync(url, config.AllowedUrls, budget.Token);
+            return fetched.ErrorCode switch
+            {
+                "web-access-disabled" => Outcome(ToolInvocationOutcomeKind.NotInvocable, $"{WebFetchToolDefinition.ToolName}: {fetched.ErrorMessage}"),
+                "url-not-allowed" or "url-blocked" or "invalid-url" =>
+                    Outcome(ToolInvocationOutcomeKind.InvalidArguments, $"{WebFetchToolDefinition.ToolName}: {fetched.ErrorMessage}"),
+                _ => new ToolInvocationOutcome
+                {
+                    Kind = ToolInvocationOutcomeKind.Executed,
+                    Result = WebFetchService.Serialize(fetched),
+                    Reason = WebFetchToolDefinition.ToolName
+                }
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return deadline.IsCancellationRequested
+                ? Outcome(ToolInvocationOutcomeKind.Timeout, $"'{WebFetchToolDefinition.ToolName}' exceeded the node's time budget.")
+                : Outcome(ToolInvocationOutcomeKind.Cancelled, $"The invocation of '{WebFetchToolDefinition.ToolName}' was cancelled.");
+        }
+        catch (Exception exception)
+        {
+            // Debug only, like the invocation service: the message can carry the URL, which is the exfiltration payload.
+            _logger.LogDebug(exception, "web_fetch threw for node {NodeKey} of graph-workflow run {RunId}.", node.NodeKey, runId);
+            return Outcome(ToolInvocationOutcomeKind.Faulted, $"'{WebFetchToolDefinition.ToolName}' threw during invocation.");
+        }
+    }
+
+    /// <summary>The resolved arguments' <c>url</c>, the only member <c>web_fetch</c>'s schema has.</summary>
+    private static bool TryReadUrl(string argumentsJson, out string url, out string refusal)
+    {
+        url = string.Empty;
+        refusal = $"'{WebFetchToolDefinition.ToolName}' takes exactly one string argument, 'url'.";
+        try
+        {
+            using var document = JsonDocument.Parse(argumentsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || document.RootElement.EnumerateObject().Any(static member => !string.Equals(member.Name, "url", StringComparison.Ordinal))
+                || !document.RootElement.TryGetProperty("url", out var value)
+                || value.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            url = value.GetString()!;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static ToolInvocationOutcome Outcome(ToolInvocationOutcomeKind kind, string reason) =>
+        new()
+        {
+            Kind = kind,
+            Result = null,
+            Reason = reason
+        };
 
     /// <summary>The arguments this call is made with: the node's literals, then every binding on top.</summary>
     /// <remarks>

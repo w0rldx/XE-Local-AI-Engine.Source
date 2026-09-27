@@ -306,6 +306,14 @@ public sealed class McpServerEndpointTests
                 RequiresApproval = false,
                 Source = "builtin",
                 Category = ToolCategory.ReadLocal
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "web_fetch",
+                Description = "Downloads one page.",
+                RequiresApproval = true,
+                Source = "builtin",
+                Category = ToolCategory.Network
             }
         ]);
         await using var factory = CreateFactory(service, offerProvider);
@@ -316,6 +324,11 @@ public sealed class McpServerEndpointTests
         var body = await ReadJsonAsync<ToolCatalogResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        // An unattended web call gets a "no one to review it" result and the run continues, like ask_user.
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == "web_fetch"
+                    && tool.EffectiveRequiresApproval
+                    && tool.UnattendedBehaviour == ToolUnattendedBehaviourValues.ContinuesUnanswered);
         AssertEx.ContainsSingle(body.Tools,
             tool => tool.Name == AskUserTool.ToolName
                     && tool.EffectiveRequiresApproval

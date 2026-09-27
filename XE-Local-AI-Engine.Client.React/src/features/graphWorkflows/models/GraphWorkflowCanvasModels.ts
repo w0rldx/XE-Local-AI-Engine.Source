@@ -126,6 +126,8 @@ export type GraphWorkflowCanvasNodeData =
 			readonly toolName: string | null;
 			readonly argumentsJson: string;
 			readonly argumentBindings: readonly GraphWorkflowArgumentBinding[];
+			/** web_fetch's link allow-list (ADR 0017); written to the wire only when non-empty. */
+			readonly allowedUrls: readonly string[];
 	  })
 	| (GraphWorkflowNodeBase & { readonly kind: "Condition"; readonly path: string | null })
 	| (GraphWorkflowNodeBase & { readonly kind: "Parallel" | "Join" })
@@ -348,6 +350,9 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				toolName: stringOrNull(config["toolName"]),
 				argumentsJson: jsonText(config["arguments"]) ?? "",
 				argumentBindings: bindingsFromWire(config["argumentBindings"]),
+				allowedUrls: Array.isArray(config["allowedUrls"])
+					? config["allowedUrls"].filter((entry): entry is string => typeof entry === "string")
+					: [],
 			};
 		case "Condition":
 			return { ...base, kind: "Condition", path: stringOrNull(config["path"]) };
@@ -631,6 +636,7 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				toolName: data.toolName,
 				arguments: parseArguments(data.argumentsJson, data.key, issues),
 				...(bindings ? { argumentBindings: bindings } : {}),
+				...(data.allowedUrls.length > 0 ? { allowedUrls: data.allowedUrls } : {}),
 			};
 		}
 		case "Condition":
@@ -774,7 +780,7 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 				samplingOptions: {},
 			};
 		case "Tool":
-			return { ...base, kind, toolName: null, argumentsJson: "", argumentBindings: [] };
+			return { ...base, kind, toolName: null, argumentsJson: "", argumentBindings: [], allowedUrls: [] };
 		case "Condition":
 			return { ...base, kind, path: null };
 		case "Parallel":

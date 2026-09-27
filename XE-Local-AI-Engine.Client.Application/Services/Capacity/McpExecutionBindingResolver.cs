@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>Produces the repeatable, keyed execution binding used exclusively by inbound MCP execution.</summary>
@@ -132,7 +133,8 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         IReadOnlyList<AllowedToolDto> allowedTools;
         if (request.InboundContext.IsAgentic)
         {
-            allowedTools = resolved.AllowedTools;
+            // Agentic runs auto-approve every call, which would skip the web result review: the web tools never enter the binding.
+            allowedTools = [.. resolved.AllowedTools.Where(static tool => !WebAccessToolCatalog.IsWebTool(tool.Name))];
         }
         else
         {

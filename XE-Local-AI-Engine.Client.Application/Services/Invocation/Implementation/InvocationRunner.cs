@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -711,6 +712,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // The resolver ORs the registry pre-wrap into this tighten-only flag, so an all-false ClientLocal offer never wraps one; every other location is fail-closed here.
         var approvalPossible = package.AllowedTools.Any(static tool => tool.RequiresApproval || tool.Location != ToolLocation.ClientLocal);
 
+        // The reviewed web results of THIS agent stream, read by the web tool handlers when the framework executes the approved calls.
+        using var webReviewScope = WebReviewResultScope.BeginScope();
+
         do
         {
             // Growth point (b): re-budget the approval-grown message list before each provider round — a cheap passthrough on the first iteration, and a bound on
@@ -964,9 +968,33 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
                 currentMessages.AddRange(foldedMessages);
 
+                // Every web call of the segment is retrieved at once, before the first review card; the tool time is not charged to the model.
+                IReadOnlyDictionary<ToolApprovalRequestContent, WebReviewRetrieval> webRetrievals = FrozenDictionary<ToolApprovalRequestContent, WebReviewRetrieval>.Empty;
+                if (pendingApprovals.Exists(ToolApprovalCoordinator.IsWebReviewRequest))
+                {
+                    _lifecycleTracker.SetToolExecuting(executing: true);
+                    try
+                    {
+                        webRetrievals = await _toolApprovalCoordinator.RetrieveWebContentAsync(package, pendingApprovals, invocationToken);
+                    }
+                    finally
+                    {
+                        _lifecycleTracker.SetToolExecuting(executing: false);
+                    }
+                }
+
                 var approvalResponses = new List<AIContent>(pendingApprovals.Count);
                 foreach (var approvalRequest in pendingApprovals)
                 {
+                    // A web review, like ask_user, always approves: the handler returns whatever the review stashed, the decline text included.
+                    if (webRetrievals.TryGetValue(approvalRequest, out var webRetrieval))
+                    {
+                        var reviewNote = await _toolApprovalCoordinator.RequestWebReviewAsync(package, approvalRequest, webRetrieval, _lifecycleTracker.SetInvocationDeadline, invocationToken);
+                        approvalResponses.Add(approvalRequest.CreateResponse(approved: true, reviewNote));
+                        openToolCalls.OpenApproved(approvalRequest);
+                        continue;
+                    }
+
                     // ask_user rides the approval seam for its BLOCKING behaviour, not a risk verdict (AskUserToolHandler): its round-trip collects an ANSWER
                     // and then always approves, so the framework executes the tool and the handler returns that answer. Every other tool keeps the approve/deny path.
                     if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))

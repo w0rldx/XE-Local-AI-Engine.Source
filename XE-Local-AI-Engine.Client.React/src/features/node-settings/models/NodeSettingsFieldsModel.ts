@@ -132,14 +132,15 @@ export function validateLlamaCppTag(value: string): { value?: string; error?: "f
 	return llamaCppTagPattern.test(trimmed) ? { value: trimmed } : { error: "format" };
 }
 
-// http/https URL validator for the Ollama endpoint. Empty resolves to undefined (left unchanged on save).
+// http/https URL validator for the Ollama endpoint and the SearXNG URL (mirrors the server's BeAbsoluteHttpUrl). Empty
+// resolves to undefined; each caller decides what a blank means on save.
 const httpUrlSchema = z
 	.string()
 	.trim()
 	.url()
 	.refine((value) => /^https?:\/\//i.test(value), { message: "protocol" });
 
-export function validateOllamaEndpoint(value: string): { value?: string; error?: "url" } {
+export function validateOptionalHttpUrl(value: string): { value?: string; error?: "url" } {
 	const trimmed = value.trim();
 	if (trimmed.length === 0) {
 		return {};
@@ -193,6 +194,9 @@ export interface NodeSettingsFieldsForm {
 	customToolsEnabled: boolean;
 	toolRelevanceEnabled: boolean;
 	toolCapableModels: string[];
+	// Web access (web_search + web_fetch). Off by default; an empty SearXNG URL means DuckDuckGo.
+	webAccessEnabled: boolean;
+	webSearchSearxngUrl: string;
 	ollamaEndpoint: string;
 	huggingFaceDefaultQuant: string;
 	recommendedLlamaCppTag: string;
@@ -238,6 +242,8 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	customToolsEnabled: false,
 	toolRelevanceEnabled: false,
 	toolCapableModels: [],
+	webAccessEnabled: false,
+	webSearchSearxngUrl: "",
 	ollamaEndpoint: "",
 	huggingFaceDefaultQuant: "",
 	recommendedLlamaCppTag: "",
@@ -287,6 +293,8 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		customToolsEnabled: response.customToolsEnabled ?? nodeSettingsFieldDefaults.customToolsEnabled,
 		toolRelevanceEnabled: response.toolRelevanceEnabled ?? nodeSettingsFieldDefaults.toolRelevanceEnabled,
 		toolCapableModels: response.toolCapableModels ? [...response.toolCapableModels] : [],
+		webAccessEnabled: response.webAccessEnabled ?? nodeSettingsFieldDefaults.webAccessEnabled,
+		webSearchSearxngUrl: response.webSearchSearxngUrl ?? "",
 		ollamaEndpoint: response.ollamaEndpoint ?? "",
 		huggingFaceDefaultQuant: response.huggingFaceDefaultQuant ?? "",
 		recommendedLlamaCppTag: response.recommendedLlamaCppTag ?? "",
@@ -463,7 +471,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
 //                                     but a running invocation's own approval-wait timer was fixed at process start.
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
-// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
+// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
 // message-request timeout.
 export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
 	"defaultModelName",
@@ -544,8 +552,22 @@ export function buildNodeSettingsRequest(
 		body.toolCapableModels = toolModels.value;
 	}
 
+	if (form.webAccessEnabled !== baseline.webAccessEnabled) {
+		body.webAccessEnabled = form.webAccessEnabled;
+	}
+
+	if (form.webSearchSearxngUrl !== baseline.webSearchSearxngUrl) {
+		const searxngUrl = validateOptionalHttpUrl(form.webSearchSearxngUrl);
+		if (searxngUrl.error) {
+			errors["webSearchSearxngUrl"] = searxngUrl.error;
+		} else {
+			// The PUT is null-preserving, so a blank field is sent as "" — the explicit clear back to DuckDuckGo.
+			body.webSearchSearxngUrl = searxngUrl.value ?? "";
+		}
+	}
+
 	if (form.ollamaEndpoint !== baseline.ollamaEndpoint) {
-		const endpoint = validateOllamaEndpoint(form.ollamaEndpoint);
+		const endpoint = validateOptionalHttpUrl(form.ollamaEndpoint);
 		if (endpoint.error) {
 			errors["ollamaEndpoint"] = endpoint.error;
 		} else {

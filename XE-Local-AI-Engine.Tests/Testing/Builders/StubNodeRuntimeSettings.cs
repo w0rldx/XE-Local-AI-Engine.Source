@@ -37,6 +37,8 @@ public sealed class StubNodeRuntimeSettings
     private int? _speculativeDraftGpuLayers;
     private string? _rerankerModelName;
     private bool _customToolsEnabled = StoredNodeSettings.DefaultCustomToolsEnabled;
+    private bool _webAccessEnabled = StoredNodeSettings.DefaultWebAccessEnabled;
+    private string? _webSearchSearxngUrl;
     private Func<CancellationToken, Task<bool>> _toolRelevanceRead = static _ => Task.FromResult(StoredNodeSettings.DefaultToolRelevanceEnabled);
     private bool _autoCheckApplicationUpdates = StoredNodeSettings.DefaultAutoCheckApplicationUpdates;
     private bool _autoCheckRuntimeUpdates = StoredNodeSettings.DefaultAutoCheckRuntimeUpdates;
@@ -76,6 +78,18 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithCustomToolsEnabled(bool customToolsEnabled)
     {
         _customToolsEnabled = customToolsEnabled;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWebAccessEnabled(bool webAccessEnabled)
+    {
+        _webAccessEnabled = webAccessEnabled;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWebSearchSearxngUrl(string? webSearchSearxngUrl)
+    {
+        _webSearchSearxngUrl = webSearchSearxngUrl;
         return this;
     }
 
@@ -281,6 +295,8 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftGpuLayersAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftGpuLayers);
         settings.GetRerankerModelNameAsync(Arg.Any<CancellationToken>()).Returns(_rerankerModelName);
         settings.GetCustomToolsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_customToolsEnabled);
+        settings.GetWebAccessEnabledAsync(Arg.Any<CancellationToken>()).Returns(_webAccessEnabled);
+        settings.GetWebSearchSearxngUrlAsync(Arg.Any<CancellationToken>()).Returns(_webSearchSearxngUrl);
         settings.GetToolRelevanceEnabledAsync(Arg.Any<CancellationToken>()).Returns(call => _toolRelevanceRead(call.Arg<CancellationToken>()));
         settings.GetExternalAccessProfileAsync(Arg.Any<CancellationToken>())
                 .Returns(call => _externalAccessProfileRead(call.Arg<CancellationToken>()));

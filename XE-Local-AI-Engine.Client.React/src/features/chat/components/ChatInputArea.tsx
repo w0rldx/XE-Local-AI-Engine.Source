@@ -65,6 +65,8 @@ interface ChatInputAreaProps {
 	// Whether the active model advertises the Ollama `tools` capability. Combined with the node-wide
 	// capability to gate the local-tool controls so a non-tool model never offers them.
 	activeModelToolCapable?: boolean;
+	// The conversation the composer sends into ("" for a draft without one yet); keys the per-conversation web review mode.
+	conversationId?: string;
 	toolsEnabled?: boolean;
 	// Whether the active model has a local mmproj vision projector. Combined with the node-wide capability
 	// (showImageAttachmentControls) to gate whether the composer accepts image attachments — mirrors
@@ -121,6 +123,7 @@ export function ChatInputArea({
 	selectedModel,
 	reasoningEffort,
 	activeModelToolCapable = false,
+	conversationId = "",
 	toolsEnabled = false,
 	activeModelMultimodal = false,
 	knowledgeBaseEnabled = false,
@@ -319,6 +322,7 @@ export function ChatInputArea({
 			reasoningMenuDisabled={reasoningMenuDisabled}
 			onReasoningEffortChange={onReasoningEffortChange}
 			showLocalToolControls={showLocalToolControls}
+			conversationId={conversationId}
 			toolsEnabled={toolsEnabled}
 			onToggleTools={onToggleTools}
 			showKnowledgeBaseControls={showKnowledgeBaseControls}

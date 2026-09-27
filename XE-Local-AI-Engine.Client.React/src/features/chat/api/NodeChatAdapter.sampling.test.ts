@@ -127,6 +127,14 @@ describe("NodeChatAdapter toStreamRequest sampling forwarding", () => {
 		expect(streamRequest.samplingOptions).toBeUndefined();
 	});
 
+	it("sends autoAcceptWebContent only when the conversation is in auto mode", () => {
+		expect(toStreamRequest({ ...baseRequest, autoAcceptWebContent: true }).autoAcceptWebContent).toBe(true);
+		// Review is the server default, so the review path keeps the frame byte-identical to a pre-web-access client.
+		expect(JSON.stringify(toStreamRequest({ ...baseRequest, autoAcceptWebContent: false }))).not.toContain(
+			"autoAcceptWebContent",
+		);
+	});
+
 	it("carries the identifiers the resume registry keys on", () => {
 		const streamRequest = toStreamRequest(baseRequest);
 

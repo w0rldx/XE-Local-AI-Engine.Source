@@ -13,10 +13,12 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 
 /// <summary>
-///     Owns every human round-trip an invocation can park on: tool approvals, the session-scoped approval memo, and
-///     the <c>ask_user</c> question flow.
+///     Owns every human round-trip an invocation can park on: tool approvals, the session-scoped approval memo, the
+///     <c>ask_user</c> question flow and the web result review.
 /// </summary>
 /// <remarks>
 ///     Separate from <see cref="InvocationRunner" /> so the security-critical ordering rules are reviewable in one
@@ -31,6 +33,14 @@ public sealed class ToolApprovalCoordinator
     private const string SessionScopeApprovalDecision = "session-scope auto-approve";
 
     private const string UnattendedApprovalDecision = "unattended-unavailable";
+
+    private const string WebContentAutoAcceptDecision = "web-content auto-accept";
+
+    internal const string WebContentDeclinedMessage = "The user declined to add this web content to the conversation.";
+
+    internal const string WebContentUnattendedMessage = "Web content is unavailable in unattended runs (no one to review it).";
+
+    internal const string WebContentTimeoutMessage = "The user did not review this web content in time, so it was not added to the conversation.";
 
     // Upper bound on remembered session approvals, so a long-lived node cannot grow the memo without limit; each entry is a conversation +
     // tool + skill + version + resource tuple. Overflow FAILS CLOSED and the operator is prompted again, so the cap only ever adds prompts.
@@ -81,9 +91,13 @@ public sealed class ToolApprovalCoordinator
 
     private readonly TimeSpan _maxPendingToolCallAge;
 
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
     private readonly TimeProvider _timeProvider;
 
     private readonly UserQuestionAnswerStash _userQuestionAnswerStash;
+
+    private readonly WebReviewRetriever _webReviewRetriever;
 
     /// <summary>The effective startup snapshot used by approval and question waits, also bounding work-session parks.</summary>
     internal TimeSpan PendingToolCallAge => _maxPendingToolCallAge;
@@ -93,6 +107,7 @@ public sealed class ToolApprovalCoordinator
         IToolApprovalAuditRecorder approvalAuditRecorder,
         IToolApprovalPolicy approvalPolicy,
         UserQuestionAnswerStash userQuestionAnswerStash,
+        WebReviewRetriever webReviewRetriever,
         INodeRuntimeSettings runtimeSettings,
         ILogger<ToolApprovalCoordinator> logger,
         TimeProvider timeProvider)
@@ -102,12 +117,13 @@ public sealed class ToolApprovalCoordinator
         _pendingToolCalls = pendingToolCallRegistry.Calls;
         _approvalAuditRecorder = approvalAuditRecorder ?? throw new ArgumentNullException(nameof(approvalAuditRecorder));
         _userQuestionAnswerStash = userQuestionAnswerStash ?? throw new ArgumentNullException(nameof(userQuestionAnswerStash));
+        _webReviewRetriever = webReviewRetriever ?? throw new ArgumentNullException(nameof(webReviewRetriever));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // The human-wait cap is read once at singleton construction from INodeRuntimeSettings, exactly as the runner and
         // the API tool-call bridge read it, so an operator edit applies on the next process restart and all three agree.
-        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
 
         // A concrete-type test rather than a widened IToolApprovalPolicy: that interface is the cross-project contract for one call's yes/no verdict, and the
@@ -166,76 +182,16 @@ public sealed class ToolApprovalCoordinator
             return true;
         }
 
-        var requestId = Guid.NewGuid().ToString("N");
-        var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall
-        {
-            InvocationId = package.InvocationId,
-            CreatedAt = _timeProvider.GetUtcNow(),
-            ApprovalCompletion = approvalCompletion,
-            ToolName = approvalToolName
-        };
-        var dispatcher = _eventDispatcher.Value;
-
-        if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
-        {
-            throw new InvalidOperationException("Failed to register pending tool approval.");
-        }
-
-        // Only a memo-ELIGIBLE request gets a candidate key, so an "approve for this session" decision on anything else — run_skill_script, a non-skill tool,
-        // an imported skill, or any tool at all while the operator's always-prompt switch is on — resolves as a plain one-shot approval and is never remembered.
-        if (sessionApprovalKey is { } candidateKey)
-        {
-            _sessionApprovalCandidates[requestId] = candidateKey;
-        }
-
         try
         {
-            var approvalPayload = new ApprovalRequestPayload
-            {
-                InvocationId = package.InvocationId,
-                RequestId = requestId,
-                Description = descriptionOverride
-                              ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs."
-            };
-
-            await dispatcher.ReportApprovalRequestedAsync(approvalPayload);
-
-            // Surface the pending approval on the LOCAL chat stream, deriving the CallId through the SAME helper the streaming tool-call lifecycle uses, so both
-            // events resolve one id and the browser attaches Approve/Deny to the matching card. ToolCall is the base ToolCallContent; FunctionCallContent carries the name.
-            var approvalCallId = InvocationRunner.ResolveToolCallCardId(approvalRequest.ToolCall.CallId, approvalToolName);
-            await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
-            {
-                InvocationId = package.InvocationId,
-                RequestId = requestId,
-                CallId = approvalCallId,
-                ToolName = string.IsNullOrEmpty(approvalToolName) ? approvalCallId : approvalToolName,
-                Description = approvalPayload.Description,
-                // The operator approves WHAT runs, and the tool-call-requested card carrying the arguments only arrives after the decision, so the
-                // prompt carries them itself, serialized exactly as that lifecycle event serializes them.
-                Arguments = approvalRequest.ToolCall is FunctionCallContent { Arguments: { } approvalArguments }
-                    ? JsonSerializer.Serialize(approvalArguments)
-                    : null,
-                // The coordinator already resolved whether this exact call can be memoized, so it is the authority on whether the card may offer "Approve for
-                // this session". The node tool catalog carries no MAF skill tool, so falling back to it would offer the button where the click degrades to "Once".
-                SessionScopeEligible = sessionApprovalKey is not null
-            });
-
-            // The age runs on the injected clock, so the expiry is testable; linking keeps an invocation cancel distinguishable in the catch below.
-            using var approvalAgeCancellationTokenSource = new CancellationTokenSource(_maxPendingToolCallAge, _timeProvider);
-            using var approvalTimeoutCancellationTokenSource =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, approvalAgeCancellationTokenSource.Token);
-
-            bool approved;
-            setInvocationDeadline(true);
-            try
-            {
-                approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
-            }
-            finally
-            {
-                setInvocationDeadline(false);
-            }
+            var approved = await ParkForDecisionAsync(package,
+                approvalRequest,
+                approvalToolName,
+                descriptionOverride ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs.",
+                sessionApprovalKey,
+                webReview: null,
+                setInvocationDeadline,
+                cancellationToken);
 
             await RecordApprovalDecisionAuditAsync(package,
                 approvalToolName,
@@ -255,12 +211,117 @@ public sealed class ToolApprovalCoordinator
                 cancellationToken);
             throw new ApprovalExpiredException(approvalToolName);
         }
-        finally
+    }
+
+    /// <summary>Retrieves every web call among <paramref name="approvalRequests" /> concurrently, ahead of their reviews.</summary>
+    /// <remarks>
+    ///     An unattended run and a call with no id fetch nothing: neither can ever deliver the content. A request that is not
+    ///     a web call has no entry, so the common segment pays one scan.
+    /// </remarks>
+    internal async Task<IReadOnlyDictionary<ToolApprovalRequestContent, WebReviewRetrieval>> RetrieveWebContentAsync(RuntimePackage package,
+        IReadOnlyList<ToolApprovalRequestContent> approvalRequests,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(approvalRequests);
+
+        var retrievals = new Dictionary<ToolApprovalRequestContent, Task<WebReviewRetrieval>>();
+        foreach (var approvalRequest in approvalRequests)
         {
-            _pendingToolCalls.TryRemove(requestId, out _);
-            _sessionApprovalCandidates.TryRemove(requestId, out _);
+            if (!IsWebReviewRequest(approvalRequest))
+            {
+                continue;
+            }
+
+            retrievals[approvalRequest] = package.IsUnattended || string.IsNullOrEmpty(approvalRequest.ToolCall.CallId)
+                ? Task.FromResult(WebReviewRetrieval.Refusal("web-review-unavailable", WebContentUnattendedMessage))
+                : _webReviewRetriever.RetrieveAsync((FunctionCallContent)approvalRequest.ToolCall, cancellationToken);
+        }
+
+        var retrieved = await Task.WhenAll(retrievals.Values);
+        return retrievals.Keys.Zip(retrieved).ToDictionary(static pair => pair.First, static pair => pair.Second);
+    }
+
+    /// <summary>
+    ///     Runs the web result review for one retrieved call and returns the note riding its (always approving) response.
+    /// </summary>
+    /// <remarks>
+    ///     Stashes what the handler returns: the fenced result on accept or auto, the decline text on reject, the host's
+    ///     refusal when there is nothing to review. It parks on the same approval events as any tool, never offers session
+    ///     scope, and never fails the turn; the unattended guard runs FIRST. See PLAN web-access §1.6.
+    /// </remarks>
+    internal async Task<string> RequestWebReviewAsync(RuntimePackage package,
+        ToolApprovalRequestContent approvalRequest,
+        WebReviewRetrieval retrieval,
+        Action<bool> setInvocationDeadline,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(approvalRequest);
+        ArgumentNullException.ThrowIfNull(retrieval);
+        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+
+        var toolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
+        var callId = approvalRequest.ToolCall.CallId;
+        var requestedTimestamp = Stopwatch.GetTimestamp();
+
+        if (package.IsUnattended)
+        {
+            WebReviewResultScope.Stash(callId, WebReviewRetrieval.RefusalJson("web-review-unavailable", WebContentUnattendedMessage));
+            await RecordApprovalDecisionAuditAsync(package, toolName, UnattendedApprovalDecision, requestedTimestamp, cancellationToken);
+            return "Not retrieved: this run has no one to review web content.";
+        }
+
+        if (retrieval.Preview is not { } preview)
+        {
+            WebReviewResultScope.Stash(callId, retrieval.ModelText);
+            return "Nothing to review: the call was refused.";
+        }
+
+        // Auto also covers a review the operator's approval policy would add: on a single-admin node the operator is this user.
+        if (package.AutoAcceptWebContent)
+        {
+            WebReviewResultScope.Stash(callId, await AcceptedWebContentAsync(retrieval, cancellationToken));
+            await RecordApprovalDecisionAuditAsync(package, toolName, WebContentAutoAcceptDecision, requestedTimestamp, cancellationToken);
+            return "Accepted automatically.";
+        }
+
+        try
+        {
+            var accepted = await ParkForDecisionAsync(package,
+                approvalRequest,
+                toolName,
+                $"Review the content {toolName} retrieved before it is added to the conversation.",
+                sessionApprovalKey: null,
+                preview,
+                setInvocationDeadline,
+                cancellationToken);
+
+            WebReviewResultScope.Stash(callId, accepted
+                ? await AcceptedWebContentAsync(retrieval, cancellationToken)
+                : WebReviewRetrieval.RefusalJson("user-declined", WebContentDeclinedMessage));
+            await RecordApprovalDecisionAuditAsync(package,
+                toolName,
+                accepted ? ApprovalDecisions.Approve : ApprovalDecisions.Deny,
+                requestedTimestamp,
+                cancellationToken);
+            return accepted ? "Accepted by user." : "Rejected by user.";
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // No review in time: like ask_user, the turn continues without the content rather than failing.
+            WebReviewResultScope.Stash(callId, WebReviewRetrieval.RefusalJson("review-timeout", WebContentTimeoutMessage));
+            await RecordApprovalDecisionAuditAsync(package, toolName, ApprovalDecisions.Timeout, requestedTimestamp, cancellationToken);
+            return "No review arrived in time.";
         }
     }
+
+    // The switch is re-read at the moment content would enter the conversation: turning web access off while a card is
+    // open refuses what it shows, as the services refuse every call made after it.
+    private async Task<string> AcceptedWebContentAsync(WebReviewRetrieval retrieval, CancellationToken cancellationToken) =>
+        await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken)
+            ? retrieval.ModelText
+            : WebReviewRetrieval.RefusalJson("web-access-disabled", "Web access is disabled on this node.");
 
     /// <summary>
     ///     Runs the <c>ask_user</c> human round-trip and returns the short, content-free note riding the approval response.
@@ -396,6 +457,92 @@ public sealed class ToolApprovalCoordinator
         }
     }
 
+    // Registers the pending call, broadcasts both approval events and waits on the operator. Throws OperationCanceledException on the
+    // pending-age timeout as on a cancel; callers tell them apart. The registration is removed however the wait ends.
+    private async Task<bool> ParkForDecisionAsync(RuntimePackage package,
+        ToolApprovalRequestContent approvalRequest,
+        string? toolName,
+        string description,
+        ApprovalMemoKey? sessionApprovalKey,
+        WebReviewPreview? webReview,
+        Action<bool> setInvocationDeadline,
+        CancellationToken cancellationToken)
+    {
+        var requestId = Guid.NewGuid().ToString("N");
+        var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingToolCall = new PendingToolCall
+        {
+            InvocationId = package.InvocationId,
+            CreatedAt = _timeProvider.GetUtcNow(),
+            ApprovalCompletion = approvalCompletion,
+            ToolName = toolName
+        };
+        var dispatcher = _eventDispatcher.Value;
+
+        if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
+        {
+            throw new InvalidOperationException("Failed to register pending tool approval.");
+        }
+
+        // Only a memo-ELIGIBLE request gets a candidate key, so an "approve for this session" decision on anything else — run_skill_script, a non-skill tool,
+        // an imported skill, a web review, or any tool at all while the operator's always-prompt switch is on — resolves as a one-shot approval.
+        if (sessionApprovalKey is { } candidateKey)
+        {
+            _sessionApprovalCandidates[requestId] = candidateKey;
+        }
+
+        try
+        {
+            await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+            {
+                InvocationId = package.InvocationId,
+                RequestId = requestId,
+                Description = description
+            });
+
+            // Surface the pending approval on the LOCAL chat stream, deriving the CallId through the SAME helper the streaming tool-call lifecycle uses, so both
+            // events resolve one id and the browser attaches Approve/Deny to the matching card. ToolCall is the base ToolCallContent; FunctionCallContent carries the name.
+            var approvalCallId = InvocationRunner.ResolveToolCallCardId(approvalRequest.ToolCall.CallId, toolName);
+            await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+            {
+                InvocationId = package.InvocationId,
+                RequestId = requestId,
+                CallId = approvalCallId,
+                ToolName = string.IsNullOrEmpty(toolName) ? approvalCallId : toolName,
+                Description = description,
+                // The operator approves WHAT runs, and the tool-call-requested card carrying the arguments only arrives after the decision, so the
+                // prompt carries them itself, serialized exactly as that lifecycle event serializes them.
+                Arguments = approvalRequest.ToolCall is FunctionCallContent { Arguments: { } approvalArguments }
+                    ? JsonSerializer.Serialize(approvalArguments)
+                    : null,
+                // The coordinator already resolved whether this exact call can be memoized, so it is the authority on whether the card may offer "Approve for
+                // this session". The node tool catalog carries no MAF skill tool, so falling back to it would offer the button where the click degrades to "Once".
+                SessionScopeEligible = sessionApprovalKey is not null,
+                WebReview = webReview
+            });
+
+            // The age runs on the injected clock, so the expiry is testable; linking keeps an invocation cancel distinguishable in the callers' catch.
+            using var approvalAgeCancellationTokenSource = new CancellationTokenSource(_maxPendingToolCallAge, _timeProvider);
+            using var approvalTimeoutCancellationTokenSource =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, approvalAgeCancellationTokenSource.Token);
+
+            setInvocationDeadline(true);
+            try
+            {
+                return await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
+            }
+            finally
+            {
+                setInvocationDeadline(false);
+            }
+        }
+        finally
+        {
+            _pendingToolCalls.TryRemove(requestId, out _);
+            _sessionApprovalCandidates.TryRemove(requestId, out _);
+        }
+    }
+
     /// <summary>Whether this approval request has already been captured for the current segment.</summary>
     /// <remarks>
     ///     Prefers a namespaced stable key — the tool-call id, else the approval's own request id — so a provider
@@ -435,6 +582,10 @@ public sealed class ToolApprovalCoordinator
     /// </remarks>
     public static bool IsUserQuestionRequest(ToolApprovalRequestContent approvalRequest) =>
         string.Equals((approvalRequest.ToolCall as FunctionCallContent)?.Name, AskUserTool.ToolName, StringComparison.Ordinal);
+
+    /// <summary>Whether a framework-surfaced approval request is a web result review; matched on the tool name as for <c>ask_user</c>.</summary>
+    public static bool IsWebReviewRequest(ToolApprovalRequestContent approvalRequest) =>
+        approvalRequest.ToolCall is FunctionCallContent call && WebAccessToolCatalog.IsWebTool(call.Name);
 
     /// <summary>
     ///     The <see cref="ApprovalMemoKey" /> this request may be remembered under, or <see langword="null" /> when it is

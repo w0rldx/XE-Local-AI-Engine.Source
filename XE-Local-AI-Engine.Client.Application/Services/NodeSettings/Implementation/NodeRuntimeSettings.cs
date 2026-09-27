@@ -105,6 +105,18 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.CustomToolsEnabled ?? StoredNodeSettings.DefaultCustomToolsEnabled;
     }
 
+    public async Task<bool> GetWebAccessEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.WebAccessEnabled ?? StoredNodeSettings.DefaultWebAccessEnabled;
+    }
+
+    public async Task<string?> GetWebSearchSearxngUrlAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.WebSearchSearxngUrl;
+    }
+
     public async Task<bool> GetToolRelevanceEnabledAsync(CancellationToken cancellationToken = default)
     {
         var stored = await LoadAsync(cancellationToken);

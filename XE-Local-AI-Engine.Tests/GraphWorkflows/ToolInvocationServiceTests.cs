@@ -11,8 +11,10 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The invocation envelope, asserted where it is enforced. <c>IToolInvocationService</c> is the ONLY place a workflow node's
@@ -129,6 +131,31 @@ public sealed class ToolInvocationServiceTests
             $"{toolName} must not be offered to a picker it can never run from.");
     }
 
+    /// <summary>
+    ///     Web access ON does not widen this service: <c>web_fetch</c> is Network, so every caller of it — the dataset
+    ///     generator included — is refused, and only the graph Tool lane reaches the fetch, itself, with a node's
+    ///     allow-list (ADR 0017, decision 6).
+    /// </summary>
+    [Test]
+    public async Task Invoke_WebFetchWithWebAccessOn_IsStillRefusedAndNeverListed()
+    {
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = static services =>
+            {
+                services.RemoveAll<INodeRuntimeSettings>();
+                services.AddSingleton(StubNodeRuntimeSettings.Create().WithWebAccessEnabled(webAccessEnabled: true).Build());
+            }
+        };
+        var service = ServiceOf(factory);
+
+        var outcome = await service.InvokeAsync("web_fetch", """{"url":"https://docs.example.com/"}""", Context());
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind);
+        AssertEx.Equal("not-read-local", outcome.Reason);
+        AssertEx.False((await service.ListInvocableToolsAsync()).Any(static tool => tool.Name == "web_fetch"));
+    }
+
     [Test]
     [Arguments("no_such_tool")]
     [Arguments("")]
@@ -240,6 +267,17 @@ public sealed class ToolInvocationServiceTests
     ///     The gate lives INSIDE the service, not in its callers: a node policy that tightens <c>ReadLocal</c> closes
     ///     every Tool node, and it does so through the same composed call the catalog default flows into.
     /// </summary>
+    [Test]
+    [Arguments("web_fetch")]
+    [Arguments("web_search")]
+    public async Task Invoke_AWebTool_IsNeverInvocable_SoTheHeadlessAndDatasetPathsCannotRunIt(string toolName)
+    {
+        // HeadlessToolExecutor (training datasets) reaches tools only through here; the handler itself also refuses unreviewed calls.
+        var outcome = await ServiceOf(Factory).InvokeAsync(toolName, """{"url":"https://example.com/","query":"q"}""", Context());
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind, outcome.Reason);
+    }
+
     [Test]
     public async Task Invoke_WhenTheNodePolicyTightensReadLocal_RefusesEvenTheSafestTool()
     {

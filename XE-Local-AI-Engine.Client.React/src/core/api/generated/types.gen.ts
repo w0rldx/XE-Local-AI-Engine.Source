@@ -2898,6 +2898,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRespo
 	name: string;
 	description: string;
 	parameterSchema: string;
+	requiresAllowedUrls: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
@@ -4606,6 +4607,8 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
+	webAccessEnabled?: boolean | null;
+	webSearchSearxngUrl?: string | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
 	updateChannel?: string | null;
@@ -4674,6 +4677,8 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
+	webAccessEnabled?: boolean | null;
+	webSearchSearxngUrl?: string | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
 	updateChannel?: string | null;

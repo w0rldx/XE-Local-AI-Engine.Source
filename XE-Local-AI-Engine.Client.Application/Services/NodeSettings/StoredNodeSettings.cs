@@ -171,6 +171,12 @@ public sealed partial record StoredNodeSettings
     public const bool DefaultCustomToolsEnabled = false;
 
     /// <summary>
+    ///     Node switch for the built-in web tools (<c>web_fetch</c>, <c>web_search</c>); default (absent) is OFF. When
+    ///     off they are offered to no model and the web-access service refuses every call. ADR 0017.
+    /// </summary>
+    public const bool DefaultWebAccessEnabled = false;
+
+    /// <summary>
     ///     Node switch for the per-turn tool-relevance offer. Default (absent) is OFF: the filter stays a
     ///     pass-through, so every offer is byte-identical to the pre-toggle behaviour.
     /// </summary>
@@ -500,6 +506,19 @@ public sealed partial record StoredNodeSettings
     ///     passes it through untouched.
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
+
+    /// <summary>
+    ///     Node switch for the built-in web tools. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultWebAccessEnabled" /> (off). Read per offer and per call, so a save applies to the next turn.
+    /// </summary>
+    public bool? WebAccessEnabled { get; init; }
+
+    /// <summary>
+    ///     Operator-configured SearXNG base URL that replaces the DuckDuckGo backend of <c>web_search</c>;
+    ///     <see langword="null" /> uses DuckDuckGo. <c>NodeSettingsStore.Normalize</c> keeps only an absolute http(s) URL,
+    ///     and a blank save clears it, like <see cref="OllamaEndpoint" />.
+    /// </summary>
+    public string? WebSearchSearxngUrl { get; init; }
 
     /// <summary>
     ///     Which external-access preset was last applied: a RECORD of the choice, never the authority.

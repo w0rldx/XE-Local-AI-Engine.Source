@@ -6,8 +6,10 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -87,6 +89,70 @@ public sealed class NodeChatHubTests
         AssertEx.True(events.All(streamEvent => streamEvent.ConversationId == conversationId));
         AssertEx.True(events.All(streamEvent => streamEvent.MessageId == messageId));
         AssertEx.True(events.All(streamEvent => streamEvent.RequestId == requestId));
+    }
+
+    [Test]
+    public async Task RegenerateMessage_CarriesTheWebReviewModeAsTheArgumentAfterSamplingOptions()
+    {
+        // Positional over the wire: autoAcceptWebContent is appended AFTER samplingOptions, and the order is the contract.
+        var regeneration = Substitute.For<INodeChatRegenerationService>();
+        regeneration.RegenerateAsync(Arg.Any<Guid>(),
+                        Arg.Any<Guid>(),
+                        Arg.Any<string?>(),
+                        Arg.Any<bool>(),
+                        Arg.Any<bool>(),
+                        Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
+                        Arg.Any<SamplingOptions?>(),
+                        Arg.Any<bool>(),
+                        Arg.Any<CancellationToken>())
+                    .Returns(AsyncEnumerable.Empty<ChatStreamEvent>());
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeChatRegenerationService>();
+                services.AddSingleton(regeneration);
+            }
+        };
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+
+        _ = await connection.StreamAsync<ChatStreamEvent>("RegenerateMessage",
+                                conversationId,
+                                messageId,
+                                null,
+                                true,
+                                false,
+                                null,
+                                null,
+                                true)
+                            .ToListAsync();
+
+        _ = regeneration.Received(1)
+                        .RegenerateAsync(conversationId,
+                            messageId,
+                            null,
+                            true,
+                            false,
+                            null,
+                            null,
+                            true,
+                            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RegenerateMessage_WithoutTheWebReviewModeArgument_IsRejectedByTheHubProtocol()
+    {
+        // SignalR binds hub arguments by position and count, so a client sending the pre-web-access seven arguments fails.
+        await using var factory = new TestServerWebAppFactory();
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+
+        _ = await AssertEx.ThrowsAsync<HubException>(async () =>
+            _ = await connection.StreamAsync<ChatStreamEvent>("RegenerateMessage", Guid.NewGuid(), Guid.NewGuid(), null, true, false, null, null)
+                                .ToListAsync());
     }
 
     [Test]

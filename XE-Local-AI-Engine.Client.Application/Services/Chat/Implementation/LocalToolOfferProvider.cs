@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
@@ -58,6 +59,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // The work-session state tools, held out of the whole offer as profile-opt-in only. Each handler also fails closed
     // outside a session, so this projection is convenience, not the boundary.
     private readonly IReadOnlyList<AllowedToolDto> _workSessionOfferDtos;
+
+    // The built-in web tools, merged into the WHOLE offer only while WebAccessEnabled is on (ADR 0017).
+    private readonly IReadOnlyList<AllowedToolDto> _webAccessOfferDtos;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
@@ -137,6 +141,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // category-based operator policy would blind the layer whose job is to see it.
         _workSessionOfferDtos =
             [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+
+        _webAccessOfferDtos =
+            [.. WebAccessToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
 
         // The capability-gated variant, precomputed once: the built-ins minus the coder and knowledge tools and
         // ask_user, returned when the active model is not tool-capable.
@@ -219,6 +226,15 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 RequiresApproval = descriptor.RequiresApproval,
                 Source = BuiltinSource,
                 Category = descriptor.Category
+            }),
+            // Listed whatever the node switch says, so the agent picker shows them and AllowedToolNames validation accepts them.
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => new LocalToolCatalogEntry
+            {
+                Name = descriptor.Name,
+                Description = descriptor.Description,
+                RequiresApproval = descriptor.RequiresApproval,
+                Source = BuiltinSource,
+                Category = descriptor.Category
             })
         ];
 
@@ -231,7 +247,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             SpawnSubAgentToolDefinition.ToolName,
             ComputeToolDefinition.ToolName,
             AgentHomeToolDefinition.ToolName,
-            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)
+            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => descriptor.Name),
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)
         ];
     }
 
@@ -305,6 +322,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         if (!IsToolCapable(activeModelId) || IsOutsideTrustBoundary(activeModelId, isCloudModel))
         {
             return baseOffer;
+        }
+
+        // The web tools take the custom-tool gates above (tool-capable, inside the trust boundary) plus their own node
+        // switch. A bound agent still gets them only through its AllowedToolNames intersection.
+        if (await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken))
+        {
+            baseOffer = [.. baseOffer, .. _webAccessOfferDtos];
         }
 
         // The node kill-switch is off by default. It is checked here, before the scope and store read, so the common

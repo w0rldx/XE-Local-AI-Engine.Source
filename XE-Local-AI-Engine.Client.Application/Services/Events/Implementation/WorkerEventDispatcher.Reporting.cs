@@ -264,7 +264,8 @@ public sealed partial class WorkerEventDispatcher
                         CallId = payload.CallId,
                         ToolName = payload.ToolName,
                         Arguments = payload.Arguments,
-                        SessionScopeEligible = payload.SessionScopeEligible ?? approval.SessionScopeEligible
+                        SessionScopeEligible = payload.SessionScopeEligible ?? approval.SessionScopeEligible,
+                        WebReview = payload.WebReview
                     };
                 }
 

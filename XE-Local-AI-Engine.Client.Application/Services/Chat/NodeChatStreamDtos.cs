@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 
 /// <summary>
 ///     Represents chat stream event types.
@@ -111,9 +112,11 @@ public sealed record NodeChatStreamRequest(
     // Invariant GRAPH-C4-2, armed by a work session whose node declares no WriteExecute capability: the send refuses
     // if its own resolved offer carries a writing tool. See docs/wiki/05-chat.md, "Work-session write declaration".
     bool RefuseUndeclaredWrites = false,
-    // Whether this turn is sent WITHOUT ask_user, overriding AskUserToolOffer's invariant for a workflow-owned work
-    // session, which has no operator. See docs/wiki/05-chat.md, "Withdrawing ask_user from a workflow-owned session".
-    bool SuppressAskUser = false);
+    // Sent WITHOUT the tools that park on an operator (ask_user, web_fetch, web_search), for a workflow-owned work session,
+    // which has no operator. See docs/wiki/05-chat.md, "Withdrawing operator tools from a workflow-owned session".
+    bool SuppressOperatorTools = false,
+    // The conversation's web result review mode: true skips the review card (PLAN web-access §1.6). Absent means review.
+    bool AutoAcceptWebContent = false);
 
 public sealed record ChatStreamEvent
 {
@@ -182,6 +185,9 @@ public sealed record ChatStreamEvent
     public int? InvocationTimeoutSeconds { get; init; }
 
     public bool? SessionScopeEligible { get; init; }
+
+    /// <summary>On an <c>approval-requested</c> event for a web result review: the content awaiting Accept or Reject.</summary>
+    public WebReviewPreview? WebReview { get; init; }
 
     public string? NoticeDetail { get; init; }
 

@@ -40,6 +40,8 @@ public sealed class LocalChatRuntimePackageRequest
 
     public bool IsUnattended { get; init; }
 
+    public bool AutoAcceptWebContent { get; init; }
+
     public IReadOnlyList<ResolvedCustomTool>? CustomTools { get; init; }
 
     public JsonElement? ResponseJsonSchema { get; init; }

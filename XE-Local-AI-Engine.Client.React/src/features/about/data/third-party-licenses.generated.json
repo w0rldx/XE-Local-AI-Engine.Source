@@ -538,6 +538,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "backend:AngleSharp@1.5.2",
+			"name": "AngleSharp",
+			"version": "1.5.2",
+			"license": "MIT",
+			"homepageUrl": "https://anglesharp.github.io/",
+			"source": "backend"
+		},
+		{
 			"id": "frontend:asynckit@0.4.0",
 			"name": "asynckit",
 			"version": "0.4.0",
@@ -3623,6 +3631,14 @@
 			"version": "3.119.4",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=868515",
+			"source": "backend"
+		},
+		{
+			"id": "backend:SmartReader@0.11.1",
+			"name": "SmartReader",
+			"version": "0.11.1",
+			"license": "Apache-2.0",
+			"homepageUrl": "https://smartreader.inre.me/",
 			"source": "backend"
 		},
 		{

@@ -226,7 +226,20 @@
 			"toolsFiltered": "Tools filtered",
 			"effortDispatched": "Reasoning effort resolved"
 		},
-		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
+		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
+		"webReview": {
+			"heading": "Review web content before the model reads it",
+			"backend": "Search engine: {{backend}}",
+			"noResults": "The search returned no results.",
+			"redirectedTo": "Redirected to {{url}}",
+			"truncated": "Truncated",
+			"textLabel": "Retrieved page text",
+			"accept": "Add to conversation",
+			"reject": "Reject",
+			"resultsLabel": "Search results",
+			"missingPreview": "Reload the page to review this web content before the model reads it.",
+			"reload": "Reload"
+		}
 	},
 	"pages": {
 		"development": {
@@ -1348,6 +1361,17 @@
 					"capReached": "This node has been steered the maximum number of times."
 				},
 				"lockedHintSteer": "Workflow running — Intervene or Stop."
+			},
+			"webAutoAccept": {
+				"label": "Auto-accept web content",
+				"needsConversation": "Send a first message to choose how web content is handled",
+				"on": "Web content reaches the model without review",
+				"off": "Web content is shown to you for review first",
+				"noticeTitle": "Auto-accept web content?",
+				"noticeInjection": "Web pages and search results can contain hidden instructions (prompt injection) written to make the model leak your data or take actions you did not ask for.",
+				"noticeUnreviewed": "With auto-accept on, retrieved content goes to the model in this conversation without being shown to you first.",
+				"noticeReversible": "You can turn it off again at any time.",
+				"confirm": "Enable auto-accept"
 			}
 		},
 		"clientNodes": {
@@ -2060,6 +2084,17 @@
 				"customToolsEnabled": {
 					"label": "Enable custom tools",
 					"description": "Allows agents to run user-defined tools that execute host commands, launch programs, and make network requests. Off by default. Each call still requires your approval."
+				},
+				"webAccess": {
+					"title": "Web access"
+				},
+				"webAccessEnabled": {
+					"label": "Allow web search and page fetching",
+					"description": "When enabled, the model can send search queries to DuckDuckGo or SearXNG and download public web pages. Retrieved content is shown to you for review before the model sees it. Off by default."
+				},
+				"webSearchSearxngUrl": {
+					"label": "SearXNG URL",
+					"description": "Leave empty to use DuckDuckGo (best effort). Point to your own SearXNG instance with the JSON format enabled for reliable search."
 				},
 				"toolRelevanceEnabled": {
 					"label": "Filter tools by relevance",
@@ -6088,6 +6123,11 @@
 				"argumentsJson": {
 					"notObject": "Enter a JSON object of arguments, or leave it empty."
 				},
+				"allowedUrls": {
+					"required": "Add at least one allowed link. A web_fetch node fetches only pages under its allowed links.",
+					"invalid": "Each allowed link must be an absolute http or https URL.",
+					"literalUrlNotAllowed": "The literal url argument is not under any of this node's allowed links."
+				},
 				"argumentBindings": {
 					"pathRequired": "Enter the path this argument reads from."
 				},
@@ -6165,6 +6205,14 @@
 				"includeUpstreamOutputs": "Include upstream outputs",
 				"includeUpstreamOutputsHelp": "Hands this agent what the nodes before it produced, on top of the run input.",
 				"tool": "Tool",
+				"allowedUrls": "Allowed links",
+				"allowedUrlsHelp": "web_fetch reads only pages under these links: same scheme, host and port, and a path at or below the link's path. Private and local addresses stay blocked even when listed.",
+				"addAllowedUrl": "Add link",
+				"removeAllowedUrl": "Remove link",
+				"noAllowedUrls": "None yet. The node cannot fetch anything until you add a link.",
+				"allowlistNoticeTitle": "Pages on these links reach the model unreviewed",
+				"allowlistNoticeBody": "A workflow run fetches these pages without asking anyone, and their text goes straight to the next model. A page can contain instructions written to mislead that model. List only sites you trust.",
+				"allowlistNoticeAcknowledge": "I understand",
 				"toolPlaceholder": "Choose a tool",
 				"arguments": "Arguments (JSON)",
 				"argumentBindings": "Argument bindings",

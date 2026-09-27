@@ -672,6 +672,41 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		);
 	});
 
+	it("saves the web-access switch and a cleared SearXNG URL", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, webAccessEnabled: false, webSearchSearxngUrl: "http://localhost:8888" }),
+		});
+		renderPage();
+		await screen.findByDisplayValue("http://localhost:8888");
+
+		const toggle = screen.getByTestId("node-settings-web-access-enabled");
+		fireEvent.click(toggle.querySelector("input[type='checkbox']") ?? toggle);
+		fireEvent.change(screen.getByTestId("node-settings-web-search-searxng-url"), { target: { value: "" } });
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { webAccessEnabled: true, webSearchSearxngUrl: "", maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+	});
+
+	it("refuses to save a relative SearXNG URL and flags the field", async () => {
+		renderPage();
+		await screen.findByDisplayValue(/600/);
+
+		fireEvent.change(screen.getByTestId("node-settings-web-search-searxng-url"), { target: { value: "/search" } });
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		// This file mocks i18n, so the field's invalid state is asserted here; the bundle copy is asserted in
+		// NodeSettingsWebAccessCard.test.tsx.
+		await waitFor(() =>
+			expect(screen.getByTestId("node-settings-web-search-searxng-url").getAttribute("aria-invalid")).toBe("true"),
+		);
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
 	// One-click recommended-reranker download: response-state handling.
 	it("downloads the recommended reranker on a fresh start — shows progress and duplicate-guards the button", async () => {
 		renderPage();

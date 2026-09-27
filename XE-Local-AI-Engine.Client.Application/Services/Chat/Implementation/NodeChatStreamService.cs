@@ -241,9 +241,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // carries; every other turn resolves it right here, exactly where it always did.
         var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken);
         var offerTools = toolOffer.OfferTools;
-        // The ask_user withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
+        // The operator-tool withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
         // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
-        var allowedTools = request.SuppressAskUser ? AskUserToolOffer.Withdraw(toolOffer.AllowedTools) : toolOffer.AllowedTools;
+        var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
 
         var attachmentsAllowed = AreAttachmentsAllowed(resolution);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
@@ -817,7 +817,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 InvocationTimeoutSeconds = invocationTimeoutSeconds
             },
             ReasoningEffort = EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
-            OrchestrationSpec = request.SuppressAskUser ? AskUserToolOffer.Withdraw(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
+            OrchestrationSpec = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
             SupportsThinking = resolution.SupportsThinking,
             SamplingOptions = request.SamplingOptions,
             Skills = resolved?.Skills,
@@ -828,7 +828,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
             // Model-selection provenance for the runner's reasoning-effort dispatcher; false means pinned, never swap.
             // A work-session step never swaps: the graph was authored against a model, so no silent substitution.
-            AllowAutoModelSwap = resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn
+            AllowAutoModelSwap = resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn,
+            AutoAcceptWebContent = request.AutoAcceptWebContent
         });
     }
 

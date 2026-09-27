@@ -1860,6 +1860,21 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_ThreadsTheWebReviewModeIntoRuntimePackage()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-web-auto.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        _ = await service.RegenerateAsync(conversationId, originalId, autoAcceptWebContent: true).ToListAsync();
+
+        AssertEx.True(capturingRunner.LastAutoAcceptWebContent, "a regenerated turn keeps the conversation's web review mode");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenNoSamplingOptionsSupplied_LeavesRuntimePackageSamplingNull()
     {
         // The no-override path must stay byte-identical to before the threading landed (the package's config hash
@@ -3329,10 +3344,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The per-turn sampling overrides carried on the runtime package; the sampling tests assert the developer-mode
         // knobs reach a regenerated turn too, and that an override-free rerun still carries none.
         public SamplingOptions? LastSamplingOptions { get; private set; }
+
+        public bool LastAutoAcceptWebContent { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
+            LastAutoAcceptWebContent = context.Package.AutoAcceptWebContent;
             LastContext = context.Package.ConversationContext;
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;

@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -833,7 +834,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// <summary>The headless loopback package for one node's turn.</summary>
     /// <remarks>
     ///     Approval-required tools are stripped: an unattended run has no approval round-trip, so an approval-gated
-    ///     tool would surface a request nobody can answer. <c>IsUnattended</c> covers the rest — skill tools arrive
+    ///     tool would surface a request nobody can answer. The web tools are stripped by name on top, bound agent or not. <c>IsUnattended</c> covers the rest — skill tools arrive
     ///     through MAF's context providers and never through the offer, so stripping alone cannot reach them. The
     ///     whole-turn deadline is the NODE's own <c>timeoutSeconds</c>, not the node-level maximum message request
     ///     timeout: the runner must end first, or the dispatcher's grace expiry becomes a race with the answer.
@@ -848,12 +849,14 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         string seedPrompt,
         IReadOnlyList<ConversationImagePart>? images)
     {
-        var offeredTools = resolved.AllowedTools.Where(static tool => !tool.RequiresApproval).ToArray();
-        var strippedTools = resolved.AllowedTools.Where(static tool => tool.RequiresApproval).ToArray();
+        // The web tools go BY NAME, whatever their approval flag says: a graph reaches the web only through an allow-listed
+        // web_fetch Tool node (ADR 0017, decision 6), and a flag a later change relaxes must not quietly reopen it here.
+        var offeredTools = resolved.AllowedTools.Where(static tool => !tool.RequiresApproval && !WebAccessToolCatalog.IsWebTool(tool.Name)).ToArray();
+        var strippedTools = resolved.AllowedTools.Where(static tool => tool.RequiresApproval || WebAccessToolCatalog.IsWebTool(tool.Name)).ToArray();
         if (strippedTools.Length > 0)
         {
             _logger.LogWarning(
-                "Graph workflow node '{NodeKey}' stripped {StrippedCount} approval-required tool(s) ({StrippedTools}) from its unattended offer: a graph workflow run has no approval round-trip.",
+                "Graph workflow node '{NodeKey}' stripped {StrippedCount} tool(s) ({StrippedTools}) from its unattended offer: a graph workflow run has no approval round-trip, and reaches the web only through an allow-listed Tool node.",
                 node.NodeKey,
                 strippedTools.Length,
                 string.Join(", ", strippedTools.Select(static tool => tool.Name)));

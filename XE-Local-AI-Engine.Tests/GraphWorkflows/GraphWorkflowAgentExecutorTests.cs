@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -12,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -244,6 +247,74 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.True(harness.Services.GetRequiredService<RecordingLogger<GraphWorkflowInvocationExecutor>>()
                              .HasEntry(LogLevel.Warning, FakeGraphWorkflowAgentRuntime.ApprovalRequiredTool),
             "the stripped tool is named, so a narrower offer is visible rather than silent.");
+    }
+
+    /// <summary>
+    ///     Web access ON, as the offer sees it: both web tools are in the default persona's offer, and no graph Agent node
+    ///     may keep either (ADR 0017, decision 6).
+    /// </summary>
+    /// <remarks>They are flagged ReadLocal and approval-free here, so only the NAME strip can remove them.</remarks>
+    [Test]
+    public async Task AnAgentlessNode_NeverKeepsAWebToolFromTheDefaultPersonasOffer()
+    {
+        const string instructions = "agentless-web-offer";
+        var offer = Substitute.For<ILocalToolOfferProvider>();
+        offer.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+             .Returns([HarmlessTool("read_file"), HarmlessTool("web_fetch"), HarmlessTool("web_search")]);
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost(services =>
+        {
+            services.RemoveAll<ILocalToolOfferProvider>();
+            services.AddSingleton(offer);
+        });
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, SingleAttempt));
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId)).Status);
+
+        var offered = harness.Invocations.PackageFor(instructions).AllowedTools.Select(static tool => tool.Name).ToList();
+        AssertEx.Contains(offered, "read_file", message: "the rest of the offer survives, so the strip is by name and not wholesale.");
+        AssertEx.False(offered.Contains("web_fetch", StringComparer.Ordinal) || offered.Contains("web_search", StringComparer.Ordinal),
+            $"a graph Agent node reaches the web only through an allow-listed Tool node; offered: {string.Join(", ", offered)}");
+    }
+
+    /// <summary>The bound-agent twin: an agent whose <c>AllowedToolNames</c> opted into both web tools still loses them here.</summary>
+    [Test]
+    public async Task ABoundAgentNode_NeverKeepsAWebToolItsDefinitionAllows()
+    {
+        const string instructions = "bound-web-offer";
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool>(),
+                    Arg.Any<bool>(),
+                    Arg.Any<bool>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<Guid?>(0) is null
+                    ? null
+                    : new ResolvedAgentRuntime("PERSONA",
+                        [HarmlessTool("read_file"), HarmlessTool("web_fetch"), HarmlessTool("web_search")],
+                        call.ArgAt<string?>(1),
+                        ReasoningEffort: null,
+                        AgentDefinitionVersion: 1));
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost(services =>
+        {
+            services.RemoveAll<IAgentDefinitionResolver>();
+            services.AddSingleton(resolver);
+        });
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-web-agent");
+        var runId = await StartToTheAgentAsync(harness,
+            Graph(instructions,
+                $$"""
+                  , "agentDefinitionId": "{{agentDefinitionId}}"
+                  """,
+                SingleAttempt));
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId)).Status);
+
+        var offered = harness.Invocations.PackageFor(instructions).AllowedTools.Select(static tool => tool.Name).ToList();
+        AssertEx.Equal("read_file", string.Join(",", offered), "both web tools are gone and nothing else is.");
+        AssertEx.True(harness.Services.GetRequiredService<RecordingLogger<GraphWorkflowInvocationExecutor>>().HasEntry(LogLevel.Warning, "web_fetch"),
+            "the strip is named in the log, like the approval strip.");
     }
 
     /// <summary>
@@ -1118,6 +1189,16 @@ public sealed class GraphWorkflowAgentExecutorTests
                                     });
         return definition.Id;
     }
+
+    private static AllowedToolDto HarmlessTool(string name) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            RequiresApproval = false,
+            Category = ToolCategory.ReadLocal
+        };
 
     private static JsonElement Output(GraphWorkflowNodeRunSnapshot nodeRun)
     {

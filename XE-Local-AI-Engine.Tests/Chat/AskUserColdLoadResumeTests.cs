@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -129,6 +131,69 @@ public sealed class AskUserColdLoadResumeTests
 
         await dispatcher.ReportInvocationCompletedAsync(invocationId);
         await consumer;
+    }
+
+    [Test]
+    public async Task AfterAReload_AParkedWebReviewIsReplayedWithItsPreview()
+    {
+        // The web result review parks on the approval slot, so the retrieved content must survive the same reload.
+        var runner = Substitute.For<IInvocationRunner>();
+        var dispatcher = CreateDispatcher(runner);
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithConversationId(conversationId).Build();
+
+        await using var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+        await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+        {
+            InvocationId = invocationId,
+            RequestId = "review-1",
+            Description = "Review the content web_fetch retrieved."
+        });
+        await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+        {
+            InvocationId = invocationId,
+            RequestId = "review-1",
+            CallId = "call-web-1",
+            ToolName = "web_fetch",
+            Description = "Review the content web_fetch retrieved.",
+            SessionScopeEligible = false,
+            WebReview = new WebReviewPreview
+            {
+                ToolName = "web_fetch",
+                Url = "https://news.example.com/tidal",
+                FinalUrl = "https://news.example.com/2026/tidal",
+                Title = "Tidal energy",
+                ContentType = "text/html",
+                Truncated = false,
+                Text = "Tidal turbines now power six hundred homes."
+            }
+        });
+
+        var resolved = registry.TryGetLiveInvocationIdForConversation(conversationId);
+        AssertEx.True(resolved.HasValue, "the reload finds the parked run from the conversation alone");
+        var resumeId = resolved!.Value;
+        var events = new List<ChatStreamEvent>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(resumeId, cancellation.Token))
+            {
+                events.Add(streamEvent);
+            }
+        }, cancellation.Token);
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(10));
+        await dispatcher.ReportInvocationCompletedAsync(invocationId);
+        await consumer;
+
+        var replayed = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("call-web-1", replayed.ToolCallId);
+        AssertEx.Equal(expected: false, replayed.SessionScopeEligible);
+        var preview = AssertEx.NotNull(replayed.WebReview, "a reload must re-render the content awaiting review, not an empty card");
+        AssertEx.Equal("https://news.example.com/2026/tidal", preview.FinalUrl);
+        AssertEx.Equal("Tidal turbines now power six hundred homes.", preview.Text);
     }
 
     [Test]

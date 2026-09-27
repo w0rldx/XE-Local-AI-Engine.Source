@@ -22,10 +22,12 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -34,6 +36,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
+using XE_Local_AI_Engine.Client.Services.Interaction.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
@@ -42,6 +45,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -1474,6 +1479,229 @@ public sealed class InvocationRunnerTests
         AssertEx.True(stash.TryPop("call-ask-user", out var stashed), "the answer must be stashed under the tool call's CallId for the handler to pop");
         AssertEx.Contains(stashed, "\"answered\":true");
         AssertEx.Contains(stashed, "OAuth device flow");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAWebFetchSurfaces_RetrievesItParksOnAReviewCardAndTheResumedHandlerReturnsTheAcceptedResult()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var handlerResults = new ConcurrentQueue<string>();
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults),
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build());
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+
+        var card = cards.Single();
+        AssertEx.Equal("call-web-fetch", card.CallId, "the review attaches to the tool-call card the model is waiting on");
+        AssertEx.Equal(WebReviewTestServer.PageText, AssertEx.NotNull(card.WebReview).Text);
+        AssertEx.Equal(WebReviewTestServer.PageUrl, server.Requests.Single().AbsoluteUri, "fetched once, before the card, with no allow-list");
+        AssertEx.False(runTask.IsCompleted, "the turn holds until the user reviews the content");
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = card.RequestId,
+            Approved = true
+        });
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment);
+        AssertEx.True(AssertEx.NotNull(resumeMessages).SelectMany(static message => message.Contents).OfType<ToolApprovalResponseContent>().Single().Approved);
+        var result = handlerResults.Single();
+        AssertEx.Contains(result, WebReviewTestServer.PageText);
+        AssertEx.True(result.Contains(UntrustedContentFraming.UntrustedTrustLabel, StringComparison.Ordinal), "accepted content still reaches the model fenced");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAWebReviewIsRejected_TheCallIsStillApprovedAndTheHandlerReturnsTheDeclineText()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var handlerResults = new ConcurrentQueue<string>();
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults),
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, approvalAuditRecorder: auditRecorder, webReviewRetriever: server.CreateRetriever());
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build());
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = false
+        });
+        await runTask;
+
+        AssertEx.True(AssertEx.NotNull(resumeMessages).SelectMany(static message => message.Contents).OfType<ToolApprovalResponseContent>().Single().Approved,
+            "a rejected review still approves the call, so the model gets our decline text rather than a framework rejection");
+        var result = handlerResults.Single();
+        AssertEx.Contains(result, ToolApprovalCoordinator.WebContentDeclinedMessage);
+        AssertEx.False(result.Contains(WebReviewTestServer.PageText, StringComparison.Ordinal));
+        await auditRecorder.Received(1)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               WebFetchToolDefinition.ToolName,
+                               Arg.Any<ToolCategory>(),
+                               ApprovalDecisions.Deny,
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAutoAcceptIsOn_NeverSurfacesAReviewCard()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var handlerResults = new ConcurrentQueue<string>();
+        var segment = 0;
+        var factory = CreateFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults));
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).AutoAcceptingWebContent().Build())
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Empty(cards);
+        await dispatcher.DidNotReceive().ReportApprovalRequestedAsync(Arg.Any<ApprovalRequestPayload>());
+        AssertEx.Contains(handlerResults.Single(), WebReviewTestServer.PageText);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenUnattended_FetchesNothingAndTheTurnContinuesWithTheUnavailableText()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var handlerResults = new ConcurrentQueue<string>();
+        var segment = 0;
+        var factory = CreateFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults));
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).AsUnattended().Build())
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment, "an unattended web call continues the turn instead of failing it");
+        AssertEx.Empty(server.Requests, "nobody can review it, so nothing is fetched");
+        AssertEx.Empty(cards);
+        AssertEx.Contains(handlerResults.Single(), ToolApprovalCoordinator.WebContentUnattendedMessage);
+    }
+
+    [Test]
+    public async Task RunAsync_TwoWebCallsAndAskUserInOneSegment_ThroughTheRealFunctionPipeline_EachReachesTheModelAsReviewed()
+    {
+        // The real ChatClientAgent + FunctionInvokingChatClient + production tool wrapping: the only proof that the handlers
+        // read the runner's AsyncLocal scope and the framework's CallId when they actually execute.
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        using var model = new WebReviewScriptedChatClient();
+        var runner = CreateRunner(RealPipelineFactory(model, stash),
+            eventDispatcher: dispatcher,
+            userQuestionAnswerStash: stash,
+            webReviewRetriever: server.CreateRetriever());
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(WebSearchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(AskUserTool.ToolName, requiresApproval: true)
+                                           .Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(expected: 2, server.Requests.Count, "both web calls are retrieved before the first card");
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = true
+        });
+        await AssertEx.EventuallyAsync(() => cards.Count == 2, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, cards.Last().ToolName);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Last().RequestId,
+            Approved = false
+        });
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(10));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Which auth method?",
+                    Selected = ["API key"],
+                    Other = null
+                }
+            ]
+        });
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal("all done", model.FinalText);
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.FetchCallId], WebReviewTestServer.PageText);
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.SearchCallId], ToolApprovalCoordinator.WebContentDeclinedMessage);
+        AssertEx.False(model.Results[WebReviewScriptedChatClient.SearchCallId].Contains("Ignore previous instructions", StringComparison.Ordinal));
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.AskCallId], "API key");
+        AssertEx.Equal(expected: 2, server.Requests.Count, "the resumed segment executes the handlers, which never fetch again");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOneWebCallThrowsUnexpectedly_TheTurnContinuesAndTheOtherStillReviews()
+    {
+        // A throw neither service maps (here from the handler itself) must become that call's refusal: the segment's
+        // Task.WhenAll would otherwise fault the whole turn, taking the search review and the question down with it.
+        using var server = new WebReviewTestServer { PageFailure = new InvalidOperationException("stub parser blew up") };
+        var (dispatcher, cards) = WebReviewDispatcher();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        using var model = new WebReviewScriptedChatClient();
+        var runner = CreateRunner(RealPipelineFactory(model, stash),
+            eventDispatcher: dispatcher,
+            userQuestionAnswerStash: stash,
+            webReviewRetriever: server.CreateRetriever());
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(WebSearchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(AskUserTool.ToolName, requiresApproval: true)
+                                           .Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, cards.Single().ToolName, "the failed fetch has nothing to review, so the search card is the only one");
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = true
+        });
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(10));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Which auth method?",
+                    Selected = ["API key"],
+                    Other = null
+                }
+            ]
+        });
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal("all done", model.FinalText);
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.FetchCallId], "request-failed");
+        AssertEx.False(model.Results[WebReviewScriptedChatClient.FetchCallId].Contains("stub parser blew up", StringComparison.Ordinal),
+            "the exception text is logged by type only and never handed to the model");
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.SearchCallId], WebReviewTestServer.SearchHitUrl);
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.AskCallId], "API key");
+        AssertEx.Equal(expected: 1, cards.Count);
     }
 
     [Test]
@@ -4595,6 +4823,7 @@ public sealed class InvocationRunnerTests
         Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
         IExternalProviderRegistry? externalProviderRegistry = null,
         PendingToolCallRegistry? pendingToolCallRegistry = null,
+        WebReviewRetriever? webReviewRetriever = null,
         TimeProvider? timeProvider = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
@@ -4655,6 +4884,8 @@ public sealed class InvocationRunnerTests
                                                      // Tool relevance stays OFF by default here: every existing assertion in this file is a
                                                      // byte-identical-offer assertion. The notice-drain tests pass their own enabled read.
                                                      .WithToolRelevanceEnabled(toolRelevanceRead ?? (static _ => Task.FromResult(false)))
+                                                     // On, as the stub web the retriever reads: the coordinator re-reads it before accepted content lands.
+                                                     .WithWebAccessEnabled(true)
                                                      .Build();
 
         // One registry instance shared by all three collaborators, exactly as the DI graph wires it: a second copy
@@ -4684,6 +4915,7 @@ public sealed class InvocationRunnerTests
                 approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
                 approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
                 userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
+                webReviewRetriever ?? WebReviewTestServer.IdleRetriever,
                 runtimeSettings,
                 NullLogger<ToolApprovalCoordinator>.Instance,
                 TimeProvider.System),
@@ -5184,6 +5416,118 @@ public sealed class InvocationRunnerTests
             approvalRequest
         });
         await Task.Yield();
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> WebFetchRequestUpdates()
+    {
+        var arguments = JsonSerializer.Deserialize<Dictionary<string, object?>>($$"""{"url":"{{WebReviewTestServer.PageUrl}}"}""")!;
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new ToolApprovalRequestContent("approval-web-fetch", new FunctionCallContent("call-web-fetch", WebFetchToolDefinition.ToolName, arguments))
+        });
+        await Task.Yield();
+    }
+
+    // Stands in for the framework executing the approved call in the resumed segment, inside the runner's review scope.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ExecuteWebFetchHandlerUpdates(ConcurrentQueue<string> results)
+    {
+        results.Enqueue(await new WebFetchToolHandler { ResolveCallId = static () => "call-web-fetch" }.ExecuteAsync("{}"));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    private static (IWorkerEventDispatcher Dispatcher, ConcurrentQueue<ApprovalLifecyclePayload> Cards) WebReviewDispatcher()
+    {
+        var cards = new ConcurrentQueue<ApprovalLifecyclePayload>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(cards.Enqueue)).Returns(Task.CompletedTask);
+        return (dispatcher, cards);
+    }
+
+    private static IInvocationAgentFactory RealPipelineFactory(IChatClient model, UserQuestionAnswerStash stash)
+    {
+        var registry = new ClientLocalToolRegistry([new AskUserToolHandler(stash), new WebFetchToolHandler(), new WebSearchToolHandler()],
+            Options.Create(new AgentToolPipelineOptions()));
+        var tools = new List<AITool>();
+        foreach (var name in new[] { WebFetchToolDefinition.ToolName, WebSearchToolDefinition.ToolName, AskUserTool.ToolName })
+        {
+            AssertEx.True(registry.TryResolve(name, out var tool));
+            tools.Add(tool!);
+        }
+
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   var chatClient = model.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+                           "web-review",
+                           definition.Instructions,
+                           "Result review gate end to end.",
+                           tools,
+                           NullLoggerFactory.Instance,
+                           new ServiceCollection().BuildServiceProvider())),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    // The model: round one calls web_fetch, web_search and ask_user in parallel; once all three have results it records them and answers.
+    private sealed class WebReviewScriptedChatClient : IChatClient
+    {
+        public const string FetchCallId = "call-web-fetch";
+        public const string SearchCallId = "call-web-search";
+        public const string AskCallId = "call-ask-user";
+
+        public Dictionary<string, string> Results { get; } = new(StringComparer.Ordinal);
+
+        public string? FinalText { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var results = messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>().ToList();
+            if (results.Count > 0)
+            {
+                foreach (var result in results)
+                {
+                    Results[result.CallId] = result.Result?.ToString() ?? string.Empty;
+                }
+
+                FinalText = "all done";
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, FinalText)));
+            }
+
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+            [
+                new FunctionCallContent(FetchCallId, WebFetchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal) { ["url"] = WebReviewTestServer.PageUrl }),
+                new FunctionCallContent(SearchCallId, WebSearchToolDefinition.ToolName, new Dictionary<string, object?>(StringComparer.Ordinal) { ["query"] = "tidal power" }),
+                new FunctionCallContent(AskCallId, AskUserTool.ToolName, ValidAskUserArguments())
+            ])));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (var message in response.Messages)
+            {
+                yield return new ChatResponseUpdate(message.Role, message.Contents);
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceType == typeof(IChatClient) ? this : null;
+
+        public void Dispose()
+        {
+        }
     }
 
     // An ask_user call whose CallId is a non-null EMPTY STRING — the shape the approval dedup already guards against.

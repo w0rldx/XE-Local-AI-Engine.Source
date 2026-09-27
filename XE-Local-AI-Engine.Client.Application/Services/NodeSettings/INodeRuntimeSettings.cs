@@ -109,6 +109,18 @@ public interface INodeRuntimeSettings
     Task<bool> GetCustomToolsEnabledAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Whether the built-in web tools are enabled (stored &gt; off). Read per offer and per call, so a save applies
+    ///     to the next turn without a restart. When off, the web tools are neither offered nor executed.
+    /// </summary>
+    Task<bool> GetWebAccessEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The operator's SearXNG base URL for <c>web_search</c>, or <see langword="null" /> to use DuckDuckGo. No seed:
+    ///     an outbound endpoint has no config-file default.
+    /// </summary>
+    Task<string?> GetWebSearchSearxngUrlAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Whether the per-turn tool-relevance offer may engage at all (stored &gt; off). Read per turn, so a save
     ///     applies to the next turn without a restart. A per-agent opt-out still wins over this.
     /// </summary>

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The run command surface over the real store and a real database. Only the dispatcher signal is faked, and only
@@ -162,7 +163,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         // The graph carries no Tool node, so the tool gate never reads the catalog: the substitute is here to satisfy
         // the constructor, and a call on it would be a bug this test would rather fail on than hide.
-        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()), Options.Create(new SecurityOptions()));
+        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(), Options.Create(new GraphWorkflowOptions()), Options.Create(new SecurityOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
             runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
@@ -196,7 +197,7 @@ public sealed class GraphWorkflowRunServiceTests
         var racing = new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), GraphWorkflowDecisionKind.Reject, race);
         var runs = new GraphWorkflowRunService(racing,
             new RecordingGraphWorkflowDispatcherSignal(),
-            Substitute.For<IToolInvocationService>(),
+            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             Options.Create(harness.CurrentOptions()),
             Options.Create(new SecurityOptions()));
 
@@ -300,7 +301,7 @@ public sealed class GraphWorkflowRunServiceTests
         Guid callerOperationId = default) =>
         new(new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), winningDecision, race, callerOperationId),
             new RecordingGraphWorkflowDispatcherSignal(),
-            Substitute.For<IToolInvocationService>(),
+            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             Options.Create(harness.CurrentOptions()),
             Options.Create(new SecurityOptions()));
 

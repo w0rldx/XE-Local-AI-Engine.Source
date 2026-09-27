@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 
 /// <summary>
 ///     The single place that unions <c>ask_user</c> into a resolved tool set, shared by every seam that narrows the
@@ -60,20 +61,20 @@ internal static class AskUserToolOffer
     }
 
     /// <summary>
-    ///     Drops <c>ask_user</c> from a resolved tool list: this class's union, undone for the ONE turn that must not
-    ///     carry the tool.
+    ///     Drops every tool that parks on an operator — <c>ask_user</c> and the two web tools, whose results wait on a
+    ///     review card — from a resolved tool list: this class's union, undone for the ONE turn that has no operator.
     /// </summary>
     /// <remarks>
     ///     It lives here so the halves cannot drift — whatever counts as <c>ask_user</c> for the union counts for the
     ///     withdrawal. The caller is the workflow-owned work-session send; see
-    ///     <c>NodeChatStreamRequest.SuppressAskUser</c> for why only that turn has no operator behind it. A null list
-    ///     and a list that never carried the tool are both returned unchanged.
+    ///     <c>NodeChatStreamRequest.SuppressOperatorTools</c> for why only that turn has no operator behind it. A null
+    ///     list and a list that never carried such a tool are both returned unchanged.
     /// </remarks>
-    public static IReadOnlyList<AllowedToolDto>? Withdraw(IReadOnlyList<AllowedToolDto>? allowedTools)
+    public static IReadOnlyList<AllowedToolDto>? WithdrawOperatorTools(IReadOnlyList<AllowedToolDto>? allowedTools)
     {
-        return allowedTools is null || !allowedTools.Any(IsAskUser)
+        return allowedTools is null || !allowedTools.Any(NeedsOperator)
             ? allowedTools
-            : [.. allowedTools.Where(static tool => !IsAskUser(tool))];
+            : [.. allowedTools.Where(static tool => !NeedsOperator(tool))];
     }
 
     /// <summary>
@@ -82,13 +83,13 @@ internal static class AskUserToolOffer
     /// <remarks>
     ///     Each participant carries its OWN projected tool list on the compiled spec rather than on the send's single
     ///     allowed-tool list, so filtering that list alone would leave every participant of a workflow node still able
-    ///     to park on a question. A spec no participant was offered the tool on is returned unchanged. It does not
-    ///     keep the config hash stable: the hash is over projected values, so a spec that DID carry the tool hashes
-    ///     differently once it is gone.
+    ///     to park on a question or a web review. A spec no participant was offered such a tool on is returned
+    ///     unchanged. It does not keep the config hash stable: the hash is over projected values, so a spec that DID
+    ///     carry the tool hashes differently once it is gone.
     /// </remarks>
-    public static OrchestrationSpec? Withdraw(OrchestrationSpec? spec)
+    public static OrchestrationSpec? WithdrawOperatorTools(OrchestrationSpec? spec)
     {
-        if (spec is null || !spec.Participants.Any(static participant => participant.Tools.Any(IsAskUser)))
+        if (spec is null || !spec.Participants.Any(static participant => participant.Tools.Any(NeedsOperator)))
         {
             return spec;
         }
@@ -99,10 +100,15 @@ internal static class AskUserToolOffer
             [
                 .. spec.Participants.Select(static participant => participant with
                 {
-                    Tools = [.. participant.Tools.Where(static tool => !IsAskUser(tool))]
+                    Tools = [.. participant.Tools.Where(static tool => !NeedsOperator(tool))]
                 })
             ]
         };
+    }
+
+    private static bool NeedsOperator(AllowedToolDto tool)
+    {
+        return IsAskUser(tool) || WebAccessToolCatalog.IsWebTool(tool.Name);
     }
 
     private static bool IsAskUser(AllowedToolDto tool)

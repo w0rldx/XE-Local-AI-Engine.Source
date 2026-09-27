@@ -15,6 +15,9 @@ public sealed class GraphWorkflowToolResponse
     public required string Description { get; init; }
 
     public required string ParameterSchema { get; init; }
+
+    /// <summary>True for <c>web_fetch</c>: the node must carry a non-empty <c>allowedUrls</c> list (ADR 0017).</summary>
+    public required bool RequiresAllowedUrls { get; init; }
 }
 
 /// <summary>

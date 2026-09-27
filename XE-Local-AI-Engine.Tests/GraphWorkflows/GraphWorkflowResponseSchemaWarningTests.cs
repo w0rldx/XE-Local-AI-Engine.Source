@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The response-schema warning is about the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, and since
@@ -145,7 +146,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
 
     private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers) =>
         new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
-            Substitute.For<IToolInvocationService>(),
+            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             providers,
             Options.Create(new GraphWorkflowOptions()));
 

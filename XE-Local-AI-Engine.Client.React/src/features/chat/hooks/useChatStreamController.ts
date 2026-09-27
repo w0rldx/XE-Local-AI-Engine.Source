@@ -36,6 +36,7 @@ import type { ActiveChatStream, PendingStreamCommit } from "@/features/chat/mode
 import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
+import { isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoAcceptStore";
 
 function createId(): string {
 	return crypto.randomUUID();
@@ -309,6 +310,8 @@ export function useChatStreamController({
 						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
 						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path).
 						samplingOptions: developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
+						// Read at send time for the conversation the turn actually targets (it may have just been created).
+						autoAcceptWebContent: isWebContentAutoAccepted(conversation.id),
 					},
 					abortController.signal,
 				)) {
@@ -472,6 +475,7 @@ export function useChatStreamController({
 					// Same developer-mode gate the send path applies: overrides ride only when developer mode is on and
 					// at least one field is set, so a plain regenerate stays byte-identical to today.
 					developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
+					isWebContentAutoAccepted(conversation.id),
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so

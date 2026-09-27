@@ -615,7 +615,7 @@ survives.
 
 The turn's contents come from `RunSavedAgentHandler`, the node's other unattended caller of this stack, and five of
 its rules carry over: the locality gate runs **before** capacity, the capacity reservation is disposed on every
-terminal path, approval-required tools are stripped from the offer, `IsUnattended` is set, and the terminal state is
+terminal path, approval-required tools are stripped from the offer (and the web tools by name, §4.3), `IsUnattended` is set, and the terminal state is
 read off a `StrongBox<T>` the state-changed handler fills rather than off a return value the runner does not have.
 The executor is a **singleton** — the lane and its slot count are the node's and outlive both a tick and a DI scope —
 so every scoped collaborator is resolved inside the task body from its own scope: the scope the tick handed the store
@@ -738,6 +738,7 @@ One built-in tool call, on its own lane, through `IToolInvocationService` (`Grap
 | `toolName` | **Required.** |
 | `arguments` | Optional object of literal arguments. |
 | `argumentBindings` | Optional map of argument name → dot path, resolved against the node's input document. A binding **wins** over a literal of the same name. |
+| `allowedUrls` | `web_fetch` only, and required there: the link allow-list (below). Any other tool carrying it is a save error. |
 
 Output: `{ "result": … }` — embedded as JSON when the tool answered with an object or an array, and as a string
 otherwise. That one try-parse is what lets a downstream `Condition`, which passes its predecessor's output through
@@ -754,6 +755,20 @@ Both are asked of the same catalog at **definition save** and again at **run sta
 A tool that was read-only when the graph was saved does not execute after a policy tightened. A tool outside the
 envelope is an **error**, never a warning: a workflow node runs unattended, so a write, execute or approval-gated
 tool has nobody to ask. Errors are keyed by node key, so the editor draws them on the offending node.
+
+**The one web exception** ([ADR 0017](../adr/0017-web-access-tools-and-graph-allowlist.md) decision 6; ADR 0006 is its
+basis and is not amended). While web access is on, a Tool node may name `web_fetch` if it carries a non-empty
+`allowedUrls` list of absolute http(s) URL prefixes (same scheme, host and port; a path prefix on a segment boundary).
+The list, written before the run, is the consent an unattended node cannot ask for, so there is no pause and no result
+review. The gate checks the list's shape and any **literal** `url` argument at save and start; a **bound** `url`,
+usually upstream model output, is checked at dispatch, which is the real gate: `GraphWorkflowToolExecutor` calls the
+fetch service itself with the node's list, and the first URL and every redirect hop must match. Private and local
+addresses stay blocked even when listed. `IToolInvocationService` still refuses `web_fetch` (it is `Network`), so no
+other caller reaches it this way. A URL outside the list, a blocked address and web access switched off fail the node
+`ValidationFailed`; any other refusal about the page (HTTP error, unsupported type, the fetch's own time budget)
+succeeds carrying the tool's `{ "error", "message" }` answer, as `read_file`'s own refusal does. `web_search` is never
+allowed on a Tool node, and **no** Agent node — bound agent or default persona — is offered either web tool: both are
+stripped from the offer by name.
 
 The lane itself is a `GraphWorkflowInFlightLane`, the same registry the `Agent` lane uses, and the two differ only in
 what they run: dispatch to a queue, settle on the poll, a stop that answers no on a repeat, forget what a retry
@@ -773,8 +788,9 @@ output document over the cap is a real, reachable outcome (a knowledge-base sear
 thousand characters) and is deliberately **not** retryable, since the same call composes the same bytes; the message
 names the tool beside the node, because "which node" alone does not say what to shrink.
 
-`graph-workflows/tools` is the picker's feed, filtered server-side by the same service the runtime invokes through,
-so the picker cannot offer a name the run would then refuse. A missing binding path fails the node
+`graph-workflows/tools` is the picker's feed, the same list the save gate checks (`GraphWorkflowToolGate.ListAsync`:
+the invocation envelope, plus `web_fetch` flagged `requiresAllowedUrls` while web access is on), so the picker cannot
+offer a name the run would then refuse. A missing binding path fails the node
 `ValidationFailed`; the `Queued` write happens before bindings resolve, so a refused row keeps its input document.
 
 ### 4.4 `Condition`

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
 ///     The one write seam for graph workflow definitions: every save comes through here, so the parse and the node cap
@@ -52,4 +53,10 @@ public interface IGraphWorkflowDefinitionService
 
     /// <summary>Deletes, on <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" />'s terms — the live-run refusal included.</summary>
     Task DeleteAsync(Guid definitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     What a <c>Tool</c> node may name: the invocation envelope, plus <c>web_fetch</c> flagged
+    ///     <see cref="InvocableToolDescriptor.RequiresAllowedUrls" /> while web access is on. The same list the save gate checks.
+    /// </summary>
+    Task<IReadOnlyList<InvocableToolDescriptor>> ListToolsAsync(CancellationToken cancellationToken = default);
 }

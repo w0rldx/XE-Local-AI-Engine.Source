@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -15,9 +16,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class AskUserToolOfferTests
 {
     [Test]
-    public void Withdraw_RemovesOnlyAskUser()
+    public void Withdraw_RemovesOnlyAskUserAndTheWebTools()
     {
-        var withdrawn = AssertEx.NotNull(AskUserToolOffer.Withdraw([Tool("read_file"), Tool(AskUserTool.ToolName), Tool("record_finding")]));
+        var withdrawn = AssertEx.NotNull(AskUserToolOffer.WithdrawOperatorTools([
+            Tool("read_file"), Tool(AskUserTool.ToolName), Tool(WebFetchToolDefinition.ToolName), Tool(WebSearchToolDefinition.ToolName),
+            Tool("record_finding")
+        ]));
 
         AssertEx.Equal(expected: 2, withdrawn.Count);
         AssertEx.Contains(withdrawn, tool => tool.Name == "read_file");
@@ -31,8 +35,8 @@ public sealed class AskUserToolOfferTests
         // The ordinary path has to stay allocation-free: every send of a workflow-owned session runs this.
         IReadOnlyList<AllowedToolDto> offered = [Tool("read_file")];
 
-        AssertEx.True(ReferenceEquals(offered, AskUserToolOffer.Withdraw(offered)));
-        AssertEx.Null(AskUserToolOffer.Withdraw((IReadOnlyList<AllowedToolDto>?)null), "A turn that offers no tools has nothing to withdraw.");
+        AssertEx.True(ReferenceEquals(offered, AskUserToolOffer.WithdrawOperatorTools(offered)));
+        AssertEx.Null(AskUserToolOffer.WithdrawOperatorTools((IReadOnlyList<AllowedToolDto>?)null), "A turn that offers no tools has nothing to withdraw.");
     }
 
     [Test]
@@ -40,11 +44,12 @@ public sealed class AskUserToolOfferTests
     {
         // Each participant carries its own projected list, so a workflow node bound to an Orchestrator agent needs all
         // of them filtered — not just the send's single allowed-tool list.
-        var spec = Spec([Tool("read_file"), Tool(AskUserTool.ToolName)], [Tool(AskUserTool.ToolName)]);
+        var spec = Spec([Tool("read_file"), Tool(AskUserTool.ToolName)], [Tool(AskUserTool.ToolName), Tool(WebFetchToolDefinition.ToolName)]);
 
-        var withdrawn = AssertEx.NotNull(AskUserToolOffer.Withdraw(spec));
+        var withdrawn = AssertEx.NotNull(AskUserToolOffer.WithdrawOperatorTools(spec));
 
         AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName)));
+        AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => WebAccessToolCatalog.IsWebTool(tool.Name))));
         AssertEx.Equal(expected: 1, withdrawn.Participants[0].Tools.Count);
         AssertEx.Empty(withdrawn.Participants[1].Tools);
         AssertEx.Equal("triage", withdrawn.TriageParticipantKey, "The rewrite touches the participants' tools and nothing else.");
@@ -55,8 +60,8 @@ public sealed class AskUserToolOfferTests
     {
         var spec = Spec([Tool("read_file")], [Tool("record_finding")]);
 
-        AssertEx.True(ReferenceEquals(spec, AskUserToolOffer.Withdraw(spec)));
-        AssertEx.Null(AskUserToolOffer.Withdraw((OrchestrationSpec?)null), "A single-agent turn carries no spec.");
+        AssertEx.True(ReferenceEquals(spec, AskUserToolOffer.WithdrawOperatorTools(spec)));
+        AssertEx.Null(AskUserToolOffer.WithdrawOperatorTools((OrchestrationSpec?)null), "A single-agent turn carries no spec.");
     }
 
     private static AllowedToolDto Tool(string name) =>

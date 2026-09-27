@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -412,10 +413,8 @@ public sealed class InvocationResumeRegistryTests
     }
 
     [Test]
-    public async Task ResumeAsync_WhenApprovalHasNoCallId_StillReplaysWithNullToolCallId()
+    public async Task ResumeAsync_WhenAWebReviewIsPending_ReplaysItsSearchPreview()
     {
-        // A platform-hub approval carries only an id and a description. Degrade gracefully: the prompt still reaches
-        // the client, it just cannot be attached to a specific tool-call card.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();
@@ -424,9 +423,26 @@ public sealed class InvocationResumeRegistryTests
         var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
         parked.PendingApproval = new InvocationApprovalState
         {
-            RequestId = "approval-2",
-            Description = "Run a command",
-            RequestedAt = DateTimeOffset.UtcNow
+            RequestId = "review-2",
+            Description = "Review the content web_search retrieved.",
+            RequestedAt = DateTimeOffset.UtcNow,
+            CallId = "call-web-2",
+            ToolName = "web_search",
+            SessionScopeEligible = false,
+            WebReview = new WebReviewPreview
+            {
+                ToolName = "web_search",
+                Backend = "duckduckgo",
+                Results =
+                [
+                    new WebSearchResult
+                    {
+                        Title = "Tidal power",
+                        Url = "https://example.org/tidal-power",
+                        Snippet = "Tidal power converts tides into electricity."
+                    }
+                ]
+            }
         };
         RaiseState(dispatcher, parked);
 
@@ -443,13 +459,55 @@ public sealed class InvocationResumeRegistryTests
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
         await consumer;
 
-        var replayed = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
-        AssertEx.Equal("approval-2", replayed.ApprovalRequestId);
-        AssertEx.Null(replayed.ToolCallId);
-        AssertEx.Null(replayed.ToolName);
-        // Nothing recorded the runner's answer, so the replay fails CLOSED rather than letting the client fall back to
-        // the tool catalog and offer a session scope the node may never honor.
-        AssertEx.Equal(expected: false, replayed.SessionScopeEligible);
+        var preview = AssertEx.NotNull(events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested).WebReview);
+        AssertEx.Equal("duckduckgo", preview.Backend);
+        AssertEx.Equal("https://example.org/tidal-power", AssertEx.NotNull(preview.Results).Single().Url);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenTheApprovalSlotIsNotFoldedYet_WaitsForTheFoldAndEmitsItOnce()
+    {
+        // The slot is published bare, then folded with the call identity; emitting the bare one consumed its request id,
+        // so the folded prompt never reached the resumed stream.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var bare = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        bare.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "approval-2",
+            Description = "Run a command",
+            RequestedAt = DateTimeOffset.UtcNow
+        };
+        RaiseState(dispatcher, bare);
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        // The opening replay ends with the snapshot, so by then the bare slot has been considered and withheld.
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot), TimeSpan.FromSeconds(5));
+        AssertEx.False(events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested));
+
+        var folded = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        folded.PendingApproval = bare.PendingApproval with { CallId = "call-9", ToolName = "run_command", SessionScopeEligible = true };
+        RaiseState(dispatcher, folded);
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+        await consumer;
+
+        var emitted = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("approval-2", emitted.ApprovalRequestId);
+        AssertEx.Equal("call-9", emitted.ToolCallId);
+        AssertEx.Equal("run_command", emitted.ToolName);
+        AssertEx.Equal(expected: true, emitted.SessionScopeEligible);
     }
 
     [Test]

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 
 /// <summary>
 ///     Default <see cref="IOrchestrationResolver" />: compiles an orchestrator definition and its topology into an
@@ -338,7 +339,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered
-                        .Where(tool => allowedNames.Contains(tool.Name))
+                        // The web tools' result review needs the single-agent runner's call id; this approval path carries none.
+                        .Where(tool => allowedNames.Contains(tool.Name) && !WebAccessToolCatalog.IsWebTool(tool.Name))
                         .Select(tool => tool with
                         {
                             // TIGHTEN-ONLY compose, identical to AgentDefinitionResolver.ProjectAllowedTools, so no

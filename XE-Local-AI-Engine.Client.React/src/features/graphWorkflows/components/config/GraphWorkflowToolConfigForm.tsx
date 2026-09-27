@@ -7,6 +7,7 @@ import { ActionIcon, Button, Group, Select, Stack, Text, TextInput } from "@mant
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { GraphWorkflowAllowedUrlsField } from "@/features/graphWorkflows/components/config/GraphWorkflowAllowedUrlsField";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
 import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type {
@@ -14,6 +15,7 @@ import type {
 	GraphWorkflowCanvasNodeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowToolResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { webFetchToolName } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 type ToolNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Tool" }>;
 
@@ -90,6 +92,8 @@ export function GraphWorkflowToolConfigForm({
 	const { t } = useTranslation();
 	const selectedTool = tools.find((tool) => tool.name === node.toolName);
 	const properties = schemaProperties(selectedTool?.parameterSchema);
+	// The flag is the server's word; the name keeps the list visible on a node whose tool web access no longer offers.
+	const needsAllowedUrls = selectedTool?.requiresAllowedUrls === true || node.toolName === webFetchToolName;
 
 	return (
 		<>
@@ -113,7 +117,12 @@ export function GraphWorkflowToolConfigForm({
 					// Seeded only when the operator has typed nothing of their own — an empty box, or the template the
 					// PREVIOUS tool put there. Anything else is theirs and survives the swap.
 					const seed = current.length === 0 || current === argumentsTemplate(selectedTool).trim();
-					onChange({ toolName: value, ...(seed ? { argumentsJson: argumentsTemplate(next) } : {}) });
+					// A list only web_fetch reads is dropped with it, or the save would refuse a field nothing applies.
+					onChange({
+						toolName: value,
+						...(seed ? { argumentsJson: argumentsTemplate(next) } : {}),
+						...(next?.requiresAllowedUrls !== true && node.allowedUrls.length > 0 ? { allowedUrls: [] } : {}),
+					});
 				}}
 				data-testid="gw-node-config-tool"
 			/>
@@ -121,6 +130,15 @@ export function GraphWorkflowToolConfigForm({
 				<Text size="xs" c="dimmed" data-testid="gw-node-config-tool-description">
 					{selectedTool.description}
 				</Text>
+			) : null}
+			{needsAllowedUrls ? (
+				<GraphWorkflowAllowedUrlsField
+					allowedUrls={node.allowedUrls}
+					onChange={(allowedUrls) => onChange({ allowedUrls })}
+					error={errorFor("allowedUrls")}
+					onTouch={() => onTouch("allowedUrls")}
+					readOnly={readOnly}
+				/>
 			) : null}
 			<GraphWorkflowJsonField
 				label={t("pages.graphWorkflows.config.arguments", "Arguments (JSON)")}

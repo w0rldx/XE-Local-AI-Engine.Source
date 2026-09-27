@@ -1,0 +1,50 @@
+{
+  "query": "tidal energy",
+  "number_of_results": 0,
+  "results": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Tidal_power",
+      "title": "Tidal power - Wikipedia",
+      "content": "Tidal power or tidal energy is harnessed by converting energy from tides into useful forms of power, mainly electricity.",
+      "engine": "wikipedia",
+      "parsed_url": ["https", "en.wikipedia.org", "/wiki/Tidal_power", "", "", ""],
+      "template": "default.html",
+      "engines": ["wikipedia", "duckduckgo"],
+      "positions": [1, 2],
+      "score": 4.0,
+      "category": "general"
+    },
+    {
+      "url": "https://www.eia.gov/energyexplained/hydropower/tidal-power.php",
+      "title": "Tidal power - U.S. Energy Information Administration (EIA)",
+      "content": "A tidal basin is an inlet of an ocean bay or lagoon that fills with water during high tide.",
+      "engine": "brave",
+      "engines": ["brave"],
+      "positions": [3],
+      "score": 0.33,
+      "category": "general"
+    },
+    {
+      "url": "javascript:alert(1)",
+      "title": "Not a web link",
+      "content": "Dropped: only absolute http(s) URLs survive.",
+      "engine": "brave",
+      "engines": ["brave"],
+      "score": 0.2,
+      "category": "general"
+    },
+    {
+      "url": "https://www.pnnl.gov/explainer-articles/tidal-energy",
+      "title": "Tidal Energy - PNNL",
+      "engine": "startpage",
+      "engines": ["startpage"],
+      "score": 0.25,
+      "category": "general"
+    }
+  ],
+  "answers": [],
+  "corrections": [],
+  "infoboxes": [],
+  "suggestions": ["tidal energy advantages"],
+  "unresponsive_engines": []
+}

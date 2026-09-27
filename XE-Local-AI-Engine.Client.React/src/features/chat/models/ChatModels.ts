@@ -11,6 +11,7 @@ export type { ReasoningEffort };
 // module so a backend field rename stays a one-line fix.
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+import type { NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
@@ -51,6 +52,9 @@ export interface ChatToolPart {
 	// exact call. Preferred over the tool catalog's tool-identity flag; undefined when the backend did not resolve it
 	// (a reconnect replay), in which case the card falls back to the catalog.
 	pendingApprovalSessionScopeEligible?: boolean;
+	// When set, the pending approval is a web content review (`web_fetch`/`web_search`): what was retrieved, shown to
+	// the operator before the model reads it. Cleared on exactly the same terms as `pendingApprovalRequestId`.
+	pendingWebReview?: NodeChatWebReviewPreviewDto;
 	// When set, this is an `ask_user` call parked on the operator's answer: the question payload the inline answer
 	// card renders. Transient and live-only on exactly the same terms as `pendingApprovalRequestId` — cleared when
 	// the tool call completes/fails or the turn terminalizes, and never present on a reloaded/persisted turn.

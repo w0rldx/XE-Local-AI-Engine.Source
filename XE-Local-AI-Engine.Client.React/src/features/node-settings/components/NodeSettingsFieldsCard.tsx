@@ -11,6 +11,7 @@ import {
 import { NodeSettingsKnowledgeModelsCard } from "@/features/node-settings/components/NodeSettingsKnowledgeModelsCard";
 import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
+import { NodeSettingsWebAccessCard } from "@/features/node-settings/components/NodeSettingsWebAccessCard";
 import type {
 	ExternalAccessPreset,
 	NodeSettingsFieldBounds,
@@ -164,6 +165,8 @@ export function NodeSettingsFieldsCard({
 			/>
 
 			<NodeSettingsExternalAccessCard form={form} onChange={onChange} onApplyPreset={onApplyPreset} />
+
+			<NodeSettingsWebAccessCard form={form} errors={errors} onChange={onChange} />
 
 			<NodeSettingsKnowledgeModelsCard
 				form={form}

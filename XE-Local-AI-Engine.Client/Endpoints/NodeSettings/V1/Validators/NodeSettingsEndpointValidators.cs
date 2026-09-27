@@ -26,6 +26,11 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => !string.IsNullOrWhiteSpace(request.OllamaEndpoint))
             .WithMessage("Ollama endpoint must be an absolute http or https URL.");
 
+        RuleFor(static request => request.WebSearchSearxngUrl!)
+            .Must(BeAbsoluteHttpUrl)
+            .When(static request => !string.IsNullOrWhiteSpace(request.WebSearchSearxngUrl))
+            .WithMessage("SearXNG URL must be an absolute http or https URL.");
+
         RuleFor(static request => request.ToolCapableModels!)
             .Must(static models => models.Count > 0 && models.All(static model => !string.IsNullOrWhiteSpace(model)))
             .When(static request => request.ToolCapableModels is not null)

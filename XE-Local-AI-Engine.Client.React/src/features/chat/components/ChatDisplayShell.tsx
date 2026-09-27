@@ -281,6 +281,7 @@ export function ChatDisplayShell({
 					reasoningEffort={reasoningEffort}
 					activeModelToolCapable={activeModelToolCapable}
 					activeModelMultimodal={activeModelMultimodal}
+					conversationId={selectedConversationId}
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}

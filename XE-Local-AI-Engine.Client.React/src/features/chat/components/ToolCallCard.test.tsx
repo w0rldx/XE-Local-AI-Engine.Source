@@ -431,4 +431,118 @@ describe("ToolCallCard", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ id: "persist-1", name: "persist_tool" })} />);
 		expect((screen.getByTestId("chat-tool-call-disclosure-persist_tool") as HTMLDetailsElement).open).toBe(true);
 	});
+
+	describe("web content review", () => {
+		// Untrusted page text carrying both an HTML script and markdown: it must reach the DOM as literal characters.
+		const hostileText = "<script>window.pwned = true</script>\n# Heading\n[click](javascript:alert(1)) **bold**";
+
+		function reviewPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
+			return toolPart({
+				id: "call-web",
+				name: "web_fetch",
+				state: "waiting",
+				requiresApproval: true,
+				pendingApprovalRequestId: "approval-web",
+				pendingApprovalSessionScopeEligible: false,
+				pendingWebReview: {
+					toolName: "web_fetch",
+					url: "https://example.com/start",
+					finalUrl: "https://example.com/landed",
+					title: "Example page",
+					contentType: "text/html",
+					truncated: true,
+					text: hostileText,
+				},
+				...overrides,
+			});
+		}
+
+		it("shows a fetched page as plain text, never as HTML or markdown", () => {
+			const { container } = renderWithProviders(<ToolCallCard part={reviewPart()} />);
+
+			expect(screen.getByText("Review web content before the model reads it")).toBeTruthy();
+			expect(screen.getByText("Example page")).toBeTruthy();
+			expect(screen.getByText("https://example.com/start")).toBeTruthy();
+			expect(screen.getByText("Redirected to https://example.com/landed")).toBeTruthy();
+			expect(screen.getByText("text/html")).toBeTruthy();
+			expect(screen.getByText("Truncated")).toBeTruthy();
+			expect(screen.getByTestId("chat-web-review-text").textContent).toBe(hostileText);
+			expect(container.querySelector("script")).toBeNull();
+			expect(container.querySelector("h1")).toBeNull();
+			expect(container.querySelector("strong")).toBeNull();
+			expect(container.querySelector("a")).toBeNull();
+		});
+
+		it("lists search results as plain text with the backend that produced them", () => {
+			const { container } = renderWithProviders(
+				<ToolCallCard
+					part={reviewPart({
+						name: "web_search",
+						pendingWebReview: {
+							toolName: "web_search",
+							backend: "searxng",
+							results: [
+								{ title: "First hit", url: "https://one.example/", snippet: "<b>snippet</b> one" },
+								{ title: "Second hit", url: "https://two.example/", snippet: "snippet two" },
+							],
+						},
+					})}
+				/>,
+			);
+
+			expect(screen.getByText("Search engine: searxng")).toBeTruthy();
+			expect(screen.getByText("First hit")).toBeTruthy();
+			expect(screen.getByText("https://two.example/")).toBeTruthy();
+			expect(screen.getByText("<b>snippet</b> one")).toBeTruthy();
+			expect(screen.getByTestId("chat-web-review-results").querySelectorAll("li")).toHaveLength(2);
+			expect(container.querySelector("a")).toBeNull();
+		});
+
+		it("offers Add to conversation and Reject, but never approve-for-session", () => {
+			renderWithProviders(<ToolCallCard part={reviewPart()} />);
+
+			expect(screen.getByRole("button", { name: "Add to conversation" })).toBeTruthy();
+			expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
+			expect(screen.queryByTestId("chat-tool-call-approve-session-web_fetch")).toBeNull();
+			expect(screen.queryByText("Approve for this session")).toBeNull();
+			// The generic approval row is replaced, not shown beside the review.
+			expect(screen.queryByTestId("chat-tool-call-approval-actions-web_fetch")).toBeNull();
+		});
+
+		it("approves the parked call once when the content is added", async () => {
+			renderWithProviders(<ToolCallCard part={reviewPart()} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "Add to conversation" }));
+
+			await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+			expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({
+				body: { requestId: "approval-web", approved: true, scope: "Once" },
+			});
+		});
+
+		it("never offers a blind Approve for a web tool whose preview is missing", () => {
+			renderWithProviders(<ToolCallCard part={reviewPart({ pendingWebReview: undefined })} />);
+
+			expect(screen.getByText("Reload the page to review this web content before the model reads it.")).toBeTruthy();
+			expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+			expect(screen.queryByTestId("chat-tool-call-approve-web_fetch")).toBeNull();
+			expect(screen.queryByRole("button", { name: "Add to conversation" })).toBeNull();
+		});
+
+		it("keeps the generic approval for a prompt whose tool is unknown", () => {
+			renderWithProviders(<ToolCallCard part={reviewPart({ name: "tool", pendingWebReview: undefined })} />);
+
+			expect(screen.getByTestId("chat-tool-call-approve-tool")).toBeTruthy();
+			expect(screen.queryByTestId("chat-tool-call-web-review-missing-tool")).toBeNull();
+		});
+
+		it("denies the parked call when the content is rejected", async () => {
+			renderWithProviders(<ToolCallCard part={reviewPart()} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+
+			await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+			expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-web", approved: false } });
+		});
+	});
 });

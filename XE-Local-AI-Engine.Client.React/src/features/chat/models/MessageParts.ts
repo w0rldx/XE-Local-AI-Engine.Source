@@ -7,6 +7,7 @@ import type {
 	ChatToolPart,
 	ToolCallState,
 } from "@/features/chat/models/ChatModels";
+import type { NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 /**
  * Single source of truth for the ordered interleave (`reasoning → tool → reasoning → …`). Both the streaming
@@ -36,6 +37,8 @@ export interface ToolEntryInput {
 	// The backend's per-request answer to "can a session-scoped approval be remembered for this call?". Undefined when
 	// the backend did not resolve it; cleared with the prompt.
 	pendingApprovalSessionScopeEligible?: boolean;
+	// The web content review preview riding the approval prompt; cleared with it.
+	pendingWebReview?: NodeChatWebReviewPreviewDto;
 	// Set while an `ask_user` call waits on the operator's answer; the question payload the inline card renders and
 	// posts back. Cleared on the same terms as the approval prompt above.
 	pendingQuestion?: PendingUserQuestion;
@@ -73,6 +76,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		requiresApproval: entry.requiresApproval,
 		pendingApprovalRequestId: entry.pendingApprovalRequestId,
 		pendingApprovalSessionScopeEligible: entry.pendingApprovalSessionScopeEligible,
+		pendingWebReview: entry.pendingWebReview,
 		pendingQuestion: entry.pendingQuestion,
 	};
 }

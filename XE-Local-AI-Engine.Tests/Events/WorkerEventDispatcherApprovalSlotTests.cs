@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -77,5 +78,62 @@ public sealed class WorkerEventDispatcherApprovalSlotTests
         AssertEx.Equal("call-1", replayed.ToolCallId);
         AssertEx.Equal("run_in_agent_home", replayed.ToolName);
         AssertEx.Equal(arguments, replayed.Arguments);
+    }
+
+    [Test]
+    public async Task ApprovalRaisedAfterAResume_ReachesTheResumedStreamOnce_WithCallIdToolNameAndWebReview()
+    {
+        var dispatcher = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var registry = new InvocationResumeRegistry(dispatcher, TimeProvider.System, NullLogger<InvocationResumeRegistry>.Instance);
+        var invocationId = Guid.NewGuid();
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithConversationId(Guid.NewGuid()).Build();
+
+        await using var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+
+        // The browser reloaded and re-attached BEFORE the approval exists, so the approval reaches it live, through the
+        // state publishes, not through the opening replay.
+        var events = new List<ChatStreamEvent>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, cancellation.Token))
+            {
+                events.Add(streamEvent);
+            }
+        }, cancellation.Token);
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot), TimeSpan.FromSeconds(10));
+
+        await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+        {
+            InvocationId = invocationId,
+            RequestId = "approval-1",
+            Description = "A tool call requires approval."
+        });
+        await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+        {
+            InvocationId = invocationId,
+            RequestId = "approval-1",
+            CallId = "call-1",
+            ToolName = "web_fetch",
+            Description = "A tool call requires approval.",
+            Arguments = "{\"url\":\"https://example.com/\"}",
+            SessionScopeEligible = false,
+            WebReview = new WebReviewPreview { ToolName = "web_fetch", Url = "https://example.com/", Text = "Example Domain" }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(10));
+        await dispatcher.ReportInvocationCompletedAsync(invocationId);
+        await consumer;
+
+        // Exactly one prompt: the stream dedupes by request id, so a first emission without the call identity would
+        // have been the only one the browser ever saw.
+        var approval = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("approval-1", approval.ApprovalRequestId);
+        AssertEx.Equal("call-1", approval.ToolCallId);
+        AssertEx.Equal("web_fetch", approval.ToolName);
+        AssertEx.Equal("Example Domain", AssertEx.NotNull(approval.WebReview).Text);
     }
 }

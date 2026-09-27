@@ -382,6 +382,20 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments("not a url", null)]
+    [Arguments("   ", null)]
+    [Arguments(" https://searx.example.org/ ", "https://searx.example.org/")]
+    public async Task WebSearchSearxngUrl_IsNormalizedLikeOllamaEndpoint(string stored, string? expected)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            WebSearchSearxngUrl = stored
+        });
+
+        AssertEx.Equal<string?>(expected, loaded.WebSearchSearxngUrl);
+    }
+
+    [Test]
     public async Task ToolCapableModels_AllBlank_FallsBackToNull()
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings

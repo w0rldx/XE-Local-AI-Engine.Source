@@ -110,6 +110,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         SamplingOptions? samplingOptions = null,
+        bool autoAcceptWebContent = false,
         CancellationToken cancellationToken = default)
     {
         // The sampling seed rides the wire as a string, so a malformed value is rejected here rather than dropped
@@ -119,7 +120,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             throw new NodeChatInvalidRequestException(seedError);
         }
 
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken);
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
@@ -129,6 +130,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         SamplingOptions? samplingOptions,
+        bool autoAcceptWebContent,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -272,7 +274,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 // Carried exactly as the send path carries it, so a regenerated turn sees the same tool array.
                 DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
                 // Carried exactly as the send path carries it: false = pinned, so no dispatcher model swap.
-                AllowAutoModelSwap = resolution.AllowAutoModelSwap
+                AllowAutoModelSwap = resolution.AllowAutoModelSwap,
+                AutoAcceptWebContent = autoAcceptWebContent
             });
 
             // The post-run adaptive-memory hook fires once on a Completed or Failed terminal, and ONLY when the resolved

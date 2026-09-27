@@ -36,6 +36,7 @@ What still leaves the machine does so only because an operator configured a feat
 | OpenAI-compatible providers | `Services/ExternalProviders` | the operator declares a connection and its base URL |
 | Outbound MCP servers | `Services/Mcp` | the operator registers and enables a server |
 | Update checks | `Services/AppUpdate` | shipped update channel |
+| Web search and page fetches | `Services/WebAccess` | the operator turns on **Web access** in Node settings (off by default) |
 
 **Maintainer rule:** do not add an outbound connection that a shipped build opens on its own. Egress belongs
 to a feature an operator turned on, and it is documented on that feature's page.
@@ -584,6 +585,39 @@ small check-to-`execve` TOCTOU window remains — eliminating it would need `ope
 validation and execution share one open file description — and host commands retain the signed-in user's filesystem and network
 rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency bounds, and explicit acknowledgement
 reduce risk; they do not create OS isolation.
+
+### Web access tools: `web_search` and `web_fetch`
+
+Both tools are `ToolCategory.Network` and exist only while the `WebAccessEnabled` node setting is on (default off);
+`WebFetchService` and `WebSearchService` re-read the switch on every call, and the review gate re-reads it before an
+accepted (or auto-accepted) result is stored, so turning it off refuses in-flight offers and open review cards too.
+The switch is independent of the external-access presets: choosing `offline` does not turn Web access off. ADR 0017
+is the decision record.
+
+- **Fetch boundary.** Every request and every redirect hop goes through `CustomToolSsrfGuard.ValidateRequestUrl`
+  (open-host form, full private-address deny list) and the pinned connect callback on the `xe-web-fetch` client: GET
+  only, no proxy, no cookies, manual redirects (at most five) under one 20-second budget, a 2 MiB decompressed body
+  cap, and an HTML/XHTML/plain text/Markdown/JSON content-type allowlist. HTML is reduced to its main content by
+  SmartReader; the text is capped at 12 000 characters.
+- **Search backends.** DuckDuckGo's HTML endpoint (best effort, unofficial; a block or rate limit returns a structured
+  "unavailable" result) through the same guarded client, or the operator's SearXNG URL. The SearXNG client
+  (`xe-web-search-searxng`) is not address-guarded because the operator typed the URL and it is often local; it is
+  bound to that base URL and the model controls only the query string.
+- **Untrusted output.** Page text, title and final URL, and every search result's title, URL and snippet, reach the
+  model inside `UntrustedContentFraming` fences with the untrusted trust label. Bodies are never logged; URLs and queries
+  only at Debug, because a query string is what an injected page would use to exfiltrate. When an OTLP exporter is
+  configured (development or opt-in telemetry), the HttpClient spans carry each fetched URL as `url.full`.
+- **Result review (prompt-injection gate).** Retrieved content enters the model's context only after the user accepted
+  it on a review card; a rejection hands the model a decline note. The gate reuses the approval pause
+  (`ToolApprovalCoordinator.RequestWebReviewAsync`): the host retrieves first, then parks the turn with a preview, and the
+  tool delegate only returns what the review stored in a per-invocation scope — any other caller gets a refusal.
+  There is no approval before the request, so a URL that carries data out has already been requested when the user
+  reviews. A per-conversation **auto-accept** mode skips the card; the first time a user enables it they acknowledge a
+  risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants, agentic
+  MCP scope and workflow-owned work sessions (no operator to review) are not offered the tools.
+- **Graphs.** Agent nodes are never offered either tool. A Tool node may run `web_fetch` only against its own
+  allowlist of URL prefixes (path-segment boundary; private addresses stay blocked even when listed), which is the
+  consent that replaces the review for those URLs.
 
 ---
 

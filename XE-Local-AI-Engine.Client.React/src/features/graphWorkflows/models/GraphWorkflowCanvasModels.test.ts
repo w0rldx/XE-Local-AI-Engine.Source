@@ -306,6 +306,7 @@ describe("node config conversion", () => {
 					kind: "Tool",
 					toolName: "read_file",
 					argumentsJson: "",
+					allowedUrls: [],
 					argumentBindings: [
 						{ parameter: "path", path: "first" },
 						{ parameter: "", path: "dropped" },
@@ -317,6 +318,28 @@ describe("node config conversion", () => {
 		);
 		const config = (filled.graph.nodes ?? [])[0]?.config as Record<string, unknown>;
 		expect(config["argumentBindings"]).toEqual({ path: "second" });
+	});
+
+	it("round-trips a web_fetch node's allowedUrls and writes none for an empty list", () => {
+		const listed = canvasToGraph(
+			[
+				canvasNode({
+					...defaultNodeData("Tool", "fetch-1"),
+					kind: "Tool",
+					toolName: "web_fetch",
+					argumentsJson: "",
+					argumentBindings: [],
+					allowedUrls: ["https://docs.example.com/guide"],
+				}),
+			],
+			[],
+		);
+		const config = (listed.graph.nodes ?? [])[0]?.config as Record<string, unknown>;
+		expect(config["allowedUrls"]).toEqual(["https://docs.example.com/guide"]);
+		expect(dataOfKind(graphToCanvas(listed.graph), "fetch-1", "Tool").allowedUrls).toEqual(["https://docs.example.com/guide"]);
+
+		const empty = canvasToGraph([canvasNode(defaultNodeData("Tool", "tool-1"))], []);
+		expect(Object.keys((empty.graph.nodes ?? [])[0]?.config as Record<string, unknown>)).not.toContain("allowedUrls");
 	});
 
 	it("reads a malformed or missing config as the kind's defaults instead of throwing", () => {

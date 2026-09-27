@@ -3274,6 +3274,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRes
 	name: z.string(),
 	description: z.string(),
 	parameterSchema: z.string(),
+	requiresAllowedUrls: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = z.object({
@@ -7134,6 +7135,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
+	webAccessEnabled: z.boolean().nullish(),
+	webSearchSearxngUrl: z.string().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
 	updateChannel: z.string().nullish(),
@@ -7340,6 +7343,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
+	webAccessEnabled: z.boolean().nullish(),
+	webSearchSearxngUrl: z.string().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
 	updateChannel: z.string().nullish(),

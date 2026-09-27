@@ -105,7 +105,15 @@ internal sealed record GraphWorkflowChatSettings
     public required bool RequireRerunConfirmation { get; init; }
 }
 
-internal sealed record GraphWorkflowToolConfig(string ToolName, JsonElement? Arguments, IReadOnlyDictionary<string, string> ArgumentBindings) : GraphWorkflowNodeConfig;
+/// <summary>A <c>Tool</c> node's settings.</summary>
+/// <remarks>
+///     <see cref="AllowedUrls" /> is the link allow-list only a <c>web_fetch</c> node reads (ADR 0017, decision 6); it is
+///     empty, never <see langword="null" />, when the node declares none, so the fetch it reaches can only fail closed.
+/// </remarks>
+internal sealed record GraphWorkflowToolConfig(string ToolName, JsonElement? Arguments, IReadOnlyDictionary<string, string> ArgumentBindings) : GraphWorkflowNodeConfig
+{
+    public IReadOnlyList<string> AllowedUrls { get; init; } = [];
+}
 
 /// <summary>
 ///     <see cref="Path" /> is the node-level DEFAULT dot path its own out-edges inherit when their condition omits one.

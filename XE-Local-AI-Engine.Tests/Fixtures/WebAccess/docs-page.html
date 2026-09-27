@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Configuring retries - Widget SDK documentation</title>
+</head>
+<body>
+  <div class="topbar">Widget SDK <a href="/docs">Docs</a> <a href="/api">API</a> <a href="/blog">Blog</a></div>
+  <div class="layout">
+    <nav class="toc">
+      <ul>
+        <li><a href="/docs/install">Install</a></li>
+        <li><a href="/docs/retries">Configuring retries</a></li>
+        <li><a href="/docs/timeouts">Timeouts</a></li>
+      </ul>
+    </nav>
+    <div class="content" role="main">
+      <h1>Configuring retries</h1>
+      <p>The client retries a failed request up to three times by default, waiting longer before each attempt. The wait starts at
+        two hundred milliseconds and doubles on every retry, with a random jitter so that many clients do not retry in step.</p>
+      <h2>Changing the retry count</h2>
+      <p>Set <code>maxRetries</code> on the client options to change how many attempts are made. A value of zero turns retries off
+        entirely, which is what you want for requests that are not safe to repeat.</p>
+      <pre><code>var client = new WidgetClient(new WidgetOptions { MaxRetries = 5 });</code></pre>
+      <h2>Which errors are retried</h2>
+      <p>Only connection failures and responses with status 502, 503 or 504 are retried. A 4xx response is returned to the caller
+        at once, because repeating a request the server rejected will not change the answer.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -249,6 +249,7 @@ public sealed class LayerDependencyTests
                 "Quartz.Plugins.TimeZoneConverter",
                 "Quartz.Serialization.SystemTextJson",
                 "Serilog",
+                "SmartReader",
                 "System.Numerics.Tensors",
                 "UTF.Unknown"
             ],

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -98,6 +99,30 @@ public sealed class McpExecutionBindingResolverTests
         AssertEx.True(binding.AllowedTools.Select(static tool => tool.Name)
                              .SequenceEqual(expected.Select(static tool => tool.Name), StringComparer.Ordinal));
         AssertEx.True(binding.AllowedTools.Single(static tool => tool.Name == "write_file").RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAgenticCallerBindsAnAgentWithWebTools_LeavesThemOut()
+    {
+        // Agentic scope auto-approves every call, which would bypass the web result review.
+        var harness = new Harness();
+        var definition = Definition("Agentic", AgentDefinitionSource.Manual, seedSlug: null);
+        harness.Register(definition,
+            Tool("read_file", ToolCategory.ReadLocal),
+            Tool(WebFetchToolDefinition.ToolName, ToolCategory.Network, requiresApproval: true),
+            Tool(WebSearchToolDefinition.ToolName, ToolCategory.Network, requiresApproval: true));
+
+        var result = await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = "xemcp_abc123"
+            }
+        }, CancellationToken.None);
+
+        AssertEx.Equal("read_file", AssertEx.NotNull(result.Binding).AllowedTools.Single().Name);
     }
 
     [Test]

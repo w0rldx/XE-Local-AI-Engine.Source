@@ -1,5 +1,5 @@
 import { Badge, Button, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconChevronDown, IconCheck, IconFileDiff, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFileDiff, IconRefresh, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useState } from "react";
@@ -13,6 +13,7 @@ import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
+import { WebReviewCard } from "@/features/chat/components/WebReviewCard";
 import { agentHomeRunIdWithPatch } from "@/features/chat/models/AgentHomePatchToolResult";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
@@ -34,6 +35,9 @@ const approvalControlsEnabled = buildChatUiCapabilities(nodeCapabilities.chat).s
  * map carries the operator's choice through that swap. Default stays collapsed (no entry → false).
  */
 const expandedByToolId = new Map<string, boolean>();
+
+// The node's web tools (WebAccessToolCatalog.IsWebTool). Their approval is a content review, answered from the preview.
+const webReviewToolNames = new Set(["web_fetch", "web_search"]);
 
 function isLiveState(state: ToolCallState): boolean {
 	return state === "requesting" || state === "waiting";
@@ -211,6 +215,36 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 				</details>
 				{part.pendingQuestion ? (
 					<AskUserQuestionCard pending={part.pendingQuestion} />
+				) : awaitingApproval && part.pendingWebReview ? (
+					// A web content review is an approval with a different question: not "may this run?" but "may the model
+					// read what it fetched?". Accept = approve once, Reject = deny; never a session scope.
+					<WebReviewCard
+						preview={part.pendingWebReview}
+						busy={resolveApproval.isPending}
+						onAccept={() => handleApprovalDecision(true, "Once")}
+						onReject={() => handleApprovalDecision(false)}
+					/>
+				) : awaitingApproval && webReviewToolNames.has(part.name) ? (
+					// A web review whose preview did not arrive: approving here would let the model read content nobody saw.
+					// The node still holds the preview and replays it to a reloaded page, so reloading is the way to answer.
+					<Group
+						gap="xs"
+						wrap="wrap"
+						className={classes["tool-body"]}
+						data-testid={`chat-tool-call-web-review-missing-${part.name}`}
+					>
+						<Text size="xs" c="dimmed" style={{ minWidth: 0 }}>
+							{t("chat.webReview.missingPreview", "Reload the page to review this web content before the model reads it.")}
+						</Text>
+						<Button
+							size="compact-xs"
+							variant="light"
+							leftSection={<IconRefresh size={12} />}
+							onClick={() => window.location.reload()}
+						>
+							{t("chat.webReview.reload", "Reload")}
+						</Button>
+					</Group>
 				) : awaitingApproval ? (
 					// This row MUST wrap. On a 390px viewport the prompt plus Approve / Approve-for-this-session / Deny is
 					// far wider than the card, and `nowrap` pushed the buttons off the right edge of a Paper that does
@@ -291,8 +325,13 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 				{patchDialogOpen && patchRunId !== null ? (
 					<AgentHomePatchApplyDialog runId={patchRunId} onClose={() => setPatchDialogOpen(false)} />
 				) : null}
-				{/* Open while an approval is pending: the operator must see the arguments of what they are approving. */}
-				<Collapse expanded={expanded || awaitingApproval} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
+				{/* Open while an approval is pending: the operator must see the arguments of what they are approving. A web
+				    review carries its own preview (the request included), so it leaves the body to the operator. */}
+				<Collapse
+					expanded={expanded || (awaitingApproval && !part.pendingWebReview)}
+					keepMounted={true}
+					transitionDuration={reduced ? 0 : 240}
+				>
 					<Stack gap={6} className={classes["tool-body"]}>
 						{formattedArgs ? (
 							<Stack gap={2}>

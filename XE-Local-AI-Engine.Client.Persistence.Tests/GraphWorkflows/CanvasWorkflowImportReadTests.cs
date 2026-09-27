@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
@@ -279,6 +280,7 @@ public sealed class CanvasWorkflowImportReadTests
         var store = new GraphWorkflowStore(context, TimeProvider.System);
         var definitions = new GraphWorkflowDefinitionService(store,
             Substitute.For<IToolInvocationService>(),
+            Substitute.For<INodeRuntimeSettings>(),
             Substitute.For<ILocalModelProviderResolver>(),
             Options.Create(new GraphWorkflowOptions()));
         await CanvasWorkflowImport.ImportAsync(context, definitions, store, snapshot, logger);

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -315,6 +316,28 @@ public sealed class OrchestrationResolverTests
         AssertEx.Equal(expected: 1, specialistSpec.Tools.Count);
         AssertEx.Equal("GetCurrentTime", specialistSpec.Tools[0].Name);
         AssertEx.Equal(expected: true, specialistSpec.Tools[0].RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_NeverHandsAParticipantTheWebTools()
+    {
+        // A participant's approval path carries no call id, so the web result review cannot run there.
+        string[] allowed = ["GetCurrentTime", WebFetchToolDefinition.ToolName, WebSearchToolDefinition.ToolName];
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: allowed);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: allowed);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store,
+            OfferTool("GetCurrentTime"),
+            OfferTool(WebFetchToolDefinition.ToolName, requiresApproval: true, ToolCategory.Network),
+            OfferTool(WebSearchToolDefinition.ToolName, requiresApproval: true, ToolCategory.Network));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = AssertEx.NotNull((await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration);
+
+        foreach (var participant in resolved.Spec.Participants)
+        {
+            AssertEx.Equal("GetCurrentTime", participant.Tools.Single().Name);
+        }
     }
 
     [Test]

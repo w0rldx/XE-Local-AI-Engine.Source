@@ -101,6 +101,13 @@ public sealed record RuntimePackage
     /// </remarks>
     public bool AllowAutoModelSwap { get; init; }
 
+    /// <summary>
+    ///     Whether the user switched this conversation's web result review to auto: retrieved web content reaches the model
+    ///     without a review card. Only the chat send and regenerate paths set it.
+    /// </summary>
+    /// <remarks>Excluded from the config hash (mirrors <see cref="IsUnattended" />): a per-send execution choice, not agent configuration.</remarks>
+    public bool AutoAcceptWebContent { get; init; }
+
     /// <summary>Requires every provider send in this invocation to use the package model through llama-server.</summary>
     public bool RequireNodeManagedLlama { get; init; }
 

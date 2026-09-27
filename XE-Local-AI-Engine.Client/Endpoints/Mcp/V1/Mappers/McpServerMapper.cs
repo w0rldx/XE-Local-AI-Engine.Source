@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
 internal static class McpServerMapper
@@ -86,11 +87,12 @@ internal static class McpServerMapper
 
         var effectiveRequiresApproval = toolCatalog.RequiresApproval(entry);
 
-        // Matched on AskUserTool.ToolName, the same constant ToolApprovalCoordinator.IsUserQuestionRequest matches on, rather than a second list here that could drift from
-        // the branch it describes. The question arm comes FIRST: ask_user is approval-gated too, and the approval arm would otherwise claim it fails an unattended run.
+        // Matched on the names ToolApprovalCoordinator.IsUserQuestionRequest and WebAccessToolCatalog.IsWebTool match on. These arms come FIRST: ask_user and the web tools are
+        // approval-gated too, yet an unattended run continues past them (no answer, no web content), where the approval arm would claim the run fails.
         var unattendedBehaviour = entry.Name switch
         {
             AskUserTool.ToolName => ToolUnattendedBehaviourValues.ContinuesUnanswered,
+            _ when WebAccessToolCatalog.IsWebTool(entry.Name) => ToolUnattendedBehaviourValues.ContinuesUnanswered,
             _ when effectiveRequiresApproval => ToolUnattendedBehaviourValues.Fails,
             _ => ToolUnattendedBehaviourValues.Runs
         };

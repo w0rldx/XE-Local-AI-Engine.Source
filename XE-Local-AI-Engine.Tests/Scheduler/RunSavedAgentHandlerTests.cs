@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -305,6 +306,31 @@ public sealed class RunSavedAgentHandlerTests
 
         AssertEx.Empty(harness.CapturedPackage!.AllowedTools,
             "a scheduled run must never be offered run_in_agent_home — nobody is there to approve it");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_StripsTheRealWebToolsFromTheUnattendedOffer()
+    {
+        // Same proof for the two web tools: their structural review flag must trip the unattended strip.
+        using var harness = new Harness();
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithWebAccessEnabled(true).Build(),
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
+            allowCloudKnowledgeAccess: false);
+        var webTools = (await offerProvider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false))
+                       .Where(static tool => WebAccessToolCatalog.IsWebTool(tool.Name))
+                       .ToList();
+        AssertEx.Equal(expected: 2, webTools.Count, "the scenario needs both web tools in the real offer");
+
+        harness.Resolver
+               .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", webTools, null, null, 7, AgentId, "Web Agent", []));
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Empty(harness.CapturedPackage!.AllowedTools, "a scheduled run has no one to review web content");
     }
 
     // Stripping approval-required tools from the OFFER (above) cannot reach the skill tools: they arrive through MAF's

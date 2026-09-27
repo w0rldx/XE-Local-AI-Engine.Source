@@ -42,6 +42,7 @@
     <PackageReference Include="Serilog"/>
     <PackageReference Include="System.Numerics.Tensors"/>
     <PackageReference Include="PdfPig"/>
+    <PackageReference Include="SmartReader"/>
     <PackageReference Include="UTF.Unknown"/>
   </ItemGroup>
 

@@ -32,6 +32,7 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -436,6 +437,52 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_ThreadsTheWebReviewModeIntoRuntimePackage()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        _ = await service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                             "hello",
+                             MessageId: assistantMessageId,
+                             RequestId: requestId,
+                             AutoAcceptWebContent: true))
+                         .ToListAsync();
+
+        AssertEx.True(runner.LastAutoAcceptWebContent, "the conversation's auto mode must reach the runtime package");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenSamplingOptionsOmitted_LeavesRuntimePackageSamplingNull()
     {
         var conversationId = Guid.NewGuid();
@@ -548,10 +595,10 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenAskUserIsSuppressed_WithholdsOnlyThatToolFromTheRuntimePackage()
+    public async Task SendMessageAsync_WhenOperatorToolsAreSuppressed_WithholdsAskUserAndTheWebToolsFromTheRuntimePackage()
     {
-        // The workflow-owned work-session send: no operator is attached to answer a question, so the tool is withdrawn
-        // rather than left to park the turn. Everything else the turn was offered has to survive the filter.
+        // The workflow-owned work-session send: no operator is attached to answer a question or review a web result, so
+        // those tools are withdrawn rather than left to park the turn. Everything else the turn was offered survives.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -560,6 +607,8 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto(WebFetchToolDefinition.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto(WebSearchToolDefinition.ToolName, "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -597,7 +646,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: true,
-                           SuppressAskUser: true)))
+                           SuppressOperatorTools: true)))
         {
             drained++;
         }
@@ -608,13 +657,15 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "Calculate");
         AssertEx.False(runner.LastAllowedTools.Any(tool => tool.Name == AskUserTool.ToolName),
             "The suppressed turn must reach the runtime package without ask_user.");
+        AssertEx.False(runner.LastAllowedTools.Any(tool => WebAccessToolCatalog.IsWebTool(tool.Name)),
+            "A web result would park on a review card nobody can open, so neither web tool may reach the package.");
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenAskUserIsNotSuppressed_LeavesTheOfferedToolInPlace()
+    public async Task SendMessageAsync_WhenOperatorToolsAreNotSuppressed_LeavesAskUserAndTheWebToolsInPlace()
     {
-        // The other half of the pin: suppression is opt-in per send, so an ordinary chat turn keeps the tool it has
-        // always been offered. Same offer as the suppressed case, so only the flag can explain the difference.
+        // The other half of the pin: suppression is opt-in per send, so an interactive turn with web access on keeps
+        // every tool it was offered. Same offer as the suppressed case, so only the flag can explain the difference.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -623,6 +674,8 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto(WebFetchToolDefinition.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto(WebSearchToolDefinition.ToolName, "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -665,8 +718,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Equal(expected: 3, runner.LastAllowedTools.Count);
+        AssertEx.Equal(expected: 5, runner.LastAllowedTools.Count);
         AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == AskUserTool.ToolName);
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == WebFetchToolDefinition.ToolName);
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == WebSearchToolDefinition.ToolName);
     }
 
     [Test]
@@ -2637,7 +2692,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenAskUserIsSuppressed_WithholdsItFromEveryOrchestrationParticipant()
+    public async Task SendMessageAsync_WhenOperatorToolsAreSuppressed_WithholdsThemFromEveryOrchestrationParticipant()
     {
         // The other list the withdrawal has to reach. Participants carry their own projected offer on the compiled
         // spec, so a workflow node bound to an Orchestrator agent would otherwise still park on a question. This send
@@ -2700,7 +2755,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           SuppressAskUser: true)))
+                           SuppressOperatorTools: true)))
         {
             drained++;
         }
@@ -2710,6 +2765,8 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(expected: 2, withdrawn.Participants.Count, "The withdrawal rewrites the tools and nothing else.");
         AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName)),
             "No participant may reach the runner still able to park on a question.");
+        AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => WebAccessToolCatalog.IsWebTool(tool.Name))),
+            "No participant may reach the runner still able to park on a web review.");
         AssertEx.Contains(withdrawn.Participants.Single(participant => participant.Key == "b").Tools, tool => tool.Name == "Calculate");
         AssertEx.Contains(spec.Participants, participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName));
     }
@@ -4492,7 +4549,12 @@ public sealed class NodeChatStreamServiceTests
                     Name = "Specialist",
                     Instructions = "Specialist.",
                     ModelId = "qwen3:8b",
-                    Tools = [CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"), CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}")]
+                    Tools =
+                    [
+                        CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"),
+                        CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
+                        CreateLocalToolDto(WebSearchToolDefinition.ToolName, "{\"type\":\"object\"}")
+                    ]
                 }
             ],
             Edges =
@@ -5418,6 +5480,8 @@ public sealed class NodeChatStreamServiceTests
         // step never hands the dispatcher permission to replace the model.
         public bool LastAllowAutoModelSwap { get; private set; }
 
+        public bool LastAutoAcceptWebContent { get; private set; }
+
         public bool CaptureObserved { get; private set; }
         public int ActiveInvocationCount => 0;
 
@@ -5427,6 +5491,7 @@ public sealed class NodeChatStreamServiceTests
             LastAllowedTools = context.Package.AllowedTools;
             LastSamplingOptions = context.Package.SamplingOptions;
             LastAllowAutoModelSwap = context.Package.AllowAutoModelSwap;
+            LastAutoAcceptWebContent = context.Package.AutoAcceptWebContent;
             CaptureObserved = true;
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);

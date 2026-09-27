@@ -63,6 +63,13 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public static GraphWorkflowHarness PrivateAgentHost(params (string Key, string Value)[] configuration) =>
         new(GraphWorkflowAgentHostFixture.NewFactory(configuration), ownsFactory: true);
 
+    /// <summary>An agent host of this test's own with one more registration pass over the agent fakes.</summary>
+    [SuppressMessage("Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership transfers to the harness, which disposes a factory it built in its own DisposeAsync.")]
+    public static GraphWorkflowHarness PrivateAgentHost(Action<IServiceCollection> configureServices, params (string Key, string Value)[] configuration) =>
+        new(GraphWorkflowAgentHostFixture.NewFactory(configureServices, configuration), ownsFactory: true);
+
     /// <summary>
     ///     A tool host of this test's own. Take one for host-level state a concurrent sibling must not see — a config
     ///     value, or a PARKED call, which holds a lane slot that on a shared host is every sibling's too.

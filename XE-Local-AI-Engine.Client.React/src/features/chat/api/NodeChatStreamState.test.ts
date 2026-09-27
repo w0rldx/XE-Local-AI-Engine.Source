@@ -639,6 +639,94 @@ describe("node chat stream state", () => {
 		});
 	});
 
+	it("carries a web review preview onto the waiting card and drops it once the call resolves", () => {
+		const webReview = {
+			toolName: "web_fetch",
+			url: "https://example.com/a",
+			finalUrl: "https://example.com/a",
+			title: "A",
+			contentType: "text/html",
+			truncated: false,
+			text: "page text",
+		};
+		const review = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-web",
+				toolName: "web_fetch",
+				approvalRequestId: "approval-web",
+				sessionScopeEligible: false,
+				webReview,
+				content: null,
+				delta: null,
+			}),
+		);
+		expect(review.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({
+			id: "call-web",
+			state: "waiting",
+			pendingApprovalRequestId: "approval-web",
+			pendingWebReview: webReview,
+		});
+
+		const resolved = applyNodeChatStreamEvent(
+			review.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 5,
+				toolCallId: "call-web",
+				toolName: "web_fetch",
+				result: "fenced page text",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
+		);
+		const resolvedPart = resolved.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(resolvedPart).toMatchObject({ id: "call-web", state: "received" });
+		expect(resolvedPart?.kind === "tool" ? resolvedPart.pendingWebReview : "not a tool").toBeUndefined();
+	});
+
+	it("renders an approval raised after a stream resume as a web review only when the event carries the call identity", () => {
+		// Live round D1: after a reload the resumed stream sent the third web call's approval before the node had folded
+		// the call id, tool name and preview onto the pending slot. With no tool card to attach to, the reducer builds a
+		// generic request-id-keyed card named "tool" — the blind Approve the operator saw.
+		const webReview = { toolName: "web_fetch", url: "https://example.com/b", text: "page b" };
+		const bare = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				approvalRequestId: "approval-3",
+				content: null,
+				delta: null,
+			}),
+		);
+		expect(bare.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({
+			id: "approval-3",
+			name: "tool",
+			pendingWebReview: undefined,
+		});
+
+		// The event the node now sends: the fold's identity and preview ride the one and only prompt.
+		const folded = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-web-3",
+				toolName: "web_fetch",
+				approvalRequestId: "approval-3",
+				arguments: '{"url":"https://example.com/b"}',
+				sessionScopeEligible: false,
+				webReview,
+				content: null,
+				delta: null,
+			}),
+		);
+		const tools = folded.streamingMessage.parts?.filter((part) => part.kind === "tool") ?? [];
+		expect(tools).toHaveLength(1);
+		expect(tools[0]).toMatchObject({ id: "call-web-3", name: "web_fetch", state: "waiting", pendingWebReview: webReview });
+	});
+
 	it("keeps a tool card's arguments when an approval replay carries none", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

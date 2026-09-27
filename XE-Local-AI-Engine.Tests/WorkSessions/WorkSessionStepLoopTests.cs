@@ -1264,12 +1264,12 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.False(fake.Requests[0].ReasoningEffortOverridesAgentPin);
         AssertEx.True(fake.Requests[0].IsWorkSessionTurn,
             "an unpinned session is still a supervised step, so the adaptive-effort swap must stay refused on it.");
-        AssertEx.False(fake.Requests[0].SuppressAskUser,
-            "An operator-driven session keeps ask_user: there is someone attached to the embedded chat to answer it.");
+        AssertEx.False(fake.Requests[0].SuppressOperatorTools,
+            "An operator-driven session keeps ask_user and the web tools: someone is attached to the embedded chat to answer.");
     }
 
     [Test]
-    public async Task Loop_WhenTheSessionIsWorkflowOwned_SendsEveryStepWithAskUserSuppressed()
+    public async Task Loop_WhenTheSessionIsWorkflowOwned_SendsEveryStepWithOperatorToolsSuppressed()
     {
         // A workflow node has no operator attached and its embedded chat is read-only, so an ask_user question could
         // only ever go unanswered — burning the node-wide pending-tool-call age or, sooner, the park guard that pauses
@@ -1302,7 +1302,7 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Equal(expected: 2, fake.Requests.Count);
         foreach (var request in fake.Requests)
         {
-            AssertEx.True(request.SuppressAskUser, "Every step of a workflow-owned session is sent without ask_user, not just the first.");
+            AssertEx.True(request.SuppressOperatorTools, "Every step of a workflow-owned session is sent without ask_user and the web tools, not just the first.");
         }
     }
 

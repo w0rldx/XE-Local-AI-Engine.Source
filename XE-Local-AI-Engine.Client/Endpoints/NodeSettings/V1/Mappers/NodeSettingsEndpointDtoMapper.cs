@@ -18,6 +18,8 @@ internal static class NodeSettingsEndpointDtoMapper
             EnableTools = settings.EnableTools,
             CustomToolsEnabled = settings.CustomToolsEnabled,
             ToolRelevanceEnabled = settings.ToolRelevanceEnabled,
+            WebAccessEnabled = settings.WebAccessEnabled,
+            WebSearchSearxngUrl = settings.WebSearchSearxngUrl,
             ExternalAccessProfile = settings.ExternalAccessProfile,
             UiMode = settings.UiMode,
             UpdateChannel = settings.UpdateChannel,
@@ -111,6 +113,11 @@ internal static class NodeSettingsEndpointDtoMapper
             EnableTools = request.EnableTools ?? currentSettings.EnableTools,
             CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
             ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
+            WebAccessEnabled = request.WebAccessEnabled ?? currentSettings.WebAccessEnabled,
+            // Blank clears it: the store's Normalize maps an empty string to null, like OllamaEndpoint.
+            WebSearchSearxngUrl = request.WebSearchSearxngUrl is null
+                ? currentSettings.WebSearchSearxngUrl
+                : request.WebSearchSearxngUrl.Trim(),
             ExternalAccessProfile = externalAccessProfile,
             // Plain null-preserving merge, unlike the external-access block above: the mode couples to no other field, so it needs no joint resolution. The validator has
             // already proven a supplied value is one of the two literals; the store's Normalize trims and re-checks it.

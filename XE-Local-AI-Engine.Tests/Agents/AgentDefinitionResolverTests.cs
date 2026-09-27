@@ -187,6 +187,25 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    [Arguments("web_fetch")]
+    [Arguments("web_search")]
+    public async Task ResolveAsync_AWebTool_ReachesABoundAgentOnlyThroughAllowedToolNames(string toolName)
+    {
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool(toolName, category: ToolCategory.Network));
+        var without = CreateDefinition("Researcher", allowedTools: ["GetCurrentTime"]);
+        var with = CreateDefinition("Browser", allowedTools: ["GetCurrentTime", toolName]);
+        store.GetByIdAsync(without.Id, Arg.Any<CancellationToken>()).Returns(without);
+        store.GetByIdAsync(with.Id, Arg.Any<CancellationToken>()).Returns(with);
+
+        var resolvedWithout = AssertEx.NotNull(await resolver.ResolveAsync(without.Id, ToolCapableModel));
+        var resolvedWith = AssertEx.NotNull(await resolver.ResolveAsync(with.Id, ToolCapableModel));
+
+        AssertEx.False(resolvedWithout.AllowedTools.Any(tool => tool.Name == toolName),
+            "an offered web tool must not leak to an agent that does not list it");
+        AssertEx.Contains(resolvedWith.AllowedTools, tool => tool.Name == toolName);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenDefaultAssistant_DoesNotGetSpawnSubAgent()
     {
         // spawn_subagent is profile-opt-in only: even though it is offered to a tool-capable model, the mode-off Default

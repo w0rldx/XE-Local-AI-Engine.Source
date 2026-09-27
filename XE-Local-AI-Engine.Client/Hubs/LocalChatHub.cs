@@ -99,6 +99,7 @@ public sealed class LocalChatHub : Hub
     ///     never overwriting the original. Throws for an Origin=Remote (view-only) conversation or an unknown
     ///     conversation/message. <paramref name="samplingOptions" /> is the LAST wire argument on purpose: the client
     ///     passes the same developer-gated overrides a send carries, and appending keeps the positional order intact.
+    ///     <paramref name="autoAcceptWebContent" /> is appended AFTER it for the same reason.
     /// </remarks>
     public IAsyncEnumerable<ChatStreamEvent> RegenerateMessage(Guid conversationId,
         Guid originalMessageId,
@@ -107,11 +108,20 @@ public sealed class LocalChatHub : Hub
         bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         SamplingOptions? samplingOptions,
+        bool autoAcceptWebContent,
         CancellationToken cancellationToken)
     {
         return TrackAttachment(
             RejectInvalidRequest(() =>
-                _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken)),
+                _regenerationService.RegenerateAsync(conversationId,
+                    originalMessageId,
+                    reasoningEffort,
+                    useLocalTools,
+                    useKnowledgeBase,
+                    selectedPath,
+                    samplingOptions,
+                    autoAcceptWebContent,
+                    cancellationToken)),
             cancellationToken);
     }
 

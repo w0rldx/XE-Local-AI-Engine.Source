@@ -24,6 +24,7 @@ public interface INodeChatRegenerationService
     ///     Developer-gated per-turn sampling overrides, the same the send path carries; null leaves the package
     ///     byte-identical.
     /// </param>
+    /// <param name="autoAcceptWebContent">The conversation's web result review mode, as a send carries it.</param>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort = null,
@@ -31,6 +32,7 @@ public interface INodeChatRegenerationService
         bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         SamplingOptions? samplingOptions = null,
+        bool autoAcceptWebContent = false,
         CancellationToken cancellationToken = default);
 }
 

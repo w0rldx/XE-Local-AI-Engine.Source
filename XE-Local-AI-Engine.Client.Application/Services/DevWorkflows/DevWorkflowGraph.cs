@@ -329,6 +329,15 @@ internal sealed class DevWorkflowGraph
 
         var nodeKey = RequiredString(element, "nodeKey", "a node");
         var nodeType = RequiredEnum<DevWorkflowNodeType>(element, "nodeType", $"node '{nodeKey}'");
+
+        // Named tools — web_fetch and its link allow-list among them — are Graph Workflows only (ADR 0017): a Dev
+        // Workflow Tool node runs validation commands, so either member here would be a setting nothing applies.
+        if (element.TryGetProperty("toolName", out _) || element.TryGetProperty("allowedUrls", out _))
+        {
+            throw new DevWorkflowValidationException($"Node '{nodeKey}' declares 'toolName' or 'allowedUrls', which Dev Workflows do not support: "
+                                                     + "named tools such as web_fetch, and their allowed links, exist only in Graph Workflows.");
+        }
+
         var isWorkNode = nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask;
         var commandIds = OptionalStringArray(element, "validationCommandIds", nodeKey);
         var toolMode = ParseToolMode(element, nodeKey, nodeType, commandIds);
