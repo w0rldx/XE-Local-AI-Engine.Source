@@ -25,13 +25,6 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// </remarks>
 public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 {
-    // Byte ceiling on the vector cache beside the configured entry bound — the same pair, and reason, as the playbook
-    // ranker's: an entry bound alone lets a wide-vector model multiply the footprint silently.
-    private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
-
-    // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
-    private const long EntryOverheadBytes = 64;
-
     // RAM-only, keyed by tool name, description and embedding model. The description stands in for the playbook
     // cache's Version, so an edited one cannot score a stale vector; the model name guards the dimension.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
@@ -56,11 +49,11 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         _options = options.Value;
         _lexical = lexical;
         _logger = logger;
-        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
+        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingVectorCacheBudget.MaxBytes,
             _options.EmbeddingCacheMaxEntries,
             static (key, vector) => (vector.Length * sizeof(float))
                                     + ((key.Model.Length + key.ToolName.Length + (key.Description?.Length ?? 0)) * sizeof(char))
-                                    + EntryOverheadBytes,
+                                    + EmbeddingVectorCacheBudget.EntryOverheadBytes,
             timeProvider);
     }
 

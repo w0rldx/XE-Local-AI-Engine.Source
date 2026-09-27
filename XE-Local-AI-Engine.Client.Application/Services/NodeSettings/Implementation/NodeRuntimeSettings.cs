@@ -29,6 +29,11 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly long _agentHomeMaxSelectedFolderBytesSeed;
     private readonly int _agentHomeCommandTimeoutSeed;
     private readonly int _agentHomePrepareTimeoutSeed;
+    private readonly int _agentHomeMaxRunSecondsSeed;
+    private readonly int _agentHomeRunRetentionDaysSeed;
+    private readonly int _hfDownloadConnectionsSeed;
+    private readonly TimeSpan _imageIdleTimeToLiveSeed;
+    private readonly int _maxProviderCallsPerInvocationSeed;
     private readonly int _orchestrationIdleTimeoutSeed;
     private readonly int _transcriptionIdleTimeoutMinutesSeed;
     private readonly string _ollamaEndpointSeed;
@@ -58,6 +63,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _agentHomeCommandTimeoutSeed = agentHome.CommandTimeoutSeconds;
         _agentHomeMaxSelectedFolderBytesSeed = agentHome.MaxSelectedFolderBytes;
         _agentHomeMaxPatchBytesSeed = agentHome.MaxPatchBytes;
+        _agentHomeMaxRunSecondsSeed = agentHome.MaxRunSeconds;
         _maxResponseSizeMbSeed = workerNode.MaxResponseSizeMb;
         _maxPendingToolCallAgeMinutesSeed = workerNode.MaxPendingToolCallAgeMinutes;
         _detachedGraceSecondsSeed = workerNode.DetachedGraceSeconds;
@@ -81,6 +87,25 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
         var configuredMargin = configuration.GetValue<long?>("HuggingFace:DiskMarginBytes");
         _hfDiskMarginSeed = configuredMargin is > 0 ? configuredMargin.Value : StoredNodeSettings.DefaultHuggingFaceDiskMarginBytes;
+
+        // Seeds below come from configuration for the reasons above: their options are registered by modules not every context runs,
+        // or (Agent:ProviderCallBudget) are Configure-d FROM this accessor, so an IOptions<T> dependency would be a cycle.
+        var configuredConnections = configuration.GetValue<int?>("HuggingFace:DownloadConnections");
+        _hfDownloadConnectionsSeed = configuredConnections is > 0 ? configuredConnections.Value : StoredNodeSettings.DefaultHuggingFaceDownloadConnections;
+
+        var configuredImageTtl = configuration.GetValue<TimeSpan?>("StableDiffusionRuntime:IdleTimeToLive");
+        _imageIdleTimeToLiveSeed = configuredImageTtl is { } imageTtl && imageTtl > TimeSpan.Zero
+            ? imageTtl
+            : TimeSpan.FromSeconds(StoredNodeSettings.DefaultImageIdleTimeToLiveSeconds);
+
+        var configuredProviderCalls = configuration.GetValue<int?>("Agent:ProviderCallBudget:MaxProviderCallsPerInvocation");
+        _maxProviderCallsPerInvocationSeed = configuredProviderCalls is > 0
+            ? configuredProviderCalls.Value
+            : StoredNodeSettings.DefaultMaxProviderCallsPerInvocation;
+
+        // 0 is a valid seed here: it turns the age limit off, and an absent stored value must keep that.
+        var configuredRetentionDays = configuration.GetValue<int?>("AgentHome:RunRetention:RetentionDays");
+        _agentHomeRunRetentionDaysSeed = configuredRetentionDays is >= 0 ? configuredRetentionDays.Value : StoredNodeSettings.DefaultAgentHomeRunRetentionDays;
 
         // Ollama:Endpoint is not bound to an Options class today; it is read directly from configuration at host build.
         var configuredOllama = configuration.GetValue<string>("Ollama:Endpoint");
@@ -250,6 +275,42 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<string?> GetAutoEffortFastModelNameAsync(CancellationToken cancellationToken = default) =>
         ResolveAutoEffortFastModelName(await LoadAsync(cancellationToken));
 
+    public async Task<int> GetCustomToolMaxTimeoutSecondsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.CustomToolMaxTimeoutSeconds ?? StoredNodeSettings.DefaultCustomToolMaxTimeoutSeconds;
+    }
+
+    public async Task<TimeSpan> GetWebFetchTimeoutAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return TimeSpan.FromSeconds(stored.WebFetchTimeoutSeconds ?? StoredNodeSettings.DefaultWebFetchTimeoutSeconds);
+    }
+
+    public async Task<int> GetWebFetchMaxContentCharsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.WebFetchMaxContentChars ?? StoredNodeSettings.DefaultWebFetchMaxContentChars;
+    }
+
+    public async Task<int> GetKnowledgeSearchDefaultResultsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.KnowledgeSearchDefaultResults ?? StoredNodeSettings.DefaultKnowledgeSearchDefaultResults;
+    }
+
+    public async Task<int> GetKnowledgeSearchMaxResultsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.KnowledgeSearchMaxResults ?? StoredNodeSettings.DefaultKnowledgeSearchMaxResults;
+    }
+
+    public async Task<int> GetAgentHomeMaxRunSecondsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return stored.AgentHomeMaxRunSeconds ?? _agentHomeMaxRunSecondsSeed;
+    }
+
     public string GetDefaultModelName() =>
         ResolveDefaultModelName(LoadStored());
 
@@ -306,6 +367,47 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public string? GetRerankerModelName() =>
         ResolveRerankerModelName(LoadStored());
+
+    public TimeSpan GetLlamaReadinessTimeoutCap() =>
+        TimeSpan.FromSeconds(LoadStored().LlamaReadinessTimeoutCapSeconds ?? StoredNodeSettings.DefaultLlamaReadinessTimeoutCapSeconds);
+
+    public TimeSpan GetLlamaChatHttpTimeout() =>
+        TimeSpan.FromSeconds(LoadStored().LlamaChatHttpTimeoutSeconds ?? StoredNodeSettings.DefaultLlamaChatHttpTimeoutSeconds);
+
+    public TimeSpan GetLlamaEmbeddingHttpTimeout() =>
+        TimeSpan.FromSeconds(LoadStored().LlamaEmbeddingHttpTimeoutSeconds ?? StoredNodeSettings.DefaultLlamaEmbeddingHttpTimeoutSeconds);
+
+    public int? GetLlamaChatCacheRamMiB() =>
+        LoadStored().LlamaChatCacheRamMiB;
+
+    public int GetLlamaCpuThreadReserve() =>
+        LoadStored().LlamaCpuThreadReserve ?? StoredNodeSettings.DefaultLlamaCpuThreadReserve;
+
+    // Percent / 100.0 is correctly rounded, so the defaults reproduce the 0.05 / 0.15 literals exactly and the launch-policy
+    // fingerprint that serializes them stays byte-identical on a node that never set either knob.
+    public double GetLlamaGpuReserveFraction() =>
+        (LoadStored().LlamaGpuReservePercent ?? StoredNodeSettings.DefaultLlamaGpuReservePercent) / 100d;
+
+    public double GetLlamaRamReserveFraction() =>
+        (LoadStored().LlamaRamReservePercent ?? StoredNodeSettings.DefaultLlamaRamReservePercent) / 100d;
+
+    public TimeSpan GetImageIdleTimeToLive() =>
+        LoadStored().ImageIdleTimeToLiveSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : _imageIdleTimeToLiveSeed;
+
+    public int GetMaxProviderCallsPerInvocation() =>
+        LoadStored().MaxProviderCallsPerInvocation ?? _maxProviderCallsPerInvocationSeed;
+
+    public int GetHuggingFaceDownloadConnections() =>
+        LoadStored().HuggingFaceDownloadConnections ?? _hfDownloadConnectionsSeed;
+
+    public TimeSpan GetTranscriptionInferenceTimeout() =>
+        TimeSpan.FromMinutes(LoadStored().TranscriptionInferenceTimeoutMinutes ?? StoredNodeSettings.DefaultTranscriptionInferenceTimeoutMinutes);
+
+    public int GetAgentHomeRunRetentionDays() =>
+        LoadStored().AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed;
+
+    public double GetModelFitSafetyMarginFraction() =>
+        (LoadStored().ModelFitSafetyMarginPercent ?? StoredNodeSettings.DefaultModelFitSafetyMarginPercent) / 100d;
 
     private string ResolveDefaultModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.DefaultModelName) ? _defaultModelSeed : stored.DefaultModelName;

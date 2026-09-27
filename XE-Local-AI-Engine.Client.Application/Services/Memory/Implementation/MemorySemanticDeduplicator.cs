@@ -21,13 +21,6 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// </remarks>
 internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 {
-    // Byte ceiling on the vector cache, alongside the configured entry bound: 4 MiB holds well over the default entry
-    // count at 768 dimensions and caps a 4096-dimension model, which the entry bound alone would let reach 8 MB.
-    private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
-
-    // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
-    private const long EntryOverheadBytes = 64;
-
     // RAM-only cache keyed by memory id, version and embedding model: the version invalidates an edited memory and the
     // model name stops a stale-dimension vector being cosined against a new model's candidate. Eviction is coldest-first.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
@@ -52,9 +45,9 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         _embeddingModelResolver = embeddingModelResolver;
         _options = options.Value;
         _logger = logger;
-        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
+        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingVectorCacheBudget.MaxBytes,
             _options.SemanticDedupEmbeddingCacheMaxEntries,
-            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes,
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EmbeddingVectorCacheBudget.EntryOverheadBytes,
             timeProvider);
     }
 

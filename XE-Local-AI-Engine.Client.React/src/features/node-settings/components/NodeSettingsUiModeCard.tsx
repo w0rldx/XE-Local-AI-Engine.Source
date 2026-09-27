@@ -1,30 +1,21 @@
 import { Group, SegmentedControl, Stack, Text, Title } from "@mantine/core";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { IconLayoutSidebar } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
-// The home of the choice the first-run step promises can be changed here. Deliberately NOT part of the big fields
-// form and its Save button: the mode only decides what the navigation renders, so it applies the moment it is picked.
-// Seeding the node-settings cache with the save's own response is what makes the nav bars re-render on the next
-// commit — they read the same query — so the rail changes under the operator without a reload.
-export function NodeSettingsUiModeCard() {
+interface Props {
+	// The draft value as the server stores it. Anything but "simple" shows as Advanced, matching useUiMode.
+	readonly value: string;
+	readonly onChange: (value: "simple" | "advanced") => void;
+}
+
+// The home of the choice the first-run step promises can be changed here. It is a draft field like every other node
+// setting: the save bar persists it, and the page seeds the node-settings cache with the save's response, which is
+// what re-renders the navigation rail (it reads the same query) without a reload.
+export function NodeSettingsUiModeCard({ value, onChange }: Props) {
 	const { t } = useTranslation();
-	const queryClient = useQueryClient();
-	const uiMode = useUiMode();
-
-	const saveMutation = useMutation({
-		...withResponseValidation(saveNodeSettingsMutation()),
-		onSuccess: (saved) => {
-			queryClient.setQueryData(getNodeSettingsQueryKey(), saved);
-		},
-	});
+	const uiMode = value === "simple" ? "simple" : "advanced";
 
 	return (
 		<SectionCard
@@ -39,18 +30,10 @@ export function NodeSettingsUiModeCard() {
 				)}
 			</Text>
 
-			{saveMutation.isError ? (
-				<InlineErrorAlert
-					message={apiErrorMessage(saveMutation.error, t("pages.uiMode.saveError", "Could not save your choice. Try again."))}
-					data-testid="node-settings-ui-mode-error"
-				/>
-			) : null}
-
 			<Group>
 				<SegmentedControl
 					value={uiMode}
-					onChange={(value) => saveMutation.mutate({ body: { uiMode: value === "simple" ? "simple" : "advanced" } })}
-					disabled={saveMutation.isPending}
+					onChange={(next) => onChange(next === "simple" ? "simple" : "advanced")}
 					aria-label={t("pages.nodeSettings.uiMode.title", "Interface mode")}
 					data={[
 						{ value: "simple", label: t("pages.uiMode.simple.title", "Simple") },

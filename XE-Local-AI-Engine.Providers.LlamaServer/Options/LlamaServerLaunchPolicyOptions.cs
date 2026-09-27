@@ -18,8 +18,8 @@ public sealed class LlamaServerLaunchPolicyOptions
     public const int ContextAlignmentTokens = 256;
     public const long MinimumGpuReserveBytes = 512L * 1024 * 1024;
     public const long MinimumRamReserveBytes = 2L * 1024 * 1024 * 1024;
-    public const double GpuReserveFraction = 0.05;
-    public const double RamReserveFraction = 0.15;
+    public const double DefaultGpuReserveFraction = 0.05;
+    public const double DefaultRamReserveFraction = 0.15;
 
     /// <summary>
     ///     The provider-only chat-role fallback used when the composed application's capacity-aware resolver is absent.
@@ -122,6 +122,18 @@ public sealed class LlamaServerLaunchPolicyOptions
     public int CpuThreadReserve { get; init; } = DefaultCpuThreadReserve;
 
     /// <summary>
+    ///     Share of the GPU budget the context allocator keeps free (never below <see cref="MinimumGpuReserveBytes" />).
+    ///     Must be in [0, 1). Part of the launch-policy fingerprint, so changing it re-explores every frozen profile.
+    /// </summary>
+    public double GpuReserveFraction { get; init; } = DefaultGpuReserveFraction;
+
+    /// <summary>
+    ///     Share of RAM the context allocator keeps free (never below <see cref="MinimumRamReserveBytes" />). Must be in
+    ///     [0, 1). Part of the launch-policy fingerprint, like <see cref="GpuReserveFraction" />.
+    /// </summary>
+    public double RamReserveFraction { get; init; } = DefaultRamReserveFraction;
+
+    /// <summary>
     ///     Explicit generation thread count (<c>-t</c>) override. When set (&gt; 0) it wins over the physical-core
     ///     estimate; leave <see langword="null" /> to derive it as <c>physicalCores − <see cref="CpuThreadReserve" /></c>
     ///     (floored at 1). Only meaningful for the CPU build.
@@ -202,6 +214,11 @@ public sealed class LlamaServerLaunchPolicyOptions
         if (CpuThreadReserve < 0)
         {
             throw new InvalidOperationException($"{nameof(CpuThreadReserve)} must be non-negative (was {CpuThreadReserve}).");
+        }
+
+        if (GpuReserveFraction is < 0d or >= 1d || RamReserveFraction is < 0d or >= 1d)
+        {
+            throw new InvalidOperationException($"{nameof(GpuReserveFraction)} and {nameof(RamReserveFraction)} must be in [0, 1) (were {GpuReserveFraction} and {RamReserveFraction}).");
         }
 
         if (CpuThreadCount is { } threads && threads <= 0)

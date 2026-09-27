@@ -27,7 +27,11 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, and "
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
 
-    /// <summary>Query is required; limit defaults to 5 and is clamped to 1-20; optional single-document scope + neighbor expansion.</summary>
+    /// <summary>
+    ///     Query is required; limit defaults to the node's <c>KnowledgeSearchDefaultResults</c> and is clamped to its
+    ///     <c>KnowledgeSearchMaxResults</c>, whose bound is this schema's static maximum of 20; optional single-document scope
+    ///     + neighbor expansion.
+    /// </summary>
     public static readonly string ParameterSchema = $$"""
                                                       {
                                                         "type": "object",

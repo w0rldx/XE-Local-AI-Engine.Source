@@ -20,9 +20,6 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
 {
     private const int MaxProbeOutputChars = 4096;
 
-    /// <summary>A whisper.cpp CUDA build's source, objects and installed tree, with room to spare.</summary>
-    internal const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
-
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
 
     // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
@@ -31,11 +28,11 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
     private readonly long _requiredFreeDiskBytes;
 
     public WhisperCppSourceBuildPrerequisiteProbe()
-        : this(RuntimeCacheDirectory.Resolve(), RequiredFreeDiskBytes)
+        : this(RuntimeCacheDirectory.Resolve(), SourceBuildPolicy.RequiredFreeDiskBytes)
     {
     }
 
-    internal WhisperCppSourceBuildPrerequisiteProbe(string cacheRoot, long requiredFreeDiskBytes = RequiredFreeDiskBytes)
+    internal WhisperCppSourceBuildPrerequisiteProbe(string cacheRoot, long requiredFreeDiskBytes = SourceBuildPolicy.RequiredFreeDiskBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;

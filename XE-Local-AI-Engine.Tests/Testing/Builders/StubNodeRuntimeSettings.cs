@@ -43,6 +43,8 @@ public sealed class StubNodeRuntimeSettings
     private bool _autoCheckApplicationUpdates = StoredNodeSettings.DefaultAutoCheckApplicationUpdates;
     private bool _autoCheckRuntimeUpdates = StoredNodeSettings.DefaultAutoCheckRuntimeUpdates;
     private bool _autoProvisionFirstRunModel = StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
+    private int _agentHomeMaxRunSeconds = 600;
+    private int _webFetchMaxContentChars = StoredNodeSettings.DefaultWebFetchMaxContentChars;
 
     // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
     // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
@@ -264,6 +266,18 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithAgentHomeMaxRunSeconds(int agentHomeMaxRunSeconds)
+    {
+        _agentHomeMaxRunSeconds = agentHomeMaxRunSeconds;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWebFetchMaxContentChars(int webFetchMaxContentChars)
+    {
+        _webFetchMaxContentChars = webFetchMaxContentChars;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -303,6 +317,12 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAutoCheckApplicationUpdatesAsync(Arg.Any<CancellationToken>()).Returns(_autoCheckApplicationUpdates);
         settings.GetAutoCheckRuntimeUpdatesAsync(Arg.Any<CancellationToken>()).Returns(_autoCheckRuntimeUpdates);
         settings.GetAutoProvisionFirstRunModelAsync(Arg.Any<CancellationToken>()).Returns(_autoProvisionFirstRunModel);
+        settings.GetCustomToolMaxTimeoutSecondsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultCustomToolMaxTimeoutSeconds);
+        settings.GetWebFetchTimeoutAsync(Arg.Any<CancellationToken>()).Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultWebFetchTimeoutSeconds));
+        settings.GetWebFetchMaxContentCharsAsync(Arg.Any<CancellationToken>()).Returns(_webFetchMaxContentChars);
+        settings.GetKnowledgeSearchDefaultResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchDefaultResults);
+        settings.GetKnowledgeSearchMaxResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchMaxResults);
+        settings.GetAgentHomeMaxRunSecondsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxRunSeconds);
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
@@ -324,6 +344,18 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftMaxTokens().Returns(_speculativeDraftMaxTokens);
         settings.GetSpeculativeDraftGpuLayers().Returns(_speculativeDraftGpuLayers);
         settings.GetRerankerModelName().Returns(_rerankerModelName);
+        settings.GetLlamaReadinessTimeoutCap().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaReadinessTimeoutCapSeconds));
+        settings.GetLlamaChatHttpTimeout().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaChatHttpTimeoutSeconds));
+        settings.GetLlamaEmbeddingHttpTimeout().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaEmbeddingHttpTimeoutSeconds));
+        settings.GetLlamaCpuThreadReserve().Returns(StoredNodeSettings.DefaultLlamaCpuThreadReserve);
+        settings.GetLlamaGpuReserveFraction().Returns(StoredNodeSettings.DefaultLlamaGpuReservePercent / 100d);
+        settings.GetLlamaRamReserveFraction().Returns(StoredNodeSettings.DefaultLlamaRamReservePercent / 100d);
+        settings.GetImageIdleTimeToLive().Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultImageIdleTimeToLiveSeconds));
+        settings.GetMaxProviderCallsPerInvocation().Returns(StoredNodeSettings.DefaultMaxProviderCallsPerInvocation);
+        settings.GetHuggingFaceDownloadConnections().Returns(StoredNodeSettings.DefaultHuggingFaceDownloadConnections);
+        settings.GetTranscriptionInferenceTimeout().Returns(TimeSpan.FromMinutes(StoredNodeSettings.DefaultTranscriptionInferenceTimeoutMinutes));
+        settings.GetAgentHomeRunRetentionDays().Returns(StoredNodeSettings.DefaultAgentHomeRunRetentionDays);
+        settings.GetModelFitSafetyMarginFraction().Returns(StoredNodeSettings.DefaultModelFitSafetyMarginPercent / 100d);
         return settings;
     }
 }

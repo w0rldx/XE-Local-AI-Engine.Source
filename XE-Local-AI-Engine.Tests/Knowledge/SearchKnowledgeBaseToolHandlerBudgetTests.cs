@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
@@ -302,12 +305,31 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.Null(capturing.LastRequest);
     }
 
+    [Test]
+    public async Task ExecuteAsync_ClampsTheLimitToTheNodesKnowledgeSearchSettings()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        runtimeSettings.GetKnowledgeSearchDefaultResultsAsync(Arg.Any<CancellationToken>()).Returns(2);
+        runtimeSettings.GetKnowledgeSearchMaxResultsAsync(Arg.Any<CancellationToken>()).Returns(3);
+        var capturing = new CapturingKnowledgeSearchService(new KnowledgeSearchResult
+        {
+            Results = new List<KnowledgeSearchHit>()
+        });
+        var handler = CreateHandler(capturing, runtimeSettings);
+
+        await handler.ExecuteAsync(JsonSerializer.Serialize(new { query = "tides", limit = 10 }));
+        AssertEx.Equal(expected: 3, AssertEx.NotNull(capturing.LastRequest).Limit, "a requested limit above the node ceiling is clamped to it.");
+
+        await handler.ExecuteAsync(JsonSerializer.Serialize(new { query = "tides" }));
+        AssertEx.Equal(expected: 2, AssertEx.NotNull(capturing.LastRequest).Limit, "an omitted limit reads the node default.");
+    }
+
     private static SearchKnowledgeBaseToolHandler CreateHandler(KnowledgeSearchResult result)
     {
         return CreateHandler(new FakeKnowledgeSearchService(result));
     }
 
-    private static SearchKnowledgeBaseToolHandler CreateHandler(IKnowledgeSearchService searchService)
+    private static SearchKnowledgeBaseToolHandler CreateHandler(IKnowledgeSearchService searchService, INodeRuntimeSettings? runtimeSettings = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => searchService);
@@ -316,7 +338,7 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         return new SearchKnowledgeBaseToolHandler(scopeFactory, Options.Create(new KnowledgeBaseOptions
         {
             AgentToolsEnabled = true
-        }));
+        }), runtimeSettings ?? StubNodeRuntimeSettings.Create().Build());
     }
 
     private sealed class FakeKnowledgeSearchService : IKnowledgeSearchService

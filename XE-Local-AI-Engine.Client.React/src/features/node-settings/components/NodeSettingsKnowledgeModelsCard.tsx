@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import {
 	nodeSettingsFieldError,
-	nodeSettingsRestartHint,
+	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import type { NodeSettingsFieldsForm, NodeSettingsModelOption } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
@@ -62,16 +62,15 @@ export function NodeSettingsKnowledgeModelsCard({
 					</Button>
 				</Group>
 				<Select
-					label={t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model")}
-					description={
-						<>
-							{t(
-								"pages.nodeSettings.fields.rerankerModel.description",
-								"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
-							)}
-							{nodeSettingsRestartHint(t, "rerankerModelName")}
-						</>
-					}
+					label={nodeSettingsFieldLabel(
+						t,
+						"rerankerModelName",
+						t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model"),
+					)}
+					description={t(
+						"pages.nodeSettings.fields.rerankerModel.description",
+						"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
+					)}
 					data={rerankerOptions}
 					value={form.rerankerModelName}
 					onChange={(value) => onChange("rerankerModelName", value ?? "")}

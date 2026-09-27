@@ -19,7 +19,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
 {
     // The inspect path skips the per-file header read, so only the on-disk size (≈ weights) is known while resident VRAM
     // also needs the KV cache and runtime overhead: mirror MemoryFitEstimator's ~12% margin + ~0.75 GiB overhead, rounded up.
-    private const double HeadroomFraction = 0.15d;
+    private const double HeadroomFraction = 0.15d; // Not derived from ModelFitSafetyMarginPercent: that cannot reproduce max(15 %, 1 GiB).
     private const long MinHeadroomBytes = 1024L * 1024 * 1024; // ~1 GiB floor for fixed KV/runtime overhead.
 
     private readonly ILogger<GgufVariantRecommender> _logger;

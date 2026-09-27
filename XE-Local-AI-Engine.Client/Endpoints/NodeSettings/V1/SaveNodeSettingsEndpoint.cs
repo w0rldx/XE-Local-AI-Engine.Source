@@ -83,6 +83,12 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             case NodeSettingsField.AutoEffortFastModelName:
                 AddError(r => r.AutoEffortFastModelName, error.Message);
                 break;
+            case NodeSettingsField.KnowledgeSearchDefaultResults:
+                AddError(r => r.KnowledgeSearchDefaultResults, error.Message);
+                break;
+            case NodeSettingsField.AgentHomeMaxRunSeconds:
+                AddError(r => r.AgentHomeMaxRunSeconds, error.Message);
+                break;
             default:
                 AddError(error.Message);
                 break;

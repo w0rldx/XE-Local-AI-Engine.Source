@@ -38,6 +38,27 @@ const nodeSettingsFieldBounds = {
 	detachedGraceSeconds: { min: 0, max: 86400 },
 	chatCacheReuse: { min: 0, max: 8192 },
 	speculativeDraftMaxTokens: { min: 0, max: 16 },
+	speculativeDraftGpuLayers: { min: 0, max: 1000 },
+	llamaChatCacheRamMiB: { min: 0, max: 131072 },
+	llamaReadinessTimeoutCapSeconds: { min: 120, max: 3600 },
+	llamaChatHttpTimeoutSeconds: { min: 60, max: 86400 },
+	llamaEmbeddingHttpTimeoutSeconds: { min: 10, max: 3600 },
+	llamaCpuThreadReserve: { min: 0, max: 64 },
+	llamaGpuReservePercent: { min: 0, max: 50 },
+	llamaRamReservePercent: { min: 0, max: 75 },
+	imageIdleTimeToLiveSeconds: { min: 30, max: 86400 },
+	modelFitSafetyMarginPercent: { min: 0, max: 50 },
+	maxProviderCallsPerInvocation: { min: 10, max: 2000 },
+	customToolMaxTimeoutSeconds: { min: 30, max: 3600 },
+	webFetchTimeoutSeconds: { min: 5, max: 120 },
+	webFetchMaxContentChars: { min: 1000, max: 100000 },
+	knowledgeSearchDefaultResults: { min: 1, max: 20 },
+	knowledgeSearchMaxResults: { min: 1, max: 20 },
+	huggingFaceDownloadConnections: { min: 1, max: 16 },
+	transcriptionIdleTimeoutMinutes: { min: 1, max: 240 },
+	transcriptionInferenceTimeoutMinutes: { min: 1, max: 480 },
+	agentHomeMaxRunSeconds: { min: 60, max: 86400 },
+	agentHomeRunRetentionDays: { min: 1, max: 365 },
 } as const satisfies Record<string, NumericBounds>;
 
 // Speculative-decoding modes, each mapped to its capability class — mirrors the backend SpeculativeModeClass, and the
@@ -109,10 +130,6 @@ export function usesDraftTokensPerStep(mode: string): boolean {
 	return modeClass === "external-draft" || modeClass === "main-model-heads";
 }
 
-// Recommended llama.cpp tag must match the upstream release-tag scheme `b<N>` (e.g. b9692). Enforced at every entry
-// point (settings save, update endpoint, catalog, manager) to prevent path/URL injection into the download URL.
-const llamaCppTagPattern = /^b\d+$/;
-
 // Resolves a controlled numeric input (number or string) to a valid integer within [min, max], or undefined when the
 // value is empty / fractional / out of range. Mirrors `toValidNodeSettingsTimeoutSeconds`.
 export function toValidBoundedInt(value: number | string, bounds: NumericBounds): number | undefined {
@@ -121,15 +138,6 @@ export function toValidBoundedInt(value: number | string, bounds: NumericBounds)
 		return undefined;
 	}
 	return numeric;
-}
-
-// Validates the recommended llama.cpp tag. Empty resolves to undefined (the field is left unchanged on save).
-export function validateLlamaCppTag(value: string): { value?: string; error?: "format" } {
-	const trimmed = value.trim();
-	if (trimmed.length === 0) {
-		return {};
-	}
-	return llamaCppTagPattern.test(trimmed) ? { value: trimmed } : { error: "format" };
 }
 
 // http/https URL validator for the Ollama endpoint and the SearXNG URL (mirrors the server's BeAbsoluteHttpUrl). Empty
@@ -199,8 +207,8 @@ export interface NodeSettingsFieldsForm {
 	webSearchSearxngUrl: string;
 	ollamaEndpoint: string;
 	huggingFaceDefaultQuant: string;
-	recommendedLlamaCppTag: string;
 	llamaMaxLoadedProcesses: number | string;
+	// Shown and edited in MINUTES (see nodeSettingsDisplayScale); the key keeps the wire name so request keys stay 1:1.
 	llamaIdleTimeToLiveSeconds: number | string;
 	keepModelWarmEnabled: boolean;
 	keepModelWarmModelName: string;
@@ -224,7 +232,12 @@ export interface NodeSettingsFieldsForm {
 	autoCheckApplicationUpdates: boolean;
 	autoCheckRuntimeUpdates: boolean;
 	autoProvisionFirstRunModel: boolean;
-	// Developer-only
+	// Navigation mode as the server stores it ("simple" / "advanced", or "" / another literal while undecided).
+	uiMode: string;
+	// Node-level voice gate and the default voice for new users on this node.
+	voiceFeatureEnabled: boolean;
+	defaultVoiceProfile: string;
+	// Developer-only. The AgentHome timeouts are edited in MINUTES and the byte caps in MB (see nodeSettingsDisplayScale).
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
 	agentHomeCommandTimeoutSeconds: number | string;
@@ -232,10 +245,109 @@ export interface NodeSettingsFieldsForm {
 	agentHomeMaxPatchBytes: number | string;
 	maxPendingToolCallAgeMinutes: number | string;
 	detachedGraceSeconds: number | string;
+	// The curated runtime tunables (see tunableFields). Plain bounded integers; the chat HTTP timeout, the image idle TTL
+	// and the AgentHome run limit are edited in MINUTES, the Hugging Face disk margin in GB.
+	llamaReadinessTimeoutCapSeconds: number | string;
+	llamaChatHttpTimeoutSeconds: number | string;
+	llamaEmbeddingHttpTimeoutSeconds: number | string;
+	llamaCpuThreadReserve: number | string;
+	llamaGpuReservePercent: number | string;
+	llamaRamReservePercent: number | string;
+	imageIdleTimeToLiveSeconds: number | string;
+	modelFitSafetyMarginPercent: number | string;
+	maxProviderCallsPerInvocation: number | string;
+	customToolMaxTimeoutSeconds: number | string;
+	webFetchTimeoutSeconds: number | string;
+	webFetchMaxContentChars: number | string;
+	knowledgeSearchDefaultResults: number | string;
+	knowledgeSearchMaxResults: number | string;
+	huggingFaceDownloadConnections: number | string;
+	transcriptionIdleTimeoutMinutes: number | string;
+	transcriptionInferenceTimeoutMinutes: number | string;
+	// Prompt-cache RAM: the stored value is null (automatic), 0 (off) or a size, so the form splits it into a mode and a
+	// size. Only the size key exists on the wire; a save that returns to automatic sends the -1 reset sentinel.
+	llamaChatCacheRamMode: ChatCacheRamMode;
+	llamaChatCacheRamMiB: number | string;
+	// Blank = never set (the runtime default); the wire has no way to clear it again, so a blank edit is refused.
+	speculativeDraftGpuLayers: number | string;
+	huggingFaceDiskMarginBytes: number | string;
+	containerRuntimeSelection: string;
+	// Developer-only, like the other AgentHome limits.
+	agentHomeMaxRunSeconds: number | string;
+	agentHomeRunRetentionDays: number | string;
+}
+
+export type ChatCacheRamMode = "auto" | "off" | "custom";
+
+// The request-only value that resets the prompt-cache RAM to automatic (StoredNodeSettings.LlamaChatCacheRamMiBAuto).
+const CHAT_CACHE_RAM_AUTO = -1;
+
+export const containerRuntimeSelectValues = ["auto", "docker"] as const;
+
+// The curated tunables that are plain bounded integers, each validated against its own server bounds entry.
+const tunableFields = [
+	"llamaReadinessTimeoutCapSeconds",
+	"llamaChatHttpTimeoutSeconds",
+	"llamaEmbeddingHttpTimeoutSeconds",
+	"llamaCpuThreadReserve",
+	"llamaGpuReservePercent",
+	"llamaRamReservePercent",
+	"imageIdleTimeToLiveSeconds",
+	"modelFitSafetyMarginPercent",
+	"maxProviderCallsPerInvocation",
+	"customToolMaxTimeoutSeconds",
+	"webFetchTimeoutSeconds",
+	"webFetchMaxContentChars",
+	"knowledgeSearchDefaultResults",
+	"knowledgeSearchMaxResults",
+	"huggingFaceDownloadConnections",
+	"transcriptionIdleTimeoutMinutes",
+	"transcriptionInferenceTimeoutMinutes",
+] as const;
+
+type TunableField = (typeof tunableFields)[number];
+
+const SECONDS_PER_MINUTE = 60;
+const BYTES_PER_MB = 1024 * 1024;
+const BYTES_PER_GB = 1024 * BYTES_PER_MB;
+
+// Fields whose wire unit is too fine to read comfortably: the form holds `wire / scale` (minutes instead of seconds, MB
+// instead of bytes) and buildNodeSettingsRequest multiplies back, rounding to a whole wire unit. The wire never changes.
+export const nodeSettingsDisplayScale = {
+	llamaIdleTimeToLiveSeconds: SECONDS_PER_MINUTE,
+	agentHomePrepareTimeoutSeconds: SECONDS_PER_MINUTE,
+	agentHomeCommandTimeoutSeconds: SECONDS_PER_MINUTE,
+	agentHomeMaxSelectedFolderBytes: BYTES_PER_MB,
+	agentHomeMaxPatchBytes: BYTES_PER_MB,
+	llamaChatHttpTimeoutSeconds: SECONDS_PER_MINUTE,
+	imageIdleTimeToLiveSeconds: SECONDS_PER_MINUTE,
+	agentHomeMaxRunSeconds: SECONDS_PER_MINUTE,
+	huggingFaceDiskMarginBytes: BYTES_PER_GB,
+} as const satisfies Partial<Record<keyof NodeSettingsFieldsForm, number>>;
+
+// The display scale of any field; 1 for a field shown in its wire unit.
+export function nodeSettingsScaleOf(field: keyof NodeSettingsFieldsForm): number {
+	return (nodeSettingsDisplayScale as Partial<Record<keyof NodeSettingsFieldsForm, number>>)[field] ?? 1;
+}
+
+// Wire bounds expressed in the display unit, for a field's range text and its NumberInput min/max.
+export function toDisplayBounds(bounds: NumericBounds, scale: number): NumericBounds {
+	return { min: bounds.min / scale, max: bounds.max / scale };
+}
+
+// A display value converted back to whole wire units. Blank or non-numeric input stays as it is, so validation still
+// reports it instead of a blank silently becoming 0.
+function toWireValue(value: number | string, scale: number): number | string {
+	if (scale === 1 || (typeof value === "string" && value.trim().length === 0)) {
+		return value;
+	}
+	const numeric = typeof value === "number" ? value : Number(value);
+	return Number.isFinite(numeric) ? Math.round(numeric * scale) : value;
 }
 
 // Defaults used when the response omits a field. These mirror the backend seed defaults (the `Default*` consts in
 // StoredNodeSettings.cs) so the form renders sensible values on an old server that has not yet persisted the field.
+// Scaled fields are given in their display unit.
 export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	defaultModelName: "",
 	enableTools: true,
@@ -246,9 +358,8 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	webSearchSearxngUrl: "",
 	ollamaEndpoint: "",
 	huggingFaceDefaultQuant: "",
-	recommendedLlamaCppTag: "",
 	llamaMaxLoadedProcesses: 3,
-	llamaIdleTimeToLiveSeconds: 900,
+	llamaIdleTimeToLiveSeconds: 15,
 	keepModelWarmEnabled: false,
 	keepModelWarmModelName: "",
 	keepModelWarmIntervalSeconds: 300,
@@ -267,18 +378,63 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	autoCheckApplicationUpdates: true,
 	autoCheckRuntimeUpdates: true,
 	autoProvisionFirstRunModel: true,
+	uiMode: "",
+	voiceFeatureEnabled: false,
+	defaultVoiceProfile: "",
 	orchestrationIdleTimeoutSeconds: 120,
-	agentHomePrepareTimeoutSeconds: 900,
-	agentHomeCommandTimeoutSeconds: 300,
-	agentHomeMaxSelectedFolderBytes: 536870912,
-	agentHomeMaxPatchBytes: 52428800,
+	agentHomePrepareTimeoutSeconds: 15,
+	agentHomeCommandTimeoutSeconds: 5,
+	agentHomeMaxSelectedFolderBytes: 512,
+	agentHomeMaxPatchBytes: 50,
 	maxPendingToolCallAgeMinutes: 10,
 	detachedGraceSeconds: 300,
+	llamaReadinessTimeoutCapSeconds: 600,
+	llamaChatHttpTimeoutSeconds: 60,
+	llamaEmbeddingHttpTimeoutSeconds: 600,
+	llamaCpuThreadReserve: 1,
+	llamaGpuReservePercent: 5,
+	llamaRamReservePercent: 15,
+	imageIdleTimeToLiveSeconds: 15,
+	modelFitSafetyMarginPercent: 12,
+	maxProviderCallsPerInvocation: 200,
+	customToolMaxTimeoutSeconds: 300,
+	webFetchTimeoutSeconds: 20,
+	webFetchMaxContentChars: 12000,
+	knowledgeSearchDefaultResults: 5,
+	knowledgeSearchMaxResults: 20,
+	huggingFaceDownloadConnections: 4,
+	transcriptionIdleTimeoutMinutes: 15,
+	transcriptionInferenceTimeoutMinutes: 30,
+	llamaChatCacheRamMode: "auto",
+	llamaChatCacheRamMiB: "",
+	speculativeDraftGpuLayers: "",
+	huggingFaceDiskMarginBytes: 1,
+	containerRuntimeSelection: "auto",
+	agentHomeMaxRunSeconds: 10,
+	agentHomeRunRetentionDays: 30,
 };
 
 // Coalesces a nullable numeric response field into a form value, falling back to the provided default when absent.
 function numberOr(value: number | null | undefined, fallback: number | string): number | string {
 	return value ?? fallback;
+}
+
+// The same for a scaled field: a server value is converted into the display unit, the default already is in it.
+function scaledOr(value: number | null | undefined, field: keyof NodeSettingsFieldsForm): number | string {
+	return value === null || value === undefined
+		? (nodeSettingsFieldDefaults[field] as number | string)
+		: value / nodeSettingsScaleOf(field);
+}
+
+function toChatCacheRam(
+	value: number | null | undefined,
+): Pick<NodeSettingsFieldsForm, "llamaChatCacheRamMode" | "llamaChatCacheRamMiB"> {
+	if (value === null || value === undefined) {
+		return { llamaChatCacheRamMode: "auto", llamaChatCacheRamMiB: "" };
+	}
+	return value === 0
+		? { llamaChatCacheRamMode: "off", llamaChatCacheRamMiB: "" }
+		: { llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: value };
 }
 
 // Maps the GET response into the editable form state. A null/absent field falls back to its seed default so the form
@@ -297,12 +453,8 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		webSearchSearxngUrl: response.webSearchSearxngUrl ?? "",
 		ollamaEndpoint: response.ollamaEndpoint ?? "",
 		huggingFaceDefaultQuant: response.huggingFaceDefaultQuant ?? "",
-		recommendedLlamaCppTag: response.recommendedLlamaCppTag ?? "",
 		llamaMaxLoadedProcesses: numberOr(response.llamaMaxLoadedProcesses, nodeSettingsFieldDefaults.llamaMaxLoadedProcesses),
-		llamaIdleTimeToLiveSeconds: numberOr(
-			response.llamaIdleTimeToLiveSeconds,
-			nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds,
-		),
+		llamaIdleTimeToLiveSeconds: scaledOr(response.llamaIdleTimeToLiveSeconds, "llamaIdleTimeToLiveSeconds"),
 		keepModelWarmEnabled: response.keepModelWarmEnabled ?? nodeSettingsFieldDefaults.keepModelWarmEnabled,
 		keepModelWarmModelName: response.keepModelWarmModelName ?? "",
 		keepModelWarmIntervalSeconds: numberOr(
@@ -324,28 +476,32 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		autoCheckApplicationUpdates: response.autoCheckApplicationUpdates ?? nodeSettingsFieldDefaults.autoCheckApplicationUpdates,
 		autoCheckRuntimeUpdates: response.autoCheckRuntimeUpdates ?? nodeSettingsFieldDefaults.autoCheckRuntimeUpdates,
 		autoProvisionFirstRunModel: response.autoProvisionFirstRunModel ?? nodeSettingsFieldDefaults.autoProvisionFirstRunModel,
+		uiMode: response.uiMode ?? "",
+		voiceFeatureEnabled: response.voiceFeatureEnabled ?? nodeSettingsFieldDefaults.voiceFeatureEnabled,
+		defaultVoiceProfile: response.defaultVoiceProfile ?? "",
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
 			nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds,
 		),
-		agentHomePrepareTimeoutSeconds: numberOr(
-			response.agentHomePrepareTimeoutSeconds,
-			nodeSettingsFieldDefaults.agentHomePrepareTimeoutSeconds,
-		),
-		agentHomeCommandTimeoutSeconds: numberOr(
-			response.agentHomeCommandTimeoutSeconds,
-			nodeSettingsFieldDefaults.agentHomeCommandTimeoutSeconds,
-		),
-		agentHomeMaxSelectedFolderBytes: numberOr(
-			response.agentHomeMaxSelectedFolderBytes,
-			nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes,
-		),
-		agentHomeMaxPatchBytes: numberOr(response.agentHomeMaxPatchBytes, nodeSettingsFieldDefaults.agentHomeMaxPatchBytes),
+		agentHomePrepareTimeoutSeconds: scaledOr(response.agentHomePrepareTimeoutSeconds, "agentHomePrepareTimeoutSeconds"),
+		agentHomeCommandTimeoutSeconds: scaledOr(response.agentHomeCommandTimeoutSeconds, "agentHomeCommandTimeoutSeconds"),
+		agentHomeMaxSelectedFolderBytes: scaledOr(response.agentHomeMaxSelectedFolderBytes, "agentHomeMaxSelectedFolderBytes"),
+		agentHomeMaxPatchBytes: scaledOr(response.agentHomeMaxPatchBytes, "agentHomeMaxPatchBytes"),
 		maxPendingToolCallAgeMinutes: numberOr(
 			response.maxPendingToolCallAgeMinutes,
 			nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes,
 		),
 		detachedGraceSeconds: numberOr(response.detachedGraceSeconds, nodeSettingsFieldDefaults.detachedGraceSeconds),
+		...(Object.fromEntries(tunableFields.map((field) => [field, scaledOr(response[field], field)])) as Pick<
+			NodeSettingsFieldsForm,
+			TunableField
+		>),
+		...toChatCacheRam(response.llamaChatCacheRamMiB),
+		speculativeDraftGpuLayers: response.speculativeDraftGpuLayers ?? "",
+		huggingFaceDiskMarginBytes: scaledOr(response.huggingFaceDiskMarginBytes, "huggingFaceDiskMarginBytes"),
+		containerRuntimeSelection: response.containerRuntimeSelection ?? nodeSettingsFieldDefaults.containerRuntimeSelection,
+		agentHomeMaxRunSeconds: scaledOr(response.agentHomeMaxRunSeconds, "agentHomeMaxRunSeconds"),
+		agentHomeRunRetentionDays: numberOr(response.agentHomeRunRetentionDays, nodeSettingsFieldDefaults.agentHomeRunRetentionDays),
 	};
 }
 
@@ -392,6 +548,49 @@ export interface NodeSettingsFieldBounds {
 	readonly agentHomeTimeoutSeconds: NumericBounds;
 	readonly maxPendingToolCallAgeMinutes: NumericBounds;
 	readonly detachedGraceSeconds: NumericBounds;
+	readonly speculativeDraftGpuLayers: NumericBounds;
+	readonly llamaChatCacheRamMiB: NumericBounds;
+	readonly agentHomeMaxRunSeconds: NumericBounds;
+	readonly agentHomeRunRetentionDays: NumericBounds;
+	readonly tunables: Readonly<Record<TunableField, NumericBounds>>;
+}
+
+// Where each newer field's bounds live on the GET response. Typed against the generated response, so a renamed wire
+// member is a compile error rather than a silent fallback. The two knowledge counts share one range.
+const responseBoundKeys = {
+	speculativeDraftGpuLayers: ["minSpeculativeDraftGpuLayers", "maxAllowedSpeculativeDraftGpuLayers"],
+	llamaChatCacheRamMiB: ["minLlamaChatCacheRamMiB", "maxAllowedLlamaChatCacheRamMiB"],
+	agentHomeMaxRunSeconds: ["minAgentHomeMaxRunSeconds", "maxAllowedAgentHomeMaxRunSeconds"],
+	agentHomeRunRetentionDays: ["minAgentHomeRunRetentionDays", "maxAllowedAgentHomeRunRetentionDays"],
+	llamaReadinessTimeoutCapSeconds: ["minLlamaReadinessTimeoutCapSeconds", "maxAllowedLlamaReadinessTimeoutCapSeconds"],
+	llamaChatHttpTimeoutSeconds: ["minLlamaChatHttpTimeoutSeconds", "maxAllowedLlamaChatHttpTimeoutSeconds"],
+	llamaEmbeddingHttpTimeoutSeconds: ["minLlamaEmbeddingHttpTimeoutSeconds", "maxAllowedLlamaEmbeddingHttpTimeoutSeconds"],
+	llamaCpuThreadReserve: ["minLlamaCpuThreadReserve", "maxAllowedLlamaCpuThreadReserve"],
+	llamaGpuReservePercent: ["minLlamaGpuReservePercent", "maxAllowedLlamaGpuReservePercent"],
+	llamaRamReservePercent: ["minLlamaRamReservePercent", "maxAllowedLlamaRamReservePercent"],
+	imageIdleTimeToLiveSeconds: ["minImageIdleTimeToLiveSeconds", "maxAllowedImageIdleTimeToLiveSeconds"],
+	modelFitSafetyMarginPercent: ["minModelFitSafetyMarginPercent", "maxAllowedModelFitSafetyMarginPercent"],
+	maxProviderCallsPerInvocation: ["minMaxProviderCallsPerInvocation", "maxAllowedMaxProviderCallsPerInvocation"],
+	customToolMaxTimeoutSeconds: ["minCustomToolMaxTimeoutSeconds", "maxAllowedCustomToolMaxTimeoutSeconds"],
+	webFetchTimeoutSeconds: ["minWebFetchTimeoutSeconds", "maxAllowedWebFetchTimeoutSeconds"],
+	webFetchMaxContentChars: ["minWebFetchMaxContentChars", "maxAllowedWebFetchMaxContentChars"],
+	knowledgeSearchDefaultResults: ["minKnowledgeSearchResults", "maxAllowedKnowledgeSearchResults"],
+	knowledgeSearchMaxResults: ["minKnowledgeSearchResults", "maxAllowedKnowledgeSearchResults"],
+	huggingFaceDownloadConnections: ["minHuggingFaceDownloadConnections", "maxAllowedHuggingFaceDownloadConnections"],
+	transcriptionIdleTimeoutMinutes: ["minTranscriptionIdleTimeoutMinutes", "maxAllowedTranscriptionIdleTimeoutMinutes"],
+	transcriptionInferenceTimeoutMinutes: [
+		"minTranscriptionInferenceTimeoutMinutes",
+		"maxAllowedTranscriptionInferenceTimeoutMinutes",
+	],
+} as const satisfies Record<string, readonly [keyof NodeSettingsResponse, keyof NodeSettingsResponse]>;
+
+function responseBounds(response: NodeSettingsResponse | undefined, field: keyof typeof responseBoundKeys): NumericBounds {
+	const [minKey, maxKey] = responseBoundKeys[field];
+	return boundsOf(
+		response?.[minKey] as number | undefined,
+		response?.[maxKey] as number | undefined,
+		nodeSettingsFieldBounds[field],
+	);
 }
 
 export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undefined): NodeSettingsFieldBounds {
@@ -446,6 +645,14 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 			response?.maxAllowedDetachedGraceSeconds,
 			nodeSettingsFieldBounds.detachedGraceSeconds,
 		),
+		speculativeDraftGpuLayers: responseBounds(response, "speculativeDraftGpuLayers"),
+		llamaChatCacheRamMiB: responseBounds(response, "llamaChatCacheRamMiB"),
+		agentHomeMaxRunSeconds: responseBounds(response, "agentHomeMaxRunSeconds"),
+		agentHomeRunRetentionDays: responseBounds(response, "agentHomeRunRetentionDays"),
+		tunables: Object.fromEntries(tunableFields.map((field) => [field, responseBounds(response, field)])) as Record<
+			TunableField,
+			NumericBounds
+		>,
 	};
 }
 
@@ -470,9 +677,17 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   orchestrationIdleTimeoutSeconds — AddNodeModelRuntimeExtensions Configure<OrchestrationAgentOptions>
 //   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
 //                                     but a running invocation's own approval-wait timer was fixed at process start.
+//   speculativeDraftGpuLayers       — BuildSeededLlamaServerLaunchPolicyOptions
+//   huggingFaceDiskMarginBytes      — BuildSeededHuggingFaceOptions
+//   llamaReadinessTimeoutCap / llamaChatHttp / llamaEmbeddingHttp / llamaChatCacheRamMiB / llamaCpuThreadReserve /
+//   llamaGpu+RamReservePercent / imageIdleTimeToLive / maxProviderCallsPerInvocation / huggingFaceDownloadConnections /
+//   transcriptionIdle+InferenceTimeoutMinutes / agentHomeRunRetentionDays
+//                                   — the synchronous INodeRuntimeSettings getters, each read once by a seed factory.
+// Live and NOT listed: modelFitSafetyMarginPercent, customToolMaxTimeoutSeconds, webFetch*, knowledgeSearch*,
+// agentHomeMaxRunSeconds and containerRuntimeSelection (read per call).
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
-// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
-// message-request timeout.
+// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
+// detachedGraceSeconds, usageRates, uiMode, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
 export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
 	"defaultModelName",
 	"ollamaEndpoint",
@@ -488,6 +703,21 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 	"maxResponseSizeMb",
 	"orchestrationIdleTimeoutSeconds",
 	"maxPendingToolCallAgeMinutes",
+	"speculativeDraftGpuLayers",
+	"huggingFaceDiskMarginBytes",
+	"llamaReadinessTimeoutCapSeconds",
+	"llamaChatHttpTimeoutSeconds",
+	"llamaEmbeddingHttpTimeoutSeconds",
+	"llamaChatCacheRamMiB",
+	"llamaCpuThreadReserve",
+	"llamaGpuReservePercent",
+	"llamaRamReservePercent",
+	"imageIdleTimeToLiveSeconds",
+	"maxProviderCallsPerInvocation",
+	"huggingFaceDownloadConnections",
+	"transcriptionIdleTimeoutMinutes",
+	"transcriptionInferenceTimeoutMinutes",
+	"agentHomeRunRetentionDays",
 ]);
 
 // True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
@@ -503,7 +733,7 @@ export interface NodeSettingsValidationResult {
 	readonly errors: Readonly<Record<string, string>>;
 }
 
-// A positive-long validator for the AgentHome byte caps (> 0).
+// A positive-long validator for the AgentHome byte caps (> 0), applied to the wire value.
 function toValidPositiveLong(value: number | string): number | undefined {
 	const numeric = typeof value === "number" ? value : Number(value);
 	if (!Number.isInteger(numeric) || numeric <= 0) {
@@ -581,15 +811,6 @@ export function buildNodeSettingsRequest(
 		body.huggingFaceDefaultQuant = form.huggingFaceDefaultQuant.trim().length > 0 ? form.huggingFaceDefaultQuant.trim() : null;
 	}
 
-	if (form.recommendedLlamaCppTag !== baseline.recommendedLlamaCppTag) {
-		const tag = validateLlamaCppTag(form.recommendedLlamaCppTag);
-		if (tag.error) {
-			errors["recommendedLlamaCppTag"] = tag.error;
-		} else {
-			body.recommendedLlamaCppTag = tag.value ?? null;
-		}
-	}
-
 	collectBoundedInt(
 		form.llamaMaxLoadedProcesses,
 		baseline.llamaMaxLoadedProcesses,
@@ -611,6 +832,7 @@ export function buildNodeSettingsRequest(
 		(v) => {
 			body.llamaIdleTimeToLiveSeconds = v;
 		},
+		nodeSettingsDisplayScale.llamaIdleTimeToLiveSeconds,
 	);
 
 	if (form.keepModelWarmEnabled !== baseline.keepModelWarmEnabled) {
@@ -647,7 +869,10 @@ export function buildNodeSettingsRequest(
 		);
 
 		const warmInterval = toValidBoundedInt(form.keepModelWarmIntervalSeconds, bounds.keepModelWarmIntervalSeconds);
-		const idleTtl = toValidBoundedInt(form.llamaIdleTimeToLiveSeconds, bounds.llamaIdleTimeToLiveSeconds);
+		const idleTtl = toValidBoundedInt(
+			toWireValue(form.llamaIdleTimeToLiveSeconds, nodeSettingsDisplayScale.llamaIdleTimeToLiveSeconds),
+			bounds.llamaIdleTimeToLiveSeconds,
+		);
 		if (warmInterval !== undefined && idleTtl !== undefined && warmInterval >= idleTtl) {
 			errors["keepModelWarmIntervalSeconds"] = "belowIdleTtl";
 		}
@@ -753,7 +978,119 @@ export function buildNodeSettingsRequest(
 		}
 	}
 
+	if (form.uiMode !== baseline.uiMode) {
+		body.uiMode = form.uiMode;
+	}
+
+	if (form.voiceFeatureEnabled !== baseline.voiceFeatureEnabled) {
+		// Explicit false is meaningful: it turns voice off for every user on the node.
+		body.voiceFeatureEnabled = form.voiceFeatureEnabled;
+	}
+
+	// The voice picker offers no "none", so a blank draft only ever equals a blank baseline and is never sent.
+	if (form.defaultVoiceProfile !== baseline.defaultVoiceProfile && form.defaultVoiceProfile.length > 0) {
+		body.defaultVoiceProfile = form.defaultVoiceProfile;
+	}
+
+	for (const field of tunableFields) {
+		collectBoundedInt(
+			form[field],
+			baseline[field],
+			bounds.tunables[field],
+			field,
+			body,
+			errors,
+			(v) => {
+				body[field] = v;
+			},
+			nodeSettingsScaleOf(field),
+		);
+	}
+
+	// The default result count may not exceed the maximum; the server rejects the pair too (mapped onto the same field).
+	if (
+		form.knowledgeSearchDefaultResults !== baseline.knowledgeSearchDefaultResults ||
+		form.knowledgeSearchMaxResults !== baseline.knowledgeSearchMaxResults
+	) {
+		const defaultResults = toValidBoundedInt(form.knowledgeSearchDefaultResults, bounds.tunables.knowledgeSearchDefaultResults);
+		const maxResults = toValidBoundedInt(form.knowledgeSearchMaxResults, bounds.tunables.knowledgeSearchMaxResults);
+		if (defaultResults !== undefined && maxResults !== undefined && defaultResults > maxResults) {
+			errors["knowledgeSearchDefaultResults"] = "defaultAboveMax";
+		}
+	}
+
+	collectChatCacheRam(form, baseline, bounds.llamaChatCacheRamMiB, body, errors);
+
+	if (form.speculativeDraftGpuLayers !== baseline.speculativeDraftGpuLayers) {
+		collectBoundedInt(
+			form.speculativeDraftGpuLayers,
+			baseline.speculativeDraftGpuLayers,
+			bounds.speculativeDraftGpuLayers,
+			"speculativeDraftGpuLayers",
+			body,
+			errors,
+			(v) => {
+				body.speculativeDraftGpuLayers = v;
+			},
+		);
+	}
+
+	collectPositiveLong(
+		form.huggingFaceDiskMarginBytes,
+		baseline.huggingFaceDiskMarginBytes,
+		"huggingFaceDiskMarginBytes",
+		errors,
+		(v) => {
+			body.huggingFaceDiskMarginBytes = v;
+		},
+		nodeSettingsDisplayScale.huggingFaceDiskMarginBytes,
+	);
+
+	if (form.containerRuntimeSelection !== baseline.containerRuntimeSelection) {
+		body.containerRuntimeSelection = form.containerRuntimeSelection;
+	}
+
 	if (includeDeveloperFields) {
+		collectBoundedInt(
+			form.agentHomeMaxRunSeconds,
+			baseline.agentHomeMaxRunSeconds,
+			bounds.agentHomeMaxRunSeconds,
+			"agentHomeMaxRunSeconds",
+			body,
+			errors,
+			(v) => {
+				body.agentHomeMaxRunSeconds = v;
+			},
+			nodeSettingsDisplayScale.agentHomeMaxRunSeconds,
+		);
+		collectBoundedInt(
+			form.agentHomeRunRetentionDays,
+			baseline.agentHomeRunRetentionDays,
+			bounds.agentHomeRunRetentionDays,
+			"agentHomeRunRetentionDays",
+			body,
+			errors,
+			(v) => {
+				body.agentHomeRunRetentionDays = v;
+			},
+		);
+		// A whole run must be allowed at least one full command; the server enforces the same on the merged values.
+		if (
+			form.agentHomeMaxRunSeconds !== baseline.agentHomeMaxRunSeconds ||
+			form.agentHomeCommandTimeoutSeconds !== baseline.agentHomeCommandTimeoutSeconds
+		) {
+			const maxRun = toValidBoundedInt(
+				toWireValue(form.agentHomeMaxRunSeconds, nodeSettingsDisplayScale.agentHomeMaxRunSeconds),
+				bounds.agentHomeMaxRunSeconds,
+			);
+			const commandTimeout = toValidBoundedInt(
+				toWireValue(form.agentHomeCommandTimeoutSeconds, nodeSettingsDisplayScale.agentHomeCommandTimeoutSeconds),
+				bounds.agentHomeTimeoutSeconds,
+			);
+			if (maxRun !== undefined && commandTimeout !== undefined && maxRun < commandTimeout) {
+				errors["agentHomeMaxRunSeconds"] = "belowCommandTimeout";
+			}
+		}
 		collectBoundedInt(
 			form.orchestrationIdleTimeoutSeconds,
 			baseline.orchestrationIdleTimeoutSeconds,
@@ -775,6 +1112,7 @@ export function buildNodeSettingsRequest(
 			(v) => {
 				body.agentHomePrepareTimeoutSeconds = v;
 			},
+			nodeSettingsDisplayScale.agentHomePrepareTimeoutSeconds,
 		);
 		collectBoundedInt(
 			form.agentHomeCommandTimeoutSeconds,
@@ -786,6 +1124,7 @@ export function buildNodeSettingsRequest(
 			(v) => {
 				body.agentHomeCommandTimeoutSeconds = v;
 			},
+			nodeSettingsDisplayScale.agentHomeCommandTimeoutSeconds,
 		);
 		collectBoundedInt(
 			form.maxPendingToolCallAgeMinutes,
@@ -817,17 +1156,62 @@ export function buildNodeSettingsRequest(
 			(v) => {
 				body.agentHomeMaxSelectedFolderBytes = v;
 			},
+			nodeSettingsDisplayScale.agentHomeMaxSelectedFolderBytes,
 		);
-		collectPositiveLong(form.agentHomeMaxPatchBytes, baseline.agentHomeMaxPatchBytes, "agentHomeMaxPatchBytes", errors, (v) => {
-			body.agentHomeMaxPatchBytes = v;
-		});
+		collectPositiveLong(
+			form.agentHomeMaxPatchBytes,
+			baseline.agentHomeMaxPatchBytes,
+			"agentHomeMaxPatchBytes",
+			errors,
+			(v) => {
+				body.agentHomeMaxPatchBytes = v;
+			},
+			nodeSettingsDisplayScale.agentHomeMaxPatchBytes,
+		);
 	}
 
 	return { body, errors };
 }
 
+// Prompt-cache RAM: compares what each side MEANS (auto / off / a size), so switching Custom on and back off without a
+// net change sends nothing. Automatic is sent as the -1 reset sentinel, because null on the wire means "keep".
+function collectChatCacheRam(
+	form: NodeSettingsFieldsForm,
+	baseline: NodeSettingsFieldsForm,
+	bounds: NumericBounds,
+	body: SaveNodeSettingsRequest,
+	errors: Record<string, string>,
+): void {
+	const wireOf = (draft: NodeSettingsFieldsForm): number | string => {
+		switch (draft.llamaChatCacheRamMode) {
+			case "auto":
+				return CHAT_CACHE_RAM_AUTO;
+			case "off":
+				return 0;
+			default:
+				return draft.llamaChatCacheRamMiB;
+		}
+	};
+	const wire = wireOf(form);
+	if (wire === wireOf(baseline)) {
+		return;
+	}
+	if (form.llamaChatCacheRamMode !== "custom") {
+		body.llamaChatCacheRamMiB = wire as number;
+		return;
+	}
+	// A custom size is at least 1 MiB; 0 is the Off mode.
+	const parsed = toValidBoundedInt(wire, { min: Math.max(1, bounds.min), max: bounds.max });
+	if (parsed === undefined) {
+		errors["llamaChatCacheRamMiB"] = "range";
+		return;
+	}
+	body.llamaChatCacheRamMiB = parsed;
+}
+
 // Validates one bounded-int field against the baseline; on change either records an error or applies the parsed value
-// via `apply`. `body`/`errors` are mutated in place (keeps the per-field call sites flat).
+// via `apply`. `body`/`errors` are mutated in place (keeps the per-field call sites flat). `scale` converts a display
+// value back to the wire unit the bounds are in (see nodeSettingsDisplayScale).
 function collectBoundedInt(
 	value: number | string,
 	baseline: number | string,
@@ -836,11 +1220,12 @@ function collectBoundedInt(
 	_body: SaveNodeSettingsRequest,
 	errors: Record<string, string>,
 	apply: (parsed: number) => void,
+	scale = 1,
 ): void {
 	if (value === baseline) {
 		return;
 	}
-	const parsed = toValidBoundedInt(value, bounds);
+	const parsed = toValidBoundedInt(toWireValue(value, scale), bounds);
 	if (parsed === undefined) {
 		errors[field] = "range";
 		return;
@@ -854,14 +1239,38 @@ function collectPositiveLong(
 	field: string,
 	errors: Record<string, string>,
 	apply: (parsed: number) => void,
+	scale = 1,
 ): void {
 	if (value === baseline) {
 		return;
 	}
-	const parsed = toValidPositiveLong(value);
+	const parsed = toValidPositiveLong(toWireValue(value, scale));
 	if (parsed === undefined) {
 		errors[field] = "positive";
 		return;
 	}
 	apply(parsed);
+}
+
+// What the save bar reports: every field the next Save would send, plus every edited field that currently fails
+// validation (it is still an unsaved change, it just cannot go out yet), and the restart-gated subset of those.
+export interface NodeSettingsPendingChanges {
+	readonly changed: readonly (keyof NodeSettingsFieldsForm)[];
+	readonly restartRequired: readonly (keyof NodeSettingsFieldsForm)[];
+}
+
+export function summarizePendingChanges(
+	result: NodeSettingsValidationResult,
+	form: NodeSettingsFieldsForm,
+	baseline: NodeSettingsFieldsForm,
+): NodeSettingsPendingChanges {
+	const changed = new Set(Object.keys(result.body) as (keyof NodeSettingsFieldsForm)[]);
+	for (const key of Object.keys(result.errors)) {
+		const field = key as keyof NodeSettingsFieldsForm;
+		if (JSON.stringify(form[field]) !== JSON.stringify(baseline[field])) {
+			changed.add(field);
+		}
+	}
+	const list = [...changed];
+	return { changed: list, restartRequired: list.filter((field) => restartGatedNodeSettingsFields.has(field)) };
 }

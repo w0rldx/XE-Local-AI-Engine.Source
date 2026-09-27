@@ -438,6 +438,8 @@ internal static class McpAdminWireNames
             NodeSettingsField.KeepModelWarmIntervalSeconds => "keep_model_warm_interval_seconds",
             NodeSettingsField.AutoEffortFastModelName => "auto_effort_fast_model_name",
             NodeSettingsField.ContainerRuntimeSelection => "container_runtime_selection",
+            NodeSettingsField.KnowledgeSearchDefaultResults => "knowledge_search_default_results",
+            NodeSettingsField.AgentHomeMaxRunSeconds => "agent_home_max_run_seconds",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 

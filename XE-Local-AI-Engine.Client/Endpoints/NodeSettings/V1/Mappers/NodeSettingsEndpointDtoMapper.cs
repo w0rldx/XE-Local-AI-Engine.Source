@@ -82,7 +82,65 @@ internal static class NodeSettingsEndpointDtoMapper
             VoiceFeatureEnabled = settings.VoiceFeatureEnabled,
             DefaultVoiceProfile = settings.DefaultVoiceProfile,
             // Flatten the stored wrapper to the map the React rate editor renders (null wrapper → null map).
-            UsageRates = settings.UsageRates?.Models
+            UsageRates = settings.UsageRates?.Models,
+            TranscriptionIdleTimeoutMinutes = settings.TranscriptionIdleTimeoutMinutes,
+            MinTranscriptionIdleTimeoutMinutes = StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes,
+            MaxAllowedTranscriptionIdleTimeoutMinutes = StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes,
+            LlamaReadinessTimeoutCapSeconds = settings.LlamaReadinessTimeoutCapSeconds,
+            MinLlamaReadinessTimeoutCapSeconds = StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds,
+            MaxAllowedLlamaReadinessTimeoutCapSeconds = StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds,
+            LlamaChatHttpTimeoutSeconds = settings.LlamaChatHttpTimeoutSeconds,
+            MinLlamaChatHttpTimeoutSeconds = StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds,
+            MaxAllowedLlamaChatHttpTimeoutSeconds = StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds,
+            LlamaEmbeddingHttpTimeoutSeconds = settings.LlamaEmbeddingHttpTimeoutSeconds,
+            MinLlamaEmbeddingHttpTimeoutSeconds = StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds,
+            MaxAllowedLlamaEmbeddingHttpTimeoutSeconds = StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds,
+            LlamaChatCacheRamMiB = settings.LlamaChatCacheRamMiB,
+            MinLlamaChatCacheRamMiB = StoredNodeSettings.MinLlamaChatCacheRamMiB,
+            MaxAllowedLlamaChatCacheRamMiB = StoredNodeSettings.MaxLlamaChatCacheRamMiB,
+            LlamaCpuThreadReserve = settings.LlamaCpuThreadReserve,
+            MinLlamaCpuThreadReserve = StoredNodeSettings.MinLlamaCpuThreadReserve,
+            MaxAllowedLlamaCpuThreadReserve = StoredNodeSettings.MaxLlamaCpuThreadReserve,
+            LlamaGpuReservePercent = settings.LlamaGpuReservePercent,
+            MinLlamaGpuReservePercent = StoredNodeSettings.MinLlamaGpuReservePercent,
+            MaxAllowedLlamaGpuReservePercent = StoredNodeSettings.MaxLlamaGpuReservePercent,
+            LlamaRamReservePercent = settings.LlamaRamReservePercent,
+            MinLlamaRamReservePercent = StoredNodeSettings.MinLlamaRamReservePercent,
+            MaxAllowedLlamaRamReservePercent = StoredNodeSettings.MaxLlamaRamReservePercent,
+            ImageIdleTimeToLiveSeconds = settings.ImageIdleTimeToLiveSeconds,
+            MinImageIdleTimeToLiveSeconds = StoredNodeSettings.MinImageIdleTimeToLiveSeconds,
+            MaxAllowedImageIdleTimeToLiveSeconds = StoredNodeSettings.MaxImageIdleTimeToLiveSeconds,
+            ModelFitSafetyMarginPercent = settings.ModelFitSafetyMarginPercent,
+            MinModelFitSafetyMarginPercent = StoredNodeSettings.MinModelFitSafetyMarginPercent,
+            MaxAllowedModelFitSafetyMarginPercent = StoredNodeSettings.MaxModelFitSafetyMarginPercent,
+            MaxProviderCallsPerInvocation = settings.MaxProviderCallsPerInvocation,
+            MinMaxProviderCallsPerInvocation = StoredNodeSettings.MinMaxProviderCallsPerInvocation,
+            MaxAllowedMaxProviderCallsPerInvocation = StoredNodeSettings.MaxMaxProviderCallsPerInvocation,
+            CustomToolMaxTimeoutSeconds = settings.CustomToolMaxTimeoutSeconds,
+            MinCustomToolMaxTimeoutSeconds = StoredNodeSettings.MinCustomToolMaxTimeoutSeconds,
+            MaxAllowedCustomToolMaxTimeoutSeconds = StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds,
+            WebFetchTimeoutSeconds = settings.WebFetchTimeoutSeconds,
+            MinWebFetchTimeoutSeconds = StoredNodeSettings.MinWebFetchTimeoutSeconds,
+            MaxAllowedWebFetchTimeoutSeconds = StoredNodeSettings.MaxWebFetchTimeoutSeconds,
+            WebFetchMaxContentChars = settings.WebFetchMaxContentChars,
+            MinWebFetchMaxContentChars = StoredNodeSettings.MinWebFetchMaxContentChars,
+            MaxAllowedWebFetchMaxContentChars = StoredNodeSettings.MaxWebFetchMaxContentChars,
+            KnowledgeSearchDefaultResults = settings.KnowledgeSearchDefaultResults,
+            MinKnowledgeSearchResults = StoredNodeSettings.MinKnowledgeSearchResults,
+            MaxAllowedKnowledgeSearchResults = StoredNodeSettings.MaxKnowledgeSearchResults,
+            KnowledgeSearchMaxResults = settings.KnowledgeSearchMaxResults,
+            HuggingFaceDownloadConnections = settings.HuggingFaceDownloadConnections,
+            MinHuggingFaceDownloadConnections = StoredNodeSettings.MinHuggingFaceDownloadConnections,
+            MaxAllowedHuggingFaceDownloadConnections = StoredNodeSettings.MaxHuggingFaceDownloadConnections,
+            TranscriptionInferenceTimeoutMinutes = settings.TranscriptionInferenceTimeoutMinutes,
+            MinTranscriptionInferenceTimeoutMinutes = StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes,
+            MaxAllowedTranscriptionInferenceTimeoutMinutes = StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes,
+            AgentHomeMaxRunSeconds = settings.AgentHomeMaxRunSeconds,
+            MinAgentHomeMaxRunSeconds = StoredNodeSettings.MinAgentHomeMaxRunSeconds,
+            MaxAllowedAgentHomeMaxRunSeconds = StoredNodeSettings.MaxAgentHomeMaxRunSeconds,
+            AgentHomeRunRetentionDays = settings.AgentHomeRunRetentionDays,
+            MinAgentHomeRunRetentionDays = StoredNodeSettings.MinAgentHomeRunRetentionDays,
+            MaxAllowedAgentHomeRunRetentionDays = StoredNodeSettings.MaxAgentHomeRunRetentionDays
         };
     }
 
@@ -197,7 +255,33 @@ internal static class NodeSettingsEndpointDtoMapper
                 : new NodeUsageRateSettings
                 {
                     Models = request.UsageRates
-                }
+                },
+            TranscriptionIdleTimeoutMinutes = request.TranscriptionIdleTimeoutMinutes ?? currentSettings.TranscriptionIdleTimeoutMinutes,
+            LlamaReadinessTimeoutCapSeconds = request.LlamaReadinessTimeoutCapSeconds ?? currentSettings.LlamaReadinessTimeoutCapSeconds,
+            LlamaChatHttpTimeoutSeconds = request.LlamaChatHttpTimeoutSeconds ?? currentSettings.LlamaChatHttpTimeoutSeconds,
+            LlamaEmbeddingHttpTimeoutSeconds = request.LlamaEmbeddingHttpTimeoutSeconds ?? currentSettings.LlamaEmbeddingHttpTimeoutSeconds,
+            // -1 is the request's "back to automatic", the one way a null-keeps member can clear a stored count.
+            LlamaChatCacheRamMiB = request.LlamaChatCacheRamMiB switch
+            {
+                null => currentSettings.LlamaChatCacheRamMiB,
+                StoredNodeSettings.LlamaChatCacheRamMiBAuto => null,
+                { } cacheRamMiB => cacheRamMiB
+            },
+            LlamaCpuThreadReserve = request.LlamaCpuThreadReserve ?? currentSettings.LlamaCpuThreadReserve,
+            LlamaGpuReservePercent = request.LlamaGpuReservePercent ?? currentSettings.LlamaGpuReservePercent,
+            LlamaRamReservePercent = request.LlamaRamReservePercent ?? currentSettings.LlamaRamReservePercent,
+            ImageIdleTimeToLiveSeconds = request.ImageIdleTimeToLiveSeconds ?? currentSettings.ImageIdleTimeToLiveSeconds,
+            ModelFitSafetyMarginPercent = request.ModelFitSafetyMarginPercent ?? currentSettings.ModelFitSafetyMarginPercent,
+            MaxProviderCallsPerInvocation = request.MaxProviderCallsPerInvocation ?? currentSettings.MaxProviderCallsPerInvocation,
+            CustomToolMaxTimeoutSeconds = request.CustomToolMaxTimeoutSeconds ?? currentSettings.CustomToolMaxTimeoutSeconds,
+            WebFetchTimeoutSeconds = request.WebFetchTimeoutSeconds ?? currentSettings.WebFetchTimeoutSeconds,
+            WebFetchMaxContentChars = request.WebFetchMaxContentChars ?? currentSettings.WebFetchMaxContentChars,
+            KnowledgeSearchDefaultResults = request.KnowledgeSearchDefaultResults ?? currentSettings.KnowledgeSearchDefaultResults,
+            KnowledgeSearchMaxResults = request.KnowledgeSearchMaxResults ?? currentSettings.KnowledgeSearchMaxResults,
+            HuggingFaceDownloadConnections = request.HuggingFaceDownloadConnections ?? currentSettings.HuggingFaceDownloadConnections,
+            TranscriptionInferenceTimeoutMinutes = request.TranscriptionInferenceTimeoutMinutes ?? currentSettings.TranscriptionInferenceTimeoutMinutes,
+            AgentHomeMaxRunSeconds = request.AgentHomeMaxRunSeconds ?? currentSettings.AgentHomeMaxRunSeconds,
+            AgentHomeRunRetentionDays = request.AgentHomeRunRetentionDays ?? currentSettings.AgentHomeRunRetentionDays
         };
     }
 

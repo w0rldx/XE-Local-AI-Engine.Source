@@ -12,11 +12,6 @@ import { toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
-// Mirrors the server's default Security.MaxUploadFileSizeMb (25). Advisory only — the endpoint is the source of
-// truth and re-enforces the cap; the client check just avoids a guaranteed-reject round trip and gives instant feedback.
-const MAX_UPLOAD_SIZE_MB = 25;
-const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
-
 export interface UseConversationAttachmentsResult {
 	readonly attachments: ChatAttachment[];
 	// All current (non-deleted) attachment file ids for the conversation, re-sent on every turn (the send contract).
@@ -65,6 +60,10 @@ interface UseConversationAttachmentsOptions {
 	// Resolves the conversation id to upload into, creating + selecting one when none exists yet (cold start).
 	// Returning "" signals the conversation could not be resolved, and the upload is aborted with an error toast.
 	ensureConversationId: () => Promise<string>;
+	// The node's Security:MaxUploadFileSizeMb, from the conversation-list response (like the composer's message-size
+	// limit). Advisory only — the endpoint re-enforces the cap; the pre-check just avoids a guaranteed-reject round trip.
+	// Undefined until that response lands (or on a node that omits it): no pre-check, the server decides.
+	maxUploadFileSizeMb?: number;
 }
 
 /**
@@ -76,6 +75,7 @@ interface UseConversationAttachmentsOptions {
 export function useConversationAttachments({
 	conversationId,
 	ensureConversationId,
+	maxUploadFileSizeMb,
 }: UseConversationAttachmentsOptions): UseConversationAttachmentsResult {
 	const queryClient = useQueryClient();
 	const [pendingUploads, setPendingUploads] = useState<PendingAttachmentUpload[]>([]);
@@ -171,12 +171,14 @@ export function useConversationAttachments({
 			}
 
 			// Client-side size guard (advisory): reject oversize files up front, upload the rest. The server re-checks.
+			const limitBytes =
+				maxUploadFileSizeMb !== undefined && maxUploadFileSizeMb > 0 ? maxUploadFileSizeMb * 1024 * 1024 : undefined;
 			const accepted = files.filter((file) => {
-				if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+				if (limitBytes !== undefined && file.size > limitBytes) {
 					toast.error(
 						t("pages.chat.composer.attachments.tooLarge", "{{name}} exceeds the {{limit}} MB upload limit.", {
 							name: file.name,
-							limit: MAX_UPLOAD_SIZE_MB,
+							limit: maxUploadFileSizeMb,
 						}),
 					);
 					return false;
@@ -191,7 +193,7 @@ export function useConversationAttachments({
 				toast.error(uploadErrorMessage(error, t("pages.chat.composer.attachments.uploadBatchFailed", "Failed to upload files.")));
 			});
 		},
-		[runUploads],
+		[maxUploadFileSizeMb, runUploads],
 	);
 
 	const removeAttachment = useCallback(

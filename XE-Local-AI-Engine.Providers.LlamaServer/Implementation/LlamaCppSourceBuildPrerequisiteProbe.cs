@@ -23,28 +23,18 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
     // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
     private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
 
-    /// <summary>
-    ///     Conservative free-disk floor for a CUDA source build.
-    /// </summary>
-    /// <remarks>
-    ///     The clone plus the cmake and CUDA object tree for a single <c>llama-server</c> target comfortably fits in
-    ///     this; the check is a disk-exhaustion guard, not a precise estimate. Re-checked immediately before the build
-    ///     starts, because the probe value can go stale.
-    /// </remarks>
-    internal const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
-
     private readonly string _buildCacheRoot;
     private readonly long _requiredFreeDiskBytes;
     private readonly IGpuVendorProbe _vendorProbe;
 
     /// <summary>Creates the probe over the supplied vendor probe, defaulting the disk check to the shared app cache root.</summary>
     public LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe)
-        : this(vendorProbe, RuntimeCacheDirectory.Resolve(), RequiredFreeDiskBytes)
+        : this(vendorProbe, RuntimeCacheDirectory.Resolve(), SourceBuildPolicy.RequiredFreeDiskBytes)
     {
     }
 
     /// <summary>Test seam: pins the cache root whose drive the free-disk item inspects, and the required-free-disk floor.</summary>
-    internal LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe, string buildCacheRoot, long requiredFreeDiskBytes = RequiredFreeDiskBytes)
+    internal LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe, string buildCacheRoot, long requiredFreeDiskBytes = SourceBuildPolicy.RequiredFreeDiskBytes)
     {
         _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
         ArgumentException.ThrowIfNullOrWhiteSpace(buildCacheRoot);

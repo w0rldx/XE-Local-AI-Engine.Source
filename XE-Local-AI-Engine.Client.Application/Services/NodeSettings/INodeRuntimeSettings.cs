@@ -156,6 +156,24 @@ public interface INodeRuntimeSettings
     /// </remarks>
     Task<bool> GetAutoProvisionFirstRunModelAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The ceiling on a custom command tool's timeout in seconds (stored &gt; 300). Read per save and per call.</summary>
+    Task<int> GetCustomToolMaxTimeoutSecondsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The time budget of one <c>web_fetch</c> or <c>web_search</c> call (stored &gt; 20 s).</summary>
+    Task<TimeSpan> GetWebFetchTimeoutAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The cap on the readable text one <c>web_fetch</c> returns, in characters (stored &gt; 12000).</summary>
+    Task<int> GetWebFetchMaxContentCharsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The <c>search_knowledge_base</c> hit count when the model names none (stored &gt; 5).</summary>
+    Task<int> GetKnowledgeSearchDefaultResultsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The ceiling on the <c>search_knowledge_base</c> hit count (stored &gt; 20).</summary>
+    Task<int> GetKnowledgeSearchMaxResultsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome whole-run wall clock in seconds (stored &gt; <c>AgentHome:MaxRunSeconds</c> &gt; 600).</summary>
+    Task<int> GetAgentHomeMaxRunSecondsAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path and for structurally synchronous request-time call sites. Prefer the async getters:
     // a sync twin on a per-TOKEN path, or a captured result in a singleton field, is NOT acceptable. Rules and reasons: docs/wiki/08-data-and-persistence.md.
 
@@ -219,4 +237,49 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetRerankerModelNameAsync" />
     string? GetRerankerModelName();
+
+    // Synchronous only: each of these is read once, by the host-build factory or Configure delegate that seeds a provider
+    // option object, so an edit applies on the next node restart.
+
+    /// <summary>The llama-server readiness deadline cap (stored &gt; 600 s).</summary>
+    TimeSpan GetLlamaReadinessTimeoutCap();
+
+    /// <summary>The chat-role HTTP timeout to a llama-server (stored &gt; 3600 s).</summary>
+    TimeSpan GetLlamaChatHttpTimeout();
+
+    /// <summary>The embedding/rerank-role HTTP timeout to a llama-server (stored &gt; 600 s).</summary>
+    TimeSpan GetLlamaEmbeddingHttpTimeout();
+
+    /// <summary>The chat-role <c>--cache-ram</c> budget in MiB, or <see langword="null" /> for the RAM-derived automatic value.</summary>
+    int? GetLlamaChatCacheRamMiB();
+
+    /// <summary>The CPU threads left free for the host (stored &gt; 1).</summary>
+    int GetLlamaCpuThreadReserve();
+
+    /// <summary>The fraction of GPU memory the context allocator keeps free (stored percent / 100 &gt; 0.05).</summary>
+    double GetLlamaGpuReserveFraction();
+
+    /// <summary>The fraction of RAM the context allocator keeps free (stored percent / 100 &gt; 0.15).</summary>
+    double GetLlamaRamReserveFraction();
+
+    /// <summary>The sd-server idle time-to-live (stored &gt; <c>StableDiffusionRuntime:IdleTimeToLive</c> &gt; 15 minutes).</summary>
+    TimeSpan GetImageIdleTimeToLive();
+
+    /// <summary>The raw provider-round ceiling per invocation (stored &gt; <c>Agent:ProviderCallBudget:MaxProviderCallsPerInvocation</c> &gt; 200).</summary>
+    int GetMaxProviderCallsPerInvocation();
+
+    /// <summary>The parallel range connections per large model download (stored &gt; <c>HuggingFace:DownloadConnections</c> &gt; 4).</summary>
+    int GetHuggingFaceDownloadConnections();
+
+    /// <summary>The whisper.cpp per-request inference timeout (stored &gt; 30 minutes).</summary>
+    TimeSpan GetTranscriptionInferenceTimeout();
+
+    /// <summary>The AgentHome run-folder retention in days (stored &gt; <c>AgentHome:RunRetention:RetentionDays</c> &gt; 30).</summary>
+    int GetAgentHomeRunRetentionDays();
+
+    /// <summary>
+    ///     The model-fit safety margin as a fraction of weights + KV (stored percent / 100 &gt; 0.12). Synchronous
+    ///     because the estimator it feeds is synchronous; it is read per estimate, so a save applies to the next fit.
+    /// </summary>
+    double GetModelFitSafetyMarginFraction();
 }

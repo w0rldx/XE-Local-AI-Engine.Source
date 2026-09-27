@@ -13,10 +13,9 @@ import {
 	Title,
 } from "@mantine/core";
 import { IconInfoCircle, IconVolume } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { toast } from "@/core/ui/notifications/Toast";
 import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
 import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
 import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
@@ -53,14 +52,31 @@ function buildVoiceGroups(
 	return groups;
 }
 
-// Node Settings voice block. Lets the operator drive the node-level voice feature through the existing
-// operator-gated node-settings GET/PUT (the master gate `voiceFeatureEnabled` plus the legacy-compatible
-// `defaultVoiceProfile`), and lets each user manage the per-browser client prefs (master enable, autoplay, profile,
-// speaking rate). Voice choices come only from the browser/OS Web Speech catalog.
+interface VoiceSettingsCardProps {
+	// The node-level voice fields are DRAFT values owned by the Node settings page and persisted by its save bar. The
+	// saved gate (read here through useVoiceNodeSettings) still decides whether the per-browser controls are offered,
+	// because the voice runtime follows the saved state, not the draft.
+	readonly voiceFeatureEnabled: boolean;
+	readonly defaultVoiceProfile: string;
+	readonly onVoiceFeatureEnabledChange: (enabled: boolean) => void;
+	readonly onDefaultVoiceProfileChange: (profile: string) => void;
+	// Rendered next to the per-browser block's heading (the page's "this browser only" marker).
+	readonly browserOnlyBadge?: ReactNode;
+}
 
-export function VoiceSettingsCard() {
+// Node Settings voice block. The operator edits the node-level voice feature (the master gate `voiceFeatureEnabled`
+// plus the legacy-compatible `defaultVoiceProfile`) as part of the page draft, and each user manages the per-browser
+// client prefs (master enable, autoplay, profile, speaking rate), which apply instantly. Voice choices come only from
+// the browser/OS Web Speech catalog.
+export function VoiceSettingsCard({
+	voiceFeatureEnabled,
+	defaultVoiceProfile,
+	onVoiceFeatureEnabledChange,
+	onDefaultVoiceProfileChange,
+	browserOnlyBadge,
+}: VoiceSettingsCardProps) {
 	const { t, i18n } = useTranslation();
-	// Operator-owned node settings (read + write the node-level voice fields via the existing node-settings endpoint).
+	// The saved node state: the per-browser block follows it, since the runtime only starts once the gate is saved.
 	const nodeVoice = useVoiceNodeSettings();
 	// Every OS/browser voice, grouped by language.
 	const osVoices = useWebSpeechVoices();
@@ -80,18 +96,7 @@ export function VoiceSettingsCard() {
 
 	const operatorEnabled = nodeVoice.voiceFeatureEnabled;
 	const selectedProfile = voiceProfile || nodeVoice.defaultVoiceProfile || null;
-	const nodeDefaultProfile = nodeVoice.defaultVoiceProfile ?? null;
-
-	const handleNodeGateChange = (checked: boolean): void => {
-		nodeVoice.save({ voiceFeatureEnabled: checked }, { onError: () => toast.error(t("voice.settings.operatorSaveError")) });
-	};
-
-	const handleNodeDefaultProfileChange = (value: string | null): void => {
-		if (!value) {
-			return;
-		}
-		nodeVoice.save({ defaultVoiceProfile: value }, { onError: () => toast.error(t("voice.settings.operatorSaveError")) });
-	};
+	const nodeDefaultProfile = defaultVoiceProfile === "" ? null : defaultVoiceProfile;
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="voice-settings-card">
@@ -118,9 +123,9 @@ export function VoiceSettingsCard() {
 					<Switch
 						label={t("voice.settings.operatorEnableLabel")}
 						description={t("voice.settings.operatorEnableDescription")}
-						checked={nodeVoice.voiceFeatureEnabled}
-						disabled={nodeVoice.isLoading || nodeVoice.isSaving}
-						onChange={(event) => handleNodeGateChange(event.currentTarget.checked)}
+						checked={voiceFeatureEnabled}
+						disabled={nodeVoice.isLoading}
+						onChange={(event) => onVoiceFeatureEnabledChange(event.currentTarget.checked)}
 						data-testid="voice-settings-node-gate-switch"
 					/>
 					<Group align="flex-end" gap="xs" wrap="nowrap">
@@ -129,8 +134,13 @@ export function VoiceSettingsCard() {
 							description={t("voice.settings.operatorDefaultProfileDescription")}
 							data={voiceOptions}
 							value={nodeDefaultProfile}
-							disabled={voiceOptions.length === 0 || nodeVoice.isSaving}
-							onChange={handleNodeDefaultProfileChange}
+							disabled={voiceOptions.length === 0}
+							allowDeselect={false}
+							onChange={(value) => {
+								if (value) {
+									onDefaultVoiceProfileChange(value);
+								}
+							}}
 							data-testid="voice-settings-node-default-profile"
 							style={{ flex: 1 }}
 						/>
@@ -140,6 +150,12 @@ export function VoiceSettingsCard() {
 
 				{operatorEnabled ? (
 					<Stack gap="sm">
+						<Group gap="xs">
+							<Text c="dimmed" size="sm" fw={600}>
+								{t("voice.settings.browserSectionTitle")}
+							</Text>
+							{browserOnlyBadge}
+						</Group>
 						<Switch
 							label={t("voice.settings.enableLabel")}
 							description={t("voice.settings.enableDescription")}

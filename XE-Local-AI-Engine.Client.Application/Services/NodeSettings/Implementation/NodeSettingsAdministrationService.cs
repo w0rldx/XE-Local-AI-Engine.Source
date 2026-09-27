@@ -74,8 +74,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         return await ValidateAndSaveAsync(record => merge(record) with
             {
                 MachineKey = record.MachineKey,
-                TranscriptionSelectedModelId = record.TranscriptionSelectedModelId,
-                TranscriptionIdleTimeoutMinutes = record.TranscriptionIdleTimeoutMinutes
+                TranscriptionSelectedModelId = record.TranscriptionSelectedModelId
             },
             current,
             cancellationToken);
@@ -207,8 +206,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                     return apply(latest) with
                     {
                         MachineKey = latest.MachineKey,
-                        TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId,
-                        TranscriptionIdleTimeoutMinutes = latest.TranscriptionIdleTimeoutMinutes
+                        TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId
                     };
                 },
                 cancellationToken);

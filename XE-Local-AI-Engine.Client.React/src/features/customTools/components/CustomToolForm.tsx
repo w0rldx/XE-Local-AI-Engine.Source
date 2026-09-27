@@ -8,8 +8,9 @@ import { CommandEditor, HttpEditor, ParameterBuilder } from "@/features/customTo
 import type { FieldErrors } from "@/features/customTools/models/CustomToolFormErrors";
 import {
 	CUSTOM_TOOL_NAME_PREFIX,
+	buildCustomToolFormSchema,
+	CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 	type CustomToolFormValues,
-	customToolFormSchema,
 	storedSecretRowNames,
 } from "@/features/customTools/models/CustomToolModels";
 
@@ -31,6 +32,8 @@ interface CustomToolFormProps {
 	onDirtyChange?: (isDirty: boolean) => void;
 	/** Reports the danger acknowledgement so the host footer can gate Save on it (the server also enforces it). */
 	onAcknowledgedChange?: (acknowledged: boolean) => void;
+	/** The node's command-timeout ceiling in seconds (node setting customToolMaxTimeoutSeconds). */
+	maxTimeoutSeconds?: number;
 }
 
 // Create/edit form for a node custom tool. Controlled Mantine inputs validated with the shared Zod schema on submit.
@@ -46,6 +49,7 @@ export function CustomToolForm({
 	ref,
 	onDirtyChange,
 	onAcknowledgedChange,
+	maxTimeoutSeconds = CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 }: CustomToolFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<CustomToolFormValues>(initialValues);
@@ -65,7 +69,7 @@ export function CustomToolForm({
 	}, [values.acknowledged, onAcknowledgedChange]);
 
 	const handleSubmit = useCallback(() => {
-		const result = customToolFormSchema.safeParse(values);
+		const result = buildCustomToolFormSchema(maxTimeoutSeconds).safeParse(values);
 		if (!result.success) {
 			const next: FieldErrors = {};
 			for (const issue of result.error.issues) {
@@ -79,7 +83,7 @@ export function CustomToolForm({
 		}
 		setErrors({});
 		onSubmit(result.data as CustomToolFormValues);
-	}, [onSubmit, values]);
+	}, [maxTimeoutSeconds, onSubmit, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -211,6 +215,7 @@ export function CustomToolForm({
 					errors={errors}
 					update={update}
 					storedSecrets={storedSecretRowNames(initialValues.command.env)}
+					maxTimeoutSeconds={maxTimeoutSeconds}
 				/>
 			)}
 

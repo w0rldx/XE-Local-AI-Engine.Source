@@ -245,6 +245,145 @@ public sealed record NodeSettingsResponse
     ///     default rate table. Local runtimes are always free regardless.
     /// </remarks>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
+
+    /// <summary>Whisper.cpp daemon idle time-to-live in minutes. Applies after a node restart.</summary>
+    public int? TranscriptionIdleTimeoutMinutes { get; init; }
+
+    public int MinTranscriptionIdleTimeoutMinutes { get; init; }
+
+    public int MaxAllowedTranscriptionIdleTimeoutMinutes { get; init; }
+
+    /// <summary>Cap on how long a llama-server may take to become ready, in seconds. Applies after a node restart.</summary>
+    public int? LlamaReadinessTimeoutCapSeconds { get; init; }
+
+    public int MinLlamaReadinessTimeoutCapSeconds { get; init; }
+
+    public int MaxAllowedLlamaReadinessTimeoutCapSeconds { get; init; }
+
+    /// <summary>Chat-role HTTP timeout to a llama-server, in seconds. Applies after a node restart.</summary>
+    public int? LlamaChatHttpTimeoutSeconds { get; init; }
+
+    public int MinLlamaChatHttpTimeoutSeconds { get; init; }
+
+    public int MaxAllowedLlamaChatHttpTimeoutSeconds { get; init; }
+
+    /// <summary>Embedding/rerank-role HTTP timeout to a llama-server, in seconds. Applies after a node restart.</summary>
+    public int? LlamaEmbeddingHttpTimeoutSeconds { get; init; }
+
+    public int MinLlamaEmbeddingHttpTimeoutSeconds { get; init; }
+
+    public int MaxAllowedLlamaEmbeddingHttpTimeoutSeconds { get; init; }
+
+    /// <summary>
+    ///     Chat-role host prompt-cache budget in MiB (<c>--cache-ram</c>); <c>0</c> disables it and <see langword="null" />
+    ///     is automatic (one eighth of RAM, 512–8192 MiB). Applies after a node restart.
+    /// </summary>
+    public int? LlamaChatCacheRamMiB { get; init; }
+
+    public int MinLlamaChatCacheRamMiB { get; init; }
+
+    public int MaxAllowedLlamaChatCacheRamMiB { get; init; }
+
+    /// <summary>CPU threads left free for the host when a spawn derives its thread count. Applies after a node restart.</summary>
+    public int? LlamaCpuThreadReserve { get; init; }
+
+    public int MinLlamaCpuThreadReserve { get; init; }
+
+    public int MaxAllowedLlamaCpuThreadReserve { get; init; }
+
+    /// <summary>Share of GPU memory, in percent, the context allocator keeps free. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    public int? LlamaGpuReservePercent { get; init; }
+
+    public int MinLlamaGpuReservePercent { get; init; }
+
+    public int MaxAllowedLlamaGpuReservePercent { get; init; }
+
+    /// <summary>Share of RAM, in percent, the context allocator keeps free. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    public int? LlamaRamReservePercent { get; init; }
+
+    public int MinLlamaRamReservePercent { get; init; }
+
+    public int MaxAllowedLlamaRamReservePercent { get; init; }
+
+    /// <summary>Idle time-to-live of an sd-server daemon, in seconds. Applies after a node restart.</summary>
+    public int? ImageIdleTimeToLiveSeconds { get; init; }
+
+    public int MinImageIdleTimeToLiveSeconds { get; init; }
+
+    public int MaxAllowedImageIdleTimeToLiveSeconds { get; init; }
+
+    /// <summary>Model-fit safety margin in percent of weights plus KV cache. Applies to the next fit estimate.</summary>
+    public int? ModelFitSafetyMarginPercent { get; init; }
+
+    public int MinModelFitSafetyMarginPercent { get; init; }
+
+    public int MaxAllowedModelFitSafetyMarginPercent { get; init; }
+
+    /// <summary>Ceiling on raw provider rounds per invocation. Applies after a node restart.</summary>
+    public int? MaxProviderCallsPerInvocation { get; init; }
+
+    public int MinMaxProviderCallsPerInvocation { get; init; }
+
+    public int MaxAllowedMaxProviderCallsPerInvocation { get; init; }
+
+    /// <summary>Ceiling on a custom command tool's timeout, in seconds. Applies to the next save or call.</summary>
+    public int? CustomToolMaxTimeoutSeconds { get; init; }
+
+    public int MinCustomToolMaxTimeoutSeconds { get; init; }
+
+    public int MaxAllowedCustomToolMaxTimeoutSeconds { get; init; }
+
+    /// <summary>Time budget of one web_fetch or web_search call, in seconds. Applies to the next call.</summary>
+    public int? WebFetchTimeoutSeconds { get; init; }
+
+    public int MinWebFetchTimeoutSeconds { get; init; }
+
+    public int MaxAllowedWebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>Cap on the readable text one web_fetch returns, in characters. Applies to the next call.</summary>
+    public int? WebFetchMaxContentChars { get; init; }
+
+    public int MinWebFetchMaxContentChars { get; init; }
+
+    public int MaxAllowedWebFetchMaxContentChars { get; init; }
+
+    /// <summary>search_knowledge_base hit count when the model names none; must not exceed the maximum. Applies to the next call.</summary>
+    public int? KnowledgeSearchDefaultResults { get; init; }
+
+    public int MinKnowledgeSearchResults { get; init; }
+
+    public int MaxAllowedKnowledgeSearchResults { get; init; }
+
+    /// <summary>Ceiling on the search_knowledge_base hit count. Applies to the next call.</summary>
+    public int? KnowledgeSearchMaxResults { get; init; }
+
+    /// <summary>Parallel range connections per large model download. Applies after a node restart.</summary>
+    public int? HuggingFaceDownloadConnections { get; init; }
+
+    public int MinHuggingFaceDownloadConnections { get; init; }
+
+    public int MaxAllowedHuggingFaceDownloadConnections { get; init; }
+
+    /// <summary>Whisper.cpp per-request inference timeout, in minutes. Applies after a node restart.</summary>
+    public int? TranscriptionInferenceTimeoutMinutes { get; init; }
+
+    public int MinTranscriptionInferenceTimeoutMinutes { get; init; }
+
+    public int MaxAllowedTranscriptionInferenceTimeoutMinutes { get; init; }
+
+    /// <summary>AgentHome whole-run time limit in seconds; must be at least the command timeout. Applies to the next run.</summary>
+    public int? AgentHomeMaxRunSeconds { get; init; }
+
+    public int MinAgentHomeMaxRunSeconds { get; init; }
+
+    public int MaxAllowedAgentHomeMaxRunSeconds { get; init; }
+
+    /// <summary>Days an AgentHome run folder is kept. Applies after a node restart.</summary>
+    public int? AgentHomeRunRetentionDays { get; init; }
+
+    public int MinAgentHomeRunRetentionDays { get; init; }
+
+    public int MaxAllowedAgentHomeRunRetentionDays { get; init; }
 }
 
 /// <summary>
@@ -430,6 +569,69 @@ public sealed record SaveNodeSettingsRequest
     ///     rejected at the boundary with a 400.
     /// </remarks>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
+
+    /// <summary>Whisper.cpp daemon idle time-to-live in minutes. Applies after a node restart.</summary>
+    public int? TranscriptionIdleTimeoutMinutes { get; init; }
+
+    /// <summary>Cap on how long a llama-server may take to become ready, in seconds. Applies after a node restart.</summary>
+    public int? LlamaReadinessTimeoutCapSeconds { get; init; }
+
+    /// <summary>Chat-role HTTP timeout to a llama-server, in seconds. Applies after a node restart.</summary>
+    public int? LlamaChatHttpTimeoutSeconds { get; init; }
+
+    /// <summary>Embedding/rerank-role HTTP timeout to a llama-server, in seconds. Applies after a node restart.</summary>
+    public int? LlamaEmbeddingHttpTimeoutSeconds { get; init; }
+
+    /// <summary>
+    ///     Chat-role host prompt-cache budget in MiB; <c>0</c> disables it. <see langword="null" /> keeps the stored value,
+    ///     and <c>-1</c> resets it to automatic. Applies after a node restart.
+    /// </summary>
+    public int? LlamaChatCacheRamMiB { get; init; }
+
+    /// <summary>CPU threads left free for the host when a spawn derives its thread count. Applies after a node restart.</summary>
+    public int? LlamaCpuThreadReserve { get; init; }
+
+    /// <summary>Share of GPU memory, in percent, the context allocator keeps free. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    public int? LlamaGpuReservePercent { get; init; }
+
+    /// <summary>Share of RAM, in percent, the context allocator keeps free. Applies after a node restart and invalidates frozen inference profiles.</summary>
+    public int? LlamaRamReservePercent { get; init; }
+
+    /// <summary>Idle time-to-live of an sd-server daemon, in seconds. Applies after a node restart.</summary>
+    public int? ImageIdleTimeToLiveSeconds { get; init; }
+
+    /// <summary>Model-fit safety margin in percent of weights plus KV cache. Applies to the next fit estimate.</summary>
+    public int? ModelFitSafetyMarginPercent { get; init; }
+
+    /// <summary>Ceiling on raw provider rounds per invocation. Applies after a node restart.</summary>
+    public int? MaxProviderCallsPerInvocation { get; init; }
+
+    /// <summary>Ceiling on a custom command tool's timeout, in seconds. Applies to the next save or call.</summary>
+    public int? CustomToolMaxTimeoutSeconds { get; init; }
+
+    /// <summary>Time budget of one web_fetch or web_search call, in seconds. Applies to the next call.</summary>
+    public int? WebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>Cap on the readable text one web_fetch returns, in characters. Applies to the next call.</summary>
+    public int? WebFetchMaxContentChars { get; init; }
+
+    /// <summary>search_knowledge_base hit count when the model names none; must not exceed the maximum. Applies to the next call.</summary>
+    public int? KnowledgeSearchDefaultResults { get; init; }
+
+    /// <summary>Ceiling on the search_knowledge_base hit count. Applies to the next call.</summary>
+    public int? KnowledgeSearchMaxResults { get; init; }
+
+    /// <summary>Parallel range connections per large model download. Applies after a node restart.</summary>
+    public int? HuggingFaceDownloadConnections { get; init; }
+
+    /// <summary>Whisper.cpp per-request inference timeout, in minutes. Applies after a node restart.</summary>
+    public int? TranscriptionInferenceTimeoutMinutes { get; init; }
+
+    /// <summary>AgentHome whole-run time limit in seconds; must be at least the command timeout. Applies to the next run.</summary>
+    public int? AgentHomeMaxRunSeconds { get; init; }
+
+    /// <summary>Days an AgentHome run folder is kept. Applies after a node restart.</summary>
+    public int? AgentHomeRunRetentionDays { get; init; }
 }
 
 /// <summary>

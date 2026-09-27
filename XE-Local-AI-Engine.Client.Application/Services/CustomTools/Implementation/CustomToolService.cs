@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>Author-time CRUD and validation for the custom-tool library.</summary>
 /// <remarks>
@@ -17,9 +18,6 @@ internal sealed partial class CustomToolService : ICustomToolService
 {
     private const int MaxDescriptionLength = 1024;
     private const int MaxParameterNameLength = 64;
-
-    // Mirrors HostProcessExecutor.MaxTimeoutSeconds so a timeout accepted here always survives the executor's clamp.
-    private const int MaxTimeoutSeconds = 300;
 
     private static readonly HashSet<string> AllowedHttpMethods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -41,11 +39,13 @@ internal sealed partial class CustomToolService : ICustomToolService
 
     private readonly ICustomToolStore _store;
     private readonly ILocalToolOfferProvider _offerProvider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public CustomToolService(ICustomToolStore store, ILocalToolOfferProvider offerProvider)
+    public CustomToolService(ICustomToolStore store, ILocalToolOfferProvider offerProvider, INodeRuntimeSettings runtimeSettings)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
@@ -170,7 +170,9 @@ internal sealed partial class CustomToolService : ICustomToolService
         var configJson = definition.Kind switch
         {
             CustomToolKind.HttpFetch => BuildHttpFetchConfigJson(definition, declaredNames),
-            CustomToolKind.Command => BuildCommandConfigJson(definition, declaredNames),
+            // The same node ceiling HostProcessExecutor clamps to, so a timeout accepted here always survives the executor's clamp.
+            CustomToolKind.Command => BuildCommandConfigJson(definition, declaredNames,
+                await _runtimeSettings.GetCustomToolMaxTimeoutSecondsAsync(cancellationToken)),
             _ => throw new CustomToolValidationException($"Unknown custom-tool kind '{definition.Kind}'.")
         };
 
@@ -334,7 +336,7 @@ internal sealed partial class CustomToolService : ICustomToolService
         return JsonSerializer.Serialize(config, CustomToolJson.Options);
     }
 
-    private static string BuildCommandConfigJson(CustomToolDefinition definition, IReadOnlySet<string> declaredNames)
+    private static string BuildCommandConfigJson(CustomToolDefinition definition, IReadOnlySet<string> declaredNames, int maxTimeoutSeconds)
     {
         var command = definition.Command
                       ?? throw new CustomToolValidationException("A Command tool requires a command configuration.");
@@ -401,9 +403,9 @@ internal sealed partial class CustomToolService : ICustomToolService
             env.Add(new CustomToolEnvironmentVariable(variableName, variable.Value ?? string.Empty, variable.IsSecret));
         }
 
-        if (command.TimeoutSeconds < 0 || command.TimeoutSeconds > MaxTimeoutSeconds)
+        if (command.TimeoutSeconds < 0 || command.TimeoutSeconds > maxTimeoutSeconds)
         {
-            throw new CustomToolValidationException($"The timeout must be between 0 (default) and {MaxTimeoutSeconds} seconds.");
+            throw new CustomToolValidationException($"The timeout must be between 0 (default) and {maxTimeoutSeconds} seconds.");
         }
 
         var config = new CommandConfig(executable, argsTemplate, workingDirectory, command.TimeoutSeconds, env);

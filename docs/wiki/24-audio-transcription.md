@@ -967,9 +967,10 @@ re-probes server-side regardless, so a stale "can build" can never let an unbuil
 |---|---|---|---|
 | `Transcription:Enabled` | `TranscriptionOptions.Enabled`, read once in `Program.cs` | `true` | Gates behaviour, never registration: the 404 middleware, not a missing endpoint. |
 | `Transcription:IdleTimeoutMinutes` | `TranscriptionOptions.IdleTimeoutMinutes` | `15` | Seed for the daemon's idle-unload TTL, used until a node setting is stored. |
-| `TranscriptionIdleTimeoutMinutes` | `StoredNodeSettings`, clamped 1–240 | unset | The stored node setting; it wins over the appsettings seed. |
+| `TranscriptionIdleTimeoutMinutes` | `StoredNodeSettings`, clamped 1–240 | unset | The stored node setting; it wins over the appsettings seed. Applies after a node restart. |
 | `Transcription:MaxBufferedAudioMb` | `TranscriptionOptions.MaxBufferedAudioMb`, 16–1 048 576, validated on start | `512` | Safety cap in MiB on one live session's queued, untranscribed audio across its lanes (about 4.6 h of one mono lane). Crossing it ends the session gracefully as `Completed`, draining what is queued, with one Warning. |
 | `TranscriptionSelectedModelId` | `StoredNodeSettings` | unset | The operator's selected whisper model. Unset resolves through `ITranscriptionRuntimeService.ResolveEffectiveModelIdAsync`. |
+| `TranscriptionInferenceTimeoutMinutes` | `StoredNodeSettings`, clamped 1–480 | unset (seed: `WhisperRuntimeOptions.InferenceTimeout`, 30 min) | Per-request whisper.cpp inference deadline, including the one-shot process-death retry's remaining budget (§ above). Applies after a node restart. |
 | `Security:MaxUploadFileSizeMb` | `SecurityOptions.MaxUploadFileSizeMb` | `25` | The upload cap the copy enforces as it writes. |
 
 Per-session options live in the session's encrypted `ConfigJson`: language mode (`auto` / `override`) and the

@@ -249,6 +249,148 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WithTheTunables_RoundTripsThroughGetWithTheirBounds()
+    {
+        var saved = new StoredNodeSettings
+        {
+            LlamaChatCacheRamMiB = 2048
+        };
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            TranscriptionIdleTimeoutMinutes = 30,
+            LlamaReadinessTimeoutCapSeconds = 900,
+            LlamaChatHttpTimeoutSeconds = 7200,
+            LlamaEmbeddingHttpTimeoutSeconds = 120,
+            // -1 is "back to automatic": the stored 2048 must become null.
+            LlamaChatCacheRamMiB = StoredNodeSettings.LlamaChatCacheRamMiBAuto,
+            LlamaCpuThreadReserve = 2,
+            LlamaGpuReservePercent = 10,
+            LlamaRamReservePercent = 20,
+            ImageIdleTimeToLiveSeconds = 600,
+            ModelFitSafetyMarginPercent = 15,
+            MaxProviderCallsPerInvocation = 100,
+            CustomToolMaxTimeoutSeconds = 600,
+            WebFetchTimeoutSeconds = 30,
+            WebFetchMaxContentChars = 20_000,
+            KnowledgeSearchDefaultResults = 4,
+            KnowledgeSearchMaxResults = 8,
+            HuggingFaceDownloadConnections = 6,
+            TranscriptionInferenceTimeoutMinutes = 60,
+            AgentHomeMaxRunSeconds = 1200,
+            AgentHomeRunRetentionDays = 14
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+
+        AssertEx.Equal(expected: 30, settings.TranscriptionIdleTimeoutMinutes);
+        AssertEx.Equal(expected: 900, settings.LlamaReadinessTimeoutCapSeconds);
+        AssertEx.Equal(expected: 7200, settings.LlamaChatHttpTimeoutSeconds);
+        AssertEx.Equal(expected: 120, settings.LlamaEmbeddingHttpTimeoutSeconds);
+        AssertEx.Null(settings.LlamaChatCacheRamMiB);
+        AssertEx.Equal(expected: 2, settings.LlamaCpuThreadReserve);
+        AssertEx.Equal(expected: 10, settings.LlamaGpuReservePercent);
+        AssertEx.Equal(expected: 20, settings.LlamaRamReservePercent);
+        AssertEx.Equal(expected: 600, settings.ImageIdleTimeToLiveSeconds);
+        AssertEx.Equal(expected: 15, settings.ModelFitSafetyMarginPercent);
+        AssertEx.Equal(expected: 100, settings.MaxProviderCallsPerInvocation);
+        AssertEx.Equal(expected: 600, settings.CustomToolMaxTimeoutSeconds);
+        AssertEx.Equal(expected: 30, settings.WebFetchTimeoutSeconds);
+        AssertEx.Equal(expected: 20_000, settings.WebFetchMaxContentChars);
+        AssertEx.Equal(expected: 4, settings.KnowledgeSearchDefaultResults);
+        AssertEx.Equal(expected: 8, settings.KnowledgeSearchMaxResults);
+        AssertEx.Equal(expected: 6, settings.HuggingFaceDownloadConnections);
+        AssertEx.Equal(expected: 60, settings.TranscriptionInferenceTimeoutMinutes);
+        AssertEx.Equal(expected: 1200, settings.AgentHomeMaxRunSeconds);
+        AssertEx.Equal(expected: 14, settings.AgentHomeRunRetentionDays);
+        // Bounds are server-authoritative for the React form.
+        AssertEx.Equal(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, settings.MinLlamaReadinessTimeoutCapSeconds);
+        AssertEx.Equal(StoredNodeSettings.MaxLlamaChatCacheRamMiB, settings.MaxAllowedLlamaChatCacheRamMiB);
+        AssertEx.Equal(StoredNodeSettings.MaxKnowledgeSearchResults, settings.MaxAllowedKnowledgeSearchResults);
+        AssertEx.Equal(StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes, settings.MaxAllowedTranscriptionIdleTimeoutMinutes);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheKnowledgeSearchDefaultExceedsTheMaximum_BindsTheErrorToTheDefault()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KnowledgeSearchDefaultResults = 10,
+            KnowledgeSearchMaxResults = 5
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("knowledgeSearchDefaultResults", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheAgentHomeRunLimitIsBelowTheCommandTimeout_BindsTheErrorToTheRunLimit()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            AgentHomeCommandTimeoutSeconds = 600
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            AgentHomeMaxRunSeconds = 300
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("agentHomeMaxRunSeconds", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(-2)]
+    [Arguments(131073)]
+    public async Task SaveNodeSettings_WhenTheCacheRamIsOutOfRange_ReturnsValidationProblem(int cacheRamMiB)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            LlamaChatCacheRamMiB = cacheRamMiB
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenOmittingOptionalFields_KeepsCurrentStoredValues()
     {
         var stored = new StoredNodeSettings

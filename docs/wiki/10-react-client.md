@@ -92,7 +92,7 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `mcp` | MCP server registration + tooling | [API & Hubs](09-api-and-hubs.md) |
 | `model-fit` | Box-aware GGUF recommendation + quant pick, plus the per-machine inference-profile panel (`InferenceProfilePanel`, explore/benchmark/freeze) | [Model Fit](07-model-fit.md) |
 | `models` | Model management (HF GGUF discovery/download, classification) | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| `node-settings` | User-editable cached node settings, local runtime config, the **runtime build cards**, and `RuntimeAcquisitionBanner`: `useRuntimeAcquisitionHub` hydrates `GET model-fit/llamacpp/acquisition`, merges `runtimeAcquisition.statusChanged` pushes by monotonic sequence, and rehydrates after reconnect | [Hosting & Deployment](11-hosting-and-deployment.md), [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
+| `node-settings` | **Node Settings** at `/node-settings`: one page, eleven intent-based sections behind a left nav (`?section=` search param, so a section is linkable), one sticky save bar for every node-stored field, the **runtime build cards**, and `RuntimeAcquisitionBanner`: `useRuntimeAcquisitionHub` hydrates `GET model-fit/llamacpp/acquisition`, merges `runtimeAcquisition.statusChanged` pushes by monotonic sequence, and rehydrates after reconnect. See [§ Node Settings: one draft, one save bar](#node-settings-one-draft-one-save-bar) below | [Hosting & Deployment](11-hosting-and-deployment.md), [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
 | `onboarding` | First-response guided tour (React Joyride) + welcome dialog with language picker + showcase panel | — |
 | `scheduler` | Quartz job management + run history | [Scheduler](06-scheduler.md) |
 | `skills` | Node skill library + per-agent skill picklist | [Agent Mode](04-agent-mode.md) |
@@ -135,6 +135,47 @@ group that would otherwise hold it alone and becomes a top-level entry — Agent
 — and a group left with no children is dropped rather than rendered empty. Changing the mode on the Node Settings page
 re-renders the rails on the next commit; no reload, and the operator stays on whatever page they were on.
 
+### Node Settings: one draft, one save bar
+
+`features/node-settings/pages/NodeSettings.tsx` treats the whole page as **one draft**. `nodeSettingsFieldSections`
+(`models/NodeSettingsSections.ts`) is a `Record` over every draft field keyed to exactly one of eleven sections
+(`general`, `chat`, `runtime`, `runtimes`, `models`, `knowledge`, `voice`, `privacy`, `integrations`, `workspaces`,
+`usage`) — a `Record`, not a lookup with a fallback, so a new stored field that is not placed fails the build rather
+than landing in no section or two. `NodeSettingsSectionNav` renders that list as `NavLink`s from the `sm` breakpoint up
+and a `Select` on phone width; the active section is driven by the route's `?section=` search param
+(`nodeSettingsSearchSchema` falls an unrecognized value back to the default section rather than failing the route) so
+every section is a bookmarkable, linkable URL.
+
+**The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
+diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract
+(`08-data-and-persistence.md`'s save protocol). That diff also drives `NodeSettingsSaveBar` — one sticky bar at the
+foot of the page reporting the unsaved-field count and, separately, how many touch a
+`restartGatedNodeSettingsFields` entry (a toast on save says so, worded differently, instead of implying every saved
+change is already live) — and `NodeSettingsSectionNav`'s per-section unsaved badges, so an edit left behind in a
+section the operator has since navigated away from stays visible rather than silently riding along on the next Save.
+**A fresh server response is adopted into the draft only while it is pristine.** The page can mount against a cached
+query response, seed from it, and then have the mount's own refetch resolve with fresher values; adopting those
+unconditionally is what the pristine check prevents once the operator has typed a single keystroke — a background
+refetch (window focus, the post-save cache invalidation) must never discard an in-progress edit. Reset is the one
+explicit exception: it awaits its own refetch and reseeds the draft from that result.
+
+`uiMode` and the two voice fields (`voiceFeatureEnabled`, `defaultVoiceProfile`) are ordinary draft fields that save
+through this one bar; earlier they PUT instantly on change. Per-browser preferences — developer mode, and the voice
+feature's own local playback prefs — are `NodeSettingsBrowserOnlyBadge`-marked and stay instant, because they are
+never sent to the server at all. The non-form action panels (the llama.cpp updater, the three source-build cards,
+Managed Python, the Hugging Face token panel, the MCP/local-proxy key panels) render inside their section but keep
+their own mutations against their own endpoints — the save bar has no opinion on them.
+
+A handful of stored fields are edited in a friendlier unit than the wire: `nodeSettingsDisplayScale`
+(`models/NodeSettingsFieldsModel.ts`) holds the wire-field → divisor map (minutes instead of seconds for the llama.cpp
+idle TTL and HTTP timeout, the AgentHome prepare/command/max-run timeouts and the image idle TTL; MB instead of bytes
+for the AgentHome folder/patch byte caps; GB for the Hugging Face disk margin) — the wire value and its stored bounds
+never change, `nodeSettingsScaleOf`/`toDisplayBounds` only affect what the `NumberInput` shows and
+`buildNodeSettingsRequest` multiplies the display value back before it is sent. Simple UI mode collapses the five
+sections classified `runtime`/`runtimes`/`integrations`/`workspaces`/`usage` behind a "Show advanced sections" toggle
+in the nav (`isAdvancedNodeSettingsSection`), but every one of them stays reachable by its own `?section=` link even
+with the toggle off — a validation error naming a field in a section the operator is not looking at, or a linked
+advanced section, both force it into the visible list.
 
 ---
 

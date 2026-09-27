@@ -55,13 +55,17 @@ public sealed class NodeChatEndpointTests
     }
 
     [Test]
-    public async Task Conversations_WhenListed_ReportTheEffectiveMessageSizeCap()
+    public async Task Conversations_WhenListed_ReportTheEffectiveMessageAndUploadSizeCaps()
     {
-        // A non-default value proves the composer's pre-check limit tracks the operator's Security:MaxMessageSizeKb
-        // instead of a constant baked into the response.
+        // Non-default values prove the composer's and upload pickers' pre-check limits track the operator's Security
+        // options instead of constants baked into the response.
         await using var factory = new TestServerWebAppFactory
         {
-            ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxMessageSizeKb = 7)
+            ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options =>
+            {
+                options.MaxMessageSizeKb = 7;
+                options.MaxUploadFileSizeMb = 3;
+            })
         };
         using var client = factory.CreateClient();
 
@@ -71,6 +75,7 @@ public sealed class NodeChatEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         AssertEx.Equal(expected: 7, listed.MaxMessageSizeKb);
+        AssertEx.Equal(expected: 3, listed.MaxUploadFileSizeMb);
     }
 
     [Test]

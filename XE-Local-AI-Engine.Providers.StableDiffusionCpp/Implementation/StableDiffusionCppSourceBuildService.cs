@@ -8,14 +8,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// <summary>Linux-only detached single-flight source build for stable-diffusion.cpp.</summary>
 public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSourceBuildService, IDisposable
 {
-    private const int MaxBuildJobs = 8;
     private const int MaxLogLines = 500;
     private const int PublishQueueCapacity = 128;
-    private static readonly TimeSpan BuildTimeout = TimeSpan.FromHours(2);
-    private static readonly TimeSpan CloneTimeout = TimeSpan.FromMinutes(20);
-    private static readonly TimeSpan ConfigureTimeout = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan ShortCommandTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan SmokeTimeout = TimeSpan.FromSeconds(20);
 
     private static readonly string[] GitHardeningArguments =
     [
@@ -398,25 +392,25 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             var requestedCommit = descriptor.RevisionMode == StableDiffusionCppSourceRevisionMode.EnginePinned
                 ? StableDiffusionReleasePins.PinnedSourceCommitSha
                 : descriptor.RequestedCommit;
-            await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, ShortCommandTimeout, captureOutput: false, ct)
+            await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
                 .ConfigureAwait(false);
-            await RunRequiredAsync("git", GitArguments("remote", "add", "origin", descriptor.Repository), sourceDir, ShortCommandTimeout, captureOutput: false, ct)
+            await RunRequiredAsync("git", GitArguments("remote", "add", "origin", descriptor.Repository), sourceDir, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
                 .ConfigureAwait(false);
             await RunRequiredAsync("git",
                     GitArguments("fetch", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", requestedCommit ?? "HEAD"),
                     sourceDir,
-                    CloneTimeout,
+                    SourceBuildPolicy.CloneTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Verifying);
-            await RunRequiredAsync("git", GitArguments("checkout", "--detach", "FETCH_HEAD"), sourceDir, ShortCommandTimeout, captureOutput: false, ct)
+            await RunRequiredAsync("git", GitArguments("checkout", "--detach", "FETCH_HEAD"), sourceDir, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
                 .ConfigureAwait(false);
             var resolvedCommit = (await RunRequiredAsync("git",
                     GitArguments("rev-parse", "HEAD"),
                     sourceDir,
-                    ShortCommandTimeout,
+                    SourceBuildPolicy.ShortCommandTimeout,
                     captureOutput: true,
                     ct)
                 .ConfigureAwait(false)).StandardOutput.Trim();
@@ -429,7 +423,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             await RunRequiredAsync("git",
                     GitArguments("submodule", "update", "--init", "--recursive"),
                     sourceDir,
-                    CloneTimeout,
+                    SourceBuildPolicy.CloneTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
@@ -445,14 +439,14 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Configuring);
             var cmakeArgs = BuildCMakeConfigureArguments(sourceDir, buildDir, descriptor.Backend);
-            await RunRequiredAsync("cmake", cmakeArgs, WorkRoot, ConfigureTimeout, captureOutput: false, ct).ConfigureAwait(false);
+            await RunRequiredAsync("cmake", cmakeArgs, WorkRoot, SourceBuildPolicy.ConfigureTimeout, captureOutput: false, ct).ConfigureAwait(false);
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Building);
-            var buildJobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
+            var buildJobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
             await RunRequiredAsync("cmake",
                 ["--build", buildDir, "--target", "sd-server", "--config", "Release", "--parallel", buildJobs.ToString()],
                 WorkRoot,
-                BuildTimeout,
+                SourceBuildPolicy.BuildTimeout,
                 captureOutput: false,
                 ct).ConfigureAwait(false);
 
@@ -465,7 +459,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             await RunRequiredAsync(serverPath,
                     ["--help"],
                     Path.GetDirectoryName(serverPath)!,
-                    SmokeTimeout,
+                    SourceBuildPolicy.SmokeTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);

@@ -159,6 +159,148 @@ public sealed partial record StoredNodeSettings
     /// <summary>Upper guard for draft-model GPU layers (well above any real model's layer count).</summary>
     public const int MaxSpeculativeDraftGpuLayers = 1000;
 
+    // Curated runtime tunables (Plans/node-settings-regroup-2026-09-27). Each Default equals the constant it replaced, so an
+    // absent value keeps today's behaviour; each Min/Max pair is what Normalize and the boundary validator enforce.
+
+    /// <summary>Default llama-server readiness deadline cap, in seconds; mirrors <c>LlamaServerSupervisorOptions.ReadinessTimeoutCap</c>.</summary>
+    public const int DefaultLlamaReadinessTimeoutCapSeconds = 600;
+
+    /// <summary>
+    ///     Lower bound for the readiness cap: the supervisor's fixed 120 s readiness BASE, because
+    ///     <c>LlamaServerSupervisorOptions.Validate</c> rejects a cap below it at host build.
+    /// </summary>
+    public const int MinLlamaReadinessTimeoutCapSeconds = 120;
+
+    public const int MaxLlamaReadinessTimeoutCapSeconds = 3600;
+
+    /// <summary>Default chat-role HTTP timeout to a llama-server, in seconds; mirrors <c>LlamaServerSupervisorOptions.HttpNetworkTimeout</c>.</summary>
+    public const int DefaultLlamaChatHttpTimeoutSeconds = 3600;
+
+    public const int MinLlamaChatHttpTimeoutSeconds = 60;
+
+    public const int MaxLlamaChatHttpTimeoutSeconds = 86400;
+
+    /// <summary>Default embedding/rerank HTTP timeout, in seconds; mirrors <c>LlamaServerSupervisorOptions.EmbeddingHttpNetworkTimeout</c>.</summary>
+    public const int DefaultLlamaEmbeddingHttpTimeoutSeconds = 600;
+
+    public const int MinLlamaEmbeddingHttpTimeoutSeconds = 10;
+
+    public const int MaxLlamaEmbeddingHttpTimeoutSeconds = 3600;
+
+    /// <summary><c>0</c> disables the chat host prompt cache (<c>--cache-ram 0</c>).</summary>
+    public const int MinLlamaChatCacheRamMiB = 0;
+
+    public const int MaxLlamaChatCacheRamMiB = 131072;
+
+    /// <summary>
+    ///     The request-only sentinel that resets <see cref="LlamaChatCacheRamMiB" /> to automatic (stored
+    ///     <see langword="null" />), because a <see langword="null" /> request member means "keep".
+    /// </summary>
+    public const int LlamaChatCacheRamMiBAuto = -1;
+
+    /// <summary>Default CPU threads left free for the host; mirrors <c>LlamaServerLaunchPolicyOptions.CpuThreadReserve</c>.</summary>
+    public const int DefaultLlamaCpuThreadReserve = 1;
+
+    public const int MinLlamaCpuThreadReserve = 0;
+
+    public const int MaxLlamaCpuThreadReserve = 64;
+
+    /// <summary>Default share of GPU memory kept free, in percent; mirrors <c>LlamaServerLaunchPolicyOptions.DefaultGpuReserveFraction</c>.</summary>
+    public const int DefaultLlamaGpuReservePercent = 5;
+
+    public const int MinLlamaGpuReservePercent = 0;
+
+    public const int MaxLlamaGpuReservePercent = 50;
+
+    /// <summary>Default share of RAM kept free, in percent; mirrors <c>LlamaServerLaunchPolicyOptions.DefaultRamReserveFraction</c>.</summary>
+    public const int DefaultLlamaRamReservePercent = 15;
+
+    public const int MinLlamaRamReservePercent = 0;
+
+    public const int MaxLlamaRamReservePercent = 75;
+
+    /// <summary>Default sd-server idle time-to-live, in seconds; mirrors <c>StableDiffusionRuntimeOptions.IdleTimeToLive</c>.</summary>
+    public const int DefaultImageIdleTimeToLiveSeconds = 900;
+
+    public const int MinImageIdleTimeToLiveSeconds = 30;
+
+    public const int MaxImageIdleTimeToLiveSeconds = 86400;
+
+    /// <summary>Default model-fit safety margin, in percent; mirrors <c>MemoryFitEstimator.DefaultSafetyMarginFraction</c>.</summary>
+    public const int DefaultModelFitSafetyMarginPercent = 12;
+
+    public const int MinModelFitSafetyMarginPercent = 0;
+
+    public const int MaxModelFitSafetyMarginPercent = 50;
+
+    /// <summary>Hardcoded fallback for the provider-call ceiling; mirrors <c>ProviderCallBudgetOptions.MaxProviderCallsPerInvocation</c>.</summary>
+    public const int DefaultMaxProviderCallsPerInvocation = 200;
+
+    public const int MinMaxProviderCallsPerInvocation = 10;
+
+    public const int MaxMaxProviderCallsPerInvocation = 2000;
+
+    /// <summary>Default ceiling on a custom command tool's timeout, in seconds (the former <c>HostProcessExecutor.MaxTimeoutSeconds</c>).</summary>
+    public const int DefaultCustomToolMaxTimeoutSeconds = 300;
+
+    public const int MinCustomToolMaxTimeoutSeconds = 30;
+
+    public const int MaxCustomToolMaxTimeoutSeconds = 3600;
+
+    /// <summary>Default <c>web_fetch</c>/<c>web_search</c> time budget, in seconds (the former <c>WebFetchService.TimeBudget</c>).</summary>
+    public const int DefaultWebFetchTimeoutSeconds = 20;
+
+    public const int MinWebFetchTimeoutSeconds = 5;
+
+    public const int MaxWebFetchTimeoutSeconds = 120;
+
+    /// <summary>Default cap on the text <c>web_fetch</c> returns, in characters (the former <c>WebFetchService.MaxContentChars</c>).</summary>
+    public const int DefaultWebFetchMaxContentChars = 12_000;
+
+    public const int MinWebFetchMaxContentChars = 1000;
+
+    public const int MaxWebFetchMaxContentChars = 100_000;
+
+    /// <summary>Default <c>search_knowledge_base</c> hit count when the model names none.</summary>
+    public const int DefaultKnowledgeSearchDefaultResults = 5;
+
+    /// <summary>Default ceiling on the <c>search_knowledge_base</c> hit count.</summary>
+    public const int DefaultKnowledgeSearchMaxResults = 20;
+
+    public const int MinKnowledgeSearchResults = 1;
+
+    /// <summary>
+    ///     Upper bound for both knowledge-search counts: the tool's static JSON schema declares <c>"maximum": 20</c>, and
+    ///     raising it is a tool-schema change (grammar smoke), so the setting can only lower the ceiling.
+    /// </summary>
+    public const int MaxKnowledgeSearchResults = 20;
+
+    /// <summary>Fallback when the appsettings seed is unreadable; mirrors <c>HuggingFaceOptions.DownloadConnections</c>.</summary>
+    public const int DefaultHuggingFaceDownloadConnections = 4;
+
+    public const int MinHuggingFaceDownloadConnections = 1;
+
+    /// <summary>The provider's own ceiling (<c>HfDownloadClient</c>): Hugging Face throttles per IP well before more streams pay.</summary>
+    public const int MaxHuggingFaceDownloadConnections = 16;
+
+    /// <summary>Default whisper.cpp per-request inference timeout, in minutes; mirrors <c>WhisperRuntimeOptions.InferenceTimeout</c>.</summary>
+    public const int DefaultTranscriptionInferenceTimeoutMinutes = 30;
+
+    public const int MinTranscriptionInferenceTimeoutMinutes = 1;
+
+    public const int MaxTranscriptionInferenceTimeoutMinutes = 480;
+
+    public const int MinAgentHomeMaxRunSeconds = 60;
+
+    public const int MaxAgentHomeMaxRunSeconds = 86400;
+
+    /// <summary>Hardcoded fallback for the run-folder retention; mirrors <c>AgentHomeRunRetentionOptions.RetentionDays</c>.</summary>
+    public const int DefaultAgentHomeRunRetentionDays = 30;
+
+    public const int MinAgentHomeRunRetentionDays = 1;
+
+    public const int MaxAgentHomeRunRetentionDays = 365;
+
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
@@ -623,9 +765,86 @@ public sealed partial record StoredNodeSettings
     ///     <see cref="DefaultTranscriptionIdleTimeoutMinutes" />; <c>NodeSettingsStore.Normalize</c> clamps to
     ///     <see cref="MinTranscriptionIdleTimeoutMinutes" />..<see cref="MaxTranscriptionIdleTimeoutMinutes" />.
     ///     Applies on the next node restart (read once when the runtime options are seeded).
-    ///     <para>LOCAL-ONLY, exactly as <see cref="TranscriptionSelectedModelId" /> is.</para>
     /// </summary>
     public int? TranscriptionIdleTimeoutMinutes { get; init; }
+
+    /// <summary>
+    ///     The llama-server readiness deadline cap in seconds. Seed: 600. Applies on the next node restart (seeded into
+    ///     the supervisor options at host build).
+    /// </summary>
+    public int? LlamaReadinessTimeoutCapSeconds { get; init; }
+
+    /// <summary>Chat-role HTTP timeout to a llama-server in seconds. Seed: 3600. Applies on the next node restart.</summary>
+    public int? LlamaChatHttpTimeoutSeconds { get; init; }
+
+    /// <summary>Embedding/rerank-role HTTP timeout to a llama-server in seconds. Seed: 600. Applies on the next node restart.</summary>
+    public int? LlamaEmbeddingHttpTimeoutSeconds { get; init; }
+
+    /// <summary>
+    ///     Chat-role host prompt-cache budget in MiB (<c>--cache-ram</c>); <c>0</c> disables it. <see langword="null" />
+    ///     (absent) is automatic: one eighth of RAM, clamped to 512–8192 MiB. Applies on the next node restart.
+    /// </summary>
+    public int? LlamaChatCacheRamMiB { get; init; }
+
+    /// <summary>CPU threads left free for the host when a spawn derives its thread count. Seed: 1. Applies on the next node restart.</summary>
+    public int? LlamaCpuThreadReserve { get; init; }
+
+    /// <summary>
+    ///     Share of GPU memory, in percent, the context allocator keeps free. Seed: 5. Applies on the next node restart,
+    ///     and CHANGING IT invalidates every frozen inference profile (it is part of the launch-policy fingerprint).
+    /// </summary>
+    public int? LlamaGpuReservePercent { get; init; }
+
+    /// <summary>Share of RAM, in percent, the context allocator keeps free. Seed: 15. Same restart and fingerprint rules as <see cref="LlamaGpuReservePercent" />.</summary>
+    public int? LlamaRamReservePercent { get; init; }
+
+    /// <summary>Idle TTL (seconds) of an sd-server daemon. Seed: <c>StableDiffusionRuntime:IdleTimeToLive</c> (900). Applies on the next node restart.</summary>
+    public int? ImageIdleTimeToLiveSeconds { get; init; }
+
+    /// <summary>Model-fit safety margin in percent of weights + KV. Seed: 12. Read per estimate, so a save applies to the next fit.</summary>
+    public int? ModelFitSafetyMarginPercent { get; init; }
+
+    /// <summary>
+    ///     Ceiling on raw provider rounds per invocation. Seed: <c>Agent:ProviderCallBudget:MaxProviderCallsPerInvocation</c>
+    ///     (200). Applies on the next node restart.
+    /// </summary>
+    public int? MaxProviderCallsPerInvocation { get; init; }
+
+    /// <summary>Ceiling on a custom command tool's timeout in seconds. Seed: 300. Read per save and per call.</summary>
+    public int? CustomToolMaxTimeoutSeconds { get; init; }
+
+    /// <summary>Time budget of one <c>web_fetch</c> or <c>web_search</c> call in seconds. Seed: 20. Read per call.</summary>
+    public int? WebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>Cap on the readable text one <c>web_fetch</c> returns, in characters. Seed: 12000. Read per call.</summary>
+    public int? WebFetchMaxContentChars { get; init; }
+
+    /// <summary>
+    ///     <c>search_knowledge_base</c> hit count when the model names none. Seed: 5; must not exceed
+    ///     <see cref="KnowledgeSearchMaxResults" />. Read per call.
+    /// </summary>
+    public int? KnowledgeSearchDefaultResults { get; init; }
+
+    /// <summary>Ceiling on the <c>search_knowledge_base</c> hit count. Seed: 20. Read per call.</summary>
+    public int? KnowledgeSearchMaxResults { get; init; }
+
+    /// <summary>
+    ///     Parallel range connections per large model download. Seed: <c>HuggingFace:DownloadConnections</c> (4).
+    ///     Applies on the next node restart.
+    /// </summary>
+    public int? HuggingFaceDownloadConnections { get; init; }
+
+    /// <summary>Whisper.cpp per-request inference timeout in minutes. Seed: 30. Applies on the next node restart.</summary>
+    public int? TranscriptionInferenceTimeoutMinutes { get; init; }
+
+    /// <summary>
+    ///     AgentHome whole-run wall clock in seconds (developer-only). Seed: <c>AgentHome:MaxRunSeconds</c> (600); must be
+    ///     at least the effective command timeout. Read per run.
+    /// </summary>
+    public int? AgentHomeMaxRunSeconds { get; init; }
+
+    /// <summary>AgentHome run-folder retention in days. Seed: <c>AgentHome:RunRetention:RetentionDays</c> (30). Read per sweep.</summary>
+    public int? AgentHomeRunRetentionDays { get; init; }
 
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.

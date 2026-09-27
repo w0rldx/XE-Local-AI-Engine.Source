@@ -568,14 +568,14 @@
 			"upload": {
 				"heading": "Dokumente hinzufügen",
 				"prompt": "Dokumente hier ablegen oder zum Durchsuchen klicken",
-				"hint": "PDF, DOCX, Markdown, Text, strukturierte Daten und Quellcode — bis zu {{limit}} MB pro Datei.",
+				"hint": "PDF, DOCX, Markdown, Text, strukturierte Daten und Quellcode.",
 				"dropzoneAria": "Dokumente in die Wissensdatenbank hochladen",
 				"queued": "{{name}} wird indexiert.",
 				"deduplicated": "{{name}} ist bereits in der Wissensdatenbank.",
 				"failed": "{{name}} konnte nicht hochgeladen werden.",
-				"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
 				"unsupported": "{{name}} ist kein unterstützter Dokumenttyp.",
-				"batchFailed": "Dateien konnten nicht hochgeladen werden."
+				"batchFailed": "Dateien konnten nicht hochgeladen werden.",
+				"tooLargeForNode": "{{name}} ist größer, als dieser Node annimmt."
 			},
 			"embeddingMissing": {
 				"title": "Kein Embedding-Modell installiert",
@@ -1696,7 +1696,6 @@
 				"revokeError": "Arbeitsbereichszugriff konnte nicht entzogen werden."
 			},
 			"developerMode": {
-				"title": "Entwicklereinstellungen",
 				"label": "Entwicklermodus",
 				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen) und zeichnet diese Browser-Sitzung auf — DOM-Änderungen, Klicks und Navigation —, damit sie einem Diagnose-Snapshot beigefügt werden kann. Wird nur in diesem Browser gespeichert."
 			},
@@ -2048,13 +2047,11 @@
 			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
 			"savedRestartRequired": "Knoteneinstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Knotens wirksam.",
 			"fields": {
-				"save": "Knoteneinstellungen speichern",
 				"validationError": "Einige Einstellungen sind ungültig. Bitte die markierten Felder korrigieren.",
 				"allowedRange": "Zulässiger Bereich",
 				"restartRequired": "Wird erst nach einem Neustart des Knotens wirksam.",
 				"seconds": "Sekunden",
 				"minutes": "Minuten",
-				"bytesPositive": "Eine positive Anzahl an Bytes. Änderungen werden ohne Neustart des Knotens wirksam.",
 				"errors": {
 					"range": "Bitte eine ganze Zahl innerhalb des zulässigen Bereichs eingeben.",
 					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
@@ -2068,7 +2065,9 @@
 					"keepWarmCapacity": "Zum Warmhalten eines Modells sind mindestens zwei geladene Prozessplätze erforderlich.",
 					"belowIdleTtl": "Das Warmhalteintervall muss kürzer als die Leerlauf-Lebensdauer sein.",
 					"unavailableKeepWarmModel": "Das ausgewählte Modell {{model}} ist nicht mehr installiert.",
-					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte."
+					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte.",
+					"defaultAboveMax": "Die Standardanzahl der Treffer darf nicht größer als das Maximum sein.",
+					"belowCommandTimeout": "Das Laufzeitlimit muss mindestens so groß wie das Befehls-Timeout sein."
 				},
 				"localChat": {
 					"title": "Lokaler Chat"
@@ -2105,8 +2104,8 @@
 					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."
 				},
 				"runtime": {
-					"title": "Lokale Modell-Laufzeit",
-					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
+					"title": "Prozess-Pool",
+					"tagHint": "Die empfohlene llama.cpp-Version wird in der llama.cpp-Laufzeitkarte unter Laufzeiten & Builds verwaltet."
 				},
 				"llamaMaxLoadedProcesses": {
 					"label": "Max. geladene llama-server-Prozesse"
@@ -2123,7 +2122,8 @@
 					"noModels": "Keine installierten llama.cpp-Chatmodelle",
 					"intervalLabel": "Warmhalteintervall",
 					"help": "Das Anheften belegt dauerhaft VRAM und einen der konfigurierten {{maxLoadedProcesses}} MaxLoadedProcesses-Plätze. Das Warmhalteintervall muss unter der Leerlauf-Lebensdauer bleiben, um ein Entladen zu verhindern.",
-					"unavailableOption": "{{model}} (nicht installiert)"
+					"unavailableOption": "{{model}} (nicht installiert)",
+					"title": "Warmhalten"
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama-Endpunkt",
@@ -2144,20 +2144,17 @@
 					"label": "Maximale Antwortgröße"
 				},
 				"advanced": {
-					"title": "Erweitert (Entwickler)",
-					"description": "Low-Level-Orchestrierung und AgentHome-Limits.",
+					"title": "Agent-Limits (Entwickler)",
 					"samplingNote": "Sampling-Standardwerte werden pro Nachricht im Chat konfiguriert."
 				},
 				"orchestrationIdleTimeoutSeconds": {
 					"label": "Orchestrierungs-Leerlauf-Timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome-Vorbereitungs-Timeout",
-					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
+					"label": "AgentHome-Vorbereitungs-Timeout"
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome-Befehls-Timeout",
-					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
+					"label": "AgentHome-Befehls-Timeout"
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max. ausgewählte Ordnergröße"
@@ -2261,11 +2258,142 @@
 				},
 				"autoCheckRuntimeUpdates": {
 					"label": "Nach llama.cpp-Laufzeit-Updates suchen",
-					"description": "Beim Start nach einem neueren llama.cpp-Laufzeit-Build suchen. Sie können jederzeit von Hand im Laufzeit-Bereich unten suchen."
+					"description": "Beim Start nach einem neueren llama.cpp-Laufzeit-Build suchen. Du kannst jederzeit manuell über die llama.cpp-Laufzeitkarte unter Laufzeiten & Builds prüfen."
 				},
 				"autoProvisionFirstRunModel": {
 					"label": "Beim ersten Start ein Startmodell herunterladen",
 					"description": "Bei einer frischen Installation ein Modell und eine Laufzeit holen, damit die Engine sofort antworten kann. Ohne Wirkung, sobald ein Modell installiert ist."
+				},
+				"restartBadge": "Neustart nötig",
+				"liveReload": "Änderungen werden ohne Neustart des Nodes wirksam.",
+				"megabytesPositive": "Eine positive Größe in MB. Änderungen werden ohne Neustart des Nodes wirksam.",
+				"ollama": {
+					"title": "Ollama"
+				},
+				"launchTuning": {
+					"title": "Chat-Starttuning"
+				},
+				"agentWorkspaces": {
+					"title": "AgentHome-Arbeitsbereiche (Entwickler)"
+				},
+				"secondsShort": "s",
+				"agentHomeMaxRunSeconds": {
+					"label": "AgentHome-Laufzeitlimit",
+					"description": "Die maximale Dauer eines ganzen Laufs; mindestens das Befehls-Timeout. Gilt ab dem nächsten Lauf."
+				},
+				"agentHomeRunRetentionDays": {
+					"label": "Aufbewahrung von AgentHome-Läufen",
+					"description": "Abgeschlossene Läufe, die älter sind, werden gelöscht."
+				},
+				"days": "Tage",
+				"imageIdleTimeToLiveSeconds": {
+					"label": "Leerlaufzeit des Bildservers"
+				},
+				"serverTimeouts": {
+					"title": "Server-Timeouts"
+				},
+				"llamaReadinessTimeoutCapSeconds": {
+					"label": "Obergrenze für das Laden eines Modells",
+					"description": "So lange darf ein llama-server höchstens zum Laden eines Modells brauchen, bevor der Start abgebrochen wird."
+				},
+				"llamaChatHttpTimeoutSeconds": {
+					"label": "Timeout für Chat-Anfragen",
+					"description": "Das Netzwerk-Timeout für eine einzelne Chat-Anfrage an llama-server."
+				},
+				"llamaEmbeddingHttpTimeoutSeconds": {
+					"label": "Timeout für Embedding-Anfragen"
+				},
+				"resourceReserve": {
+					"title": "Ressourcenreserve",
+					"description": "Was der Modellstarter beim Dimensionieren eines Modells für den Rest des Rechners frei lässt."
+				},
+				"llamaCpuThreadReserve": {
+					"label": "Reservierte CPU-Threads"
+				},
+				"llamaGpuReservePercent": {
+					"label": "Reservierter GPU-Speicher"
+				},
+				"llamaRamReservePercent": {
+					"label": "Reservierter Arbeitsspeicher"
+				},
+				"modelFitSafetyMarginPercent": {
+					"label": "Sicherheitsmarge der Modellprüfung",
+					"description": "Puffer, den die Modellprüfung auf den geschätzten Speicherbedarf eines Modells aufschlägt. Gilt ab der nächsten Prüfung."
+				},
+				"speculativeDraftGpuLayers": {
+					"label": "GPU-Schichten des Draft-Modells",
+					"description": "Wie viele Schichten des Draft-Modells auf die GPU ausgelagert werden. Leer lassen für den Standard der Laufzeit."
+				},
+				"llamaChatCacheRam": {
+					"label": "Prompt-Cache-Speicher",
+					"description": "Arbeitsspeicher, den llama-server für zwischengespeicherte Prompts nutzt. Automatisch verwendet ein Achtel des RAM (512–8192 MiB).",
+					"auto": "Automatisch",
+					"off": "Aus",
+					"custom": "Eigener Wert",
+					"sizeLabel": "Größe des Prompt-Caches"
+				},
+				"toolLimits": {
+					"title": "Tool- und Anbieterlimits"
+				},
+				"maxProviderCallsPerInvocation": {
+					"label": "Modellaufrufe pro Agentenlauf",
+					"description": "Stoppt einen Agentenlauf, der das Modell immer wieder aufruft, etwa in einer Tool-Schleife."
+				},
+				"customToolMaxTimeoutSeconds": {
+					"label": "Timeout-Obergrenze für eigene Tools",
+					"description": "Das längste Timeout, das ein eigenes Tool für sich festlegen darf."
+				},
+				"containerRuntime": {
+					"title": "Container-Laufzeit"
+				},
+				"containerRuntimeSelection": {
+					"label": "Laufzeit für externe Apps",
+					"description": "Welche Container-Laufzeit externe Apps verwenden. Eine App kann das weiterhin überschreiben.",
+					"options": {
+						"auto": "Automatisch",
+						"docker": "Docker"
+					}
+				},
+				"downloads": {
+					"title": "Downloads"
+				},
+				"huggingFaceDownloadConnections": {
+					"label": "Parallele Download-Verbindungen"
+				},
+				"huggingFaceDiskMarginBytes": {
+					"label": "Freizuhaltender Speicherplatz",
+					"description": "Ein Download wird abgelehnt, wenn danach weniger freier Speicher übrig bliebe."
+				},
+				"knowledgeSearch": {
+					"title": "Wissenssuche"
+				},
+				"knowledgeSearchDefaultResults": {
+					"label": "Standardanzahl der Treffer",
+					"description": "Trefferzahl, wenn das Modell keine Anzahl angibt. Höchstens das Maximum darunter."
+				},
+				"knowledgeSearchMaxResults": {
+					"label": "Maximale Trefferzahl"
+				},
+				"webFetch": {
+					"title": "Seitenabruf"
+				},
+				"webFetchTimeoutSeconds": {
+					"label": "Timeout für den Seitenabruf"
+				},
+				"webFetchMaxContentChars": {
+					"label": "Textlimit pro Seite",
+					"description": "Höchstens so viele Zeichen einer abgerufenen Seite erhält das Modell."
+				},
+				"characters": "Zeichen",
+				"transcription": {
+					"title": "Transkription"
+				},
+				"transcriptionIdleTimeoutMinutes": {
+					"label": "Ungenutztes Transkriptionsmodell entladen nach"
+				},
+				"transcriptionInferenceTimeoutMinutes": {
+					"label": "Transkriptions-Timeout",
+					"description": "So lange darf ein einzelner Transkriptionsauftrag höchstens laufen."
 				}
 			},
 			"title": "Node-Einstellungen",
@@ -2276,9 +2404,7 @@
 				"description": "Das maximale Zeitlimit für Nachrichtenanfragen begrenzt, wie lange eine einzelne lokale Chat-Nachrichtenanfrage (Senden oder Neu generieren) laufen darf, bevor sie mit einer Zeitüberschreitung abgebrochen wird. Es wird außerdem über Fähigkeitsberichte an die Plattform gemeldet.",
 				"timeoutLabel": "Maximales Zeitlimit für Nachrichtenanfragen",
 				"timeoutRange": "Zulässiger Bereich: {{min}}–{{max}} Sekunden.",
-				"timeoutError": "Bitte eine ganze Zahl von {{min}} bis {{max}} eingeben.",
-				"save": "Einstellungen speichern",
-				"reload": "Neu laden"
+				"timeoutError": "Bitte eine ganze Zahl von {{min}} bis {{max}} eingeben."
 			},
 			"uiMode": {
 				"title": "Oberflächenmodus",
@@ -2329,6 +2455,44 @@
 					"probeContract": "Prüfvertrag",
 					"toolchainStore": "Speicherort der Toolchain"
 				}
+			},
+			"browserOnly": "Nur dieser Browser",
+			"developerOnlyNote": "Diese Limits sind Entwicklereinstellungen. Aktiviere den Entwicklermodus unter Allgemein, um sie zu ändern.",
+			"browserPreferences": {
+				"title": "Dieser Browser",
+				"languageLabel": "Sprache"
+			},
+			"integrationLinks": {
+				"title": "Verwandte Einstellungen",
+				"description": "MCP-Server, externe Modellanbieter und Cloud-Konten haben eigene Seiten.",
+				"mcp": "MCP-Server",
+				"externalProviders": "Externe Anbieter",
+				"cloudSettings": "Cloud-Einstellungen"
+			},
+			"saveBar": {
+				"clean": "Keine ungespeicherten Änderungen",
+				"unsaved_one": "{{count}} ungespeicherte Änderung",
+				"unsaved_other": "{{count}} ungespeicherte Änderungen",
+				"restart_one": "{{count}} erfordert einen Neustart",
+				"restart_other": "{{count}} erfordern einen Neustart",
+				"reset": "Zurücksetzen",
+				"save": "Änderungen speichern"
+			},
+			"sections": {
+				"navLabel": "Einstellungsbereiche",
+				"general": "Allgemein",
+				"chat": "Chat & Agenten",
+				"runtime": "Modell-Laufzeit",
+				"runtimes": "Laufzeiten & Builds",
+				"models": "Modelle & Downloads",
+				"knowledge": "Wissen & Web",
+				"voice": "Sprache & Transkription",
+				"privacy": "Datenschutz & Updates",
+				"integrations": "Integrationen & Schlüssel",
+				"workspaces": "Agent-Arbeitsbereiche",
+				"usage": "Nutzung & Limits",
+				"showAdvanced": "Erweiterte Bereiche anzeigen",
+				"hideAdvanced": "Erweiterte Bereiche ausblenden"
 			}
 		},
 		"cloudSettings": {
@@ -7777,9 +7941,9 @@
 			"operatorEnableDescription": "Hauptschalter für alle Benutzer auf diesem Knoten. Wird er deaktiviert, ist die Sprachausgabe überall ausgeschaltet.",
 			"operatorDefaultProfileLabel": "Standardstimme",
 			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
-			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden.",
 			"previewLabel": "Stimme anhören",
-			"systemVoiceGroupLabel": "Systemstimmen ({{language}})"
+			"systemVoiceGroupLabel": "Systemstimmen ({{language}})",
+			"browserSectionTitle": "Deine Spracheinstellungen"
 		}
 	},
 	"notifications": {

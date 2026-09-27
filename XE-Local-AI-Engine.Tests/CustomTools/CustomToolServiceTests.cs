@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class CustomToolServiceTests
@@ -236,7 +237,7 @@ public sealed class CustomToolServiceTests
         offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetKnownToolNames().Returns([]);
 
-        return new CustomToolService(store, offerProvider);
+        return new CustomToolService(store, offerProvider, StubNodeRuntimeSettings.Create().Build());
     }
 
     private static CustomToolRecord ToRecord(CustomToolInput input)

@@ -516,11 +516,11 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
-    public async Task SaveTrustedMerged_WhenTheRequestOmitsTheTranscriptionMembers_PreservesTheStoredOnes()
+    public async Task SaveTrustedMerged_KeepsTheLocalOnlyModelChoice_AndHonoursTheWireIdleTimeout()
     {
-        // Both transcription members are LOCAL-ONLY: the wire DTO cannot carry them, so the endpoint's merged record
-        // always arrives without them. Saving it verbatim would silently reset the operator's model choice and idle
-        // timeout every time any unrelated setting was saved.
+        // The model choice is LOCAL-ONLY: the wire DTO cannot carry it, so the endpoint's merged record always arrives
+        // without it and saving that verbatim would reset it on every unrelated save. The idle timeout is on the wire now,
+        // so the endpoint's merge owns it and the service must NOT overwrite it with the stored value.
         var store = NewSubstituteStore(new StoredNodeSettings
         {
             TranscriptionSelectedModelId = "large-v3-turbo",
@@ -530,12 +530,13 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
-            ChatCacheReuse = 512
+            ChatCacheReuse = 512,
+            TranscriptionIdleTimeoutMinutes = 30
         });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("large-v3-turbo", AssertEx.NotNull(result.Settings.TranscriptionSelectedModelId));
-        AssertEx.Equal(expected: 42, result.Settings.TranscriptionIdleTimeoutMinutes);
+        AssertEx.Equal(expected: 30, result.Settings.TranscriptionIdleTimeoutMinutes);
     }
 
     [Test]

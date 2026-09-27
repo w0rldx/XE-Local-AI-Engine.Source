@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -189,29 +190,42 @@ public sealed class WebFetchServiceTests
     [Test]
     public async Task FetchAsync_TruncatesLongTextToTheCharacterBudget()
     {
-        using var handler = new StubHandler((_, _) => Task.FromResult(Text("text/markdown", new string('x', WebFetchService.MaxContentChars + 500))));
+        using var handler = new StubHandler((_, _) => Task.FromResult(Text("text/markdown", new string('x', StoredNodeSettings.DefaultWebFetchMaxContentChars + 500))));
         var service = CreateService(handler);
 
         using var result = JsonDocument.Parse(await FetchJsonAsync(service, PageUrl, allowedUrls: null));
 
         AssertEx.True(result.RootElement.GetProperty("truncated").GetBoolean());
         var content = result.RootElement.GetProperty("content").GetString()!;
-        AssertEx.Contains(content, new string('x', WebFetchService.MaxContentChars));
-        AssertEx.False(content.Contains(new string('x', WebFetchService.MaxContentChars + 1), StringComparison.Ordinal));
+        AssertEx.Contains(content, new string('x', StoredNodeSettings.DefaultWebFetchMaxContentChars));
+        AssertEx.False(content.Contains(new string('x', StoredNodeSettings.DefaultWebFetchMaxContentChars + 1), StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task FetchAsync_TruncatesToTheNodesConfiguredCharacterBudget()
+    {
+        // The budget is the live node setting, read per call, not the former constant.
+        using var handler = new StubHandler((_, _) => Task.FromResult(Text("text/plain", new string('x', 5000))));
+        var service = CreateService(handler, runtimeSettings: StubNodeRuntimeSettings.Create().WithWebAccessEnabled(true).WithWebFetchMaxContentChars(1000).Build());
+
+        var page = AssertEx.NotNull((await service.FetchAsync(PageUrl, allowedUrls: null)).Page);
+
+        AssertEx.True(page.Truncated);
+        AssertEx.Equal(expected: 1000, page.Text.Length);
     }
 
     [Test]
     public async Task FetchAsync_TruncationNeverSplitsASurrogatePair()
     {
         // The cut would land between the two halves of the emoji; a lone high surrogate is not valid text.
-        var body = new string('x', WebFetchService.MaxContentChars - 1) + "\U0001F30A" + new string('y', 100);
+        var body = new string('x', StoredNodeSettings.DefaultWebFetchMaxContentChars - 1) + "\U0001F30A" + new string('y', 100);
         using var handler = new StubHandler((_, _) => Task.FromResult(Text("text/plain", body)));
         var service = CreateService(handler);
 
         var page = AssertEx.NotNull((await service.FetchAsync(PageUrl, allowedUrls: null)).Page);
 
         AssertEx.True(page.Truncated);
-        AssertEx.Equal(WebFetchService.MaxContentChars - 1, page.Text.Length);
+        AssertEx.Equal(StoredNodeSettings.DefaultWebFetchMaxContentChars - 1, page.Text.Length);
         AssertEx.False(char.IsHighSurrogate(page.Text[^1]));
     }
 
@@ -446,12 +460,15 @@ public sealed class WebFetchServiceTests
     private static async Task<string> FetchJsonAsync(WebFetchService service, string? url, IReadOnlyList<string>? allowedUrls) =>
         WebFetchService.Serialize(await service.FetchAsync(url, allowedUrls));
 
-    private static WebFetchService CreateService(StubHandler handler, bool webAccessEnabled = true, TimeProvider? timeProvider = null)
+    private static WebFetchService CreateService(StubHandler handler,
+        bool webAccessEnabled = true,
+        TimeProvider? timeProvider = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient(WebFetchService.HttpClientName).Returns(_ => new HttpClient(handler, disposeHandler: false));
         return new WebFetchService(factory,
-            StubNodeRuntimeSettings.Create().WithWebAccessEnabled(webAccessEnabled).Build(),
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().WithWebAccessEnabled(webAccessEnabled).Build(),
             timeProvider ?? TimeProvider.System,
             NullLogger<WebFetchService>.Instance);
     }

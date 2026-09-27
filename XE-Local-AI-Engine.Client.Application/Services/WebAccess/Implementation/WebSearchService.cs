@@ -81,7 +81,9 @@ internal sealed class WebSearchService
         var backend = searxngUrl is null ? DuckDuckGoBackend : SearxngBackend;
         _logger.LogDebug("web_search via {Backend}: {Query}", backend, query);
 
-        using var budget = new CancellationTokenSource(WebFetchService.TimeBudget, _timeProvider);
+        // One time budget for both web tools: the node's WebFetchTimeoutSeconds.
+        var timeBudget = await _runtimeSettings.GetWebFetchTimeoutAsync(cancellationToken);
+        using var budget = new CancellationTokenSource(timeBudget, _timeProvider);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
         try
         {
@@ -107,7 +109,7 @@ internal sealed class WebSearchService
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return WebSearchOutcome.Refused("timeout", $"The search did not answer within {WebFetchService.TimeBudget.TotalSeconds:0} seconds.");
+            return WebSearchOutcome.Refused("timeout", $"The search did not answer within {timeBudget.TotalSeconds:0} seconds.");
         }
     }
 

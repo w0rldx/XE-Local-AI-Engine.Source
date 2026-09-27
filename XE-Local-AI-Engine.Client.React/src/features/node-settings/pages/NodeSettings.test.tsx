@@ -3,7 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
@@ -158,6 +158,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
+import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -188,9 +189,26 @@ function installJsdomEnvironmentMocks(): void {
 	Element.prototype.scrollIntoView = vi.fn();
 }
 
-// Returns the client so a test can drive a BACKGROUND refetch (an invalidation), which is a different contract from
-// the operator clicking Reload.
-function renderPage(cachedSettings?: unknown): QueryClient {
+// The route owns `?section=`; this harness stands in for it so a test can start in a section and follow the page's
+// own navigation. Returns the client so a test can drive a BACKGROUND refetch (an invalidation), which is a different
+// contract from the operator clicking Reset.
+const sectionChanges = vi.fn();
+
+function Harness({ initialSection }: { readonly initialSection: NodeSettingsSectionId }) {
+	const [section, setSection] = useState<NodeSettingsSectionId>(initialSection);
+	return (
+		<NodeSettings
+			section={section}
+			onSectionChange={(next) => {
+				sectionChanges(next);
+				setSection(next);
+			}}
+			updateChannelSelector={<div data-testid="update-channel-slot" />}
+		/>
+	);
+}
+
+function renderPage(section: NodeSettingsSectionId = "chat", cachedSettings?: unknown): QueryClient {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
@@ -208,8 +226,21 @@ function renderPage(cachedSettings?: unknown): QueryClient {
 		</QueryClientProvider>
 	);
 
-	render(<NodeSettings />, { wrapper });
+	render(<Harness initialSection={section} />, { wrapper });
 	return queryClient;
+}
+
+function openSection(section: NodeSettingsSectionId): void {
+	fireEvent.click(screen.getByTestId(`node-settings-section-${section}`));
+}
+
+function clickSwitch(testId: string): void {
+	const toggle = screen.getByTestId(testId);
+	fireEvent.click(toggle.querySelector("input[type='checkbox']") ?? toggle);
+}
+
+function saveBarStatus(): string {
+	return screen.getByTestId("node-settings-save-bar-status").textContent ?? "";
 }
 
 describe("NodeSettings (generated hey-api data layer)", () => {
@@ -290,15 +321,15 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	it("hides the Ollama endpoint field when the node reports the runtime gated off", () => {
 		ollamaProbe.data = false;
 
-		renderPage();
+		renderPage("runtimes");
 
-		// Through the real page -> NodeSettingsFieldsCard -> NodeSettingsRuntimeCard path, so the prop is proven wired.
+		// Through the real page -> NodeSettingsFieldsCard -> NodeSettingsOllamaCard path, so the prop is proven wired.
 		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
 		expect(screen.getByTestId("node-settings-ollama-disabled")).toBeTruthy();
 	});
 
 	it("keeps the Ollama endpoint field while the runtime probe has not answered", () => {
-		renderPage();
+		renderPage("runtimes");
 
 		// FAIL OPEN: `undefined` is a loading or failed probe, and must never take the setting away.
 		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
@@ -306,11 +337,12 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	});
 
 	it("mounts workspace access directly below the inbound MCP key panel", () => {
-		renderPage();
+		renderPage("integrations");
 
 		const keyPanel = screen.getByTestId("mcp-server-key-panel");
 		const workspacePanel = screen.getByTestId("mcp-workspace-allowlist-panel");
 		expect(keyPanel.compareDocumentPosition(workspacePanel) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+		expect(screen.getByTestId("node-settings-integration-links")).toBeTruthy();
 	});
 
 	afterEach(() => {
@@ -341,17 +373,19 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 	// Regression: the editable draft used to be re-seeded by an effect on every `settings` identity, so any
 	// background refetch (window focus, the post-save invalidation) silently replaced whatever the operator had typed
-	// with the server's values.
-	it("keeps in-progress edits when a background refetch returns different server values", async () => {
+	// with the server's values. The draft also has to survive moving between sections.
+	it("keeps in-progress edits across sections when a background refetch returns different server values", async () => {
 		mockSecondLoadDiffers();
 
-		const queryClient = renderPage();
-		await screen.findByDisplayValue(/600/);
-
-		const timeout = screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement;
-		const maxProcesses = screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement;
-		fireEvent.change(timeout, { target: { value: "700" } });
+		const queryClient = renderPage("runtime");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(maxProcesses.value).toBe("3"));
 		fireEvent.change(maxProcesses, { target: { value: "5" } });
+
+		openSection("chat");
+		const timeout = (await screen.findByLabelText(/Maximum message request timeout/)) as HTMLInputElement;
+		fireEvent.change(timeout, { target: { value: "700" } });
 
 		await queryClient.invalidateQueries({ queryKey: ["getNodeSettings"] });
 
@@ -360,7 +394,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() => expect(screen.getByText(/Allowed range: 7–3600 seconds\./)).toBeTruthy());
 		// The NumberInput renders its suffix inside the value.
 		expect(timeout.value).toBe("700 seconds");
-		expect(maxProcesses.value).toBe("5");
+
+		openSection("runtime");
+		expect((screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement).value).toBe("5");
 	});
 
 	// Seeding only on the first load was wrong the other way round: mounting against a cached response latched the
@@ -371,72 +407,228 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryFn: async () => ({ ...settingsResponse, maxMessageRequestTimeoutSeconds: 900, llamaMaxLoadedProcesses: 9 }),
 		});
 
-		renderPage({ ...settingsResponse, maxMessageRequestTimeoutSeconds: 120, llamaMaxLoadedProcesses: 2 });
+		renderPage("chat", { ...settingsResponse, maxMessageRequestTimeoutSeconds: 120, llamaMaxLoadedProcesses: 2 });
 
-		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
-		await waitFor(() => expect(maxProcesses.value).toBe("9"));
-		expect((screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement).value).toBe("900 seconds");
+		const timeout = (await screen.findByLabelText(/Maximum message request timeout/)) as HTMLInputElement;
+		await waitFor(() => expect(timeout.value).toBe("900 seconds"));
 
-		fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+		clickSwitch("node-settings-enable-tools");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		// The stale 120 would have ridden the body here, overwriting the newer server value.
 		await waitFor(() =>
-			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 900 } }),
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { enableTools: false, maxMessageRequestTimeoutSeconds: 900 },
+			}),
 		);
 	});
 
-	// The other half of the same contract: Reload is the operator asking for the server's values, so it is the one
-	// refetch that DOES discard the draft. Seeding once must not turn Reload into a no-op.
-	it("replaces the draft with the server's values when the operator clicks Reload", async () => {
+	// The other half of the same contract: Reset is the operator asking for the server's values, so it is the one
+	// refetch that DOES discard the draft.
+	it("replaces the draft with the server's values when the operator clicks Reset", async () => {
 		mockSecondLoadDiffers();
 
-		renderPage();
+		renderPage("chat");
 		await screen.findByDisplayValue(/600/);
 
 		const timeout = screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement;
-		const maxProcesses = screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement;
 		fireEvent.change(timeout, { target: { value: "700" } });
-		fireEvent.change(maxProcesses, { target: { value: "5" } });
 
-		fireEvent.click(screen.getByRole("button", { name: /reload/i }));
+		fireEvent.click(screen.getByTestId("node-settings-reset-button"));
 
-		await waitFor(() => expect(maxProcesses.value).toBe("9"));
-		expect(timeout.value).toBe("900 seconds");
+		await waitFor(() => expect(timeout.value).toBe("900 seconds"));
+		expect(saveBarStatus()).toBe("No unsaved changes");
+		openSection("runtime");
+		expect((screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement).value).toBe("9");
 	});
 
 	it("loads settings through the generated query options", async () => {
-		renderPage();
+		renderPage("chat");
 
 		expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled();
 		expect(await screen.findByDisplayValue(/600/)).toBeTruthy();
 	});
 
-	it("saves through the generated mutation with the timeout body", async () => {
-		renderPage();
+	it("saves an edited timeout through the generated mutation", async () => {
+		renderPage("chat");
 		await screen.findByDisplayValue(/600/);
 
-		fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+		fireEvent.change(screen.getByLabelText(/Maximum message request timeout/), { target: { value: "610" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() => {
 			// TanStack passes a second context arg to mutationFn; assert only the request variables.
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { maxMessageRequestTimeoutSeconds: 600 },
+				body: { maxMessageRequestTimeoutSeconds: 610 },
 			});
 		});
 	});
 
-	// Local-runtime cards relocated from the model-fit advisor (llama.cpp now a single merged card).
-	it("renders the merged llama.cpp runtime card and the Hugging Face token card", async () => {
-		renderPage();
+	// The save bar: one save point, counts from the same diff as the save body, Save disabled while nothing changed.
+	it("counts unsaved and restart-gated changes in the save bar and disables Save while clean", async () => {
+		renderPage("runtime");
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		expect(saveBarStatus()).toBe("No unsaved changes");
+		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(true);
+		expect(screen.getByTestId("node-settings-save-bar-status").getAttribute("role")).toBe("status");
+
+		// llamaMaxLoadedProcesses is restart-gated; enableTools is live.
+		fireEvent.change(maxProcesses, { target: { value: "5" } });
+		openSection("chat");
+		clickSwitch("node-settings-enable-tools");
+
+		expect(saveBarStatus()).toBe("2 unsaved changes · 1 need a restart");
+		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(false);
+		// Each section with an edit carries its own count in the nav.
+		expect(screen.getByTestId("node-settings-section-runtime").textContent).toContain("1");
+
+		// One Save sends both, wherever they were edited.
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { llamaMaxLoadedProcesses: 5, enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		// A single save point: the old second Save button is gone.
+		expect(screen.queryByTestId("node-settings-fields-save-button")).toBeNull();
+	});
+
+	it("badges restart-gated fields in place of the old hint text", async () => {
+		renderPage("runtime");
+
+		expect(await screen.findByTestId("node-settings-restart-badge-llamaMaxLoadedProcesses")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-keepModelWarmEnabled")).toBeNull();
+	});
+
+	// Section navigation: a landmark with aria-current, driven through the route's search param.
+	it("switches sections through the nav, marks the active one and reports it to the route", async () => {
+		renderPage("general");
+
+		const nav = screen.getByRole("navigation", { name: "Settings sections" });
+		expect(within(nav).getByTestId("node-settings-section-general").getAttribute("aria-current")).toBe("page");
+		expect(screen.getByTestId("node-settings-section-content-general")).toBeTruthy();
+
+		openSection("knowledge");
+
+		expect(sectionChanges).toHaveBeenCalledWith("knowledge");
+		expect(screen.getByTestId("node-settings-section-knowledge").getAttribute("aria-current")).toBe("page");
+		expect(screen.getByTestId("node-settings-section-general").getAttribute("aria-current")).toBeNull();
+		expect(await screen.findByTestId("node-settings-web-access-card")).toBeTruthy();
+	});
+
+	it("lists only the everyday sections in Simple mode until advanced sections are shown", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, uiMode: "simple" }),
+		});
+
+		renderPage("general");
+
+		const toggle = await screen.findByTestId("node-settings-advanced-sections-toggle");
+		for (const everyday of ["general", "chat", "models", "knowledge", "voice", "privacy"]) {
+			expect(screen.getByTestId(`node-settings-section-${everyday}`)).toBeTruthy();
+		}
+		for (const advanced of ["runtime", "runtimes", "integrations", "workspaces", "usage"]) {
+			expect(screen.queryByTestId(`node-settings-section-${advanced}`)).toBeNull();
+		}
+
+		fireEvent.click(toggle);
+
+		expect(screen.getByTestId("node-settings-section-runtime")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-section-usage")).toBeTruthy();
+	});
+
+	it("keeps a linked advanced section reachable in Simple mode", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, uiMode: "simple" }),
+		});
+
+		renderPage("usage");
+
+		await screen.findByTestId("node-settings-advanced-sections-toggle");
+		expect(screen.getByTestId("node-settings-section-usage").getAttribute("aria-current")).toBe("page");
+		expect(screen.getByTestId("node-settings-usage-rates-card")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-section-runtime")).toBeNull();
+	});
+
+	// D4: the interface mode and the node voice fields are draft fields now — no instant PUT.
+	it("saves the interface mode through the save bar and seeds the shared query the nav reads", async () => {
+		// A server that keeps what it was sent, so the post-save refetch agrees with the seeded cache.
+		let storedMode = "advanced";
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, uiMode: storedMode }),
+		});
+		generatedMock.saveFn.mockImplementation(async ({ body }: { body: { uiMode?: string } }) => {
+			storedMode = body.uiMode ?? storedMode;
+			return { ...settingsResponse, uiMode: storedMode } as SaveNodeSettingsResponse;
+		});
+
+		const queryClient = renderPage("general");
+		await waitFor(() => expect((screen.getByRole("radio", { name: "Advanced" }) as HTMLInputElement).checked).toBe(true));
+
+		fireEvent.click(screen.getByRole("radio", { name: "Simple" }));
+
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+		// This file's i18n stub renders the `_other` default for every count.
+		expect(saveBarStatus()).toBe("1 unsaved changes");
+
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { uiMode: "simple", maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		await waitFor(() => expect((queryClient.getQueryData(["getNodeSettings"]) as { uiMode?: string }).uiMode).toBe("simple"));
+	});
+
+	it("saves the node voice gate through the save bar instead of an instant write", async () => {
+		renderPage("voice");
+
+		const gate = (await screen.findByTestId("voice-settings-node-gate-switch")) as HTMLInputElement;
+		await waitFor(() => expect(gate.disabled).toBe(false));
+		fireEvent.click(gate);
+
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { voiceFeatureEnabled: true, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+	});
+
+	it("groups the per-browser preferences in General and labels them as this browser only", () => {
+		renderPage("general");
+
+		const card = screen.getByTestId("node-settings-browser-preferences-card");
+		expect(within(card).getByTestId("developer-mode-switch")).toBeTruthy();
+		expect(within(card).getByTestId("node-settings-browser-only-badge").textContent).toBe("This browser only");
+		expect(screen.getByTestId("node-settings-ui-mode-card")).toBeTruthy();
+	});
+
+	it("puts the route-supplied update-channel picker into Privacy & updates", () => {
+		renderPage("privacy");
+
+		expect(within(screen.getByTestId("node-settings-external-access-card")).getByTestId("update-channel-slot")).toBeTruthy();
+	});
+
+	// Action panels keep their own endpoints and sit in their sections, outside the save bar.
+	it("renders the llama.cpp runtime card in Runtimes & builds", async () => {
+		renderPage("runtimes");
 
 		// The merged runtime card shows the installed tag + variant on mount (no operator click / version probe).
 		expect(await screen.findByTestId("llamacpp-updater-card")).toBeTruthy();
 		await waitFor(() => expect(screen.getByTestId("llamacpp-updater-installed").textContent).toContain("b1000"));
-		expect(screen.getByTestId("model-fit-hf-token-card")).toBeTruthy();
 	});
 
 	it("ensures the selected llama.cpp variant through the generated mutation", async () => {
-		renderPage();
+		renderPage("runtimes");
 		// The ensure control only renders once the runtime status has resolved.
 		const ensureButton = await screen.findByTestId("llamacpp-updater-ensure-button");
 
@@ -452,7 +644,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryFn: async () => ({ hasToken: true }),
 		});
 
-		renderPage();
+		renderPage("models");
 
 		const input = (await screen.findByTestId("model-fit-hf-token-input")) as HTMLInputElement;
 		// PasswordInput renders a type=password field — the value is masked, never plain text.
@@ -463,7 +655,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	it("saves the HF token draft through the generated mutation", async () => {
 		useHfTokenStore.setState({ tokenDraft: "hf_secret" });
 
-		renderPage();
+		renderPage("models");
 		await screen.findByTestId("model-fit-hf-token-card");
 
 		fireEvent.click(screen.getByTestId("model-fit-hf-token-save"));
@@ -472,37 +664,20 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() => expect(generatedMock.setTokenFn.mock.calls[0]?.[0]).toEqual({ body: { token: "hf_secret" } }));
 	});
 
-	// Migrated appsettings knobs: developer-mode gating and zod validation.
+	// Developer-mode gating: the switch lives in General, the gated card in Chat & agents.
 	it("hides developer-only fields when developer mode is off and reveals them when on", async () => {
 		localStorage.setItem("xe-developer-mode", "false");
 		useDeveloperModeStore.setState({ developerMode: false });
-		renderPage();
+		renderPage("chat");
 		await screen.findByTestId("node-settings-local-chat-card");
 
-		// Always-shown fields render; the developer-only advanced card does not.
 		expect(screen.getByTestId("node-settings-default-model")).toBeTruthy();
 		expect(screen.queryByTestId("node-settings-advanced-card")).toBeNull();
 
-		// Flip developer mode on via the page switch -> the advanced card mounts. Mantine puts data-testid on the
-		// checkbox input itself.
-		const switchEl = screen.getByTestId("developer-mode-switch");
-		fireEvent.click(switchEl.querySelector("input[type='checkbox']") ?? switchEl);
+		openSection("general");
+		clickSwitch("developer-mode-switch");
+		openSection("chat");
 		await waitFor(() => expect(screen.getByTestId("node-settings-advanced-card")).toBeTruthy());
-	});
-
-	it("merges the migrated-fields card with the timeout and sends only changed fields on save", async () => {
-		renderPage();
-		// Wait for the loaded settings to sync into the form (timeout 600).
-		await screen.findByDisplayValue(/600/);
-		await screen.findByTestId("node-settings-runtime-card");
-
-		// The migrated-fields card renders and its dedicated save button drives the same merged PUT as the timeout
-		// card. With no migrated field edited, only the timeout is sent (optional-request semantics: omit = unchanged).
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
-
-		await waitFor(() =>
-			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 600 } }),
-		);
 	});
 
 	it("offers only installed llama.cpp chat models in the keep-warm picker", async () => {
@@ -548,7 +723,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			}),
 		});
 
-		renderPage();
+		renderPage("runtime");
 		const toggle = await screen.findByTestId("node-settings-keep-model-warm-enabled");
 		fireEvent.click(toggle);
 		const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
@@ -577,7 +752,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryFn: async () => ({ items: [], isAvailable: true }),
 		});
 
-		renderPage();
+		renderPage("runtime");
 
 		await waitFor(() => {
 			const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
@@ -585,7 +760,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 		expect(await screen.findByText("The selected model deleted-model is no longer installed.")).toBeTruthy();
 
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		// An unrelated edit makes the draft saveable; the unavailable model still blocks the save.
+		fireEvent.change(screen.getByTestId("node-settings-chat-cache-reuse"), { target: { value: "300" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
@@ -621,7 +798,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			}),
 		});
 
-		renderPage();
+		renderPage("runtime");
 
 		expect(await screen.findByText("The selected model MODEL-A is no longer installed.")).toBeTruthy();
 		const listbox = screen.getByRole("listbox", { name: "Model to keep warm", hidden: true });
@@ -636,12 +813,12 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, huggingFaceDefaultQuant: "Q4_K_M" }),
 		});
-		renderPage();
+		renderPage("models");
 		await screen.findByDisplayValue("Q4_K_M");
 
 		// huggingFaceDefaultQuant is seeded once into the HF options at composition.
 		fireEvent.change(screen.getByTestId("node-settings-hf-default-quant"), { target: { value: "Q5_K_M" } });
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalled());
 		await waitFor(() =>
@@ -656,13 +833,12 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, defaultModelName: "loaded-model" }),
 		});
-		renderPage();
+		renderPage("chat");
 		await screen.findByDisplayValue("loaded-model");
 
 		// enableTools is re-read per send/regenerate — no restart involved.
-		const toggle = screen.getByTestId("node-settings-enable-tools");
-		fireEvent.click(toggle.querySelector("input[type='checkbox']") ?? toggle);
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		clickSwitch("node-settings-enable-tools");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
@@ -681,13 +857,13 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, webAccessEnabled: false, webSearchSearxngUrl: "http://localhost:8888" }),
 		});
-		renderPage();
+		renderPage("knowledge");
 		await screen.findByDisplayValue("http://localhost:8888");
 
 		const toggle = screen.getByTestId("node-settings-web-access-enabled");
 		fireEvent.click(toggle.querySelector("input[type='checkbox']") ?? toggle);
 		fireEvent.change(screen.getByTestId("node-settings-web-search-searxng-url"), { target: { value: "" } });
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
@@ -696,12 +872,14 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		);
 	});
 
-	it("refuses to save a relative SearXNG URL and flags the field", async () => {
-		renderPage();
-		await screen.findByDisplayValue(/600/);
+	it("refuses to save a relative SearXNG URL, returns to its section and flags the field", async () => {
+		renderPage("knowledge");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
 
 		fireEvent.change(screen.getByTestId("node-settings-web-search-searxng-url"), { target: { value: "/search" } });
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		// Saving from another section still lands the operator on the invalid field.
+		openSection("chat");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		// This file mocks i18n, so the field's invalid state is asserted here; the bundle copy is asserted in
 		// NodeSettingsWebAccessCard.test.tsx.
@@ -713,7 +891,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 	// One-click recommended-reranker download: response-state handling.
 	it("downloads the recommended reranker on a fresh start — shows progress and duplicate-guards the button", async () => {
-		renderPage();
+		renderPage("knowledge");
 		const button = await screen.findByTestId("node-settings-reranker-download-recommended");
 
 		fireEvent.click(button);
@@ -736,7 +914,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			alreadyInFlight: false,
 		});
 
-		renderPage();
+		renderPage("knowledge");
 		const button = await screen.findByTestId("node-settings-reranker-download-recommended");
 
 		fireEvent.click(button);
@@ -751,7 +929,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	// One-click recommended-embedding download: response-state handling. Mirrors the reranker download above — the
 	// embedding model is not a node-settings field, so this only exercises the button + shared progress feed.
 	it("downloads the recommended embedding model on a fresh start — shows progress and duplicate-guards the button", async () => {
-		renderPage();
+		renderPage("knowledge");
 		const button = await screen.findByTestId("node-settings-embedding-download-recommended");
 
 		fireEvent.click(button);
@@ -772,7 +950,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			alreadyInFlight: false,
 		});
 
-		renderPage();
+		renderPage("knowledge");
 		const button = await screen.findByTestId("node-settings-embedding-download-recommended");
 
 		fireEvent.click(button);
@@ -796,7 +974,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				autoProvisionFirstRunModel: false,
 			}),
 		});
-		renderPage();
+		renderPage("privacy");
 		await screen.findByDisplayValue("Offline / Manual");
 
 		// Pick Recommended, then turn provisioning back off by hand. Sending the profile too would let the server honour
@@ -807,7 +985,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		fireEvent.click(within(profileListbox).getByRole("option", { name: "Recommended", hidden: true }));
 		const provisioning = screen.getByTestId("node-settings-auto-provision-first-run-model");
 		fireEvent.click(provisioning.querySelector("input[type='checkbox']") ?? provisioning);
-		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
@@ -816,6 +994,39 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 					autoCheckRuntimeUpdates: true,
 					maxMessageRequestTimeoutSeconds: 600,
 				},
+			}),
+		);
+	});
+
+	it("refuses a default knowledge result count above the maximum and flags it in its section", async () => {
+		renderPage("knowledge");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.change(await screen.findByTestId("node-settings-knowledge-max-results"), { target: { value: "3" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(screen.getByTestId("node-settings-knowledge-default-results").getAttribute("aria-invalid")).toBe("true"),
+		);
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
+	it("saves a return to automatic prompt-cache memory as the -1 reset", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, llamaChatCacheRamMiB: 2048 }),
+		});
+		renderPage("runtime");
+
+		await screen.findByDisplayValue("2048 MiB");
+		fireEvent.click(screen.getByRole("radio", { name: "Automatic" }));
+
+		expect(saveBarStatus()).toBe("1 unsaved changes · 1 need a restart");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { llamaChatCacheRamMiB: -1, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
 	});

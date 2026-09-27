@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>search_knowledge_base</c> (ClientLocal), which despite the location
@@ -19,26 +20,28 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private const int DefaultLimit = 5;
     private const int MinLimit = 1;
-    private const int MaxLimit = 20;
 
     /// <summary>
     ///     Upper bound on the total hit-content characters serialized into one response, so a wide search cannot dump an
     ///     unbounded payload into the model context.
     /// </summary>
     /// <remarks>
-    ///     A search may return up to <see cref="MaxLimit" /> neighbor-expanded hits. Mirrors
+    ///     A search may return up to the node's <c>KnowledgeSearchMaxResults</c> neighbor-expanded hits. Mirrors
     ///     <c>ReadDocumentToolHandler.MaxContentChars</c>; truncation is flagged in the payload.
     /// </remarks>
     private const int MaxContentChars = 50_000;
 
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly bool _toolsEnabled;
 
-    public SearchKnowledgeBaseToolHandler(IServiceScopeFactory scopeFactory, IOptions<KnowledgeBaseOptions> options)
+    public SearchKnowledgeBaseToolHandler(IServiceScopeFactory scopeFactory,
+        IOptions<KnowledgeBaseOptions> options,
+        INodeRuntimeSettings runtimeSettings)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(options);
         _toolsEnabled = options.Value.AgentToolsEnabled;
     }
@@ -99,7 +102,9 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             documentId = parsed;
         }
 
-        var limit = request.Limit is { } requested ? Math.Clamp(requested, MinLimit, MaxLimit) : DefaultLimit;
+        // Live node settings; the default is clamped too, so a hand-edited file with default > max still honours the ceiling.
+        var maxLimit = await _runtimeSettings.GetKnowledgeSearchMaxResultsAsync(cancellationToken);
+        var limit = Math.Clamp(request.Limit ?? await _runtimeSettings.GetKnowledgeSearchDefaultResultsAsync(cancellationToken), MinLimit, maxLimit);
         if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
         {
             return "search_knowledge_base 'collectionId' is invalid.";

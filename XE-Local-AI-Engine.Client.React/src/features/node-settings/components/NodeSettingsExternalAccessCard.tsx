@@ -1,5 +1,6 @@
 import { Card, Group, Select, Stack, Switch, Text, Title } from "@mantine/core";
 import { IconWorld } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ExternalAccessPreset, NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -10,12 +11,14 @@ interface Props {
 	// A profile pick is a command, not a field edit: it moves all three switches together and marks the preset pending
 	// so the save carries the profile NAME alone and the server derives the triple.
 	readonly onApplyPreset: (preset: ExternalAccessPreset) => void;
+	// The application update-channel picker. It saves on its own endpoint the moment it changes, outside the save bar.
+	readonly updateChannelSelector?: ReactNode;
 }
 
 // The three settings that decide whether this node reaches the internet on its own, plus the profile that sets all
 // three at once. No field here is restart-gated (the services read the setting live; the check itself runs once per
 // process, which is what the "at startup" wording in the descriptions means), so no restart hint is rendered.
-export function NodeSettingsExternalAccessCard({ form, onChange, onApplyPreset }: Props) {
+export function NodeSettingsExternalAccessCard({ form, onChange, onApplyPreset, updateChannelSelector }: Props) {
 	const { t } = useTranslation();
 
 	// `custom` is display-only. The server stamps it whenever a save carries individual switches and no profile, so the
@@ -75,7 +78,7 @@ export function NodeSettingsExternalAccessCard({ form, onChange, onApplyPreset }
 					label={t("pages.nodeSettings.fields.autoCheckRuntimeUpdates.label", "Check for llama.cpp runtime updates")}
 					description={t(
 						"pages.nodeSettings.fields.autoCheckRuntimeUpdates.description",
-						"Look for a newer llama.cpp runtime build at startup. You can always check by hand from the runtime panel below.",
+						"Look for a newer llama.cpp runtime build at startup. You can always check by hand from the llama.cpp runtime card under Runtimes & builds.",
 					)}
 					checked={form.autoCheckRuntimeUpdates}
 					onChange={(event) => onChange("autoCheckRuntimeUpdates", event.currentTarget.checked)}
@@ -91,6 +94,7 @@ export function NodeSettingsExternalAccessCard({ form, onChange, onApplyPreset }
 					onChange={(event) => onChange("autoProvisionFirstRunModel", event.currentTarget.checked)}
 					data-testid="node-settings-auto-provision-first-run-model"
 				/>
+				{updateChannelSelector}
 			</Stack>
 		</Card>
 	);

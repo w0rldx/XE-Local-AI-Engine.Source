@@ -1096,6 +1096,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             reader,
             new FakeModelTrustResolver(),
             options,
+            StubNodeRuntimeSettings.Create().WithAgentHomeMaxRunSeconds(options.Value.MaxRunSeconds).Build(),
             clock,
             NullLoggerFactory.Instance,
             NullLogger<AgentHomeGoalExecutor>.Instance);

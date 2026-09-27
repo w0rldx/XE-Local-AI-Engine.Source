@@ -368,10 +368,11 @@ invocation's value, not an accumulation: each run overwrites the captured local,
 persisted record is the last one. `ApplyAgenticPatchAsync` relies on exactly that to name the PREVIOUS default
 model for its cache invalidation.
 
-**LOCAL-ONLY members ride along from the stored record**, never from the caller: `MachineKey`,
-`TranscriptionSelectedModelId` and `TranscriptionIdleTimeoutMinutes` are deliberately absent from the wire DTO, so
+**LOCAL-ONLY members ride along from the stored record**, never from the caller: `MachineKey` and
+`TranscriptionSelectedModelId` are deliberately absent from the wire DTO, so
 a caller that builds a `StoredNodeSettings` out of a request has no value to supply and saving its record verbatim
-would erase them. For `MachineKey` that is silent data loss with a long tail: the next start mints a fresh key and
+would erase them. `TranscriptionIdleTimeoutMinutes` is on the wire DTO
+and no longer needs this carry-over. For `MachineKey` that is silent data loss with a long tail: the next start mints a fresh key and
 every frozen inference profile — keyed by machine key — is orphaned while still reading as frozen. The carry-over
 is applied both in `SaveTrustedMergedAsync` (so the record a call VALIDATES and RETURNS carries the key, including
 on rejection paths that never reach a write) and inside the store mutation, where it is taken from the *latest*

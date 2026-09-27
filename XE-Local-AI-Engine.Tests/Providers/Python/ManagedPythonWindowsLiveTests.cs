@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Python;
 
 using System.Collections.Concurrent;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
@@ -11,6 +10,7 @@ using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
+using Win32Exception = System.ComponentModel.Win32Exception;
 
 /// <summary>
 ///     LIVE Windows evidence for ADR 0016 M4: the shared layer provisions a throwaway pure-Python profile, a cancel
@@ -22,7 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </remarks>
 [RunOn(OS.Windows)]
 [SupportedOSPlatform("windows")]
-[TUnit.Core.Category(TestCategories.ExternalInfra)]
+[Category(TestCategories.ExternalInfra)]
 public sealed class ManagedPythonWindowsLiveTests : IDisposable
 {
     private const string EnabledVariable = "XE_COMPUTE_LIVE";

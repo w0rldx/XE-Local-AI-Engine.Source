@@ -1,7 +1,7 @@
-import { Button, Group, Loader, NumberInput, Text } from "@mantine/core";
-import { IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { Box, Grid, Group, Loader, NumberInput, Stack, Text } from "@mantine/core";
+import { IconMessage, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -17,6 +17,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { useUiMode } from "@/core/layout/hooks/useUiMode";
 import { useOllamaRuntimeConfigured } from "@/core/runtime/hooks/useOllamaRuntimeConfigured";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -24,16 +25,19 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
+import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { ManagedPythonCard } from "@/features/node-settings/components/ManagedPythonCard";
 import { NodeChangePasswordCard } from "@/features/node-settings/components/NodeChangePasswordCard";
 import {
-	NodeSettingsAuxiliaryPanels,
-	NodeSettingsDeveloperModePanel,
+	NodeSettingsBrowserPreferencesCard,
+	NodeSettingsIntegrationPanels,
 } from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
+import { NodeSettingsBrowserOnlyBadge } from "@/features/node-settings/components/NodeSettingsBrowserOnlyBadge";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
-import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
+import { NodeSettingsSaveBar } from "@/features/node-settings/components/NodeSettingsSaveBar";
+import { NodeSettingsSectionNav } from "@/features/node-settings/components/NodeSettingsSectionNav";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
 import { useNodeSettingsModelOptions } from "@/features/node-settings/hooks/useNodeSettingsModelOptions";
@@ -44,6 +48,7 @@ import {
 	type ExternalAccessPreset,
 	isExternalAccessBooleanField,
 	type NodeSettingsFieldsForm,
+	summarizePendingChanges,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
 	touchesRestartGatedField,
@@ -53,6 +58,13 @@ import {
 	nodeSettingsDefaults,
 	toValidNodeSettingsTimeoutSeconds,
 } from "@/features/node-settings/models/NodeSettingsModel";
+import {
+	defaultNodeSettingsSection,
+	isAdvancedNodeSettingsSection,
+	type NodeSettingsSectionId,
+	nodeSettingsSectionIds,
+	nodeSettingsSectionOf,
+} from "@/features/node-settings/models/NodeSettingsSections";
 import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
@@ -61,7 +73,16 @@ function errorMessage(error: unknown): string {
 	return apiErrorMessage(error, "Unexpected node settings error");
 }
 
-export function NodeSettings() {
+interface NodeSettingsProps {
+	// The active section, from the route's `?section=` search param. Absent means the page keeps its own selection,
+	// starting at General.
+	readonly section?: NodeSettingsSectionId;
+	readonly onSectionChange?: (section: NodeSettingsSectionId) => void;
+	// The application update-channel picker. It lives in another feature, so the route supplies it.
+	readonly updateChannelSelector?: ReactNode;
+}
+
+export function NodeSettings({ section, onSectionChange, updateChannelSelector }: NodeSettingsProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const {
@@ -73,12 +94,18 @@ export function NodeSettings() {
 	} = useQuery(withResponseValidation(getNodeSettingsOptions()));
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
+	const savedUiMode = useUiMode();
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 	);
 
-	// The migrated appsettings knobs. `fieldsForm` is the editable draft; `fieldsBaseline` is the last-loaded
-	// authoritative state — only fields that differ from the baseline are sent on save (optional-request semantics).
+	const [ownSection, setOwnSection] = useState<NodeSettingsSectionId>(defaultNodeSettingsSection);
+	const activeSection = section ?? ownSection;
+	const selectSection = onSectionChange ?? setOwnSection;
+	const [showAdvancedSections, setShowAdvancedSections] = useState(false);
+
+	// The whole page is ONE draft. `fieldsForm` is the editable draft; `fieldsBaseline` is the last-loaded authoritative
+	// state — only fields that differ from the baseline are sent on save (optional-request semantics).
 	const [fieldsForm, setFieldsForm] = useState<NodeSettingsFieldsForm>(() => toNodeSettingsFieldsForm(undefined));
 	const [fieldsBaseline, setFieldsBaseline] = useState<NodeSettingsFieldsForm>(() => toNodeSettingsFieldsForm(undefined));
 	// The server state the draft was last seeded from, and whether the operator has since touched anything. Together
@@ -100,7 +127,7 @@ export function NodeSettings() {
 	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
 
 	// Replaces the draft (and the save baseline) with a server state. Every deliberate "take the server's values" path
-	// goes through here: the first load, an explicit Reload, and a successful save.
+	// goes through here: the first load, Reset, and a successful save.
 	const seedDraft = (loaded: NodeSettingsResponse | SaveNodeSettingsResponse): void => {
 		const form = toNodeSettingsFieldsForm(loaded);
 		setFieldsForm(form);
@@ -108,16 +135,14 @@ export function NodeSettings() {
 		setSeededSource(loaded);
 		setIsDirty(false);
 		setPendingPreset(null);
-		if (loaded.maxMessageRequestTimeoutSeconds !== undefined) {
-			setTimeoutSeconds(loaded.maxMessageRequestTimeoutSeconds);
-		}
+		setTimeoutSeconds(loaded.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
 	};
 
 	// Adopt every newer server state while the draft is PRISTINE. Seeding only once was wrong in both directions: the
 	// page can mount against a cached response, seed from it, and then ignore the mount refetch's fresher values — a
 	// Save would submit the stale ones straight back over the newer server state. Once the operator has typed, adoption
 	// stops, because a background refetch (window focus, the post-save invalidation) must never discard their edits.
-	// Reload re-seeds explicitly below and Save re-seeds from its own response, so both still take the server's values.
+	// Reset re-seeds explicitly below and Save re-seeds from its own response, so both still take the server's values.
 	// Adjusted during render rather than in an effect so the values are on the paint, not one paint later.
 	if (settings !== undefined && settings !== seededSource && !isDirty) {
 		seedDraft(settings);
@@ -130,6 +155,24 @@ export function NodeSettings() {
 		() => toValidNodeSettingsTimeoutSeconds(timeoutSeconds, minTimeout, maxTimeout),
 		[maxTimeout, minTimeout, timeoutSeconds],
 	);
+	const timeoutBaseline = seededSource?.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds;
+
+	// The save body and the save bar's counts come from the same diff, so the bar never promises a change Save skips.
+	// Developer-only fields are included ONLY when developer mode is on (off-mode their cards are unmounted).
+	const draftRequest = useMemo(
+		() => buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset),
+		[fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset],
+	);
+	const pendingChanges = summarizePendingChanges(draftRequest, fieldsForm, fieldsBaseline);
+	const timeoutChanged = timeoutSeconds !== timeoutBaseline;
+	const changedFields: string[] = [...pendingChanges.changed, ...(timeoutChanged ? ["maxMessageRequestTimeoutSeconds"] : [])];
+	const dirtyCounts = new Map<NodeSettingsSectionId, number>();
+	for (const field of changedFields) {
+		const fieldSection = nodeSettingsSectionOf(field);
+		if (fieldSection !== undefined) {
+			dirtyCounts.set(fieldSection, (dirtyCounts.get(fieldSection) ?? 0) + 1);
+		}
+	}
 
 	const handleFieldChange = <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]): void => {
 		setIsDirty(true);
@@ -174,40 +217,49 @@ export function NodeSettings() {
 						)
 					: t("pages.nodeSettings.saved", "Node settings saved. Capability reporting was requested for the worker connection."),
 			);
-			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
 			seedDraft(updatedSettings);
 			setFieldErrors({});
+			// Seeding the shared query is also what re-renders the navigation rail after a uiMode change, and what the
+			// voice runtime reads its gate from.
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
 		},
 		onError: (error) => toast.error(errorMessage(error)),
 	});
 
-	// Builds the merged PUT body (timeout + only-changed migrated fields). Developer-only fields are included ONLY when
-	// developer mode is on (off-mode the advanced card is unmounted, so an off-mode save must not touch them).
+	// A validation failure can sit in a section the operator is not looking at; take them to the first one.
+	const showErrors = (errors: Readonly<Record<string, string>>): void => {
+		setFieldErrors(errors);
+		toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+		const firstSection = Object.keys(errors)
+			.map(nodeSettingsSectionOf)
+			.find((candidate) => candidate !== undefined);
+		if (firstSection !== undefined && firstSection !== activeSection) {
+			selectSection(firstSection);
+		}
+	};
+
 	const handleSave = (): void => {
 		if (timeoutToSave === undefined) {
+			selectSection("chat");
 			return;
 		}
 		if (modelOptions.keepWarmModelUnavailable) {
-			setFieldErrors((current) => ({ ...current, keepModelWarmModelName: "unavailableKeepWarmModel" }));
-			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+			showErrors({ ...fieldErrors, keepModelWarmModelName: "unavailableKeepWarmModel" });
 			return;
 		}
-		const { body, errors } = buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset);
-		if (Object.keys(errors).length > 0) {
-			setFieldErrors(errors);
-			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+		if (Object.keys(draftRequest.errors).length > 0) {
+			showErrors(draftRequest.errors);
 			return;
 		}
 		setFieldErrors({});
-		saveMutation.mutate({ body: { ...body, maxMessageRequestTimeoutSeconds: timeoutToSave } });
+		saveMutation.mutate({ body: { ...draftRequest.body, maxMessageRequestTimeoutSeconds: timeoutToSave } });
 	};
 
-	// Reload is the operator asking for the server's values, so it is the one refetch that DOES replace the draft. It
+	// Reset is the operator asking for the server's values, so it is the one refetch that DOES replace the draft. It
 	// seeds from the refetch's own result rather than clearing the seeded flag, which would re-seed from the stale
 	// cached state one render before the fresh response arrives.
-	const handleReload = async (): Promise<void> => {
+	const handleReset = async (): Promise<void> => {
 		const reloaded = await settingsRefetch();
 		if (reloaded.data !== undefined) {
 			seedDraft(reloaded.data);
@@ -215,11 +267,8 @@ export function NodeSettings() {
 		}
 	};
 
-	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
-
 	// HF token: the draft lives in a store so it survives a remount; the token itself is write-only (never read back
-	// into the draft). The llama.cpp runtime card (installed tag/variant, recommended/upstream, ensure/update) is fully
-	// self-contained in LlamaCppUpdaterPanel and owns its own data layer.
+	// into the draft). It saves on its own endpoint, outside the save bar.
 	const tokenDraft = useHfTokenStore((state) => state.tokenDraft);
 	const setTokenDraft = useHfTokenStore((state) => state.actions.setTokenDraft);
 	const clearTokenDraft = useHfTokenStore((state) => state.actions.clearTokenDraft);
@@ -249,6 +298,145 @@ export function NodeSettings() {
 		});
 	};
 
+	// Simple UI mode lists the everyday sections; the advanced ones sit behind a toggle but stay reachable by URL, so a
+	// linked advanced section is listed even while the toggle is off.
+	const isSimpleMode = savedUiMode === "simple";
+	const visibleSections = nodeSettingsSectionIds.filter(
+		(candidate) =>
+			!isSimpleMode || showAdvancedSections || candidate === activeSection || !isAdvancedNodeSettingsSection(candidate),
+	);
+
+	const fields = (
+		<NodeSettingsFieldsCard
+			section={activeSection}
+			form={fieldsForm}
+			bounds={fieldBounds}
+			errors={modelOptions.visibleErrors}
+			onChange={handleFieldChange}
+			onApplyPreset={handleApplyExternalAccessPreset}
+			showDeveloperFields={developerMode}
+			draftModelOptions={modelOptions.draftModelOptions}
+			keepWarmModelOptions={modelOptions.keepWarmModelOptions}
+			autoEffortFastModelOptions={modelOptions.autoEffortFastModelOptions}
+			rerankerModelOptions={modelOptions.rerankerModelOptions}
+			onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
+			isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}
+			isRecommendedRerankerInFlight={recommendedDownloads.reranker.isInFlight}
+			onDownloadRecommendedEmbedding={recommendedDownloads.embedding.start}
+			isDownloadRecommendedEmbeddingPending={recommendedDownloads.embedding.isPending}
+			isRecommendedEmbeddingInFlight={recommendedDownloads.embedding.isInFlight}
+			ollamaRuntimeDisabled={ollamaRuntimeDisabled}
+			updateChannelSelector={updateChannelSelector}
+		/>
+	);
+
+	const renderSection = (): ReactNode => {
+		switch (activeSection) {
+			case "general":
+				return (
+					<>
+						{fields}
+						<NodeSettingsBrowserPreferencesCard developerMode={developerMode} onToggleDeveloperMode={toggleDeveloperMode} />
+						<NodeChangePasswordCard />
+					</>
+				);
+			case "chat":
+				return (
+					<>
+						<SectionCard
+							title={t("pages.nodeSettings.localChatRuntime.title", "Local chat runtime")}
+							icon={<IconMessage size={22} />}
+						>
+							<Text c="dimmed">
+								{t(
+									"pages.nodeSettings.localChatRuntime.description",
+									"The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
+								)}
+							</Text>
+							<NumberInput
+								label={t("pages.nodeSettings.localChatRuntime.timeoutLabel", "Maximum message request timeout")}
+								description={t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
+									min: minTimeout,
+									max: maxTimeout,
+								})}
+								suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
+								min={minTimeout}
+								max={maxTimeout}
+								step={5}
+								allowDecimal={false}
+								value={timeoutSeconds}
+								onChange={handleTimeoutChange}
+								error={
+									timeoutToSave === undefined
+										? t("pages.nodeSettings.localChatRuntime.timeoutError", "Enter a whole number from {{min}} to {{max}}.", {
+												min: minTimeout,
+												max: maxTimeout,
+											})
+										: undefined
+								}
+							/>
+						</SectionCard>
+						{fields}
+					</>
+				);
+			case "runtimes":
+				return (
+					<>
+						<LlamaCppUpdaterPanel />
+						<SourceBuildCard />
+						<ImageRuntimeSourceBuildCard />
+						<WhisperRuntimeSourceBuildCard />
+						<ManagedPythonCard />
+						{fields}
+					</>
+				);
+			case "models":
+				return (
+					<>
+						{fields}
+						<HfTokenPanel
+							hasToken={hfTokenQuery.data ?? false}
+							isLoading={hfTokenQuery.isLoading}
+							tokenDraft={tokenDraft}
+							onTokenDraftChange={setTokenDraft}
+							onSave={handleSaveToken}
+							onClear={handleClearToken}
+							isSaving={setHfToken.isPending}
+						/>
+					</>
+				);
+			case "knowledge":
+				return (
+					<>
+						{fields}
+						<DownloadProgressPanel
+							inFlight={recommendedDownloads.progressNames}
+							downloadStatuses={recommendedDownloads.downloadStatuses}
+							onCancel={recommendedDownloads.cancelDownload}
+							cancellingModelName={recommendedDownloads.cancellingModelName}
+						/>
+					</>
+				);
+			case "voice":
+				return (
+					<>
+						<VoiceSettingsCard
+							voiceFeatureEnabled={fieldsForm.voiceFeatureEnabled}
+							defaultVoiceProfile={fieldsForm.defaultVoiceProfile}
+							onVoiceFeatureEnabledChange={(enabled) => handleFieldChange("voiceFeatureEnabled", enabled)}
+							onDefaultVoiceProfileChange={(profile) => handleFieldChange("defaultVoiceProfile", profile)}
+							browserOnlyBadge={<NodeSettingsBrowserOnlyBadge />}
+						/>
+						{fields}
+					</>
+				);
+			case "integrations":
+				return <NodeSettingsIntegrationPanels />;
+			default:
+				return fields;
+		}
+	};
+
 	return (
 		<PageShell>
 			<PageHeader
@@ -266,117 +454,38 @@ export function NodeSettings() {
 
 			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
 
-			{/* First on the page on purpose: the first-run step promises the choice can be changed "in Node settings",
-			    so it has to be the first thing an operator who followed that sentence sees. It saves on change, so it
-			    deliberately sits outside the big fields form and its Save button. */}
-			<NodeSettingsUiModeCard />
+			<Grid gap="lg">
+				<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
+					<Box pos={{ base: "static", sm: "sticky" }} top={0}>
+						<NodeSettingsSectionNav
+							sections={visibleSections}
+							active={activeSection}
+							onSelect={selectSection}
+							dirtyCounts={dirtyCounts}
+							advancedToggle={
+								isSimpleMode
+									? { shown: showAdvancedSections, onToggle: () => setShowAdvancedSections((shown) => !shown) }
+									: undefined
+							}
+						/>
+					</Box>
+				</Grid.Col>
+				<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
+					<Stack gap="lg" data-testid={`node-settings-section-content-${activeSection}`}>
+						{renderSection()}
+					</Stack>
+				</Grid.Col>
+			</Grid>
 
-			<SectionCard title={t("pages.nodeSettings.localChatRuntime.title", "Local chat runtime")} icon={<IconSettings size={22} />}>
-				<Text c="dimmed">
-					{t(
-						"pages.nodeSettings.localChatRuntime.description",
-						"The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
-					)}
-				</Text>
-				<NumberInput
-					label={t("pages.nodeSettings.localChatRuntime.timeoutLabel", "Maximum message request timeout")}
-					description={t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
-						min: minTimeout,
-						max: maxTimeout,
-					})}
-					suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
-					min={minTimeout}
-					max={maxTimeout}
-					step={5}
-					allowDecimal={false}
-					value={timeoutSeconds}
-					onChange={handleTimeoutChange}
-					error={
-						timeoutToSave === undefined
-							? t("pages.nodeSettings.localChatRuntime.timeoutError", "Enter a whole number from {{min}} to {{max}}.", {
-									min: minTimeout,
-									max: maxTimeout,
-								})
-							: undefined
-					}
-				/>
-				<Group>
-					<Button
-						leftSection={<IconDeviceFloppy size={16} />}
-						onClick={handleSave}
-						loading={saveMutation.isPending}
-						disabled={!canSave}
-						data-testid="node-settings-save-button"
-					>
-						{t("pages.nodeSettings.localChatRuntime.save", "Save settings")}
-					</Button>
-					<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={handleReload} disabled={settingsIsFetching}>
-						{t("pages.nodeSettings.localChatRuntime.reload", "Reload")}
-					</Button>
-				</Group>
-			</SectionCard>
-
-			<LlamaCppUpdaterPanel />
-
-			<SourceBuildCard />
-
-			<ImageRuntimeSourceBuildCard />
-
-			<WhisperRuntimeSourceBuildCard />
-
-			<ManagedPythonCard />
-
-			<NodeSettingsFieldsCard
-				form={fieldsForm}
-				bounds={fieldBounds}
-				errors={modelOptions.visibleErrors}
-				onChange={handleFieldChange}
-				onApplyPreset={handleApplyExternalAccessPreset}
-				showDeveloperFields={developerMode}
-				draftModelOptions={modelOptions.draftModelOptions}
-				keepWarmModelOptions={modelOptions.keepWarmModelOptions}
-				autoEffortFastModelOptions={modelOptions.autoEffortFastModelOptions}
-				rerankerModelOptions={modelOptions.rerankerModelOptions}
-				onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
-				isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}
-				isRecommendedRerankerInFlight={recommendedDownloads.reranker.isInFlight}
-				onDownloadRecommendedEmbedding={recommendedDownloads.embedding.start}
-				isDownloadRecommendedEmbeddingPending={recommendedDownloads.embedding.isPending}
-				isRecommendedEmbeddingInFlight={recommendedDownloads.embedding.isInFlight}
-				ollamaRuntimeDisabled={ollamaRuntimeDisabled}
+			<NodeSettingsSaveBar
+				unsavedCount={changedFields.length}
+				restartCount={pendingChanges.restartRequired.length}
+				canSave={changedFields.length > 0 && !saveMutation.isPending}
+				canReset={isDirty && !settingsIsFetching}
+				isSaving={saveMutation.isPending}
+				onSave={handleSave}
+				onReset={handleReset}
 			/>
-
-			<DownloadProgressPanel
-				inFlight={recommendedDownloads.progressNames}
-				downloadStatuses={recommendedDownloads.downloadStatuses}
-				onCancel={recommendedDownloads.cancelDownload}
-				cancellingModelName={recommendedDownloads.cancellingModelName}
-			/>
-
-			<Group>
-				<Button
-					leftSection={<IconDeviceFloppy size={16} />}
-					onClick={handleSave}
-					loading={saveMutation.isPending}
-					disabled={!canSave}
-					data-testid="node-settings-fields-save-button"
-				>
-					{t("pages.nodeSettings.fields.save", "Save node settings")}
-				</Button>
-			</Group>
-
-			<NodeSettingsAuxiliaryPanels
-				hasToken={hfTokenQuery.data ?? false}
-				isTokenLoading={hfTokenQuery.isLoading}
-				tokenDraft={tokenDraft}
-				isSavingToken={setHfToken.isPending}
-				onTokenDraftChange={setTokenDraft}
-				onSaveToken={handleSaveToken}
-				onClearToken={handleClearToken}
-			/>
-			<VoiceSettingsCard />
-			<NodeChangePasswordCard />
-			<NodeSettingsDeveloperModePanel developerMode={developerMode} onToggleDeveloperMode={toggleDeveloperMode} />
 		</PageShell>
 	);
 }

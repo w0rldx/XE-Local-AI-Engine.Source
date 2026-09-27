@@ -374,6 +374,8 @@ export interface ChatScope {
 export interface ChatConversationListModel {
 	conversations: ChatConversationModel[];
 	maxMessageSizeKb?: number;
+	// The node's Security:MaxUploadFileSizeMb, for the attachment pre-check; absent → no pre-check.
+	maxUploadFileSizeMb?: number;
 }
 
 // Result of a manual, non-destructive compaction. `outcome` mirrors the backend ConversationCompactionOutcome names

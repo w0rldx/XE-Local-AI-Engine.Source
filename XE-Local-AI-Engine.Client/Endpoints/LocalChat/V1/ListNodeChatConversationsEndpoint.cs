@@ -40,7 +40,8 @@ public sealed class ListNodeChatConversationsEndpoint : Endpoint<ListNodeChatCon
         await Send.OkAsync(new ListNodeChatConversationsResponse
         {
             Items = summaries.Select(static summary => summary.ToResponse()).ToArray(),
-            MaxMessageSizeKb = _securityOptions.Value.MaxMessageSizeKb
+            MaxMessageSizeKb = _securityOptions.Value.MaxMessageSizeKb,
+            MaxUploadFileSizeMb = _securityOptions.Value.MaxUploadFileSizeMb
         }, ct);
     }
 }

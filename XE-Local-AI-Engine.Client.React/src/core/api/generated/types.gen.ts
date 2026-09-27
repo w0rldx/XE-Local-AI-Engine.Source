@@ -3671,6 +3671,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsRe
 export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse>;
 	maxMessageSizeKb: number;
+	maxUploadFileSizeMb: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest = {
@@ -4669,6 +4670,64 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
 	} | null;
+	transcriptionIdleTimeoutMinutes?: number | null;
+	minTranscriptionIdleTimeoutMinutes?: number;
+	maxAllowedTranscriptionIdleTimeoutMinutes?: number;
+	llamaReadinessTimeoutCapSeconds?: number | null;
+	minLlamaReadinessTimeoutCapSeconds?: number;
+	maxAllowedLlamaReadinessTimeoutCapSeconds?: number;
+	llamaChatHttpTimeoutSeconds?: number | null;
+	minLlamaChatHttpTimeoutSeconds?: number;
+	maxAllowedLlamaChatHttpTimeoutSeconds?: number;
+	llamaEmbeddingHttpTimeoutSeconds?: number | null;
+	minLlamaEmbeddingHttpTimeoutSeconds?: number;
+	maxAllowedLlamaEmbeddingHttpTimeoutSeconds?: number;
+	llamaChatCacheRamMiB?: number | null;
+	minLlamaChatCacheRamMiB?: number;
+	maxAllowedLlamaChatCacheRamMiB?: number;
+	llamaCpuThreadReserve?: number | null;
+	minLlamaCpuThreadReserve?: number;
+	maxAllowedLlamaCpuThreadReserve?: number;
+	llamaGpuReservePercent?: number | null;
+	minLlamaGpuReservePercent?: number;
+	maxAllowedLlamaGpuReservePercent?: number;
+	llamaRamReservePercent?: number | null;
+	minLlamaRamReservePercent?: number;
+	maxAllowedLlamaRamReservePercent?: number;
+	imageIdleTimeToLiveSeconds?: number | null;
+	minImageIdleTimeToLiveSeconds?: number;
+	maxAllowedImageIdleTimeToLiveSeconds?: number;
+	modelFitSafetyMarginPercent?: number | null;
+	minModelFitSafetyMarginPercent?: number;
+	maxAllowedModelFitSafetyMarginPercent?: number;
+	maxProviderCallsPerInvocation?: number | null;
+	minMaxProviderCallsPerInvocation?: number;
+	maxAllowedMaxProviderCallsPerInvocation?: number;
+	customToolMaxTimeoutSeconds?: number | null;
+	minCustomToolMaxTimeoutSeconds?: number;
+	maxAllowedCustomToolMaxTimeoutSeconds?: number;
+	webFetchTimeoutSeconds?: number | null;
+	minWebFetchTimeoutSeconds?: number;
+	maxAllowedWebFetchTimeoutSeconds?: number;
+	webFetchMaxContentChars?: number | null;
+	minWebFetchMaxContentChars?: number;
+	maxAllowedWebFetchMaxContentChars?: number;
+	knowledgeSearchDefaultResults?: number | null;
+	minKnowledgeSearchResults?: number;
+	maxAllowedKnowledgeSearchResults?: number;
+	knowledgeSearchMaxResults?: number | null;
+	huggingFaceDownloadConnections?: number | null;
+	minHuggingFaceDownloadConnections?: number;
+	maxAllowedHuggingFaceDownloadConnections?: number;
+	transcriptionInferenceTimeoutMinutes?: number | null;
+	minTranscriptionInferenceTimeoutMinutes?: number;
+	maxAllowedTranscriptionInferenceTimeoutMinutes?: number;
+	agentHomeMaxRunSeconds?: number | null;
+	minAgentHomeMaxRunSeconds?: number;
+	maxAllowedAgentHomeMaxRunSeconds?: number;
+	agentHomeRunRetentionDays?: number | null;
+	minAgentHomeRunRetentionDays?: number;
+	maxAllowedAgentHomeRunRetentionDays?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
@@ -4717,6 +4776,26 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
 	} | null;
+	transcriptionIdleTimeoutMinutes?: number | null;
+	llamaReadinessTimeoutCapSeconds?: number | null;
+	llamaChatHttpTimeoutSeconds?: number | null;
+	llamaEmbeddingHttpTimeoutSeconds?: number | null;
+	llamaChatCacheRamMiB?: number | null;
+	llamaCpuThreadReserve?: number | null;
+	llamaGpuReservePercent?: number | null;
+	llamaRamReservePercent?: number | null;
+	imageIdleTimeToLiveSeconds?: number | null;
+	modelFitSafetyMarginPercent?: number | null;
+	maxProviderCallsPerInvocation?: number | null;
+	customToolMaxTimeoutSeconds?: number | null;
+	webFetchTimeoutSeconds?: number | null;
+	webFetchMaxContentChars?: number | null;
+	knowledgeSearchDefaultResults?: number | null;
+	knowledgeSearchMaxResults?: number | null;
+	huggingFaceDownloadConnections?: number | null;
+	transcriptionInferenceTimeoutMinutes?: number | null;
+	agentHomeMaxRunSeconds?: number | null;
+	agentHomeRunRetentionDays?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = {

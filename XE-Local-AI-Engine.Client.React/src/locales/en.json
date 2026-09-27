@@ -568,14 +568,14 @@
 			"upload": {
 				"heading": "Add documents",
 				"prompt": "Drop documents here or click to browse",
-				"hint": "PDF, DOCX, Markdown, text, structured data, and source code — up to {{limit}} MB each.",
+				"hint": "PDF, DOCX, Markdown, text, structured data, and source code.",
 				"dropzoneAria": "Upload documents to the knowledge base",
 				"queued": "{{name}} is being indexed.",
 				"deduplicated": "{{name}} is already in the knowledge base.",
 				"failed": "Failed to upload {{name}}.",
-				"tooLarge": "{{name}} exceeds the {{limit}} MB upload limit.",
 				"unsupported": "{{name}} is not a supported document type.",
-				"batchFailed": "Failed to upload files."
+				"batchFailed": "Failed to upload files.",
+				"tooLargeForNode": "{{name}} is larger than this node accepts."
 			},
 			"embeddingMissing": {
 				"title": "No embedding model installed",
@@ -1696,7 +1696,6 @@
 				"revokeError": "Could not revoke workspace access."
 			},
 			"developerMode": {
-				"title": "Developer settings",
 				"label": "Developer mode",
 				"description": "Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only."
 			},
@@ -2048,13 +2047,11 @@
 			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
 			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {
-				"save": "Save node settings",
 				"validationError": "Some settings are invalid. Fix the highlighted fields.",
 				"allowedRange": "Allowed range",
 				"restartRequired": "Takes effect after the node restarts.",
 				"seconds": "seconds",
 				"minutes": "minutes",
-				"bytesPositive": "A positive number of bytes. Changes take effect without restarting the node.",
 				"errors": {
 					"range": "Enter a whole number within the allowed range.",
 					"format": "Must match the format b<number> (e.g. b9692).",
@@ -2068,7 +2065,9 @@
 					"keepWarmCapacity": "Keep model warm requires at least two loaded-process slots.",
 					"belowIdleTtl": "The warm interval must be shorter than the idle TTL.",
 					"unavailableKeepWarmModel": "The selected model {{model}} is no longer installed.",
-					"rate": "Each rate needs a model name and non-negative input and output values."
+					"rate": "Each rate needs a model name and non-negative input and output values.",
+					"defaultAboveMax": "The default number of results cannot be larger than the maximum.",
+					"belowCommandTimeout": "The run time limit must be at least the command timeout."
 				},
 				"localChat": {
 					"title": "Local chat"
@@ -2105,8 +2104,8 @@
 					"description": "Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node."
 				},
 				"runtime": {
-					"title": "Local model runtime",
-					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
+					"title": "Process pool",
+					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime card under Runtimes & builds."
 				},
 				"llamaMaxLoadedProcesses": {
 					"label": "Max loaded llama-server processes"
@@ -2123,7 +2122,8 @@
 					"noModels": "No installed llama.cpp chat models",
 					"intervalLabel": "Warm interval",
 					"help": "Pinning keeps VRAM occupied and permanently uses one of the configured {{maxLoadedProcesses}} MaxLoadedProcesses slots. The warm interval must remain below the idle TTL to prevent eviction.",
-					"unavailableOption": "{{model}} (not installed)"
+					"unavailableOption": "{{model}} (not installed)",
+					"title": "Keep warm"
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama endpoint",
@@ -2144,20 +2144,17 @@
 					"label": "Max response size"
 				},
 				"advanced": {
-					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits.",
+					"title": "Agent limits (developer)",
 					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
 					"label": "Orchestration idle timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome prepare timeout",
-					"description": "Changes take effect without restarting the node."
+					"label": "AgentHome prepare timeout"
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome command timeout",
-					"description": "Changes take effect without restarting the node."
+					"label": "AgentHome command timeout"
 				},
 				"agentHomeMaxSelectedFolderBytes": {
 					"label": "AgentHome max selected folder size"
@@ -2261,11 +2258,142 @@
 				},
 				"autoCheckRuntimeUpdates": {
 					"label": "Check for llama.cpp runtime updates",
-					"description": "Look for a newer llama.cpp runtime build at startup. You can always check by hand from the runtime panel below."
+					"description": "Look for a newer llama.cpp runtime build at startup. You can always check by hand from the llama.cpp runtime card under Runtimes & builds."
 				},
 				"autoProvisionFirstRunModel": {
 					"label": "Download a starter model on first run",
 					"description": "On a fresh install, fetch a model and runtime so the engine can answer straight away. Has no effect once a model is installed."
+				},
+				"restartBadge": "Needs restart",
+				"liveReload": "Changes take effect without restarting the node.",
+				"megabytesPositive": "A positive size in MB. Changes take effect without restarting the node.",
+				"ollama": {
+					"title": "Ollama"
+				},
+				"launchTuning": {
+					"title": "Chat launch tuning"
+				},
+				"agentWorkspaces": {
+					"title": "AgentHome workspaces (developer)"
+				},
+				"secondsShort": "s",
+				"agentHomeMaxRunSeconds": {
+					"label": "AgentHome run time limit",
+					"description": "The longest a whole run may take; at least the command timeout. Applies to the next run."
+				},
+				"agentHomeRunRetentionDays": {
+					"label": "AgentHome run retention",
+					"description": "Finished runs older than this are deleted."
+				},
+				"days": "days",
+				"imageIdleTimeToLiveSeconds": {
+					"label": "Image server idle time-to-live"
+				},
+				"serverTimeouts": {
+					"title": "Server timeouts"
+				},
+				"llamaReadinessTimeoutCapSeconds": {
+					"label": "Model load timeout cap",
+					"description": "The longest a llama-server may take to load a model before the start is given up."
+				},
+				"llamaChatHttpTimeoutSeconds": {
+					"label": "Chat request timeout",
+					"description": "The network timeout for one chat request to llama-server."
+				},
+				"llamaEmbeddingHttpTimeoutSeconds": {
+					"label": "Embedding request timeout"
+				},
+				"resourceReserve": {
+					"title": "Resource reserve",
+					"description": "What the model launcher leaves free for the rest of the machine when it sizes a model."
+				},
+				"llamaCpuThreadReserve": {
+					"label": "Reserved CPU threads"
+				},
+				"llamaGpuReservePercent": {
+					"label": "Reserved GPU memory"
+				},
+				"llamaRamReservePercent": {
+					"label": "Reserved system memory"
+				},
+				"modelFitSafetyMarginPercent": {
+					"label": "Model fit safety margin",
+					"description": "Headroom the model-fit check adds on top of a model's estimated memory. Applies to the next check."
+				},
+				"speculativeDraftGpuLayers": {
+					"label": "Draft model GPU layers",
+					"description": "How many draft-model layers are offloaded to the GPU. Leave empty for the runtime default."
+				},
+				"llamaChatCacheRam": {
+					"label": "Prompt cache memory",
+					"description": "Host memory llama-server keeps for cached prompts. Automatic uses one eighth of RAM (512–8192 MiB).",
+					"auto": "Automatic",
+					"off": "Off",
+					"custom": "Custom",
+					"sizeLabel": "Prompt cache size"
+				},
+				"toolLimits": {
+					"title": "Tool and provider limits"
+				},
+				"maxProviderCallsPerInvocation": {
+					"label": "Model calls per agent run",
+					"description": "Stops an agent run that keeps calling the model, for example in a tool loop."
+				},
+				"customToolMaxTimeoutSeconds": {
+					"label": "Custom tool timeout ceiling",
+					"description": "The longest timeout a custom tool may set for itself."
+				},
+				"containerRuntime": {
+					"title": "Container runtime"
+				},
+				"containerRuntimeSelection": {
+					"label": "Runtime for external apps",
+					"description": "Which container runtime external apps use. An app can still override it.",
+					"options": {
+						"auto": "Automatic",
+						"docker": "Docker"
+					}
+				},
+				"downloads": {
+					"title": "Downloads"
+				},
+				"huggingFaceDownloadConnections": {
+					"label": "Parallel download connections"
+				},
+				"huggingFaceDiskMarginBytes": {
+					"label": "Free disk space to keep",
+					"description": "A download is refused if it would leave less free space than this."
+				},
+				"knowledgeSearch": {
+					"title": "Knowledge search"
+				},
+				"knowledgeSearchDefaultResults": {
+					"label": "Default results",
+					"description": "Results returned when the model does not ask for a number. At most the maximum below."
+				},
+				"knowledgeSearchMaxResults": {
+					"label": "Maximum results"
+				},
+				"webFetch": {
+					"title": "Page fetching"
+				},
+				"webFetchTimeoutSeconds": {
+					"label": "Page fetch timeout"
+				},
+				"webFetchMaxContentChars": {
+					"label": "Page text limit",
+					"description": "The most characters of a fetched page the model receives."
+				},
+				"characters": "characters",
+				"transcription": {
+					"title": "Transcription"
+				},
+				"transcriptionIdleTimeoutMinutes": {
+					"label": "Unload an idle transcription model after"
+				},
+				"transcriptionInferenceTimeoutMinutes": {
+					"label": "Transcription timeout",
+					"description": "The longest one transcription job may run."
 				}
 			},
 			"title": "Node settings",
@@ -2276,9 +2404,7 @@
 				"description": "The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
 				"timeoutLabel": "Maximum message request timeout",
 				"timeoutRange": "Allowed range: {{min}}–{{max}} seconds.",
-				"timeoutError": "Enter a whole number from {{min}} to {{max}}.",
-				"save": "Save settings",
-				"reload": "Reload"
+				"timeoutError": "Enter a whole number from {{min}} to {{max}}."
 			},
 			"uiMode": {
 				"title": "Interface mode",
@@ -2329,6 +2455,44 @@
 					"probeContract": "Probe contract",
 					"toolchainStore": "Toolchain location"
 				}
+			},
+			"browserOnly": "This browser only",
+			"developerOnlyNote": "These limits are developer settings. Turn on developer mode under General to change them.",
+			"browserPreferences": {
+				"title": "This browser",
+				"languageLabel": "Language"
+			},
+			"integrationLinks": {
+				"title": "Related settings",
+				"description": "MCP servers, external model providers and cloud accounts have their own pages.",
+				"mcp": "MCP servers",
+				"externalProviders": "External providers",
+				"cloudSettings": "Cloud settings"
+			},
+			"saveBar": {
+				"clean": "No unsaved changes",
+				"unsaved_one": "{{count}} unsaved change",
+				"unsaved_other": "{{count}} unsaved changes",
+				"restart_one": "{{count}} needs a restart",
+				"restart_other": "{{count}} need a restart",
+				"reset": "Reset",
+				"save": "Save changes"
+			},
+			"sections": {
+				"navLabel": "Settings sections",
+				"general": "General",
+				"chat": "Chat & agents",
+				"runtime": "Model runtime",
+				"runtimes": "Runtimes & builds",
+				"models": "Models & downloads",
+				"knowledge": "Knowledge & web",
+				"voice": "Voice & transcription",
+				"privacy": "Privacy & updates",
+				"integrations": "Integrations & keys",
+				"workspaces": "Agent workspaces",
+				"usage": "Usage & limits",
+				"showAdvanced": "Show advanced sections",
+				"hideAdvanced": "Hide advanced sections"
 			}
 		},
 		"cloudSettings": {
@@ -7777,9 +7941,9 @@
 			"operatorEnableDescription": "Master gate for every user on this node. Turning it off disables voice output everywhere.",
 			"operatorDefaultProfileLabel": "Default voice",
 			"operatorDefaultProfileDescription": "The voice new users start with on this node.",
-			"operatorSaveError": "Could not save the node voice setting.",
 			"previewLabel": "Preview voice",
-			"systemVoiceGroupLabel": "System voices ({{language}})"
+			"systemVoiceGroupLabel": "System voices ({{language}})",
+			"browserSectionTitle": "Your voice preferences"
 		}
 	},
 	"notifications": {

@@ -20,6 +20,7 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
     /// <summary>The named <see cref="HttpClient" /> whose handler carries the SSRF connect-pin and has redirects disabled.</summary>
     public const string HttpClientName = "xe-custom-tool-fetch";
 
+    // Deliberately not shared with WebFetchService: an operator-authored tool hits one configured API, so its raw response stays small.
     private const int MaxResponseBodyBytes = 64 * 1024;
 
     // Wall-clock ceiling for the send plus body read, mirroring the command path's default timeout (HostProcessExecutor.DefaultTimeoutSeconds,

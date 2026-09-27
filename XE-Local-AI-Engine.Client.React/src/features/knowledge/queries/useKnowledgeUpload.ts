@@ -4,14 +4,10 @@ import { useCallback, useState } from "react";
 
 import type { UploadKnowledgeDocumentResponse } from "@/core/api/generated";
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
+import { ApiError } from "@/core/api/errors/ApiError";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { toast } from "@/core/ui/notifications/Toast";
-import {
-	KNOWLEDGE_DEFAULT_COLLECTION_ID,
-	isAcceptedKnowledgeFile,
-	KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES,
-	KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
-} from "@/features/knowledge/models/KnowledgeModels";
+import { KNOWLEDGE_DEFAULT_COLLECTION_ID, isAcceptedKnowledgeFile } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
@@ -78,9 +74,15 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 					toast.success(t("pages.knowledgeBase.upload.queued", "{{name}} is being indexed.", { name: file.name }));
 				}
 			} catch (error) {
-				toast.error(
-					knowledgeErrorMessage(error, t("pages.knowledgeBase.upload.failed", "Failed to upload {{name}}.", { name: file.name })),
-				);
+				// The endpoint names the size limit in its own validation message. A body over the host's request limit is
+				// refused before the endpoint runs, as a bare 413, so that one gets its own message rather than "failed".
+				const fallback =
+					error instanceof ApiError && error.statusCode === 413
+						? t("pages.knowledgeBase.upload.tooLargeForNode", "{{name}} is larger than this node accepts.", {
+								name: file.name,
+							})
+						: t("pages.knowledgeBase.upload.failed", "Failed to upload {{name}}.", { name: file.name });
+				toast.error(knowledgeErrorMessage(error, fallback));
 			} finally {
 				removePending(tempId);
 			}
@@ -94,18 +96,9 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 				return;
 			}
 
-			// Advisory client-side guards: reject oversize + unsupported files up front with a friendly toast, upload the
-			// rest. The server re-checks every accepted file.
+			// Advisory client-side guard: reject unsupported files up front with a friendly toast, upload the rest. The
+			// server re-checks every accepted file, including the node's upload size limit.
 			const accepted = files.filter((file) => {
-				if (file.size > KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES) {
-					toast.error(
-						t("pages.knowledgeBase.upload.tooLarge", "{{name}} exceeds the {{limit}} MB upload limit.", {
-							name: file.name,
-							limit: KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
-						}),
-					);
-					return false;
-				}
 				if (!isAcceptedKnowledgeFile(file.name)) {
 					toast.error(
 						t("pages.knowledgeBase.upload.unsupported", "{{name}} is not a supported document type.", { name: file.name }),

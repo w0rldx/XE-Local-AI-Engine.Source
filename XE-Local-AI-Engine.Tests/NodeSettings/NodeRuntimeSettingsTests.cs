@@ -7,8 +7,13 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
+using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -331,6 +336,112 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(stored, await sut.GetAutoCheckApplicationUpdatesAsync());
         AssertEx.Equal(stored, await sut.GetAutoCheckRuntimeUpdatesAsync());
         AssertEx.Equal(stored, await sut.GetAutoProvisionFirstRunModelAsync());
+    }
+
+    [Test]
+    public async Task Tunables_UnsetAndUnseeded_EqualTheConstantsTheyReplaced()
+    {
+        // Behaviour-unchanged proof: each getter is compared against the provider/service default it replaced, not against the
+        // StoredNodeSettings mirror, so a drifted Default* constant fails here.
+        var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        var supervisor = new LlamaServerSupervisorOptions();
+        var launchPolicy = new LlamaServerLaunchPolicyOptions();
+
+        AssertEx.Equal(supervisor.ReadinessTimeoutCap, sut.GetLlamaReadinessTimeoutCap());
+        AssertEx.Equal(supervisor.HttpNetworkTimeout, sut.GetLlamaChatHttpTimeout());
+        AssertEx.Equal(supervisor.EmbeddingHttpNetworkTimeout, sut.GetLlamaEmbeddingHttpTimeout());
+        AssertEx.Null(sut.GetLlamaChatCacheRamMiB());
+        AssertEx.Equal(launchPolicy.CpuThreadReserve, sut.GetLlamaCpuThreadReserve());
+        // Exact double equality is the point: the fraction is serialized into the launch-policy fingerprint.
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultGpuReserveFraction, sut.GetLlamaGpuReserveFraction());
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultRamReserveFraction, sut.GetLlamaRamReserveFraction());
+        AssertEx.Equal(new StableDiffusionRuntimeOptions().IdleTimeToLive, sut.GetImageIdleTimeToLive());
+        AssertEx.Equal(new WhisperRuntimeOptions().InferenceTimeout, sut.GetTranscriptionInferenceTimeout());
+        AssertEx.Equal(new ProviderCallBudgetOptions().MaxProviderCallsPerInvocation, sut.GetMaxProviderCallsPerInvocation());
+        AssertEx.Equal(new HuggingFaceOptions().DownloadConnections, sut.GetHuggingFaceDownloadConnections());
+        AssertEx.Equal(new AgentHomeRunRetentionOptions().RetentionDays, sut.GetAgentHomeRunRetentionDays());
+        AssertEx.Equal(MemoryFitEstimator.DefaultSafetyMarginFraction, sut.GetModelFitSafetyMarginFraction());
+        AssertEx.Equal(new AgentHomeOptions().MaxRunSeconds, await sut.GetAgentHomeMaxRunSecondsAsync());
+        AssertEx.Equal(expected: 300, await sut.GetCustomToolMaxTimeoutSecondsAsync());
+        AssertEx.Equal(TimeSpan.FromSeconds(20), await sut.GetWebFetchTimeoutAsync());
+        AssertEx.Equal(expected: 12_000, await sut.GetWebFetchMaxContentCharsAsync());
+        AssertEx.Equal(expected: 5, await sut.GetKnowledgeSearchDefaultResultsAsync());
+        AssertEx.Equal(expected: 20, await sut.GetKnowledgeSearchMaxResultsAsync());
+    }
+
+    [Test]
+    public async Task Tunables_StoredAbsent_UseTheAppsettingsSeed()
+    {
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["HuggingFace:DownloadConnections"] = "8",
+                ["StableDiffusionRuntime:IdleTimeToLive"] = "00:05:00",
+                ["Agent:ProviderCallBudget:MaxProviderCallsPerInvocation"] = "150",
+                ["AgentHome:RunRetention:RetentionDays"] = "0"
+            },
+            agentHome: new AgentHomeOptions
+            {
+                MaxRunSeconds = 1200
+            });
+
+        AssertEx.Equal(expected: 8, sut.GetHuggingFaceDownloadConnections());
+        AssertEx.Equal(TimeSpan.FromMinutes(5), sut.GetImageIdleTimeToLive());
+        AssertEx.Equal(expected: 150, sut.GetMaxProviderCallsPerInvocation());
+        AssertEx.Equal(expected: 0, sut.GetAgentHomeRunRetentionDays(), "0 turns the age limit off and must survive as a seed.");
+        AssertEx.Equal(expected: 1200, await sut.GetAgentHomeMaxRunSecondsAsync());
+    }
+
+    [Test]
+    public async Task Tunables_Stored_WinOverSeedAndDefault()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                LlamaReadinessTimeoutCapSeconds = 900,
+                LlamaChatHttpTimeoutSeconds = 7200,
+                LlamaEmbeddingHttpTimeoutSeconds = 120,
+                LlamaChatCacheRamMiB = 0,
+                LlamaCpuThreadReserve = 2,
+                LlamaGpuReservePercent = 10,
+                LlamaRamReservePercent = 20,
+                ImageIdleTimeToLiveSeconds = 60,
+                ModelFitSafetyMarginPercent = 20,
+                MaxProviderCallsPerInvocation = 50,
+                CustomToolMaxTimeoutSeconds = 600,
+                WebFetchTimeoutSeconds = 45,
+                WebFetchMaxContentChars = 30_000,
+                KnowledgeSearchDefaultResults = 3,
+                KnowledgeSearchMaxResults = 10,
+                HuggingFaceDownloadConnections = 2,
+                TranscriptionInferenceTimeoutMinutes = 90,
+                AgentHomeMaxRunSeconds = 1800,
+                AgentHomeRunRetentionDays = 7
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["HuggingFace:DownloadConnections"] = "8",
+                ["Agent:ProviderCallBudget:MaxProviderCallsPerInvocation"] = "150"
+            });
+
+        AssertEx.Equal(TimeSpan.FromSeconds(900), sut.GetLlamaReadinessTimeoutCap());
+        AssertEx.Equal(TimeSpan.FromSeconds(7200), sut.GetLlamaChatHttpTimeout());
+        AssertEx.Equal(TimeSpan.FromSeconds(120), sut.GetLlamaEmbeddingHttpTimeout());
+        AssertEx.Equal(expected: 0, sut.GetLlamaChatCacheRamMiB());
+        AssertEx.Equal(expected: 2, sut.GetLlamaCpuThreadReserve());
+        AssertEx.Equal(expected: 0.1d, sut.GetLlamaGpuReserveFraction());
+        AssertEx.Equal(expected: 0.2d, sut.GetLlamaRamReserveFraction());
+        AssertEx.Equal(TimeSpan.FromSeconds(60), sut.GetImageIdleTimeToLive());
+        AssertEx.Equal(expected: 0.2d, sut.GetModelFitSafetyMarginFraction());
+        AssertEx.Equal(expected: 50, sut.GetMaxProviderCallsPerInvocation());
+        AssertEx.Equal(expected: 600, await sut.GetCustomToolMaxTimeoutSecondsAsync());
+        AssertEx.Equal(TimeSpan.FromSeconds(45), await sut.GetWebFetchTimeoutAsync());
+        AssertEx.Equal(expected: 30_000, await sut.GetWebFetchMaxContentCharsAsync());
+        AssertEx.Equal(expected: 3, await sut.GetKnowledgeSearchDefaultResultsAsync());
+        AssertEx.Equal(expected: 10, await sut.GetKnowledgeSearchMaxResultsAsync());
+        AssertEx.Equal(expected: 2, sut.GetHuggingFaceDownloadConnections());
+        AssertEx.Equal(TimeSpan.FromMinutes(90), sut.GetTranscriptionInferenceTimeout());
+        AssertEx.Equal(expected: 1800, await sut.GetAgentHomeMaxRunSecondsAsync());
+        AssertEx.Equal(expected: 7, sut.GetAgentHomeRunRetentionDays());
     }
 
     private static NodeRuntimeSettings CreateSut(StoredNodeSettings stored,

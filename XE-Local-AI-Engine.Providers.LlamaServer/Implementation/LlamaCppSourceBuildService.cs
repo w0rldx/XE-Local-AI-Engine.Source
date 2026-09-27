@@ -31,16 +31,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     // Conservative fallback compute-architecture set when nvidia-smi's compute_cap can't be read/validated. [secMED-1]
     private const string DefaultCudaArchitectures = "75;86;89;120";
 
-    // -j cap: parallel build jobs are min(nproc, this) to bound peak memory/CPU during the build. [secMED-5]
-    private const int MaxBuildJobs = 8;
-
     // The number of streamed log lines retained for the status GET (the hub streams every line live).
     private const int LogRingCapacity = 400;
-
-    private static readonly TimeSpan CloneTimeout = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan ShortCommandTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan ConfigureTimeout = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan BuildTimeout = TimeSpan.FromMinutes(120);
 
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaCppSourceBuildActivity _buildActivity;
@@ -411,7 +403,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 ["-C", cloneDir, "rev-parse", "HEAD"],
                 environment,
                 workDir,
-                ShortCommandTimeout,
+                SourceBuildPolicy.ShortCommandTimeout,
                 ct).ConfigureAwait(false);
             var checkedOut = revOutput.Trim();
             var expectedCommit = descriptor.RevisionMode switch
@@ -447,7 +439,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 BuildConfigureArguments(buildDir, cloneDir, descriptor.Variant, architectures),
                 environment,
                 cloneDir,
-                ConfigureTimeout,
+                SourceBuildPolicy.ConfigureTimeout,
                 ct).ConfigureAwait(false);
             if (configureExit != 0)
             {
@@ -456,12 +448,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
             // 5. cmake build (jobs capped). [secMED-5]
             SetPhase(LlamaCppSourceBuildPhase.Building);
-            var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
+            var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
             var buildExit = await RunStreamingStepAsync("cmake",
                 ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, ManagedPerplexityFileName, "-j", jobs.ToString()],
                 environment,
                 cloneDir,
-                BuildTimeout,
+                SourceBuildPolicy.BuildTimeout,
                 ct).ConfigureAwait(false);
             if (buildExit != 0)
             {
@@ -588,7 +580,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             Directory.CreateDirectory(cloneDir);
             for (var index = 0; index < commands.Count; index++)
             {
-                var timeout = index == 2 ? CloneTimeout : ShortCommandTimeout;
+                var timeout = index == 2 ? SourceBuildPolicy.CloneTimeout : SourceBuildPolicy.ShortCommandTimeout;
                 var exit = await RunStreamingStepAsync("git", commands[index], environment, workDir, timeout, ct).ConfigureAwait(false);
                 if (exit != 0)
                 {
@@ -599,7 +591,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             return 0;
         }
 
-        return await RunStreamingStepAsync("git", commands[0], environment, workDir, CloneTimeout, ct).ConfigureAwait(false);
+        return await RunStreamingStepAsync("git", commands[0], environment, workDir, SourceBuildPolicy.CloneTimeout, ct).ConfigureAwait(false);
     }
 
     internal static IReadOnlyList<IReadOnlyList<string>> BuildCloneCommands(LlamaCppSourceBuildDescriptor descriptor, string cloneDir)
@@ -894,7 +886,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(ShortCommandTimeout);
+        timeout.CancelAfter(SourceBuildPolicy.ShortCommandTimeout);
         try
         {
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
@@ -985,7 +977,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 ["--query-gpu=compute_cap", "--format=csv,noheader"],
                 environment,
                 workDir,
-                ShortCommandTimeout,
+                SourceBuildPolicy.ShortCommandTimeout,
                 ct).ConfigureAwait(false);
             if (exit != 0)
             {

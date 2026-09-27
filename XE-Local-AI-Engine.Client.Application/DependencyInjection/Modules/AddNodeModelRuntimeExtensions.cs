@@ -220,6 +220,11 @@ internal static class AddNodeModelRuntimeExtensions
 #pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
                    options.IdleTimeoutSeconds = runtimeSettings.GetOrchestrationIdleTimeoutSeconds());
+
+        // Same shape for the AI.Agent provider-call ceiling: appended after AI.Agent's Bind, so a stored value wins over the seed.
+        builder.Services.AddOptions<ProviderCallBudgetOptions>()
+               .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
+                   options.MaxProviderCallsPerInvocation = runtimeSettings.GetMaxProviderCallsPerInvocation());
 #pragma warning restore MA0045
 
         AddExternalOpenAiRuntime(builder);
@@ -377,7 +382,7 @@ internal static class AddNodeModelRuntimeExtensions
     ///     non-migrated fields keep today's behavior and only the two migrated ones come from the accessor
     ///     (stored &gt; seed &gt; default). Resolved once at singleton construction, off every hot path.
     /// </remarks>
-    private static HuggingFaceOptions BuildSeededHuggingFaceOptions(IServiceProvider serviceProvider, IConfiguration configuration)
+    internal static HuggingFaceOptions BuildSeededHuggingFaceOptions(IServiceProvider serviceProvider, IConfiguration configuration)
     {
         var options = new HuggingFaceOptions();
         configuration.GetSection(HuggingFaceOptions.SectionName).Bind(options);
@@ -390,6 +395,7 @@ internal static class AddNodeModelRuntimeExtensions
 #pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         options.DefaultQuant = runtimeSettings.GetHuggingFaceDefaultQuant();
         options.DiskMarginBytes = runtimeSettings.GetHuggingFaceDiskMarginBytes();
+        options.DownloadConnections = runtimeSettings.GetHuggingFaceDownloadConnections();
 #pragma warning restore MA0045
 
         return options;
@@ -404,7 +410,7 @@ internal static class AddNodeModelRuntimeExtensions
     ///     value-object fields on its hot reaper and spawn loop, so the one-time read here keeps that loop allocation-
     ///     and await-free; an operator cap or TTL edit applies on the next process restart.
     /// </remarks>
-    private static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
+    internal static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
 #pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
@@ -419,7 +425,15 @@ internal static class AddNodeModelRuntimeExtensions
             SpeculativeMode = runtimeSettings.GetSpeculativeMode(),
             SpeculativeDraftModelName = runtimeSettings.GetSpeculativeDraftModelName(),
             SpeculativeDraftMaxTokens = runtimeSettings.GetSpeculativeDraftMaxTokens(),
-            SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers()
+            SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers(),
+
+            ReadinessTimeoutCap = runtimeSettings.GetLlamaReadinessTimeoutCap(),
+            HttpNetworkTimeout = runtimeSettings.GetLlamaChatHttpTimeout(),
+            EmbeddingHttpNetworkTimeout = runtimeSettings.GetLlamaEmbeddingHttpTimeout(),
+
+            // Absent is automatic: the same RAM-derived value the option's own initializer computes.
+            ChatCacheRamMiB = runtimeSettings.GetLlamaChatCacheRamMiB()
+                              ?? LlamaServerSupervisorOptions.ComputeDefaultChatCacheRamMiB(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes)
         };
 #pragma warning restore MA0045
     }
@@ -444,7 +458,10 @@ internal static class AddNodeModelRuntimeExtensions
         return new LlamaServerLaunchPolicyOptions
         {
             KvCacheType = kvCacheType,
-            EnableGpuKvCacheQuantization = !string.Equals(kvCacheType, LlamaServerKvCacheTypes.F16, StringComparison.Ordinal)
+            EnableGpuKvCacheQuantization = !string.Equals(kvCacheType, LlamaServerKvCacheTypes.F16, StringComparison.Ordinal),
+            CpuThreadReserve = runtimeSettings.GetLlamaCpuThreadReserve(),
+            GpuReserveFraction = runtimeSettings.GetLlamaGpuReserveFraction(),
+            RamReserveFraction = runtimeSettings.GetLlamaRamReserveFraction()
         };
     }
 

@@ -3,11 +3,7 @@ import { IconCloudUpload, IconFileText } from "@tabler/icons-react";
 import { type ChangeEvent, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	KNOWLEDGE_ACCEPT_ATTRIBUTE,
-	KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
-	formatKnowledgeBytes,
-} from "@/features/knowledge/models/KnowledgeModels";
+import { KNOWLEDGE_ACCEPT_ATTRIBUTE, formatKnowledgeBytes } from "@/features/knowledge/models/KnowledgeModels";
 import type { KnowledgePendingUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
 
 interface KnowledgeUploadPanelProps {
@@ -107,13 +103,7 @@ export function KnowledgeUploadPanel({ pendingUploads, disabled = false, onUploa
 					<IconCloudUpload size={40} stroke={1.4} color="var(--mantine-color-primary-filled)" />
 					<Text fw={600}>{t("pages.knowledgeBase.upload.prompt", "Drop documents here or click to browse")}</Text>
 					<Text size="sm" c="dimmed" ta="center">
-						{t(
-							"pages.knowledgeBase.upload.hint",
-							"PDF, DOCX, Markdown, text, structured data, and source code — up to {{limit}} MB each.",
-							{
-								limit: KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
-							},
-						)}
+						{t("pages.knowledgeBase.upload.hint", "PDF, DOCX, Markdown, text, structured data, and source code.")}
 					</Text>
 				</Stack>
 				<input

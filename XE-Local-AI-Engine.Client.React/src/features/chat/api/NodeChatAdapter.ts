@@ -174,7 +174,11 @@ export const nodeChatAdapter: NodeChatAdapter = {
 				throwOnError: true,
 			}),
 		);
-		return { conversations: (data.items ?? []).map(mapConversationSummary), maxMessageSizeKb: data.maxMessageSizeKb };
+		return {
+			conversations: (data.items ?? []).map(mapConversationSummary),
+			maxMessageSizeKb: data.maxMessageSizeKb,
+			maxUploadFileSizeMb: data.maxUploadFileSizeMb,
+		};
 	},
 	async getConversation(conversationId, options) {
 		const { data } = await callWithResponseValidation(

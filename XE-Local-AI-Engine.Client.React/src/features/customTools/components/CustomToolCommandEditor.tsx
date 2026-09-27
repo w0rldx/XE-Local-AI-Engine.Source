@@ -7,14 +7,16 @@ import type { CustomToolSecretSectionProps } from "@/features/customTools/compon
 import { useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
 import { CustomToolProgramLaunchSelector } from "@/features/customTools/components/CustomToolProgramLaunchSelector";
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
-import {
-	CUSTOM_TOOL_TIMEOUT_MAX,
-	type CustomToolEnvVar,
-	type CustomToolFormValues,
-} from "@/features/customTools/models/CustomToolModels";
+import type { CustomToolEnvVar, CustomToolFormValues } from "@/features/customTools/models/CustomToolModels";
 
 // Command editor: executable (with a ProgramLaunch probe), args template, working directory, timeout, env.
-export function CommandEditor({ values, errors, update, storedSecrets }: CustomToolSecretSectionProps) {
+export function CommandEditor({
+	values,
+	errors,
+	update,
+	storedSecrets,
+	maxTimeoutSeconds,
+}: CustomToolSecretSectionProps & { readonly maxTimeoutSeconds: number }) {
 	const { t } = useTranslation();
 	const command = values.command;
 	const {
@@ -118,7 +120,7 @@ export function CommandEditor({ values, errors, update, storedSecrets }: CustomT
 					description={t("pages.customTools.form.command.timeoutHint", "0 uses the default.")}
 					value={command.timeoutSeconds}
 					min={0}
-					max={CUSTOM_TOOL_TIMEOUT_MAX}
+					max={maxTimeoutSeconds}
 					onChange={(value) => patchCommand({ timeoutSeconds: typeof value === "number" ? value : 0 })}
 					data-testid="custom-tool-form-command-timeout"
 				/>

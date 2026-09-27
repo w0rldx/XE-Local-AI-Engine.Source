@@ -1,8 +1,8 @@
 import { Alert, Button, Group, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
-import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { useRecommendedEmbeddingDownload } from "@/features/knowledge/queries/useRecommendedEmbeddingDownload";
 
 // Shown above the upload panel while this node resolves no embedding model. Without one the server accepts an upload
@@ -41,15 +41,15 @@ export function KnowledgeEmbeddingModelAlert() {
 					>
 						{t("pages.nodeSettings.fields.embeddingModel.downloadRecommended", "Download recommended embedding model")}
 					</Button>
-					<Button
-						component={Link}
+					<ButtonLink
 						to="/node-settings"
+						search={{ section: "knowledge" }}
 						variant="subtle"
 						size="xs"
 						data-testid="knowledge-embedding-open-node-settings"
 					>
 						{t("pages.knowledgeBase.embeddingMissing.openNodeSettings", "Open node settings")}
-					</Button>
+					</ButtonLink>
 				</Group>
 			</Stack>
 		</Alert>

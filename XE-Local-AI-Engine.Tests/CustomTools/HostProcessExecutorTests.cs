@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
@@ -130,7 +131,7 @@ public sealed class HostProcessExecutorTests : IDisposable
 
     private HostProcessExecutor CreateExecutor()
     {
-        return new HostProcessExecutor(_limiter, NullLogger<HostProcessExecutor>.Instance);
+        return new HostProcessExecutor(_limiter, StubNodeRuntimeSettings.Create().Build(), NullLogger<HostProcessExecutor>.Instance);
     }
 
     private async Task<string> CreateScriptAsync(string body)

@@ -14,6 +14,7 @@ import {
 	toNodeSettingsFieldsForm,
 	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation applied) so the human copy is
@@ -58,6 +59,7 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 interface RenderOverrides {
+	section?: NodeSettingsSectionId;
 	onDownloadRecommendedReranker?: () => void;
 	isDownloadRecommendedRerankerPending?: boolean;
 	isRecommendedRerankerInFlight?: boolean;
@@ -83,6 +85,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
 			<NodeSettingsFieldsCard
+				section={overrides.section ?? "chat"}
 				form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}
 				errors={overrides.errors ?? {}}
@@ -115,7 +118,7 @@ describe("NodeSettingsFieldsCard — fast model for automatic reasoning effort",
 	afterEach(() => cleanup());
 
 	it("defaults to Off and offers only the llama.cpp chat models it was given", () => {
-		renderCard({ autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }] });
+		renderCard({ section: "chat", autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }] });
 
 		const select = screen.getByTestId("node-settings-auto-effort-fast-model") as HTMLInputElement;
 		expect(select.value).toBe("Off");
@@ -128,7 +131,10 @@ describe("NodeSettingsFieldsCard — fast model for automatic reasoning effort",
 	});
 
 	it("edits the selection through the generic onChange", () => {
-		const { onChange } = renderCard({ autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }] });
+		const { onChange } = renderCard({
+			section: "chat",
+			autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }],
+		});
 
 		fireEvent.click(screen.getByTestId("node-settings-auto-effort-fast-model"));
 		fireEvent.click(screen.getByText("qwen3-1.7b"));
@@ -139,6 +145,7 @@ describe("NodeSettingsFieldsCard — fast model for automatic reasoning effort",
 	it("keeps a stored model selectable after it was uninstalled", () => {
 		// Without the synthetic entry the select would silently read "Off" for a node that is still configured.
 		renderCard({
+			section: "chat",
 			form: { ...toNodeSettingsFieldsForm(undefined), autoEffortFastModelName: "deleted-model" },
 			autoEffortFastModelOptions: [],
 		});
@@ -159,20 +166,20 @@ describe("NodeSettingsFieldsCard — tool-relevance switch", () => {
 	it("renders off by default", () => {
 		// That the field is NOT restart-gated is pinned in NodeSettingsFieldsModel.test.ts against
 		// restartGatedNodeSettingsFields; a queryByTestId for the hint here could not fail, so it is not asserted.
-		renderCard();
+		renderCard({ section: "chat" });
 
 		const toggle = screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement;
 		expect(toggle.checked).toBe(false);
 	});
 
 	it("renders on when the form says so", () => {
-		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), toolRelevanceEnabled: true } });
+		renderCard({ section: "chat", form: { ...toNodeSettingsFieldsForm(undefined), toolRelevanceEnabled: true } });
 
 		expect((screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement).checked).toBe(true);
 	});
 
 	it("reports a click through the generic onChange", () => {
-		const { onChange } = renderCard();
+		const { onChange } = renderCard({ section: "chat" });
 
 		fireEvent.click(screen.getByTestId("node-settings-tool-relevance-enabled"));
 
@@ -189,7 +196,7 @@ describe("NodeSettingsFieldsCard — keep model warm", () => {
 	afterEach(() => cleanup());
 
 	it("renders the live toggle and disables the model and interval controls while off", () => {
-		renderCard();
+		renderCard({ section: "runtime" });
 
 		expect(screen.getByTestId("node-settings-keep-model-warm-enabled")).toBeTruthy();
 		expect((screen.getByTestId("node-settings-keep-model-warm-model") as HTMLInputElement).disabled).toBe(true);
@@ -199,6 +206,7 @@ describe("NodeSettingsFieldsCard — keep model warm", () => {
 	it("edits the toggle, llama.cpp model, and interval through the generic onChange", () => {
 		const form = { ...toNodeSettingsFieldsForm(undefined), keepModelWarmEnabled: true };
 		const { onChange } = renderCard({
+			section: "runtime",
 			form,
 			keepWarmModelOptions: [{ value: "qwen3:8b", label: "qwen3:8b" }],
 		});
@@ -214,9 +222,7 @@ describe("NodeSettingsFieldsCard — keep model warm", () => {
 	});
 
 	it("surfaces the VRAM, live MaxLoadedProcesses capacity, and idle-TTL caveats", () => {
-		renderCard({
-			form: { ...toNodeSettingsFieldsForm(undefined), llamaMaxLoadedProcesses: 7 },
-		});
+		renderCard({ section: "runtime", form: { ...toNodeSettingsFieldsForm(undefined), llamaMaxLoadedProcesses: 7 } });
 
 		const help = screen.getByTestId("node-settings-keep-model-warm-help").textContent ?? "";
 		expect(help).toContain("VRAM");
@@ -226,6 +232,7 @@ describe("NodeSettingsFieldsCard — keep model warm", () => {
 
 	it("marks a stale selected model as unavailable", () => {
 		renderCard({
+			section: "runtime",
 			form: {
 				...toNodeSettingsFieldsForm(undefined),
 				keepModelWarmEnabled: true,
@@ -251,7 +258,7 @@ describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 	afterEach(() => cleanup());
 
 	it("renders the download button and the recommended-model helper line", () => {
-		renderCard();
+		renderCard({ section: "knowledge" });
 
 		expect(screen.getByTestId("node-settings-reranker-download-recommended")).toBeTruthy();
 		// The helper names the recommended model + its extra model server (human copy resolves — no bare i18n key).
@@ -259,7 +266,7 @@ describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 	});
 
 	it("invokes the download handler once when the button is clicked", () => {
-		const { onDownload } = renderCard();
+		const { onDownload } = renderCard({ section: "knowledge" });
 
 		fireEvent.click(screen.getByTestId("node-settings-reranker-download-recommended"));
 
@@ -267,13 +274,13 @@ describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 	});
 
 	it("disables the button while the recommended reranker download is in flight (duplicate-guard)", () => {
-		renderCard({ isRecommendedRerankerInFlight: true });
+		renderCard({ section: "knowledge", isRecommendedRerankerInFlight: true });
 
 		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it("disables the button while the download request is pending", () => {
-		renderCard({ isDownloadRecommendedRerankerPending: true });
+		renderCard({ section: "knowledge", isDownloadRecommendedRerankerPending: true });
 
 		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(true);
 	});
@@ -288,7 +295,7 @@ describe("NodeSettingsFieldsCard — recommended embedding model download", () =
 	afterEach(() => cleanup());
 
 	it("renders the download button and the recommended-model helper line", () => {
-		renderCard();
+		renderCard({ section: "knowledge" });
 
 		expect(screen.getByTestId("node-settings-embedding-download-recommended")).toBeTruthy();
 		// The helper names the recommended model + explains why it's required (human copy resolves — no bare i18n key).
@@ -296,7 +303,7 @@ describe("NodeSettingsFieldsCard — recommended embedding model download", () =
 	});
 
 	it("invokes the download handler once when the button is clicked", () => {
-		const { onDownloadEmbedding } = renderCard();
+		const { onDownloadEmbedding } = renderCard({ section: "knowledge" });
 
 		fireEvent.click(screen.getByTestId("node-settings-embedding-download-recommended"));
 
@@ -304,13 +311,13 @@ describe("NodeSettingsFieldsCard — recommended embedding model download", () =
 	});
 
 	it("disables the button while the recommended embedding download is in flight (duplicate-guard)", () => {
-		renderCard({ isRecommendedEmbeddingInFlight: true });
+		renderCard({ section: "knowledge", isRecommendedEmbeddingInFlight: true });
 
 		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it("disables the button while the download request is pending", () => {
-		renderCard({ isDownloadRecommendedEmbeddingPending: true });
+		renderCard({ section: "knowledge", isDownloadRecommendedEmbeddingPending: true });
 
 		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(true);
 	});
@@ -329,7 +336,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 	}
 
 	it("renders the empty state and the add affordance when no rates are configured", () => {
-		renderCard();
+		renderCard({ section: "usage" });
 
 		expect(screen.getByTestId("node-settings-usage-rates-card")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-usage-rates-empty")).toBeTruthy();
@@ -338,7 +345,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 	});
 
 	it("appends a blank row when Add rate is clicked", () => {
-		const { onChange } = renderCard();
+		const { onChange } = renderCard({ section: "usage" });
 
 		fireEvent.click(screen.getByTestId("node-settings-usage-rate-add"));
 
@@ -354,6 +361,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 
 	it("edits a row's model name through the generic onChange (whole-array replace)", () => {
 		const { onChange } = renderCard({
+			section: "usage",
 			form: formWithRates([{ id: "a", modelName: "gpt", inputPer1M: 1, outputPer1M: 2 }]),
 		});
 
@@ -364,6 +372,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 
 	it("edits a row's input rate through the number input", () => {
 		const { onChange } = renderCard({
+			section: "usage",
 			form: formWithRates([{ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }]),
 		});
 
@@ -374,6 +383,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 
 	it("removes a row, sending the reduced array", () => {
 		const { onChange } = renderCard({
+			section: "usage",
 			form: formWithRates([
 				{ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 },
 				{ id: "b", modelName: "claude", inputPer1M: 3, outputPer1M: 4 },
@@ -389,6 +399,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 
 	it("surfaces the rate validation error when the page passes one", () => {
 		renderCard({
+			section: "usage",
 			form: formWithRates([{ id: "a", modelName: "gpt-5", inputPer1M: -1, outputPer1M: 2 }]),
 			errors: { usageRates: "rate" },
 		});
@@ -399,7 +410,7 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 	});
 });
 
-describe("NodeSettingsFieldsCard — restart-required hint", () => {
+describe("NodeSettingsFieldsCard — restart-required badge", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
@@ -408,45 +419,81 @@ describe("NodeSettingsFieldsCard — restart-required hint", () => {
 	afterEach(() => cleanup());
 
 	it("marks a restart-gated field so the operator knows a Save is not live", () => {
-		renderCard();
+		renderCard({ section: "runtime" });
 
 		// chatCacheReuse is seeded once into LlamaServerSupervisorOptions at composition — a save needs a node restart.
-		const hint = screen.getByTestId("node-settings-restart-hint-chatCacheReuse");
-		expect(hint.textContent?.trim()).toBe("Takes effect after the node restarts.");
-		expect(screen.getByTestId("node-settings-restart-hint-defaultModelName")).toBeTruthy();
-		expect(screen.getByTestId("node-settings-restart-hint-rerankerModelName")).toBeTruthy();
+		const badge = screen.getByTestId("node-settings-restart-badge-chatCacheReuse");
+		expect(badge.textContent?.trim()).toBe("Needs restart");
+		expect(badge.getAttribute("title")).toBe("Takes effect after the node restarts.");
+		cleanup();
+
+		renderCard({ section: "chat" });
+		expect(screen.getByTestId("node-settings-restart-badge-defaultModelName")).toBeTruthy();
+		cleanup();
+
+		renderCard({ section: "knowledge" });
+		expect(screen.getByTestId("node-settings-restart-badge-rerankerModelName")).toBeTruthy();
 	});
 
 	it("does not mark a field that is read live on every call", () => {
-		renderCard();
+		renderCard({ section: "chat" });
 
 		// toolCapableModels is re-read per invocation (OrchestrationResolver) — labelling it would be a lie.
-		expect(screen.queryByTestId("node-settings-restart-hint-toolCapableModels")).toBeNull();
-		expect(screen.queryByTestId("node-settings-restart-hint-enableTools")).toBeNull();
-		expect(screen.queryByTestId("node-settings-restart-hint-keepModelWarmIntervalSeconds")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-toolCapableModels")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-enableTools")).toBeNull();
+		cleanup();
+
+		renderCard({ section: "runtime" });
+		expect(screen.queryByTestId("node-settings-restart-badge-keepModelWarmIntervalSeconds")).toBeNull();
 	});
 
-	it("hints the draft-model fields only once the mode that uses them is selected", () => {
-		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: "draft-simple" } });
+	it("badges the draft-model fields only once the mode that uses them is selected", () => {
+		renderCard({ section: "runtime", form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: "draft-simple" } });
 
-		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftModelName")).toBeTruthy();
-		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftMaxTokens")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-speculativeDraftModelName")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-speculativeDraftMaxTokens")).toBeTruthy();
 	});
 
-	it("renders the KV cache type picker with a restart hint", () => {
-		renderCard();
+	it("renders the KV cache type picker with a restart badge", () => {
+		renderCard({ section: "runtime" });
 
 		expect(screen.getByTestId("node-settings-kv-cache-type")).toBeTruthy();
 		// LlamaServerLaunchPolicyOptions is seeded once at host build, so the operator must be told it needs a restart.
-		expect(screen.getByTestId("node-settings-restart-hint-kvCacheType")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-kvCacheType")).toBeTruthy();
 	});
 
 	it.each(["draft-dflash", "draft-dspark"])("treats %s as an external-draft mode and shows its draft-model fields", (mode) => {
-		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: mode } });
+		renderCard({ section: "runtime", form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: mode } });
 
 		// Both load a second GGUF, so the draft-model picker and the draft-tokens input must appear for them.
 		expect(screen.getByTestId("node-settings-speculative-draft-model")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-speculative-draft-max-tokens")).toBeTruthy();
+	});
+});
+
+describe("NodeSettingsFieldsCard — section split", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("renders only the cards of the requested section", () => {
+		renderCard({ section: "chat" });
+
+		expect(screen.getByTestId("node-settings-local-chat-card")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-auto-effort-fast-model")).toBeTruthy();
+		// Runtime tuning and the Ollama endpoint live in their own sections now.
+		expect(screen.queryByTestId("node-settings-runtime-card")).toBeNull();
+		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
+	});
+
+	it("tells the operator how to reach developer-only workspace limits", () => {
+		renderCard({ section: "workspaces" });
+
+		expect(screen.getByTestId("node-settings-developer-only-note")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-agent-workspaces-card")).toBeNull();
 	});
 });
 
@@ -459,7 +506,7 @@ describe("NodeSettingsFieldsCard — Ollama gate pass-through", () => {
 	afterEach(() => cleanup());
 
 	it("hides the Ollama endpoint input when the page reports the runtime gated off", () => {
-		renderCard({ ollamaRuntimeDisabled: true });
+		renderCard({ section: "runtimes", ollamaRuntimeDisabled: true });
 
 		// Proves the boolean survives the card group, not only the runtime card that renders the branch.
 		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
@@ -467,9 +514,91 @@ describe("NodeSettingsFieldsCard — Ollama gate pass-through", () => {
 	});
 
 	it("renders the Ollama endpoint input when the runtime is not gated off", () => {
-		renderCard({ ollamaRuntimeDisabled: false });
+		renderCard({ section: "runtimes", ollamaRuntimeDisabled: false });
 
 		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
 		expect(screen.queryByTestId("node-settings-ollama-disabled")).toBeNull();
+	});
+});
+
+describe("NodeSettingsFieldsCard — curated tunables", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it.each([
+		["chat", ["node-settings-max-provider-calls", "node-settings-custom-tool-max-timeout"]],
+		[
+			"runtime",
+			[
+				"node-settings-llama-readiness-cap",
+				"node-settings-llama-chat-http-timeout",
+				"node-settings-llama-embedding-http-timeout",
+				"node-settings-llama-cpu-thread-reserve",
+				"node-settings-llama-gpu-reserve",
+				"node-settings-llama-ram-reserve",
+				"node-settings-image-idle-ttl",
+				"node-settings-model-fit-safety-margin",
+				"node-settings-chat-cache-ram-mode",
+			],
+		],
+		["runtimes", ["node-settings-container-runtime"]],
+		["models", ["node-settings-hf-download-connections", "node-settings-hf-disk-margin"]],
+		[
+			"knowledge",
+			[
+				"node-settings-knowledge-default-results",
+				"node-settings-knowledge-max-results",
+				"node-settings-web-fetch-timeout",
+				"node-settings-web-fetch-max-chars",
+			],
+		],
+		["voice", ["node-settings-transcription-idle-timeout", "node-settings-transcription-inference-timeout"]],
+	] as const)("renders the %s section's tunables", (section, testIds) => {
+		renderCard({ section });
+
+		for (const testId of testIds) {
+			expect(screen.getByTestId(testId)).toBeTruthy();
+		}
+	});
+
+	it("shows the draft-model GPU layers only for an external-draft mode", () => {
+		renderCard({ section: "runtime" });
+		expect(screen.queryByTestId("node-settings-speculative-draft-gpu-layers")).toBeNull();
+		cleanup();
+
+		renderCard({ section: "runtime", form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: "draft-simple" } });
+		expect(screen.getByTestId("node-settings-speculative-draft-gpu-layers")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-speculativeDraftGpuLayers")).toBeTruthy();
+	});
+
+	it("offers the prompt-cache size only in Custom mode and reports a mode pick to the draft", () => {
+		const { onChange } = renderCard({ section: "runtime" });
+		expect(screen.queryByTestId("node-settings-chat-cache-ram-size")).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+		expect(onChange).toHaveBeenCalledWith("llamaChatCacheRamMode", "custom");
+		cleanup();
+
+		renderCard({
+			section: "runtime",
+			form: { ...toNodeSettingsFieldsForm(undefined), llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: 2048 },
+		});
+		expect((screen.getByTestId("node-settings-chat-cache-ram-size") as HTMLInputElement).value).toBe("2048 MiB");
+	});
+
+	it("shows the disk margin in GB and the chat request timeout in minutes", () => {
+		renderCard({ section: "models" });
+		expect((screen.getByTestId("node-settings-hf-disk-margin") as HTMLInputElement).value).toBe("1 GB");
+		cleanup();
+
+		renderCard({ section: "runtime" });
+		expect((screen.getByTestId("node-settings-llama-chat-http-timeout") as HTMLInputElement).value).toBe("60 minutes");
+		expect(
+			screen.getByText("Allowed range: 1–1440 minutes. The network timeout for one chat request to llama-server."),
+		).toBeTruthy();
 	});
 });

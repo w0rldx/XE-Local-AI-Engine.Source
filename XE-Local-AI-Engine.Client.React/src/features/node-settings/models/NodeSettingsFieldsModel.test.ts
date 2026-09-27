@@ -7,14 +7,15 @@ import {
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
 	kvCacheTypeSelectValues,
+	nodeSettingsDisplayScale,
 	restartGatedNodeSettingsFields,
 	speculativeModeSelectValues,
+	summarizePendingChanges,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
 	touchesRestartGatedField,
 	toUsageRateRows,
 	type UsageRateRow,
-	validateLlamaCppTag,
 	validateOptionalHttpUrl,
 	validateToolCapableModels,
 	validateUsageRates,
@@ -25,16 +26,6 @@ function rateRow(overrides: Partial<UsageRateRow>): UsageRateRow {
 }
 
 describe("NodeSettingsFieldsModel validators", () => {
-	it("accepts a well-formed llama.cpp tag and rejects everything else", () => {
-		expect(validateLlamaCppTag("b9692")).toEqual({ value: "b9692" });
-		expect(validateLlamaCppTag("  b1  ")).toEqual({ value: "b1" });
-		// Empty resolves to "leave unchanged" (no value, no error).
-		expect(validateLlamaCppTag("")).toEqual({});
-		expect(validateLlamaCppTag("9692")).toEqual({ error: "format" });
-		expect(validateLlamaCppTag("b96.92")).toEqual({ error: "format" });
-		expect(validateLlamaCppTag("../etc")).toEqual({ error: "format" });
-	});
-
 	it("accepts http/https Ollama endpoints and rejects non-URLs", () => {
 		expect(validateOptionalHttpUrl("http://127.0.0.1:11434")).toEqual({ value: "http://127.0.0.1:11434" });
 		expect(validateOptionalHttpUrl("https://ollama.local")).toEqual({ value: "https://ollama.local" });
@@ -123,7 +114,6 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		maxAllowedLlamaMaxLoadedProcesses: 16,
 		llamaIdleTimeToLiveSeconds: 600,
 		maxResponseSizeMb: 12,
-		recommendedLlamaCppTag: "b9692",
 		keepModelWarmEnabled: true,
 		keepModelWarmModelName: "qwen3:8b",
 		keepModelWarmIntervalSeconds: 120,
@@ -143,6 +133,8 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(form.toolRelevanceEnabled).toBe(false);
 		expect(form.toolCapableModels).toEqual(["qwen3:8b"]);
 		expect(form.llamaMaxLoadedProcesses).toBe(5);
+		// 600 s on the wire, edited in minutes.
+		expect(form.llamaIdleTimeToLiveSeconds).toBe(10);
 		expect(form.keepModelWarmEnabled).toBe(true);
 		expect(form.keepModelWarmModelName).toBe("qwen3:8b");
 		expect(form.keepModelWarmIntervalSeconds).toBe(120);
@@ -158,16 +150,17 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(nodeSettingsFieldDefaults.toolRelevanceEnabled).toBe(false); // DefaultToolRelevanceEnabled
 		expect(nodeSettingsFieldDefaults.webAccessEnabled).toBe(false); // DefaultWebAccessEnabled
 		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3);
-		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900);
+		// Scaled fields are in their display unit: 900 s, 900 s, 300 s, 536870912 B, 52428800 B on the wire.
+		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(15);
 		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
 		expect(nodeSettingsFieldDefaults.keepModelWarmModelName).toBe("");
 		expect(nodeSettingsFieldDefaults.keepModelWarmIntervalSeconds).toBe(300);
 		expect(nodeSettingsFieldDefaults.maxResponseSizeMb).toBe(10);
 		expect(nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds).toBe(120); // DefaultOrchestrationIdleTimeoutSeconds
-		expect(nodeSettingsFieldDefaults.agentHomePrepareTimeoutSeconds).toBe(900); // DefaultAgentHomePrepareTimeoutSeconds
-		expect(nodeSettingsFieldDefaults.agentHomeCommandTimeoutSeconds).toBe(300); // DefaultAgentHomeCommandTimeoutSeconds
-		expect(nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes).toBe(536870912);
-		expect(nodeSettingsFieldDefaults.agentHomeMaxPatchBytes).toBe(52428800);
+		expect(nodeSettingsFieldDefaults.agentHomePrepareTimeoutSeconds).toBe(15); // DefaultAgentHomePrepareTimeoutSeconds
+		expect(nodeSettingsFieldDefaults.agentHomeCommandTimeoutSeconds).toBe(5); // DefaultAgentHomeCommandTimeoutSeconds
+		expect(nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes).toBe(512);
+		expect(nodeSettingsFieldDefaults.agentHomeMaxPatchBytes).toBe(50);
 		expect(nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes).toBe(10); // DefaultMaxPendingToolCallAgeMinutes
 		expect(nodeSettingsFieldDefaults.detachedGraceSeconds).toBe(300); // DefaultDetachedGraceSeconds
 	});
@@ -369,7 +362,8 @@ describe("buildNodeSettingsRequest", () => {
 	it("rejects a keep-warm interval that is not below the idle TTL", () => {
 		const form = {
 			...baseline,
-			llamaIdleTimeToLiveSeconds: 120,
+			// 2 minutes = 120 s, the same as the warm interval.
+			llamaIdleTimeToLiveSeconds: 2,
 			keepModelWarmEnabled: true,
 			keepModelWarmModelName: "qwen3:8b",
 			keepModelWarmIntervalSeconds: 120,
@@ -378,12 +372,6 @@ describe("buildNodeSettingsRequest", () => {
 		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 
 		expect(errors["keepModelWarmIntervalSeconds"]).toBe("belowIdleTtl");
-	});
-
-	it("rejects a malformed recommended tag", () => {
-		const form = { ...baseline, recommendedLlamaCppTag: "not-a-tag" };
-		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
-		expect(errors["recommendedLlamaCppTag"]).toBe("format");
 	});
 
 	it("excludes developer-only fields when developer mode is off", () => {
@@ -666,7 +654,9 @@ describe("restart-gated fields", () => {
 			"agentHomeMaxPatchBytes",
 			"detachedGraceSeconds",
 			"usageRates",
-			"recommendedLlamaCppTag",
+			"uiMode",
+			"voiceFeatureEnabled",
+			"defaultVoiceProfile",
 		] as const) {
 			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
 		}
@@ -791,5 +781,214 @@ describe("external access", () => {
 				autoProvisionFirstRunModel: false,
 			}),
 		).toBe(false);
+	});
+});
+
+describe("display units", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("round-trips seconds shown as minutes and bytes shown as MB back to the unchanged wire values", () => {
+		const response = {
+			llamaIdleTimeToLiveSeconds: 45,
+			agentHomePrepareTimeoutSeconds: 100,
+			agentHomeCommandTimeoutSeconds: 300,
+			agentHomeMaxSelectedFolderBytes: 1_000_000,
+			agentHomeMaxPatchBytes: 52_428_800,
+			llamaChatHttpTimeoutSeconds: 90,
+			imageIdleTimeToLiveSeconds: 900,
+			agentHomeMaxRunSeconds: 610,
+			huggingFaceDiskMarginBytes: 1_500_000_000,
+		} satisfies NodeSettingsResponse;
+		const form = toNodeSettingsFieldsForm(response);
+
+		expect(form.llamaIdleTimeToLiveSeconds).toBe(0.75);
+		expect(form.agentHomeCommandTimeoutSeconds).toBe(5);
+		expect(form.agentHomeMaxPatchBytes).toBe(50);
+		// An untouched field is never sent, so a value that is not a whole display unit survives unchanged.
+		expect(buildNodeSettingsRequest(form, form, bounds, true).body).toEqual({});
+
+		// Each display value multiplied back is the original wire value.
+		for (const [field, scale] of Object.entries(nodeSettingsDisplayScale)) {
+			const key = field as keyof typeof nodeSettingsDisplayScale;
+			expect(Math.round(Number(form[key]) * scale)).toBe(response[key]);
+		}
+	});
+
+	it("sends an edited display value in wire units, rounded to a whole unit", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		const form = {
+			...baseline,
+			llamaIdleTimeToLiveSeconds: 20,
+			agentHomePrepareTimeoutSeconds: 1.67,
+			agentHomeMaxSelectedFolderBytes: 1024,
+			agentHomeMaxPatchBytes: "0.5",
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+
+		expect(errors).toEqual({});
+		expect(body).toMatchObject({
+			llamaIdleTimeToLiveSeconds: 1200,
+			agentHomePrepareTimeoutSeconds: 100,
+			agentHomeMaxSelectedFolderBytes: 1_073_741_824,
+			agentHomeMaxPatchBytes: 524_288,
+		});
+	});
+
+	it("validates the converted value against the wire bounds and never turns a blank into zero", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		// 0.25 min = 15 s, below the 30 s floor.
+		const tooShort = buildNodeSettingsRequest({ ...baseline, llamaIdleTimeToLiveSeconds: 0.25 }, baseline, bounds, false);
+		expect(tooShort.errors["llamaIdleTimeToLiveSeconds"]).toBe("range");
+
+		const blank = buildNodeSettingsRequest({ ...baseline, agentHomeMaxPatchBytes: "" }, baseline, bounds, true);
+		expect(blank.errors["agentHomeMaxPatchBytes"]).toBe("positive");
+	});
+});
+
+describe("unified node fields and the pending-change summary", () => {
+	const baseline = toNodeSettingsFieldsForm({ uiMode: "advanced", voiceFeatureEnabled: false, defaultVoiceProfile: "a" });
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("sends uiMode and the voice fields through the one save body", () => {
+		const form = { ...baseline, uiMode: "simple", voiceFeatureEnabled: true, defaultVoiceProfile: "b" };
+		const { body } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(body).toEqual({ uiMode: "simple", voiceFeatureEnabled: true, defaultVoiceProfile: "b" });
+		expect(touchesRestartGatedField(body)).toBe(false);
+	});
+
+	it("counts sendable changes, invalid edits and the restart-gated subset", () => {
+		const form = { ...baseline, uiMode: "simple", chatCacheReuse: 512, llamaMaxLoadedProcesses: "abc" };
+		const result = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		const summary = summarizePendingChanges(result, form, baseline);
+
+		expect([...summary.changed].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses", "uiMode"]);
+		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses"]);
+	});
+
+	it("reports nothing for an untouched draft", () => {
+		const summary = summarizePendingChanges(buildNodeSettingsRequest(baseline, baseline, bounds, true), baseline, baseline);
+		expect(summary.changed).toEqual([]);
+		expect(summary.restartRequired).toEqual([]);
+	});
+});
+
+describe("curated tunables", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("maps the prompt-cache RAM to Automatic / Off / Custom and back, resetting to automatic with -1", () => {
+		const auto = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: null });
+		const off = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: 0 });
+		const custom = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: 2048 });
+		expect(auto.llamaChatCacheRamMode).toBe("auto");
+		expect(off.llamaChatCacheRamMode).toBe("off");
+		expect(custom).toMatchObject({ llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: 2048 });
+
+		// null on the wire means "keep", so returning to automatic must send the -1 reset sentinel.
+		expect(buildNodeSettingsRequest({ ...custom, llamaChatCacheRamMode: "auto" }, custom, bounds, false).body).toEqual({
+			llamaChatCacheRamMiB: -1,
+		});
+		expect(buildNodeSettingsRequest({ ...auto, llamaChatCacheRamMode: "off" }, auto, bounds, false).body).toEqual({
+			llamaChatCacheRamMiB: 0,
+		});
+		expect(
+			buildNodeSettingsRequest({ ...off, llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: 4096 }, off, bounds, false).body,
+		).toEqual({ llamaChatCacheRamMiB: 4096 });
+		// Touching the mode and returning to the same meaning sends nothing.
+		expect(buildNodeSettingsRequest({ ...custom }, custom, bounds, false).body).toEqual({});
+		expect(touchesRestartGatedField({ llamaChatCacheRamMiB: -1 })).toBe(true);
+	});
+
+	it("refuses a custom prompt-cache size that is blank or zero", () => {
+		const auto = toNodeSettingsFieldsForm({ llamaChatCacheRamMiB: null });
+		for (const size of ["", 0]) {
+			const { body, errors } = buildNodeSettingsRequest(
+				{ ...auto, llamaChatCacheRamMode: "custom", llamaChatCacheRamMiB: size },
+				auto,
+				bounds,
+				false,
+			);
+			expect(errors["llamaChatCacheRamMiB"]).toBe("range");
+			expect(body.llamaChatCacheRamMiB).toBeUndefined();
+		}
+	});
+
+	it("rejects a default knowledge result count above the maximum", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		const invalid = buildNodeSettingsRequest(
+			{ ...baseline, knowledgeSearchDefaultResults: 12, knowledgeSearchMaxResults: 10 },
+			baseline,
+			bounds,
+			false,
+		);
+		expect(invalid.errors["knowledgeSearchDefaultResults"]).toBe("defaultAboveMax");
+
+		const valid = buildNodeSettingsRequest({ ...baseline, knowledgeSearchMaxResults: 10 }, baseline, bounds, false);
+		expect(valid.errors).toEqual({});
+		expect(valid.body).toEqual({ knowledgeSearchMaxResults: 10 });
+	});
+
+	it("keeps the AgentHome run limit at or above the command timeout, developer-gated", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		// 4 minutes run limit < 5 minute command timeout.
+		const form = { ...baseline, agentHomeMaxRunSeconds: 4 };
+		expect(buildNodeSettingsRequest(form, baseline, bounds, true).errors["agentHomeMaxRunSeconds"]).toBe("belowCommandTimeout");
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false).errors).toEqual({});
+		expect(buildNodeSettingsRequest({ ...baseline, agentHomeMaxRunSeconds: 20 }, baseline, bounds, true).body).toEqual({
+			agentHomeMaxRunSeconds: 1200,
+		});
+	});
+
+	it("sends each curated tunable in wire units and classifies restart versus live", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		const form = {
+			...baseline,
+			llamaChatHttpTimeoutSeconds: 30,
+			imageIdleTimeToLiveSeconds: 5,
+			webFetchTimeoutSeconds: 40,
+			huggingFaceDiskMarginBytes: 2,
+			containerRuntimeSelection: "docker",
+			speculativeDraftGpuLayers: 99,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			llamaChatHttpTimeoutSeconds: 1800,
+			imageIdleTimeToLiveSeconds: 300,
+			webFetchTimeoutSeconds: 40,
+			huggingFaceDiskMarginBytes: 2 * 1024 * 1024 * 1024,
+			containerRuntimeSelection: "docker",
+			speculativeDraftGpuLayers: 99,
+		});
+		expect(restartGatedNodeSettingsFields.has("llamaChatHttpTimeoutSeconds")).toBe(true);
+		expect(restartGatedNodeSettingsFields.has("huggingFaceDiskMarginBytes")).toBe(true);
+		for (const live of [
+			"modelFitSafetyMarginPercent",
+			"customToolMaxTimeoutSeconds",
+			"webFetchTimeoutSeconds",
+			"webFetchMaxContentChars",
+			"knowledgeSearchDefaultResults",
+			"knowledgeSearchMaxResults",
+			"agentHomeMaxRunSeconds",
+			"containerRuntimeSelection",
+		] as const) {
+			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
+		}
+	});
+
+	it("takes the new bounds from the response, the knowledge counts sharing one range", () => {
+		const fromServer = toNodeSettingsFieldBounds({
+			minWebFetchTimeoutSeconds: 7,
+			maxAllowedWebFetchTimeoutSeconds: 99,
+			minKnowledgeSearchResults: 2,
+			maxAllowedKnowledgeSearchResults: 15,
+		});
+		expect(fromServer.tunables.webFetchTimeoutSeconds).toEqual({ min: 7, max: 99 });
+		expect(fromServer.tunables.knowledgeSearchDefaultResults).toEqual({ min: 2, max: 15 });
+		expect(fromServer.tunables.knowledgeSearchMaxResults).toEqual({ min: 2, max: 15 });
+		expect(bounds.tunables.llamaChatHttpTimeoutSeconds).toEqual({ min: 60, max: 86400 });
 	});
 });

@@ -576,7 +576,8 @@ credential-bearing response headers are stripped, and the process-wide concurren
 **Host program controls and residual risk.** `HostProcessExecutor` does **not** use the AgentHome process jail: host
 access is the feature. It never invokes a shell, expands each template item to exactly one
 `ProcessStartInfo.ArgumentList` element, clears the inherited worker environment, overlays only an allowlist plus the
-tool's fixed environment, enforces a 1–300 second timeout (30-second default), tree-kills on cancellation/timeout, and
+tool's fixed environment, enforces a 1-second-to-ceiling timeout (30-second default; the ceiling is the
+`CustomToolMaxTimeoutSeconds` node setting, default 300 s, bounds 30–3600 s), tree-kills on cancellation/timeout, and
 caps each captured stream at 64 KiB. `HostExecutableGuard.Validate()` runs both while authoring and immediately before
 launch: absolute path only, no shell/interpreter/script, existing regular file, symlink/reparse rejection. The Linux
 regular-file check uses `statx` with `AT_SYMLINK_NOFOLLOW`, because a raw `(FileOptions)` cast for the flag throws. That
@@ -596,9 +597,11 @@ is the decision record.
 
 - **Fetch boundary.** Every request and every redirect hop goes through `CustomToolSsrfGuard.ValidateRequestUrl`
   (open-host form, full private-address deny list) and the pinned connect callback on the `xe-web-fetch` client: GET
-  only, no proxy, no cookies, manual redirects (at most five) under one 20-second budget, a 2 MiB decompressed body
+  only, no proxy, no cookies, manual redirects (at most five) under a per-call time budget (`WebFetchTimeoutSeconds`
+  node setting, default 20 s, bounds 5–120 s), a 2 MiB decompressed body
   cap, and an HTML/XHTML/plain text/Markdown/JSON content-type allowlist. HTML is reduced to its main content by
-  SmartReader; the text is capped at 12 000 characters.
+  SmartReader; the text is capped at `WebFetchMaxContentChars` characters (node setting, default 12 000, bounds
+  1000–100 000).
 - **Search backends.** DuckDuckGo's HTML endpoint (best effort, unofficial; a block or rate limit returns a structured
   "unavailable" result) through the same guarded client, or the operator's SearXNG URL. The SearXNG client
   (`xe-web-search-searxng`) is not address-guarded because the operator typed the URL and it is often local; it is

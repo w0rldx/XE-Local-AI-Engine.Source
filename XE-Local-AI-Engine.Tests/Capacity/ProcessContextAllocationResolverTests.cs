@@ -901,7 +901,7 @@ public sealed class ProcessContextAllocationResolverTests
 
     private static long UsableRamBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,
-            (long)(total * LlamaServerLaunchPolicyOptions.RamReserveFraction)));
+            (long)(total * LlamaServerLaunchPolicyOptions.DefaultRamReserveFraction)));
 
     private static HardwareProfile Profile(long ram, long vram, bool vramKnown) =>
         new()

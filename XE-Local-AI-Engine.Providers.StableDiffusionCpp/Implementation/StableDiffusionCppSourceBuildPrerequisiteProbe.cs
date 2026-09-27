@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiffusionCppSourceBuildPrerequisiteProbe
 {
     private const int MaxProbeOutputChars = 4096;
-    internal const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
 
     // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
@@ -19,11 +18,11 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
     private readonly long _requiredFreeDiskBytes;
 
     public StableDiffusionCppSourceBuildPrerequisiteProbe()
-        : this(RuntimeCacheDirectory.Resolve(), RequiredFreeDiskBytes)
+        : this(RuntimeCacheDirectory.Resolve(), SourceBuildPolicy.RequiredFreeDiskBytes)
     {
     }
 
-    internal StableDiffusionCppSourceBuildPrerequisiteProbe(string cacheRoot, long requiredFreeDiskBytes = RequiredFreeDiskBytes)
+    internal StableDiffusionCppSourceBuildPrerequisiteProbe(string cacheRoot, long requiredFreeDiskBytes = SourceBuildPolicy.RequiredFreeDiskBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;

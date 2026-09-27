@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>Executes a <c>Command</c> custom tool on the host, porting the sandbox provider's host-exec posture minus the jail.</summary>
 /// <remarks>
@@ -29,15 +30,18 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
     private const int MaxCapturedOutputBytes = 64 * 1024;
     private const int MinTimeoutSeconds = 1;
-    private const int MaxTimeoutSeconds = 300;
     private const int DefaultTimeoutSeconds = 30;
 
     private readonly CustomToolConcurrencyLimiter _concurrencyLimiter;
     private readonly ILogger<HostProcessExecutor> _logger;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public HostProcessExecutor(CustomToolConcurrencyLimiter concurrencyLimiter, ILogger<HostProcessExecutor> logger)
+    public HostProcessExecutor(CustomToolConcurrencyLimiter concurrencyLimiter,
+        INodeRuntimeSettings runtimeSettings,
+        ILogger<HostProcessExecutor> logger)
     {
         _concurrencyLimiter = concurrencyLimiter ?? throw new ArgumentNullException(nameof(concurrencyLimiter));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -72,7 +76,9 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
 
         using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken);
-        return await RunAsync(startInfo, config, redactor, cancellationToken);
+        // The ceiling is the node's CustomToolMaxTimeoutSeconds, the same value CustomToolService validates a saved timeout against.
+        var maxTimeoutSeconds = await _runtimeSettings.GetCustomToolMaxTimeoutSecondsAsync(cancellationToken);
+        return await RunAsync(startInfo, config, maxTimeoutSeconds, redactor, cancellationToken);
     }
 
     private static ProcessStartInfo BuildStartInfo(CommandConfig config,
@@ -142,6 +148,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
     private static async Task<string> RunAsync(ProcessStartInfo startInfo,
         CommandConfig config,
+        int maxTimeoutSeconds,
         SecretValueRedactor redactor,
         CancellationToken cancellationToken)
     {
@@ -170,7 +177,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
         var timeoutSeconds = Math.Clamp(config.TimeoutSeconds <= 0 ? DefaultTimeoutSeconds : config.TimeoutSeconds,
             MinTimeoutSeconds,
-            MaxTimeoutSeconds);
+            maxTimeoutSeconds);
 
         using var timeoutSource = new CancellationTokenSource();
         using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);

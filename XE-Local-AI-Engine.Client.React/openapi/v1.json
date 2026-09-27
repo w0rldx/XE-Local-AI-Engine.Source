@@ -37815,7 +37815,8 @@
         "additionalProperties": false,
         "required": [
           "items",
-          "maxMessageSizeKb"
+          "maxMessageSizeKb",
+          "maxUploadFileSizeMb"
         ],
         "properties": {
           "items": {
@@ -37825,6 +37826,10 @@
             }
           },
           "maxMessageSizeKb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxUploadFileSizeMb": {
             "type": "integer",
             "format": "int32"
           }
@@ -41363,6 +41368,258 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
             }
+          },
+          "transcriptionIdleTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minTranscriptionIdleTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedTranscriptionIdleTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaReadinessTimeoutCapSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaReadinessTimeoutCapSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaReadinessTimeoutCapSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaChatHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaChatHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaChatHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaEmbeddingHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaEmbeddingHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaEmbeddingHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaChatCacheRamMiB": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaChatCacheRamMiB": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaChatCacheRamMiB": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaCpuThreadReserve": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaCpuThreadReserve": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaCpuThreadReserve": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaGpuReservePercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaGpuReservePercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaGpuReservePercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "llamaRamReservePercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minLlamaRamReservePercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedLlamaRamReservePercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "imageIdleTimeToLiveSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minImageIdleTimeToLiveSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedImageIdleTimeToLiveSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelFitSafetyMarginPercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minModelFitSafetyMarginPercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedModelFitSafetyMarginPercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxProviderCallsPerInvocation": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minMaxProviderCallsPerInvocation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedMaxProviderCallsPerInvocation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "customToolMaxTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minCustomToolMaxTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedCustomToolMaxTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "webFetchTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minWebFetchTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedWebFetchTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "webFetchMaxContentChars": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minWebFetchMaxContentChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedWebFetchMaxContentChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeSearchDefaultResults": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minKnowledgeSearchResults": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedKnowledgeSearchResults": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeSearchMaxResults": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "huggingFaceDownloadConnections": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minHuggingFaceDownloadConnections": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedHuggingFaceDownloadConnections": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transcriptionInferenceTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minTranscriptionInferenceTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedTranscriptionInferenceTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomeMaxRunSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minAgentHomeMaxRunSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedAgentHomeMaxRunSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomeRunRetentionDays": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minAgentHomeRunRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedAgentHomeRunRetentionDays": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -41560,6 +41817,106 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
             }
+          },
+          "transcriptionIdleTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaReadinessTimeoutCapSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaChatHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaEmbeddingHttpTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaChatCacheRamMiB": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaCpuThreadReserve": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaGpuReservePercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "llamaRamReservePercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "imageIdleTimeToLiveSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "modelFitSafetyMarginPercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxProviderCallsPerInvocation": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "customToolMaxTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "webFetchTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "webFetchMaxContentChars": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "knowledgeSearchDefaultResults": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "knowledgeSearchMaxResults": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "huggingFaceDownloadConnections": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "transcriptionInferenceTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "agentHomeMaxRunSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "agentHomeRunRetentionDays": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },

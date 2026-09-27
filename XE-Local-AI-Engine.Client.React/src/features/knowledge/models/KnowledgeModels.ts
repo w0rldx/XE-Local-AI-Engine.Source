@@ -23,11 +23,8 @@ export function normalizeKnowledgeCollectionId(value: string): string | undefine
 	return normalized.length > 0 && normalized.length <= 128 && /^[A-Z0-9._-]+$/.test(normalized) ? normalized : undefined;
 }
 
-// Advisory upload guards. The endpoint re-enforces both (extension allow-list + size cap + extraction) — these
-// only avoid a guaranteed-reject round trip and give the operator instant feedback. Mirrors the chat-attachment
-// surface's advisory-then-server-authoritative posture.
-export const KNOWLEDGE_MAX_UPLOAD_SIZE_MB = 25;
-export const KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES = KNOWLEDGE_MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+// Advisory upload guard: the extension allow-list only avoids a guaranteed-reject round trip. The size cap is the node's
+// Security:MaxUploadFileSizeMb and is left to the endpoint, which names the limit in its rejection.
 
 // Deterministic plaintext/code formats handled by the backend PlaintextDocumentReader. Keep this explicit list in
 // parity with that reader: the browser guard is advisory, but hiding a server-supported extension makes a valid local

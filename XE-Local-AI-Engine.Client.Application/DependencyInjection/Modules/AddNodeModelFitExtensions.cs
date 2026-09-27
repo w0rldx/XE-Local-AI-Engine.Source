@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities;
@@ -73,9 +74,13 @@ internal static class AddNodeModelFitExtensions
         // The catalog ranking lane composes only singleton seams (catalog provider, HF discovery, estimator, llama.cpp
         // update state) → singleton.
         builder.Services.AddSingleton<ICatalogRecommendationService, CatalogRecommendationService>();
-        // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
-        // profile → singleton. Consumed by the advisor to score each candidate GGUF file's fit.
-        builder.Services.AddSingleton<MemoryFitEstimator>();
+        // The memory-fit estimator is a pure function over GGUF header metadata + the hardware profile → singleton, scoring
+        // each candidate GGUF file's fit. Its safety margin is the live node setting, read per estimate.
+        builder.Services.AddSingleton(sp =>
+        {
+            var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
+            return new MemoryFitEstimator(MemoryFitEstimator.RuntimeOverheadBytes, runtimeSettings.GetModelFitSafetyMarginFraction);
+        });
         // The GGUF variant recommender annotates a repo's selectable files (quality tier, hardware fit verdict, one recommended pick)
         // for the download picker's inspect endpoint. Singleton: stateless over the GPU-variant selector and free-VRAM probe, and never persists.
         builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();

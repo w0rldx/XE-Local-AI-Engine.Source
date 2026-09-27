@@ -98,19 +98,34 @@ describe("useConversationAttachments", () => {
 		expect(config.headers["Content-Type"]).toBe("multipart/form-data");
 	});
 
-	it("rejects an oversize file client-side with a toast and never calls the upload endpoint", async () => {
+	it("rejects a file over the node's reported limit client-side with a toast and never calls the upload endpoint", async () => {
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(
+			() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId, maxUploadFileSizeMb: 1 }),
+			{ wrapper },
+		);
+
+		// 2 MB > the 1 MB limit the conversation list reported.
+		const oversize = new File([new Uint8Array(2 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
+		result.current.uploadFiles([oversize]);
+
+		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("big.pdf exceeds the 1 MB upload limit."));
+		expect(postMock).not.toHaveBeenCalled();
+		expect(ensureConversationId).not.toHaveBeenCalled();
+	});
+
+	it("leaves the size decision to the server while the node's limit is unknown", async () => {
 		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
 			wrapper,
 		});
 
-		// 26 MB > the 25 MB advisory cap.
-		const oversize = new File([new Uint8Array(26 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
-		result.current.uploadFiles([oversize]);
+		// Larger than the old hard-coded 25 MB guess: without a reported limit there is no pre-check at all.
+		const large = new File([new Uint8Array(26 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
+		result.current.uploadFiles([large]);
 
-		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
-		expect(postMock).not.toHaveBeenCalled();
-		expect(ensureConversationId).not.toHaveBeenCalled();
+		await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+		expect(toastErrorMock).not.toHaveBeenCalled();
 	});
 
 	it("removes an attachment via the delete endpoint", async () => {

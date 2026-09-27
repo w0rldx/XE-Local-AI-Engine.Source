@@ -11,7 +11,8 @@ import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer();
+// The page reads the custom-tool timeout ceiling from the node settings.
+setupMswServer(jsonRoute("get", "node-settings", { customToolMaxTimeoutSeconds: 300 }));
 
 // Smoke coverage only — the page orchestrates a dialog, a confirm flow, an unsaved-changes guard and five query
 // hooks, and unit-testing that orchestration would mostly re-test the libraries. What is worth pinning is that the

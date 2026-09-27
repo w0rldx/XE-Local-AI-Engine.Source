@@ -23,13 +23,6 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// </remarks>
 public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 {
-    // Byte ceiling on the candidate-vector cache, beside the configured entry bound: 4 MiB holds well over the default
-    // 512 entries at 768 dimensions and caps a 4096-dimension model, where the entry bound alone would retain 8 MB.
-    private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
-
-    // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
-    private const long EntryOverheadBytes = 64;
-
     // RAM-only, keyed by action id, version and embedding model: the version invalidates an edited action and the
     // model name stops a stale-dimension vector meeting a new model's query. Concurrent misses share one round-trip.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
@@ -54,9 +47,9 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         _options = options.Value;
         _lexical = lexical;
         _logger = logger;
-        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
+        _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingVectorCacheBudget.MaxBytes,
             _options.EmbeddingCacheMaxEntries,
-            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes,
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EmbeddingVectorCacheBudget.EntryOverheadBytes,
             timeProvider);
     }
 

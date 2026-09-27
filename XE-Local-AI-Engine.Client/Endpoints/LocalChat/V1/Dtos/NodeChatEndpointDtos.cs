@@ -38,6 +38,13 @@ public sealed class ListNodeChatConversationsResponse
     ///     keystroke, and it carries the same <c>Operator</c> policy as the hub that enforces it.
     /// </remarks>
     public required int MaxMessageSizeKb { get; init; }
+
+    /// <summary>
+    ///     The node's EFFECTIVE <c>Security:MaxUploadFileSizeMb</c>, so the attachment and knowledge upload pickers can
+    ///     refuse an oversized file before sending it. Advisory, like <see cref="MaxMessageSizeKb" />: the upload
+    ///     endpoints stay the enforcement point.
+    /// </summary>
+    public required int MaxUploadFileSizeMb { get; init; }
 }
 
 public sealed class GetNodeChatConversationRequest

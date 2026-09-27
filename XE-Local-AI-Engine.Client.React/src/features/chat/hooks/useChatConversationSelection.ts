@@ -22,6 +22,8 @@ interface ChatConversationSelection {
 	conversationsError: unknown;
 	// The node's effective Security:MaxMessageSizeKb, reported by the conversation-list endpoint.
 	maxMessageSizeKb?: number;
+	// The node's effective Security:MaxUploadFileSizeMb, from the same response.
+	maxUploadFileSizeMb?: number;
 	showArchivedConversations: boolean;
 	setShowArchivedConversations: (showArchived: boolean) => void;
 	selectedConversationId: string;
@@ -59,6 +61,7 @@ export function useChatConversationSelection({
 	// The node's effective Security:MaxMessageSizeKb, reported by the conversation-list endpoint. Undefined until that
 	// first fetch lands (or on a node that omits it) — the composer then skips its pre-check and the hub enforces.
 	const maxMessageSizeKb = conversationsData?.maxMessageSizeKb;
+	const maxUploadFileSizeMb = conversationsData?.maxUploadFileSizeMb;
 	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
 	// mergeSelectedConversation prepends the pinned conversation when the list does not contain it, so a scoped id
 	// renders correctly whatever the (still-fetched — it carries maxMessageSizeKb) conversation list returns.
@@ -154,6 +157,7 @@ export function useChatConversationSelection({
 		conversationsIsError,
 		conversationsError,
 		maxMessageSizeKb,
+		maxUploadFileSizeMb,
 		showArchivedConversations,
 		setShowArchivedConversations,
 		selectedConversationId,

@@ -41,7 +41,7 @@ public sealed class MemoryFitEstimator
     /// </remarks>
     public const double DefaultExpertWeightShareFraction = 0.85d;
 
-    private readonly double _safetyMarginFraction;
+    private readonly Func<double> _safetyMarginFraction;
 
     /// <summary>Creates an estimator with the default ~0.75 GB overhead and 12% safety margin.</summary>
     public MemoryFitEstimator()
@@ -55,7 +55,18 @@ public sealed class MemoryFitEstimator
         ArgumentOutOfRangeException.ThrowIfNegative(overheadBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(safetyMarginFraction);
         OverheadBytes = overheadBytes;
-        _safetyMarginFraction = safetyMarginFraction;
+        _safetyMarginFraction = () => safetyMarginFraction;
+    }
+
+    /// <summary>
+    ///     Creates an estimator whose safety margin is read once per estimate, so the node's live
+    ///     <c>ModelFitSafetyMarginPercent</c> applies to the next fit without a restart.
+    /// </summary>
+    public MemoryFitEstimator(long overheadBytes, Func<double> safetyMarginFraction)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(overheadBytes);
+        OverheadBytes = overheadBytes;
+        _safetyMarginFraction = safetyMarginFraction ?? throw new ArgumentNullException(nameof(safetyMarginFraction));
     }
 
     /// <summary>The fixed runtime overhead this estimator adds to every estimate (the insufficient-metadata floor).</summary>
@@ -112,8 +123,10 @@ public sealed class MemoryFitEstimator
         var budgetBytes = ResolveFitBudgetBytes(profile);
         var mode = useGpu ? FitMode.Gpu : FitMode.Cpu;
 
-        // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead.
-        var marginBytes = (long)((weightsBytes + kvBytes) * _safetyMarginFraction);
+        // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead. Read once, so the
+        // resident and the expert-offload branches of one estimate agree even if the setting changes mid-call.
+        var safetyMarginFraction = _safetyMarginFraction();
+        var marginBytes = (long)((weightsBytes + kvBytes) * safetyMarginFraction);
         var residentEstimatedBytes = weightsBytes + kvBytes + marginBytes + OverheadBytes;
         var residentHeadroomBytes = budgetBytes - residentEstimatedBytes;
 
@@ -140,7 +153,7 @@ public sealed class MemoryFitEstimator
         {
             var expertWeightsBytes = EstimateExpertWeightsBytes(weightsBytes, paramCount, moeFacts);
             var nonExpertWeightsBytes = Math.Max(val1: 0L, weightsBytes - expertWeightsBytes);
-            var gpuMarginBytes = (long)((nonExpertWeightsBytes + kvBytes) * _safetyMarginFraction);
+            var gpuMarginBytes = (long)((nonExpertWeightsBytes + kvBytes) * safetyMarginFraction);
             var gpuBytes = nonExpertWeightsBytes + kvBytes + gpuMarginBytes + OverheadBytes;
             var cpuBytes = expertWeightsBytes;
 

@@ -465,7 +465,7 @@ Every tool item spawns the tool by **bare name**, which .NET resolves against th
 
 **Build phases** (`LlamaCppSourceBuildPhase`, each pushed over the hub with the appended log lines): `Cloning → Verifying → Configuring → Building → Adopting → Completed | Cancelled | Failed`.
 
-1. **Clone** the selected repository/revision, no submodules, 15-minute cap.
+1. **Clone** the selected repository/revision, no submodules, 20-minute cap (`SourceBuildPolicy.CloneTimeout`, shared with the image and whisper source builds).
 2. **Verify** `git rev-parse HEAD` equals the expected commit **before any cmake runs** — the pinned SHA for `EnginePinned`, the requested SHA for `ExplicitCommit`, unconstrained for `DefaultBranch`. A mismatch aborts.
 3. **Resolve compute architectures** (CUDA only) from `nvidia-smi`'s `compute_cap`, validated, falling back to `75;86;89`.
 4. **cmake configure** (15-minute cap), then **cmake build** of the `llama-server` target with `-j min(nproc, 8)` (120-minute cap).

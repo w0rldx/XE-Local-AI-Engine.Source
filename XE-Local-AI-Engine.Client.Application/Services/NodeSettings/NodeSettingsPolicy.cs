@@ -17,7 +17,9 @@ public enum NodeSettingsField
     LlamaMaxLoadedProcesses,
     KeepModelWarmIntervalSeconds,
     AutoEffortFastModelName,
-    ContainerRuntimeSelection
+    ContainerRuntimeSelection,
+    KnowledgeSearchDefaultResults,
+    AgentHomeMaxRunSeconds
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>
@@ -99,6 +101,45 @@ public static class NodeSettingsPolicy
                     {
                         Field = NodeSettingsField.LlamaMaxLoadedProcesses,
                         Message = "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model."
+                    }
+                ];
+            }
+        }
+
+        // A default above the ceiling would be clamped silently at every call; refuse it where the operator can see why. Only
+        // checked when either count is stored, so a node that never touched them never reads the runtime values here.
+        if (settings.KnowledgeSearchDefaultResults is not null || settings.KnowledgeSearchMaxResults is not null)
+        {
+            var defaultResults = settings.KnowledgeSearchDefaultResults
+                                 ?? await runtimeSettings.GetKnowledgeSearchDefaultResultsAsync(cancellationToken);
+            var maxResults = settings.KnowledgeSearchMaxResults
+                             ?? await runtimeSettings.GetKnowledgeSearchMaxResultsAsync(cancellationToken);
+            if (defaultResults > maxResults)
+            {
+                return
+                [
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.KnowledgeSearchDefaultResults,
+                        Message = "The default knowledge-search result count must not exceed the maximum."
+                    }
+                ];
+            }
+        }
+
+        // A run budget shorter than one command would cut every long command off by the run clock instead of its own timeout.
+        if (settings.AgentHomeMaxRunSeconds is { } maxRunSeconds)
+        {
+            var commandTimeoutSeconds = settings.AgentHomeCommandTimeoutSeconds
+                                        ?? await runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
+            if (maxRunSeconds < commandTimeoutSeconds)
+            {
+                return
+                [
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.AgentHomeMaxRunSeconds,
+                        Message = "The AgentHome run time limit must be at least the AgentHome command timeout."
                     }
                 ];
             }

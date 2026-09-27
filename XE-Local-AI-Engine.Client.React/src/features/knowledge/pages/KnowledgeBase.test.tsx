@@ -73,7 +73,9 @@ describe("KnowledgeBase embedding-model precondition", () => {
 		const alert = await screen.findByTestId("knowledge-embedding-missing-alert");
 		expect(alert.textContent).toContain(embeddingMissing.title);
 		expect(alert.textContent).toContain(embeddingMissing.body);
-		expect(screen.getByTestId("knowledge-embedding-open-node-settings").getAttribute("href")).toBe("/node-settings");
+		expect(screen.getByTestId("knowledge-embedding-open-node-settings").getAttribute("href")).toBe(
+			"/node-settings?section=knowledge",
+		);
 
 		const dropzone = screen.getByTestId("knowledge-upload-dropzone");
 		expect(dropzone.getAttribute("aria-disabled")).toBe("true");

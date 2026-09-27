@@ -15,7 +15,7 @@ internal sealed class WebFetchPage
     /// <summary>The allow-listed media type, in canonical lower case.</summary>
     public required string ContentType { get; init; }
 
-    /// <summary>The extracted readable text, at most <c>WebFetchService.MaxContentChars</c> characters.</summary>
+    /// <summary>The extracted readable text, at most the node's <c>WebFetchMaxContentChars</c> characters.</summary>
     public required string Text { get; init; }
 
     public required bool Truncated { get; init; }

@@ -21,8 +21,9 @@ const CUSTOM_TOOL_PARAM_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const CUSTOM_TOOL_DESCRIPTION_MAX = 1024;
 const CUSTOM_TOOL_PARAM_NAME_MAX = 64;
-// HostProcessExecutor.MaxTimeoutSeconds; 0 means "use the executor default".
-export const CUSTOM_TOOL_TIMEOUT_MAX = 300;
+// The node's customToolMaxTimeoutSeconds default, used until the node settings have loaded; 0 means "use the executor
+// default". The node setting is the real ceiling (useCustomToolMaxTimeoutSeconds) and the backend re-checks it.
+export const CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK = 300;
 
 export const CUSTOM_TOOL_PARAMETER_TYPES: readonly CustomToolParameterType[] = ["string", "number", "integer", "boolean"];
 export const CUSTOM_TOOL_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
@@ -124,49 +125,51 @@ const envSchema = z.object({
 
 // Submit-time validation. Cross-field rules (Fixed forbids parameters; each kind requires its own block) are enforced
 // with superRefine so the error attaches to a stable path the form can surface. The backend re-checks everything.
-export const customToolFormSchema = z
-	.object({
-		name: z.string().trim().min(1).regex(CUSTOM_TOOL_SLUG_PATTERN, { message: "nameInvalid" }),
-		description: z.string().trim().min(1).max(CUSTOM_TOOL_DESCRIPTION_MAX),
-		kind: z.enum(["HttpFetch", "Command"]),
-		mode: z.enum(["Fixed", "Parameterized"]),
-		enabled: z.boolean(),
-		// The danger acknowledgement is mandatory: the server enforces it on every create/update, so a false here can
-		// never save. Gating Save on it in the UI just makes the requirement visible before the round-trip.
-		acknowledged: z.literal(true),
-		parameters: z.array(parameterSchema),
-		http: z.object({
-			method: z.string().trim().min(1),
-			// Required only for the ACTIVE kind — see superRefine. Only the active kind's block is submitted
-			// (toDefinition) and only its editor is rendered, so requiring this unconditionally made the empty
-			// create form unsavable with the error attached to an off-screen field.
-			urlTemplate: z.string().trim(),
-			headers: z.array(headerSchema),
-			bodyTemplate: z.string(),
-			allowedHosts: z.array(z.string().trim().min(1)),
-		}),
-		command: z.object({
-			// Required only for the ACTIVE kind — see superRefine, and the urlTemplate note above.
-			executable: z.string().trim(),
-			argsTemplate: z.array(z.string()),
-			workingDirectory: z.string(),
-			timeoutSeconds: z.number().int().min(0).max(CUSTOM_TOOL_TIMEOUT_MAX),
-			env: z.array(envSchema),
-		}),
-	})
-	.superRefine((values, ctx) => {
-		if (values.mode === "Fixed" && values.parameters.length > 0) {
-			ctx.addIssue({ code: z.ZodIssueCode.custom, message: "fixedNoParameters", path: ["mode"] });
-		}
-		if (values.kind === "HttpFetch" && values.http.urlTemplate.trim().length === 0) {
-			ctx.addIssue({ code: z.ZodIssueCode.custom, message: "urlRequired", path: ["http", "urlTemplate"] });
-		}
-		if (values.kind === "Command" && values.command.executable.trim().length === 0) {
-			ctx.addIssue({ code: z.ZodIssueCode.custom, message: "executableRequired", path: ["command", "executable"] });
-		}
-	});
+// Built per ceiling because the command-timeout maximum is a node setting, not a constant.
+export const buildCustomToolFormSchema = (maxTimeoutSeconds: number = CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK) =>
+	z
+		.object({
+			name: z.string().trim().min(1).regex(CUSTOM_TOOL_SLUG_PATTERN, { message: "nameInvalid" }),
+			description: z.string().trim().min(1).max(CUSTOM_TOOL_DESCRIPTION_MAX),
+			kind: z.enum(["HttpFetch", "Command"]),
+			mode: z.enum(["Fixed", "Parameterized"]),
+			enabled: z.boolean(),
+			// The danger acknowledgement is mandatory: the server enforces it on every create/update, so a false here can
+			// never save. Gating Save on it in the UI just makes the requirement visible before the round-trip.
+			acknowledged: z.literal(true),
+			parameters: z.array(parameterSchema),
+			http: z.object({
+				method: z.string().trim().min(1),
+				// Required only for the ACTIVE kind — see superRefine. Only the active kind's block is submitted
+				// (toDefinition) and only its editor is rendered, so requiring this unconditionally made the empty
+				// create form unsavable with the error attached to an off-screen field.
+				urlTemplate: z.string().trim(),
+				headers: z.array(headerSchema),
+				bodyTemplate: z.string(),
+				allowedHosts: z.array(z.string().trim().min(1)),
+			}),
+			command: z.object({
+				// Required only for the ACTIVE kind — see superRefine, and the urlTemplate note above.
+				executable: z.string().trim(),
+				argsTemplate: z.array(z.string()),
+				workingDirectory: z.string(),
+				timeoutSeconds: z.number().int().min(0).max(maxTimeoutSeconds),
+				env: z.array(envSchema),
+			}),
+		})
+		.superRefine((values, ctx) => {
+			if (values.mode === "Fixed" && values.parameters.length > 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "fixedNoParameters", path: ["mode"] });
+			}
+			if (values.kind === "HttpFetch" && values.http.urlTemplate.trim().length === 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "urlRequired", path: ["http", "urlTemplate"] });
+			}
+			if (values.kind === "Command" && values.command.executable.trim().length === 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "executableRequired", path: ["command", "executable"] });
+			}
+		});
 
-export type CustomToolFormSchema = z.infer<typeof customToolFormSchema>;
+export type CustomToolFormSchema = z.infer<ReturnType<typeof buildCustomToolFormSchema>>;
 
 /** Strips the `custom__` prefix so the editor works with the bare slug. */
 export function toSlug(name: string): string {

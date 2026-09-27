@@ -474,7 +474,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     ///     cleared from the profile: the estimator prefers a free-VRAM figure when one is present, and leaving it here would silently score
     ///     against a global reading this resolver has deliberately narrowed to a per-process one.
     /// </remarks>
-    private static EstimationContext BuildEstimationContext(GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
+    private EstimationContext BuildEstimationContext(GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
     {
         var useGpu = variant != GpuVariant.Cpu
                      && profile is { GpuAccelAvailable: true, VramKnown: true }
@@ -543,7 +543,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         return probed is > 0 ? probed : profile.VramBytes;
     }
 
-    private static bool FitsStableBudgets(ResourceFootprint footprint, GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
+    private bool FitsStableBudgets(ResourceFootprint footprint, GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
     {
         var ramFits = footprint.RamBytes <= UsableRamBudget(profile.TotalRamBytes);
         if (variant == GpuVariant.Cpu || !profile.VramKnown || !profile.GpuAccelAvailable)
@@ -556,13 +556,13 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                && ramFits;
     }
 
-    private static long UsableGpuBudget(long total) =>
+    private long UsableGpuBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes,
-            (long)(total * LlamaServerLaunchPolicyOptions.GpuReserveFraction)));
+            (long)(total * _options.GpuReserveFraction)));
 
-    private static long UsableRamBudget(long total) =>
+    private long UsableRamBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,
-            (long)(total * LlamaServerLaunchPolicyOptions.RamReserveFraction)));
+            (long)(total * _options.RamReserveFraction)));
 
     private int? ResolveTrainCeiling(long? contextLength)
     {

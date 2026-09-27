@@ -7,27 +7,18 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
-import { toNodeSettingsFieldBounds, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { NodeSettingsOllamaCard } from "@/features/node-settings/components/NodeSettingsOllamaCard";
+import { toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function renderCard(ollamaRuntimeDisabled: boolean) {
 	const form = { ...toNodeSettingsFieldsForm(undefined), ollamaEndpoint: "http://127.0.0.1:11434" };
 	return renderWithProviders(
-		<NodeSettingsRuntimeCard
-			form={form}
-			bounds={toNodeSettingsFieldBounds(undefined)}
-			errors={{}}
-			onChange={() => undefined}
-			draftModelOptions={[]}
-			keepWarmModelOptions={[]}
-			autoEffortFastModelOptions={[]}
-			ollamaRuntimeDisabled={ollamaRuntimeDisabled}
-		/>,
+		<NodeSettingsOllamaCard form={form} errors={{}} onChange={() => undefined} ollamaRuntimeDisabled={ollamaRuntimeDisabled} />,
 	);
 }
 
-describe("NodeSettingsRuntimeCard — Ollama endpoint field", () => {
+describe("NodeSettingsOllamaCard — Ollama endpoint field", () => {
 	it("replaces the endpoint field with the disabled line when the runtime is gated off", () => {
 		const { getByTestId, queryByTestId } = renderCard(true);
 

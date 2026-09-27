@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
@@ -970,6 +971,7 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
             reader,
             trust ?? new FakeModelTrustResolver(),
             Options.Create(options),
+            StubNodeRuntimeSettings.Create().WithAgentHomeMaxRunSeconds(options.MaxRunSeconds).Build(),
             clock ?? TimeProvider.System,
             NullLoggerFactory.Instance,
             NullLogger<AgentHomeGoalExecutor>.Instance);

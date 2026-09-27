@@ -149,6 +149,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		conversationsIsError,
 		conversationsError,
 		maxMessageSizeKb,
+		maxUploadFileSizeMb,
 		showArchivedConversations,
 		setShowArchivedConversations,
 		selectedConversationId,
@@ -284,7 +285,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		pendingUploads,
 		uploadFiles: handleUploadAttachments,
 		removeAttachment: handleRemoveAttachment,
-	} = useConversationAttachments({ conversationId: selectedConversationId, ensureConversationId });
+	} = useConversationAttachments({ conversationId: selectedConversationId, ensureConversationId, maxUploadFileSizeMb });
 
 	const refreshConversation = useCallback(
 		async (conversationId: string): Promise<void> => {

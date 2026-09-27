@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
 	CUSTOM_TOOL_NAME_PREFIX,
-	CUSTOM_TOOL_TIMEOUT_MAX,
-	customToolFormSchema,
+	buildCustomToolFormSchema,
+	CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 	type CustomToolFormValues,
 	toSlug,
 } from "@/features/customTools/models/CustomToolModels";
@@ -16,6 +16,8 @@ import {
 // submitted (toDefinition) and only its editor is rendered (CustomToolForm), so an unconditional requirement made
 // the empty create form unsavable for either kind with the error attached to an off-screen field. See
 // "ignores the inactive kind's empty block" below.
+
+const customToolFormSchema = buildCustomToolFormSchema();
 
 function values(overrides: Partial<CustomToolFormValues> = {}): CustomToolFormValues {
 	return {
@@ -110,16 +112,24 @@ describe("customToolFormSchema", () => {
 		expect(issues(input)).toContain("envNameInvalid");
 	});
 
-	// HostProcessExecutor.MaxTimeoutSeconds; 0 means "use the executor default", so the range is inclusive at both ends.
+	// The node's customToolMaxTimeoutSeconds (fallback until it loads); 0 means "use the executor default", so the range
+	// is inclusive at both ends.
 	it.each([
 		[0, true],
-		[CUSTOM_TOOL_TIMEOUT_MAX, true],
-		[CUSTOM_TOOL_TIMEOUT_MAX + 1, false],
+		[CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK, true],
+		[CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK + 1, false],
 		[-1, false],
 	])("bounds the command timeout: %s is valid=%s", (timeoutSeconds, valid) => {
 		const input = values({ kind: "Command", command: { ...values().command, timeoutSeconds } });
 
 		expect(customToolFormSchema.safeParse(input).success).toBe(valid);
+	});
+
+	it("bounds the command timeout by the ceiling the node reports", () => {
+		const input = values({ kind: "Command", command: { ...values().command, timeoutSeconds: 900 } });
+
+		expect(buildCustomToolFormSchema(1200).safeParse(input).success).toBe(true);
+		expect(buildCustomToolFormSchema(600).safeParse(input).success).toBe(false);
 	});
 
 	// The empty create form (CustomToolsPage `emptyFormValues`) starts with BOTH blocks blank. Requiring the inactive

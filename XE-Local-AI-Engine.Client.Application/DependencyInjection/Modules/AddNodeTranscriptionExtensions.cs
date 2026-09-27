@@ -49,6 +49,7 @@ internal static class AddNodeTranscriptionExtensions
             return new WhisperRuntimeOptions
             {
                 IdleTimeToLive = sp.GetRequiredService<INodeRuntimeSettings>().GetTranscriptionIdleTimeout(),
+                InferenceTimeout = sp.GetRequiredService<INodeRuntimeSettings>().GetTranscriptionInferenceTimeout(),
                 VadModelPath = pathResolver.VadFilePath,
                 ModelsDirectory = pathResolver.ModelsDirectory
             };

@@ -265,12 +265,12 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
                     contextAlignmentTokens = LlamaServerLaunchPolicyOptions.ContextAlignmentTokens,
                     gpuReserve = new
                     {
-                        fraction = LlamaServerLaunchPolicyOptions.GpuReserveFraction,
+                        fraction = _launchPolicyOptions.GpuReserveFraction,
                         minimumBytes = LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes
                     },
                     ramReserve = new
                     {
-                        fraction = LlamaServerLaunchPolicyOptions.RamReserveFraction,
+                        fraction = _launchPolicyOptions.RamReserveFraction,
                         minimumBytes = LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes
                     },
                     kvFootprintBaseline = "f16-conservative",

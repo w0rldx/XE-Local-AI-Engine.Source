@@ -23,6 +23,7 @@ import {
 	useDeleteCustomTool,
 	useUpdateCustomTool,
 } from "@/features/customTools/queries/useCustomTools";
+import { useCustomToolMaxTimeoutSeconds } from "@/features/customTools/queries/useCustomToolMaxTimeoutSeconds";
 import { useCustomToolManagementStore } from "@/features/customTools/stores/CustomToolManagementStore";
 
 // A new tool starts disabled and unacknowledged: enabling and acknowledging are deliberate acts in the editor.
@@ -40,6 +41,7 @@ const emptyFormValues: CustomToolFormValues = {
 
 export function CustomToolsPage() {
 	const { t } = useTranslation();
+	const maxTimeoutSeconds = useCustomToolMaxTimeoutSeconds();
 	const { confirm } = useConfirm();
 
 	const editorTarget = useCustomToolManagementStore((state) => state.editorTarget);
@@ -243,6 +245,7 @@ export function CustomToolsPage() {
 							onCancel={requestCloseEditor}
 							onDirtyChange={setIsDirty}
 							onAcknowledgedChange={setIsAcknowledged}
+							maxTimeoutSeconds={maxTimeoutSeconds}
 						/>
 					)}
 				</Stack>

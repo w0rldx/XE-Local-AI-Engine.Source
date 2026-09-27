@@ -26,19 +26,16 @@ internal sealed class WebFetchService
     /// <summary>The named client: pinned connect callback, no proxy, no cookies, no automatic redirects.</summary>
     public const string HttpClientName = "xe-web-fetch";
 
+    // Deliberately not shared with the custom-tool HttpFetchExecutor: this is the built-in, model-driven fetch of any page, sized for readable text.
     public const int MaxRedirects = 5;
 
     public const int MaxBodyBytes = 2 * 1024 * 1024;
-
-    public const int MaxContentChars = 12_000;
 
     /// <summary>The largest page, in elements, handed to SmartReader; see <see cref="ExtractHtmlAsync" />.</summary>
     internal const int MaxReadabilityElements = 8_000;
 
     /// <summary>The deepest element nesting handed to SmartReader; see <see cref="ExtractHtmlAsync" />.</summary>
     internal const int MaxReadabilityDepth = 64;
-
-    public static readonly TimeSpan TimeBudget = TimeSpan.FromSeconds(20);
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -119,11 +116,14 @@ internal sealed class WebFetchService
             return WebFetchOutcome.Refused("invalid-url", "web_fetch requires an absolute http or https 'url'.");
         }
 
-        using var budget = new CancellationTokenSource(TimeBudget, _timeProvider);
+        // Both limits are live node settings (WebFetchTimeoutSeconds, WebFetchMaxContentChars), read once per call.
+        var timeBudget = await _runtimeSettings.GetWebFetchTimeoutAsync(cancellationToken);
+        var maxContentChars = await _runtimeSettings.GetWebFetchMaxContentCharsAsync(cancellationToken);
+        using var budget = new CancellationTokenSource(timeBudget, _timeProvider);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
         try
         {
-            return await FetchCoreAsync(requested, allowedUrls, linked.Token);
+            return await FetchCoreAsync(requested, allowedUrls, maxContentChars, linked.Token);
         }
         catch (CustomToolExecutionException exception)
         {
@@ -147,11 +147,11 @@ internal sealed class WebFetchService
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return WebFetchOutcome.Refused("timeout", $"The page did not load within {TimeBudget.TotalSeconds:0} seconds.");
+            return WebFetchOutcome.Refused("timeout", $"The page did not load within {timeBudget.TotalSeconds:0} seconds.");
         }
     }
 
-    private async Task<WebFetchOutcome> FetchCoreAsync(Uri requested, IReadOnlyList<string>? allowedUrls, CancellationToken cancellationToken)
+    private async Task<WebFetchOutcome> FetchCoreAsync(Uri requested, IReadOnlyList<string>? allowedUrls, int maxContentChars, CancellationToken cancellationToken)
     {
         var client = _httpClientFactory.CreateClient(HttpClientName);
         var current = requested;
@@ -203,7 +203,7 @@ internal sealed class WebFetchService
             var (body, bodyCapped) = await ReadCappedAsync(response.Content, cancellationToken);
             try
             {
-                return WebFetchOutcome.Fetched(await BuildPageAsync(requested, current, canonicalMediaType, body, bodyCapped, cancellationToken));
+                return WebFetchOutcome.Fetched(await BuildPageAsync(requested, current, canonicalMediaType, body, bodyCapped, maxContentChars, cancellationToken));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -264,17 +264,17 @@ internal sealed class WebFetchService
         }
     }
 
-    private static async Task<WebFetchPage> BuildPageAsync(Uri requested, Uri final, string mediaType, string body, bool bodyCapped, CancellationToken cancellationToken)
+    private static async Task<WebFetchPage> BuildPageAsync(Uri requested, Uri final, string mediaType, string body, bool bodyCapped, int maxContentChars, CancellationToken cancellationToken)
     {
         var isHtml = mediaType is "text/html" or "application/xhtml+xml";
         var (title, text) = isHtml ? await ExtractHtmlAsync(final, body, cancellationToken) : (null, body);
         text = CollapseBlankLines(text);
 
-        var truncated = bodyCapped || text.Length > MaxContentChars;
-        if (text.Length > MaxContentChars)
+        var truncated = bodyCapped || text.Length > maxContentChars;
+        if (text.Length > maxContentChars)
         {
             // Never split a surrogate pair: a lone high surrogate is not valid text.
-            text = text[..(char.IsHighSurrogate(text[MaxContentChars - 1]) ? MaxContentChars - 1 : MaxContentChars)];
+            text = text[..(char.IsHighSurrogate(text[maxContentChars - 1]) ? maxContentChars - 1 : maxContentChars)];
         }
 
         return new WebFetchPage

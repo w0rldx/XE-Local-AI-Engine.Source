@@ -929,6 +929,108 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal("large-v3-turbo", kept.TranscriptionSelectedModelId);
     }
 
+    [Test]
+    public async Task Tunables_AtTheirBounds_RoundTrip()
+    {
+        var atMin = await SaveAndReloadAsync(TunablesAt(static bounds => bounds.Min));
+        var atMax = await SaveAndReloadAsync(TunablesAt(static bounds => bounds.Max));
+
+        foreach (var (name, read, bounds) in Tunables)
+        {
+            AssertEx.Equal(bounds.Min, read(atMin), $"{name} at its minimum must survive Normalize.");
+            AssertEx.Equal(bounds.Max, read(atMax), $"{name} at its maximum must survive Normalize.");
+        }
+    }
+
+    [Test]
+    public async Task Tunables_OutOfRange_ResetOnlyThemselves()
+    {
+        // One step outside each bound: every tunable falls back to null (re-seeded), and an unrelated field survives.
+        var below = await SaveAndReloadAsync(TunablesAt(static bounds => bounds.Min - 1) with
+        {
+            DefaultModelName = "keep-unrelated"
+        });
+        var above = await SaveAndReloadAsync(TunablesAt(static bounds => bounds.Max + 1));
+
+        foreach (var (name, read, _) in Tunables)
+        {
+            AssertEx.Null(read(below), $"{name} below its minimum must fall back to null.");
+            AssertEx.Null(read(above), $"{name} above its maximum must fall back to null.");
+        }
+
+        AssertEx.Equal("keep-unrelated", below.DefaultModelName);
+    }
+
+    private static readonly (string Name, Func<StoredNodeSettings, int?> Read, (int Min, int Max) Bounds)[] Tunables =
+    [
+        (nameof(StoredNodeSettings.LlamaReadinessTimeoutCapSeconds), static s => s.LlamaReadinessTimeoutCapSeconds,
+            (StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds)),
+        (nameof(StoredNodeSettings.LlamaChatHttpTimeoutSeconds), static s => s.LlamaChatHttpTimeoutSeconds,
+            (StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds)),
+        (nameof(StoredNodeSettings.LlamaEmbeddingHttpTimeoutSeconds), static s => s.LlamaEmbeddingHttpTimeoutSeconds,
+            (StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds)),
+        (nameof(StoredNodeSettings.LlamaChatCacheRamMiB), static s => s.LlamaChatCacheRamMiB,
+            (StoredNodeSettings.MinLlamaChatCacheRamMiB, StoredNodeSettings.MaxLlamaChatCacheRamMiB)),
+        (nameof(StoredNodeSettings.LlamaCpuThreadReserve), static s => s.LlamaCpuThreadReserve,
+            (StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve)),
+        (nameof(StoredNodeSettings.LlamaGpuReservePercent), static s => s.LlamaGpuReservePercent,
+            (StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent)),
+        (nameof(StoredNodeSettings.LlamaRamReservePercent), static s => s.LlamaRamReservePercent,
+            (StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent)),
+        (nameof(StoredNodeSettings.ImageIdleTimeToLiveSeconds), static s => s.ImageIdleTimeToLiveSeconds,
+            (StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds)),
+        (nameof(StoredNodeSettings.ModelFitSafetyMarginPercent), static s => s.ModelFitSafetyMarginPercent,
+            (StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent)),
+        (nameof(StoredNodeSettings.MaxProviderCallsPerInvocation), static s => s.MaxProviderCallsPerInvocation,
+            (StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation)),
+        (nameof(StoredNodeSettings.CustomToolMaxTimeoutSeconds), static s => s.CustomToolMaxTimeoutSeconds,
+            (StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds)),
+        (nameof(StoredNodeSettings.WebFetchTimeoutSeconds), static s => s.WebFetchTimeoutSeconds,
+            (StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds)),
+        (nameof(StoredNodeSettings.WebFetchMaxContentChars), static s => s.WebFetchMaxContentChars,
+            (StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars)),
+        (nameof(StoredNodeSettings.KnowledgeSearchDefaultResults), static s => s.KnowledgeSearchDefaultResults,
+            (StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)),
+        (nameof(StoredNodeSettings.KnowledgeSearchMaxResults), static s => s.KnowledgeSearchMaxResults,
+            (StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)),
+        (nameof(StoredNodeSettings.HuggingFaceDownloadConnections), static s => s.HuggingFaceDownloadConnections,
+            (StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections)),
+        (nameof(StoredNodeSettings.TranscriptionInferenceTimeoutMinutes), static s => s.TranscriptionInferenceTimeoutMinutes,
+            (StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes)),
+        (nameof(StoredNodeSettings.AgentHomeMaxRunSeconds), static s => s.AgentHomeMaxRunSeconds,
+            (StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds)),
+        (nameof(StoredNodeSettings.AgentHomeRunRetentionDays), static s => s.AgentHomeRunRetentionDays,
+            (StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays))
+    ];
+
+    private static StoredNodeSettings TunablesAt(Func<(int Min, int Max), int> pick)
+    {
+        int Value(int index) => pick(Tunables[index].Bounds);
+
+        return new StoredNodeSettings
+        {
+            LlamaReadinessTimeoutCapSeconds = Value(0),
+            LlamaChatHttpTimeoutSeconds = Value(1),
+            LlamaEmbeddingHttpTimeoutSeconds = Value(2),
+            LlamaChatCacheRamMiB = Value(3),
+            LlamaCpuThreadReserve = Value(4),
+            LlamaGpuReservePercent = Value(5),
+            LlamaRamReservePercent = Value(6),
+            ImageIdleTimeToLiveSeconds = Value(7),
+            ModelFitSafetyMarginPercent = Value(8),
+            MaxProviderCallsPerInvocation = Value(9),
+            CustomToolMaxTimeoutSeconds = Value(10),
+            WebFetchTimeoutSeconds = Value(11),
+            WebFetchMaxContentChars = Value(12),
+            KnowledgeSearchDefaultResults = Value(13),
+            KnowledgeSearchMaxResults = Value(14),
+            HuggingFaceDownloadConnections = Value(15),
+            TranscriptionInferenceTimeoutMinutes = Value(16),
+            AgentHomeMaxRunSeconds = Value(17),
+            AgentHomeRunRetentionDays = Value(18)
+        };
+    }
+
     private async Task<StoredNodeSettings> SaveAndReloadAsync(StoredNodeSettings settings)
     {
         using var store = NewStore();

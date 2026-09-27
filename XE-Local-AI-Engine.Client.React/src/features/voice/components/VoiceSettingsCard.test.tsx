@@ -4,13 +4,13 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
-const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey } = vi.hoisted(() => ({
+// Mock the generated query factory to isolate the saved-state read while retaining validation and mapping. The card
+// never writes: the node fields are draft props the Node settings page saves through its save bar.
+const { getNodeSettingsOptionsMock, saveMutationFn, nodeSettingsQueryKey } = vi.hoisted(() => ({
 	getNodeSettingsOptionsMock: vi.fn(),
 	saveMutationFn: vi.fn(),
-	toastError: vi.fn(),
 	nodeSettingsQueryKey: ["getNodeSettings"] as const,
 }));
 
@@ -19,8 +19,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsQueryKey: () => nodeSettingsQueryKey,
 	saveNodeSettingsMutation: () => ({ mutationFn: saveMutationFn }),
 }));
-
-vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastError, success: vi.fn() } }));
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
@@ -31,19 +29,30 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
-function renderCard(): { queryClient: QueryClient } {
+interface DraftHandlers {
+	readonly onVoiceFeatureEnabledChange: Mock<(enabled: boolean) => void>;
+	readonly onDefaultVoiceProfileChange: Mock<(profile: string) => void>;
+}
+
+function renderCard(draftEnabled = false): DraftHandlers {
+	const handlers: DraftHandlers = { onVoiceFeatureEnabledChange: vi.fn(), onDefaultVoiceProfileChange: vi.fn() };
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	const ui: ReactElement = (
 		<QueryClientProvider client={queryClient}>
 			<MantineProvider env="test" theme={testMantineTheme}>
-				<VoiceSettingsCard />
+				<VoiceSettingsCard
+					voiceFeatureEnabled={draftEnabled}
+					defaultVoiceProfile=""
+					onVoiceFeatureEnabledChange={handlers.onVoiceFeatureEnabledChange}
+					onDefaultVoiceProfileChange={handlers.onDefaultVoiceProfileChange}
+				/>
 			</MantineProvider>
 		</QueryClientProvider>
 	);
 	render(ui);
-	return { queryClient };
+	return handlers;
 }
 
 describe("VoiceSettingsCard operator controls", () => {
@@ -55,12 +64,10 @@ describe("VoiceSettingsCard operator controls", () => {
 		useNodeAuthStore.setState({ accessToken: "test-access-token" });
 		getNodeSettingsOptionsMock.mockReset();
 		saveMutationFn.mockReset();
-		toastError.mockReset();
 		getNodeSettingsOptionsMock.mockReturnValue({
 			queryKey: nodeSettingsQueryKey,
 			queryFn: async () => ({ voiceFeatureEnabled: false, defaultVoiceProfile: undefined }),
 		});
-		saveMutationFn.mockResolvedValue({ voiceFeatureEnabled: true });
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -108,30 +115,24 @@ describe("VoiceSettingsCard operator controls", () => {
 		expect(screen.queryByTestId("voice-settings-enable-switch")).toBeNull();
 	});
 
-	it("writes voiceFeatureEnabled=true through the node-settings mutation when the operator toggles the node gate", async () => {
-		renderCard();
+	it("reports a node-gate toggle to the page draft and never saves by itself", async () => {
+		const handlers = renderCard();
 
 		const gate = (await screen.findByTestId("voice-settings-node-gate-switch")) as HTMLInputElement;
 		await waitFor(() => expect(gate.disabled).toBe(false));
 
 		fireEvent.click(gate);
 
-		await waitFor(() => expect(saveMutationFn).toHaveBeenCalledTimes(1));
-		expect(saveMutationFn).toHaveBeenCalledWith(
-			expect.objectContaining({ body: { voiceFeatureEnabled: true } }),
-			expect.anything(),
-		);
+		expect(handlers.onVoiceFeatureEnabledChange).toHaveBeenCalledWith(true);
+		expect(saveMutationFn).not.toHaveBeenCalled();
 	});
 
-	it("invalidates the shared node-settings query after a successful node save", async () => {
-		const { queryClient } = renderCard();
-		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+	it("shows the draft gate while the per-browser block follows the saved gate", async () => {
+		renderCard(true);
 
 		const gate = (await screen.findByTestId("voice-settings-node-gate-switch")) as HTMLInputElement;
-		await waitFor(() => expect(gate.disabled).toBe(false));
-
-		fireEvent.click(gate);
-
-		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: nodeSettingsQueryKey })));
+		expect(gate.checked).toBe(true);
+		// The node still has voice off until the draft is saved, so the runtime-backed controls stay hidden.
+		expect(screen.queryByTestId("voice-settings-enable-switch")).toBeNull();
 	});
 });

@@ -19,19 +19,12 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 /// </remarks>
 public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuildService, IDisposable
 {
-    private const int MaxBuildJobs = 8;
     private const int MaxLogLines = 500;
     private const int PublishQueueCapacity = 128;
 
     // Conservative fallback set when nvidia-smi's compute_cap cannot be read or validated, matching the llama.cpp
     // managed build's choice so two managed lanes on one box do not disagree about what they target.
     private const string DefaultCudaArchitectures = "75;86;89;120";
-
-    private static readonly TimeSpan BuildTimeout = TimeSpan.FromHours(2);
-    private static readonly TimeSpan CloneTimeout = TimeSpan.FromMinutes(20);
-    private static readonly TimeSpan ConfigureTimeout = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan ShortCommandTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan SmokeTimeout = TimeSpan.FromSeconds(20);
 
     private static readonly string[] GitHardeningArguments =
     [
@@ -541,19 +534,19 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             var requestedCommit = descriptor.RevisionMode == WhisperCppSourceRevisionMode.EnginePinned
                 ? WhisperCppReleasePins.PinnedSourceCommitSha
                 : descriptor.RequestedCommit;
-            await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, ShortCommandTimeout, captureOutput: false, ct)
+            await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
                 .ConfigureAwait(false);
             await RunRequiredAsync("git",
                     GitArguments("remote", "add", "origin", descriptor.Repository),
                     sourceDir,
-                    ShortCommandTimeout,
+                    SourceBuildPolicy.ShortCommandTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
             await RunRequiredAsync("git",
                     GitArguments("fetch", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", requestedCommit ?? "HEAD"),
                     sourceDir,
-                    CloneTimeout,
+                    SourceBuildPolicy.CloneTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
@@ -562,14 +555,14 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             await RunRequiredAsync("git",
                     GitArguments("checkout", "--detach", "FETCH_HEAD"),
                     sourceDir,
-                    ShortCommandTimeout,
+                    SourceBuildPolicy.ShortCommandTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
             var resolvedCommit = (await RunRequiredAsync("git",
                     GitArguments("rev-parse", "HEAD"),
                     sourceDir,
-                    ShortCommandTimeout,
+                    SourceBuildPolicy.ShortCommandTimeout,
                     captureOutput: true,
                     ct)
                 .ConfigureAwait(false)).StandardOutput.Trim();
@@ -586,7 +579,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             await RunRequiredAsync("git",
                     GitArguments("submodule", "update", "--init", "--recursive"),
                     sourceDir,
-                    CloneTimeout,
+                    SourceBuildPolicy.CloneTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
@@ -605,10 +598,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 ? await ResolveCudaArchitecturesAsync(ct).ConfigureAwait(false)
                 : null;
             var cmakeArgs = BuildCMakeConfigureArguments(sourceDir, buildDir, descriptor.Backend, architectures);
-            await RunRequiredAsync("cmake", cmakeArgs, WorkRoot, ConfigureTimeout, captureOutput: false, ct).ConfigureAwait(false);
+            await RunRequiredAsync("cmake", cmakeArgs, WorkRoot, SourceBuildPolicy.ConfigureTimeout, captureOutput: false, ct).ConfigureAwait(false);
 
             SetPhase(WhisperCppSourceBuildPhase.Building);
-            var buildJobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
+            var buildJobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
             await RunRequiredAsync("cmake",
                     [
                         "--build", buildDir,
@@ -617,7 +610,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                         "--parallel", buildJobs.ToString(CultureInfo.InvariantCulture)
                     ],
                     WorkRoot,
-                    BuildTimeout,
+                    SourceBuildPolicy.BuildTimeout,
                     captureOutput: false,
                     ct)
                 .ConfigureAwait(false);
@@ -629,7 +622,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             ValidateRequestedBackendArtifacts(buildDir, descriptor.Backend);
 
             SetPhase(WhisperCppSourceBuildPhase.SmokeTesting);
-            await RunRequiredAsync(serverPath, ["--help"], Path.GetDirectoryName(serverPath)!, SmokeTimeout, captureOutput: false, ct)
+            await RunRequiredAsync(serverPath, ["--help"], Path.GetDirectoryName(serverPath)!, SourceBuildPolicy.SmokeTimeout, captureOutput: false, ct)
                 .ConfigureAwait(false);
 
             SetPhase(WhisperCppSourceBuildPhase.Adopting);
@@ -677,7 +670,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         var result = await RunRequiredAsync("readelf",
                 ["-d", serverPath],
                 Path.GetDirectoryName(serverPath)!,
-                ShortCommandTimeout,
+                SourceBuildPolicy.ShortCommandTimeout,
                 captureOutput: true,
                 ct)
             .ConfigureAwait(false);
@@ -692,7 +685,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                                           ["--query-gpu=compute_cap", "--format=csv,noheader"],
                                           WorkRoot,
                                           _ => { },
-                                          ShortCommandTimeout,
+                                          SourceBuildPolicy.ShortCommandTimeout,
                                           captureOutput: true,
                                           ct)
                                       .ConfigureAwait(false);

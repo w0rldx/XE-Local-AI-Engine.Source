@@ -5,8 +5,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-	NodeSettingsAdvancedFieldsCard,
 	type NodeSettingsAdvancedFieldsCardProps,
+	NodeSettingsAgentLimitsCard,
+	NodeSettingsAgentWorkspacesCard,
 } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
 import { toNodeSettingsFieldBounds, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import { testMantineTheme } from "@/test/MantineTestRender";
@@ -41,15 +42,17 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
-function renderCard(): void {
+function renderCards(): void {
+	const props: NodeSettingsAdvancedFieldsCardProps = {
+		form: toNodeSettingsFieldsForm(undefined),
+		bounds: toNodeSettingsFieldBounds(undefined),
+		errors: {},
+		onChange: vi.fn() as unknown as NodeSettingsAdvancedFieldsCardProps["onChange"],
+	};
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<NodeSettingsAdvancedFieldsCard
-				form={toNodeSettingsFieldsForm(undefined)}
-				bounds={toNodeSettingsFieldBounds(undefined)}
-				errors={{}}
-				onChange={vi.fn() as unknown as NodeSettingsAdvancedFieldsCardProps["onChange"]}
-			/>
+			<NodeSettingsAgentLimitsCard {...props} />
+			<NodeSettingsAgentWorkspacesCard {...props} />
 		</MantineProvider>,
 	);
 }
@@ -68,7 +71,7 @@ describe("NodeSettingsAdvancedFieldsCard guidance", () => {
 	afterEach(() => cleanup());
 
 	it("explains disconnect grace semantics and displays its seconds unit", () => {
-		renderCard();
+		renderCards();
 
 		expect(screen.getByLabelText("Disconnect grace")).toBeTruthy();
 		expect(
@@ -79,25 +82,39 @@ describe("NodeSettingsAdvancedFieldsCard guidance", () => {
 		expectInputSuffix("node-settings-detached-grace-seconds", "seconds");
 	});
 
-	it("marks both AgentHome timeouts as live-reload settings measured in seconds", () => {
-		renderCard();
+	it("shows both AgentHome timeouts as live-reload settings in minutes", () => {
+		renderCards();
 
 		expect(screen.getByLabelText("AgentHome prepare timeout")).toBeTruthy();
 		expect(screen.getByLabelText("AgentHome command timeout")).toBeTruthy();
-		expect(screen.getAllByText("Allowed range: 1–86400 seconds. Changes take effect without restarting the node.")).toHaveLength(
+		// 1–86400 s on the wire, shown in minutes; the 1 s floor is no clean minute value, so it stays in seconds.
+		expect(screen.getAllByText("Allowed range: 1 s–1440 minutes. Changes take effect without restarting the node.")).toHaveLength(
 			2,
 		);
-		expectInputSuffix("node-settings-agenthome-prepare-timeout", "seconds");
-		expectInputSuffix("node-settings-agenthome-command-timeout", "seconds");
+		expect((screen.getByTestId("node-settings-agenthome-prepare-timeout") as HTMLInputElement).value).toBe("15 minutes");
+		expectInputSuffix("node-settings-agenthome-command-timeout", "minutes");
 	});
 
-	it("retains byte-limit labels and live-reload guidance", () => {
-		renderCard();
+	it("shows the AgentHome byte caps in MB with live-reload guidance", () => {
+		renderCards();
 
 		expect(screen.getByLabelText("AgentHome max selected folder size")).toBeTruthy();
 		expect(screen.getByLabelText("AgentHome max patch size")).toBeTruthy();
-		expect(screen.getAllByText("A positive number of bytes. Changes take effect without restarting the node.")).toHaveLength(2);
-		expectInputSuffix("node-settings-agenthome-max-folder-bytes", "bytes");
-		expectInputSuffix("node-settings-agenthome-max-patch-bytes", "bytes");
+		expect(screen.getAllByText("A positive size in MB. Changes take effect without restarting the node.")).toHaveLength(2);
+		// 536870912 / 52428800 bytes on the wire.
+		expect((screen.getByTestId("node-settings-agenthome-max-folder-bytes") as HTMLInputElement).value).toBe("512 MB");
+		expect((screen.getByTestId("node-settings-agenthome-max-patch-bytes") as HTMLInputElement).value).toBe("50 MB");
+	});
+
+	it("adds the run time limit in minutes and the run retention in days", () => {
+		renderCards();
+
+		expect((screen.getByTestId("node-settings-agenthome-max-run") as HTMLInputElement).value).toBe("10 minutes");
+		expect((screen.getByTestId("node-settings-agenthome-run-retention") as HTMLInputElement).value).toBe("30 days");
+		expect(
+			screen.getByText(
+				"Allowed range: 1–1440 minutes. The longest a whole run may take; at least the command timeout. Applies to the next run.",
+			),
+		).toBeTruthy();
 	});
 });

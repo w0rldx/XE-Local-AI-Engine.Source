@@ -146,6 +146,86 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
             .When(static request => request.DetachedGraceSeconds is not null);
 
+        RuleFor(static request => request.TranscriptionIdleTimeoutMinutes!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes, StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes)
+            .When(static request => request.TranscriptionIdleTimeoutMinutes is not null);
+
+        RuleFor(static request => request.LlamaReadinessTimeoutCapSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds)
+            .When(static request => request.LlamaReadinessTimeoutCapSeconds is not null);
+
+        RuleFor(static request => request.LlamaChatHttpTimeoutSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds)
+            .When(static request => request.LlamaChatHttpTimeoutSeconds is not null);
+
+        RuleFor(static request => request.LlamaEmbeddingHttpTimeoutSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds)
+            .When(static request => request.LlamaEmbeddingHttpTimeoutSeconds is not null);
+
+        RuleFor(static request => request.LlamaChatCacheRamMiB!.Value)
+            .InclusiveBetween(StoredNodeSettings.LlamaChatCacheRamMiBAuto, StoredNodeSettings.MaxLlamaChatCacheRamMiB)
+            .When(static request => request.LlamaChatCacheRamMiB is not null);
+
+        RuleFor(static request => request.LlamaCpuThreadReserve!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve)
+            .When(static request => request.LlamaCpuThreadReserve is not null);
+
+        RuleFor(static request => request.LlamaGpuReservePercent!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent)
+            .When(static request => request.LlamaGpuReservePercent is not null);
+
+        RuleFor(static request => request.LlamaRamReservePercent!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent)
+            .When(static request => request.LlamaRamReservePercent is not null);
+
+        RuleFor(static request => request.ImageIdleTimeToLiveSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds)
+            .When(static request => request.ImageIdleTimeToLiveSeconds is not null);
+
+        RuleFor(static request => request.ModelFitSafetyMarginPercent!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent)
+            .When(static request => request.ModelFitSafetyMarginPercent is not null);
+
+        RuleFor(static request => request.MaxProviderCallsPerInvocation!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation)
+            .When(static request => request.MaxProviderCallsPerInvocation is not null);
+
+        RuleFor(static request => request.CustomToolMaxTimeoutSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds)
+            .When(static request => request.CustomToolMaxTimeoutSeconds is not null);
+
+        RuleFor(static request => request.WebFetchTimeoutSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds)
+            .When(static request => request.WebFetchTimeoutSeconds is not null);
+
+        RuleFor(static request => request.WebFetchMaxContentChars!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars)
+            .When(static request => request.WebFetchMaxContentChars is not null);
+
+        RuleFor(static request => request.KnowledgeSearchDefaultResults!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)
+            .When(static request => request.KnowledgeSearchDefaultResults is not null);
+
+        RuleFor(static request => request.KnowledgeSearchMaxResults!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults)
+            .When(static request => request.KnowledgeSearchMaxResults is not null);
+
+        RuleFor(static request => request.HuggingFaceDownloadConnections!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections)
+            .When(static request => request.HuggingFaceDownloadConnections is not null);
+
+        RuleFor(static request => request.TranscriptionInferenceTimeoutMinutes!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes)
+            .When(static request => request.TranscriptionInferenceTimeoutMinutes is not null);
+
+        RuleFor(static request => request.AgentHomeMaxRunSeconds!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds)
+            .When(static request => request.AgentHomeMaxRunSeconds is not null);
+
+        RuleFor(static request => request.AgentHomeRunRetentionDays!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays)
+            .When(static request => request.AgentHomeRunRetentionDays is not null);
+
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
         // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.
         RuleFor(static request => request.UsageRates!)

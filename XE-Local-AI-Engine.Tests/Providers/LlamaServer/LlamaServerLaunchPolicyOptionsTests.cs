@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -90,10 +91,11 @@ public sealed class LlamaServerLaunchPolicyOptionsTests
     [Test]
     public void Seed_AssignsOnlyTheKvCacheTypeAndItsQuantizationFlag()
     {
-        // The DI seed itself, not a hand-written re-expression of it. Any third assignment added to
-        // BuildSeededLlamaServerLaunchPolicyOptions makes the seeded object differ from the provider default on a
-        // third member, which breaks invariant 2 (byte-identical argv, launch identity and profile fingerprint) and
-        // must break this test. f16 is used because it moves BOTH members the seed is allowed to move.
+        // The DI seed itself, not a hand-written re-expression of it. With every other node setting at its default, any
+        // further assignment added to BuildSeededLlamaServerLaunchPolicyOptions that moves a third member breaks invariant 2
+        // (byte-identical argv, launch identity and profile fingerprint) and must break this test. The thread reserve and the
+        // two reserve fractions ARE seeded, but at their defaults they must equal the provider's. f16 is used because it moves
+        // BOTH members the KV setting is allowed to move.
         using var services = new ServiceCollection()
                              .AddSingleton(StubNodeRuntimeSettings.Create().WithKvCacheType(LlamaServerKvCacheTypes.F16).Build())
                              .BuildServiceProvider();
@@ -112,6 +114,37 @@ public sealed class LlamaServerLaunchPolicyOptionsTests
             "The DI seed must assign exactly the KV cache type and its quantization flag.");
         AssertEx.Equal(LlamaServerKvCacheTypes.F16, seeded.KvCacheType);
         AssertEx.False(seeded.EnableGpuKvCacheQuantization);
+    }
+
+    [Test]
+    public void Seed_CarriesTheThreadReserveAndBothReserveFractions()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        runtimeSettings.GetLlamaCpuThreadReserve().Returns(3);
+        runtimeSettings.GetLlamaGpuReserveFraction().Returns(0.1d);
+        runtimeSettings.GetLlamaRamReserveFraction().Returns(0.25d);
+        using var services = new ServiceCollection().AddSingleton(runtimeSettings).BuildServiceProvider();
+
+        var seeded = AddNodeModelRuntimeExtensions.BuildSeededLlamaServerLaunchPolicyOptions(services);
+
+        AssertEx.Equal(expected: 3, seeded.CpuThreadReserve);
+        AssertEx.Equal(expected: 0.1d, seeded.GpuReserveFraction);
+        AssertEx.Equal(expected: 0.25d, seeded.RamReserveFraction);
+    }
+
+    [Test]
+    [Arguments(-0.01d)]
+    [Arguments(1d)]
+    public async Task Validate_ReserveFractionOutsideZeroToOne_Throws(double fraction)
+    {
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            GpuReserveFraction = fraction
+        });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            RamReserveFraction = fraction
+        });
     }
 
     [Test]

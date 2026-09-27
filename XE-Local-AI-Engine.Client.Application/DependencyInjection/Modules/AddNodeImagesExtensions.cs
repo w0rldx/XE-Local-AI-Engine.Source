@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -30,7 +31,13 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddHuggingFaceImageModelStore(configuration);
         // Registered BEFORE the provider modules: both TryAdd a bare default, so this is the only place the
         // StableDiffusionRuntime config section (port range, TTL, cap, TextEncoderOnGpu, ...) reaches the supervisor.
-        builder.Services.AddSingleton(BindStableDiffusionRuntimeOptions(configuration));
+        builder.Services.AddSingleton(sp =>
+        {
+            // The idle TTL is a node setting (stored > this section's value > 15 min), seeded here because the provider cannot read it.
+            var options = BindStableDiffusionRuntimeOptions(configuration);
+            options.IdleTimeToLive = sp.GetRequiredService<INodeRuntimeSettings>().GetImageIdleTimeToLive();
+            return options;
+        });
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();
 
