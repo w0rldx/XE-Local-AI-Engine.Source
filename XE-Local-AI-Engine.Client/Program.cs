@@ -65,6 +65,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.ExternalApps;
     using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
     using XE_Local_AI_Engine.Client.Services.Integrations;
+    using XE_Local_AI_Engine.Client.Services.NodeSettings;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.Transcription;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -383,12 +384,19 @@ namespace XE_Local_AI_Engine.Client
                 builder.Services.AddSingleton<DesktopParentLifetime>(_ => parentLifetime);
             }
 
+            // The launch mode resolved above, registered once so no service or endpoint re-reads the process arguments.
+            var launchContext = new NodeLaunchContext
+            {
+                IsLocalMode = isLocalMode
+            };
+            builder.Services.AddSingleton(launchContext);
+
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases), desktop-mode only: off the flag this registers nothing and the desktop-only endpoints are
             // filtered out of FastEndpoints above. The process args are re-passed on relaunch, so the new version comes back up in desktop mode on the persisted port.
             builder.AddAppUpdate(builder.Configuration,
-                launchMode,
+                launchContext,
                 stableRestartArgs,
                 shellOwned: parentLifetime is not null);
 

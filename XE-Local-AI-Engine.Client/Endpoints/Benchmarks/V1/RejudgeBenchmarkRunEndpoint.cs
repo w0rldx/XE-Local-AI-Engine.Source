@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Judges one succeeded run again under the project's current policy.</summary>
 public sealed class RejudgeBenchmarkRunEndpoint : Endpoint<RejudgeBenchmarkRunRequest, BenchmarkRunDetailResponse>

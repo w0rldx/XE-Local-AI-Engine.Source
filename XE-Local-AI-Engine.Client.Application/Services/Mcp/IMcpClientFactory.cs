@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
 using ModelContextProtocol.Client;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Creates a connected <see cref="McpClient" /> for a registration.

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -33,7 +34,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // The ordinary way an operator runs a suite. Deriving the cell from the repeat group alone made every one of
         // these three runs its own singleton cell, each missing two of three items, and the project ranked nothing.
         await using var context = await CreateDatabaseAsync("cell-mean.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 3);
 
         var cell = await ScoredCellAsync(store, project.Id, 90, 60, 30);
@@ -53,7 +54,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // Exclusion, not partial credit: scored on the two easy items only, a model that ran out of budget on the
         // hard one would outrank one that attempted everything.
         await using var context = await CreateDatabaseAsync("cell-incomplete.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 3);
 
         var cell = await ScoredCellAsync(store, project.Id, [(90, "stop"), (60, "stop"), (null, "length")]);
@@ -73,7 +74,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     public async Task TwoFreezesOfOneProject_AreDistinctCells_NeverAveragedTogether()
     {
         await using var context = await CreateDatabaseAsync("cell-two-freezes.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 2);
 
         var first = await ScoredCellAsync(store, project.Id, 90, 90);
@@ -94,7 +95,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // A warm-up sits at repeat index 0, so it forms a cell that could only ever complete if every leaf item also
         // got a warm-up run — and it would then sit in the denominator forever.
         await using var context = await CreateDatabaseAsync("cell-warmup.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 2);
         var warmupCell = "cell:" + Guid.NewGuid().ToString("D") + ":0";
         _ = await ScoredCellAsync(store, project.Id, [(50, "stop")], cellKey: warmupCell, warmup: true, itemLimit: 1);
@@ -114,7 +115,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // A project frozen before task suites keeps ranking after something materializes its item 0. The materialized
         // item must not turn every historical singleton into an incomplete cell.
         await using var context = await CreateDatabaseAsync("cell-legacy.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var high = await LegacyScoredRunAsync(store, project.Id, 90);
         var low = await LegacyScoredRunAsync(store, project.Id, 10);
@@ -136,7 +137,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // anyway overruled the machine about a fact they could see — and wrong here: the score was given for a
         // question that has since changed, and the operator has no way to know it did.
         await using var context = await CreateDatabaseAsync("cell-item-revised.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 2);
         var cell = await ScoredCellAsync(store, project.Id, 90, 90);
         var items = await store.ListTaskItemsAsync(project.Id);
@@ -159,7 +160,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     {
         // The precedence change must not have broken the override it sits above.
         await using var context = await CreateDatabaseAsync("cell-truncation-override.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 2);
 
         var cell = await ScoredCellAsync(store, project.Id, [(70, "length"), (90, "stop")]);
@@ -175,7 +176,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     public async Task AddingAnItem_ExcludesEveryHistoricalCell_ItemSetRevised()
     {
         await using var context = await CreateDatabaseAsync("cell-item-added.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 2);
         var cell = await ScoredCellAsync(store, project.Id, 90, 90);
         var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
@@ -196,7 +197,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // suite the model was never scored on. Only the per-run copy of the set hash can see it — the project-level
         // hash cannot, because it IS the thing that changed.
         await using var context = await CreateDatabaseAsync("cell-item-deleted.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 3);
         var cell = await ScoredCellAsync(store, project.Id, [(90, "stop"), (90, "stop"), (null, "length")]);
         var items = await store.ListTaskItemsAsync(project.Id);
@@ -219,7 +220,7 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         // The set hash is ordered by item Id, not by index: a reorder changes no question, so a cosmetic drag-and-drop
         // must not unrank a completed suite.
         await using var context = await CreateDatabaseAsync("cell-item-reordered.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await CreateSuiteAsync(store, itemCount: 3);
         var cell = await ScoredCellAsync(store, project.Id, 90, 60, 30);
         var items = await store.ListTaskItemsAsync(project.Id);

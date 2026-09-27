@@ -24,7 +24,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     private readonly IRuntimeAcquisitionEventPublisher _publisher;
     private readonly TimeProvider _timeProvider;
 
-    private RuntimeAcquisitionStatusHubEvent _current = Empty;
+    private RuntimeAcquisitionStatusEvent _current = Empty;
     private long _lastPushTicks;
     private long _sequence;
 
@@ -38,7 +38,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     }
 
     /// <summary>The pre-acquisition snapshot: nothing attempted yet in this process lifetime.</summary>
-    public static RuntimeAcquisitionStatusHubEvent Empty { get; } = new()
+    public static RuntimeAcquisitionStatusEvent Empty { get; } = new()
     {
         Sequence = 0,
         Phase = nameof(RuntimeAcquisitionPhase.Idle),
@@ -52,7 +52,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     };
 
     /// <inheritdoc />
-    public RuntimeAcquisitionStatusHubEvent Current
+    public RuntimeAcquisitionStatusEvent Current
     {
         get
         {
@@ -68,7 +68,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     {
         ArgumentNullException.ThrowIfNull(update);
 
-        RuntimeAcquisitionStatusHubEvent? toPush;
+        RuntimeAcquisitionStatusEvent? toPush;
         lock (_gate)
         {
             // Byte updates repeat within one (phase, step); a phase or step transition — and every terminal status —
@@ -79,7 +79,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
 
             // The write itself is unconditional, so the hydrate endpoint always serves the freshest bytes even while a
             // push is being throttled.
-            _current = new RuntimeAcquisitionStatusHubEvent
+            _current = new RuntimeAcquisitionStatusEvent
             {
                 Sequence = ++_sequence,
                 Phase = update.Phase.ToString(),
@@ -110,7 +110,7 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
         return phase is RuntimeAcquisitionPhase.Completed or RuntimeAcquisitionPhase.Failed;
     }
 
-    private async Task PublishAsync(RuntimeAcquisitionStatusHubEvent statusEvent)
+    private async Task PublishAsync(RuntimeAcquisitionStatusEvent statusEvent)
     {
         try
         {

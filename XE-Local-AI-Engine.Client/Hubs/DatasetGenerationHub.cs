@@ -6,21 +6,6 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public static class DatasetGenerationHubEvents
-{
-    public const string Event = "datasetGeneration.event";
-    public const string ReplayReset = "datasetGeneration.replayReset";
-}
-
-public sealed class DatasetGenerationReplayReset
-{
-    public required Guid DatasetId { get; init; }
-
-    public required long LatestSequence { get; init; }
-
-    public required long DatasetVersion { get; init; }
-}
-
 /// <summary>
 ///     Operator-only, per-dataset delivery for live generation progress. The caller joins the group before replay so the
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.

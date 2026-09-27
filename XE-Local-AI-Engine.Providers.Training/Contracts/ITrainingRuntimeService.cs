@@ -127,16 +127,11 @@ public interface ITrainingRuntimeService
     string? ResolveInterpreterPath();
 }
 
-public static class TrainingRuntimeHubEvents
-{
-    public const string StatusChanged = "trainingRuntime.statusChanged";
-}
-
 /// <summary>
 ///     One status push. Carries only the lines appended since the last push plus their starting sequence, so a client
 ///     that reconnects can splice its local log at a known offset instead of re-rendering the whole ring.
 /// </summary>
-public sealed class TrainingRuntimeStatusHubEvent
+public sealed class TrainingRuntimeStatusEvent
 {
     public required string Phase { get; init; }
 
@@ -150,10 +145,10 @@ public sealed class TrainingRuntimeStatusHubEvent
 }
 
 /// <summary>
-///     Transport seam for <see cref="ITrainingRuntimeService" />. The provider stays transport-agnostic; the Client host
-///     supplies the SignalR-backed implementation and projects this into its own stable wire shape.
+///     Transport seam for <see cref="ITrainingRuntimeService" />. The Client host's implementation owns the
+///     client-method name and projects each event 1:1 into its own wire type, so a rename here never reaches the wire.
 /// </summary>
 public interface ITrainingRuntimeEventPublisher
 {
-    Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default);
+    Task PublishStatusAsync(TrainingRuntimeStatusEvent statusEvent, CancellationToken cancellationToken = default);
 }

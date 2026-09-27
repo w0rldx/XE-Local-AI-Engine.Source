@@ -6,6 +6,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     The delete guarantee, proven on the real e_sqlite3 runtime connection under the foreign-key enforcement the node

@@ -4,49 +4,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Endpoints.WorkSessions.V1;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.WorkSessions.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
-
-public static class WorkSessionHubEvents
-{
-    public const string Changed = "workSessionChanged";
-}
-
-/// <summary>
-///     What changed and where the store now stands.
-/// </summary>
-/// <remarks>
-///     <see cref="Kind" /> is lowercase on the wire — the client switches on the literal. The payload deliberately
-///     carries no content: the subscriber re-reads the named feed from its own watermark, so a dropped push degrades
-///     to a late read rather than to a wrong render.
-/// </remarks>
-public sealed class WorkSessionChanged
-{
-    public required Guid SessionId { get; init; }
-
-    public required long Seq { get; init; }
-
-    public required string Kind { get; init; }
-}
-
-public sealed class WorkSessionSubscriptionSnapshot
-{
-    public required Guid SessionId { get; init; }
-
-    public required string Status { get; init; }
-
-    public required int Step { get; init; }
-
-    public required Guid? CurrentTaskId { get; init; }
-
-    public required long LastSeq { get; init; }
-
-    public required IReadOnlyList<WorkSessionEventResponse> Events { get; init; }
-
-    public required bool ReplayTruncated { get; init; }
-}
 
 /// <summary>
 ///     Operator-only live notifications for one work session.
@@ -111,9 +72,7 @@ public sealed class WorkSessionHub : Hub
         // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), cancellationToken);
 
-        // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var events = await _service.ListEventsAsync(sessionId, afterSeq, ReplayCap + 1, cancellationToken);
-        var truncated = events.Count > ReplayCap;
+        var (events, truncated) = await ReplayWindow.ReadAsync(ReplayCap, limit => _service.ListEventsAsync(sessionId, afterSeq, limit, cancellationToken));
         return new WorkSessionSubscriptionSnapshot
         {
             SessionId = sessionId,
@@ -121,17 +80,11 @@ public sealed class WorkSessionHub : Hub
             Step = session.StepCount,
             CurrentTaskId = session.CurrentTaskId,
             LastSeq = session.LastSequence,
-            Events = [.. events.Take(ReplayCap).Select(WorkSessionContractMapper.ToResponse)],
+            Events = [.. events.Select(WorkSessionContractMapper.ToResponse)],
             ReplayTruncated = truncated
         };
     }
 
     public Task UnsubscribeSession(Guid sessionId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), Context.ConnectionAborted);
-}
-
-internal static class WorkSessionHubGroups
-{
-    public static string Session(Guid sessionId) =>
-        string.Concat("work-session-", sessionId.ToString("N"));
 }

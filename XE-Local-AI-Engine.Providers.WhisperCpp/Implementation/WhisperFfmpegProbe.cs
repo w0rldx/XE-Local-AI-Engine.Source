@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+
 /// <summary>
 ///     Answers one question once per process: is <c>ffmpeg</c> on <c>PATH</c>?
 /// </summary>
@@ -12,7 +14,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 /// </remarks>
 internal static class WhisperFfmpegProbe
 {
-    private static readonly Lazy<string?> Resolved = new(ResolveFromPath, LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<string?> Resolved = new(FfmpegExecutableLocator.ResolveFromPath, LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>True when an <c>ffmpeg</c> executable was found on <c>PATH</c>.</summary>
     internal static bool IsAvailable => Resolved.Value is not null;
@@ -22,36 +24,5 @@ internal static class WhisperFfmpegProbe
     {
         path = Resolved.Value ?? string.Empty;
         return Resolved.Value is not null;
-    }
-
-    private static string? ResolveFromPath()
-    {
-        var fileName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(pathVariable))
-        {
-            return null;
-        }
-
-        foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            string candidate;
-            try
-            {
-                candidate = Path.Combine(directory, fileName);
-            }
-            catch (ArgumentException)
-            {
-                // A malformed PATH entry cannot hold an executable; skip it rather than failing the whole probe.
-                continue;
-            }
-
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
     }
 }

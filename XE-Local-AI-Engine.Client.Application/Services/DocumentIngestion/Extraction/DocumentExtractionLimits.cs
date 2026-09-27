@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
+
 /// <summary>
 ///     Shared bounds for document extraction.
 /// </summary>

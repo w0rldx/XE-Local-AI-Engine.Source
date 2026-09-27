@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Re-measures one run's quant fidelity. A new immutable attempt, never an overwrite of the last one.</summary>
 public sealed class StartBenchmarkRunFidelityEndpoint : Endpoint<StartRunFidelityRequest>

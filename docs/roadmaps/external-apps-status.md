@@ -14,7 +14,7 @@ is [External Apps](../wiki/23-external-apps.md).
 
 | Capability | Current evidence |
 |---|---|
-| Engine-owned container runtime layer, separate from the sandbox SPI | `Client.Application/Services/Containers/`: `IContainerRuntime`, `IContainerRuntimeResolver`, `IContainerRuntimeFactory`, `DockerDotNetRuntimeClient`, and `FakeDockerRuntimeClient` moving in lockstep with it. `ContainerRuntimeRealDaemonTests` drives it against a real daemon. |
+| Engine-owned container runtime layer, separate from the sandbox SPI | `Client.Application/Services/Containers/`: `IContainerRuntime`, `IContainerRuntimeResolver`, `IContainerRuntimeFactory`, `DockerDotNetRuntimeClient`, and the test-side `FakeDockerRuntimeClient` (`XE-Local-AI-Engine.Tests/Testing/`) moving in lockstep with it. `ContainerRuntimeRealDaemonTests` drives it against a real daemon. |
 | Shared daemon probe and identity attestation | `DockerDaemonProbe`, extracted from `DockerDaemonPreflightService` and used by both consumer classes; `DockerDaemonEndpoint.Display`/`Redact` keep an operator-set endpoint's user information, query and fragment out of every log, pin, message and API body. |
 | Catalog document, validator and provider | `ExternalAppCatalogValidator` (fail-closed, whole-document rejection), `ApplicationCatalogProvider` (bundled seed, remote refresh with ETag and TTL, owner-only cache file), `ExternalAppManifestFingerprint` binding acceptance across C# and the Python converter. |
 | Catalog authoring source and converter | `catalog/external-apps/` with the upstream Compose, variable classification and override document per application; `tools/build_catalog.py` and its pytest suite; `dist/applications.json` and the byte-identical embedded seed, asserted equal by test. |

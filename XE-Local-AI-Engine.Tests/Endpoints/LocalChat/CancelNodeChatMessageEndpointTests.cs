@@ -42,16 +42,9 @@ public sealed class CancelNodeChatMessageEndpointTests
         persistence.CancelMessageAsync(Arg.Any<NodeChatCancelRequest>(), Arg.Any<CancellationToken>())
                    .Returns<Task<NodeChatCancelResultDto>>(_ => throw thrownByCancel);
 
-        var mutationGuard = Substitute.For<INodeChatMutationGuard>();
-        mutationGuard.EnsureMutableAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-
         await using var factory = new TestServerWebAppFactory
         {
-            ConfigureAdditionalTestServices = services =>
-            {
-                services.AddSingleton(persistence);
-                services.AddSingleton(mutationGuard);
-            }
+            ConfigureAdditionalTestServices = services => services.AddSingleton(persistence)
         };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, CancelRoute)

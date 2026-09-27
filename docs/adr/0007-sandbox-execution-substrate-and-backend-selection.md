@@ -81,7 +81,7 @@ is only cheap if no consumer named the thing being swapped.
 5. **Provider capability reporting becomes the same vocabulary the requirements are written in.** The axes a backend
    advertises (`SandboxProviderCapabilities`) and the axes a consumer declares are one set, so "can this host run this
    workload, and under what boundary" is answerable without inspecting a provider type. This makes surfacing the
-   isolation level to `CapabilityReportComposer` a projection rather than a new model.
+   isolation level in a capability report a projection rather than a new model.
 
 6. **Names in this record are provisional.** `SandboxRequirements`, `ISandboxBackend`, `SandboxBackendSelector` and
    `SandboxIsolationLevel` are placeholders chosen to make this document readable. The implementation must follow the

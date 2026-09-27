@@ -9,13 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
-public sealed class SelectedFolderResolverTests
+public sealed class SelectedFolderResolverTests : IDisposable
 {
-    // SelectedFolderResolver.IsSafeHostPath requires Path.IsPathFullyQualified, and "/trusted/..." is rooted but NOT
-    // fully qualified on Windows — it has no drive, so it resolves against the current drive. A Unix literal therefore
-    // fails registration before any of these tests reach their actual assertion. The production check is correct and
-    // portable; only the fixture was Unix-only.
-    private static readonly string TrustedHostPath = HostPath("trusted", "host", "projects", "repo-one");
+    // Registration requires a fully qualified path that names an existing directory, so every host path here is a real
+    // directory under a per-test temp root: fully qualified on both platforms, and gone when the test ends.
+    private readonly TempDirectory _root = new("xe-selected-folder");
+
+    private string TrustedHostPath => HostPath("trusted", "host", "projects", "repo-one");
+
+    public void Dispose() => _root.Dispose();
 
     [Test]
     public async Task RegisterAsync_NormalizesAliasAndPersists()
@@ -53,15 +55,34 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
+        // Fully qualified and an existing directory, so the '..' segment — not the qualification or existence check — is
+        // what rejects it.
+        var traversal = Path.Combine(HostPath("trusted"), "..", "trusted");
         var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration
             {
                 Alias = "repo-one",
-                HostPath = HostPath("trusted", "..", "etc", "passwd")
+                HostPath = traversal
             }),
             "A traversal host path should be rejected.");
 
         AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
+        AssertEx.Contains(exception.Message, "traversal-free");
+    }
+
+    [Test]
+    public async Task RegisterAsync_WithMissingDirectory_ThrowsBeforeAliasValidation()
+    {
+        var resolver = CreateResolver();
+
+        // An unusable alias too: the missing directory is the rejection the operator sees, whatever else is wrong.
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration
+            {
+                Alias = "!!!",
+                HostPath = Path.Combine(_root.Path, "missing")
+            }),
+            "A fully qualified host path that names no directory should be rejected.");
+
+        AssertEx.Equal("The host path does not exist or is not a directory.", exception.Message);
     }
 
     [Test]
@@ -268,14 +289,9 @@ public sealed class SelectedFolderResolverTests
         AssertEx.True(Guid.TryParse(references[0].Id, out _), "Listed references should carry a GUID id.");
     }
 
-    /// <summary>
-    ///     Builds a fully qualified host path for the running OS. Windows needs a drive to satisfy
-    ///     <see cref="Path.IsPathFullyQualified" />; a bare leading slash is rooted but not qualified.
-    /// </summary>
-    private static string HostPath(params string[] segments) =>
-        OperatingSystem.IsWindows()
-            ? string.Concat(@"C:\", string.Join('\\', segments))
-            : string.Concat("/", string.Join('/', segments));
+    /// <summary>Creates a directory under this test's temp root and returns its fully qualified path.</summary>
+    private string HostPath(params string[] segments) =>
+        Directory.CreateDirectory(Path.Combine([_root.Path, .. segments])).FullName;
 
     private static SelectedFolderResolver CreateResolver()
     {

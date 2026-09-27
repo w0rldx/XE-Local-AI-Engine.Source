@@ -15,7 +15,7 @@ Model-fit is the node's **box-aware GGUF recommendation advisor**: given the ope
 | Curated model catalog (primary recommendation lane) | `…/Services/ModelFit/Catalog/` (`ModelCatalogProvider`, `CatalogRecommendationService`, `model-catalog.seed.json`) |
 | Quant ladder + quality tier (single source of truth) | `XE-Local-AI-Engine.Providers.Abstractions/Gguf/QuantLadder.cs` · `GgufQuantQuality.cs` |
 | GGUF variant recommender (quant picker) | `…/Services/ModelFit/Gguf/GgufVariantRecommender.cs` (`IGgufVariantRecommender`) |
-| Inference Optimizer orchestrator | `…/Services/Inference/InferenceProfileService.cs` (`IInferenceProfileService`) |
+| Inference Optimizer orchestrator | `…/Services/Inference/Implementation/InferenceProfileService.cs` (`IInferenceProfileService`) |
 | Hardware profiler (provider seam impl) | `XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs` |
 | Process VRAM-budget probe | `XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaListDevicesProcessVramBudgetProbe.cs` (`IProcessVramBudgetProbe`) |
 | Quartz handler | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Handlers/ModelRecommendationCheckHandler.cs` |

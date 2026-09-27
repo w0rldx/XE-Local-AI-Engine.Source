@@ -28,7 +28,10 @@ public sealed class AppUpdateServiceTests
             port: 41234);
 
         builder.Configuration[DesktopBootstrap.NodeDataDirectoryKey] = Path.GetTempPath();
-        builder.AddAppUpdate(builder.Configuration, LaunchMode.McpOnly, sanitized, shellOwned: true);
+        builder.AddAppUpdate(builder.Configuration, new NodeLaunchContext
+        {
+            IsLocalMode = true
+        }, sanitized, shellOwned: true);
 
         var descriptor = builder.Services.Single(static service => service.ServiceType == typeof(AppUpdateHostContext));
         var context = (AppUpdateHostContext)AssertEx.NotNull(descriptor.ImplementationInstance);

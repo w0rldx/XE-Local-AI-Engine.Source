@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using System.Diagnostics.Metrics;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

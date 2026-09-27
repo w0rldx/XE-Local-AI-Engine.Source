@@ -31,6 +31,24 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 
 Tooling gates (`pnpm build` / `pnpm lint`): `tsc --noEmit`, a custom `scripts/CheckEventCurrentTargetInUpdaters.mjs` guard, Biome lint, Stylelint, plus `knip` and `dependency-cruiser` in `pnpm validate`. Knip fingerprints the current unused surface and enforces strict no-growth; reducing that surface passes without a baseline edit. Exact-pinned React Doctor is available separately through `pnpm run doctor` as an offline advisory and is intentionally outside `validate` and CI; `REACT-DOCTOR.md` records its license and compatibility evidence.
 
+Two more of the custom gates are easy to trip without knowing they exist. `scripts/CheckMantineTestTheme.mjs` (in
+`pnpm lint`) fails on a hand-rolled `<MantineProvider env="test">` in test code that does not pass
+`theme={testMantineTheme}`: `env="test"` does not stop `useTransition` scheduling real timers on every overlay close,
+so a late timer fires after cleanup and the Vitest process exits 1 with every test green; `testMantineTheme` zeroes
+those durations. A test rendering through `renderWithProviders` has no provider of its own and is not checked.
+`scripts/CheckBundleBudget.mjs` (`bundle:check`, the last step of `build:bundle`) sums the built JavaScript against
+`config/bundle-budget.json`: `applicationJavaScriptBytes` for everything every user downloads, and
+`lazyEditorJavaScriptBytes` for the Monaco chunks, measured separately so one large lazy vendor chunk cannot mask
+growth in the app bundle.
+
+`dependency-cruiser` runs through `scripts/CheckDependencyBaseline.mjs` (`pnpm run depcruise`): `error`-severity
+rules (`no-circular`, `not-to-test`, `not-to-dev-dep`, …) fail outright, and the `warn`-severity boundary rules
+(`no-cross-feature`, `no-core-to-features`, `no-core-to-legacy`, `no-feature-to-routes`, `no-orphans`) are TRACKED
+DEBT gated by a no-growth fingerprint baseline, `config/dependency-baseline.json`: any rule/from/to fingerprint not
+in it fails, paying one down passes with no edit. That baseline is broad, not a short list of reviewed exceptions:
+as measured 2026-09-27 it held roughly a hundred `no-cross-feature` fingerprints across many feature pairs, plus
+the `no-core-to-*` entries. `QUALITY-GATE.md` records the policy.
+
 ---
 
 ## Entry point & provider stack
@@ -341,6 +359,11 @@ reconnect). Four things differ and must not be copied from that hook:
   The two routes are separately code-split (6.2 kB list, 25.0 kB detail) and Monaco stays in its own lazy chunk, so
   `lazyEditorJavaScriptBytes` is untouched.
 
+These are not the only baselined cross-feature seams (see [Stack at a glance](#stack-at-a-glance)). One of the same
+shape is `features/chat/workflow/`, the chat-embedded graph-workflow runner, which imports `graphWorkflows` models,
+queries, the run-hub hook and the status badge. Unlike `workSessions` → `chat`, it is not a ruled exception: it is
+tracked debt in the no-growth baseline, and hoisting the shared pieces into `core/` would pay it down.
+
 ### E2E: the seeder has to be put back
 
 `XE-Local-AI-Engine.Tests.E2ETests/Tests/WorkSessionsPageE2ETests.cs` drives create → Start → `update_work_plan` →
@@ -436,10 +459,10 @@ Notes for maintainers:
 ## Cross-cutting concerns a contributor must know
 
 - **Generated code is off-limits to hand-edits.** Anything under `core/api/generated/` is regenerated; change the backend endpoint/DTO and run `pnpm openapi`, then commit the diff (`openapi:check` enforces this).
-- **One axios instance, one baseURL.** Do not create ad-hoc axios instances or change `baseURL` away from `""`; both break the same-origin invariant. There is exactly **one** sanctioned exception — `authClient` in `core/auth/api/NodeAuthApi.ts` — and it exists so the shared instance's 401-refresh interceptor cannot recurse through the refresh call itself. Anything else belongs on the shared instance via `buildLocalApiUrl()`.
+- **One axios instance, one baseURL.** Do not create ad-hoc axios instances or change `baseURL` away from `""`; both break the same-origin invariant. There is exactly **one** sanctioned exception — `authClient` in `core/auth/api/NodeAuthApi.ts` — and it exists so the shared instance's 401-refresh interceptor cannot recurse through the refresh call itself. Anything else belongs on the shared instance via `buildLocalApiUrl()`. Separately from axios, `AppUpdateButton`'s raw `fetch("/health/live")` is sanctioned too: it polls liveness while the node restarts after an update, outside `/api/local/v1`, where there is no generated operation to route it through. A raw `fetch` anywhere else is not.
 - **Hub connections are shared, not per-component.** Acquire through `SharedHubConnection`; never `new HubConnectionBuilder()` inside a feature hook.
 - **Secrets never reach the store.** Auth/cloud/HMAC credentials stay node-local; the browser only ever holds a short-lived node access token in `NodeAuthStore`. See [Security & Privacy](12-security-and-privacy.md).
-- **Feature isolation.** New UI goes in a `features/<name>/` folder mirroring the existing shape (`pages` / `components` / `queries` / `models` / optional `stores`); keep cross-feature reuse in `core/`. The one recorded exception is `workSessions`, whose centre pane is `features/chat`'s `Chat` component — see [Work Sessions](#work-sessions-the-chat-embed-seam) for why, and for the seven baselined `no-cross-feature` fingerprints that go with it.
+- **Feature isolation.** New UI goes in a `features/<name>/` folder mirroring the existing shape (`pages` / `components` / `queries` / `models` / optional `stores`); keep cross-feature reuse in `core/`. The one ruled exception is `workSessions`, whose centre pane is `features/chat`'s `Chat` component — see [Work Sessions](#work-sessions-the-chat-embed-seam) for why, and for the seven baselined `no-cross-feature` fingerprints that go with it. The dependency baseline also carries older cross-feature debt, `chat/workflow` → `graphWorkflows` among it; that is tracked debt, not an exception.
 
 ---
 

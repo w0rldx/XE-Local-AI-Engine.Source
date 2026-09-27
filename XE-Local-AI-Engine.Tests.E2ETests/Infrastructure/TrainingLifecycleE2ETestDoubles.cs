@@ -1,10 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 #pragma warning disable CA1725, S927 // Compact external-seam fakes keep local names; the production contracts remain unchanged.
-using System.Net;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Inference;
@@ -346,20 +344,32 @@ public static class TrainingLifecycleE2ETestDoubles
         }
     }
 
-    public sealed class PropsHttpClientFactory : IHttpClientFactory
+    /// <summary>Reports a resolved chat template from <c>/props</c>; the smoke gate reads nothing else natively.</summary>
+    public sealed class PropsNativeClient : ILlamaServerNativeClient
     {
-#pragma warning disable CA2000 // The returned HttpClient owns and disposes the handler.
-        public HttpClient CreateClient(string name) =>
-            new(new PropsHandler());
-#pragma warning restore CA2000
-        private sealed class PropsHandler : HttpMessageHandler
-        {
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent("{\"chat_template\":\"e2e-template\"}", Encoding.UTF8, "application/json")
-                });
-        }
+        public Task<LlamaServerProps?> GetPropsAsync(Uri baseAddress, CancellationToken ct) =>
+            Task.FromResult<LlamaServerProps?>(new LlamaServerProps
+            {
+                EffectiveContextTokens = null,
+                HasChatTemplate = true
+            });
+
+        public Task<string> GetMetricsTextAsync(Uri baseAddress, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingsAsync(Uri baseAddress,
+            string modelName,
+            IReadOnlyList<string> inputs,
+            CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<double>> PostRerankAsync(Uri baseAddress,
+            string query,
+            IReadOnlyList<string> documents,
+            CancellationToken ct) =>
+            throw new NotSupportedException();
     }
 
     public sealed class InstalledModels : IGgufModelStore, ITrainingEvaluationInstalledModelLeaseProvider

@@ -683,6 +683,7 @@ import type {
 	DeleteComparisonError,
 	DeleteComparisonResponse,
 	DeleteConversationFileData,
+	DeleteConversationFileError,
 	DeleteConversationFileResponse,
 	DeleteCustomToolData,
 	DeleteCustomToolResponse,
@@ -1564,6 +1565,7 @@ import type {
 	UpdateWorkSessionError,
 	UpdateWorkSessionResponse,
 	UploadConversationFileData,
+	UploadConversationFileError,
 	UploadConversationFileResponse,
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentResponse,
@@ -4031,10 +4033,14 @@ export const listConversationFilesOptions = (options: Options<ListConversationFi
 
 export const uploadConversationFileMutation = (
 	options?: Partial<Options<UploadConversationFileData>>,
-): UseMutationOptions<UploadConversationFileResponse, AxiosError<DefaultError>, Options<UploadConversationFileData>> => {
+): UseMutationOptions<
+	UploadConversationFileResponse,
+	AxiosError<UploadConversationFileError>,
+	Options<UploadConversationFileData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UploadConversationFileResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UploadConversationFileError>,
 		Options<UploadConversationFileData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4051,10 +4057,14 @@ export const uploadConversationFileMutation = (
 
 export const deleteConversationFileMutation = (
 	options?: Partial<Options<DeleteConversationFileData>>,
-): UseMutationOptions<DeleteConversationFileResponse, AxiosError<DefaultError>, Options<DeleteConversationFileData>> => {
+): UseMutationOptions<
+	DeleteConversationFileResponse,
+	AxiosError<DeleteConversationFileError>,
+	Options<DeleteConversationFileData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteConversationFileResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteConversationFileError>,
 		Options<DeleteConversationFileData>
 	> = {
 		mutationFn: async (fnOptions) => {

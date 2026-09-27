@@ -185,7 +185,7 @@ public sealed class LlamaCppUpdateBlockedResponse
 ///     snapshot.
 /// </summary>
 /// <remarks>
-///     Its fields mirror the <c>RuntimeAcquisitionStatusHubEvent</c> push payload 1:1 <b>on purpose</b> — the client
+///     Its fields mirror the <c>RuntimeAcquisitionStatusHubMessage</c> push payload 1:1 <b>on purpose</b> — the client
 ///     hydrates from this endpoint on mount and is then pushed the same shape over the acquisition hub, so both paths
 ///     reconcile through one type and one <see cref="Sequence" /> comparison.
 /// </remarks>

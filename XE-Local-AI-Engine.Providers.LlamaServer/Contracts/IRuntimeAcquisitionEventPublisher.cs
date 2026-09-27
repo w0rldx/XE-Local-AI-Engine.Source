@@ -14,17 +14,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public interface IRuntimeAcquisitionEventPublisher
 {
     /// <summary>Pushes the latest sanitized acquisition status to all connected operator clients.</summary>
-    Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-///     Stable SignalR client-method name for runtime acquisition status pushes. The React client subscribes to this
-///     single method and reconciles each push against the hydrate snapshot by <see cref="RuntimeAcquisitionStatusHubEvent.Sequence" />.
-/// </summary>
-public static class RuntimeAcquisitionHubEvents
-{
-    /// <summary>The client method name a runtime acquisition status push is broadcast under.</summary>
-    public const string StatusChanged = "runtimeAcquisition.statusChanged";
+    Task PublishStatusAsync(RuntimeAcquisitionStatusEvent statusEvent, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The lifecycle stage of a llama.cpp runtime acquisition.</summary>
@@ -61,10 +51,11 @@ public enum RuntimeAcquisitionPhase
 }
 
 /// <summary>
-///     Sanitized runtime-acquisition status push payload, also served verbatim by the acquisition-status hydrate
-///     endpoint so a late-joining client reconciles pushes and hydrate through one shape.
+///     Sanitized runtime-acquisition status, pushed through <see cref="IRuntimeAcquisitionEventPublisher" /> and also
+///     read by the acquisition-status hydrate endpoint. The host projects it 1:1 into both wire shapes, so a
+///     late-joining client reconciles pushes and hydrate through one shape.
 /// </summary>
-public sealed class RuntimeAcquisitionStatusHubEvent
+public sealed class RuntimeAcquisitionStatusEvent
 {
     /// <summary>
     ///     Monotonic counter stamped by <see cref="IRuntimeAcquisitionStatusRegistry" /> on every status write, never

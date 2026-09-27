@@ -18,6 +18,8 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatConversationCommands _conversations;
     private readonly NodeChatFeedbackStore _feedback;
     private readonly NodeChatMessageCommands _messages;
+    // Run first by every operator mutation, so no caller skips it; the turn pipeline's writes are guarded where a turn starts.
+    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
@@ -35,6 +37,7 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         _messages = new NodeChatMessageCommands(writer);
         _variants = new NodeChatVariantBranchService(writer, _readModel);
         _feedback = new NodeChatFeedbackStore(writer);
+        _mutationGuard = new NodeChatMutationGuard(this);
     }
 
     public Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
@@ -72,9 +75,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _conversations.GetSelectedPathAsync(conversationId, cancellationToken);
     }
 
-    public Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.SetSelectedPathAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetSelectedPathAsync(request, cancellationToken);
     }
 
     public Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default)
@@ -127,34 +132,46 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _messages.TerminalizeAssistantMessageAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
     {
-        return _messages.CancelMessageAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.Correlation.ConversationId, cancellationToken);
+        return await _messages.CancelMessageAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.DeleteConversationAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.DeleteConversationAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.RenameConversationAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.RenameConversationAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.SetConversationPinnedAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetConversationPinnedAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.SetConversationArchivedAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetConversationArchivedAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
     {
-        return _conversations.SetConversationMemoryExcludedAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetConversationMemoryExcludedAsync(request, cancellationToken);
     }
 
     public Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)
@@ -167,14 +184,18 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _conversations.SetConversationStateAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
     {
-        return _variants.BranchConversationAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _variants.BranchConversationAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)
     {
-        return _variants.CreateMessageVariantAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _variants.CreateMessageVariantAsync(request, cancellationToken);
     }
 
     public Task<IReadOnlyList<NodeChatPersistedMessageDto>> ListMessageVariantsAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
@@ -182,9 +203,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _variants.ListMessageVariantsAsync(conversationId, messageId, cancellationToken);
     }
 
-    public Task<NodeChatMessageFeedbackDto> SetMessageFeedbackAsync(NodeChatSetMessageFeedbackRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatMessageFeedbackDto> SetMessageFeedbackAsync(NodeChatSetMessageFeedbackRequest request, CancellationToken cancellationToken = default)
     {
-        return _feedback.SetMessageFeedbackAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _feedback.SetMessageFeedbackAsync(request, cancellationToken);
     }
 
     public Task<NodeChatMessageFeedbackDto?> GetMessageFeedbackAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)

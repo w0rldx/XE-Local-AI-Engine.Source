@@ -17,7 +17,6 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 
     private static readonly IReadOnlyDictionary<string, int> BenchmarkCatchAllowlist = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        ["V1/BenchmarkExportPairwise.cs"] = 1,
         ["V1/Mappers/BenchmarkEndpointMapper.cs"] = 1,
         // Both catches came from BenchmarkRunEndpoints.cs, which S7f-1 split one endpoint per file.
         ["V1/StartBenchmarkRunEndpoint.cs"] = 2

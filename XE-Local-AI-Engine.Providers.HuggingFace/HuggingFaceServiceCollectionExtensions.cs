@@ -17,8 +17,8 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </summary>
 /// <remarks>
 ///     <strong>Caller contract:</strong> the consuming application must register an <see cref="IHfTokenStore" /> (the
-///     encrypted token store lives in the Application layer next to the other credential stores) before resolving the
-///     store, since the download client depends on it.
+///     encrypted <see cref="HfTokenStore" /> in this provider, registered at the composition root like
+///     <c>CodexTokenStore</c>) before resolving the store, since the download client depends on it.
 /// </remarks>
 public static class HuggingFaceServiceCollectionExtensions
 {

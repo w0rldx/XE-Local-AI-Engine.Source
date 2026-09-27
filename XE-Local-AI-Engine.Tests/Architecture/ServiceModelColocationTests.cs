@@ -14,9 +14,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         red — so this is a source-text scan, the same technique as <see cref="ProviderTelemetryWrapGuardTests" />.
 ///     </para>
 ///     <para>
-///         Scope is the six service folders whose contract types were extracted into sibling files by the 2026-09
-///         cleanup. It guards the regression where it actually happened rather than gating the whole layer; the rest of
-///         <c>Services/</c> still holds pre-existing co-located declarations and is deliberately out of scope.
+///         Scope is the named service folders: the six whose contract types were extracted into sibling files by the
+///         2026-09 cleanup, plus each area that later moved its concretes under <c>Implementation/</c>. It guards those
+///         areas rather than gating the whole layer; the rest of <c>Services/</c> still holds pre-existing co-located
+///         declarations and is deliberately out of scope.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -26,8 +27,13 @@ public sealed class ServiceModelColocationTests
     [
         "AgentHome",
         "Benchmarks",
+        "Capacity",
         "Development",
+        "DocumentIngestion",
+        "Inference",
         "Integrations",
+        "Knowledge",
+        "Models",
         "Training",
         "WorkSessions"
     ];
@@ -64,7 +70,7 @@ public sealed class ServiceModelColocationTests
         // Non-vacuity: a renamed folder or a broken glob would otherwise report "no offenders" as a pass.
         AssertEx.Equal(ScannedFolders.Length,
             ScannedFolders.Count(folder => Directory.Exists(Path.Combine(servicesRoot, folder))),
-            $"All six scanned service folders must exist under '{servicesRoot}'. A rename silently empties this guard.");
+            $"All {ScannedFolders.Length} scanned service folders must exist under '{servicesRoot}'. A rename silently empties this guard.");
         AssertEx.True(scanned.Count(file => file.Lines.Any(DeclaresService)) >= 40,
             $"Expected at least forty service classes across the scanned folders; found {scanned.Count(file => file.Lines.Any(DeclaresService))}.");
 

@@ -2229,6 +2229,69 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task OperatorMutations_OnARemoteConversation_AreRefusedByTheServiceItself()
+    {
+        // The guard lives in the service, so a caller that never ran the guard (any endpoint, hub or service) is still refused.
+        await using var provider = await BuildProviderAsync("guard-in-service.sqlite");
+        var service = CreateService(provider);
+        var remoteId = Guid.NewGuid();
+        await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = remoteId,
+            Title = "Remote",
+            UserId = "node",
+            CreatedAtUtc = 510,
+            Origin = NodeChatOriginValues.Remote
+        });
+        var local = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Local",
+            UserId = "node",
+            CreatedAtUtc = 511
+        });
+
+        var messageId = Guid.NewGuid();
+        var mutations = new (string Name, Func<Task> Call)[]
+        {
+            ("SetSelectedPath", () => service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = remoteId, SelectedPath = null, UpdatedAtUtc = 520 })),
+            ("CancelMessage", () => service.CancelMessageAsync(new NodeChatCancelRequest
+            {
+                Correlation = new NodeChatMessageCorrelation { ConversationId = remoteId, MessageId = messageId, RequestId = Guid.NewGuid() },
+                CancelledAtUtc = 520
+            })),
+            ("DeleteConversation", () => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = remoteId, DeletedAtUtc = 520, PurgeImmediately = true })),
+            ("RenameConversation", () => service.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = remoteId, Title = "renamed", UpdatedAtUtc = 520 })),
+            ("SetConversationPinned", () => service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = remoteId, IsPinned = true, UpdatedAtUtc = 520 })),
+            ("SetConversationArchived", () => service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = remoteId, Archived = true, UpdatedAtUtc = 520 })),
+            ("SetConversationMemoryExcluded", () => service.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest { ConversationId = remoteId, MemoryExcluded = true, UpdatedAtUtc = 520 })),
+            ("BranchConversation", () => service.BranchConversationAsync(new NodeChatBranchConversationRequest { ConversationId = remoteId, MessageId = messageId, CreatedAtUtc = 520 })),
+            ("CreateMessageVariant", () => service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+            {
+                ConversationId = remoteId,
+                OriginalMessageId = messageId,
+                NewMessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                CreatedAtUtc = 520
+            })),
+            ("SetMessageFeedback", () => service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest { ConversationId = remoteId, MessageId = messageId, Rating = "up", Comment = null, UpdatedAtUtc = 520 }))
+        };
+
+        foreach (var (name, call) in mutations)
+        {
+            var rejection = await AssertEx.ThrowsAsync<NodeChatReadOnlyConversationException>(call, $"{name} must refuse an Origin=Remote conversation.");
+            AssertEx.Equal(remoteId, rejection.ConversationId);
+        }
+
+        var untouched = AssertEx.NotNull(await service.GetConversationAsync(remoteId));
+        AssertEx.Equal("Remote", untouched.Title);
+        AssertEx.False(untouched.IsPinned);
+
+        // A Local conversation passes the same service-side guard.
+        var renamed = await service.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = local.ConversationId, Title = "renamed", UpdatedAtUtc = 520 });
+        AssertEx.Equal("renamed", AssertEx.NotNull(renamed).Title);
+    }
+
+    [Test]
     public async Task BranchConversationAsync_ClonesMessagesUpToCutoffIntoNewLocalConversation()
     {
         await using var provider = await BuildProviderAsync("branch.sqlite");

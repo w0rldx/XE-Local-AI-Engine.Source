@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 /// <summary>
@@ -17,15 +16,11 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeChatConversationRequest, CompactNodeChatConversationResponse>
 {
     private readonly IConversationCompactionService _compactionService;
-    private readonly INodeChatMutationGuard _mutationGuard;
 
-    public CompactNodeChatConversationEndpoint(IConversationCompactionService compactionService,
-        INodeChatMutationGuard mutationGuard)
+    public CompactNodeChatConversationEndpoint(IConversationCompactionService compactionService)
     {
         ArgumentNullException.ThrowIfNull(compactionService);
-        ArgumentNullException.ThrowIfNull(mutationGuard);
         _compactionService = compactionService;
-        _mutationGuard = mutationGuard;
     }
 
     public override void Configure()
@@ -40,8 +35,6 @@ public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeCh
 
     public override async Task HandleAsync(CompactNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
-
         var result = await _compactionService.CompactAsync(req.ConversationId, req.Model, ct);
 
         if (result.Outcome == ConversationCompactionOutcome.ConversationNotFound)

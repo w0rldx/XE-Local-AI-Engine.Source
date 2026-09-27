@@ -26,14 +26,13 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Automation.V1;
-using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Development;
-using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Security;
 using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -44,9 +43,11 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
@@ -190,10 +191,6 @@ public static class ConfigureServices
         // daemon-watcher state change and the boot reconciler's adoptions all reach an open instance view live.
         builder.Services.AddSingleton<IExternalAppEventPublisher, ExternalAppEventPublisher>();
 
-        // Composes the run-detail and node-detail read shapes, which need the pinned graph and the agent names beside
-        // the rows. Scoped, because the stores it reads are.
-        builder.Services.AddScoped<DevWorkflowRunComposer>();
-
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
         var developmentEnabled = configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
         if (developmentEnabled)
@@ -302,6 +299,7 @@ public static class ConfigureServices
                // Fourth scheme, applied ONLY by the IntegrationApi policy on the hand-mapped integration routes: independent of all three
                // above, so an integrator gains neither the operator's admin reach, the MCP client's tool reach, nor the proxy's raw model.
                .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
+        builder.Services.AddSingleton<NodeJwtBearerEvents>();
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
                {
@@ -320,54 +318,7 @@ public static class ConfigureServices
                        NameClaimType = JwtRegisteredClaimNames.Name,
                        RoleClaimType = NodeAuthorizationPolicies.RoleClaimType
                    };
-                   options.Events = new JwtBearerEvents
-                   {
-                       OnMessageReceived = context =>
-                       {
-                           var path = context.HttpContext.Request.Path;
-                           if (path.StartsWithSegments($"/{LocalApiRoutes.Prefix}", StringComparison.OrdinalIgnoreCase)
-                               && path.Value?.EndsWith("/hub", StringComparison.OrdinalIgnoreCase) == true)
-                           {
-                               var token = context.Request.Query["access_token"].FirstOrDefault();
-                               if (!string.IsNullOrWhiteSpace(token))
-                               {
-                                   context.Token = token;
-                               }
-                           }
-
-                           return Task.CompletedTask;
-                       },
-                       // Stateless JWTs carry no revocation state, so enforce the user's current Identity security stamp here: a password
-                       // reset rotates it and must invalidate every token minted before the change. One indexed lookup per request.
-                       OnTokenValidated = static async context =>
-                       {
-                           var userId = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-                           if (string.IsNullOrEmpty(userId))
-                           {
-                               return;
-                           }
-
-                           // Fail CLOSED when the token carries no stamp: every token minted for a persisted user binds one, so an unstamped
-                           // but validly-signed token is a legacy token that must not outlive a reset, or a forgery. Never a bypass.
-                           var tokenStamp = context.Principal?.FindFirst(NodeAuthorizationPolicies.SecurityStampClaimType)?.Value;
-                           if (string.IsNullOrEmpty(tokenStamp))
-                           {
-                               context.Fail("Access token is missing its security stamp.");
-                               return;
-                           }
-
-                           var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<NodeUser>>();
-                           var user = await userManager.FindByIdAsync(userId);
-
-                           // No persisted row for the subject: preserve the base stateless-JWT posture, where the token authenticates and each
-                           // endpoint resolves the user. The stamp is a revocation signal, not an existence check.
-                           if (user is not null
-                               && !string.Equals(await userManager.GetSecurityStampAsync(user), tokenStamp, StringComparison.Ordinal))
-                           {
-                               context.Fail("Access token security stamp is stale.");
-                           }
-                       }
-                   };
+                   options.EventsType = typeof(NodeJwtBearerEvents);
                });
         builder.Services.AddAuthorization(options =>
         {

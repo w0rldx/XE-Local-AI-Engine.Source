@@ -2,13 +2,17 @@ namespace XE_Local_AI_Engine.Tests.Inference;
 
 using System.Net;
 using System.Text;
-using XE_Local_AI_Engine.Client.Services.Inference;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
 public sealed class InferenceBenchmarkHelperTests
 {
+    private static readonly HttpClient UnusedTokenizeClient = new();
+
     [Test]
     public async Task EmbeddingProtocol_RestoresInputOrderFromResponseIndices()
     {
@@ -20,8 +24,7 @@ public sealed class InferenceBenchmarkHelperTests
                                             """);
         using var client = new HttpClient(handler, disposeHandler: false);
 
-        var vectors = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client,
-            new Uri("http://localhost/v1/embeddings"),
+        var vectors = await NativeClient(client).PostEmbeddingsAsync(new Uri("http://localhost/v1"),
             "model",
             ["first", "second"],
             CancellationToken.None);
@@ -42,8 +45,7 @@ public sealed class InferenceBenchmarkHelperTests
         using var client = new HttpClient(handler, disposeHandler: false);
 
         _ = await AssertEx.ThrowsAsync<InvalidDataException>(() =>
-            InferenceBenchmarkHttpProtocol.PostRerankAsync(client,
-                new Uri("http://localhost/v1/rerank"),
+            NativeClient(client).PostRerankAsync(new Uri("http://localhost/v1"),
                 "query",
                 ["first", "second"],
                 CancellationToken.None));
@@ -79,6 +81,13 @@ public sealed class InferenceBenchmarkHelperTests
         AssertEx.True(collector.ExternalPressureDetected);
         AssertEx.Equal<long?>(550, collector.MinimumGlobalFreeBytes);
         AssertEx.Equal<long?>(20, collector.PeakWorkingSetBytes);
+    }
+
+    private static LlamaServerNativeClient NativeClient(HttpClient client)
+    {
+        var factory = Substitute.For<IHttpClientFactory>();
+        factory.CreateClient(Arg.Any<string>()).Returns(client);
+        return new LlamaServerNativeClient(factory, UnusedTokenizeClient);
     }
 
     private sealed class JsonHandler : HttpMessageHandler

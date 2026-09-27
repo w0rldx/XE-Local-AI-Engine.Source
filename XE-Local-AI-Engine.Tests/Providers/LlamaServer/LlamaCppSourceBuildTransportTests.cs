@@ -407,7 +407,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             ResolvedCommit = new string('a', 40),
             BuildId = buildId
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusEvent
         {
             Phase = "Building",
             AppendedLogLines = [],
@@ -436,7 +436,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             RequestedCommit = null,
             ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusEvent
         {
             Phase = "Building",
             AppendedLogLines = ["line"],

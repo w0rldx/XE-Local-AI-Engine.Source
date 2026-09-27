@@ -2,15 +2,10 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public interface ILlamaCppSourceBuildEventPublisher
 {
-    Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default);
+    Task PublishStatusAsync(LlamaCppSourceBuildStatusEvent statusEvent, CancellationToken cancellationToken = default);
 }
 
-public static class LlamaCppSourceBuildHubEvents
-{
-    public const string StatusChanged = "llamaCppSourceBuild.statusChanged";
-}
-
-public sealed class LlamaCppSourceBuildStatusHubEvent
+public sealed class LlamaCppSourceBuildStatusEvent
 {
     public required string Phase { get; init; }
 

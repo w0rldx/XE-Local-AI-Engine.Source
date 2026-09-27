@@ -12,14 +12,14 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// </summary>
 public sealed class PauseDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer;
+    private readonly DevWorkflowRunQueryService _queries;
     private readonly IDevWorkflowRunService _runs;
 
-    public PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    public PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunQueryService queries)
     {
-        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(queries);
         ArgumentNullException.ThrowIfNull(runs);
-        _composer = composer;
+        _queries = queries;
         _runs = runs;
     }
 
@@ -38,6 +38,6 @@ public sealed class PauseDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunActionR
         ArgumentNullException.ThrowIfNull(req);
 
         var detail = await _runs.PauseAsync(req.RunId, req.OperationId, ct);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
+        await Send.ResultAsync(Results.Accepted(value: (await _queries.GetRunViewAsync(detail, ct)).ToResponse()));
     }
 }

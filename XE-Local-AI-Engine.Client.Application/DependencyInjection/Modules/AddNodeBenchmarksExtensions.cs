@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -19,6 +20,7 @@ internal static class AddNodeBenchmarksExtensions
         // Scoped because the store it fronts is: this is the Benchmarks endpoints' only door onto IBenchmarkStore
         // under the endpoint-dependency rule, and it holds nothing of its own between calls.
         builder.Services.AddScoped<BenchmarkRecordService>();
+        builder.Services.AddScoped<BenchmarkComparisonService>();
         builder.Services.AddScoped<IBenchmarkTaskItemService, BenchmarkTaskItemService>();
         builder.Services.AddScoped<IBenchmarkExportFactsResolver, BenchmarkExportFactsResolver>();
         builder.Services.AddScoped<IBenchmarkExportQuery, BenchmarkExportQuery>();
@@ -50,7 +52,6 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();
         builder.Services.AddScoped<IBenchmarkPairwiseFitter, BenchmarkPairwiseFitter>();
         builder.Services.AddScoped<IBenchmarkPairwisePlanner, BenchmarkPairwisePlanner>();
-        builder.Services.AddSingleton<IBenchmarkPerplexityRunner, BenchmarkPerplexityRunner>();
         builder.Services.AddOptions<BenchmarkKldCacheOptions>().BindConfiguration(BenchmarkKldCacheOptions.SectionName);
         builder.Services.AddSingleton(static services => new BenchmarkKldBaseCache(services.GetRequiredService<IFreeSpaceProbe>()));
         builder.Services.AddHostedService<BenchmarkQueueHostedService>();

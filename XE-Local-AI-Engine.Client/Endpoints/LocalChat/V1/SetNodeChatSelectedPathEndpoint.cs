@@ -16,18 +16,14 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelectedPathRequest, NodeChatSelectedPathResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
-    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
     public SetNodeChatSelectedPathEndpoint(INodeChatPersistenceService chatPersistence,
-        INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
-        ArgumentNullException.ThrowIfNull(mutationGuard);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
-        _mutationGuard = mutationGuard;
         _timeProvider = timeProvider;
     }
 
@@ -40,8 +36,6 @@ public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelect
 
     public override async Task HandleAsync(SetNodeChatSelectedPathRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
-
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
             {

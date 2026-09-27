@@ -84,9 +84,9 @@ public sealed class ModelFitQueryServiceTests
         AssertEx.Equal("coding", view.UseCase ?? string.Empty);
         AssertEx.Equal(ProviderName, view.ProviderName);
         AssertEx.Equal(expected: 2, view.Recommendations.Count);
-        AssertEx.Equal(expected: 1, view.Recommendations[0].Rank);
-        AssertEx.Equal("qwen2.5-coder:7b", view.Recommendations[0].ModelName);
-        AssertEx.Equal(expected: 2, view.Recommendations[1].Rank);
+        AssertEx.Equal(expected: 1, view.Recommendations[0].Record.Rank);
+        AssertEx.Equal("qwen2.5-coder:7b", view.Recommendations[0].Record.ModelName);
+        AssertEx.Equal(expected: 2, view.Recommendations[1].Record.Rank);
     }
 
     [Test]
@@ -165,8 +165,8 @@ public sealed class ModelFitQueryServiceTests
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.True(view!.Recommendations[0].IsInstalled, "a row whose tag is installed on the node is Installed despite llmfit's stored false.");
-        AssertEx.False(view.Recommendations[1].IsInstalled, "a row whose tag is absent on the node is not Installed despite llmfit's stored true.");
+        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "a row whose tag is installed on the node is Installed despite llmfit's stored false.");
+        AssertEx.False(view.Recommendations[1].Record.IsInstalled, "a row whose tag is absent on the node is not Installed despite llmfit's stored true.");
     }
 
     [Test]
@@ -197,7 +197,7 @@ public sealed class ModelFitQueryServiceTests
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.False(view!.Recommendations[0].IsInstalled);
+        AssertEx.False(view!.Recommendations[0].Record.IsInstalled);
     }
 
     [Test]
@@ -228,7 +228,7 @@ public sealed class ModelFitQueryServiceTests
         var view = await harness.Service.GetLatestRecommendationsAsync("general", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.True(view!.Recommendations[0].IsInstalled, "a bare name matches the node's :latest tag, case-insensitively.");
+        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "a bare name matches the node's :latest tag, case-insensitively.");
     }
 
     [Test]
@@ -259,7 +259,7 @@ public sealed class ModelFitQueryServiceTests
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.True(view!.Recommendations[0].IsInstalled, "the stored flag is preserved when the node list cannot be read.");
+        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "the stored flag is preserved when the node list cannot be read.");
     }
 
     [Test]

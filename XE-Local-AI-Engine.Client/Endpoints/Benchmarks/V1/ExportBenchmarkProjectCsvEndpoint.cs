@@ -42,7 +42,8 @@ public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjec
         var now = _timeProvider.GetUtcNow();
         var csv = BenchmarkExportCsv.Render(export.Runs,
             export.Fidelity.ExpectedKldDigest,
-            export.PairwiseFit);
+            export.PairwiseFit,
+            export.PairwiseScores);
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
             BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
             "text/csv",

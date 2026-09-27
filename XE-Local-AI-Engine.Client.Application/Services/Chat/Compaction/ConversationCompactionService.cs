@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 internal sealed class ConversationCompactionService : IConversationCompactionService
 {
     private readonly INodeChatPersistenceService _persistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly IConversationSummarizer _summarizer;
     private readonly IConversationStateDistillationService _distillation;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
@@ -27,6 +28,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private readonly ILogger<ConversationCompactionService> _logger;
 
     public ConversationCompactionService(INodeChatPersistenceService persistence,
+        INodeChatMutationGuard mutationGuard,
         IConversationSummarizer summarizer,
         IConversationStateDistillationService distillation,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
@@ -39,6 +41,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     {
         ArgumentNullException.ThrowIfNull(persistence);
         _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        _mutationGuard = mutationGuard;
         ArgumentNullException.ThrowIfNull(summarizer);
         _summarizer = summarizer;
         ArgumentNullException.ThrowIfNull(distillation);
@@ -67,6 +71,9 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         bool distill = true,
         CancellationToken cancellationToken = default)
     {
+        // Before any model work: an Origin=Remote conversation is refused, a missing one still answers ConversationNotFound.
+        await _mutationGuard.EnsureMutableAsync(conversationId, cancellationToken);
+
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         // One budget for resolution and ALL folds, shared by manual compaction and work-session checkpoints.
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nodeSettings.MaxMessageRequestTimeoutSeconds), _timeProvider);

@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]

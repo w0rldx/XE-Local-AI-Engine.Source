@@ -28,6 +28,9 @@ public sealed class FilePlacementConventionTests
     /// <remarks>A walk that lost its roots reads too few files and fails here rather than reporting a clean tree.</remarks>
     private const int EnforcedFileFloor = 4200;
 
+    /// <summary>A floor a little under today's count of multi-type family files, the files the purity rule judges.</summary>
+    private const int FamilyFileFloor = 130;
+
     /// <summary>Family files: a plural name declares that the file holds a vocabulary rather than a type.</summary>
     private static readonly string[] FamilySuffixes = ["Dtos.cs", "Contracts.cs", "ServiceModels.cs", "Models.cs"];
 
@@ -153,6 +156,81 @@ public sealed class FilePlacementConventionTests
             + "delegates; or an I*Store.cs / I*Service.cs carrying its own vocabulary. The allowlist is "
             + "SHRINK-ONLY, so the fix is to split the file, not to raise the count:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>A family file is exempt from one-type-per-file because it holds data; behaviour gets its own file.</summary>
+    /// <remarks>
+    ///     A class or struct in a multi-type family file may not declare a non-private, non-override method. Records,
+    ///     enums, interfaces, delegates, constants-only classes and framework plumbing that only overrides
+    ///     (<c>JsonConverter&lt;T&gt;.Read/Write</c>) stay. There is no allowlist: the fix is always a move.
+    /// </remarks>
+    [Test]
+    public void FamilyFiles_DeclareOnlyDataShapedTypes()
+    {
+        var scan = Scanned.Value;
+
+        AssertEx.True(scan.FamilyFiles >= FamilyFileFloor,
+            $"Only {scan.FamilyFiles} multi-type family files were judged, below the floor of {FamilyFileFloor}. The "
+            + "family-file detection has stopped seeing them, so the purity rule cannot fire.");
+
+        AssertEx.Empty(scan.Behaviour,
+            "A family file (*Dtos.cs, *Contracts.cs, *ServiceModels.cs, *Models.cs) is exempt from one type per file "
+            + "only because it holds a data vocabulary (docs/wiki/16-code-conventions.md). The types below declare "
+            + "behaviour: a non-private method that is not an override. Move each into its own file named after the "
+            + "type, in the same folder and namespace:"
+            + Environment.NewLine + string.Join(Environment.NewLine, scan.Behaviour));
+    }
+
+    /// <summary>The purity rule's own check: what counts as a method, and every data shape that must not.</summary>
+    [Test]
+    public void TheFamilyRule_ReadsMethodsAndIgnoresDataShapes()
+    {
+        (string Case, string Source, string Expected)[] cases =
+        [
+            ("a static helper", "namespace N;\npublic static class A { public static int M(int x) => x; }", "M"),
+            ("a method with a block body",
+                "namespace N;\npublic sealed class A { internal bool M() { return true; } }", "M"),
+            ("a generic method with a constraint",
+                "namespace N;\npublic static class A { public static T M<T>(T x) where T : class => x; }", "M"),
+            ("a method returning a tuple",
+                "namespace N;\npublic static class A { public static (int, int) M() => (1, 2); }", "M"),
+            ("an options validator",
+                "namespace N;\ninternal sealed class V : IValidateOptions<O>\n{\n"
+                + "    public ValidateOptionsResult Validate(string? name, O options) => Success;\n}", "Validate"),
+            ("constants only",
+                "namespace N;\npublic static class A { public const string X = \"x\"; public const int Y = 1; }", ""),
+            ("a field initialised by a call",
+                "namespace N;\npublic static class A { public static readonly B X = B.Create(1); }", ""),
+            ("properties, including a tuple-typed and an expression-bodied one",
+                "namespace N;\npublic sealed class A\n{\n    public (int A, int B) P { get; init; } = (1, 2);\n"
+                + "    public int Q => Compute(1);\n}", ""),
+            ("a constructor", "namespace N;\npublic sealed class A { public A(int x) : base(x) { } }", ""),
+            ("a private helper", "namespace N;\npublic sealed class A { private static int M() => 1; }", ""),
+            ("an override-only converter",
+                "namespace N;\npublic sealed class C : JsonConverter<T>\n{\n"
+                + "    public override T Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => default;\n"
+                + "    public override void Write(Utf8JsonWriter w, T v, JsonSerializerOptions o) { }\n}", ""),
+            ("an attributed property", "namespace N;\npublic sealed class A { [Json(\"a\")] public int P { get; set; } }",
+                ""),
+            ("a nested record", "namespace N;\npublic static class A { public sealed record B(int X); }", ""),
+            ("a method on a nested class",
+                "namespace N;\npublic static class A { public static class B { public static int M() => 1; } }", "B.M"),
+            ("a method on a nested struct",
+                "namespace N;\npublic sealed class A { internal struct B { public int M() { return 1; } } }", "B.M"),
+            ("a data-only nested class",
+                "namespace N;\npublic static class A { public sealed class B { public int P { get; init; } } }", ""),
+            ("an operator",
+                "namespace N;\npublic sealed class A { public static bool operator ==(A a, A b) => true; }", "")
+        ];
+
+        foreach (var (name, source, expected) in cases)
+        {
+            var declared = TopLevelTypes(source).Single();
+
+            AssertEx.Equal(expected, string.Join(", ", DeclaredMethods(declared)),
+                $"The '{name}' case was not read as expected. A miss lets behaviour back into a family file, and a "
+                + "false hit flags a data type nobody can fix.");
+        }
     }
 
     /// <summary>The shrink-only half: an entry may never reserve more room than the tree uses.</summary>
@@ -310,7 +388,9 @@ public sealed class FilePlacementConventionTests
         int Files,
         HashSet<string> Seen,
         Dictionary<string, int> Counted,
-        Dictionary<string, IReadOnlyList<string>> Types);
+        Dictionary<string, IReadOnlyList<string>> Types,
+        int FamilyFiles,
+        IReadOnlyList<string> Behaviour);
 
     private static Scan Walk()
     {
@@ -318,6 +398,8 @@ public sealed class FilePlacementConventionTests
         var counted = new Dictionary<string, int>(StringComparer.Ordinal);
         var types = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var files = 0;
+        var familyFiles = 0;
+        var behaviour = new List<string>();
 
         foreach (var (path, relative) in EnforcedSourceFiles.All())
         {
@@ -334,9 +416,24 @@ public sealed class FilePlacementConventionTests
                 counted[relative] = declared.Count;
                 types[relative] = [.. declared.Select(declaration => declaration.ToString())];
             }
+
+            if (declared.Count > 1 && IsProduction(relative) && IsFamilyFile(relative))
+            {
+                familyFiles++;
+
+                foreach (var declaration in declared)
+                {
+                    var methods = DeclaredMethods(declaration);
+
+                    if (methods.Count > 0)
+                    {
+                        behaviour.Add($"{relative}: {declaration} declares {string.Join(", ", methods)}");
+                    }
+                }
+            }
         }
 
-        return new Scan(files, seen, counted, types);
+        return new Scan(files, seen, counted, types, familyFiles, behaviour);
     }
 
     /// <summary>Test projects and the shared test doubles are out of scope for the one-type rule.</summary>
@@ -351,7 +448,7 @@ public sealed class FilePlacementConventionTests
     {
         var name = relative[(relative.LastIndexOf('/') + 1)..];
 
-        if (FamilySuffixes.Any(suffix => name.EndsWith(suffix, StringComparison.Ordinal)))
+        if (IsFamilyFile(relative))
         {
             return true;
         }
@@ -375,6 +472,9 @@ public sealed class FilePlacementConventionTests
         // One primary type beside only the enums and delegates it takes or returns.
         return declared.Count(declaration => declaration.Kind is not ("enum" or "delegate")) == 1;
     }
+
+    private static bool IsFamilyFile(string relative) =>
+        FamilySuffixes.Any(suffix => relative.EndsWith(suffix, StringComparison.Ordinal));
 
     /// <summary>An interface beside its single implementation, in either order.</summary>
     /// <remarks>
@@ -402,6 +502,9 @@ public sealed class FilePlacementConventionTests
     /// </remarks>
     private readonly record struct Declaration(string Kind, string Name, string Bases)
     {
+        /// <summary>The text between the type's own braces, comments and literals already blanked.</summary>
+        internal string Body { get; init; } = string.Empty;
+
         public override string ToString() =>
             $"{Kind} {Name}";
 
@@ -453,7 +556,7 @@ public sealed class FilePlacementConventionTests
             {
                 if (current == '[')
                 {
-                    index = SkipBracketed(text, index);
+                    index = SkipBalanced(text, index, '[', ']');
                     continue;
                 }
 
@@ -472,7 +575,9 @@ public sealed class FilePlacementConventionTests
 
                     if (TypeKeywords.Contains(word) && ReadDeclaration(text, word, after, out var next) is { } found)
                     {
-                        declarations.Add(found);
+                        declarations.Add(next < text.Length && text[next] == '{'
+                            ? found with { Body = text[(next + 1)..(SkipBalanced(text, next, '{', '}') - 1)] }
+                            : found);
                         index = next;
                     }
 
@@ -575,6 +680,12 @@ public sealed class FilePlacementConventionTests
             return string.Empty;
         }
 
+        return IdentifierBefore(head, open);
+    }
+
+    /// <summary>The identifier that owns the parameter list opening at <paramref name="open" />.</summary>
+    private static string IdentifierBefore(string head, int open)
+    {
         var end = ClosesTypeParameters(head, open, out var opened) ? opened : open;
 
         while (end > 0 && !IsWordCharacter(head[end - 1]))
@@ -652,8 +763,175 @@ public sealed class FilePlacementConventionTests
         return -1;
     }
 
-    /// <summary>Steps over a balanced <c>[…]</c> run: an attribute list is never a declaration.</summary>
-    private static int SkipBracketed(string text, int from)
+    /// <summary>Steps over a balanced run such as an attribute list, returning the index just past its close.</summary>
+    private static int SkipBalanced(string text, int from, char open, char close)
+    {
+        var depth = 0;
+
+        for (var index = from; index < text.Length; index++)
+        {
+            if (text[index] == open)
+            {
+                depth++;
+            }
+            else if (text[index] == close)
+            {
+                depth--;
+            }
+
+            if (depth == 0)
+            {
+                return index + 1;
+            }
+        }
+
+        return text.Length;
+    }
+
+    // ---------------------------------------------------------------- the family-file purity rule
+
+    /// <summary>The non-private, non-override methods a class or struct declares directly, in source order.</summary>
+    /// <remarks>
+    ///     Members are cut at <c>;</c>, a block, or the <c>=</c> of an initializer or expression body. A member is a
+    ///     method when its head ends in a parameter list (a <c>where</c> clause aside) and does not name the type,
+    ///     which would make it a constructor. A nested class or struct is read the same way and reported as
+    ///     <c>Inner.M</c>. Records, enums, interfaces and delegates are data by kind.
+    /// </remarks>
+    private static IReadOnlyList<string> DeclaredMethods(Declaration declaration)
+    {
+        var methods = new List<string>();
+
+        if (declaration.Kind is not ("class" or "struct"))
+        {
+            return methods;
+        }
+
+        var body = declaration.Body;
+        var head = new StringBuilder();
+        var index = 0;
+
+        while (index < body.Length)
+        {
+            var current = body[index];
+
+            if (current == '[' && string.IsNullOrWhiteSpace(head.ToString()))
+            {
+                index = SkipBalanced(body, index, '[', ']');
+                continue;
+            }
+
+            switch (current)
+            {
+                case '(':
+                    var closed = SkipBalanced(body, index, '(', ')');
+                    head.Append(body, index, closed - index);
+                    index = closed;
+                    continue;
+                case '{':
+                    var end = SkipBalanced(body, index, '{', '}');
+
+                    // A nested class or struct is judged by the same rule, or it would carry behaviour past it.
+                    if (TopLevelTypes(head + body[index..end]) is [var nested])
+                    {
+                        methods.AddRange(DeclaredMethods(nested).Select(method => $"{nested.Name}.{method}"));
+                    }
+                    else
+                    {
+                        AddIfMethod(head.ToString());
+                    }
+
+                    head.Clear();
+                    index = end;
+                    continue;
+                case ';':
+                    AddIfMethod(head.ToString());
+                    head.Clear();
+                    index++;
+                    continue;
+                case '=':
+                    AddIfMethod(head.ToString());
+                    head.Clear();
+                    index = SkipToStatementEnd(body, index);
+                    continue;
+                default:
+                    head.Append(current);
+                    index++;
+                    continue;
+            }
+        }
+
+        return methods;
+
+        void AddIfMethod(string member)
+        {
+            if (MethodName(member, declaration.Name) is { } name)
+            {
+                methods.Add(name);
+            }
+        }
+    }
+
+    /// <summary>The method a member head declares, or null for a field, property, constructor or nested type.</summary>
+    private static string? MethodName(string member, string typeName)
+    {
+        var head = member;
+
+        for (var where = head.IndexOf("where", StringComparison.Ordinal);
+             where >= 0;
+             where = head.IndexOf("where", where + 1, StringComparison.Ordinal))
+        {
+            if (IsWholeWord(head, where, "where".Length))
+            {
+                head = head[..where];
+                break;
+            }
+        }
+
+        // A constructor's `: base(…)` / `: this(…)` initializer would otherwise read as the parameter list.
+        var colon = ColonOutsideBrackets(head);
+        head = colon < 0 ? head : head[..colon];
+
+        var words = head.Split([' ', '\t', '\r', '\n', '(', ')', '<', '>', ',', '.'], StringSplitOptions.RemoveEmptyEntries)
+                        .ToHashSet(StringComparer.Ordinal);
+
+        if (words.Overlaps(TypeKeywords)
+            || words.Contains("override")
+            || words.Contains("operator")
+            || !(words.Contains("public") || words.Contains("internal") || words.Contains("protected")))
+        {
+            return null;
+        }
+
+        head = head.TrimEnd();
+
+        if (!head.EndsWith(')'))
+        {
+            return null;
+        }
+
+        var open = head.Length - 1;
+
+        for (var depth = 0; open >= 0; open--)
+        {
+            depth += head[open] switch
+            {
+                ')' => 1,
+                '(' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+            {
+                break;
+            }
+        }
+
+        var name = open < 0 ? string.Empty : IdentifierBefore(head, open);
+        return name.Length == 0 || string.Equals(name, typeName, StringComparison.Ordinal) ? null : name;
+    }
+
+    /// <summary>Steps past the <c>;</c> ending an initializer or expression body, over any nesting inside it.</summary>
+    private static int SkipToStatementEnd(string text, int from)
     {
         var depth = 0;
 
@@ -661,12 +939,12 @@ public sealed class FilePlacementConventionTests
         {
             depth += text[index] switch
             {
-                '[' => 1,
-                ']' => -1,
+                '(' or '[' or '{' => 1,
+                ')' or ']' or '}' => -1,
                 _ => 0
             };
 
-            if (depth == 0)
+            if (depth == 0 && text[index] == ';')
             {
                 return index + 1;
             }

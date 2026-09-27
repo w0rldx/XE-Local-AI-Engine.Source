@@ -68,7 +68,14 @@ public sealed class ModelFitQueryService : IModelFitQueryService
             UseCase = summary.UseCase,
             ProviderName = summary.ProviderName,
             CompletedAtUtc = summary.CompletedAtUtc,
-            Recommendations = recommendations
+            Recommendations =
+            [
+                .. recommendations.Select(static record => new ModelFitRecommendationView
+                {
+                    Record = record,
+                    Diagnostics = ModelFitRecommendationDiagnostics.Parse(record.DiagnosticsJson, record.ModelName)
+                })
+            ]
         };
     }
 

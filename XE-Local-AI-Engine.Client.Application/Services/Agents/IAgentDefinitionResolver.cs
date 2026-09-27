@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Compiles a node-local agent definition into the loopback runtime-package inputs.

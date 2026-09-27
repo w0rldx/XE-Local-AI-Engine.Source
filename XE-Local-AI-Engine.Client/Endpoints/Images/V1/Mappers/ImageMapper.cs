@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Client.Services.Images.Catalog;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
@@ -90,6 +91,50 @@ internal static class ImageMapper
             DefaultSteps = defaults.Steps,
             DefaultCfgScale = defaults.CfgScale,
             DefaultSampler = defaults.Sampler
+        };
+    }
+
+    public static GetImageModelCatalogResponse ToResponse(this ImageModelCatalogView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        return new GetImageModelCatalogResponse
+        {
+            CatalogVersion = view.CatalogVersion,
+            Items = [.. view.Entries.Select(static entry => entry.ToResponse())]
+        };
+    }
+
+    private static ImageModelCatalogEntryResponse ToResponse(this ImageModelCatalogEntryView view)
+    {
+        var entry = view.Entry;
+        var fit = view.Fit;
+        return new ImageModelCatalogEntryResponse
+        {
+            Id = entry.Id,
+            DisplayName = entry.DisplayName,
+            Publisher = entry.Publisher,
+            RepoId = entry.RepoId,
+            Family = entry.Family,
+            License = entry.License,
+            Recommended = entry.Recommended,
+            Notes = entry.Notes,
+            Parts =
+            [
+                .. entry.Parts.Select(static part => new ImageModelCatalogPartResponse
+                {
+                    Role = part.Role,
+                    FileName = part.FileName,
+                    RepoId = part.RepoId,
+                    SizeBytes = part.SizeBytes
+                })
+            ],
+            TotalSizeBytes = fit.TotalBytes,
+            IsInstalled = view.IsInstalled,
+            FitVerdict = fit.Verdict.ToString(),
+            ResidentBytes = fit.ResidentBytes,
+            FitBudgetBytes = fit.BudgetBytes,
+            FitsOnDisk = fit.FitsOnDisk
         };
     }
 }

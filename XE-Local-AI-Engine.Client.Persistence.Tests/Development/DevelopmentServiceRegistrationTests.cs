@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentServiceRegistrationTests

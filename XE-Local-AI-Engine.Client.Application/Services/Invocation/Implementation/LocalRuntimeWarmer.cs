@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;

@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalChat;
 
 using System.Text;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -20,7 +22,7 @@ public sealed class ConversationUploadIngestorTests
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.IsSupported(".txt").Returns(true);
         using var gate = new DocumentExtractionAdmissionGate();
-        var ingestor = new ConversationUploadIngestor(Substitute.For<IConversationUploadedFileStore>(), extractor, gate);
+        var ingestor = new ConversationUploadIngestor(Substitute.For<IConversationUploadedFileStore>(), extractor, gate, Substitute.For<INodeChatMutationGuard>());
 
         // Images are admitted by the ingestor's own allowlist, case-insensitively, without consulting the extractor.
         AssertEx.True(ingestor.IsSupportedExtension(".PNG"));
@@ -37,7 +39,7 @@ public sealed class ConversationUploadIngestorTests
         store.AddAsync(Arg.Do<ConversationUploadedFileInput>(input => captured = input), Arg.Any<CancellationToken>())
              .Returns(callInfo => Task.FromResult(ToInfo(callInfo.Arg<ConversationUploadedFileInput>())));
         using var gate = new DocumentExtractionAdmissionGate();
-        var ingestor = new ConversationUploadIngestor(store, extractor, gate);
+        var ingestor = new ConversationUploadIngestor(store, extractor, gate, Substitute.For<INodeChatMutationGuard>());
 
         var conversationId = Guid.NewGuid();
         using var content = new MemoryStream([0x89, 0x50, 0x4E, 0x47]);
@@ -72,7 +74,7 @@ public sealed class ConversationUploadIngestorTests
         store.AddAsync(Arg.Do<ConversationUploadedFileInput>(input => captured = input), Arg.Any<CancellationToken>())
              .Returns(callInfo => Task.FromResult(ToInfo(callInfo.Arg<ConversationUploadedFileInput>())));
         using var gate = new DocumentExtractionAdmissionGate();
-        var ingestor = new ConversationUploadIngestor(store, extractor, gate);
+        var ingestor = new ConversationUploadIngestor(store, extractor, gate, Substitute.For<INodeChatMutationGuard>());
 
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
         _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/markdown", CancellationToken.None);
@@ -100,7 +102,7 @@ public sealed class ConversationUploadIngestorTests
         store.AddAsync(Arg.Do<ConversationUploadedFileInput>(input => captured = input), Arg.Any<CancellationToken>())
              .Returns(callInfo => Task.FromResult(ToInfo(callInfo.Arg<ConversationUploadedFileInput>())));
         using var gate = new DocumentExtractionAdmissionGate();
-        var ingestor = new ConversationUploadIngestor(store, extractor, gate);
+        var ingestor = new ConversationUploadIngestor(store, extractor, gate, Substitute.For<INodeChatMutationGuard>());
 
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
         _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "   ", CancellationToken.None);
@@ -119,7 +121,7 @@ public sealed class ConversationUploadIngestorTests
         AssertEx.True(gate.TryAcquire(out var heldLease));
         using (heldLease)
         {
-            var ingestor = new ConversationUploadIngestor(store, extractor, gate);
+            var ingestor = new ConversationUploadIngestor(store, extractor, gate, Substitute.For<INodeChatMutationGuard>());
             using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
 
             var info = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/plain", CancellationToken.None);

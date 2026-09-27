@@ -81,8 +81,8 @@ public sealed class EndpointDependencyTests
     /// <summary>
     ///     The collaborator scan counts the classes under the host's <c>Endpoints</c> namespace that DI builds and an
     ///     endpoint reaches, and deliberately not the DTOs, requests, responses, validators, size-limit metadata or
-    ///     static mappers beside them — none of those takes a service. As measured there are two:
-    ///     <c>DevWorkflowRunComposer</c> and <c>LocalApiSecurityMiddleware</c>.
+    ///     static mappers beside them — none of those takes a service. As measured there is one:
+    ///     <c>LocalApiSecurityMiddleware</c>.
     /// </summary>
     private const int CollaboratorFloor = 1;
 

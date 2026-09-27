@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -573,7 +573,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public List<RuntimeAcquisitionUpdate> Updates { get; } = [];
 
-        public RuntimeAcquisitionStatusHubEvent Current { get; private set; } = new()
+        public RuntimeAcquisitionStatusEvent Current { get; private set; } = new()
         {
             Sequence = 0,
             Phase = nameof(RuntimeAcquisitionPhase.Idle),
@@ -589,7 +589,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         public void Report(RuntimeAcquisitionUpdate update)
         {
             Updates.Add(update);
-            Current = new RuntimeAcquisitionStatusHubEvent
+            Current = new RuntimeAcquisitionStatusEvent
             {
                 Sequence = ++_sequence,
                 Phase = update.Phase.ToString(),

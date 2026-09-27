@@ -5,7 +5,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;

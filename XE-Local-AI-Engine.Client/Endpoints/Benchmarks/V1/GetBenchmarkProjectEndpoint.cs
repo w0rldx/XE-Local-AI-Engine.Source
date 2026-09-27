@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
+using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 public sealed class GetBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRouteRequest, BenchmarkProjectDetailResponse>
 {
@@ -33,6 +34,6 @@ public sealed class GetBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRoute
         }
 
         var runCount = await _records.CountRunsAsync(project.Id, ct);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount, ct), ct);
+        await Send.OkAsync((await _records.GetProjectDetailAsync(project, ct)).ToDetail(runCount), ct);
     }
 }

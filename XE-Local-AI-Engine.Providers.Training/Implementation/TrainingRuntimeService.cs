@@ -721,7 +721,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         lock (_stateLock)
         {
             _phase = phase;
-            _ = QueuePublish(new TrainingRuntimeStatusHubEvent
+            _ = QueuePublish(new TrainingRuntimeStatusEvent
             {
                 Phase = phase.ToString(),
                 AppendedLogLines = [],
@@ -748,7 +748,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             _completedAtUtc = _timeProvider.GetUtcNow();
             _installed = installed;
 
-            publish = QueuePublish(new TrainingRuntimeStatusHubEvent
+            publish = QueuePublish(new TrainingRuntimeStatusEvent
             {
                 Phase = phase.ToString(),
                 AppendedLogLines = [],
@@ -765,7 +765,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     {
         lock (_stateLock)
         {
-            return QueuePublish(new TrainingRuntimeStatusHubEvent
+            return QueuePublish(new TrainingRuntimeStatusEvent
             {
                 Phase = phase.ToString(),
                 AppendedLogLines = [],
@@ -791,7 +791,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             }
 
             _logStartSequence = _nextLogSequence - _logLines.Count;
-            _ = QueuePublish(new TrainingRuntimeStatusHubEvent
+            _ = QueuePublish(new TrainingRuntimeStatusEvent
             {
                 Phase = _phase.ToString(),
                 AppendedLogLines = [redacted],
@@ -826,7 +826,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
     }
 
-    private Task QueuePublish(TrainingRuntimeStatusHubEvent statusEvent)
+    private Task QueuePublish(TrainingRuntimeStatusEvent statusEvent)
     {
         lock (_publishLock)
         {
@@ -835,7 +835,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
     }
 
-    private async Task PublishObservedAsync(Task previous, TrainingRuntimeStatusHubEvent statusEvent)
+    private async Task PublishObservedAsync(Task previous, TrainingRuntimeStatusEvent statusEvent)
     {
         // Process stdout/stderr callbacks must never run publisher work inline; yield before joining the serialized tail.
         await Task.Yield();

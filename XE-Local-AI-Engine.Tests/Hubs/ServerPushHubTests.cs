@@ -117,11 +117,11 @@ public sealed class ServerPushHubTests
     public async Task RuntimeAcquisitionEventPublisher_PushIsReceivedByAnAuthorizedClient()
     {
         await using var connection = Connect(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub);
-        var received = new TaskCompletionSource<RuntimeAcquisitionStatusHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = connection.On<RuntimeAcquisitionStatusHubEvent>(RuntimeAcquisitionHubEvents.StatusChanged, evt => received.TrySetResult(evt));
+        var received = new TaskCompletionSource<RuntimeAcquisitionStatusEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<RuntimeAcquisitionStatusEvent>(RuntimeAcquisitionHubEvents.StatusChanged, evt => received.TrySetResult(evt));
         await connection.StartAndAwaitRegistrationAsync();
 
-        var published = new RuntimeAcquisitionStatusHubEvent
+        var published = new RuntimeAcquisitionStatusEvent
         {
             Sequence = 7,
             Phase = nameof(RuntimeAcquisitionPhase.Downloading),

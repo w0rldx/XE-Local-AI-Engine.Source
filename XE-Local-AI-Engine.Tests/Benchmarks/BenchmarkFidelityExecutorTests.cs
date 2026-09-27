@@ -397,7 +397,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             return capacity;
         }
 
-        public BenchmarkFidelityExecutor Executor(IBenchmarkPerplexityRunner? runner = null, TimeSpan? measurementTimeout = null) =>
+        public BenchmarkFidelityExecutor Executor(ILlamaPerplexityRunner? runner = null, TimeSpan? measurementTimeout = null) =>
             new(Store,
                 new FixedSnapshots(_snapshot),
                 new NamedLeases(_leases),
@@ -569,9 +569,9 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     }
 
     /// <summary>A child process that never returns on its own — only the watchdog ends it.</summary>
-    private sealed class HangingPerplexity : IBenchmarkPerplexityRunner
+    private sealed class HangingPerplexity : ILlamaPerplexityRunner
     {
-        public async Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath,
+        public async Task<LlamaPerplexityProcessResult> RunAsync(string executablePath,
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken)
         {
@@ -580,7 +580,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         }
     }
 
-    private sealed class ScriptedPerplexity : IBenchmarkPerplexityRunner
+    private sealed class ScriptedPerplexity : ILlamaPerplexityRunner
     {
         private readonly Func<string> _output;
 
@@ -589,7 +589,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             _output = output;
         }
 
-        public async Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath,
+        public async Task<LlamaPerplexityProcessResult> RunAsync(string executablePath,
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken)
         {
@@ -601,7 +601,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken);
             }
 
-            return new BenchmarkPerplexityProcessResult
+            return new LlamaPerplexityProcessResult
             {
                 ExitCode = 0,
                 Output = _output()

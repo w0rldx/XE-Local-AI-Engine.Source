@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -59,7 +60,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     private readonly IGgufModelStore _ggufModels;
     private readonly ICapacityService _capacity;
     private readonly ILlamaCppBinaryManager _binaries;
-    private readonly IBenchmarkPerplexityRunner _perplexity;
+    private readonly ILlamaPerplexityRunner _perplexity;
     private readonly BenchmarkKldBaseCache _cache;
     private readonly IOptions<BenchmarkKldCacheOptions> _cacheOptions;
     private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
@@ -73,7 +74,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         IGgufModelStore ggufModels,
         ICapacityService capacity,
         ILlamaCppBinaryManager binaries,
-        IBenchmarkPerplexityRunner perplexity,
+        ILlamaPerplexityRunner perplexity,
         BenchmarkKldBaseCache cache,
         IOptions<BenchmarkKldCacheOptions> cacheOptions,
         IRuntimeEnvironmentFactsProvider environmentFacts,
@@ -366,7 +367,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     ///     reason — recorded as an operator cancellation with none it is indistinguishable from someone pressing
     ///     stop, and a two-hour runaway looks like a deliberate abort.
     /// </remarks>
-    private async Task<BenchmarkPerplexityProcessResult> RunUnderWatchdogAsync(string executable,
+    private async Task<LlamaPerplexityProcessResult> RunUnderWatchdogAsync(string executable,
         IReadOnlyList<string> arguments,
         CancellationToken token)
     {

@@ -16,20 +16,20 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 
 | Concern | Project / path |
 |---|---|
-| Ingestion pipeline driver | `XE-Local-AI-Engine.Client.Application/Services/Knowledge/KnowledgeIngestionService.cs` (`IKnowledgeIngestionService`) |
-| Background ingestion worker + dispatcher | `…/Services/Knowledge/KnowledgeIngestionWorker.cs`, `KnowledgeIngestionDispatcher.cs` |
-| Header-boundary chunker | `…/Services/Knowledge/HeaderBoundaryChunkingService.cs` (`IChunkingService`) |
-| Chunk embedder | `…/Services/Knowledge/KnowledgeChunkEmbedder.cs` (`IKnowledgeChunkEmbedder`) |
-| Exact chunk-embedding reuse | `…/Services/Knowledge/KnowledgeChunkEmbeddingCache.cs`, `KnowledgeChunkEmbeddingReuseStore.cs` |
+| Ingestion pipeline driver | `XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeIngestionService.cs` (`IKnowledgeIngestionService`) |
+| Background ingestion worker + dispatcher | `…/Services/Knowledge/Implementation/KnowledgeIngestionWorker.cs`, `KnowledgeIngestionDispatcher.cs` |
+| Header-boundary chunker | `…/Services/Knowledge/Implementation/HeaderBoundaryChunkingService.cs` (`IChunkingService`) |
+| Chunk embedder | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbedder.cs` (`IKnowledgeChunkEmbedder`) |
+| Exact chunk-embedding reuse | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbeddingCache.cs`, `KnowledgeChunkEmbeddingReuseStore.cs` |
 | Embedding model resolver + prefixer | `…/Services/Knowledge/EmbeddingModelResolver.cs`, `KnowledgeEmbeddingPrefixer.cs` |
-| Hybrid search orchestrator | `…/Services/Knowledge/KnowledgeSearchService.cs` (`IKnowledgeSearchService`) |
+| Hybrid search orchestrator | `…/Services/Knowledge/Implementation/KnowledgeSearchService.cs` (`IKnowledgeSearchService`) |
 | Optional-stage policy | `…/Services/Knowledge/AdaptiveRetrievalPolicy.cs` |
-| Lexical arm (FTS5) | `…/Services/Knowledge/FtsSearch.cs` (`IFtsSearch`) |
-| Semantic arm (cosine) + factory | `…/Services/Knowledge/ManagedCosineVectorSearch.cs`, `VectorSearchFactory.cs` (`IVectorSearch`) |
-| Encrypted document blob store | `…/Services/Knowledge/KnowledgeDocumentBlobStore.cs` (`IKnowledgeDocumentBlobStore`) |
-| Document text extraction | `…/Services/DocumentIngestion/DocumentTextExtractor.cs` + `Extraction/` |
-| Registered-repository import | `…/Services/Knowledge/KnowledgeRepositoryImportService.cs` |
-| Scheduled stale-model reindex | `…/Services/Knowledge/KnowledgeScheduledModelReindexWorker.cs` |
+| Lexical arm (FTS5) | `…/Services/Knowledge/Implementation/FtsSearch.cs` (`IFtsSearch`) |
+| Semantic arm (cosine) + factory | `…/Services/Knowledge/Implementation/ManagedCosineVectorSearch.cs`, `VectorSearchFactory.cs` (`IVectorSearch`) |
+| Encrypted document blob store | `…/Services/Knowledge/Implementation/KnowledgeDocumentBlobStore.cs` (`IKnowledgeDocumentBlobStore`) |
+| Document text extraction | `…/Services/DocumentIngestion/Implementation/DocumentTextExtractor.cs` + `Extraction/` |
+| Registered-repository import | `…/Services/Knowledge/Implementation/KnowledgeRepositoryImportService.cs` |
+| Scheduled stale-model reindex | `…/Services/Knowledge/Implementation/KnowledgeScheduledModelReindexWorker.cs` |
 | Agent-facing tools | `…/Services/Knowledge/Tools/Implementation/SearchKnowledgeBaseToolHandler.cs`, `ReadSurroundingChunksToolHandler.cs` |
 | SignalR notifier + hub | `XE-Local-AI-Engine.Client/Hubs/KnowledgeIndexingNotifier.cs`, `KnowledgeBaseHub.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/Knowledge/V1/` |

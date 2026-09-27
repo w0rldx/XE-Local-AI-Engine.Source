@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using static XE_Local_AI_Engine.Client.Persistence.Implementation.BenchmarkRankingPolicy;
 
 public sealed partial class BenchmarkStore
 {

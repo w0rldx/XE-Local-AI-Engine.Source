@@ -30,6 +30,7 @@ internal static class AddNodeAuthExtensions
         // UserManager/SignInManager stores: that is what puts an Identity write inside the auth service's transaction.
         builder.Services.AddScoped<INodeIdentityStore, NodeIdentityStore>();
         builder.Services.AddScoped<INodeAuthService, NodeAuthService>();
+        builder.Services.AddScoped<NodeSecurityStampCheck>();
         builder.Services.AddScoped<INodeTutorialStateService, NodeTutorialStateService>();
         builder.Services.AddSingleton<NodeIdentityInitializationService>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();

@@ -330,26 +330,6 @@ public sealed class McpServerServiceTests
         await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
     }
 
-    [Test]
-    public void GetConnectionStatuses_DelegatesToConnectionManager()
-    {
-        var service = CreateService(out _, out var manager);
-        var status = new McpServerConnectionStatus
-        {
-            ServerId = Guid.NewGuid(),
-            Name = "Filesystem",
-            Connected = true,
-            ToolCount = 3,
-            LastError = null,
-            Tools = []
-        };
-        manager.GetStatuses().Returns([status]);
-
-        var statuses = service.GetConnectionStatuses();
-
-        AssertEx.ContainsSingle(statuses, entry => entry.ServerId == status.ServerId && entry.ToolCount == 3);
-    }
-
     private static McpServerService CreateService(out IMcpServerStore store, out IMcpServerConnectionManager manager)
     {
         store = Substitute.For<IMcpServerStore>();

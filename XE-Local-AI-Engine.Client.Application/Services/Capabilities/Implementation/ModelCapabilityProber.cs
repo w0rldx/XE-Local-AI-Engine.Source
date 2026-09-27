@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 
 using System.Data.Common;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Probes the node-local model runtime through the provider-neutral <see cref="IModelCapabilityClient" />: installed-model inventory
-///     (short-lived cache), per-model context length (digest-keyed cache), runtime reachability/version, and the active/running model.
+///     (short-lived cache) and runtime reachability/version.
 /// </summary>
 /// <remarks>
-///     Collaborator behind <see cref="CapabilityReporter" />; owns the probe caches and the configured-model fallback list.
+///     Collaborator behind <see cref="CapabilityReporter" />; owns the inventory cache and the configured-model fallback list.
 /// </remarks>
 internal sealed class ModelCapabilityProber
 {
@@ -28,8 +27,6 @@ internal sealed class ModelCapabilityProber
     private readonly Lock _installedModelsCacheSync = new();
     private readonly ILogger<ModelCapabilityProber> _logger;
     private readonly IModelCapabilityClient _modelCapabilityClient;
-    private readonly Dictionary<ModelContextCacheKey, int?> _modelContextCache = new();
-    private readonly Lock _modelContextCacheSync = new();
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
 
@@ -140,28 +137,6 @@ internal sealed class ModelCapabilityProber
         }
     }
 
-    /// <summary>Builds per-model metadata (digest + max context tokens) for the given inventory.</summary>
-    public async Task<IReadOnlyList<ClientModelMetadata>> GetInstalledModelMetadataAsync(IReadOnlyList<InstalledModelInfo> installedModels,
-        CancellationToken cancellationToken)
-    {
-        var metadata = new List<ClientModelMetadata>(installedModels.Count);
-        foreach (var installedModel in installedModels)
-        {
-            var maxContextTokens = installedModel.IsDiscovered && !string.IsNullOrWhiteSpace(installedModel.Digest)
-                ? await GetMaxContextTokensAsync(installedModel, cancellationToken)
-                : null;
-
-            metadata.Add(new ClientModelMetadata
-            {
-                Name = installedModel.Name,
-                Digest = installedModel.Digest,
-                MaxContextTokens = maxContextTokens
-            });
-        }
-
-        return metadata;
-    }
-
     /// <summary>Probes the runtime reachability and version.</summary>
     public async Task<OllamaRuntimeStatus> DetectOllamaRuntimeAsync(CancellationToken cancellationToken)
     {
@@ -198,77 +173,6 @@ internal sealed class ModelCapabilityProber
                 Version = null,
                 Diagnostics = diagnostics
             };
-        }
-    }
-
-    /// <summary>Probes the runtime for the currently active/loaded model.</summary>
-    public async Task<ActiveModelInfo> DetectActiveModelAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        try
-        {
-            var runningModels = await _modelCapabilityClient.ListRunningModelsAsync(cancellationToken);
-            var active = runningModels.Count > 0 ? runningModels[0] : null;
-            if (active is null)
-            {
-                return ActiveModelInfo.None;
-            }
-
-            var modelName = NormalizeModelName(active.Name) ?? NormalizeModelName(active.ModelName);
-            if (modelName is null)
-            {
-                return ActiveModelInfo.None;
-            }
-
-            return new ActiveModelInfo
-            {
-                Name = modelName,
-                ExpiresAt = active.ExpiresAt
-            };
-        }
-        catch (HttpRequestException exception)
-        {
-            _logger.LogDebug(exception, "Ollama not reachable while querying running models (expected in desktop mode).");
-            return ActiveModelInfo.None;
-        }
-    }
-
-    private async Task<int?> GetMaxContextTokensAsync(InstalledModelInfo installedModel, CancellationToken cancellationToken)
-    {
-        var cacheKey = new ModelContextCacheKey
-        {
-            ModelName = installedModel.Name,
-            Digest = installedModel.Digest!
-        };
-        lock (_modelContextCacheSync)
-        {
-            if (_modelContextCache.TryGetValue(cacheKey, out var cachedContextLength))
-            {
-                return cachedContextLength;
-            }
-        }
-
-        try
-        {
-            var details = await _modelCapabilityClient.GetModelDetailAsync(installedModel.Name, cancellationToken);
-            if (details.MaxContextTokens is null)
-            {
-                _logger.LogWarning("Ollama /api/show for model '{ModelName}' succeeded but did not include a supported *.context_length model_info key.",
-                    installedModel.Name);
-            }
-
-            lock (_modelContextCacheSync)
-            {
-                _modelContextCache[cacheKey] = details.MaxContextTokens;
-            }
-
-            return details.MaxContextTokens;
-        }
-        catch (HttpRequestException exception)
-        {
-            _logger.LogDebug(exception, "Ollama /api/show not reachable for model '{ModelName}'; reporting unknown max context tokens.", installedModel.Name);
-            return null;
         }
     }
 
@@ -350,12 +254,5 @@ internal sealed class ModelCapabilityProber
         public required IReadOnlyList<InstalledModelInfo> Models { get; init; }
 
         public required DateTimeOffset ExpiresAt { get; init; }
-    }
-
-    private sealed record ModelContextCacheKey
-    {
-        public required string ModelName { get; init; }
-
-        public required string Digest { get; init; }
     }
 }

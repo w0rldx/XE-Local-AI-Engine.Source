@@ -51,5 +51,14 @@ public sealed class ModelFitLatestRecommendationsView
 
     public required long? CompletedAtUtc { get; init; }
 
-    public required IReadOnlyList<ModelFitRecommendationRecord> Recommendations { get; init; }
+    public required IReadOnlyList<ModelFitRecommendationView> Recommendations { get; init; }
+}
+
+/// <summary>One recommendation row plus the typed read of its diagnostics blob, parsed once at the query boundary.</summary>
+public sealed class ModelFitRecommendationView
+{
+    /// <summary>The row; its raw <see cref="ModelFitRecommendationRecord.DiagnosticsJson" /> is never surfaced.</summary>
+    public required ModelFitRecommendationRecord Record { get; init; }
+
+    public required ModelFitRecommendationDiagnostics Diagnostics { get; init; }
 }

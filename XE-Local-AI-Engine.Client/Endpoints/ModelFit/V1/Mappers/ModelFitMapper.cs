@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 
-using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -50,8 +48,10 @@ internal static class ModelFitMapper
         };
     }
 
-    private static ModelFitRecommendationResponse ToResponse(this ModelFitRecommendationRecord record)
+    private static ModelFitRecommendationResponse ToResponse(this ModelFitRecommendationView view)
     {
+        var record = view.Record;
+        var diagnostics = view.Diagnostics;
         return new ModelFitRecommendationResponse
         {
             Rank = record.Rank,
@@ -67,32 +67,24 @@ internal static class ModelFitMapper
             ContextTokens = record.ContextTokens,
             IsInstalled = record.IsInstalled,
             PullModelName = record.PullModelName,
-            ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson),
-            // Soft publisher-trust signal from the persisted diagnostics blob: the advisor emits is_trusted_publisher per model, and a blob without that key falls
-            // back to a model-name derivation, so snapshots written before it still flag trust until the next refresh.
-            IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName),
-            // Catalog-lane fields (curated catalog, explore section, MoE expert offload) from the same diagnostics blob. A snapshot row written before the catalog
-            // lane has none of these keys and defaults to the "explore" section.
-            Section = ExtractString(record.DiagnosticsJson, "section") ?? "explore",
-            Tier = ExtractString(record.DiagnosticsJson, "tier"),
-            CatalogId = ExtractString(record.DiagnosticsJson, "catalog_id"),
-            CatalogDisplayName = ExtractString(record.DiagnosticsJson, "catalog_display_name"),
-            CatalogNotes = ExtractString(record.DiagnosticsJson, "catalog_notes"),
-            ExpertsOffloaded = ExtractBool(record.DiagnosticsJson, "expert_offload") ?? false,
-            GpuGb = ExtractDouble(record.DiagnosticsJson, "gpu_gb"),
-            CpuGb = ExtractDouble(record.DiagnosticsJson, "cpu_gb"),
-            // Advisory-only quantized-KV estimate (catalog lane; absent for explore rows / incomplete metadata /
-            // pre-advisory snapshots). Extracted from the same diagnostics blob; never drives fit or ranking.
-            KvQuant = ExtractString(record.DiagnosticsJson, "kv_quant"),
-            KvQuantEstimatedGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_estimated_gb"),
-            KvQuantHeadroomGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_headroom_gb"),
-            KvQuantFits = ExtractBool(record.DiagnosticsJson, "kv_quant_fits"),
-            KvQuantRequiresFlashAttention = ExtractBool(record.DiagnosticsJson, "kv_quant_requires_flash_attention"),
-            // KV cost per token of context at the snapshot's context target and the model's attention shape, from the
-            // same blob. A row written before this shipped carries none of the keys and reads as null.
-            KvBytesPerToken = ExtractLong(record.DiagnosticsJson, "kv_bytes_per_token"),
-            KvBytesPerTokenQuant = ExtractString(record.DiagnosticsJson, "kv_bytes_per_token_quant"),
-            AttentionArch = ExtractString(record.DiagnosticsJson, "attention_arch")
+            ReleaseDate = diagnostics.ReleaseDate,
+            IsTrustedPublisher = diagnostics.IsTrustedPublisher,
+            Section = diagnostics.Section,
+            Tier = diagnostics.Tier,
+            CatalogId = diagnostics.CatalogId,
+            CatalogDisplayName = diagnostics.CatalogDisplayName,
+            CatalogNotes = diagnostics.CatalogNotes,
+            ExpertsOffloaded = diagnostics.ExpertsOffloaded,
+            GpuGb = diagnostics.GpuGb,
+            CpuGb = diagnostics.CpuGb,
+            KvQuant = diagnostics.KvQuant,
+            KvQuantEstimatedGb = diagnostics.KvQuantEstimatedGb,
+            KvQuantHeadroomGb = diagnostics.KvQuantHeadroomGb,
+            KvQuantFits = diagnostics.KvQuantFits,
+            KvQuantRequiresFlashAttention = diagnostics.KvQuantRequiresFlashAttention,
+            KvBytesPerToken = diagnostics.KvBytesPerToken,
+            KvBytesPerTokenQuant = diagnostics.KvBytesPerTokenQuant,
+            AttentionArch = diagnostics.AttentionArch
         };
     }
 
@@ -564,139 +556,5 @@ internal static class ModelFitMapper
             GpuVariant.Vulkan => "vulkan",
             _ => "cpu"
         };
-    }
-
-    /// <summary>
-    ///     Pulls ONLY the <c>release_date</c> string out of the persisted diagnostics blob, so the rest stays
-    ///     server-side and the row projection remains sanitized.
-    /// </summary>
-    /// <remarks>
-    ///     Tolerant: a null/blank/malformed blob, a non-object root, or a missing / non-string <c>release_date</c> all
-    ///     yield <c>null</c>.
-    /// </remarks>
-    private static string? ExtractReleaseDate(string? diagnosticsJson)
-    {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty("release_date", out var releaseDate)
-                   && releaseDate.ValueKind == JsonValueKind.String
-                ? releaseDate.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>Pulls the <c>is_trusted_publisher</c> boolean out of the persisted diagnostics blob.</summary>
-    /// <remarks>
-    ///     An explicit <c>true</c>/<c>false</c> in the blob wins. When the property is ABSENT (a row persisted before
-    ///     the advisor emitted the signal) or the blob is null/malformed, the trust is derived from the model name, so
-    ///     pre-existing snapshots are not all silently flagged untrusted until the next refresh regenerates the blob.
-    /// </remarks>
-    private static bool ExtractIsTrustedPublisher(string? diagnosticsJson, string modelName)
-    {
-        if (!string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(diagnosticsJson);
-                if (document.RootElement.ValueKind == JsonValueKind.Object
-                    && document.RootElement.TryGetProperty("is_trusted_publisher", out var trusted)
-                    && trusted.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                {
-                    return trusted.ValueKind == JsonValueKind.True;
-                }
-            }
-            catch (JsonException)
-            {
-                // Fall through to the name-derived signal below.
-            }
-        }
-
-        return GgufPublisherTrust.IsTrustedPublisher(modelName);
-    }
-
-    /// <summary>Pulls a single string property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-string property.</summary>
-    private static string? ExtractString(string? diagnosticsJson, string propertyName)
-    {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(propertyName, out var value)
-                   && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>The one parse behind every value extractor below.</summary>
-    /// <remarks>
-    ///     A null, whitespace or malformed blob, a non-object root and a missing property all read as null, and
-    ///     <paramref name="read" /> decides what a present property of the wrong shape does. It runs inside the
-    ///     <c>using</c> because a <see cref="JsonElement" /> does not outlive its document.
-    /// </remarks>
-    private static T? ExtractValue<T>(string? diagnosticsJson, string propertyName, Func<JsonElement, T?> read)
-        where T : struct
-    {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(propertyName, out var value)
-                ? read(value)
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>Pulls a single boolean property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-boolean property.</summary>
-    private static bool? ExtractBool(string? diagnosticsJson, string propertyName)
-    {
-        return ExtractValue<bool>(diagnosticsJson,
-            propertyName,
-            static value => value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.ValueKind == JsonValueKind.True : null);
-    }
-
-    /// <summary>Pulls a single integer property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-integral property (a fractional or out-of-range number reads as null).</summary>
-    private static long? ExtractLong(string? diagnosticsJson, string propertyName)
-    {
-        return ExtractValue<long>(diagnosticsJson,
-            propertyName,
-            static value => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) ? number : null);
-    }
-
-    /// <summary>Pulls a single numeric property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-numeric property.</summary>
-    private static double? ExtractDouble(string? diagnosticsJson, string propertyName)
-    {
-        return ExtractValue<double>(diagnosticsJson,
-            propertyName,
-            static value => value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number) ? number : null);
     }
 }

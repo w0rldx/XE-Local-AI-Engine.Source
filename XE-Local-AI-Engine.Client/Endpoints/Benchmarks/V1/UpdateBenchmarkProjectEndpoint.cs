@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 public sealed class UpdateBenchmarkProjectEndpoint : Endpoint<UpdateBenchmarkProjectRequest, BenchmarkProjectDetailResponse>
 {
@@ -32,6 +33,6 @@ public sealed class UpdateBenchmarkProjectEndpoint : Endpoint<UpdateBenchmarkPro
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
     {
         var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct), ct);
+        await Send.OkAsync((await _records.GetProjectDetailAsync(project, ct)).ToDetail(runCount: 0), ct);
     }
 }

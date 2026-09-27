@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
 ///     One node run in full. The agent view is reached from here through <c>workSessionId</c> and the EXISTING
@@ -12,12 +13,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// </summary>
 public sealed class GetDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowNodeRunRequest, DevWorkflowNodeRunDetailResponse>
 {
-    private readonly DevWorkflowRunComposer _composer;
+    private readonly DevWorkflowRunQueryService _queries;
 
-    public GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer composer)
+    public GetDevWorkflowNodeRunEndpoint(DevWorkflowRunQueryService queries)
     {
-        ArgumentNullException.ThrowIfNull(composer);
-        _composer = composer;
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = queries;
     }
 
     public override void Configure()
@@ -31,6 +32,6 @@ public sealed class GetDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowNodeRunR
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await Send.OkAsync(await _composer.ComposeNodeAsync(req.RunId, req.NodeRunId, ct), ct);
+        await Send.OkAsync((await _queries.GetNodeRunViewAsync(req.RunId, req.NodeRunId, ct)).ToResponse(), ct);
     }
 }

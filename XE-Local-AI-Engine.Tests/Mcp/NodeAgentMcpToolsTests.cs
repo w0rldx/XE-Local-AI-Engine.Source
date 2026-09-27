@@ -11,6 +11,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Models;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 

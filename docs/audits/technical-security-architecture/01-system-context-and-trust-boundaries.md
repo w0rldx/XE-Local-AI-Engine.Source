@@ -169,7 +169,7 @@ Internal traceability:
 
 - `XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`
 - `XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceSecurity.cs`
-- `XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceProvider.cs`
+- `XE-Local-AI-Engine.Client.Application/Services/Development/Implementation/DevelopmentWorkspaceProvider.cs`
 - `XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceTools.cs`
 - `XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs`
 - `XE-Local-AI-Engine.Tests/Sandbox/AgentHomeProcessWriteBackLoopTests.cs`

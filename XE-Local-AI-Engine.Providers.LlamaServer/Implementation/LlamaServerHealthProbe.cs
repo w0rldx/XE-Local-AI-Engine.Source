@@ -108,20 +108,8 @@ internal sealed class LlamaServerHealthProbe : ILlamaServerHealthProbe
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: attemptCts.Token).ConfigureAwait(false);
-
-            // /props exposes the effective per-slot context under default_generation_settings.n_ctx.
-            if (document.RootElement.TryGetProperty("default_generation_settings", out var settings)
-                && settings.ValueKind == JsonValueKind.Object
-                && settings.TryGetProperty("n_ctx", out var nCtx)
-                && nCtx.ValueKind == JsonValueKind.Number
-                && nCtx.TryGetInt32(out var contextTokens)
-                && contextTokens > 0)
-            {
-                return contextTokens;
-            }
-
-            return null;
+            var props = await LlamaServerProps.ReadAsync(stream, attemptCts.Token).ConfigureAwait(false);
+            return props.EffectiveContextTokens;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

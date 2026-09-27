@@ -68,10 +68,10 @@ public sealed class TestCategoryConventionTests
                                                                  + @"(?:class|record\s+struct|record\s+class|record|struct|interface)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline);
 
-    // Anchoring on a bracket or a comma reads a combined list ([Test, Repeat(2)], [NotInParallel, Category(…)])
-    // and a line break anywhere inside it, while a longer name such as TestCase still is not an attribute use.
+    // Anchoring on a bracket or a comma reads a combined list and a line break inside it; a longer name (TestCase) is not a
+    // use, and the only qualifier accepted is TUnit's own (optionally global::), so System.ComponentModel.Category never counts.
     private static readonly Regex CategoryAttributeUse =
-        NewRegex(@"[\[,]\s*Category\s*\(\s*TestCategories\s*\.\s*(?<value>[A-Za-z]+)\s*\)");
+        NewRegex(@"[\[,]\s*(?:global\s*::\s*)?(?:TUnit\s*\.\s*Core\s*\.\s*)?Category\s*\(\s*TestCategories\s*\.\s*(?<value>[A-Za-z]+)\s*\)");
 
     private static readonly Regex TestAttributeUse = NewRegex(@"[\[,]\s*Test\s*[\]\(,]");
     private static readonly Regex Identifier = NewRegex("[A-Za-z_][A-Za-z0-9_]*");
@@ -121,6 +121,24 @@ public sealed class TestCategoryConventionTests
         AssertEx.True(offenders.Length == 0,
             "Every class with [Test] methods carries exactly one class-level [Category(TestCategories.…)]. "
             + $"Add the missing one, or delete the duplicate:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}");
+    }
+
+    /// <summary>The attribute shapes the source scan reads as a category, and the look-alikes it must not.</summary>
+    [Test]
+    [Arguments("[Category(TestCategories.Unit)]", "Unit")]
+    [Arguments("[Test, Category(TestCategories.Integration)]", "Integration")]
+    [Arguments("[TUnit.Core.Category(TestCategories.ExternalInfra)]", "ExternalInfra")]
+    [Arguments("[global::TUnit.Core.Category(TestCategories.Unit)]", "Unit")]
+    [Arguments("[NotInParallel, TUnit . Core . Category( TestCategories.Unit )]", "Unit")]
+    [Arguments("[System.ComponentModel.Category(TestCategories.Unit)]", "")]
+    [Arguments("[global::System.ComponentModel.Category(TestCategories.Unit)]", "")]
+    [Arguments("[Other.TUnit.Core.Category(TestCategories.Unit)]", "")]
+    [Arguments("[TestCategory(TestCategories.Unit)]", "")]
+    public void CategoryAttributeUse_ReadsTUnitsCategoryOnly(string head, string expected)
+    {
+        var matched = string.Join(",", CategoryAttributeUse.Matches(head).Select(match => match.Groups["value"].Value));
+
+        AssertEx.Equal(expected, matched, $"The source scan read '{head}' as [{matched}].");
     }
 
     /// <summary>A <c>Unit</c> class must not reach an Integration mechanism, directly or through any helper.</summary>

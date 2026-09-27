@@ -1511,6 +1511,7 @@ public sealed class DevWorkflowRunEndpointTests
         store.ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([]);
         store.ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([Artifact()]);
         store.ListConsumedArtifactIdsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
+        store.ListNodeRunIdsWithStaleInputsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
         store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
         store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
              .Returns([

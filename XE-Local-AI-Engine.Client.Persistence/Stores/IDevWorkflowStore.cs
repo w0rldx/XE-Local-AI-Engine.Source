@@ -217,6 +217,12 @@ public interface IDevWorkflowStore
 
     Task<IReadOnlyList<Guid>> ListConsumedArtifactIdsAsync(Guid nodeRunId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The run's node runs that recorded a use of an artifact now flagged stale, in one grouped read: the run view's
+    ///     <c>hasStaleInputs</c> badge, without a consumed-ids read per node run.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListNodeRunIdsWithStaleInputsAsync(Guid runId, CancellationToken cancellationToken = default);
+
     Task<DevWorkflowMutationResult> RecordDecisionAsync(RecordDevWorkflowDecisionCommand command, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DevWorkflowDecisionSnapshot>> ListDecisionsAsync(Guid runId, CancellationToken cancellationToken = default);

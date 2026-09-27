@@ -56,7 +56,7 @@ internal static class AddNodeInvocationExtensions
                    "Invalid ConversationContextBudgetOptions configuration.")
                .ValidateOnStart();
         builder.Services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
-        builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
+        builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(sp.GetRequiredService<ILlamaServerNativeClient>(),
             sp.GetRequiredService<ITokenEstimatorCalibrationStore>(),
             sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
             sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>(),
@@ -89,7 +89,6 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<ModelCapabilityProber>();
-        builder.Services.AddSingleton<CapabilityReportComposer>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NodeSqliteKeyHolder>();

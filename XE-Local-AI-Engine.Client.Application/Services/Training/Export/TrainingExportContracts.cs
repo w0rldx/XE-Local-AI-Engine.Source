@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Export;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>What the operator asked to export out of a finished run.</summary>
 public sealed class TrainingExportRequest
@@ -41,49 +40,6 @@ public sealed class TrainingExportStart
     public required TrainingExportStartOutcome Outcome { get; init; }
 
     public string? Reason { get; init; }
-}
-
-/// <summary>
-///     The quantizations a training export may produce.
-/// </summary>
-/// <remarks>
-///     Deliberately a short allow-list rather than the whole quant ladder: the value is passed straight to
-///     <c>llama-quantize</c> as a type argument, and the set below is what that tool accepts AND what the advisor
-///     would ever recommend serving a fine-tune at. An unknown token would otherwise reach the subprocess and fail
-///     late, after the merge has already cost minutes and gigabytes.
-/// </remarks>
-public static class TrainingExportQuantizations
-{
-    public const string Default = "Q4_K_M";
-
-    /// <summary>The f16 intermediate every merged export passes through, and the only shape an adapter is emitted in.</summary>
-    public const string Float16 = "F16";
-
-    private static readonly HashSet<string> Allowed = new(StringComparer.Ordinal)
-    {
-        Float16,
-        "Q8_0",
-        "Q6_K",
-        "Q5_K_M",
-        "Q5_K_S",
-        "Q4_K_M",
-        "Q4_K_S",
-        "Q3_K_M"
-    };
-
-    public static IReadOnlyCollection<string> All => Allowed;
-
-    /// <summary>Normalizes and validates a requested quantization, or returns null when it is not supported.</summary>
-    public static string? TryNormalize(string? requested)
-    {
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return Default;
-        }
-
-        var normalized = requested.Trim().ToUpperInvariant();
-        return Allowed.Contains(normalized) ? normalized : null;
-    }
 }
 
 /// <summary>The <c>export-job.json</c> handed to <c>export.py</c>. Merge mode only — see the script's own docstring.</summary>
@@ -200,24 +156,6 @@ public sealed class TrainingExportRejectedException : Exception
         : base(message, innerException)
     {
     }
-}
-
-/// <summary>Where the pipeline's intermediate and final files live inside the run's staged directory.</summary>
-internal static class TrainingExportPaths
-{
-    /// <summary>
-    ///     Staged file names carry the canonical quant token because that is what the GGUF inspector reads a
-    ///     quantization off when the header does not declare one — an adapter's header never does.
-    /// </summary>
-    public static string MergedGgufName(string quantization) =>
-        $"merged-{quantization}.gguf";
-
-    public static string AdapterGgufName() =>
-        $"adapter-{TrainingExportQuantizations.Float16}.gguf";
-
-    /// <summary>Reads back the quantization the export named a staged file with.</summary>
-    public static string? QuantizationOf(string stagedPath) =>
-        GgufQuantParser.TryParse(Path.GetFileName(stagedPath));
 }
 
 public enum ArtifactQualityOutcome

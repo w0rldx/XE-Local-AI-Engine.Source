@@ -64,9 +64,8 @@ object graph *is*), and so is the Data Protection key ring, whose decryptor type
 encrypted key-ring element and therefore cannot move. `HostServiceResolutionTests` closes the other half of the
 same rule with a source scan: a host class may not pull a forbidden type out of the container with
 `GetRequiredService<T>` either, which is how three retention sweepers held persistence stores that no constructor
-scan could see. A host type that genuinely cannot move down — the model proxy's forwarder owns an `HttpContext`,
-first-run provisioning gates on the process's own launch mode — takes what it needs through an application-layer
-service instead, which is what `LlamaCppRuntimeOrchestrationService` is. The test once carried a shrink-only allowlist keyed by
+scan could see. A host type that genuinely cannot move down — the model proxy's forwarder owns an `HttpContext` — takes what it
+needs through an application-layer service instead, which is what `LlamaCppRuntimeOrchestrationService` is. The test once carried a shrink-only allowlist keyed by
 fully-qualified endpoint-and-parameter pairs,
 frozen at the persistence-store and concrete-provider injections that existed when the rule was written; slices
 S6a–S6m migrated those sites area by area until it was empty and then deleted it. Nothing may be added back: a
@@ -152,10 +151,20 @@ no file identity, and counts brace depth so a nested type is never mistaken for 
 `ServiceModelColocationTests` keeps its narrower rule over the `Services/` folders it covers, and
 `EndpointConventionTests` owns the endpoint half by reflection (below).
 
+The family-file exemption buys room for **data**, not for behaviour. In a family file that declares more than one
+type, a class or struct may not declare a non-private method that is not an `override`, and a class or struct
+nested inside one is judged by the same rule: enums, interfaces, delegates, exceptions, constants-only static
+classes (hub event names, JSON-schema strings) and wire plumbing that only overrides (`JsonConverter<T>.Read`/`Write`)
+stay; a parser, validator, calculator, prompt builder, hasher, `IValidateOptions<T>` or buffer moves to its own file
+named after the type, same folder and namespace. Records are exempt by kind, deliberately: a record is the
+repository's data shape, and the methods it may carry are the value semantics that come with it. `FilePlacementConventionTests.FamilyFiles_DeclareOnlyDataShapedTypes` enforces it with no allowlist,
+because the fix is always a pure move.
+
 ### DTO families still aggregate in one `*Dtos.cs` / `*Contracts.cs` — on purpose
 
 Inside `Dtos/`, a file like `DevelopmentContracts.cs` (40+ types) deliberately holds a whole family of
-related request/response DTOs. Intentional — do **not** explode into one-type-per-file.
+related request/response DTOs. Intentional — do **not** explode into one-type-per-file. The family holds the
+types; the code that parses, validates or builds them lives beside it in files of its own (rule above).
 
 ### Mappers are standalone files under `Mappers/`
 
@@ -207,6 +216,11 @@ existing cipher helpers — never by widening the friend list. Where that made a
 wraps, `ConcreteStoreConstructionArchitectureTests` keeps the concrete name to the module that registers it, so
 no caller can resolve the undecorated store and skip the event publishing every other caller gets.
 
+Providers follow the same rule: every `Providers.*` project grants `InternalsVisibleTo` to test projects only
+(`LayerDependencyTests.Providers_GrantTheirInternalsToNoProductionAssembly`, enrolled from the solution file). A
+member the host or application layer needs is public in the provider's `Contracts/` — for example
+`LlamaServerConnectionFailure.IsServerGone`, which the raw-model proxy shares with the provider's own clients.
+
 `ApplicationDbContextFenceTests` in `XE-Local-AI-Engine.Tests/Architecture/` fails the build for any application
 type that depends on either context, on an `IDbContextFactory<>` of one, or on the raw ADO reached through one,
 unless `Architecture/DbContextUserAllowlist.txt` lists it. That file is the authoritative list of holders — read
@@ -247,6 +261,8 @@ Classes are `sealed` by default. Options bind from config via the `*Options` pat
 (`DateTimeOffset.UtcNow`/`.Now`, `DateTime.*`) directly; inject `TimeProvider` (registered once in
 `Client/ConfigureServices.cs`, no `?? TimeProvider.System` defaults) and call `GetUtcNow()`/`GetLocalNow()` —
 enforced by `BannedSymbols.txt` (RS0030), documented in [Security & Privacy](12-security-and-privacy.md) §8.
+The same file bans `Thread.Sleep` (await `Task.Delay` with the token instead) and `GC.Collect`; it applies to
+production projects only, and 12 §8 carries the full list with each replacement.
 
 `.editorconfig` sets `csharp_style_prefer_primary_constructors = false`, but IDE0290 does not flag a primary
 constructor that already exists, so a source scan enforces the rule: `PrimaryConstructorConventionTests` fails on
@@ -396,6 +412,12 @@ A provider whose third-party SDK must not leak marks that `PackageReference` `Pr
 a per-project allowlist test alone does not stop a transitive compile-asset leak, because a `ProjectReference`
 flows the referenced project's package compile assets by default.
 
+A background job that builds its own chat client wraps it: every `provider.CreateChatClient(...)` call under
+`Client.Application/Services` ends in `.WithProviderTelemetry()`, or that provider round emits no gen_ai span and
+nothing else notices. `ProviderTelemetryWrapGuardTests` is a source scan that fails on a new unwrapped site and on a
+deleted suffix; its one allowed exception is `ModelRoutingLocalChatClient`, whose client the interactive pipeline
+already decorates. Why the wrapper exists: [Agent Mode](04-agent-mode.md).
+
 ### Placement is pinned by architecture tests, not by review
 
 IDE0130 checks that a file's namespace matches the folder the file **already** sits in; it cannot tell you the
@@ -407,9 +429,11 @@ build's test gate, not the reviewer's memory:
 | A public **interface** in a `Providers.*` project lives in `…Providers.<Name>.Contracts`. `Providers.Abstractions` is out of scope — it *is* the contracts layer. | `PlacementConventionTests.ProviderPublicInterfaces_ResideInTheProviderContractsNamespace` |
 | A public **`*Options`** class in a `Providers.*` project lives in `…Providers.<Name>.Options`. | `PlacementConventionTests.ProviderOptionsClasses_ResideInTheProviderOptionsNamespace` |
 | In the host: a FastEndpoints endpoint lives in a `.V1` namespace, a `*Mapper` in `.V1.Mappers`, an `IValidator` in `.V1.Validators`. | `PlacementConventionTests.ClientEndpointsMappersAndValidators_ResideInTheirVersionedNamespaces` |
-| A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Development,Integrations,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
+| A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Capacity,Development,DocumentIngestion,Inference,Integrations,Knowledge,Models,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
 | A production `.cs` file declares one top-level type, unless it is a family file, an `IFoo`+`Foo` pair, one type beside only enums and delegates, or an `I*Store.cs`/`I*Service.cs` contract bundle. | `FilePlacementConventionTests.ProductionProjects_DeclareOneTopLevelTypePerFile` |
 | An endpoint class is alone in a file named after it; no plural `*Endpoints.cs` may declare one. | `EndpointConventionTests.EveryEndpointTypeIsDeclaredInExactlyOneFileNamedAfterIt`, `…PluralEndpointFilesAreOnlyTheNamedGroupingExceptions` |
+| A concrete store that a publishing decorator wraps (`DevWorkflowStore`, `GraphWorkflowStore`, and `AgentWorkSessionStore` pre-emptively) is named only in the DI module that registers it, so no caller resolves the undecorated store and skips its events. | `ConcreteStoreConstructionArchitectureTests.ProductionCallers_NameAConcreteStoreOnlyWhereItIsRegistered` |
+| The model-provider map is reached only through `ICoordinatedModelProviderMapStore`: `IModelProviderMapStore` / `ModelProviderMapStore` are named only by the facade and its DI module, and that module registers the shared lock domain and coordinators. | `ProviderMapCoordinationArchitectureTests.ProductionCallers_CannotBypassCoordinatedProviderMapFacade`, `…ProductionComposition_RegistersSharedCoordinationDomainAndFacades` |
 
 `PlacementConventionTests` is **ArchUnitNET** (`TngTech.ArchUnitNET`, test-project only) over compiled IL; it
 sits alongside NetArchTest, which pins dependency *direction* between assemblies rather than placement inside

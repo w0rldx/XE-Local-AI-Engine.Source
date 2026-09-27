@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -133,7 +132,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             {
                 return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
             {
                 // Operator FORCE-eject takes priority: fail as operator-ejected (never retried) so the terminal state is
                 // truthful, not a generic provider drop.
@@ -219,7 +218,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                         // socket surfaces here (before the first update) or on a later pull (mid-stream).
                         moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
                     }
-                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
                     {
                         // A force-eject killed the process under us — fail as operator-ejected (never retried), whether
                         // the drop happened before OR mid-stream.
@@ -598,41 +597,4 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary><see cref="Bound" /> marks an endpoint that came from the endpoint binding — see ResolveEndpointCoreAsync.</summary>
     private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound);
-
-    // True when the exception chain says the target llama-server is unreachable — the process is gone — rather than reporting a model or runtime error. Walks the
-    // FULL chain, including the AggregateException fan-out from the OpenAI SDK retry policy: ClientResultException, HttpRequestException, a refused SocketException.
-    internal static bool IsServerGone(Exception exception)
-    {
-        var queue = new Queue<Exception>();
-        queue.Enqueue(exception);
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            switch (current)
-            {
-                case SocketException { SocketErrorCode: SocketError.ConnectionRefused or SocketError.ConnectionReset or SocketError.HostUnreachable or SocketError.TimedOut }:
-                    return true;
-                case HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError }:
-                    return true;
-                // A process killed MID-RESPONSE does not surface as a connect-time failure: the open body stream terminates as HttpIOException(ResponseEnded),
-                // live-observed during a force-eject. Without this arm the ejected-lease translation never fires and the user sees a generic provider failure.
-                case HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError }:
-                    return true;
-            }
-
-            if (current is AggregateException aggregate)
-            {
-                foreach (var nested in aggregate.InnerExceptions)
-                {
-                    queue.Enqueue(nested);
-                }
-            }
-            else if (current.InnerException is not null)
-            {
-                queue.Enqueue(current.InnerException);
-            }
-        }
-
-        return false;
-    }
 }

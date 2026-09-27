@@ -250,6 +250,13 @@ The exposed set equals the pinned build **b10201**'s accepted set exactly, each 
 
 `TryReadEffectiveContextTokensAsync` (AUD4-02) reads the server's **`/props`** `default_generation_settings.n_ctx` once after readiness — the effective per-slot context window the server actually loaded (the launched `-c` as clamped). The supervisor stores it on the running process; `GetRuntimeInfo(model, role)` / `ILocalModelProvider.GetRuntimeInfoAsync` expose it so the invocation runner can size **both** context budgeters (outer `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`) against the real window, and the chat context-usage meter can show it (`LocalModelDetailsResponse.EffectiveContextTokens`). Best-effort — a `/props` failure just leaves the effective context unknown (the app falls back to its default window).
 
+The provider owns every other native route the application reads, too: `ILlamaServerNativeClient` (`Contracts/`)
+serves `/metrics` (the benchmark harness's Prometheus scrape, parsed by `LlamaServerMetrics`), `/props` (the training
+smoke gate's chat-template check), `/tokenize` (token-estimator calibration, over its own redirect-free, proxy-free
+client) and the pooled `embeddings`/`rerank` benchmark POSTs. `/props` has ONE parser, `LlamaServerProps.ReadAsync`,
+shared by this probe and that client. The callers keep their decisions, timeouts and error mapping; the client only
+speaks the protocol. `ILlamaPerplexityRunner` runs `llama-perplexity` for benchmark fidelity the same way.
+
 ### Reuse-path liveness, retry classes and the two HTTP network floors
 
 `LlamaServerSupervisorOptions.Validate()` is called by the supervisor's constructor, so a structurally invalid value surfaces at startup rather than as a runtime stall.
@@ -404,9 +411,9 @@ llama.cpp launch args used to be hard-coded (the forced `-ngl 999`). They are no
 **The resolver seam.** `IInferenceProfileResolver` (`Providers.LlamaServer/Contracts/IInferenceProfileResolver.cs`) is the dependency-inversion boundary the supervisor calls on the cold-spawn path. It is **defined in `Providers.LlamaServer`** so the supervisor never depends on `Client.Application` (the one-way `Application → Providers` arrow is preserved). Two implementations:
 
 - **`DefaultInferenceProfileResolver`** (ships in the provider, `internal`) always returns `ResolvedLaunchArguments.Explore()` — a node with no profile store self-satisfies and launches under llama.cpp auto-fit. Registered with `TryAddSingleton`.
-- **`InferenceProfileResolver`** (`Client.Application/Services/Inference/InferenceProfileResolver.cs`) is the real DB-backed resolver, registered **last** so it wins. It keys a lookup by `(machineKey, model, role, backend)`, then: an **Explored** or non-stale **Frozen** profile replays its persisted args; a Frozen profile is first re-checked through `IInferenceInvalidationEvaluator.IsStaleAsync` and demoted to **Stale** (→ explore) when its baseline no longer holds; CPU spawns and any missing/Stale/corrupt row fall back to explore. This path **never throws** — a bad persisted arg combo degrades to auto-fit rather than escaping the supervisor's spawn. `IInferenceProfileStore` is scoped, so the singleton resolver opens a fresh DI scope per call.
+- **`InferenceProfileResolver`** (`Client.Application/Services/Inference/Implementation/InferenceProfileResolver.cs`) is the real DB-backed resolver, registered **last** so it wins. It keys a lookup by `(machineKey, model, role, backend)`, then: an **Explored** or non-stale **Frozen** profile replays its persisted args; a Frozen profile is first re-checked through `IInferenceInvalidationEvaluator.IsStaleAsync` and demoted to **Stale** (→ explore) when its baseline no longer holds; CPU spawns and any missing/Stale/corrupt row fall back to explore. This path **never throws** — a bad persisted arg combo degrades to auto-fit rather than escaping the supervisor's spawn. `IInferenceProfileStore` is scoped, so the singleton resolver opens a fresh DI scope per call.
 
-**Machine key.** `IMachineKeyProvider` → `MachineKeyProvider` (`Services/Inference/MachineKeyProvider.cs`) reads/mints a per-box GUID (`"N"` format) persisted in node settings (generate-once is gated so two concurrent first-callers can't mint two keys). Profiles are keyed to this machine key and are **local-only** — the key is never emitted in telemetry, aggregates, logs, or the transport view (`InferenceProfileView` deliberately omits it). This is what lets a profile re-explore when the box, build, or free-VRAM baseline changes rather than blindly replaying stale args.
+**Machine key.** `IMachineKeyProvider` → `MachineKeyProvider` (`Services/Inference/Implementation/MachineKeyProvider.cs`) reads/mints a per-box GUID (`"N"` format) persisted in node settings (generate-once is gated so two concurrent first-callers can't mint two keys). Profiles are keyed to this machine key and are **local-only** — the key is never emitted in telemetry, aggregates, logs, or the transport view (`InferenceProfileView` deliberately omits it). This is what lets a profile re-explore when the box, build, or free-VRAM baseline changes rather than blindly replaying stale args.
 
 **Process VRAM-budget probe.** `IProcessVramBudgetProbe` → `LlamaListDevicesProcessVramBudgetProbe` (`Providers.LlamaServer/Implementation/LlamaListDevicesProcessVramBudgetProbe.cs`) runs a short-lived `llama-server --list-devices` (15 s cap, tree-killed on overrun), parses the per-device `"<total> MiB, <free> MiB free"` column and returns the **largest free** figure in bytes. It is vendor-agnostic — it reads llama.cpp's own device report (CUDA / Vulkan / SYCL), never `nvidia-smi`, so one code path serves every GPU backend. **Degrade, never throw:** a CPU/unknown/blank backend (no process is even spawned), an empty device list, a timeout, or any failure degrades to `null` ("unknown"). A `TryAddSingleton` floor (`UnknownProcessVramBudgetProbe`) reports "unknown" wherever the real probe is not registered.
 
@@ -418,7 +425,7 @@ llama.cpp launch args used to be hard-coded (the forced `-ngl 999`). They are no
 
 **MoE detection.** `IGgufMetadataReader` surfaces `IsMoe` / `ExpertCount` from the GGUF header (a positive declared expert count ⇒ MoE), carried onto the persisted profile so the operator orchestrator and UI can reason about expert placement (`-ot` override-tensor) for mixture-of-experts models.
 
-**The operator orchestrator.** `IInferenceProfileService` → `InferenceProfileService` (`Services/Inference/InferenceProfileService.cs`, **scoped**) is the explore → benchmark → freeze lifecycle, exposed over the `model-fit/profiles/*` endpoints (see [07-model-fit.md](07-model-fit.md#inference-optimizer-operator-surface) and [09-api-and-hubs.md](09-api-and-hubs.md)):
+**The operator orchestrator.** `IInferenceProfileService` → `InferenceProfileService` (`Services/Inference/Implementation/InferenceProfileService.cs`, **scoped**) is the explore → benchmark → freeze lifecycle, exposed over the `model-fit/profiles/*` endpoints (see [07-model-fit.md](07-model-fit.md#inference-optimizer-operator-surface) and [09-api-and-hubs.md](09-api-and-hubs.md)):
 
 - **`ExploreAsync`** spawns one auto-fit `llama-server` (via the supervisor's exclusive profiling path `RunExclusiveProfilingAsync`), parses the fitted args from the captured startup banner (falling back to the GGUF native context when unparseable), and upserts the single **Explored** profile for the key. Only node-local GGUF models are eligible — a cloud or missing model is rejected without spawning.
 - **`BenchmarkAsync`** replays the drafted profile under a metrics-enabled spawn, runs the fixed golden transcript, and persists a benchmark snapshot + metric row (marked Succeeded/Failed). It does **not** freeze.
@@ -437,7 +444,7 @@ Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux 
 
 **The endpoints' door onto the provider (endpoint-dependency rule).** `XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs` is a pass-through over `IInstalledRuntimeStore`, `ILlamaCppBinaryManager`, `ILlamaCppSourceBuildActivity`, `ILlamaCppSourceBuildPrerequisiteProbe`, `ILlamaCppSourceBuildService`, `ILlamaCppUpdateState` and `ILlamaServerProcessSupervisor`; the source-build, eject and running-models endpoints inject it, never the provider contracts. It also owns the shared remove gate the remove endpoint delegates to (`TryRemoveAsync` — eject-first, with the build-active check repeated under the runtime mutation lease).
 
-Two members sit on that door for a reason unrelated to the endpoints. The supervisor's ensure-running and inference-lease pair is there because `Services/Proxy/LocalModelProxyForwarder` needs both and stays in the host — it owns the `HttpContext` an application service may not — and it is the only caller of that pair. The first-run provisioning trio (GPU-variant probe, binary ensure, acquisition-status report) is there because `BackgroundServices/FirstRunModelProvisioningService` needs all three and stays in the host: the desktop-launch decision it gates on is a host fact (process args plus the Velopack install kind) the application layer cannot resolve. It is the only caller of those three.
+Two members sit on that door for a reason unrelated to the endpoints. The supervisor's ensure-running and inference-lease pair is there because `Services/Proxy/LocalModelProxyForwarder` needs both and stays in the host — it owns the `HttpContext` an application service may not — and it is the only caller of that pair. The first-run provisioning trio (GPU-variant probe, binary ensure, acquisition-status report) is there because `Services/ModelFit/Implementation/FirstRunModelProvisioningService` needs all three and took them through the door while it lived in the host. It now lives in `Client.Application`, since the desktop-launch decision it gates on arrives as the host-registered `NodeLaunchContext` rather than from process args. As an application service it could take the three contracts directly, so for it the door is merely kept, not needed; it is still the only caller of those three.
 
 **What is deliberately off that surface**, because nothing in the host asks for it — each stays on the contract that owns it:
 
@@ -494,7 +501,7 @@ It recognizes **two** on-disk layouts, because a node upgraded across the genera
 ### 2.7 Per-model extra launch arguments (operator override)
 
 Distinct from the machine-wide launch policy above, an operator can persist a raw extra-argument string
-**per model**. `LlamaServerExtraLaunchArgumentsResolver` (`Services/Inference/LlamaServerExtraLaunchArgumentsResolver.cs`)
+**per model**. `LlamaServerExtraLaunchArgumentsResolver` (`Services/Inference/Implementation/LlamaServerExtraLaunchArgumentsResolver.cs`)
 implements the provider's `ILlamaServerExtraLaunchArgumentsResolver` seam — the provider ships an empty default
 (`EmptyLlamaServerExtraLaunchArgumentsResolver`) and `AddNodeModelRuntime` registers this one last, so it wins —
 reading the stored string through `IModelLaunchArgumentsStore`
@@ -506,7 +513,8 @@ last-wins parsing lets a later scalar flag override a bundled tuning default.
 Three properties are load-bearing:
 
 - **Two flag families are refused on write and stripped on read** by `LlamaLaunchArgumentParser.ParseSanitized`
-  (`Services/Inference/LlamaLaunchArgumentParser.cs`): *reachability* (`-m`/`--model`, `--host`, `--port`) and the
+  (`Services/Inference/LlamaLaunchArgumentParser.cs`), over the provider's `LlamaServerManagedFlags` — the same list
+  `LlamaServerLaunchArgumentComposer` emits from, so a newly managed flag is one edit: *reachability* (`-m`/`--model`, `--host`, `--port`) and the
   *memory-fit placement* family (`-c`, `-ngl`, `-ts`, `-ot`, `-ctk`/`-ctv`, `-fa`, `--parallel`, `-b`/`-ub` and
   their long aliases), plus `--lora`/`--lora-scaled`. Placement is decided before admission and recorded in the
   memory ledger, so a post-hoc override would invalidate the ledger, defeat the KV-quant safe-config retry, and

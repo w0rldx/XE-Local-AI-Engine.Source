@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Containers;
 using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

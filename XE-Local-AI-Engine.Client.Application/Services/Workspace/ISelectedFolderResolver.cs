@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace;
 public interface ISelectedFolderResolver
 {
     /// <summary>
-    ///     Normalizes the alias, validates the host path (absolute, traversal-free), rejects alias collisions, then
+    ///     Normalizes the alias, validates the host path (an existing directory, absolute, traversal-free), rejects alias collisions, then
     ///     persists the folder. Throws <see cref="SelectedFolderConflictException" /> when the normalized alias is
     ///     already registered and <see cref="SelectedFolderValidationException" /> for any other rejection.
     /// </summary>

@@ -190,6 +190,7 @@ public sealed class ConversationCompactionServiceTests
             MaxSummaryChars = 5
         });
         var service = new ConversationCompactionService(persistence,
+            new NodeChatMutationGuard(persistence),
             summarizer,
             NothingToDistill(),
             resolver,
@@ -478,6 +479,7 @@ public sealed class ConversationCompactionServiceTests
             MaxSummaryChars = summaryCap
         });
         var service = new ConversationCompactionService(persistence,
+            new NodeChatMutationGuard(persistence),
             summarizer,
             NothingToDistill(),
             resolver,
@@ -739,6 +741,7 @@ public sealed class ConversationCompactionServiceTests
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();
         return new ConversationCompactionService(persistence,
+            new NodeChatMutationGuard(persistence),
             summarizer,
             distillation ?? NothingToDistill(),
             resolver,

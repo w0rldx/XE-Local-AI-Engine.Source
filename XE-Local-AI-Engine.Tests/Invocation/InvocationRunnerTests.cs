@@ -2233,27 +2233,6 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public void InvocationFailedPayload_SerializesFailureCategoryAsPascalCaseString()
-    {
-        var payload = new InvocationFailedPayload
-        {
-            InvocationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            MessageId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            Error = "Invocation timed out after 30 seconds.",
-            FailureCategory = nameof(FailureCategory.Timeout)
-        };
-
-        var json = JsonSerializer.Serialize(payload);
-        var roundTrip = JsonSerializer.Deserialize<InvocationFailedPayload>(json);
-        var deserialized = AssertEx.NotNull(roundTrip);
-
-        AssertEx.Contains(json, "\"FailureCategory\":\"Timeout\"");
-        AssertEx.Contains(json, "\"MessageId\":\"22222222-2222-2222-2222-222222222222\"");
-        AssertEx.Equal(nameof(FailureCategory.Timeout), deserialized.FailureCategory);
-        AssertEx.Equal(payload.MessageId, deserialized.MessageId);
-    }
-
-    [Test]
     public async Task ResolveToolCallCardId_MatchesTheStreamingLoopSemantics_ForAllCallIdShapes()
     {
         await Task.CompletedTask;

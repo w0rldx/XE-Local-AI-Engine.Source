@@ -83,6 +83,9 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     private DevWorkflowDispatcher? _replacement;
 
+    /// <summary>The empty host directories <see cref="SeedDevelopmentProjectAsync" /> registered, removed on dispose.</summary>
+    private readonly List<TempDirectory> _seededFolders = [];
+
     /// <summary>
     ///     A host of this test's own. Take one only to hold host-level state a concurrent sibling must not see — a
     ///     config value, one of the fake agent's switches, an absolute row count, or the signal channel — and say which
@@ -256,6 +259,11 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        foreach (var folder in _seededFolders)
+        {
+            folder.Dispose();
+        }
+
         if (_replacement is { } replacement)
         {
             await replacement.DisposeAsync();
@@ -898,18 +906,22 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     A development project and the one task it owns, created the way Dev Mode creates them.
     ///     <para>
     ///         The selected folder is registered rather than invented: the project row has a foreign key to it. Its host
-    ///         path is never opened, because nothing driven through this harness prepares a workspace — the chain that
-    ///         would is the part <see cref="FakeDevelopmentTaskChain" /> scripts.
+    ///         path is an empty directory, because registration requires one to exist, and is never opened: nothing driven
+    ///         through this harness prepares a workspace — the chain that would is the part
+    ///         <see cref="FakeDevelopmentTaskChain" /> scripts.
     ///     </para>
     /// </summary>
     public async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentProjectAsync()
     {
+        var hostFolder = new TempDirectory("xe-devtask");
+        _seededFolders.Add(hostFolder);
+
         await using var scope = Services.CreateAsyncScope();
         var folder = await scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>()
                                 .RegisterAsync(new SelectedFolderRegistration
                                 {
                                     Alias = $"devtask-{Guid.NewGuid():N}"[..20],
-                                    HostPath = Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")
+                                    HostPath = hostFolder.Path
                                 });
 
         var projectId = Guid.NewGuid();

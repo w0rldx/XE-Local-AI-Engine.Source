@@ -151,10 +151,10 @@ internal static class TrainingRuntimeTestInfrastructure
     /// <summary>Captures published status events so phase order can be asserted.</summary>
     internal sealed class RecordingPublisher : ITrainingRuntimeEventPublisher
     {
-        private readonly List<TrainingRuntimeStatusHubEvent> _events = [];
+        private readonly List<TrainingRuntimeStatusEvent> _events = [];
         private readonly Lock _gate = new();
 
-        public IReadOnlyList<TrainingRuntimeStatusHubEvent> Events
+        public IReadOnlyList<TrainingRuntimeStatusEvent> Events
         {
             get
             {
@@ -165,7 +165,7 @@ internal static class TrainingRuntimeTestInfrastructure
             }
         }
 
-        public Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(TrainingRuntimeStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             lock (_gate)
             {

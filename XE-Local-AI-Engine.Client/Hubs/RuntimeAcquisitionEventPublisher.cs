@@ -22,9 +22,26 @@ internal sealed class RuntimeAcquisitionEventPublisher : IRuntimeAcquisitionEven
         _hubContext = hubContext;
     }
 
-    public Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public Task PublishStatusAsync(RuntimeAcquisitionStatusEvent statusEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        return _hubContext.Clients.All.SendAsync(RuntimeAcquisitionHubEvents.StatusChanged, statusEvent, cancellationToken);
+        return _hubContext.Clients.All.SendAsync(RuntimeAcquisitionHubEvents.StatusChanged,
+            ToHubMessage(statusEvent), cancellationToken);
+    }
+
+    private static RuntimeAcquisitionStatusHubMessage ToHubMessage(RuntimeAcquisitionStatusEvent statusEvent)
+    {
+        return new RuntimeAcquisitionStatusHubMessage
+        {
+            Sequence = statusEvent.Sequence,
+            Phase = statusEvent.Phase,
+            Variant = statusEvent.Variant,
+            Tag = statusEvent.Tag,
+            CompletedBytes = statusEvent.CompletedBytes,
+            TotalBytes = statusEvent.TotalBytes,
+            StepIndex = statusEvent.StepIndex,
+            StepCount = statusEvent.StepCount,
+            SanitizedError = statusEvent.SanitizedError
+        };
     }
 }

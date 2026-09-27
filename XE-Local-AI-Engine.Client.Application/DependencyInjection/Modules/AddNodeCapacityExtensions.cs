@@ -3,9 +3,13 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
@@ -33,6 +37,10 @@ internal static class AddNodeCapacityExtensions
         builder.Services.AddSingleton<IProcessLaunchAdmissionRegistry, ProcessLaunchAdmissionRegistry>();
         builder.Services.AddSingleton<IPendingFootprintLedger, PendingFootprintLedger>();
         builder.Services.AddScoped<ICapacityService, CapacityService>();
+
+        // The node's GPU-work admission gate (ADR 0005 §2), registered once here for every consumer: training runs, evaluation,
+        // export, dataset generation, benchmarks and image jobs. Singleton: it is the whole point that every consumer sees the same one.
+        builder.Services.AddSingleton<IGpuWorkGate, GpuWorkGate>();
 
         // Sub-agent spawn: SpawnOptions bound the per-root fan-out and cloud-spawn caps and the bounded same-model queue wait.
         // One Scoped implementation serves two deliberately separate interfaces — trusted in-process orchestration, and stricter unattended inbound MCP execution.

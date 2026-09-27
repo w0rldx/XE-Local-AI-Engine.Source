@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     The managed cosine vector search streams stored <c>float32</c> BLOBs from <c>knowledge_chunk_vectors</c>,

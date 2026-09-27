@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
@@ -396,6 +397,59 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Contains(lines[2], "41,33,49,6,fit-key-1");
     }
 
+    [Test]
+    [Arguments("/export")]
+    [Arguments("/export.csv")]
+    public async Task Export_WithAnUnreadableFitScoresBlob_ExportsNoPairwiseScoreAndWarns(string suffix)
+    {
+        // Decision C-b: the same rule as the comparisons listing — no pairwise score, a Warning naming the fit, and
+        // nothing of the blob in the message. The download itself never fails over it.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context, Run(BenchmarkPrimaryStatus.Succeeded));
+        var fit = new BenchmarkPairwiseFitRecord
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            PolicyRevisionId = Guid.NewGuid(),
+            CohortGeneration = 3,
+            TaskCaseId = null,
+            FitKey = "fit-key-1",
+            JudgeExecutionKey = "judge-key",
+            ComparisonSetVersion = 7,
+            FittedSetJson = "[]",
+            ScoresJson = "[{\"runId\": secret-blob",
+            Iterations = 42,
+            BootstrapReplicates = 1000,
+            CreatedAtUtc = 99
+        };
+        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (suffix == "/export")
+        {
+            using var document = JsonDocument.Parse(body);
+            var exported = document.RootElement.GetProperty("pairwiseFit");
+            AssertEx.Equal("fit-key-1", exported.GetProperty("fitKey").GetString());
+            AssertEx.Equal(0, exported.GetProperty("scores").GetArrayLength());
+        }
+        else
+        {
+            // pairwiseFitKey is written only beside a run's own entry, so its absence is the "no score" row.
+            AssertEx.False(body.Split("\r\n")[1].Contains("fit-key-1", StringComparison.Ordinal), "a run with no parsed entry exports no pairwise columns");
+        }
+
+        AssertEx.ContainsSingle(context.Logger.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains(fit.Id.ToString(), StringComparison.Ordinal));
+        AssertEx.False(context.Logger.Entries.Any(static entry => entry.Message.Contains("secret-blob", StringComparison.Ordinal)),
+            "the Warning must not carry blob content");
+    }
+
     /// <summary>The options the store writes the blob with; a per-call instance is what CA1869 is about.</summary>
     private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
 
@@ -568,7 +622,7 @@ public sealed class BenchmarkExportEndpointTests
     [Test]
     public async Task ExportJson_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillExports()
     {
-        // Same read path as the project detail (BenchmarkJudgePolicyProjection). A version constant moving must not
+        // Same decode as the project detail (BenchmarkRecordService.GetProjectDetailAsync). A version constant moving must not
         // take the export down with it — the export is how an operator rescues a project's numbers.
         await using var context = CreateContext();
         ArrangeProject(context);
@@ -925,6 +979,8 @@ public sealed class BenchmarkExportEndpointTests
         /// <summary>Counts snapshot reads, which is the only way to see that the export stopped paying for one per run.</summary>
         public CountingSnapshotFactory Snapshots { get; } = new();
 
+        public RecordingLogger<BenchmarkExportQuery> Logger { get; } = new();
+
         public TestServerWebAppFactory Factory { get; }
 
         public Context() =>
@@ -936,6 +992,7 @@ public sealed class BenchmarkExportEndpointTests
                     services.AddSingleton(Store);
                     services.RemoveAll<IBenchmarkRuntimeSnapshotFactory>();
                     services.AddSingleton<IBenchmarkRuntimeSnapshotFactory>(Snapshots);
+                    services.AddSingleton<ILogger<BenchmarkExportQuery>>(Logger);
                 }
             };
 

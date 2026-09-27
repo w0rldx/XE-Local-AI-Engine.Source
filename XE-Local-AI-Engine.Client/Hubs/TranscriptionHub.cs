@@ -4,113 +4,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
-
-/// <summary>The SignalR method names a live transcription client listens on.</summary>
-public static class TranscriptionHubEvents
-{
-    public const string SegmentCommitted = "transcriptionSegmentCommitted";
-
-    public const string PartialUpdated = "transcriptionPartialUpdated";
-
-    public const string SessionStatusChanged = "transcriptionSessionStatusChanged";
-
-    public const string CatchUpProgress = "transcriptionCatchUpProgress";
-
-    public const string AdmissionClosed = "transcriptionAdmissionClosed";
-}
-
-/// <summary>
-///     The refusal codes this hub throws as <see cref="HubException" /> messages.
-/// </summary>
-/// <remarks>
-///     Stable strings the client matches on: a live capture UI has to tell "your session ended" apart from "your frame
-///     was malformed", and an exception message written inline would change the contract the next time somebody
-///     reworded it.
-/// </remarks>
-public static class TranscriptionHubErrors
-{
-    public const string Disabled = "transcription-disabled";
-
-    public const string SessionRequired = "transcription-session-required";
-
-    public const string SessionNotFound = "transcription-session-not-found";
-
-    public const string NotTranscribing = "transcription-session-not-transcribing";
-
-    public const string FrameTooLarge = "transcription-frame-too-large";
-
-    public const string FrameMisaligned = "transcription-frame-misaligned";
-
-    public const string UnknownChannel = "transcription-unknown-channel";
-
-    public const string InvalidWatermark = "transcription-invalid-watermark";
-}
-
-/// <summary>
-///     What a subscriber gets back: the session's status, the transcript rows after its watermark, the watermark it
-///     may resume from, and whether the replay cap cut the page short.
-/// </summary>
-public sealed class TranscriptionSessionSubscriptionSnapshot
-{
-    /// <summary>The session subscribed to.</summary>
-    public required Guid SessionId { get; init; }
-
-    /// <summary>The session's persisted status, or <c>Transcribing</c> for a persist-free session.</summary>
-    public required string Status { get; init; }
-
-    /// <summary>The last row DELIVERED, or the caller's own watermark when nothing was.</summary>
-    public required long LastSeq { get; init; }
-
-    /// <summary>The replayed rows, ascending by sequence.</summary>
-    public required IReadOnlyList<TranscriptSegmentResponse> Segments { get; init; }
-
-    /// <summary>Whether rows beyond this page exist; read one row past the cap, never inferred.</summary>
-    public required bool ReplayTruncated { get; init; }
-}
-
-/// <summary>One committed transcript row, pushed as it is allocated its sequence.</summary>
-public sealed class TranscriptSegmentCommittedPush
-{
-    public required Guid SessionId { get; init; }
-
-    public required long Seq { get; init; }
-
-    public required long StartMs { get; init; }
-
-    public required long EndMs { get; init; }
-
-    public required string Text { get; init; }
-
-    public required string Channel { get; init; }
-
-    public required double? Confidence { get; init; }
-}
-
-/// <summary>One lane's provisional text. Never persisted and never sequenced: it is replaced, not accumulated.</summary>
-public sealed class TranscriptPartialUpdatedPush
-{
-    public required Guid SessionId { get; init; }
-
-    public required string Channel { get; init; }
-
-    public required string Text { get; init; }
-}
-
-/// <summary>A live session reached its terminal state, and this is what it was.</summary>
-public sealed class TranscriptionSessionStatusPush
-{
-    public required Guid SessionId { get; init; }
-
-    public required string Status { get; init; }
-
-    /// <summary><c>live-never-attached</c> or <c>live-failed</c> when the status alone does not say why; otherwise null.</summary>
-    public string? ErrorCode { get; init; }
-}
 
 /// <summary>
 ///     Operator-only live transcription: the browser's audio goes in here and committed segments come back out.
@@ -214,10 +112,8 @@ public sealed class TranscriptionHub : Hub
             };
         }
 
-        // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var replayLimit = _options.SegmentReplayLimit;
-        var segments = await _sessions.ListSegmentsAfterAsync(sessionId, afterSeq, replayLimit + 1, cancellationToken);
-        var replayed = segments.Take(replayLimit).ToList();
+        var (replayed, truncated) = await ReplayWindow.ReadAsync(_options.SegmentReplayLimit,
+            limit => _sessions.ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken));
 
         // The watermark is the last row the subscriber was actually HANDED: the session's own maximum would skip every
         // row the cap cut off, for good — nothing replays them a second time. An empty page keeps the caller's own watermark: it has seen nothing new and has therefore moved nowhere.
@@ -228,7 +124,7 @@ public sealed class TranscriptionHub : Hub
             Status = session.Status.ToString(),
             LastSeq = lastSeq,
             Segments = [.. replayed.Select(static segment => segment.ToResponse())],
-            ReplayTruncated = segments.Count > replayLimit
+            ReplayTruncated = truncated
         };
     }
 
@@ -374,11 +270,4 @@ public sealed class TranscriptionHub : Hub
             _ = subscribed.Remove(sessionId);
         }
     }
-}
-
-/// <summary>The per-session SignalR group every push for one live session goes to.</summary>
-internal static class TranscriptionHubGroups
-{
-    public static string Session(Guid sessionId) =>
-        string.Concat("transcription-session-", sessionId.ToString("N"));
 }

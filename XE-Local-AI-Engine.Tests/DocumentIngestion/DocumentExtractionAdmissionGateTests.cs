@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 // The lease handles are disposed explicitly on the paths under test; CA2000 cannot track the out-var + conditional flow.

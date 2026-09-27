@@ -16,14 +16,14 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// </remarks>
 public sealed class StartDevWorkflowRunEndpoint : Endpoint<StartDevWorkflowRunRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer;
+    private readonly DevWorkflowRunQueryService _queries;
     private readonly IDevWorkflowRunService _runs;
 
-    public StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    public StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunQueryService queries)
     {
-        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(queries);
         ArgumentNullException.ThrowIfNull(runs);
-        _composer = composer;
+        _queries = queries;
         _runs = runs;
     }
 
@@ -42,6 +42,6 @@ public sealed class StartDevWorkflowRunEndpoint : Endpoint<StartDevWorkflowRunRe
         ArgumentNullException.ThrowIfNull(req);
 
         var detail = await _runs.StartAsync(req.WorkItemId, req.DefinitionId, req.InputsJson, req.OperationId, ct);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
+        await Send.ResultAsync(Results.Accepted(value: (await _queries.GetRunViewAsync(detail, ct)).ToResponse()));
     }
 }

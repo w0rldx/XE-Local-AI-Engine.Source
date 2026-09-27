@@ -50,6 +50,8 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
   allowlist, scrubbed tree-killed runner (ADR 0016). No feature semantics.
 - `XE-Local-AI-Engine.AppHost` / `ServiceDefaults` — dev-only Aspire orchestration and telemetry defaults.
 - `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
+- `XE-Local-AI-Engine.Desktop` — Avalonia NativeWebView shell: window, activation, optionally engine lifetime; talks to
+  the engine over REST/SignalR only, no engine project refs.
 - `XE-Local-AI-Engine.Client.React` — the SPA. Has its own `AGENTS.md` for frontend-only rules.
 - `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
 - `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests;

@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -163,6 +165,124 @@ public sealed class NodeChatReadOnlyEndpointTests
         using var response = await client.SendAsync(request);
 
         await AssertReadOnlyConflictAsync(response);
+    }
+
+    [Test]
+    public async Task DeleteConversation_WhenOriginRemote_Returns409ReadOnly_AndALocalOneIsDeleted()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var remoteId = await SeedRemoteConversationAsync(factory);
+        var localId = await SeedLocalConversationAsync(factory);
+
+        using (var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{remoteId}"))
+        using (var response = await client.SendAsync(request))
+        {
+            await AssertReadOnlyConflictAsync(response);
+        }
+
+        AssertEx.NotNull(await factory.Services.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(remoteId));
+
+        using var localRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{localId}");
+        using var localResponse = await client.SendAsync(localRequest);
+        AssertEx.Equal(HttpStatusCode.OK, localResponse.StatusCode);
+    }
+
+    [Test]
+    public async Task UploadFile_WhenOriginRemote_Returns409ReadOnly_AndALocalOneAccepts()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var remoteId = await SeedRemoteConversationAsync(factory);
+        var localId = await SeedLocalConversationAsync(factory);
+
+        using (var response = await UploadTextFileAsync(factory, client, remoteId))
+        {
+            await AssertReadOnlyConflictAsync(response);
+        }
+
+        using var localResponse = await UploadTextFileAsync(factory, client, localId);
+        AssertEx.Equal(HttpStatusCode.OK, localResponse.StatusCode);
+    }
+
+    [Test]
+    public async Task DeleteFile_WhenOriginRemote_Returns409ReadOnly_AndALocalOneIsRemoved()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var remoteId = await SeedRemoteConversationAsync(factory);
+        var localId = await SeedLocalConversationAsync(factory);
+
+        using (var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{remoteId}/uploads/{Guid.NewGuid()}"))
+        using (var response = await client.SendAsync(request))
+        {
+            await AssertReadOnlyConflictAsync(response);
+        }
+
+        using var upload = await UploadTextFileAsync(factory, client, localId);
+        AssertEx.Equal(HttpStatusCode.OK, upload.StatusCode);
+        using var uploaded = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var fileId = uploaded.RootElement.GetProperty("fileId").GetGuid();
+        using var localRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{localId}/uploads/{fileId}");
+        using var localResponse = await client.SendAsync(localRequest);
+        AssertEx.Equal(HttpStatusCode.NoContent, localResponse.StatusCode);
+    }
+
+    [Test]
+    public async Task CompactConversation_WhenOriginRemote_Returns409ReadOnly()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var conversationId = await SeedRemoteConversationAsync(factory);
+
+        using var request = CreateJsonRequest(factory, HttpMethod.Post, $"/api/local/v1/chat/conversations/{conversationId}/compact", new
+        {
+        });
+        using var response = await client.SendAsync(request);
+
+        await AssertReadOnlyConflictAsync(response);
+    }
+
+    [Test]
+    public async Task CancelMessage_WhenOriginRemote_Returns409ReadOnly()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var conversationId = await SeedRemoteConversationAsync(factory);
+
+        using var request = CreateJsonRequest(factory, HttpMethod.Post, "/api/local/v1/chat/cancel", new
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        });
+        using var response = await client.SendAsync(request);
+
+        await AssertReadOnlyConflictAsync(response);
+    }
+
+    private static async Task<Guid> SeedLocalConversationAsync(TestServerWebAppFactory factory)
+    {
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Local conversation",
+            UserId = "client-node",
+            CreatedAtUtc = 10
+        });
+        return conversation.ConversationId;
+    }
+
+    private static async Task<HttpResponseMessage> UploadTextFileAsync(TestServerWebAppFactory factory, HttpClient client, Guid conversationId)
+    {
+        using var form = new MultipartFormDataContent();
+        using var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("attachment body"));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+        form.Add(fileContent, "file", "notes.txt");
+
+        using var request = CreateRequest(factory, HttpMethod.Post, $"/api/local/v1/chat/conversations/{conversationId}/uploads");
+        request.Content = form;
+        return await client.SendAsync(request);
     }
 
     private static async Task<Guid> SeedRemoteConversationAsync(TestServerWebAppFactory factory)

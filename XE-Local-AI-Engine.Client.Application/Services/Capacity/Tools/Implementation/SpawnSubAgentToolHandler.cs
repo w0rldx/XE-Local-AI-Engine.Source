@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>Server-side <see cref="IClientLocalToolHandler" /> for <c>spawn_subagent</c>.</summary>
 /// <remarks>

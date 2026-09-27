@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Capacity;
 
 /// <summary>Application boundary used by MCP tools to accept and inspect durable unattended runs.</summary>
 public interface IMcpAgentRunCoordinator

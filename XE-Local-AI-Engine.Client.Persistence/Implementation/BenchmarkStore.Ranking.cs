@@ -2,8 +2,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using static XE_Local_AI_Engine.Client.Persistence.Implementation.BenchmarkRankingPolicy;
 
 public sealed partial class BenchmarkStore
 {
@@ -212,9 +214,8 @@ public sealed partial class BenchmarkStore
                 continue;
             }
 
-            // Half away from zero, matching ComputeQuality's own arithmetic.
             var quality = Array.TrueForAll(contributing, member => runs[member.Id].QualityScore is not null)
-                ? (int)Math.Round(contributing.Average(member => (double)runs[member.Id].QualityScore!.Value), MidpointRounding.AwayFromZero)
+                ? CellMean(contributing.Select(member => runs[member.Id].QualityScore!.Value))
                 : (int?)null;
             cells[cell.Key] = new CellRanking
             {
@@ -271,122 +272,6 @@ public sealed partial class BenchmarkStore
         };
     }
 
-    /// <summary>
-    ///     The two RUN-level exclusions — those that come from the run itself rather than from its judging — plus the resulting quality score.
-    /// </summary>
-    /// <remarks>
-    ///     Every path that hands back a run record routes through here, so the single-run read and the write-returning paths cannot report a judge-derived
-    ///     <c>no-score</c> on a run whose only problem is truncation. Outermost first: a WARM-UP outranks even the operator override, since ranking it would rank
-    ///     the first-launch cost it controls for. TRUNCATION and the SILENT-INCOMPLETE beside it follow, before every judge-derived reason and after the override —
-    ///     their score stays visible but never ranks, read off the persisted stop reason, not the status.
-    /// </remarks>
-    /// <param name="Rankable">Whether a score could ever rank this run, returned rather than re-derived so the ranking's denominator cannot drift.</param>
-    /// <param name="pairwise">
-    ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when judging is pointwise;
-    ///     there no judge attempt exists and the fit alone decides the exclusion.
-    /// </param>
-    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
-        int? userScore,
-        bool isWarmup,
-        string? primaryStopReason,
-        BenchmarkRunIdentity identity,
-        PairwiseRunView? pairwise = null)
-    {
-        // The stale stamps sit ABOVE the operator override, truncation still below it: an operator who read a truncated answer and scored it anyway has overruled
-        // the machine about a fact they could see, while one who scored an answer to a since-edited question, or to an item of a since-changed suite, could not.
-        var revised = identity.Revised;
-        var setRevised = identity.SetRevised;
-        var stale = revised || setRevised;
-        var unanswered = isWarmup || stale || userScore is not null ? null : UnansweredReason(primaryStopReason);
-        if (!isWarmup && !stale && unanswered is null)
-        {
-            var (score, source) = ComputeQuality(userScore, judge, pairwise);
-            if (pairwise is null)
-            {
-                return (judge, score, source, true);
-            }
-
-            return (judge with
-            {
-                RankExclusionReason = userScore is null ? pairwise.Reason : null
-            }, score, source, true);
-        }
-
-        // The more specific cause wins: "your question changed" before "the suite around it changed".
-        var reason = StaleReason(revised, setRevised) ?? unanswered;
-        return (judge with
-        {
-            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : reason
-        }, null, BenchmarkQualityScoreSources.None, false);
-    }
-
-    /// <summary>
-    ///     Which stale-identity reason a run carries, or <see langword="null" /> when neither stamp moved. The more
-    ///     specific cause wins, so the badge names the question rather than the suite whenever both apply.
-    /// </summary>
-    private static string? StaleReason(bool revised, bool setRevised)
-    {
-        if (revised)
-        {
-            return BenchmarkRunJudgeStates.ReasonItemRevised;
-        }
-
-        return setRevised ? BenchmarkRunJudgeStates.ReasonItemSetRevised : null;
-    }
-
-    /// <summary>
-    ///     What a run was asked, against what the project asks now. Both sides are plaintext, so the ranking read still
-    ///     never decrypts anything.
-    /// </summary>
-    /// <remarks>
-    ///     The two axes fail differently and neither implies the other. <see cref="TaskInputHash" /> answers "was this
-    ///     run's own question edited"; every run of an untouched item passes it. <see cref="TaskItemSetHash" /> answers
-    ///     "was this cell measured against the suite the project now claims", and catches the deletion case nothing
-    ///     else does: delete the item a cell never answered and its surviving runs still match their own item hashes,
-    ///     now forming a COMPLETE cell whose mean is over a suite the model was never scored on.
-    /// </remarks>
-    private sealed record BenchmarkRunIdentity
-    {
-        public required string? TaskInputHash { get; init; }
-
-        /// <summary>
-        ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
-        ///     longer exists — in which case the set hash has moved and is the accurate reason.
-        /// </summary>
-        public required string? CurrentInputHash { get; init; }
-
-        public required string? TaskItemSetHash { get; init; }
-
-        public required string? CurrentItemSetHash { get; init; }
-
-        /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
-        public static BenchmarkRunIdentity Unstamped { get; } = new()
-        {
-            TaskInputHash = null,
-            CurrentInputHash = null,
-            TaskItemSetHash = null,
-            CurrentItemSetHash = null
-        };
-
-        public bool Revised => CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
-
-        public bool SetRevised => TaskItemSetHash is not null && !string.Equals(TaskItemSetHash, CurrentItemSetHash ?? LegacyTaskHash, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    ///     The exclusion a stop reason implies for a run nothing else already excludes, or <see langword="null" /> when
-    ///     the run answered.
-    /// </summary>
-    private static string? UnansweredReason(string? primaryStopReason)
-    {
-        if (BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason))
-        {
-            return BenchmarkRunJudgeStates.ReasonTruncated;
-        }
-
-        return BenchmarkPrimaryStopReasons.IsIncomplete(primaryStopReason) ? BenchmarkRunJudgeStates.ReasonIncomplete : null;
-    }
-
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
         ranking.Runs.TryGetValue(run.Id, out var entry)
             ? run with
@@ -398,43 +283,6 @@ public sealed partial class BenchmarkStore
                 CellQuality = entry.CellQuality
             }
             : run;
-
-    /// <summary>
-    ///     The run's ranking value: the operator's override when set, otherwise the judge score, but only while that
-    ///     judging is in the project's current cohort.
-    /// </summary>
-    /// <remarks>
-    ///     A score from an outdated policy or a different judge runtime is still shown, it just does not rank.
-    /// </remarks>
-    private static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge, PairwiseRunView? pairwise = null)
-    {
-        if (userScore is { } operatorScore)
-        {
-            return (operatorScore, BenchmarkQualityScoreSources.User);
-        }
-
-        // Pairwise mode ranks through the cohort's active fit and NEVER through a judge attempt: there are no pointwise attempts in such a cohort, and a leftover
-        // one from a previous revision is exactly what the fit scope exists to keep out of the ranking.
-        if (pairwise is not null)
-        {
-            return pairwise.Score is { } fitted ? (fitted, BenchmarkQualityScoreSources.Pairwise) : (null, BenchmarkQualityScoreSources.None);
-        }
-
-        var judgeScore = judge is { State: BenchmarkRunJudgeStates.Succeeded, PolicyCurrent: true, ExecutionCurrent: true }
-            ? judge.Score
-            : null;
-        return judgeScore is { } score
-            ? (score, BenchmarkQualityScoreSources.Judge)
-            : (null, BenchmarkQualityScoreSources.None);
-    }
-
-    /// <summary>One run's place in the active fit: the strength that ranks it, or the reason it has none.</summary>
-    private sealed record PairwiseRunView
-    {
-        public required int? Score { get; init; }
-
-        public required string? Reason { get; init; }
-    }
 
     /// <summary>The whole project's pairwise ranking input — one parsed fit row, or the reason there is no usable one.</summary>
     private sealed record PairwiseRanking
@@ -481,7 +329,28 @@ public sealed partial class BenchmarkStore
             };
         }
 
-        var entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
+        BenchmarkPairwiseScoreEntry[] entries;
+        try
+        {
+            entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
+        }
+        catch (JsonException exception)
+        {
+            // Ranked as if no fit were published, the same rule every other ScoresJson reader applies. The exception is
+            // not attached: its message quotes the offending token, which is blob content.
+            _logger.LogWarning("Benchmark pairwise fit {FitId} of project {ProjectId} has unreadable scores (line {LineNumber}, byte {BytePosition}); "
+                               + "it is ranked as no pairwise score.",
+                fit.Id,
+                fit.ProjectId,
+                exception.LineNumber,
+                exception.BytePositionInLine);
+            return new PairwiseRanking
+            {
+                Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(),
+                ScopeReason = BenchmarkRunJudgeStates.ReasonPairwisePending
+            };
+        }
+
         return new PairwiseRanking
         {
             Scores = entries.ToDictionary(static entry => entry.RunId),

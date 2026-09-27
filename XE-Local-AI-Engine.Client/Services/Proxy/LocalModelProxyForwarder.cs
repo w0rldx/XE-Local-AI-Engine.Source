@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
 ///     The inbound OpenAI-compatible model proxy: provisions the requested local model through the llama-server
@@ -269,7 +268,7 @@ internal sealed class LocalModelProxyForwarder
                         context.Abort();
                         return;
                     }
-                    catch (Exception ex) when (!ct.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(ex))
+                    catch (Exception ex) when (!ct.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
                     {
                         // The child died mid-stream, typically a forced eject. Propagating it would reach the pipeline AFTER the response
                         // started, logging an unhandled ERROR and cutting the stream mid-token — see EndAfterUpstreamGoneAsync's remarks.

@@ -16,18 +16,14 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChatConversationRequest, NodeChatBranchConversationResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
-    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
     public BranchNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
-        INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
-        ArgumentNullException.ThrowIfNull(mutationGuard);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
-        _mutationGuard = mutationGuard;
         _timeProvider = timeProvider;
     }
 
@@ -42,8 +38,6 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
 
     public override async Task HandleAsync(BranchNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
-
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         // A selected-revision entry that fails integrity validation (not a conversation member, or the wrong group) throws NodeChatInvalidBranchSelectionException, which
         // the global DomainValidationExceptionHandler answers with a 400: fail closed rather than branching a path the caller did not actually specify.

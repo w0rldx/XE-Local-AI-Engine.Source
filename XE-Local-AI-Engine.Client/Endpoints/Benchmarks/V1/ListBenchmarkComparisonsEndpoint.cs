@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-using System.Text.Json;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>
 ///     The verdict matrix behind a project's pairwise scores, together with the fit those verdicts produced.
@@ -16,13 +16,12 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 /// </remarks>
 public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
 {
-    private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
-    private readonly BenchmarkRecordService _records;
+    private readonly BenchmarkComparisonService _comparisons;
 
-    public ListBenchmarkComparisonsEndpoint(BenchmarkRecordService records)
+    public ListBenchmarkComparisonsEndpoint(BenchmarkComparisonService comparisons)
     {
-        ArgumentNullException.ThrowIfNull(records);
-        _records = records;
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
     }
 
     public override void Configure()
@@ -35,14 +34,13 @@ public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkCom
     public override async Task HandleAsync(ListBenchmarkComparisonsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
+        if (await _comparisons.GetComparisonsAsync(req.ProjectId, ct) is not { } view)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var cohort = await _records.GetPairwiseCohortAsync(req.ProjectId, ct);
-        var fit = await _records.GetActivePairwiseFitAsync(req.ProjectId, ct);
+        var cohort = view.Cohort;
         await Send.OkAsync(new ListBenchmarkComparisonsResponse
         {
             CohortGeneration = cohort.CohortGeneration,
@@ -69,18 +67,17 @@ public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkCom
                     CompletedAtUtc = comparison.CompletedAtUtc
                 })
             ],
-            Fit = ToResponse(fit, cohort)
+            Fit = ToResponse(view)
         }, ct);
     }
 
-    private static BenchmarkPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, BenchmarkPairwiseCohortState cohort)
+    private static BenchmarkPairwiseFitResponse? ToResponse(BenchmarkComparisonsView view)
     {
-        if (fit is null)
+        if (view.Fit is not { } fit)
         {
             return null;
         }
 
-        var scores = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, ScoreOptions) ?? [];
         return new BenchmarkPairwiseFitResponse
         {
             FitKey = fit.FitKey,
@@ -89,16 +86,12 @@ public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkCom
             CohortGeneration = fit.CohortGeneration,
             Iterations = fit.Iterations,
             BootstrapReplicates = fit.BootstrapReplicates,
-
-            // The same comparison the ranking makes: one integer against the revision's current value, plus the
-            // promoted execution key. No verdict is read to answer it.
-            IsCurrent = fit.ComparisonSetVersion == cohort.ComparisonSetVersion
-                        && string.Equals(fit.JudgeExecutionKey, cohort.ReferenceExecutionKey ?? string.Empty, StringComparison.Ordinal),
+            IsCurrent = view.FitIsCurrent,
             CreatedAtUtc = fit.CreatedAtUtc,
             FittedSetJson = fit.FittedSetJson,
             Scores =
             [
-                .. scores.Select(static score => new BenchmarkPairwiseRunScoreResponse
+                .. view.FitScores.Select(static score => new BenchmarkPairwiseRunScoreResponse
                 {
                     RunId = score.RunId,
                     Score = score.Score,

@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 /// </remarks>
 public static class SandboxResourceCeilings
 {
-    // Derived once, at first use, from the same source CapabilityReportComposer and HardwareProbeEnvironment use. It is container-aware:
+    // Derived once, at first use, from the same source HardwareProbeEnvironment uses. It is container-aware:
     // under a cgroup memory limit it reports the limit, so a constrained node derives a ceiling that fits it, not the hardware underneath.
     private static readonly SandboxResourceLimits HostToolchainDefaults =
         DeriveToolchainDefaults(Environment.ProcessorCount, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);

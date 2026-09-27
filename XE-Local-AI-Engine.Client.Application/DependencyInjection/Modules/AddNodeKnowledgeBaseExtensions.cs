@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 

@@ -34,6 +34,7 @@ public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversation
         Post(LocalApiRoutes.LocalChat.ConversationUploads);
         AllowFileUploads();
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(UploadConversationFileRequest req, CancellationToken ct)

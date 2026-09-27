@@ -157,9 +157,51 @@ internal sealed class McpServerService : IMcpServerService
         return _store.ListAsync(cancellationToken);
     }
 
-    public IReadOnlyList<McpServerConnectionStatus> GetConnectionStatuses()
+    public async Task<McpServerToolsView?> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _connectionManager.GetStatuses();
+        var record = await _store.GetByIdAsync(id, cancellationToken);
+        if (record is null)
+        {
+            return null;
+        }
+
+        // A disabled server is never connected, so report disabled regardless of any stale status entry.
+        if (!record.Enabled)
+        {
+            return new McpServerToolsView
+            {
+                Status = McpServerToolsStatus.Disabled,
+                Error = null,
+                Tools = []
+            };
+        }
+
+        var status = _connectionManager.GetStatuses().FirstOrDefault(entry => entry.ServerId == record.Id);
+        if (status is { Connected: true })
+        {
+            return new McpServerToolsView
+            {
+                Status = McpServerToolsStatus.Connected,
+                Error = null,
+                Tools = status.Tools
+            };
+        }
+
+        // Enabled but not connected. Only an actually recorded failure — a status entry exists, the server is not connected, and the connection manager captured a redacted
+        // reason — is a hard "error"; otherwise the server is still "connecting", which keeps a healthy not-yet-connected server from showing as a failure in the UI.
+        return status is { LastError: { Length: > 0 } recordedError }
+            ? new McpServerToolsView
+            {
+                Status = McpServerToolsStatus.Error,
+                Error = recordedError,
+                Tools = []
+            }
+            : new McpServerToolsView
+            {
+                Status = McpServerToolsStatus.Connecting,
+                Error = null,
+                Tools = []
+            };
     }
 
     private void Validate(McpServerInput input)

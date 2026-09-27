@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>

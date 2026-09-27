@@ -1083,7 +1083,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         lock (_stateLock)
         {
             _phase = phase;
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            _ = QueuePublish(new LlamaCppSourceBuildStatusEvent
             {
                 Phase = phase.ToString(),
                 AppendedLogLines = [],
@@ -1104,7 +1104,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _isRunning = false;
             _sanitizedError = sanitizedError;
             _completedAtUtc = _timeProvider.GetUtcNow();
-            publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            publish = QueuePublish(new LlamaCppSourceBuildStatusEvent
             {
                 Phase = phase.ToString(),
                 AppendedLogLines = [],
@@ -1134,7 +1134,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
             _logStartSequence = _nextLogSequence - _logLines.Count;
 
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            _ = QueuePublish(new LlamaCppSourceBuildStatusEvent
             {
                 Phase = _phase.ToString(),
                 AppendedLogLines = [redacted],
@@ -1170,7 +1170,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
     }
 
-    private Task QueuePublish(LlamaCppSourceBuildStatusHubEvent statusEvent)
+    private Task QueuePublish(LlamaCppSourceBuildStatusEvent statusEvent)
     {
         lock (_publishLock)
         {
@@ -1179,7 +1179,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
     }
 
-    private async Task PublishObservedAsync(Task previous, LlamaCppSourceBuildStatusHubEvent statusEvent)
+    private async Task PublishObservedAsync(Task previous, LlamaCppSourceBuildStatusEvent statusEvent)
     {
         // Process stdout/stderr callbacks must never run publisher work inline; yield before joining the serialized tail.
         await Task.Yield();

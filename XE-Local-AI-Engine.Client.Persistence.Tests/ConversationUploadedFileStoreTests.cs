@@ -5,12 +5,14 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 [Category(TestCategories.Integration)]
@@ -462,6 +464,8 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
                                                             .UseInternalServiceProvider(SharedEfServiceProvider));
         services.AddScoped<IConversationUploadedFileRowStore, ConversationUploadedFileRowStore>();
         services.AddSingleton<NodeChatPersistenceWriter>();
+        // The read-only guard is not under test here (NodeChatReadOnlyEndpointTests owns it); DeleteAsync resolves it per call.
+        services.AddSingleton(Substitute.For<INodeChatMutationGuard>());
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();

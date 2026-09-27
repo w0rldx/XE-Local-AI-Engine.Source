@@ -4,55 +4,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-
-public static class DevWorkflowHubEvents
-{
-    public const string Changed = "devWorkflowChanged";
-}
-
-/// <summary>
-///     What changed and where the run now stands.
-/// </summary>
-/// <remarks>
-///     <see cref="Kind" /> is lowercase on the wire — the client switches on the literal. The payload deliberately
-///     carries no content: the subscriber re-reads the named feed from its own watermark, so a dropped push degrades
-///     to a late read rather than to a wrong render.
-/// </remarks>
-public sealed class DevWorkflowChanged
-{
-    public required Guid RunId { get; init; }
-
-    public required long Seq { get; init; }
-
-    public required string Kind { get; init; }
-}
-
-public sealed class DevWorkflowRunSubscriptionSnapshot
-{
-    public required Guid RunId { get; init; }
-
-    public required string Status { get; init; }
-
-    public required int QueuedNodeCount { get; init; }
-
-    public required int RunningNodeCount { get; init; }
-
-    public required int PendingDecisionCount { get; init; }
-
-    public required Guid? BlockingGateNodeRunId { get; init; }
-
-    public required long LastSeq { get; init; }
-
-    public required IReadOnlyList<DevWorkflowRunEventResponse> Events { get; init; }
-
-    public required bool ReplayTruncated { get; init; }
-}
 
 /// <summary>
 ///     Operator-only live notifications for one development workflow run.
@@ -118,8 +75,7 @@ public sealed class DevWorkflowRunHub : Hub
         // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), cancellationToken);
 
-        // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var events = await _queries.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken);
+        var (events, truncated) = await ReplayWindow.ReadAsync(ReplayCap, limit => _queries.ListEventsAsync(runId, afterSeq, limit, cancellationToken));
         return new DevWorkflowRunSubscriptionSnapshot
         {
             RunId = runId,
@@ -129,17 +85,11 @@ public sealed class DevWorkflowRunHub : Hub
             PendingDecisionCount = detail.PendingDecisionCount,
             BlockingGateNodeRunId = detail.BlockingGateNodeRunId,
             LastSeq = detail.Run.LastSequence,
-            Events = [.. events.Take(ReplayCap).Select(DevWorkflowContractMapper.ToResponse)],
-            ReplayTruncated = events.Count > ReplayCap
+            Events = [.. events.Select(DevWorkflowContractMapper.ToResponse)],
+            ReplayTruncated = truncated
         };
     }
 
     public Task UnsubscribeRun(Guid runId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), Context.ConnectionAborted);
-}
-
-internal static class DevWorkflowHubGroups
-{
-    public static string Run(Guid runId) =>
-        string.Concat("dev-workflow-run-", runId.ToString("N"));
 }

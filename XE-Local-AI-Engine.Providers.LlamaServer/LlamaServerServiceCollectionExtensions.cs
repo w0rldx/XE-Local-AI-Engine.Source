@@ -155,6 +155,15 @@ public static class LlamaServerServiceCollectionExtensions
                 Timeout = TimeSpan.FromSeconds(30)
             }));
 
+        // The native (non-OpenAI) routes the application reads: /metrics, /props, /tokenize and the pooled-role POSTs. The factory's default
+        // client for all but /tokenize, which keeps its own redirect-free, proxy-free client (LlamaServerNativeClient's remarks).
+        services.TryAddSingleton<ILlamaServerNativeClient>(static sp =>
+            new LlamaServerNativeClient(sp.GetRequiredService<IHttpClientFactory>(),
+                new HttpClient(LlamaServerNativeClient.CreateTokenizeHandler(), disposeHandler: true)));
+
+        // The llama-perplexity child process for benchmark fidelity measurement.
+        services.TryAddSingleton<ILlamaPerplexityRunner, LlamaPerplexityRunner>();
+
         // Path-addressed throwaway spawn for the training export smoke gate. Explicit factory for the same reason the
         // supervisor needs one: it takes the internal launcher/health-probe seams.
         services.TryAddSingleton<TransientLlamaServerLauncher>(static sp =>

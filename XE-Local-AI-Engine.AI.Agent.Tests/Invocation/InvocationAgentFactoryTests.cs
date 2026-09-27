@@ -1155,7 +1155,7 @@ public sealed class InvocationAgentFactoryTests
             ]
         };
 
-        var inlineSkill = InvocationAgentFactory.BuildInlineSkill(skill);
+        var inlineSkill = InvocationSkillsProvider.BuildInlineSkill(skill);
         var content = await inlineSkill.GetContentAsync(CancellationToken.None);
 
         AssertEx.Contains(content, "references/runbook.md", message: "the skill content must advertise its first resource.");
@@ -1182,7 +1182,7 @@ public sealed class InvocationAgentFactoryTests
             Body = "## Logs"
         };
 
-        var built = InvocationAgentFactory.BuildInlineSkill(skill);
+        var built = InvocationSkillsProvider.BuildInlineSkill(skill);
         var baseline = new AgentInlineSkill("log-triage", "Triage logs", "## Logs");
 
         AssertEx.Equal(await baseline.GetContentAsync(CancellationToken.None), await built.GetContentAsync(CancellationToken.None));

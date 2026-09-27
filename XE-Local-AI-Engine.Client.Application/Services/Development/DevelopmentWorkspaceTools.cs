@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;

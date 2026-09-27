@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Holds the current llama.cpp runtime acquisition status for the hydrate endpoint, stamps the monotonic
-///     <see cref="RuntimeAcquisitionStatusHubEvent.Sequence" /> on every write, and owns the push throttle.
+///     <see cref="RuntimeAcquisitionStatusEvent.Sequence" /> on every write, and owns the push throttle.
 /// </summary>
 /// <remarks>
 ///     <b>The registry owns publishing</b> because every status write must be sequenced AND broadcast: splitting those
@@ -17,7 +17,7 @@ public interface IRuntimeAcquisitionStatusRegistry
     ///     The current status (never <see langword="null" />; starts at <see cref="RuntimeAcquisitionPhase.Idle" /> with
     ///     sequence 0). Served by the hydrate endpoint.
     /// </summary>
-    RuntimeAcquisitionStatusHubEvent Current { get; }
+    RuntimeAcquisitionStatusEvent Current { get; }
 
     /// <summary>
     ///     Records <paramref name="update" /> as the current status under a freshly-stamped sequence and broadcasts it,

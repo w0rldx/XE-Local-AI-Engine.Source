@@ -8,21 +8,17 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessageRequest, NodeChatCancelMessageResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
-    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly INodeChatStreamCancellationRegistry _streamCancellationRegistry;
     private readonly TimeProvider _timeProvider;
 
     public CancelNodeChatMessageEndpoint(INodeChatPersistenceService chatPersistence,
-        INodeChatMutationGuard mutationGuard,
         INodeChatStreamCancellationRegistry streamCancellationRegistry,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
-        ArgumentNullException.ThrowIfNull(mutationGuard);
         ArgumentNullException.ThrowIfNull(streamCancellationRegistry);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
-        _mutationGuard = mutationGuard;
         _streamCancellationRegistry = streamCancellationRegistry;
         _timeProvider = timeProvider;
     }
@@ -45,10 +41,8 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
             RequestId = req.RequestId
         };
 
-        // The guard runs OUTSIDE the try below on purpose: NodeChatReadOnlyConversationException derives from InvalidOperationException, so inside it the generic
-        // NotFound arm would swallow the 409 the global ConflictExceptionHandler must write.
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
-
+        // CancelMessageAsync throws NodeChatReadOnlyConversationException (an InvalidOperationException) for a Remote conversation, so the catch stays typed to let the
+        // 409 through. TryCancel runs first harmlessly: a Remote conversation never registers a stream, since its send is refused.
         try
         {
             _ = _streamCancellationRegistry.TryCancel(correlation);

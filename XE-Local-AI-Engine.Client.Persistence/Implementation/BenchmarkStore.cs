@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -24,14 +25,17 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
     private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NodeChatDbContext _dbContext;
+    private readonly ILogger<BenchmarkStore> _logger;
     private readonly TimeProvider _timeProvider;
 
-    public BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    public BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider, ILogger<BenchmarkStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
         _dbContext = dbContext;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     private static void EnsurePolicyHash([NotNull] string? policyHash)

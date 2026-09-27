@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -48,7 +49,7 @@ public sealed class BenchmarkExportQueryTests
             ExpectedKldDigest = "expected"
         });
         resolver.ResolveRun(Arg.Any<BenchmarkRunRecord>()).Returns(BenchmarkExportRunFacts.Empty);
-        var query = new BenchmarkExportQuery(store, resolver);
+        var query = new BenchmarkExportQuery(store, resolver, NullLogger<BenchmarkExportQuery>.Instance);
 
         var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None));
 
@@ -71,7 +72,7 @@ public sealed class BenchmarkExportQueryTests
     {
         BenchmarkRunRecord[] summaries = [Run(9), Run(2), Run(7)];
         var store = Store(Project(), summaries);
-        var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>());
+        var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>(), NullLogger<BenchmarkExportQuery>.Instance);
 
         var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None));
 
@@ -89,7 +90,7 @@ public sealed class BenchmarkExportQueryTests
         {
             ExpectedKldDigest = "expected"
         });
-        var query = new BenchmarkExportQuery(store, resolver);
+        var query = new BenchmarkExportQuery(store, resolver, NullLogger<BenchmarkExportQuery>.Instance);
 
         var result = AssertEx.NotNull(await query.GetCsvAsync(ProjectId, CancellationToken.None));
 
@@ -107,7 +108,7 @@ public sealed class BenchmarkExportQueryTests
         var cancellation = new CancellationToken(canceled: true);
         var store = Substitute.For<IBenchmarkStore>();
         store.GetProjectAsync(ProjectId, cancellation).Returns(Task.FromCanceled<BenchmarkProjectRecord?>(cancellation));
-        var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>());
+        var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>(), NullLogger<BenchmarkExportQuery>.Instance);
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => query.GetJsonAsync(ProjectId, cancellation));
 

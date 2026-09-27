@@ -21,7 +21,10 @@ public interface IConversationUploadedFileStore
     /// <summary>Decrypts and returns the raw stored bytes for one file (e.g. an image), or null when the blob is absent.</summary>
     Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken);
 
-    /// <summary>Removes one file's metadata row plus its on-disk bytes and extracted Markdown. Returns whether a row existed.</summary>
+    /// <summary>
+    ///     Removes one file's metadata row plus its on-disk bytes and extracted Markdown. Returns whether a row existed.
+    ///     Throws <see cref="Chat.NodeChatReadOnlyConversationException" /> for an Origin=Remote conversation.
+    /// </summary>
     Task<bool> DeleteAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken);
 
     /// <summary>Removes the conversation's on-disk upload directory. The metadata rows are removed by the caller's delete path.</summary>

@@ -9524,6 +9524,7 @@ export type DeleteNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type DeleteNodeChatConversationError = DeleteNodeChatConversationErrors[keyof DeleteNodeChatConversationErrors];
@@ -10010,7 +10011,10 @@ export type UploadConversationFileErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type UploadConversationFileError = UploadConversationFileErrors[keyof UploadConversationFileErrors];
 
 export type UploadConversationFileResponses = {
 	/**
@@ -10040,7 +10044,10 @@ export type DeleteConversationFileErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type DeleteConversationFileError = DeleteConversationFileErrors[keyof DeleteConversationFileErrors];
 
 export type DeleteConversationFileResponses = {
 	/**

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;

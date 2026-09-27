@@ -92,6 +92,13 @@ internal static class BenchmarkEndpointMapper
             UpdatedAtUtc = project.UpdatedAtUtc
         };
 
+    /// <summary>The project detail from the service's detail read: judge policy and task items included.</summary>
+    public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectDetail detail, int runCount)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+        return detail.Project.ToDetail(runCount, ToJudgePolicy(detail.JudgePolicyRevision, detail.JudgePolicy), detail.TaskItems);
+    }
+
     /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
     /// <param name="taskItems">
     ///     The project's items. Omitted leaves the item list empty rather than guessing: a caller that did not read
@@ -212,15 +219,7 @@ internal static class BenchmarkEndpointMapper
         }
 
         var comparable = BenchmarkKldCacheKey.IsComparable(fidelity.KldBaseLogitsDigest, expectedKldBaseLogitsDigest);
-        string kldState;
-        if (fidelity.KldMean is null)
-        {
-            kldState = BenchmarkFidelityKldStates.None;
-        }
-        else
-        {
-            kldState = comparable ? BenchmarkFidelityKldStates.Ok : BenchmarkFidelityKldStates.Stale;
-        }
+        var kldState = BenchmarkFidelityKldGate.State(fidelity, expectedKldBaseLogitsDigest);
 
         return new BenchmarkFidelityResponse
         {

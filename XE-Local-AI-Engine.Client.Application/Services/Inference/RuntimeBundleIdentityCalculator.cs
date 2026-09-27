@@ -4,6 +4,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 
 /// <summary>One file of the selected llama.cpp runtime bundle. Names only — never a path, so the facts stay shareable.</summary>
 public sealed record RuntimeBundleFileFactsV1(string Name, long SizeBytes, long LastWriteUtcTicks);

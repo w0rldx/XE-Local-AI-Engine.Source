@@ -48,7 +48,14 @@ public sealed class ModelFitMapperKvQuantTests
             UseCase = "coding",
             ProviderName = "advisor",
             CompletedAtUtc = 0L,
-            Recommendations = [record]
+            Recommendations =
+            [
+                new ModelFitRecommendationView
+                {
+                    Record = record,
+                    Diagnostics = ModelFitRecommendationDiagnostics.Parse(record.DiagnosticsJson, record.ModelName)
+                }
+            ]
         };
     }
 

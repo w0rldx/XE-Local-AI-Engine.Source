@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>
 ///     Central benchmark exception → HTTP mapper: the global handler and the batch endpoint route handled exceptions

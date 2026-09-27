@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
@@ -21,9 +20,6 @@ internal static class AddNodeTrainingRunExtensions
     public static IHostApplicationBuilder AddNodeTrainingRuns(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
-        // Also registered by the dataset module; TryAdd so whichever composes first wins and both see the same gate.
-        builder.Services.TryAddSingleton<IGpuWorkGate, GpuWorkGate>();
 
         builder.Services.AddOptions<TrainingRunEventBufferOptions>();
         builder.Services.AddOptions<TrainingRunQueueOptions>();

@@ -374,10 +374,10 @@ public sealed class RuntimeAcquisitionProgressTests
     private sealed class RecordingRegistry : IRuntimeAcquisitionStatusRegistry
     {
         private readonly Lock _gate = new();
-        private readonly List<RuntimeAcquisitionStatusHubEvent> _writes = [];
+        private readonly List<RuntimeAcquisitionStatusEvent> _writes = [];
         private long _sequence;
 
-        public RuntimeAcquisitionStatusHubEvent Current
+        public RuntimeAcquisitionStatusEvent Current
         {
             get
             {
@@ -388,7 +388,7 @@ public sealed class RuntimeAcquisitionProgressTests
             }
         }
 
-        public IReadOnlyList<RuntimeAcquisitionStatusHubEvent> Writes
+        public IReadOnlyList<RuntimeAcquisitionStatusEvent> Writes
         {
             get
             {
@@ -403,7 +403,7 @@ public sealed class RuntimeAcquisitionProgressTests
         {
             lock (_gate)
             {
-                _writes.Add(new RuntimeAcquisitionStatusHubEvent
+                _writes.Add(new RuntimeAcquisitionStatusEvent
                 {
                     Sequence = ++_sequence,
                     Phase = update.Phase.ToString(),

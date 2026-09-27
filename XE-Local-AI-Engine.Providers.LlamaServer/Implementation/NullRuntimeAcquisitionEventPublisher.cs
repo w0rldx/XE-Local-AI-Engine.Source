@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class NullRuntimeAcquisitionEventPublisher : IRuntimeAcquisitionEventPublisher
 {
     /// <inheritdoc />
-    public Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public Task PublishStatusAsync(RuntimeAcquisitionStatusEvent statusEvent, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }

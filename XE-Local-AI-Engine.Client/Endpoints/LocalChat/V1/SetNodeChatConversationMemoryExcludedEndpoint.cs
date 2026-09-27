@@ -16,18 +16,14 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<SetNodeChatConversationMemoryExcludedRequest, NodeChatConversationResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
-    private readonly INodeChatMutationGuard _mutationGuard;
     private readonly TimeProvider _timeProvider;
 
     public SetNodeChatConversationMemoryExcludedEndpoint(INodeChatPersistenceService chatPersistence,
-        INodeChatMutationGuard mutationGuard,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
-        ArgumentNullException.ThrowIfNull(mutationGuard);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
-        _mutationGuard = mutationGuard;
         _timeProvider = timeProvider;
     }
 
@@ -40,8 +36,6 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<Set
 
     public override async Task HandleAsync(SetNodeChatConversationMemoryExcludedRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
-
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest
         {

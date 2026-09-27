@@ -72,7 +72,7 @@ Internal traceability:
 - `XE-Local-AI-Engine.Client/ConfigureServices.cs`
 - `XE-Local-AI-Engine.Client.Persistence/Cryptography/AesGcmNodeAeadCipher.cs`
 - `XE-Local-AI-Engine.Client.Persistence/Cryptography/NodePayloadProtector.cs`
-- `XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/UploadedFileBlobProtector.cs`
+- `XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/Implementation/UploadedFileBlobProtector.cs`
 
 Test support:
 
@@ -129,7 +129,7 @@ Important limits:
 Internal traceability:
 
 - `XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Implementation/CloudCredentialStore.cs`
-- `XE-Local-AI-Engine.Client.Application/Services/HuggingFace/HfTokenStore.cs`
+- `XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HfTokenStore.cs`
 - `XE-Local-AI-Engine.Client.Application/Services/AppUpdate/GitHubTokenStore.cs`
 - `XE-Local-AI-Engine.Providers.CodexOAuth/Auth/CodexTokenStore.cs`
 - `XE-Local-AI-Engine.Client.Application/Services/Auth/Implementation/TokenStore.cs`

@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Changes the judge on a project that may already be frozen.</summary>
 /// <remarks>
@@ -57,7 +58,7 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint : Endpoint<UpdateBenchmar
         var runCount = await records.CountRunsAsync(change.Project.Id, ct);
         return new BenchmarkJudgeChangeResponse
         {
-            Project = await BenchmarkProjectDetailProjection.ReadAsync(records, change.Project, runCount, ct),
+            Project = (await records.GetProjectDetailAsync(change.Project, ct)).ToDetail(runCount),
             EnqueuedRunIds = change.EnqueuedRunIds,
             CohortGeneration = change.CohortGeneration
         };

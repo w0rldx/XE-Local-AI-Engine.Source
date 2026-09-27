@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1;
 
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -21,9 +22,10 @@ public sealed class GgufImportEndpointContractTests
     [Test]
     public void CapabilityGate_IsAvailableInBothDesktopAndMcpOnlyModes()
     {
-        AssertEx.True(GetGgufImportCapabilityEndpoint.IsAvailable(["--desktop"], isManagedInstall: false));
-        AssertEx.True(GetGgufImportCapabilityEndpoint.IsAvailable(["--mcp-only"], isManagedInstall: false));
-        AssertEx.False(GetGgufImportCapabilityEndpoint.IsAvailable([], isManagedInstall: false));
+        // The endpoint answers NodeLaunchContext.IsLocalMode, which the host resolves from exactly this call.
+        AssertEx.True(DesktopLaunch.ResolveLaunchMode(["--desktop"], isManagedInstall: false).IsLocalMode());
+        AssertEx.True(DesktopLaunch.ResolveLaunchMode(["--mcp-only"], isManagedInstall: false).IsLocalMode());
+        AssertEx.False(DesktopLaunch.ResolveLaunchMode([], isManagedInstall: false).IsLocalMode());
     }
 
     [Test]

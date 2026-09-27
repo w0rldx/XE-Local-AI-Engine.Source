@@ -55,7 +55,8 @@ public sealed class GgufImportEndpointDesktopGateTests
     ///     point hands off to the desktop (Velopack/WebView) launch path and never builds a test-hostable
     ///     <c>IHost</c>, and the env var is process-wide so flipping it races every concurrently-building factory.
     ///     The desktop-true half is covered at the seam instead: the endpoint returns
-    ///     <c>DesktopLaunch.IsDesktopMode(...)</c> verbatim, whose env/arg/managed-install true-paths are proven by
+    ///     <c>NodeLaunchContext.IsLocalMode</c>, which the host resolves once through
+    ///     <c>DesktopLaunch.ResolveLaunchMode(...)</c>, whose env/arg/managed-install true-paths are proven by
     ///     <see cref="Hosting.DesktopLaunchTests" />; the composed behavior is exercised by the live desktop smoke.
     /// </summary>
     [Test]

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 internal sealed class DevelopmentE2ECoderModel : IDevelopmentCoderModel
 {

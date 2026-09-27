@@ -3,14 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Default <see cref="IAudioTranscoder" />: shells out to <c>ffmpeg</c> to produce 16 kHz mono WAV.
 /// </summary>
 /// <remarks>
-///     <c>ffmpeg</c> is resolved once, at construction, by walking <c>PATH</c> — mirroring
-///     <c>WhisperFfmpegProbe.ResolveFromPath</c>, which is private to the whisper.cpp provider — so an operator who
-///     installs it while the node runs gets the capability at the next restart. Nothing a caller sends reaches the
+///     <c>ffmpeg</c> is resolved once, at construction, by walking <c>PATH</c> through the whisper.cpp provider's
+///     <see cref="FfmpegExecutableLocator" />, so an operator who installs it while the node runs gets the capability
+///     at the next restart. Nothing a caller sends reaches the
 ///     argument list: both paths are server-generated <see cref="Guid" /> names travelling through
 ///     <see cref="ProcessStartInfo.ArgumentList" /> with no shell. See docs/wiki/24-audio-transcription.md ("The transcoder's ffmpeg process").
 /// </remarks>
@@ -28,7 +29,7 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
     private readonly ILogger<FfmpegAudioTranscoder> _logger;
 
     public FfmpegAudioTranscoder(ILogger<FfmpegAudioTranscoder> logger)
-        : this(logger, ResolveFromPath())
+        : this(logger, FfmpegExecutableLocator.ResolveFromPath())
     {
     }
 
@@ -239,37 +240,5 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
             // The child already exited, the platform refused the kill, or a descendant survived the tree kill (an
             // AggregateException). None may replace the propagating OperationCanceledException, and nothing else is left.
         }
-    }
-
-    // Mirrors WhisperFfmpegProbe.ResolveFromPath in the whisper.cpp provider, which is internal to that project.
-    private static string? ResolveFromPath()
-    {
-        var fileName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(pathVariable))
-        {
-            return null;
-        }
-
-        foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            string candidate;
-            try
-            {
-                candidate = Path.Combine(directory, fileName);
-            }
-            catch (ArgumentException)
-            {
-                // A malformed PATH entry cannot hold an executable; skip it rather than failing the whole probe.
-                continue;
-            }
-
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
     }
 }

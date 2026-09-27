@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
 using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>

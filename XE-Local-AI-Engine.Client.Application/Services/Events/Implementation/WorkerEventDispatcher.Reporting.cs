@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
 using XE_Local_AI_Engine.Client.Common.Telemetry;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
 public sealed partial class WorkerEventDispatcher

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 /// <summary>
 ///     Where <see cref="DevelopmentWorkspaceProvider" /> reports the committed credentials a prepared workspace

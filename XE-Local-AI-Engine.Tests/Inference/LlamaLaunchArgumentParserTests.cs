@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using System.Reflection;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -152,5 +154,21 @@ public sealed class LlamaLaunchArgumentParserTests
         AssertEx.Equal(expected: 2, result.Count);
         AssertEx.Equal("--top-k", result[0]);
         AssertEx.Equal("40", result[1]);
+    }
+
+    [Test]
+    public void EveryNamedManagedFlag_IsReservedAgainstTheOverride()
+    {
+        // The composer emits the named constants; a constant missing from All would be a managed flag an operator could replace.
+        var named = typeof(LlamaServerManagedFlags).GetFields(BindingFlags.Public | BindingFlags.Static)
+                                                   .Where(static field => field.IsLiteral)
+                                                   .Select(static field => (string)field.GetRawConstantValue()!)
+                                                   .ToList();
+
+        AssertEx.NotEmpty(named);
+        foreach (var flag in named)
+        {
+            AssertEx.Equal(flag, LlamaLaunchArgumentParser.FindReservedFlag($"{flag} 1"));
+        }
     }
 }

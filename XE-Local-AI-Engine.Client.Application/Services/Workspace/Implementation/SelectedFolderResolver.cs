@@ -22,6 +22,13 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
     {
         ArgumentNullException.ThrowIfNull(registration);
 
+        // First, so it wins over every other rejection. An absolute path must name a directory that exists now, or the operator only
+        // learns of the mistake inside a later agent run; a relative one is left to the traversal-free check. Never echoes the path.
+        if (Path.IsPathFullyQualified(registration.HostPath) && !Directory.Exists(registration.HostPath))
+        {
+            throw new SelectedFolderValidationException("The host path does not exist or is not a directory.");
+        }
+
         var alias = NormalizeAlias(registration.Alias);
         if (!IsValidAlias(alias))
         {

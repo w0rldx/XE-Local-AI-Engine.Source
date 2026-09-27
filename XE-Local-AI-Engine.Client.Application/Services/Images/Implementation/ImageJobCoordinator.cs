@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Training;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -34,7 +35,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
 
@@ -75,7 +76,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
 
         var created = await store.CreateProjectAsync(CreateProject() with
         {
@@ -126,7 +127,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         const string OldDigest = "v1:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var project = await store.CreateProjectAsync(CreateProject() with
         {
@@ -197,7 +198,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         // Two succeeded runs and one still queued. Fidelity was off, so none of them has an attempt.
@@ -265,7 +266,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -306,7 +307,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateProjectFidelityAsync(project.Id, project.Version + 1,
@@ -330,7 +331,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -397,7 +398,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var groupId = Guid.NewGuid();
         var run = await store.StartRunAsync(CreateRun(project) with
@@ -455,7 +456,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await setup.Database.EnsureDeletedAsync();
             await setup.Database.EnsureCreatedAsync();
-            var store = new BenchmarkStore(setup, TimeProvider.System);
+            var store = new BenchmarkStore(setup, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var project = await store.CreateProjectAsync(CreateProject());
             _ = await store.StartRunAsync(CreateRun(project));
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
@@ -464,8 +465,8 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         await using var firstContext = CreateContext(databasePath);
         await using var secondContext = CreateContext(databasePath);
-        var claims = await Task.WhenAll(new BenchmarkStore(firstContext, TimeProvider.System).ClaimNextAsync(),
-            new BenchmarkStore(secondContext, TimeProvider.System).ClaimNextAsync());
+        var claims = await Task.WhenAll(new BenchmarkStore(firstContext, TimeProvider.System, NullLogger<BenchmarkStore>.Instance).ClaimNextAsync(),
+            new BenchmarkStore(secondContext, TimeProvider.System, NullLogger<BenchmarkStore>.Instance).ClaimNextAsync());
         AssertEx.Equal(expected: 2, claims.Count(static claim => claim is not null));
         AssertEx.Equal(expected: 2, claims.Select(static claim => claim!.QueueSequence).Distinct().Count());
         AssertEx.True(claims[0]!.QueueSequence < claims[1]!.QueueSequence || claims[1]!.QueueSequence < claims[0]!.QueueSequence,
@@ -481,13 +482,13 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await setup.Database.EnsureDeletedAsync();
             await setup.Database.EnsureCreatedAsync();
-            project = await new BenchmarkStore(setup, TimeProvider.System).CreateProjectAsync(CreateProject());
+            project = await new BenchmarkStore(setup, TimeProvider.System, NullLogger<BenchmarkStore>.Instance).CreateProjectAsync(CreateProject());
         }
 
         await using var startContext = CreateContext(databasePath);
         await using var updateContext = CreateContext(databasePath);
-        var startStore = new BenchmarkStore(startContext, TimeProvider.System);
-        var updateStore = new BenchmarkStore(updateContext, TimeProvider.System);
+        var startStore = new BenchmarkStore(startContext, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var updateStore = new BenchmarkStore(updateContext, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
 
         var startTask = RaceAsync(() => startStore.StartRunAsync(CreateRun(project)));
         var updateTask = RaceAsync(() => updateStore.UpdateProjectAsync(project.Id, project.Version, CreateProject(project.Id) with
@@ -510,7 +511,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         }
 
         await using var verifyContext = CreateContext(databasePath);
-        var verifyStore = new BenchmarkStore(verifyContext, TimeProvider.System);
+        var verifyStore = new BenchmarkStore(verifyContext, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var runCount = await verifyStore.CountRunsAsync(project.Id);
         var finalProject = AssertEx.NotNull(await verifyStore.GetProjectAsync(project.Id));
         if (startWon)
@@ -534,7 +535,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var projectA = await store.CreateProjectAsync(CreateProject());
         var primaryRun = await store.StartRunAsync(CreateRun(projectA));
         var primaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -583,7 +584,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var claim = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -607,7 +608,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
 
@@ -625,7 +626,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var judge = await CreateRunningJudgeAsync(store);
 
         var cancelled = await store.CancelAsync(judge.RunId, judge.Run.Version);
@@ -642,7 +643,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
 
         var successful = await CreateRunningJudgeAsync(store);
         var success = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
@@ -672,7 +673,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var judge = await CreateRunningJudgeAsync(store);
 
         var scored = await store.SetUserScoreAsync(judge.RunId, 5, judge.Run.Version);
@@ -696,7 +697,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -727,7 +728,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var guard = new RejectingFreezeCommitGuard();
 
@@ -758,7 +759,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var project = await store.CreateProjectAsync(CreateProject() with
             {
                 CoreTaskJson = task
@@ -807,7 +808,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         }
 
         await using var fresh = CreateContext(databasePath);
-        var freshStore = new BenchmarkStore(fresh, TimeProvider.System);
+        var freshStore = new BenchmarkStore(fresh, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var reloadedProject = AssertEx.NotNull(await freshStore.GetProjectAsync(projectId));
         AssertBytes(task, reloadedProject.CoreTaskJson.Span);
         var reloaded = AssertEx.NotNull(await freshStore.GetRunAsync(runId));
@@ -825,7 +826,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var created = new List<Guid>();
         for (var index = 0; index < 5; index++)
@@ -872,7 +873,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project) with
         {
@@ -906,7 +907,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         var stamped = await store.StartRunAsync(CreateRun(project) with
@@ -953,7 +954,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
 
@@ -973,7 +974,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var project = await store.CreateProjectAsync(CreateProject());
             var run = await store.StartRunAsync(CreateRun(project));
             runId = run.Id;
@@ -1009,7 +1010,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         }
 
         await using var fresh = CreateContext(databasePath);
-        var freshStore = new BenchmarkStore(fresh, TimeProvider.System);
+        var freshStore = new BenchmarkStore(fresh, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         _ = await freshStore.RecoverRunsOnStartupAsync();
         var recovered = AssertEx.NotNull(await freshStore.GetRunAsync(runId));
         AssertBytes(receipt, AssertEx.NotNull(recovered.PrimaryLaunchEvidence).ReceiptJson!.Value.Span);
@@ -1022,7 +1023,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var first = await store.StartRunAsync(CreateRun(project));
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
@@ -1050,7 +1051,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var judgeWork = await CreateRunningJudgeAsync(store);
         var receipt = Receipt(Encoding.UTF8.GetBytes("{}"), Encoding.UTF8.GetBytes("{}"));
         var run = AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId));
@@ -1085,7 +1086,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var project = await store.CreateProjectAsync(CreateProject());
             var first = await store.StartRunAsync(CreateRun(project));
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
@@ -1097,7 +1098,7 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         await using var fresh = CreateContext(databasePath);
         _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
-            new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(substitutedRunId));
+            new BenchmarkStore(fresh, TimeProvider.System, NullLogger<BenchmarkStore>.Instance).GetRunAsync(substitutedRunId));
     }
 
     [Test]
@@ -1107,7 +1108,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var withoutOrigin = await store.StartRunAsync(CreateRun(project) with
         {
@@ -1130,7 +1131,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         var exception = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
@@ -1156,7 +1157,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         {
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var project = await store.CreateProjectAsync(CreateProject());
             runId = (await store.StartRunAsync(CreateRun(project))).Id;
             _ = await context.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON;");
@@ -1164,7 +1165,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         }
 
         await using var fresh = CreateContext(databasePath);
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(runId));
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => new BenchmarkStore(fresh, TimeProvider.System, NullLogger<BenchmarkStore>.Instance).GetRunAsync(runId));
     }
 
     [Test]
@@ -1174,7 +1175,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var groupId = Guid.NewGuid();
         var commands = Enumerable.Range(0, 3)
@@ -1236,7 +1237,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var commands = Enumerable.Range(0, 5).Select(_ => CreateRun(project)).ToArray();
 
@@ -1254,7 +1255,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         // One guard instance shared by the group, exactly as the freeze service builds it — re-running its dependency
@@ -1302,7 +1303,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
 
         var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version);
@@ -1323,7 +1324,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject());
         var cellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1";
         var itemIds = new[]
@@ -1365,7 +1366,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(CreateProject() with
         {
             FidelityEnabled = true
@@ -1429,7 +1430,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var busy = await store.CreateProjectAsync(CreateProject());
         var quiet = await store.CreateProjectAsync(CreateProject());
         var untouched = await store.CreateProjectAsync(CreateProject());

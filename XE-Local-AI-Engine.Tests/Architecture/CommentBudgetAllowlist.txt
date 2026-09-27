@@ -520,8 +520,8 @@ XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairedBootstrapTests.cs|run|2
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairwiseTests.cs|run|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairwiseTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPerplexityOutputParserTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPerplexityRunnerLiveTests.cs|run|1
-XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPerplexityRunnerLiveTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|run|1
+XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPhaseLaunchResolverTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkProjectServiceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkProjectServiceTests.cs|summary|1
@@ -544,8 +544,8 @@ XE-Local-AI-Engine.Tests/Capacity/RuntimeDeviceAuditServiceTests.cs|run|6
 XE-Local-AI-Engine.Tests/Capacity/RuntimeDeviceAuditServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Capacity/SpawnContextTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Capacity/SpawnSerializerTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Capacity/SubAgentSpawnServiceTests.cs|run|20
-XE-Local-AI-Engine.Tests/Capacity/SubAgentSpawnServiceTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|run|20
+XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/AskUserColdLoadResumeTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/AskUserToolOfferTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/ChatInvocationStatePumpFaultTests.cs|summary|1
@@ -750,6 +750,7 @@ XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRetryPolicyTests.cs|summary|7
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRouteTests.cs|summary|4
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRuleSetPolicyTests.cs|run|1
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRuleSetPolicyTests.cs|summary|6
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRunQueryServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRunServiceTests.cs|summary|10
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|run|2
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|summary|5
@@ -873,7 +874,6 @@ XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.c
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|summary|4
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|multi|1
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|summary|8
-XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowRunComposerTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowRunEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowRunEndpointTests.cs|summary|10
 XE-Local-AI-Engine.Tests/Endpoints/Drafting/DraftEndpointTests.cs|run|1
@@ -1311,7 +1311,7 @@ XE-Local-AI-Engine.Tests/NodeSettings/ToolCapableModelRegistrarTests.cs|run|3
 XE-Local-AI-Engine.Tests/NodeSettings/UsageRateResolverTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|run|2
 XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Persistence/NodeDataDirectoryTests.cs|summary|1
+XE-Local-AI-Engine.Tests/NodeSettings/NodeDataDirectoryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqliteContentionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqlitePragmasTests.cs|run|4
 XE-Local-AI-Engine.Tests/Providers/Abstractions/CudaToolkitLocatorTests.cs|summary|2
@@ -1698,7 +1698,7 @@ XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionTestSupport.cs|summary|6
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionToolHandlerTests.cs|run|3
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionToolHandlerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionToolSchemaTests.cs|run|1
-XE-Local-AI-Engine.Tests/Workspace/SelectedFolderResolverTests.cs|run|4
+XE-Local-AI-Engine.Tests/Workspace/SelectedFolderResolverTests.cs|run|3
 XE-Local-AI-Engine.Tests/Workspace/SensitiveFileExclusionServiceTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Workspace/WorkspaceFileScannerTests.cs|summary|7
 XE-Local-AI-Engine.Tests/Workspace/WorkspaceFileScannerWindowsTests.cs|block|1

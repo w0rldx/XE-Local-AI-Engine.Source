@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 public sealed class CancelBenchmarkRunEndpoint : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {

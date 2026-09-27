@@ -200,7 +200,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
 
     /// <summary>
     ///     Embedding input that cancels the caller's token and then fails in a shape
-    ///     <c>DeferredLlamaServerChatClient.IsServerGone</c> matches — the two events the guard has to tell apart,
+    ///     <c>LlamaServerConnectionFailure.IsServerGone</c> matches — the two events the guard has to tell apart,
     ///     ordered deterministically on one thread. Enumerated by the SDK while it builds the request body, so the
     ///     throw comes out of the inner generator exactly where a transport failure would.
     /// </summary>

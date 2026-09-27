@@ -22,7 +22,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;

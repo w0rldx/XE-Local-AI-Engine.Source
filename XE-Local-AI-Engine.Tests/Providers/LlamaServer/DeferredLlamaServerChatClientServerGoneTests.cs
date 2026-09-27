@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the exception shapes <see cref="DeferredLlamaServerChatClient.IsServerGone" /> must recognize as
+///     Pins the exception shapes <see cref="LlamaServerConnectionFailure.IsServerGone" /> must recognize as
 ///     "the llama-server process is gone", because that predicate gates BOTH the operator-eject translation
 ///     (ejected lease → <c>LlamaServerModelEjectedException</c> → Cancelled terminal) and the pre-first-chunk
 ///     self-heal. The mid-response kill shape — <see cref="HttpIOException" /> with
@@ -58,7 +58,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         var wrapped = new InvalidOperationException("adapter wrapper",
             new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely."));
 
-        await Assert.That(DeferredLlamaServerChatClient.IsServerGone(wrapped)).IsTrue();
+        await Assert.That(LlamaServerConnectionFailure.IsServerGone(wrapped)).IsTrue();
     }
 
     [Test]
@@ -66,7 +66,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     {
         var wrapped = new HttpRequestException("refused", new SocketException((int)SocketError.ConnectionRefused));
 
-        await Assert.That(DeferredLlamaServerChatClient.IsServerGone(wrapped)).IsTrue();
+        await Assert.That(LlamaServerConnectionFailure.IsServerGone(wrapped)).IsTrue();
     }
 
     [Test]
@@ -74,7 +74,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     {
         var exception = new HttpRequestException(HttpRequestError.ConnectionError, "connection error");
 
-        await Assert.That(DeferredLlamaServerChatClient.IsServerGone(exception)).IsTrue();
+        await Assert.That(LlamaServerConnectionFailure.IsServerGone(exception)).IsTrue();
     }
 
     [Test]
@@ -84,7 +84,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         // eject translation for failures the server is still alive to explain.
         var exception = new InvalidOperationException("schema validation failed");
 
-        await Assert.That(DeferredLlamaServerChatClient.IsServerGone(exception)).IsFalse();
+        await Assert.That(LlamaServerConnectionFailure.IsServerGone(exception)).IsFalse();
     }
 
     [Test]
@@ -93,7 +93,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         var aggregate = new AggregateException(new InvalidOperationException("unrelated"),
             new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely."));
 
-        await Assert.That(DeferredLlamaServerChatClient.IsServerGone(aggregate)).IsTrue();
+        await Assert.That(LlamaServerConnectionFailure.IsServerGone(aggregate)).IsTrue();
     }
 
     // Running the request leaseless instead would slip under the eject drain (which sees zero leases), be killed

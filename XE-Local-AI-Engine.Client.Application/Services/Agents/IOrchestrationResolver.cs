@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Compiles an orchestrator definition and its <c>OrchestrationTopologyJson</c> into the loopback orchestration

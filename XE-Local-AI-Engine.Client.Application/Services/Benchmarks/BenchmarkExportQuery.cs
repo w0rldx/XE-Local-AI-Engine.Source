@@ -23,6 +23,9 @@ public sealed class BenchmarkJsonExportQueryResult
 
     public required BenchmarkPairwiseFitRecord? PairwiseFit { get; init; }
 
+    /// <summary>The fit's per-run scores; empty without a fit or when its stored scores are unreadable.</summary>
+    public required IReadOnlyList<BenchmarkPairwiseScoreEntry> PairwiseScores { get; init; }
+
     public required BenchmarkFidelityDisplayFacts Fidelity { get; init; }
 
     public required IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> Facts { get; init; }
@@ -39,6 +42,9 @@ public sealed class BenchmarkCsvExportQueryResult
     public required IReadOnlyList<BenchmarkRunRecord> Runs { get; init; }
 
     public required BenchmarkPairwiseFitRecord? PairwiseFit { get; init; }
+
+    /// <summary>The fit's per-run scores; empty without a fit or when its stored scores are unreadable.</summary>
+    public required IReadOnlyList<BenchmarkPairwiseScoreEntry> PairwiseScores { get; init; }
 
     public required BenchmarkFidelityDisplayFacts Fidelity { get; init; }
 }
@@ -77,15 +83,19 @@ public sealed class BenchmarkExportRunFacts
 internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
 {
     private readonly IBenchmarkExportFactsResolver _factsResolver;
+    private readonly ILogger<BenchmarkExportQuery> _logger;
     private readonly IBenchmarkStore _store;
 
     public BenchmarkExportQuery(IBenchmarkStore store,
-        IBenchmarkExportFactsResolver factsResolver)
+        IBenchmarkExportFactsResolver factsResolver,
+        ILogger<BenchmarkExportQuery> logger)
     {
         ArgumentNullException.ThrowIfNull(factsResolver);
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(logger);
         _factsResolver = factsResolver;
         _store = store;
+        _logger = logger;
     }
 
     public async Task<BenchmarkJsonExportQueryResult?> GetJsonAsync(Guid projectId, CancellationToken ct)
@@ -120,6 +130,7 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
             }
         }
 
+        var pairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct);
         return new BenchmarkJsonExportQueryResult
         {
             Project = project,
@@ -127,7 +138,8 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
             Runs = runs,
             RankCohort = page.RankCohort,
             JudgePolicyRevision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
-            PairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct),
+            PairwiseFit = pairwiseFit,
+            PairwiseScores = BenchmarkPairwiseFitScores.Read(pairwiseFit, _logger),
             Fidelity = _factsResolver.ResolveProject(project),
             Facts = facts,
             TaskItems = await _store.ListTaskItemsAsync(projectId, ct),
@@ -144,11 +156,13 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         }
 
         var page = await _store.ListAllRunsAsync(projectId, ct);
+        var pairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct);
         return new BenchmarkCsvExportQueryResult
         {
             Project = project,
             Runs = page.Items,
-            PairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct),
+            PairwiseFit = pairwiseFit,
+            PairwiseScores = BenchmarkPairwiseFitScores.Read(pairwiseFit, _logger),
             Fidelity = _factsResolver.ResolveProject(project)
         };
     }

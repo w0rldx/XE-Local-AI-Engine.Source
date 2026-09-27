@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 using System.Net;
-using System.Text.Json;
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -29,7 +28,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
     private readonly Lock _sync = new();
     private readonly ITokenEstimatorCalibrationStore _store;
-    private readonly HttpClient _httpClient;
+    private readonly ILlamaServerNativeClient _nativeClient;
     private readonly ILogger<LlamaTokenEstimatorCalibrationService> _logger;
     private readonly TimeSpan _interval;
     private readonly TimeProvider _timeProvider;
@@ -38,16 +37,16 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private long _generation;
 
-    public LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
+    public LlamaTokenEstimatorCalibrationService(ILlamaServerNativeClient nativeClient,
         ITokenEstimatorCalibrationStore store,
         ILlamaServerProcessSupervisor supervisor,
         ILogger<LlamaTokenEstimatorCalibrationService> logger,
         TimeProvider timeProvider)
-        : this(httpClient, store, supervisor, logger, DefaultInterval, timeProvider, DefaultWorkCapacity)
+        : this(nativeClient, store, supervisor, logger, DefaultInterval, timeProvider, DefaultWorkCapacity)
     {
     }
 
-    internal LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
+    internal LlamaTokenEstimatorCalibrationService(ILlamaServerNativeClient nativeClient,
         ITokenEstimatorCalibrationStore store,
         ILlamaServerProcessSupervisor supervisor,
         ILogger<LlamaTokenEstimatorCalibrationService> logger,
@@ -56,7 +55,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         int workCapacity)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _nativeClient = nativeClient ?? throw new ArgumentNullException(nameof(nativeClient));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _interval = interval > TimeSpan.Zero ? interval : throw new ArgumentOutOfRangeException(nameof(interval));
@@ -144,16 +143,6 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
         _store.SetDivisor(modelName, divisor);
         return true;
-    }
-
-    internal static HttpClientHandler CreateProductionHandler()
-    {
-        return new HttpClientHandler
-        {
-            AllowAutoRedirect = false,
-            UseProxy = false,
-            CheckCertificateRevocationList = true
-        };
     }
 
     internal static int CalculateDivisor(int characterCount, int tokenCount)
@@ -262,16 +251,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(RequestTimeout);
-            var tokenizeUri = new Uri($"{llamaServerBaseAddress.Scheme}://{llamaServerBaseAddress.Authority}/tokenize");
-            using var response = await _httpClient.PostAsJsonAsync(tokenizeUri,
-                new
-                {
-                    content = CalibrationText,
-                    add_special = false,
-                    parse_special = false,
-                    with_pieces = false
-                },
-                timeout.Token);
+            using var response = await _nativeClient.TokenizeAsync(llamaServerBaseAddress, CalibrationText, timeout.Token);
 
             if (IsRedirect(response.StatusCode))
             {
@@ -279,7 +259,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                 return default;
             }
 
-            if (response.RequestMessage?.RequestUri is { } finalAddress && !IsLoopbackHttp(finalAddress))
+            if (response.FinalRequestUri is { } finalAddress && !IsLoopbackHttp(finalAddress))
             {
                 LogFailure(CalibrationFailureReason.FinalEndpointRejected);
                 return default;
@@ -291,17 +271,13 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                 return default;
             }
 
-            await using var contentStream = await response.Content.ReadAsStreamAsync(timeout.Token);
-            using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: timeout.Token);
-            if (!document.RootElement.TryGetProperty("tokens", out var tokens)
-                || tokens.ValueKind != JsonValueKind.Array
-                || tokens.GetArrayLength() <= 0)
+            if (await response.ReadTokenCountAsync(timeout.Token) is not { } tokenCount)
             {
                 LogFailure(CalibrationFailureReason.InvalidPayload);
                 return default;
             }
 
-            return new CalibrationResult(CalculateDivisor(CalibrationText.Length, tokens.GetArrayLength()));
+            return new CalibrationResult(CalculateDivisor(CalibrationText.Length, tokenCount));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -315,11 +291,6 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         catch (HttpRequestException)
         {
             LogFailure(CalibrationFailureReason.RequestFailure);
-            return default;
-        }
-        catch (JsonException)
-        {
-            LogFailure(CalibrationFailureReason.InvalidPayload);
             return default;
         }
     }

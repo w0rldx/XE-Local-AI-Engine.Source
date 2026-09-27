@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -37,7 +39,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task EnsureComparisonsAsync_CreatesBothOrdersOfEverySlot_AndBumpsTheComparisonSetVersion()
     {
         await using var context = await CreateSchemaAsync("ensure-pairs.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 3);
 
         var created = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
@@ -60,7 +62,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task EnsureComparisonsAsync_AfterAFailedComparison_ReEnqueuesThatSlotAtTheNextAttemptSequence()
     {
         await using var context = await CreateSchemaAsync("ensure-pairs-retry.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
 
@@ -81,7 +83,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task ComparisonSetVersion_MovesOnEveryTerminalization_SoAFitOverARebuiltSetIsStale()
     {
         await using var context = await CreateSchemaAsync("comparison-set-version.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var afterInsert = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
@@ -107,7 +109,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task MarkComparisonSucceededAsync_ClaimsTheCohortForItsExecutionKey()
     {
         await using var context = await CreateSchemaAsync("comparison-promotes.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var claimed = await ClaimComparisonAsync(store);
@@ -133,7 +135,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task PublishPairwiseFitAsync_SwitchesThePointerInOneTransaction_AndRefusesADuplicateKey()
     {
         await using var context = await CreateSchemaAsync("publish-fit.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
 
         AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:first", setVersion: 1, runs)));
@@ -155,7 +157,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task Ranking_PairwiseMode_ReadsScoresFromTheActiveFit_AndAnOperatorScoreStillWins()
     {
         await using var context = await CreateSchemaAsync("ranking-pairwise.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 3);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var setVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
@@ -180,7 +182,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task Ranking_ActiveFitWasFitOverAnOlderComparisonSet_IsNotRankedAndReadsPairwiseStale()
     {
         await using var context = await CreateSchemaAsync("ranking-stale.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var setVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
@@ -202,7 +204,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task Ranking_RunAbsentFromTheActiveFit_ReadsPairwiseInsufficient()
     {
         await using var context = await CreateSchemaAsync("ranking-absent.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 3);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var setVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
@@ -219,7 +221,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task Ranking_PairwiseCohortWithNoFitYet_ReadsPairwisePending()
     {
         await using var context = await CreateSchemaAsync("ranking-pending.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
 
@@ -229,10 +231,41 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Ranking_CurrentFitWithAnUnreadableScoresBlob_RanksAsNoFitAndWarnsWithoutTheBlob()
+    {
+        // Decision C-b on the store's own read: a corrupt blob on a CURRENT fit must not fail the run list or the cell
+        // table (a 500 on every Benchmarks page); it ranks as if no fit were published and says so once per read.
+        await using var context = await CreateSchemaAsync("ranking-corrupt.sqlite");
+        var logger = new RecordingLogger();
+        var store = new BenchmarkStore(context, TimeProvider.System, logger);
+        var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
+        _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
+        var setVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
+        AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:corrupt", setVersion, runs, scoresJson: "[{\"runId\": secret-blob")));
+        var fit = AssertEx.NotNull(await store.GetActivePairwiseFitAsync(project.Id));
+
+        var ranked = await store.ListAllRunsAsync(project.Id);
+        var cells = await store.ListCellsAsync(project.Id);
+
+        foreach (var run in ranked.Items)
+        {
+            AssertEx.Null(run.QualityScore, "An unreadable fit ranks nothing.");
+            AssertEx.Equal(BenchmarkRunJudgeStates.ReasonPairwisePending, run.Judge?.RankExclusionReason);
+        }
+
+        AssertEx.True(cells.Cells.All(static cell => cell.Quality is null), "No cell takes a quality from an unreadable fit.");
+        AssertEx.True(logger.Warnings.Count >= 2, "Each read warns.");
+        AssertEx.True(logger.Warnings.All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)
+                                                     && message.Contains(project.Id.ToString(), StringComparison.Ordinal)));
+        AssertEx.False(logger.Warnings.Any(static message => message.Contains("secret-blob", StringComparison.Ordinal)),
+            "The Warning must not carry blob content.");
+    }
+
+    [Test]
     public async Task Ranking_ProjectThatNeverEnqueuedAComparison_StaysOnThePointwisePath()
     {
         await using var context = await CreateSchemaAsync("ranking-pointwise.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 1);
 
         var ranked = await store.ListAllRunsAsync(project.Id);
@@ -249,7 +282,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task DeleteRunAsync_WhileAComparisonNamingItIsQueued_IsRefusedFromEitherSideOfThePair()
     {
         await using var context = await CreateSchemaAsync("delete-live-comparison.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var (runA, runB) = runs[0].CompareTo(runs[1]) < 0 ? (runs[0], runs[1]) : (runs[1], runs[0]);
@@ -268,7 +301,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task DeleteRunAsync_OfAFittedParticipant_RemovesItsComparisonsAndRetiresTheFit()
     {
         await using var context = await CreateSchemaAsync("delete-fitted-participant.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 3);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         for (var index = 0; index < 6; index++)
@@ -313,7 +346,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     public async Task DeleteRunAsync_OnAPointwiseProject_TouchesNoPairwiseState()
     {
         await using var context = await CreateSchemaAsync("delete-pointwise.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
         AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:untouched", setVersion: 1, runs)));
 
@@ -420,7 +453,8 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         string fitKey,
         int setVersion,
         IReadOnlyList<Guid> runs,
-        IReadOnlyList<int>? scores = null) =>
+        IReadOnlyList<int>? scores = null,
+        string? scoresJson = null) =>
         new()
         {
             ProjectId = project.Id,
@@ -431,7 +465,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             JudgeExecutionKey = string.Empty,
             ComparisonSetVersion = setVersion,
             FittedSetJson = "[]",
-            ScoresJson = JsonSerializer.Serialize(runs.Select((run, index) => new BenchmarkPairwiseScoreEntry(run,
+            ScoresJson = scoresJson ?? JsonSerializer.Serialize(runs.Select((run, index) => new BenchmarkPairwiseScoreEntry(run,
                     scores is null ? 50 : scores[index],
                     null,
                     null,
@@ -486,4 +520,26 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             AgentVersion = 1,
             RequestedContextTokens = 4096
         };
+
+    /// <summary>Keeps the formatted Warnings, which is all the corrupt-blob test asserts on.</summary>
+    private sealed class RecordingLogger : ILogger<BenchmarkStore>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+            if (logLevel == LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+        }
+    }
 }

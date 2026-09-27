@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>The immutable measurement history behind a run's displayed numbers.</summary>
 public sealed class ListBenchmarkFidelityAttemptsEndpoint : Endpoint<ListBenchmarkFidelityAttemptsRequest, ListBenchmarkFidelityAttemptsResponse>

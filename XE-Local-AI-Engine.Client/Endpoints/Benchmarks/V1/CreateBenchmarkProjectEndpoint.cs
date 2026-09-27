@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 public sealed class CreateBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectMutationRequest, BenchmarkProjectDetailResponse>
 {
@@ -33,7 +34,7 @@ public sealed class CreateBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectMu
         await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
             {
                 projectId = project.Id
-            }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct),
+            }, (await _records.GetProjectDetailAsync(project, ct)).ToDetail(runCount: 0),
             cancellation: ct);
     }
 }

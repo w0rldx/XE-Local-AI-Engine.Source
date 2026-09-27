@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
@@ -484,7 +484,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<ITrainedModelSmokeGate>();
             services.AddSingleton<ITrainedModelSmokeGate>(provider => new TrainedModelSmokeGate(provider.GetRequiredService<ITransientLlamaServerLauncher>(),
                 provider.GetRequiredService<IInferenceChatClientFactory>(),
-                new TrainingLifecycleE2ETestDoubles.PropsHttpClientFactory(),
+                new TrainingLifecycleE2ETestDoubles.PropsNativeClient(),
                 provider.GetRequiredService<IGpuModelLoadAdmission>(),
                 provider.GetRequiredService<ILogger<TrainedModelSmokeGate>>()));
 

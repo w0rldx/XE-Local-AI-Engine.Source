@@ -31,24 +31,24 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
     private static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(3);
 
     private readonly IInferenceChatClientFactory _chatClientFactory;
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITransientLlamaServerLauncher _launcher;
     private readonly IGpuModelLoadAdmission _loadAdmission;
     private readonly ILogger<TrainedModelSmokeGate> _logger;
+    private readonly ILlamaServerNativeClient _nativeClient;
 
     public TrainedModelSmokeGate(ITransientLlamaServerLauncher launcher,
         IInferenceChatClientFactory chatClientFactory,
-        IHttpClientFactory httpClientFactory,
+        ILlamaServerNativeClient nativeClient,
         IGpuModelLoadAdmission loadAdmission,
         ILogger<TrainedModelSmokeGate> logger)
     {
         ArgumentNullException.ThrowIfNull(chatClientFactory);
-        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(nativeClient);
         ArgumentNullException.ThrowIfNull(launcher);
         ArgumentNullException.ThrowIfNull(loadAdmission);
         ArgumentNullException.ThrowIfNull(logger);
         _chatClientFactory = chatClientFactory;
-        _httpClientFactory = httpClientFactory;
+        _nativeClient = nativeClient;
         _launcher = launcher;
         _loadAdmission = loadAdmission;
         _logger = logger;
@@ -168,18 +168,8 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
     {
         try
         {
-            using var client = _httpClientFactory.CreateClient();
-            using var response = await client.GetAsync(new Uri(session.BaseAddress, "/props"), cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                return false;
-            }
-
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return document.RootElement.TryGetProperty("chat_template", out var template)
-                   && template.ValueKind == JsonValueKind.String
-                   && !string.IsNullOrWhiteSpace(template.GetString());
+            var props = await _nativeClient.GetPropsAsync(session.BaseAddress, cancellationToken);
+            return props?.HasChatTemplate == true;
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or IOException)
         {

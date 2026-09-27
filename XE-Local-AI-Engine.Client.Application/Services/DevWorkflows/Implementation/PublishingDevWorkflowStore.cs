@@ -233,6 +233,9 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
     public Task<IReadOnlyList<Guid>> ListConsumedArtifactIdsAsync(Guid nodeRunId, CancellationToken cancellationToken = default) =>
         _inner.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken);
 
+    public Task<IReadOnlyList<Guid>> ListNodeRunIdsWithStaleInputsAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _inner.ListNodeRunIdsWithStaleInputsAsync(runId, cancellationToken);
+
     public Task<DevWorkflowMutationResult> RecordDecisionAsync(RecordDevWorkflowDecisionCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.RecordDecisionAsync(command, cancellationToken), DevWorkflowChangeKind.Gate, cancellationToken);
 

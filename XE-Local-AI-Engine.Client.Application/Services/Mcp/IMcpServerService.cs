@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -41,10 +40,38 @@ public interface IMcpServerService
     Task<IReadOnlyList<McpServerRecord>> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The live per-server connection state from the connection manager (connected flag, discovered tool count, and a
-    ///     redacted last error). Servers not yet seen by a refresh are absent.
+    ///     The tool-panel view of the registration with <paramref name="id" />: its status verdict plus discovered tools.
+    ///     Returns <c>null</c> when no registration has that id.
     /// </summary>
-    IReadOnlyList<McpServerConnectionStatus> GetConnectionStatuses();
+    Task<McpServerToolsView?> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The tool-panel status of one registered MCP server.</summary>
+public enum McpServerToolsStatus
+{
+    /// <summary>The server is not enabled, so no connection is attempted.</summary>
+    Disabled = 0,
+
+    /// <summary>Enabled with no recorded failure yet: a refresh has not reached it, or is still in flight.</summary>
+    Connecting = 1,
+
+    /// <summary>The last refresh connected it and listed its tools.</summary>
+    Connected = 2,
+
+    /// <summary>An actually recorded failure: a status entry exists, it is not connected, and a redacted reason was captured.</summary>
+    Error = 3
+}
+
+/// <summary>The status verdict, recorded error and discovered tools for one registered MCP server.</summary>
+public sealed class McpServerToolsView
+{
+    public required McpServerToolsStatus Status { get; init; }
+
+    /// <summary>The redacted reason; set only for <see cref="McpServerToolsStatus.Error" />.</summary>
+    public required string? Error { get; init; }
+
+    /// <summary>Discovered tools; empty unless <see cref="McpServerToolsStatus.Connected" />.</summary>
+    public required IReadOnlyList<McpServerToolInfo> Tools { get; init; }
 }
 
 /// <summary>Thrown when an MCP server create/update fails validation. The message is safe to surface to callers.</summary>

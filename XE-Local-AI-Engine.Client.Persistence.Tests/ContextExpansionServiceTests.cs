@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     Proves that <see cref="ContextExpansionService.ExpandBatchAsync" /> (one query per document instead of one

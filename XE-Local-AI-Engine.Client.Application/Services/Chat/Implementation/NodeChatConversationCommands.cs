@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using static NodeChatMetadataSerializer;

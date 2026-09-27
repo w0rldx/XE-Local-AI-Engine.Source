@@ -321,9 +321,9 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
     private sealed class RecordingPublisher : IRuntimeAcquisitionEventPublisher
     {
         private readonly Lock _gate = new();
-        private readonly List<RuntimeAcquisitionStatusHubEvent> _pushed = [];
+        private readonly List<RuntimeAcquisitionStatusEvent> _pushed = [];
 
-        public IReadOnlyList<RuntimeAcquisitionStatusHubEvent> Pushed
+        public IReadOnlyList<RuntimeAcquisitionStatusEvent> Pushed
         {
             get
             {
@@ -334,7 +334,7 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
             }
         }
 
-        public Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(RuntimeAcquisitionStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             lock (_gate)
             {
@@ -347,7 +347,7 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
 
     private sealed class ThrowingPublisher : IRuntimeAcquisitionEventPublisher
     {
-        public Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(RuntimeAcquisitionStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("The hub connection is gone.");
         }

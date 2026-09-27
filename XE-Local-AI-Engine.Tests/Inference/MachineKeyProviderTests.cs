@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
-using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 

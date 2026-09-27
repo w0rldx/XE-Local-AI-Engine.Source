@@ -20,14 +20,15 @@ internal static class AddAppUpdateExtensions
 {
     internal static IHostApplicationBuilder AddAppUpdate(this IHostApplicationBuilder builder,
         IConfiguration configuration,
-        LaunchMode launchMode,
+        NodeLaunchContext launchContext,
         IReadOnlyList<string> restartArgs,
         bool shellOwned = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(launchContext);
         ArgumentNullException.ThrowIfNull(restartArgs);
-        var isLocalMode = launchMode.IsLocalMode();
+        var isLocalMode = launchContext.IsLocalMode;
 
         // The artifact flavor config (public repo URL + stable/RC track), baked at publish into appsettings.AppUpdate.json.
         builder.Services.AddOptions<AppUpdateChannelOptions>()

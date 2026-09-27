@@ -118,6 +118,19 @@ public sealed partial class DevWorkflowStore
                                .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Guid>> ListNodeRunIdsWithStaleInputsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        // Starts from the run's stale rows, which are few, and reaches the uses through ix_dev_workflow_artifact_uses_artifact.
+        return await _dbContext.DevWorkflowArtifacts.AsNoTracking()
+                               .Where(entity => entity.RunId == runId && entity.IsStale)
+                               .Join(_dbContext.DevWorkflowArtifactUses.AsNoTracking().Where(use => use.RunId == runId),
+                                   static artifact => artifact.Id,
+                                   static use => use.ArtifactId,
+                                   static (_, use) => use.NodeRunId)
+                               .Distinct()
+                               .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<DevWorkflowDecisionSnapshot>> ListDecisionsAsync(Guid runId, CancellationToken cancellationToken = default)
     {
         await EnsureRunExistsAsync(runId, cancellationToken);

@@ -149,6 +149,27 @@ internal static class DevelopmentContractMapper
             Events = value.Events.Select(ToResponse).ToArray()
         };
 
+    public static DevelopmentCapabilityResponse ToResponse(this DevelopmentCapability value) =>
+        new()
+        {
+            Enabled = value.Enabled,
+            SandboxProvider = value.SandboxProvider,
+            ContainerRuntime = value.ContainerRuntime?.ToResponse(),
+            Isolation = value.Isolation.Select(ToIsolationSummary).ToArray()
+        };
+
+    private static SandboxIsolationSummaryResponse ToIsolationSummary(DevelopmentIsolationRole value)
+    {
+        var summary = ToIsolationSummary(value.Role, value.Requirements, value.Provider, value.Containment, value.NodeRequiresEgressDenial);
+        return value.FilesystemIsolationWithheldReason is null
+            ? summary
+            : summary with
+            {
+                FilesystemIsolation = false,
+                FilesystemIsolationUnavailableReason = value.FilesystemIsolationWithheldReason
+            };
+    }
+
     /// <summary>
     ///     Projects one sandbox role's SERVED isolation posture — the role's own declaration INTERSECTED with what its
     ///     provider advertises, never a capability read-out — into the operator-facing summary.

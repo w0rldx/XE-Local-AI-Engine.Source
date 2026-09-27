@@ -8,21 +8,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class DevelopmentAttemptSubscriptionSnapshot
-{
-    public required Guid ProjectId { get; init; }
-
-    public required Guid TaskId { get; init; }
-
-    public required Guid AttemptId { get; init; }
-
-    public required long Watermark { get; init; }
-
-    public required long DroppedOrCoalescedUpdateCount { get; init; }
-
-    public required DevelopmentAttemptLiveUpdate? Latest { get; init; }
-}
-
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class DevelopmentAttemptHub : Hub
 {
@@ -85,10 +70,4 @@ public sealed class DevelopmentAttemptHub : Hub
             Latest = snapshot.Latest
         };
     }
-}
-
-internal static class DevelopmentAttemptHubGroups
-{
-    public static string Attempt(Guid projectId, Guid attemptId) =>
-        string.Concat("development-project:", projectId.ToString("N"), ":attempt:", attemptId.ToString("N"));
 }

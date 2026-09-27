@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;

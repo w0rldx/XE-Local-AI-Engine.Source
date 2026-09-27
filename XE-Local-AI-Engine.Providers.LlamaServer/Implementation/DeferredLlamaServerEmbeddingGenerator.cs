@@ -63,7 +63,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         {
             // Self-heal seam, mirroring DeferredLlamaServerChatClient.InvalidateInner: the cached adapter is bound to ONE endpoint for this generator's whole
             // lifetime, and the cancellation guard is the chat client's, in the same operand order. Why both, and why the drop is latent-only today: wiki 03.
-            if (!cancellationToken.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(exception))
+            if (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(exception))
             {
                 InvalidateInner();
 

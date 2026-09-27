@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 
 /// <summary>
 ///     Sets (or clears, when the string is blank) the per-model extra <c>llama-server</c> launch-argument override

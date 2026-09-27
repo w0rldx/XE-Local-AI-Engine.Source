@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -23,6 +24,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class TrainedModelSmokeGateTests
 {
+    private static readonly HttpClient UnusedTokenizeClient = new();
+
     private static readonly TrainingArtifactRecordView MergedArtifact = new()
     {
         ArtifactPath = "/staged/merged-Q4_K_M.gguf",
@@ -174,7 +177,7 @@ public sealed class TrainedModelSmokeGateTests
 
             harness.Gate = new TrainedModelSmokeGate(launcher,
                 chatClientFactory,
-                httpClientFactory,
+                new LlamaServerNativeClient(httpClientFactory, UnusedTokenizeClient),
                 harness.Admission,
                 NullLogger<TrainedModelSmokeGate>.Instance);
             return harness;

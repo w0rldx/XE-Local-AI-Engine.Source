@@ -6,21 +6,6 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
-public static class TrainingRunHubEvents
-{
-    public const string Event = "trainingRun.event";
-    public const string ReplayReset = "trainingRun.replayReset";
-}
-
-public sealed class TrainingRunReplayReset
-{
-    public required Guid RunId { get; init; }
-
-    public required long LatestSequence { get; init; }
-
-    public required long RunVersion { get; init; }
-}
-
 /// <summary>
 ///     Operator-only, per-run delivery for live training progress. The caller joins the group before replay so the
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.

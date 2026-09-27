@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Clears the operator override, so the run ranks by its judge score again (or not at all).</summary>
 public sealed class ClearBenchmarkRunScoreEndpoint : Endpoint<ClearBenchmarkRunScoreRequest, BenchmarkRunDetailResponse>

@@ -4,10 +4,11 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     The authoritative server-side guard rejecting mutations that target an <c>Origin=Remote</c> conversation.
 /// </summary>
 /// <remarks>
-///     Remote-origin rows are node-local mirrors of platform-served chats and are view-only: they must never sync
-///     back, and the node retains no epoch key to re-drive them. It applies to ALL content and state mutation entry
-///     points, and UI hiding is cosmetic beside it. It reads only the plaintext <c>origin</c> column, never touching
-///     the epoch key registry.
+///     Remote-origin rows are view-only mirrors of platform-served chats; UI hiding is cosmetic beside this guard. It
+///     reads only the plaintext <c>origin</c> column and runs inside the Application services, never an endpoint: the
+///     operator mutations of <c>NodeChatPersistenceService</c>, compaction, attachment upload and delete, and every
+///     turn start. Approval and <c>ask_user</c> resolutions key on a request id and stay unguarded, since no Remote
+///     conversation can hold a parked turn.
 /// </remarks>
 public interface INodeChatMutationGuard
 {

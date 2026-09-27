@@ -12,7 +12,9 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -242,7 +244,7 @@ public sealed class DevWorkflowRunHubTests
         // The real pass-through service over the substituted store: the hub's door onto the event log is
         // DevWorkflowRunQueryService, and wrapping rather than substituting it keeps every assertion below on the
         // store call the hub actually causes.
-        var hub = new DevWorkflowRunHub(new DevWorkflowRunQueryService(store),
+        var hub = new DevWorkflowRunHub(new DevWorkflowRunQueryService(store, Substitute.For<IAgentDefinitionService>(), Substitute.For<IWorkSessionService>()),
             runs,
             Options.Create(new DevWorkflowOptions
             {

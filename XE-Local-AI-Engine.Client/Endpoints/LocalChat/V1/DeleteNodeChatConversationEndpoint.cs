@@ -23,6 +23,7 @@ public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChat
     {
         Delete(LocalApiRoutes.LocalChat.ConversationById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(DeleteNodeChatConversationRequest req, CancellationToken ct)

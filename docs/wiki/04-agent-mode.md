@@ -561,7 +561,7 @@ providers with itself — the reason for the scoped `CA2000` suppression. On the
 own tools ride the agent-level `ChatOptions`; the per-turn `RunOptions.ChatOptions` still carries model id,
 `think` and sampling.
 
-`BuildInlineSkill` uses the full frontmatter constructor (name, description, instructions, license,
+`InvocationSkillsProvider.BuildInlineSkill` uses the full frontmatter constructor (name, description, instructions, license,
 compatibility, allowed-tools, metadata), so a skill carrying no frontmatter and no resources builds exactly
 as the 3-argument call it replaced did. Two rules bind it:
 
@@ -1165,7 +1165,7 @@ the records the GUID path reaches and no others.
 
 ### 2.3 Capacity gate & sub-agent spawn
 
-`SubAgentSpawnService.SpawnAsync` (`Services/Capacity/SubAgentSpawnService.cs`) implements the
+`SubAgentSpawnService.SpawnAsync` (`Services/Agents/Implementation/SubAgentSpawnService.cs`) implements the
 `spawn_subagent` tool with layered safety:
 
 1. **Validation** — non-blank task and exactly one binding.
@@ -1484,9 +1484,10 @@ must not ride a transitive dependency flow.
 
 Both agent-construction sites — `InvocationAgentFactory.CreateAsync` (builds the `ChatClientAgent`,
 resolves executable tools, then attaches skills) and `SubAgentSpawnService`'s child-binding path — build
-a MAF `AgentSkillsProvider` from the resolved skills as `AgentInlineSkill`s and attach it via
+a MAF `AgentSkillsProvider` from the resolved skills as `AgentInlineSkill`s through the one
+`InvocationSkillsProvider` helper in `AI.Agent` and attach it via
 `ChatClientAgentOptions.AIContextProviders`, not through the ordinary tool registries. `AgentSkillsProvider`
-/ `AgentInlineSkill` ship `[Experimental]` in this MAF version (`MAAI001`), so every call site carries a
+/ `AgentInlineSkill` ship `[Experimental]` in this MAF version (`MAAI001`), so that helper carries the
 scoped pragma suppression.
 
 The provider injects three tools, MAF-named and not present in this repo's own tool catalog:
@@ -1532,7 +1533,8 @@ rides `AIContextProviders` and bypasses `CurateChildTools` entirely — so **a s
 child could never be loaded**.
 
 The fix constructs the child's provider with `DisableLoadSkillApproval = true` and
-`DisableReadSkillResourceApproval = true` (`SubAgentSpawnService.cs`). The justification is the
+`DisableReadSkillResourceApproval = true` (`InvocationSkillsProvider.CreateForSubAgentChild`,
+called only from `SubAgentSpawnService.AttachSkillsProvider`). The justification is the
 same one that already governs every other capability a child inherits: **the operator already approved
 the spawn**, and there is no human downstream of that decision to ask. This is a security-relevant
 deviation, made deliberately and logged, not a silent default. `run_skill_script`'s approval is **never**

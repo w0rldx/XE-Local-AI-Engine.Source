@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 using System.Text;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Parses an operator-entered raw <c>llama-server</c> extra-argument string and enforces the override's safety
@@ -8,43 +9,14 @@ using System.Text;
 ///     the flags the app manages.
 /// </summary>
 /// <remarks>
-///     Two managed families are rejected on write and stripped on read — reachability (model path, host, port) and
-///     memory-fit placement — while everything else llama.cpp supports stays available; the full flag lists and the
-///     memory-ledger rationale are in docs/wiki/03-local-runtime-and-providers.md ("2.7 Per-model extra launch
+///     The managed flags (<see cref="LlamaServerManagedFlags" />, owned by the provider beside the composer that emits
+///     them) are rejected on write and stripped on read, while everything else llama.cpp supports stays available; the
+///     memory-ledger rationale is in docs/wiki/03-local-runtime-and-providers.md ("2.7 Per-model extra launch
 ///     arguments (operator override)"). Tokenizing is a small quote-aware split, enough to pass a value such as
 ///     <c>--samplers "top_k;top_p"</c> as one token: a developer experimentation knob, not a shell parser.
 /// </remarks>
 public static class LlamaLaunchArgumentParser
 {
-    // Flags the app manages: an operator override is rejected on write and stripped on read. Two families (see the class
-    // doc): reachability (model path / host / port) and memory-fit placement. Ordinal — llama.cpp flags are ASCII.
-    private static readonly string[] ReservedFlags =
-    [
-        // Reachability — the app binds these to reach the process it launched.
-        "-m", "--model", "--host", "--port",
-
-        // Memory-fit placement — owned by the capacity/allocation resolver + launch policy BEFORE admission; a post-hoc
-        // override would invalidate the memory ledger, defeat the safe-config retry, and overcommit RAM/VRAM.
-        "-c", "--ctx-size",
-        "-ngl", "--gpu-layers", "--n-gpu-layers",
-        "-ts", "--tensor-split",
-        "-ot", "--override-tensor",
-        // --cpu-moe/-cmoe and --n-cpu-moe/-ncmoe are -ot by another name: upstream pushes them into the SAME
-        // tensor_buft_overrides list -ot writes (llama.cpp common/arg.cpp), so an override could re-place every expert after admission.
-        "-cmoe", "--cpu-moe",
-        "-ncmoe", "--n-cpu-moe",
-        "-ctk", "--cache-type-k",
-        "-ctv", "--cache-type-v",
-        "-fa", "--flash-attn",
-        "-np", "--parallel",
-        "-b", "--batch-size",
-        "-ub", "--ubatch-size",
-
-        // Adapter identity — the registry decides whether a model launches with an adapter and which one, and the launch-policy
-        // fingerprint commits to that choice; an operator --lora would load weights the fingerprint, ledger and registry know nothing about.
-        "--lora", "--lora-scaled"
-    ];
-
     /// <summary>Splits <paramref name="raw" /> into tokens, honoring single/double quotes. Null/blank yields an empty list.</summary>
     public static IReadOnlyList<string> Tokenize(string? raw)
     {
@@ -158,8 +130,8 @@ public static class LlamaLaunchArgumentParser
 
     private static string? MatchReserved(string token)
     {
-        return Array.Find(ReservedFlags,
-            reserved => string.Equals(token, reserved, StringComparison.Ordinal)
-                        || token.StartsWith(reserved + "=", StringComparison.Ordinal));
+        return LlamaServerManagedFlags.All.FirstOrDefault(reserved =>
+            string.Equals(token, reserved, StringComparison.Ordinal)
+            || token.StartsWith(reserved + "=", StringComparison.Ordinal));
     }
 }

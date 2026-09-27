@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public interface ICoordinatedModelProviderMapStore
 {

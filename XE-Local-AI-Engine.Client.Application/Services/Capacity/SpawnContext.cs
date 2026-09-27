@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+
 /// <summary>
 ///     Per-root-invocation spawn state, flowed implicitly through the agent tool loop as an <see cref="AsyncLocal{T}" />: the root turn seeds
 ///     one context at <c>Depth = 0</c> and every <c>spawn_subagent</c> call inside it reads the fan-out and cloud-spawn caps.

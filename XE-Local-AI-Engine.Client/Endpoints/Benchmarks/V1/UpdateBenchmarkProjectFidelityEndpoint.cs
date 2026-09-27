@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
+using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>
 ///     Changes a project's quant-fidelity settings. Unlike every other project write this one is allowed on a FROZEN
@@ -53,7 +55,7 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint : Endpoint<UpdateBenc
         var runCount = await _records.CountRunsAsync(req.ProjectId, ct);
         await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
         {
-            Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct),
+            Project = (await _records.GetProjectDetailAsync(change.Project, ct)).ToDetail(runCount),
             EnqueuedRunIds = change.EnqueuedRunIds,
             EnqueuedCount = change.EnqueuedRunIds.Count
         }, ct);

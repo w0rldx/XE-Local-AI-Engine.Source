@@ -5,7 +5,6 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>

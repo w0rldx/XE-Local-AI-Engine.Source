@@ -1,0 +1,277 @@
+namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+
+using System.Buffers;
+using System.Security.Cryptography;
+using System.Text.Json;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+
+/// <summary>Produces the repeatable, keyed execution binding used exclusively by inbound MCP execution.</summary>
+/// <remarks>
+///     Delegate saved agents and bare models are model-visible tool-less; only the forge-proof seeded Coder may receive its exact three
+///     workspace-read tools. Agentic saved-agent bindings retain the complete resolved allowed-tool snapshot.
+/// </remarks>
+internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
+{
+    private const int AgenticFingerprintVersion = 2;
+    private const int DelegateFingerprintVersion = 1;
+
+    private const string DefaultSubAgentPersonaInstructions =
+        "You are a focused sub-agent. Complete the delegated task and return a concise result.";
+
+    private static readonly HashSet<string> CoderToolNames =
+    [
+        CoderToolDefinition.ListFilesToolName,
+        CoderToolDefinition.ReadFileToolName,
+        CoderToolDefinition.SearchTextToolName
+    ];
+
+    private readonly IAgentDefinitionResolver _agentDefinitionResolver;
+    private readonly IAgentDefinitionService _agentDefinitionService;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly IAgentInstructionProvider _instructionProvider;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly INodeSqliteKeyHolder _nodeKey;
+
+    public McpExecutionBindingResolver(IAgentDefinitionService agentDefinitionService,
+        IAgentDefinitionResolver agentDefinitionResolver,
+        IGgufModelStore ggufModelStore,
+        IAgentInstructionProvider instructionProvider,
+        IModelCapabilityResolver modelCapabilityResolver,
+        INodeSqliteKeyHolder nodeKey)
+    {
+        _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
+        _agentDefinitionResolver = agentDefinitionResolver ?? throw new ArgumentNullException(nameof(agentDefinitionResolver));
+        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
+        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
+        _nodeKey = nodeKey ?? throw new ArgumentNullException(nameof(nodeKey));
+    }
+
+    public async Task<McpExecutionBindingResolution> ResolveAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var hasAgent = !string.IsNullOrWhiteSpace(request.AgentKey);
+        var hasModel = !string.IsNullOrWhiteSpace(request.ModelId);
+        if (hasAgent == hasModel || (!hasAgent && !string.IsNullOrWhiteSpace(request.ModelOverrideId)))
+        {
+            return Reject(McpExecutionFailureCodes.InvalidRequest, "Cannot run: provide exactly one of agent or model.");
+        }
+
+        return hasModel
+            ? await ResolveBareModelAsync(request, cancellationToken)
+            : await ResolveSavedAgentAsync(request, cancellationToken);
+    }
+
+    private async Task<McpExecutionBindingResolution> ResolveBareModelAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
+    {
+        var modelId = request.ModelId!;
+        if (!await _ggufModelStore.ExistsAsync(modelId, cancellationToken))
+        {
+            return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the requested local model is not available.");
+        }
+
+        var instructions = string.IsNullOrWhiteSpace(request.Instructions)
+            ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
+            : request.Instructions;
+        var binding = CreateBinding(modelId,
+            instructions,
+            agentDefinitionId: null,
+            agentDefinitionVersion: null,
+            [],
+            reasoningEffort: null,
+            supportsThinking: false,
+            // A bare-model binding carries no reasoning at all (ChildReasoning is null for it), so the flag is never
+            // read; keep it at the value that would be correct if it ever were.
+            reasoningBudgetEnforceable: true,
+            request.InboundContext);
+        return McpExecutionBindingResolution.Success(binding);
+    }
+
+    private async Task<McpExecutionBindingResolution> ResolveSavedAgentAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
+    {
+        var definition = await _agentDefinitionService.GetByKeyAsync(request.AgentKey!, cancellationToken);
+        if (definition is null)
+        {
+            return Reject(McpExecutionFailureCodes.AgentNotFound, "Cannot run: the requested saved agent was not found.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ModelOverrideId) && !string.IsNullOrWhiteSpace(definition.ModelProfile))
+        {
+            return Reject(McpExecutionFailureCodes.ModelOverrideNotAllowed, "Cannot run: a model override is allowed only for an agent without a pinned model.");
+        }
+
+        var modelId = definition.ModelProfile ?? request.ModelOverrideId;
+        if (string.IsNullOrWhiteSpace(modelId)
+            || !await _ggufModelStore.ExistsAsync(modelId, cancellationToken))
+        {
+            return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the agent's local model is not available.");
+        }
+
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken);
+        var (supportsThinking, supportsTools, _) = capabilities;
+        var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
+            modelId,
+            supportsTools: supportsTools,
+            honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
+            cancellationToken: cancellationToken);
+        if (resolved is null || resolved.AgentDefinitionVersion != definition.Version)
+        {
+            return Reject(McpExecutionFailureCodes.AgentConfigChanged, "Cannot run: the saved agent configuration changed while it was being resolved.");
+        }
+
+        IReadOnlyList<AllowedToolDto> allowedTools;
+        if (request.InboundContext.IsAgentic)
+        {
+            // Agentic runs auto-approve every call, which would skip the web result review: the web tools never enter the binding.
+            allowedTools = [.. resolved.AllowedTools.Where(static tool => !WebAccessToolCatalog.IsWebTool(tool.Name))];
+        }
+        else
+        {
+            var isSeededCoder = definition.Source == AgentDefinitionSource.Seeded
+                                && string.Equals(definition.SeedSlug, AgentDefaults.CoderAgentSeedSlug, StringComparison.Ordinal);
+            allowedTools = [];
+            if (isSeededCoder && !TryProjectExactCoderTools(resolved.AllowedTools, out allowedTools))
+            {
+                return Reject(McpExecutionFailureCodes.AgentConfigChanged,
+                    "Cannot run: the saved Coder capability configuration is incomplete or unsafe.");
+            }
+        }
+
+        var binding = CreateBinding(modelId,
+            resolved.ResolvedSystemPrompt,
+            definition.Id,
+            definition.Version,
+            allowedTools,
+            resolved.ReasoningEffort,
+            supportsThinking,
+            capabilities.ReasoningBudgetEnforceable,
+            request.InboundContext);
+        return McpExecutionBindingResolution.Success(binding);
+    }
+
+    private static bool TryProjectExactCoderTools(IReadOnlyList<AllowedToolDto> resolvedTools, out IReadOnlyList<AllowedToolDto> projectedTools)
+    {
+        // The shared resolver may append capabilities such as ask_user after applying the saved definition's allowed names; they are irrelevant to
+        // inbound Coder execution and never enter its binding. The three expected names stay fail-closed: each occurs exactly once, read-only.
+        var coderTools = resolvedTools.Where(static tool => CoderToolNames.Contains(tool.Name)).ToArray();
+        if (coderTools.Length != CoderToolNames.Count
+            || coderTools.Select(static tool => tool.Name).Distinct(StringComparer.Ordinal).Count() != CoderToolNames.Count
+            || coderTools.Any(static tool => tool.Category != ToolCategory.ReadLocal
+                                             || tool.Location != ToolLocation.ClientLocal
+                                             || tool.RequiresApproval))
+        {
+            projectedTools = [];
+            return false;
+        }
+
+        var toolsByName = coderTools.ToDictionary(static tool => tool.Name, StringComparer.Ordinal);
+        projectedTools = Array.AsReadOnly(CoderToolDefinition.Descriptors
+                                                             .OrderBy(static descriptor => descriptor.Name, StringComparer.Ordinal)
+                                                             .Select(descriptor => new AllowedToolDto
+                                                             {
+                                                                 Id = toolsByName[descriptor.Name].Id,
+                                                                 Name = descriptor.Name,
+                                                                 Location = ToolLocation.ClientLocal,
+                                                                 Description = descriptor.Description,
+                                                                 ParameterSchema = descriptor.ParameterSchema,
+                                                                 RequiresApproval = false,
+                                                                 Category = ToolCategory.ReadLocal
+                                                             })
+                                                             .ToArray());
+        return true;
+    }
+
+    private McpExecutionBinding CreateBinding(string modelId,
+        string instructions,
+        Guid? agentDefinitionId,
+        int? agentDefinitionVersion,
+        IReadOnlyList<AllowedToolDto> allowedTools,
+        string? reasoningEffort,
+        bool supportsThinking,
+        bool reasoningBudgetEnforceable,
+        McpInboundExecutionContext inboundContext)
+    {
+        IReadOnlyList<AllowedToolDto> immutableAllowedTools = Array.AsReadOnly(allowedTools.ToArray());
+        var canonical = new ArrayBufferWriter<byte>();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
+        using (var writer = new Utf8JsonWriter(canonical))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("version", inboundContext.IsAgentic ? AgenticFingerprintVersion : DelegateFingerprintVersion);
+            writer.WriteString("modelId", modelId);
+            writer.WriteString("instructions", instructions);
+            if (agentDefinitionId is { } definitionId)
+            {
+                writer.WriteString("agentDefinitionId", definitionId);
+            }
+            else
+            {
+                writer.WriteNull("agentDefinitionId");
+            }
+
+            if (agentDefinitionVersion is { } definitionVersion)
+            {
+                writer.WriteNumber("agentDefinitionVersion", definitionVersion);
+            }
+            else
+            {
+                writer.WriteNull("agentDefinitionVersion");
+            }
+
+            writer.WriteString("reasoningEffort", reasoningEffort);
+            writer.WriteBoolean("supportsThinking", supportsThinking);
+            if (inboundContext.IsAgentic)
+            {
+                writer.WriteString("mcpScope", inboundContext.Scope.ToString());
+                writer.WriteString("mcpKeyPrefix", inboundContext.KeyPrefix);
+            }
+
+            writer.WriteStartArray("tools");
+            foreach (var tool in immutableAllowedTools.OrderBy(static tool => tool.Name, StringComparer.Ordinal))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", tool.Name);
+                writer.WriteString("location", tool.Location.ToString());
+                writer.WriteString("category", tool.Category.ToString());
+                writer.WriteBoolean("requiresApproval", tool.RequiresApproval);
+                writer.WriteString("description", tool.Description);
+                writer.WriteString("parameterSchema", tool.ParameterSchema);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+#pragma warning restore MA0045
+
+        var fingerprint = Convert.ToHexString(HMACSHA256.HashData(_nodeKey.Key.Span, canonical.WrittenSpan));
+        return new McpExecutionBinding
+        {
+            BindingFingerprint = fingerprint,
+            ModelId = modelId,
+            Instructions = instructions,
+            AgentDefinitionId = agentDefinitionId,
+            AgentDefinitionVersion = agentDefinitionVersion,
+            AllowedTools = immutableAllowedTools,
+            ReasoningEffort = reasoningEffort,
+            SupportsThinking = supportsThinking,
+            // NOT written into the canonical fingerprint payload above: it is derived from modelId, which is already
+            // hashed, so folding it in would invalidate every recorded binding fingerprint for no added identity.
+            ReasoningBudgetEnforceable = reasoningBudgetEnforceable
+        };
+    }
+
+    private static McpExecutionBindingResolution Reject(string failureCode, string displayMessage) =>
+        McpExecutionBindingResolution.Rejected(failureCode, displayMessage);
+}

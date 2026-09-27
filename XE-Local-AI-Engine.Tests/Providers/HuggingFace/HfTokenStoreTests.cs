@@ -5,7 +5,7 @@ using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Services.HuggingFace;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 

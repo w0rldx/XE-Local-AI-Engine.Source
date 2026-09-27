@@ -42,7 +42,7 @@ public sealed class ProviderMapCoordinationArchitectureTests
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules/AddNodeWorkspaceAndAgentsExtensions.cs",
-            "XE-Local-AI-Engine.Client.Application/Services/Models/CoordinatedModelProviderMapStore.cs"
+            "XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/CoordinatedModelProviderMapStore.cs"
         };
         var violations = new List<string>();
         var scannedFiles = 0;

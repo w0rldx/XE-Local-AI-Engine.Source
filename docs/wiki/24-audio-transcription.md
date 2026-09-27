@@ -159,9 +159,9 @@ deadlock or double-count.
 ### The transcoder's ffmpeg process
 
 `FfmpegAudioTranscoder` resolves `ffmpeg` (`ffmpeg.exe` on Windows) once, at construction, by walking `PATH` split on
-`Path.PathSeparator`. That is the same algorithm the whisper.cpp provider's own probe
-(`WhisperFfmpegProbe.ResolveFromPath`) uses, mirrored rather than shared because the probe is private to that provider
-and this repository has no shared executable resolver to reuse. An operator who installs ffmpeg while the node is
+`Path.PathSeparator`, through the whisper.cpp provider's public `FfmpegExecutableLocator.ResolveFromPath` — the same
+resolver that provider's own probe (`WhisperFfmpegProbe`) caches for the runtime status, so the two cannot disagree
+about which ffmpeg exists. An operator who installs ffmpeg while the node is
 running gets the capability at the next restart — the granularity every other PATH-resolved tool here has.
 
 **Arguments are never client-derived.** Both paths are server-generated `Guid`-named files inside the engine's own

@@ -50,7 +50,7 @@ public static class TrainingServiceCollectionExtensions
 
     private sealed class NoOpTrainingRuntimeEventPublisher : ITrainingRuntimeEventPublisher
     {
-        public Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(TrainingRuntimeStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

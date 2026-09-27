@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
@@ -13,6 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -346,12 +349,32 @@ public sealed class McpServerEndpointTests
     [Test]
     public async Task GetServerTools_WhenServerDisabled_ReturnsDisabledStatus()
     {
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out var manager);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with
         {
             Id = id
         });
+        // A stale connected entry from before the server was disabled must not leak through.
+        manager.GetStatuses().Returns([
+            new McpServerConnectionStatus
+            {
+                ServerId = id,
+                Name = "Filesystem",
+                Connected = true,
+                ToolCount = 1,
+                LastError = null,
+                Tools =
+                [
+                    new McpServerToolInfo
+                    {
+                        Name = "mcp__filesystem__read_file",
+                        Description = "Reads a file.",
+                        RequiresApproval = true
+                    }
+                ]
+            }
+        ]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -367,13 +390,13 @@ public sealed class McpServerEndpointTests
     [Test]
     public async Task GetServerTools_WhenConnected_ReturnsConnectedStatus()
     {
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out var manager);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
-        service.GetConnectionStatuses().Returns([
+        manager.GetStatuses().Returns([
             new McpServerConnectionStatus
             {
                 ServerId = id,
@@ -415,13 +438,13 @@ public sealed class McpServerEndpointTests
     [Test]
     public async Task GetServerTools_WhenEnabledButNotConnected_ReturnsErrorStatus()
     {
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out var manager);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
-        service.GetConnectionStatuses().Returns([
+        manager.GetStatuses().Returns([
             new McpServerConnectionStatus
             {
                 ServerId = id,
@@ -449,13 +472,13 @@ public sealed class McpServerEndpointTests
     {
         // The server is enabled but the connection manager has not produced a status for it yet (a startup refresh is
         // still in flight). That is a healthy not-yet-connected state, not a hard failure, so it reports "connecting".
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out var manager);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
-        service.GetConnectionStatuses().Returns([]);
+        manager.GetStatuses().Returns([]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -474,13 +497,13 @@ public sealed class McpServerEndpointTests
     {
         // A status entry exists but the server is not connected and no error was recorded — still "connecting", not
         // "error". "error" is reserved for an actually recorded failure (a non-empty LastError).
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out var manager);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
-        service.GetConnectionStatuses().Returns([
+        manager.GetStatuses().Returns([
             new McpServerConnectionStatus
             {
                 ServerId = id,
@@ -506,9 +529,9 @@ public sealed class McpServerEndpointTests
     [Test]
     public async Task GetServerTools_WhenServerMissing_ReturnsNotFound()
     {
-        var service = Substitute.For<IMcpServerService>();
+        var service = CreateRealService(out var store, out _);
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((McpServerRecord?)null);
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((McpServerRecord?)null);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -529,6 +552,15 @@ public sealed class McpServerEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         await service.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
+    }
+
+    // The server-tools tests run the real service over a substituted store and connection manager, so they cover the
+    // status verdict McpServerService decides as well as its wire strings.
+    private static McpServerService CreateRealService(out IMcpServerStore store, out IMcpServerConnectionManager manager)
+    {
+        store = Substitute.For<IMcpServerStore>();
+        manager = Substitute.For<IMcpServerConnectionManager>();
+        return new McpServerService(store, manager, Options.Create(new McpOptions()), NullLogger<McpServerService>.Instance);
     }
 
     private static TestServerWebAppFactory CreateFactory(IMcpServerService service, ILocalToolOfferProvider? offerProvider = null)

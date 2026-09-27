@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Common;
 ///     Runs host-side <c>git</c> commands for the host patch apply flow.
 /// </summary>
 /// <remarks>
-///     It mirrors this assembly's only other <see cref="Process" /> use, <c>CapabilityReportComposer</c>: a CA2000-clean
-///     <c>using var</c> process with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> rather than a
-///     joined string so paths with spaces are safe, and a <see cref="System.Threading.Tasks.Task" />-based read plus wait.
+///     A CA2000-clean <c>using var</c> <see cref="Process" /> with redirected stdout/stderr,
+///     <see cref="ProcessStartInfo.ArgumentList" /> rather than a joined string so paths with spaces are safe, and a
+///     <see cref="System.Threading.Tasks.Task" />-based read plus wait.
 ///     The hardened <c>-c</c> flags from <see cref="AgentHomeGit" /> and the configuration cut from
 ///     <see cref="AgentHomeGitHardening.Environment" /> keep a host global hook or <c>.gitattributes</c> out of the apply.
 /// </remarks>

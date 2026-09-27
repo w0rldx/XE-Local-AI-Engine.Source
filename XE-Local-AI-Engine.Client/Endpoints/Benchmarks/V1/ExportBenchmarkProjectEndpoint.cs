@@ -76,7 +76,7 @@ public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRo
             Runs = runs,
             RepeatGroups = groups,
             LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
-            PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
+            PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit, export.PairwiseScores)
         }, ct);
     }
 

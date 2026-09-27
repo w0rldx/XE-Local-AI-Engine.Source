@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>

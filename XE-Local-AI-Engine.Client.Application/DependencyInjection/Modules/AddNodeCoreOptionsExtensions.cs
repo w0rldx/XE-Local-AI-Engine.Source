@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
-using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 

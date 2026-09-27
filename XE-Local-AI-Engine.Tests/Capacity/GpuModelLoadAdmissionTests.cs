@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 using System.Diagnostics.Metrics;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
 

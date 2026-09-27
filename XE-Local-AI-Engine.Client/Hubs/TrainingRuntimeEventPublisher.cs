@@ -12,27 +12,14 @@ internal sealed class TrainingRuntimeEventPublisher : ITrainingRuntimeEventPubli
         _hubContext = hubContext;
     }
 
-    public async Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public async Task PublishStatusAsync(TrainingRuntimeStatusEvent statusEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
         await _hubContext.Clients.All.SendAsync(TrainingRuntimeHubEvents.StatusChanged,
-            TrainingRuntimeStatusHubMessage.FromContract(statusEvent), cancellationToken);
+            ToHubMessage(statusEvent), cancellationToken);
     }
-}
 
-/// <summary>
-///     Stable SignalR wire shape. The provider contract stays transport-agnostic; this projection keeps its CLR types
-///     from leaking onto the wire and can absorb new fields without changing the provider event contract.
-/// </summary>
-internal sealed class TrainingRuntimeStatusHubMessage
-{
-    public required string Phase { get; init; }
-    public required IReadOnlyList<string> AppendedLogLines { get; init; }
-    public required long AppendedLogStartSequence { get; init; }
-    public required bool Terminal { get; init; }
-    public string? SanitizedError { get; init; }
-
-    public static TrainingRuntimeStatusHubMessage FromContract(TrainingRuntimeStatusHubEvent statusEvent)
+    private static TrainingRuntimeStatusHubMessage ToHubMessage(TrainingRuntimeStatusEvent statusEvent)
     {
         return new TrainingRuntimeStatusHubMessage
         {

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -35,7 +36,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_IsDenseDescendingAcrossTheWholeProject_NotThePage()
     {
         await using var context = await CreateDatabaseAsync("rank-dense.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var ninety = await ScoredRunAsync(store, project.Id, 90);
         var seventyFirst = await ScoredRunAsync(store, project.Id, 70);
@@ -58,7 +59,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_UserOverrideOutranksTheJudgeAndAlwaysCounts()
     {
         await using var context = await CreateDatabaseAsync("rank-user-override.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var judged = await JudgedRunAsync(store, project, revision, score: 40, executionKey: "key-a");
 
@@ -80,7 +81,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesJudgingsOutsideTheCurrentCohort()
     {
         await using var context = await CreateDatabaseAsync("rank-cohort.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         // Ranked: it defines the cohort key.
@@ -111,7 +112,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesAStaleCohortGeneration()
     {
         await using var context = await CreateDatabaseAsync("rank-generation.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
@@ -132,7 +133,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesAJudgingUnderAnOutdatedPolicy()
     {
         await using var context = await CreateDatabaseAsync("rank-policy.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
@@ -157,7 +158,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // completely useless, because scoring it is not what it needs. Only LoadRankingAsync applied the run-level
         // exclusions, so the single-run read and every write-returning path still reported the judge-derived reason.
         await using var context = await CreateDatabaseAsync("truncated-beats-no-score.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var runId = await StartRunAsync(store, project.Id);
         var claim = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -189,7 +190,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesATruncatedRunEvenWhenTheJudgeScoredItWell()
     {
         await using var context = await CreateDatabaseAsync("rank-truncated.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         // Both judgings are in the live cohort and both scored well. Only the complete one is a comparable measurement.
@@ -223,7 +224,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesASilentlyIncompleteRunTheSameWayItExcludesATruncatedOne()
     {
         await using var context = await CreateDatabaseAsync("rank-incomplete.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a");
@@ -252,7 +253,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_UserScoreStillRanksATruncatedRun()
     {
         await using var context = await CreateDatabaseAsync("rank-truncated-override.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
 
         // The operator override wins over truncation exactly as it wins over every judge-based exclusion.
@@ -274,7 +275,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task Rank_ExcludesAWarmUpRunEvenWhenTheOperatorScoredIt()
     {
         await using var context = await CreateDatabaseAsync("rank-warmup.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
 
         // A warm-up is the ONE exclusion an operator score does not override: it exists to absorb the first-launch cost
@@ -304,7 +305,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     public async Task ListRuns_FiltersByModelGroupAndByScoredWithoutChangingTheRanking()
     {
         await using var context = await CreateDatabaseAsync("rank-filters.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var scored = await ScoredRunAsync(store, project.Id, 60, fingerprint: Fingerprint('a'));
         var otherModel = await ScoredRunAsync(store, project.Id, 90, fingerprint: Fingerprint('b'));
@@ -331,7 +332,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // as having an incomplete description of one, and execution-identity-incomplete would unrank it forever. The
         // constant key makes every such attempt of one revision share a cohort deterministically.
         await using var context = await CreateDatabaseAsync("rank-verified-sentinel.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var high = await JudgedRunAsync(store, project, revision, score: 90, executionKey: null,
@@ -358,7 +359,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // The key is written once, at launch. A success command carrying the sentinel must not be able to repair or
         // replace a measured identity — that is how two different executions would end up in one cohort.
         await using var context = await CreateDatabaseAsync("rank-verified-no-overwrite.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var measured = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "measured-key",
@@ -425,7 +426,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // The export used to page, which recomputed the whole-project ranking per page to produce the same answer each
         // time. Ranking once is only safe while the one-call read is INDISTINGUISHABLE from the paged one.
         await using var context = await CreateDatabaseAsync("rank-list-all.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var high = await ScoredRunAsync(store, project.Id, score: 90);
         var low = await ScoredRunAsync(store, project.Id, score: 10);

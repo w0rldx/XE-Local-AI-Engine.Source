@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Catalog;
 
+using XE_Local_AI_Engine.Client.Services.Images.Fit;
+
 /// <summary>The curated image-model catalog document (schema v1).</summary>
 /// <remarks>
 ///     Bundled as an embedded resource (<c>image-model-catalog.seed.json</c>) and validated through
@@ -68,4 +70,23 @@ public sealed record ImageModelCatalogValidationResult
         ArgumentNullException.ThrowIfNull(errors);
         return new ImageModelCatalogValidationResult(isValid: false, document: null, errors);
     }
+}
+
+/// <summary>The catalog as served: every entry joined with its installed state and fit verdict.</summary>
+public sealed class ImageModelCatalogView
+{
+    public required string CatalogVersion { get; init; }
+
+    public required IReadOnlyList<ImageModelCatalogEntryView> Entries { get; init; }
+}
+
+/// <summary>One catalog entry plus whether it is installed and how its file-set fits this box.</summary>
+public sealed class ImageModelCatalogEntryView
+{
+    public required ImageModelCatalogEntry Entry { get; init; }
+
+    public required bool IsInstalled { get; init; }
+
+    /// <summary><see cref="ImageModelFitVerdict.Unknown" /> when the hardware probe failed.</summary>
+    public required ImageModelFitEstimate Fit { get; init; }
 }

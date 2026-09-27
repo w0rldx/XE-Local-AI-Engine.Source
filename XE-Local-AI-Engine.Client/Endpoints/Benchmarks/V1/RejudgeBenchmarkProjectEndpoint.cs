@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Moves the project's rank cohort to the current judge runtime by re-judging every succeeded run.</summary>
 public sealed class RejudgeBenchmarkProjectEndpoint : Endpoint<RejudgeBenchmarkProjectRequest, BenchmarkJudgeChangeResponse>

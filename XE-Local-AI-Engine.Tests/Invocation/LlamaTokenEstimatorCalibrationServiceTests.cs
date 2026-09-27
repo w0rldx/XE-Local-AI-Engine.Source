@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
@@ -111,9 +112,9 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     }
 
     [Test]
-    public void CreateProductionHandler_DisablesRedirectsAndAmbientProxy()
+    public void CreateTokenizeHandler_DisablesRedirectsAndAmbientProxy()
     {
-        using var handler = LlamaTokenEstimatorCalibrationService.CreateProductionHandler();
+        using var handler = LlamaServerNativeClient.CreateTokenizeHandler();
 
         AssertEx.False(handler.AllowAutoRedirect);
         AssertEx.False(handler.UseProxy);
@@ -488,7 +489,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         int? workCapacity = null,
         ILlamaServerProcessSupervisor? supervisor = null)
     {
-        return new LlamaTokenEstimatorCalibrationService(client,
+        return new LlamaTokenEstimatorCalibrationService(new LlamaServerNativeClient(Substitute.For<IHttpClientFactory>(), client),
             store,
             supervisor ?? LeasingSupervisor(),
             logger ?? NullLogger<LlamaTokenEstimatorCalibrationService>.Instance,

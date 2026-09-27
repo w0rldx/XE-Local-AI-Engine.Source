@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 
 /// <summary>
 ///     Single-consumer durable FIFO for dataset generation — the <c>BenchmarkQueueHostedService</c> shape

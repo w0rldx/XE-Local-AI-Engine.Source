@@ -135,7 +135,7 @@ public sealed class ApplicationDbContextFenceTests
     /// <summary>One live holder per hiding shape the fence has to see. Each is verified by reading the named type.</summary>
     private static readonly (string Shape, string TypeName)[] ShapesThatMustBeSeen =
     [
-        ("a constructor parameter", "XE_Local_AI_Engine.Client.Services.Knowledge.FtsSearch"),
+        ("a constructor parameter", "XE_Local_AI_Engine.Client.Services.Knowledge.Implementation.FtsSearch"),
         ("a GetRequiredService<T> call inside an async method body",
             "XE_Local_AI_Engine.Client.Services.Chat.NodeChatPersistenceWriter"),
         ("a lambda parameter of the context type",

@@ -45,8 +45,8 @@ The architecture does **not** need to embed llama.cpp into .NET, replace llama.c
 
 ### Fit, launch, and lifecycle
 
-- `ProcessContextAllocationResolver` chooses a stable context tier, models weights/KV/overhead, and permits only bounded OOM down-tier retries. Its estimator deliberately uses f16 KV sizing because optimized runtime KV can fall back (`XE-Local-AI-Engine.Client.Application/Services/Capacity/ProcessContextAllocationResolver.cs:102-245,417-474`; the conservative invariant is documented in `docs/agent-knowledge.md`).
-- `InferenceProfileService` already implements explore -> benchmark -> freeze/invalidate for installed models and fingerprints the runtime/model/launch semantics (`XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceProfileService.cs:94-330`). It benchmarks one explored profile; it is not yet a bounded multi-candidate tuner.
+- `ProcessContextAllocationResolver` chooses a stable context tier, models weights/KV/overhead, and permits only bounded OOM down-tier retries. Its estimator deliberately uses f16 KV sizing because optimized runtime KV can fall back (`XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/ProcessContextAllocationResolver.cs:102-245,417-474`; the conservative invariant is documented in `docs/agent-knowledge.md`).
+- `InferenceProfileService` already implements explore -> benchmark -> freeze/invalidate for installed models and fingerprints the runtime/model/launch semantics (`XE-Local-AI-Engine.Client.Application/Services/Inference/Implementation/InferenceProfileService.cs:94-330`). It benchmarks one explored profile; it is not yet a bounded multi-candidate tuner.
 - The supervisor emits localhost-only serving, `--parallel 1`, and `--no-warmup` (`XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.cs:1888-1920`). Single-slot is intentional: unused parallel slots would multiply KV allocation and push weights out of VRAM.
 - Chat launches add Jinja tool support, optional mmproj, prefix reuse, bounded host prompt-cache RAM, and speculation. Embedding and rerank launches use role-specific endpoints and disable host prompt cache (`XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.cs:1932-1997`).
 - GPU explore uses `--fit on`; frozen profiles replay exact placement/KV/FA arguments. GPU launches expose metrics. CPU launches get context and CPU thread policy but currently no metrics (`XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.cs:2016-2052`).
@@ -131,7 +131,7 @@ Obtain independent global-pressure evidence for AMD/Intel while preserving llama
 
 **Current XE behavior**
 
-`HardwareProfiler` obtains NVIDIA total/free bytes via `nvidia-smi`. Linux AMD/Intel returns unknown VRAM; the Windows non-NVIDIA DXGI seam is also deferred (`XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs:110-140,197-206,302-321`). Unknown VRAM forces `GpuAccelAvailable=false`. The runtime audit separately calls `--list-devices`, and the optimizer already records global-free and llama.cpp process-budget readings independently (`XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceProfileService.cs:305-317`). The context allocator requires stable host evidence before consuming the process budget (`XE-Local-AI-Engine.Client.Application/Services/Capacity/ProcessContextAllocationResolver.cs:417-474`). This separation is load-bearing: under WDDM, XE measured 492 MiB globally free while llama.cpp reported a 29,697 MiB process residency budget ([WSL2 hardware and VRAM readers](../agent-knowledge-evidence.md#wsl2-hardware-and-vram-readers)).
+`HardwareProfiler` obtains NVIDIA total/free bytes via `nvidia-smi`. Linux AMD/Intel returns unknown VRAM; the Windows non-NVIDIA DXGI seam is also deferred (`XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs:110-140,197-206,302-321`). Unknown VRAM forces `GpuAccelAvailable=false`. The runtime audit separately calls `--list-devices`, and the optimizer already records global-free and llama.cpp process-budget readings independently (`XE-Local-AI-Engine.Client.Application/Services/Inference/Implementation/InferenceProfileService.cs:305-317`). The context allocator requires stable host evidence before consuming the process budget (`XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/ProcessContextAllocationResolver.cs:417-474`). This separation is load-bearing: under WDDM, XE measured 492 MiB globally free while llama.cpp reported a 29,697 MiB process residency budget ([WSL2 hardware and VRAM readers](../agent-knowledge-evidence.md#wsl2-hardware-and-vram-readers)).
 
 **Proposed change**
 
@@ -215,7 +215,7 @@ Correlate existing benchmark metrics with missing load/queue/placement/speculati
 
 **Current XE behavior**
 
-XE already persists a substantial benchmark record: PP/TG, TTFT, total and tool-loop latency, a cache-hit ratio derived from cold-versus-warm prompt-token deltas, separate global-free/process-budget minima, peak process RAM, pooled-role latency/throughput, and correctness fields (`XE-Local-AI-Engine.Client.Application/Services/Inference/IInferenceBenchmarkHarness.cs:184-232`; cache derivation at `XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceBenchmarkHarness.cs:759-768`). GPU launches expose metrics; CPU launches omit them. The remaining gap is not another general benchmark store: it is correlation of cold load/readiness, queue/deferred time, actual placement, speculation acceptance, and comparable production phases with the frozen profile.
+XE already persists a substantial benchmark record: PP/TG, TTFT, total and tool-loop latency, a cache-hit ratio derived from cold-versus-warm prompt-token deltas, separate global-free/process-budget minima, peak process RAM, pooled-role latency/throughput, and correctness fields (`XE-Local-AI-Engine.Client.Application/Services/Inference/IInferenceBenchmarkHarness.cs:184-232`; cache derivation at `XE-Local-AI-Engine.Client.Application/Services/Inference/Implementation/InferenceBenchmarkHarness.cs:759-768`). GPU launches expose metrics; CPU launches omit them. The remaining gap is not another general benchmark store: it is correlation of cold load/readiness, queue/deferred time, actual placement, speculation acceptance, and comparable production phases with the frozen profile.
 
 **Proposed change**
 
@@ -257,7 +257,7 @@ Extend explore -> benchmark -> freeze into a small, one-variable-at-a-time candi
 
 **Current XE behavior**
 
-`InferenceProfileService` explores one auto-fit result, benchmarks that result, and lets the operator freeze it (`XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceProfileService.cs:94-330`). Per-model extra llama.cpp arguments exist for advanced users, but the application does not automatically compare a small set of alternatives.
+`InferenceProfileService` explores one auto-fit result, benchmarks that result, and lets the operator freeze it (`XE-Local-AI-Engine.Client.Application/Services/Inference/Implementation/InferenceProfileService.cs:94-330`). Per-model extra llama.cpp arguments exist for advanced users, but the application does not automatically compare a small set of alternatives.
 
 **Proposed change**
 

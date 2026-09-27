@@ -321,6 +321,12 @@ migrations asserts nothing. Either way the file is in WAL mode — `EnsureCreate
 build does — and the at-rest scans stay honest because `SqliteFileProbe.ReadAllBytesAsync` closes the last
 connection first, which checkpoints the log back into the main file.
 
+That checkpoint only happens if the fixture opened the file with the exact bare `Data Source=<path>` string:
+Microsoft.Data.Sqlite pools by the exact string, so a decorated one (`;Cache=Shared`, a query parameter) leaves its
+own pool untouched and the at-rest scan reads stale bytes. `SqliteFileProbeConnectionStringGuardTests`
+(`Architecture/`) scans every connection-string literal in the backend test projects, the shared context factories
+included, and fails on a decorated one unless it is listed there with the reason it never reaches the probe.
+
 Keep the from-empty replay (`MigrationSchemaProbe.MigrateChatAsync` / `MigrateIdentityAsync`) where the replay is
 the thing under test, or where the assertion can see how the file was produced: a test that asserts the pending
 migration set, that reads the migrator's own pre-migration backup file, that asserts a file was created, or that

@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -40,7 +41,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task ActivatePolicy_CreatesRevisionOneAndPointsTheProjectAtIt()
     {
         await using var context = await CreateDatabaseAsync("activate-first.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
 
         var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
@@ -63,7 +64,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task ActivatePolicy_SameHash_IsANoOpThatDoesNotResetTheCohort()
     {
         await using var context = await CreateDatabaseAsync("activate-noop.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var first = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
         AssertEx.True(await store.TryPromoteReferenceExecutionKeyAsync(first.Revision.Id, first.Revision.CohortGeneration, "key-a"));
@@ -82,7 +83,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task ActivatePolicy_NewThenOldHash_ReusesTheOriginalRevisionAndResetsItsCohort()
     {
         await using var context = await CreateDatabaseAsync("activate-reuse.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var first = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
         AssertEx.True(await store.TryPromoteReferenceExecutionKeyAsync(first.Revision.Id, first.Revision.CohortGeneration, "key-a"));
@@ -106,7 +107,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task DisablePolicy_ClearsThePointerAndKeepsTheRevisionHistory()
     {
         await using var context = await CreateDatabaseAsync("disable.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         _ = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
 
@@ -120,7 +121,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task ActivateAndDisable_WhileAnAttemptIsActive_AreRefusedWithoutWritingAnything()
     {
         await using var context = await CreateDatabaseAsync("activate-blocked.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         _ = await SucceedRunAsync(store, project, revision);
 
@@ -145,7 +146,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task MarkPrimarySucceeded_WithACurrentPolicy_InsertsAttemptOneAndItsWorkItemAtomically()
     {
         await using var context = await CreateDatabaseAsync("attempt-one.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var run = await SucceedRunAsync(store, project, revision);
@@ -165,7 +166,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task MarkPrimarySucceeded_WithoutACurrentPolicy_InsertsNoAttemptAndQueuesNoJudgeWork()
     {
         await using var context = await CreateDatabaseAsync("attempt-none.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var run = await store.StartRunAsync(NewRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -181,7 +182,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task MarkPrimarySucceeded_WhenThePolicyMovedUnderTheRun_RollsBackAndThrows()
     {
         await using var context = await CreateDatabaseAsync("attempt-policy-changed.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(NewRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -206,7 +207,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task MarkPrimarySucceeded_WithoutAResolvedJudgeRuntime_InsertsAFailedAttemptAndATerminalWorkItem()
     {
         await using var context = await CreateDatabaseAsync("attempt-unresolved.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(NewRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -240,7 +241,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task EnqueueJudgeAttempt_AppliesEveryRefusalRuleAndForceBypassesTheAlreadyAppliedGuard()
     {
         await using var context = await CreateDatabaseAsync("enqueue-rules.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunAsync(store, project, revision);
 
@@ -292,7 +293,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task EnqueueJudgeAttempt_WhenTheCohortGenerationMoved_IsAllowedWithoutForce()
     {
         await using var context = await CreateDatabaseAsync("enqueue-stale-generation.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunAsync(store, project, revision);
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -329,7 +330,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task SetUserScore_AcceptsTheWholeRangeAndClearsWithNull()
     {
         await using var context = await CreateDatabaseAsync("user-score.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var run = await store.StartRunAsync(NewRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -352,7 +353,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         Guid projectId;
         await using (var context = await CreateDatabaseAsync(databasePath, create: true))
         {
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var (project, revision) = await CreateJudgeProjectAsync(store);
             projectId = project.Id;
             var run = await SucceedRunAsync(store, project, revision);
@@ -391,7 +392,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task RecoverOnStartup_MarksRunningAttemptsFailedWithoutTouchingResults()
     {
         await using var context = await CreateDatabaseAsync("recover-attempts.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunAsync(store, project, revision);
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -410,7 +411,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task JudgeSuccess_PromotesTheCohortOnTheFirstSuccess_NotAtReadiness()
     {
         await using var context = await CreateDatabaseAsync("promote-on-success.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunAsync(store, project, revision);
 
@@ -445,7 +446,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task RunJudgeView_ReportsWhyARunIsNotRanked()
     {
         await using var context = await CreateDatabaseAsync("judge-view.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunAsync(store, project, revision);
 
@@ -491,7 +492,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task RunJudgeView_ReportsACancelledJudgingSeparatelyFromAFailedOne()
     {
         await using var context = await CreateDatabaseAsync("judge-view-cancelled.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var cancelledRun = await SucceedRunAsync(store, project, revision);
@@ -520,7 +521,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task RunJudgeView_ReportsAnUnusableVerifierSeparatelyFromAFailedJudging()
     {
         await using var context = await CreateDatabaseAsync("judge-view-verifier-unavailable.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var run = await SucceedRunAsync(store, project, revision);
@@ -544,7 +545,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task RunJudgeView_ReportsAnUnmatchedItemOverrideSeparatelyFromAFailedJudging()
     {
         await using var context = await CreateDatabaseAsync("judge-view-override-unmatched.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var run = await SucceedRunAsync(store, project, revision);
@@ -564,7 +565,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task ActivatePolicy_WithACohortSeed_EnqueuesEveryEligibleRunInTheNewGeneration()
     {
         await using var context = await CreateDatabaseAsync("activate-cohort.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var eligible = new List<Guid>();
         for (var index = 0; index < 3; index++)
@@ -605,7 +606,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     {
         var interceptor = new FailingSaveInterceptor();
         await using var context = await CreateDatabaseAsync("activate-cohort-rollback.sqlite", interceptor);
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunWithoutJudgeRuntimeAsync(store, project.Id);
         var version = await CurrentVersionAsync(store, project.Id);
@@ -629,7 +630,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task BeginProjectRejudge_WithACohortSeed_EnqueuesTheSetAndRefusesAStaleRevision()
     {
         await using var context = await CreateDatabaseAsync("rejudge-cohort.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await SucceedRunWithoutJudgeRuntimeAsync(store, project.Id);
 
@@ -666,7 +667,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task CreateProject_WithAJudgePolicy_ActivatesItInTheSameTransaction()
     {
         await using var context = await CreateDatabaseAsync("create-with-judge.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
 
         var project = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput
         {
@@ -685,7 +686,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task CreateProject_WhenTheJudgePolicyIsRejected_PersistsNoProjectAtAll()
     {
         await using var context = await CreateDatabaseAsync("create-with-judge-rollback.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var input = NewProject();
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
@@ -704,7 +705,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task UpdateProject_WithAJudgeChange_AppliesBothHalvesOrNeither()
     {
         await using var context = await CreateDatabaseAsync("update-with-judge.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var created = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput
         {
             PolicyJson = PolicyA,
@@ -750,7 +751,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task UpdateProject_WithADisablingChange_TurnsJudgingOffWithTheEdit()
     {
         await using var context = await CreateDatabaseAsync("update-disables-judge.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var created = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput
         {
             PolicyJson = PolicyA,
@@ -838,7 +839,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task TryPromoteReferenceExecutionKey_PromotesOnceAndRefusesStaleGenerations()
     {
         await using var context = await CreateDatabaseAsync("promote-cas.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());
         var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
         var revision = activation.Revision;
@@ -874,7 +875,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         Guid survivorId;
         await using (var context = await CreateDatabaseAsync(databasePath, create: true))
         {
-            var store = new BenchmarkStore(context, TimeProvider.System);
+            var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
             var (project, revision) = await CreateJudgeProjectAsync(store);
             projectId = project.Id;
             _ = await store.CreateTaskItemAsync(project.Id, project.Version, new BenchmarkTaskItemInput
@@ -952,7 +953,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     public async Task DeleteProject_WhileARunIsStillInPlay_IsRefusedAndDeletesNothing(bool claimTheRun)
     {
         await using var context = await CreateDatabaseAsync(claimTheRun ? "cascade-running.sqlite" : "cascade-queued.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var finished = await SucceedRunAsync(store, project, revision);
         var live = await store.StartRunAsync(NewRun(AssertEx.NotNull(await store.GetProjectAsync(project.Id))));

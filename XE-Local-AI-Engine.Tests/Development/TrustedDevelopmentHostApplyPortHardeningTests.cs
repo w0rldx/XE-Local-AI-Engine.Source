@@ -6,6 +6,7 @@ using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

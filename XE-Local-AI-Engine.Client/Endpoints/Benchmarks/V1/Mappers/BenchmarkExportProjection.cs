@@ -12,7 +12,7 @@ internal static class BenchmarkExportProjection
     /// </summary>
     public const int SchemaVersion = 4;
 
-    public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit) =>
+    public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, IReadOnlyList<BenchmarkPairwiseScoreEntry> scores) =>
         fit is null
             ? null
             : new BenchmarkExportPairwiseFitResponse
@@ -28,7 +28,7 @@ internal static class BenchmarkExportProjection
                 FittedSetJson = fit.FittedSetJson,
                 Scores =
                 [
-                    .. BenchmarkExportPairwise.Scores(fit)
+                    .. BenchmarkExportPairwise.ByRun(scores)
                                               .Values.OrderBy(static entry => entry.RunId)
                                               .Select(static entry => new BenchmarkExportPairwiseScoreResponse
                                               {

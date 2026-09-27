@@ -86,7 +86,8 @@ Three layers, bottom up.
 **`Services/Containers/` — the engine-owned runtime layer.** `IContainerRuntime` is the whole daemon surface this
 feature uses: pull with progress, create, start, stop, remove, inspect, list, network create and remove, bounded log
 read. `IContainerRuntimeResolver` answers *which* runtime and *is it usable*; `IContainerRuntimeFactory` builds the
-client. `DockerDotNetRuntimeClient` is the only implementation, and `FakeDockerRuntimeClient` moves in lockstep with
+client. `DockerDotNetRuntimeClient` is the only implementation; the test-side `FakeDockerRuntimeClient` (in
+`XE-Local-AI-Engine.Tests/Testing/`) moves in lockstep with
 it so the suites can drive the same guards without a daemon. The layer is deliberately inert on its own: nothing
 resolves it until the External Apps service does.
 

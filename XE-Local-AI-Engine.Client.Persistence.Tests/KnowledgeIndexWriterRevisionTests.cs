@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     Revision compare-and-swap coverage for the final knowledge-index write. Repository updates keep a stable document

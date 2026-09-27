@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.WebAccess;
 /// <summary>A single tool-approval request surfaced for the in-flight invocation.</summary>
 /// <remarks>
 ///     Mirrors <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot drift. Distinct
-///     from <see cref="XE_Local_AI_Engine.Client.Models.ApprovalRequestPayload" /> (the platform-hub / invocation-monitor contract, which
+///     from <see cref="ApprovalRequestPayload" /> (the platform-hub / invocation-monitor contract, which
 ///     carries only the invocation id, request id and description): this payload additionally carries the tool-call <see cref="CallId" /> and
 ///     <see cref="ToolName" />, so the local chat stream can correlate the pending approval to the exact tool-call card the model waits on.
 /// </remarks>

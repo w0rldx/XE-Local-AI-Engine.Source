@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.LlamaCpp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>

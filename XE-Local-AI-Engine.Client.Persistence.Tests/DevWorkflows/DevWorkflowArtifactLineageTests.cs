@@ -180,6 +180,68 @@ public sealed class DevWorkflowArtifactLineageTests
     }
 
     /// <summary>
+    ///     The run view's grouped stale-input read: exactly the node runs that used an artifact now flagged stale, once
+    ///     each. Consuming the SUPERSEDED version is not a stale input; consuming what was built from it is.
+    /// </summary>
+    [Test]
+    public async Task ListNodeRunIdsWithStaleInputs_NamesOnlyTheNodeRunsThatConsumedAStaleArtifact()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
+
+        var producerId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var notesId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        var auditId = Guid.NewGuid();
+        var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = seed.RunVersion,
+            OperationId = Guid.NewGuid(),
+            NodeRuns =
+            [
+                Seed(producerId, "specify"),
+                Seed(planId, "plan"),
+                Seed(notesId, "notes"),
+                Seed(reviewId, "review"),
+                Seed(auditId, "audit")
+            ]
+        });
+
+        var specificationV1 = Guid.NewGuid();
+        var result = await AppendAsync(store, seed.RunId, specificationV1, producerId, version.Version, "specification", "spec-1");
+        result = await UseAsync(store, seed.RunId, planId, result.Version, specificationV1);
+        var plan = Guid.NewGuid();
+        result = await AppendAsync(store, seed.RunId, plan, planId, result.Version, "plan", "plan-1");
+        var notes = Guid.NewGuid();
+        result = await AppendAsync(store, seed.RunId, notes, notesId, result.Version, "notes", "notes-1");
+        // review reads the plan (about to go stale) AND the fresh notes; audit reads only the fresh notes.
+        result = await UseAsync(store, seed.RunId, reviewId, result.Version, plan, notes);
+        result = await UseAsync(store, seed.RunId, auditId, result.Version, notes);
+
+        AssertEx.Equal(expected: 0, (await store.ListNodeRunIdsWithStaleInputsAsync(seed.RunId)).Count, "nothing is stale before a supersession.");
+
+        var specificationV2 = Guid.NewGuid();
+        var superseding = await AppendAsync(store, seed.RunId, specificationV2, producerId, result.Version, "specification", "spec-2");
+        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
+        {
+            RunId = seed.RunId,
+            SupersededArtifactId = specificationV1,
+            SupersedingArtifactId = specificationV2,
+            ExpectedVersion = superseding.Version
+        });
+
+        var stale = await store.ListNodeRunIdsWithStaleInputsAsync(seed.RunId);
+
+        AssertEx.Equal(expected: 1, stale.Count, "one node run consumed a stale artifact, and it is named once despite consuming two.");
+        AssertEx.Equal(reviewId, stale[0], "only the reader of the stale plan; the plan's own author read the superseded version, not a stale one.");
+        AssertEx.Equal(expected: 0, (await store.ListNodeRunIdsWithStaleInputsAsync(Guid.NewGuid())).Count, "another run's read sees none of this run's uses.");
+    }
+
+    /// <summary>
     ///     And it must answer for an event written BEFORE the detail casing was fixed, because the log is append-only.
     ///     <para>
     ///         Every supersession recorded up to FX-D carries <c>{"SupersededArtifactId":…}</c>; a case-sensitive read
@@ -390,6 +452,24 @@ public sealed class DevWorkflowArtifactLineageTests
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_artifact_uses"),
             "A repeated capture must not duplicate the consumed-by edge.");
     }
+
+    private static DevWorkflowNodeRunSeed Seed(Guid nodeRunId, string nodeKey) =>
+        new()
+        {
+            NodeRunId = nodeRunId,
+            NodeKey = nodeKey,
+            NodeType = DevWorkflowNodeType.Agent
+        };
+
+    private static Task<DevWorkflowMutationResult> UseAsync(IDevWorkflowStore store, Guid runId, Guid nodeRunId, long expectedVersion, params Guid[] artifactIds) =>
+        store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand
+        {
+            RunId = runId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = expectedVersion,
+            OperationId = Guid.NewGuid(),
+            ArtifactIds = artifactIds
+        });
 
     private static Task<DevWorkflowMutationResult> AppendAsync(IDevWorkflowStore store,
         Guid runId,

@@ -23,6 +23,7 @@ public sealed class DeleteConversationFileEndpoint : Endpoint<DeleteConversation
     {
         Delete(LocalApiRoutes.LocalChat.ConversationUploadById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(DeleteConversationUploadRequest req, CancellationToken ct)

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -35,7 +36,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_DispatchesFidelityAndComparisonInFifoOrder()
     {
         await using var context = await CreateSchemaAsync("claim-four-kinds.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
 
@@ -65,7 +66,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_FidelityItemNamingNoAttempt_ThrowsNotFound()
     {
         await using var context = await CreateSchemaAsync("claim-fidelity-orphan.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -91,7 +92,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_FidelityAttemptAlreadyTerminal_ThrowsInvalidFidelityTransition()
     {
         await using var context = await CreateSchemaAsync("claim-fidelity-terminal.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -109,7 +110,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_ComparisonAlreadyTerminal_ThrowsInvalidComparisonTransition()
     {
         await using var context = await CreateSchemaAsync("claim-comparison-terminal.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -129,7 +130,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_Fidelity_ProjectsRunningOnTheRunAndTerminalizesBack()
     {
         await using var context = await CreateSchemaAsync("claim-fidelity-running.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -164,7 +165,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task ClaimNextAsync_Comparison_LeavesBothRunsVersionsAlone()
     {
         await using var context = await CreateSchemaAsync("claim-comparison-versions.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var first = await store.StartRunAsync(CreateRun(project));
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
@@ -191,7 +192,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task Recovery_RunningFidelityAttempt_FailsTheRunsFidelityStatusAndKeepsTheNumbers()
     {
         await using var context = await CreateSchemaAsync("recover-fidelity.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -237,7 +238,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task DeleteRunAsync_RemovesTheRunsFidelityAttempts()
     {
         await using var context = await CreateSchemaAsync("delete-fidelity-attempts.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -274,7 +275,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task RequeueFidelityAsync_PutsTheClaimedItemBackInTheQueueRatherThanFailingIt()
     {
         await using var context = await CreateSchemaAsync("requeue-fidelity.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -302,7 +303,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task RequeueFidelityAsync_OnAnAlreadyTerminalAttempt_ChangesNothing()
     {
         await using var context = await CreateSchemaAsync("requeue-fidelity-terminal.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -325,7 +326,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task Recovery_RunningComparison_TerminalizesFailed()
     {
         await using var context = await CreateSchemaAsync("recover-comparison.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -352,7 +353,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task Recovery_OrphanRunningAttemptWithTerminalWorkItem_IsSwept()
     {
         await using var context = await CreateSchemaAsync("recover-orphans.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -392,7 +393,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task FidelityProjection_IsOnlyRefreshedFromTheHighestSucceededAttempt()
     {
         await using var context = await CreateSchemaAsync("fidelity-projection.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -475,7 +476,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task Freeze_WithFidelityEnabled_QueuesNothingAndMarksTheCellsItWillNeverMeasure()
     {
         await using var context = await CreateSchemaAsync("fidelity-freeze.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
 
         context.ChangeTracker.Clear();
@@ -524,7 +525,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task Fidelity_IsSeededOnPrimarySuccessAndOnNoOtherOutcome()
     {
         await using var context = await CreateSchemaAsync("fidelity-on-success.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
 
         context.ChangeTracker.Clear();
@@ -576,7 +577,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task EnqueueFidelityAsync_WhileOneIsAlreadyQueued_IsRefused()
     {
         await using var context = await CreateSchemaAsync("fidelity-double-enqueue.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -597,7 +598,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     public async Task CountActiveWorkAsync_CountsEveryKindOfOneProjectAndNothingTerminalOrForeign()
     {
         await using var context = await CreateSchemaAsync("count-active-work.sqlite");
-        var store = new BenchmarkStore(context, TimeProvider.System);
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version);
         _ = await store.EnqueueFidelityAsync(runs[0].Id, "ppl");

@@ -429,7 +429,7 @@ public sealed partial class InvocationRunner
     ///     copy is cheaper than the project sharing them would take. A pure rename of fields — no trust decision is
     ///     taken or reversed, the resolver having already fenced an imported skill's body and resources.
     /// </remarks>
-    private static IReadOnlyList<InvocationSkill>? MapSkills(IReadOnlyList<ResolvedSkill>? skills)
+    internal static IReadOnlyList<InvocationSkill>? MapSkills(IReadOnlyList<ResolvedSkill>? skills)
     {
         if (skills is not { Count: > 0 })
         {

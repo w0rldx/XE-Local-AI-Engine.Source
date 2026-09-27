@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 
 using FastEndpoints;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -38,14 +39,13 @@ public sealed class ListDevWorkflowRunEventsEndpoint : Endpoint<DevWorkflowRunEv
         // missing run is a quiet one is the shape a client cannot tell apart from "nothing happened yet".
         _ = await _runQueries.GetRunAsync(req.RunId, ct);
 
-        // One over the limit, so "there is more" is observed rather than inferred from a full page.
-        var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct);
-        var page = events.Take(req.Limit).Select(DevWorkflowContractMapper.ToResponse).ToList();
+        var (events, hasMore) = await ReplayWindow.ReadAsync(req.Limit, limit => _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, limit, ct));
+        var page = events.Select(DevWorkflowContractMapper.ToResponse).ToList();
         await Send.OkAsync(new ListDevWorkflowRunEventsResponse
             {
                 Items = page,
                 LastSequence = DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
-                HasMore = events.Count > req.Limit
+                HasMore = hasMore
             },
             ct);
     }

@@ -5,8 +5,10 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -217,6 +219,62 @@ public sealed class BenchmarkCompareEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, status);
     }
 
+    [Test]
+    public async Task Comparisons_WithAnUnreadableFitScoresBlob_ServeTheFitWithNoScoresAndWarn()
+    {
+        // Decision C-b: a corrupt persisted blob is "no pairwise score" on the listing exactly as on the export —
+        // never a 500 — and the Warning names the fit without quoting the blob.
+        await using var context = new Context();
+        var fitId = Guid.NewGuid();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkPairwiseCohortState
+               {
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 3,
+                   ComparisonSetVersion = 7,
+                   ReferenceExecutionKey = "judge-key",
+                   ProjectVersion = 4,
+                   Candidates = [],
+                   Comparisons = []
+               });
+        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkPairwiseFitRecord
+               {
+                   Id = fitId,
+                   ProjectId = ProjectId,
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 3,
+                   TaskCaseId = null,
+                   FitKey = "fit-key-1",
+                   JudgeExecutionKey = "judge-key",
+                   ComparisonSetVersion = 7,
+                   FittedSetJson = "[]",
+                   ScoresJson = "[{\"runId\": secret-blob",
+                   Iterations = 42,
+                   BootstrapReplicates = 1000,
+                   CreatedAtUtc = 99
+               });
+        using var client = context.Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, Api + $"/projects/{ProjectId}/comparisons");
+        context.Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var fit = document.RootElement.GetProperty("fit");
+        AssertEx.Equal("fit-key-1", fit.GetProperty("fitKey").GetString());
+        AssertEx.True(fit.GetProperty("isCurrent").GetBoolean());
+        AssertEx.Equal(0, fit.GetProperty("scores").GetArrayLength());
+        AssertEx.ContainsSingle(context.Logger.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains(fitId.ToString(), StringComparison.Ordinal));
+        AssertEx.False(context.Logger.Entries.Any(static entry => entry.Message.Contains("secret-blob", StringComparison.Ordinal)),
+            "the Warning must not carry blob content");
+    }
+
     /// <param name="displayOnlyIndexes">Item indexes whose leaf does NOT count toward the score, as a NIAH case does not.</param>
     private static Context Seeded(BenchmarkCellRecord[] cells, params int[] displayOnlyIndexes)
     {
@@ -326,6 +384,8 @@ public sealed class BenchmarkCompareEndpointTests
     {
         public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
 
+        public RecordingLogger<BenchmarkComparisonService> Logger { get; } = new();
+
         public TestServerWebAppFactory Factory { get; }
 
         public Context()
@@ -336,6 +396,7 @@ public sealed class BenchmarkCompareEndpointTests
                 {
                     services.RemoveAll<IBenchmarkStore>();
                     services.AddSingleton(Store);
+                    services.AddSingleton<ILogger<BenchmarkComparisonService>>(Logger);
                 }
             };
         }

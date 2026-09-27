@@ -292,12 +292,7 @@ public sealed class LayerDependencyTests
                 "Microsoft.Extensions.AI",
                 "Microsoft.Extensions.AI.OpenAI"
             ],
-            ["XE-Local-AI-Engine.Providers.HuggingFace"] =
-            [
-                "Microsoft.Extensions.DependencyInjection.Abstractions",
-                "Microsoft.Extensions.Http.Resilience",
-                "Microsoft.Extensions.Options.ConfigurationExtensions"
-            ],
+            ["XE-Local-AI-Engine.Providers.HuggingFace"] = ["Microsoft.Extensions.Http.Resilience"],
             ["XE-Local-AI-Engine.Providers.LlamaServer"] =
             [
                 "Azure.AI.OpenAI",
@@ -930,6 +925,47 @@ public sealed class LayerDependencyTests
             "The persistence layer must not grant its internals to a production assembly: a friend assembly can bind "
             + "an internal entity, cipher or store and bypass the store boundary that the layer rules above assume. "
             + "Expose the member deliberately, or move the caller. Grants:"
+            + Environment.NewLine + string.Join(Environment.NewLine, production));
+    }
+
+    /// <summary>
+    /// Every provider assembly grants its internals to test projects only.
+    /// </summary>
+    /// <remarks>
+    /// The provider counterpart of the persistence fence above: a host or application friend grant lets a caller bind a
+    /// provider's Implementation types, so the member it needs is exposed deliberately from the provider's Contracts
+    /// instead. The provider set is every Providers.* project in the solution file.
+    /// </remarks>
+    [Test]
+    public void Providers_GrantTheirInternalsToNoProductionAssembly()
+    {
+        var providers = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.slnx"))
+                                 .Descendants("Project")
+                                 .Select(project => (string?)project.Attribute("Path"))
+                                 .Where(path => path is not null)
+                                 .Select(path => Path.GetFileNameWithoutExtension(path!.Replace('\\', '/')))
+                                 .Where(name => name.StartsWith("XE-Local-AI-Engine.Providers.", StringComparison.Ordinal))
+                                 .Order(StringComparer.Ordinal)
+                                 .Select(name => Assembly.Load(new AssemblyName(name)))
+                                 .ToList();
+        var grants = providers.SelectMany(assembly => assembly.GetCustomAttributes<InternalsVisibleToAttribute>()
+                                                              .Select(attribute => (Provider: assembly.GetName().Name!, Friend: attribute.AssemblyName)))
+                              .ToList();
+
+        AssertEx.True(providers.Count >= 10,
+            $"Only {providers.Count} Providers.* projects were found in XE-Local-AI-Engine.slnx; the fence would pass over a shrunken set.");
+        AssertEx.NotEmpty(grants,
+            "No provider declares any InternalsVisibleTo. Each is expected to grant its test project, so an empty set "
+            + "means this scan lost its subject and would pass vacuously.");
+
+        var production = grants.Where(grant => !grant.Friend.EndsWith(".Tests", StringComparison.Ordinal))
+                               .Select(grant => $"{grant.Provider} -> {grant.Friend}")
+                               .Order(StringComparer.Ordinal)
+                               .ToList();
+
+        AssertEx.Empty(production,
+            "A provider must not grant its internals to a production assembly: expose the member the caller needs from "
+            + "the provider's Contracts instead. Grants:"
             + Environment.NewLine + string.Join(Environment.NewLine, production));
     }
 

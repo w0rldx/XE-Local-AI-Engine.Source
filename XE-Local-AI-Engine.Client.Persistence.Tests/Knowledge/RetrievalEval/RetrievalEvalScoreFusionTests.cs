@@ -4,6 +4,7 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     Evidence for score-aware hybrid fusion vs classic (score-agnostic) Reciprocal Rank Fusion on the SAME ingested

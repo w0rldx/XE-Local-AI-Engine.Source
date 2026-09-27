@@ -217,19 +217,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 services: _serviceProvider));
         }
 
-        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0; the scoped suppression stays at the pinned version until there is explicit graduation evidence.
-#pragma warning disable MAAI001
-        var inlineSkills = new AgentInlineSkill[skills.Count];
-        for (var index = 0; index < skills.Count; index++)
-        {
-            inlineSkills[index] = BuildInlineSkill(skills[index]);
-        }
-
 #pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent below via AIContextProviders; the agent disposes its context providers with itself.
-        var skillsProvider = new AgentSkillsProvider(inlineSkills);
+        var skillsProvider = InvocationSkillsProvider.Create(skills);
 #pragma warning restore CA2000
-#pragma warning restore MAAI001
 
         return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
             new ChatClientAgentOptions
@@ -246,51 +236,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             },
             _loggerFactory,
             _serviceProvider));
-    }
-
-    /// <summary>
-    ///     Builds one MAF <c>AgentInlineSkill</c> from a resolved skill: the full frontmatter constructor plus one
-    ///     <c>AddResource</c> per bundled file.
-    /// </summary>
-    /// <remarks>
-    ///     Resources MUST be registered here, before the <c>AgentSkillsProvider</c> is constructed: the provider
-    ///     resolves a skill's content once, and a resource added afterwards would exist but never be advertised.
-    ///     <c>allowedTools</c> is frontmatter only and grants nothing; scripts are never registered. See
-    ///     docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
-    /// </remarks>
-    // MAAI001: scoped to the experimental Agent Skills surface, same rationale as the block in BuildAgent that calls this.
-#pragma warning disable MAAI001
-    internal static AgentInlineSkill BuildInlineSkill(InvocationSkill skill)
-    {
-        ArgumentNullException.ThrowIfNull(skill);
-
-        var inlineSkill = new AgentInlineSkill(skill.Name,
-            skill.Description,
-            skill.Body,
-            license: skill.License,
-            compatibility: skill.Compatibility,
-            allowedTools: skill.AllowedTools,
-            metadata: ToFrontmatterMetadata(skill.Metadata));
-
-        if (skill.Resources is { Count: > 0 } resources)
-        {
-            foreach (var resource in resources)
-            {
-                inlineSkill.AddResource(resource.Name, resource.Content, resource.Description);
-            }
-        }
-
-        return inlineSkill;
-    }
-#pragma warning restore MAAI001
-
-    /// <summary>Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes.</summary>
-    /// <remarks>Null for an absent or empty map, so a skill without metadata keeps the constructor's own default.</remarks>
-    private static AdditionalPropertiesDictionary? ToFrontmatterMetadata(IReadOnlyDictionary<string, string>? metadata)
-    {
-        return metadata is { Count: > 0 }
-            ? new AdditionalPropertiesDictionary(metadata.Select(static entry => new KeyValuePair<string, object?>(entry.Key, entry.Value)))
-            : null;
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 internal static class AddNodeDevelopmentExtensions
 {
@@ -18,6 +19,8 @@ internal static class AddNodeDevelopmentExtensions
                .Bind(configuration.GetSection(DevelopmentOptions.Section))
                .ValidateDataAnnotations()
                .ValidateOnStart();
+        // Before the early return: the capability endpoint answers while Development Mode is off.
+        builder.Services.AddScoped<IDevelopmentCapabilityService, DevelopmentCapabilityService>();
 
         if (!configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {

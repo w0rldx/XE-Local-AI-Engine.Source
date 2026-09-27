@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

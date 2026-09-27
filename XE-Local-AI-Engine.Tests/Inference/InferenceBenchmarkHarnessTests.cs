@@ -10,9 +10,11 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using StreamingChatCompletionUpdate = OpenAI.Chat.StreamingChatCompletionUpdate;
@@ -23,6 +25,8 @@ public sealed class InferenceBenchmarkHarnessTests
     private const long Gb = 1024L * 1024 * 1024;
     private const long Mib = 1024L * 1024;
     private static readonly EmptyMetricsHandler SharedEmptyMetricsHandler = new();
+
+    private static readonly HttpClient UnusedTokenizeClient = new();
 
     private const string MetricsScrape = """
                                          # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
@@ -35,8 +39,8 @@ public sealed class InferenceBenchmarkHarnessTests
     [Test]
     public void PromMetricParser_ExtractsGauge()
     {
-        AssertEx.Equal<double?>(1234d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:prompt_tokens_total"));
-        AssertEx.Equal<double?>(567.5d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:tokens_predicted_total"));
+        AssertEx.Equal<double?>(1234d, LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:prompt_tokens_total"));
+        AssertEx.Equal<double?>(567.5d, LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:tokens_predicted_total"));
     }
 
     [Test]
@@ -60,8 +64,8 @@ public sealed class InferenceBenchmarkHarnessTests
     [Test]
     public void PromMetricParser_ReturnsNull_WhenAbsent()
     {
-        AssertEx.Null(InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:tokens_predicted_seconds_total"));
-        AssertEx.Null(InferenceBenchmarkHarness.TryParsePromMetric(text: null, "llamacpp:prompt_tokens_total"));
+        AssertEx.Null(LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:tokens_predicted_seconds_total"));
+        AssertEx.Null(LlamaServerMetrics.TryParse(text: null, "llamacpp:prompt_tokens_total"));
     }
 
     [Test]
@@ -500,7 +504,7 @@ public sealed class InferenceBenchmarkHarnessTests
                           .Returns(Task.FromResult(processBudgetVram));
 
         return new InferenceBenchmarkHarness(chatFactory,
-            httpClientFactory,
+            new LlamaServerNativeClient(httpClientFactory, UnusedTokenizeClient),
             hardwareProfiler,
             processBudgetProbe,
             NullLogger<InferenceBenchmarkHarness>.Instance);

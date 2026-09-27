@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
+
 /// <summary>
 ///     The one Git step Development Mode's template materialization and its managed workspace share: a
 ///     <em>standalone</em> clone, whose <c>.git</c> is a real directory with its own object store, so the source

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 
+using System.Diagnostics;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
@@ -107,6 +107,35 @@ internal static class McpServerMapper
             EffectiveRequiresApproval = effectiveRequiresApproval,
             SessionScopeEligible = toolCatalog.IsSessionScopeEligible(entry),
             UnattendedBehaviour = unattendedBehaviour
+        };
+    }
+
+    public static McpServerToolsResponse ToResponse(this McpServerToolsView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        return new McpServerToolsResponse
+        {
+            Status = view.Status switch
+            {
+                McpServerToolsStatus.Disabled => "disabled",
+                McpServerToolsStatus.Connected => "connected",
+                McpServerToolsStatus.Error => "error",
+                McpServerToolsStatus.Connecting => "connecting",
+                _ => throw new UnreachableException($"Unknown MCP server tools status '{view.Status}'.")
+            },
+            Error = view.Error,
+            // The qualified name mcp__{serverSlug}__{tool} is the authoritative offered and executable name; the React
+            // panel may strip the prefix for display.
+            Tools =
+            [
+                .. view.Tools.Select(static tool => new McpDiscoveredToolResponse
+                {
+                    Name = tool.Name,
+                    Description = tool.Description,
+                    RequiresApproval = tool.RequiresApproval
+                })
+            ]
         };
     }
 }

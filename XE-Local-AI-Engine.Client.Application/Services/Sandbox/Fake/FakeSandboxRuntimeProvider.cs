@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 /// <remarks>
 ///     It needs no Docker and no network: a virtual filesystem backs copy and read, command results are scripted, and a "blocking" command
 ///     lets cancellation and kill be exercised honestly. Every timestamp comes from the injected <see cref="TimeProvider" />, so behaviour
-///     is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
+///     is reproducible.
 /// </remarks>
 // Serves BOTH per-feature roles, so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
 // Development Mode off one deterministic provider instance.

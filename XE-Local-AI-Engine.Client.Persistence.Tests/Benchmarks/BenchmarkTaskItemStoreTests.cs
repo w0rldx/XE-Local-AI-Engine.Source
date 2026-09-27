@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -461,6 +462,6 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
         _ = await context.Database.EnsureDeletedAsync();
         _ = await context.Database.EnsureCreatedAsync();
-        return (context, new BenchmarkStore(context, TimeProvider.System));
+        return (context, new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance));
     }
 }

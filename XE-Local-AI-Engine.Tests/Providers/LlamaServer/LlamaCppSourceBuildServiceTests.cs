@@ -740,9 +740,9 @@ public sealed class LlamaCppSourceBuildServiceTests
     private sealed class RecordingPublisher : ILlamaCppSourceBuildEventPublisher
     {
         private readonly Lock _lock = new();
-        private readonly List<LlamaCppSourceBuildStatusHubEvent> _events = [];
+        private readonly List<LlamaCppSourceBuildStatusEvent> _events = [];
 
-        public IReadOnlyList<LlamaCppSourceBuildStatusHubEvent> Events
+        public IReadOnlyList<LlamaCppSourceBuildStatusEvent> Events
         {
             get
             {
@@ -753,7 +753,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             }
         }
 
-        public Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(LlamaCppSourceBuildStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             lock (_lock)
             {
@@ -887,10 +887,10 @@ public sealed class LlamaCppSourceBuildServiceTests
         private int _calls;
         private int _maxConcurrent;
 
-        public List<LlamaCppSourceBuildStatusHubEvent> Events { get; } = [];
+        public List<LlamaCppSourceBuildStatusEvent> Events { get; } = [];
         public int MaxConcurrent => Volatile.Read(ref _maxConcurrent);
 
-        public async Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public async Task PublishStatusAsync(LlamaCppSourceBuildStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             var active = Interlocked.Increment(ref _active);
             var observed = Volatile.Read(ref _maxConcurrent);

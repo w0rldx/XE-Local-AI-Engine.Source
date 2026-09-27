@@ -33,16 +33,16 @@ internal static class LlamaServerLaunchArgumentComposer
     {
         var args = new List<string>
         {
-            "-m",
+            LlamaServerManagedFlags.Model,
             modelFilePath,
-            "--host",
+            LlamaServerManagedFlags.Host,
             "127.0.0.1", // localhost-only bind
-            "--port",
+            LlamaServerManagedFlags.Port,
             port.ToString(CultureInfo.InvariantCulture),
 
             // Single-slot serving, the locked design: one in-flight request per (model, role) process. Pinned on EVERY spawn, because the auto default reserves
             // four times the KV cache and starves the weight offload. See wiki 03, "LlamaServerProcessSupervisor — process lifecycle".
-            "--parallel",
+            LlamaServerManagedFlags.Parallel,
             "1",
 
             // Skip the empty-run warmup, which on a large model takes 45-110 s and overruns the readiness budget into a kill-and-respawn loop. The model serves
@@ -59,7 +59,7 @@ internal static class LlamaServerLaunchArgumentComposer
         // Role-agnostic on purpose — an adapter changes the weights, not the serving mode, so it belongs on whatever role the merged model would have served.
         if (!string.IsNullOrWhiteSpace(adapterFilePath))
         {
-            args.Add("--lora");
+            args.Add(LlamaServerManagedFlags.Lora);
             args.Add(adapterFilePath);
         }
 
@@ -166,25 +166,25 @@ internal static class LlamaServerLaunchArgumentComposer
 
         if (projection.ContextTokens is { } contextTokens)
         {
-            args.Add("-c");
+            args.Add(LlamaServerManagedFlags.ContextSize);
             args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
         }
 
         if (projection.GpuLayers is { } gpuLayers)
         {
-            args.Add("--n-gpu-layers");
+            args.Add(LlamaServerManagedFlags.GpuLayers);
             args.Add(gpuLayers.ToString(CultureInfo.InvariantCulture));
         }
 
         if (projection.TensorSplit is { } tensorSplit)
         {
-            args.Add("-ts");
+            args.Add(LlamaServerManagedFlags.TensorSplit);
             args.Add(tensorSplit);
         }
 
         if (projection.OverrideTensor is { } overrideTensor)
         {
-            args.Add("-ot");
+            args.Add(LlamaServerManagedFlags.OverrideTensor);
             args.Add(overrideTensor);
         }
 
@@ -192,7 +192,7 @@ internal static class LlamaServerLaunchArgumentComposer
         // rather than an optimization. The projection sets it on explore only, so it can never appear beside a frozen replay's tensor override.
         if (projection.CpuMoe)
         {
-            args.Add("--cpu-moe");
+            args.Add(LlamaServerManagedFlags.CpuMoe);
         }
 
         // Matching-type rule and flash-attention invariant, enforced in ResolvedLaunchArguments.Replay and in the launch policy: the fused FA path needs equal
@@ -201,20 +201,20 @@ internal static class LlamaServerLaunchArgumentComposer
         {
             if (projection.AutoFit)
             {
-                args.Add("-fa");
+                args.Add(LlamaServerManagedFlags.FlashAttentionShort);
                 args.Add("on");
-                args.Add("-ctk");
+                args.Add(LlamaServerManagedFlags.CacheTypeK);
                 args.Add(kvCacheTypeK);
-                args.Add("-ctv");
+                args.Add(LlamaServerManagedFlags.CacheTypeV);
                 args.Add(kvCacheTypeV);
             }
             else
             {
-                args.Add("-ctk");
+                args.Add(LlamaServerManagedFlags.CacheTypeK);
                 args.Add(kvCacheTypeK);
-                args.Add("-ctv");
+                args.Add(LlamaServerManagedFlags.CacheTypeV);
                 args.Add(kvCacheTypeV);
-                args.Add("--flash-attn");
+                args.Add(LlamaServerManagedFlags.FlashAttention);
                 args.Add("on");
             }
         }
@@ -252,9 +252,9 @@ internal static class LlamaServerLaunchArgumentComposer
             return;
         }
 
-        args.Add("-b");
+        args.Add(LlamaServerManagedFlags.BatchSize);
         args.Add(batchSize.ToString(CultureInfo.InvariantCulture));
-        args.Add("-ub");
+        args.Add(LlamaServerManagedFlags.UbatchSize);
         args.Add(ubatchSize.ToString(CultureInfo.InvariantCulture));
     }
 

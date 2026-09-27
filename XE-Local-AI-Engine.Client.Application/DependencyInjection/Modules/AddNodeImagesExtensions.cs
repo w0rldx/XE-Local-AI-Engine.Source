@@ -49,6 +49,10 @@ internal static class AddNodeImagesExtensions
         // reading + validating an assembly resource, which should happen once rather than per catalog request.
         builder.Services.AddSingleton<IImageModelCatalog, ImageModelCatalog>();
 
+        // The catalog endpoint's door: joins the catalog with the installed registry and the hardware fit. Singleton:
+        // stateless over singletons.
+        builder.Services.AddSingleton<ImageModelCatalogService>();
+
         // Persistence boundary for the job registry. Scoped: it owns a NodeChatDbContext per operation (the prompt is
         // encrypted at rest by the node encryption interceptor on save).
         builder.Services.AddScoped<IImageJobStore, ImageJobStore>();
