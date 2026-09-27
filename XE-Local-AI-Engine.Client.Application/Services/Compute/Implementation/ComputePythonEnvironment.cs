@@ -1,9 +1,6 @@
 ﻿namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
-using System.Security.Cryptography;
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
@@ -19,48 +16,23 @@ using XE_Local_AI_Engine.Providers.Python.Implementation;
 /// </remarks>
 internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDisposable
 {
-    private const string ProjectFileName = "pyproject.toml";
-    private const string LockfileName = "uv.lock";
-    private const string StateFileName = "installed-compute-runtime.json";
-    private const string LegacyStateFileName = "installed-compute-lock.sha256";
-    private const string ProvisionLockFileName = ".provision.lock";
-
     /// <summary>The profile id the status surface reports this environment under.</summary>
     internal const string ProfileId = "compute";
-
-    /// <summary>Bump when the environment's shape changes without its lockfile changing; a mismatch rebuilds the venv.</summary>
-    private const int ProfileRevision = 1;
-
-    /// <summary>
-    ///     The script scratch directory of the PRE-JAIL layout.
-    /// </summary>
-    /// <remarks>
-    ///     It sat beside the venv under the compute cache root, which is space the jail-occupancy watchdog never walked
-    ///     and which one call could read out of the next. Both holes are closed — the scratch is inside the
-    ///     per-invocation jail — but a box that ran an older build still has the directory, with whatever those calls
-    ///     left in it, so it is swept once before the tool can run.
-    /// </remarks>
-    private const string LegacyScratchDirectoryName = "scratch";
-
-    /// <summary>The name the shipped compute project files are linked under in the publish output (see the Client csproj).</summary>
-    private const string PublishedScriptsDirectoryName = "compute-scripts";
-
-    /// <summary>The repo-relative source of the same files, used by dev and test runs.</summary>
-    private const string RepositoryScriptsRelativePath = "tools/compute";
 
     // Generous next to the closure's real cost (~10s warm cache, ~60s cold on a slow link), because the alternative to
     // waiting is a provision that is killed halfway and re-run from scratch on the next call.
     private static readonly TimeSpan SyncTimeout = TimeSpan.FromMinutes(10);
 
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMinutes(2);
+
     // An operator's remove waits this long for another host's provision before answering busy.
     private static readonly TimeSpan RemoveLockWait = TimeSpan.FromSeconds(10);
 
     private readonly UvBinaryAcquirer _acquirer;
-    private readonly string _cacheRoot;
+    private readonly ComputeRuntimeDirectory _directory;
     private readonly ILogger<ComputePythonEnvironment> _logger;
     private readonly IPythonToolRunner _processRunner;
     private readonly SemaphoreSlim _provisionGate = new(1, 1);
-    private readonly string _scriptsDirectory;
     private readonly ManagedPythonToolchain _toolchain;
     private readonly CancellationTokenSource _disposeCts = new();
 
@@ -80,8 +52,8 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         : this(new UvBinaryAcquirer(httpClient),
             PythonToolRunner.ForCurrentPlatform(),
             logger,
-            DefaultCacheRoot(),
-            ResolveScriptsDirectory(),
+            ComputeRuntimeDirectory.DefaultCacheRoot(),
+            ComputeRuntimeDirectory.ResolveScriptsDirectory(),
             ManagedPythonToolchain.Default())
     {
     }
@@ -98,22 +70,11 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         _acquirer = acquirer ?? throw new ArgumentNullException(nameof(acquirer));
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
-        ArgumentException.ThrowIfNullOrWhiteSpace(scriptsDirectory);
-        _cacheRoot = cacheRoot;
-        _scriptsDirectory = scriptsDirectory;
+        _directory = new ComputeRuntimeDirectory(cacheRoot, scriptsDirectory, _toolchain);
     }
 
     /// <summary>The background provision the last repair started, for deterministic tests.</summary>
     internal Task PendingRepair => Volatile.Read(ref _repairTask);
-
-    private string VenvDirectory => Path.Combine(_cacheRoot, "venv");
-
-    private string VenvRoot => Path.Combine(VenvDirectory, ".venv");
-
-    private string InterpreterPath => ManagedPythonToolchain.VenvInterpreterPath(VenvRoot);
-
-    private string StatePath => Path.Combine(_cacheRoot, StateFileName);
 
     public void Dispose()
     {
@@ -155,7 +116,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         await _provisionGate.WaitAsync(cancellationToken);
         try
         {
-            return await ProvisionUnderGateAsync(cancellationToken);
+            return await ProvisionUnderGateAsync(rebuild: false, cancellationToken);
         }
         finally
         {
@@ -175,50 +136,64 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                 _removing ? "The compute runtime is being removed." : "The compute runtime is being provisioned.");
         }
 
+        // A failed rebuild that left the previous venv in service reads Ready with the failure as its reason, as Training's does.
         if (Volatile.Read(ref _lastFailure) is { } failure)
         {
-            return Status(ManagedPythonEnvironmentState.Failed, failure);
+            return Volatile.Read(ref _runtime) is null
+                ? Status(ManagedPythonEnvironmentState.Failed, failure)
+                : await ServedStatusAsync(failure, cancellationToken);
         }
 
-        var expected = await ExpectedIdentityAsync(cancellationToken);
+        var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
         if (expected is null)
         {
             return Status(ManagedPythonEnvironmentState.Failed, "The pinned compute runtime lockfile is missing from this installation.");
         }
 
-        var installed = await ReadInstalledStateAsync(cancellationToken);
+        var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
         if (installed is null)
         {
-            if (File.Exists(Path.Combine(_cacheRoot, LegacyStateFileName)))
+            if (File.Exists(_directory.LegacyStatePath))
             {
                 return Status(ManagedPythonEnvironmentState.UpdateRequired, "The compute runtime was provisioned by an older build and is rebuilt on next use.");
             }
 
-            var recordUnreadable = File.Exists(StatePath);
-            if (!recordUnreadable && !Directory.Exists(VenvRoot))
-            {
-                return Status(ManagedPythonEnvironmentState.NotProvisioned, reason: null);
-            }
-
-            // Another host mid-sync looks exactly like an interrupted one, except that it holds the provision lock.
-            if (await IsProvisionLockHeldElsewhereAsync())
+            // Another host mid-sync looks exactly like an interrupted or absent one, except that it holds the provision lock.
+            if (await _directory.IsProvisionLockHeldElsewhereAsync())
             {
                 return Status(ManagedPythonEnvironmentState.Provisioning, "Another process is provisioning the compute runtime.");
+            }
+
+            var recordUnreadable = File.Exists(_directory.StatePath);
+            if (!recordUnreadable && !Directory.Exists(_directory.VenvRoot))
+            {
+                return Status(ManagedPythonEnvironmentState.NotProvisioned, reason: null);
             }
 
             return Status(ManagedPythonEnvironmentState.RepairRequired,
                 recordUnreadable ? "The compute runtime's state record is unreadable." : "An interrupted provision left an incomplete compute runtime.");
         }
 
-        if (!File.Exists(InterpreterPath))
+        if (!File.Exists(_directory.InterpreterPath))
         {
             return Status(ManagedPythonEnvironmentState.RepairRequired, "The compute runtime's Python interpreter is missing.", installed.Identity);
         }
 
-        var mismatches = MismatchesAgainst(installed, expected);
+        var mismatches = _directory.MismatchesAgainst(installed, expected);
         return mismatches.Count > 0
             ? Status(ManagedPythonEnvironmentState.UpdateRequired, "The compute runtime is out of date and is rebuilt on next use.", installed.Identity, mismatches)
             : Status(ManagedPythonEnvironmentState.Ready, reason: null, installed.Identity);
+    }
+
+    /// <summary>What a failed rebuild left in service; a missing lockfile or record still reads Ready, since the venv is what runs.</summary>
+    private async Task<ManagedPythonEnvironmentStatus> ServedStatusAsync(string failure, CancellationToken cancellationToken)
+    {
+        var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
+        var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
+        return Status(ManagedPythonEnvironmentState.Ready,
+            $"{failure} The previous compute runtime stays in service.",
+            installed?.Identity,
+            installed is not null && expected is not null ? _directory.MismatchesAgainst(installed, expected) : null);
     }
 
     /// <summary>
@@ -243,8 +218,8 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     /// <summary>
-    ///     Removes the environment, then provisions it again in the background. The gate stays held across both, so
-    ///     status reads <c>Provisioning</c> throughout and a concurrent <c>run_python</c> waits for the fresh runtime.
+    ///     Rebuilds the environment in the background through the staged swap, so a failed repair leaves the previous venv in
+    ///     service. The gate stays held throughout: status reads <c>Provisioning</c> and a concurrent <c>run_python</c> waits.
     /// </summary>
     internal async Task<ManagedPythonActionResult> RepairAsync(CancellationToken cancellationToken)
     {
@@ -253,21 +228,10 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             return Busy();
         }
 
-        ManagedPythonActionResult removed;
-        try
-        {
-            removed = await RemoveUnderGateAsync(cancellationToken);
-        }
-        catch
+        if (!TryDropRuntimeUnlessLeased())
         {
             _provisionGate.Release();
-            throw;
-        }
-
-        if (removed.Outcome != ManagedPythonActionOutcome.Completed)
-        {
-            _provisionGate.Release();
-            return removed;
+            return Leased();
         }
 
         var disposing = _disposeCts.Token;
@@ -275,7 +239,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         {
             try
             {
-                _ = await ProvisionUnderGateAsync(disposing);
+                _ = await ProvisionUnderGateAsync(rebuild: true, disposing);
             }
             catch (Exception exception) when (exception is ComputeEnvironmentException or OperationCanceledException or ObjectDisposedException)
             {
@@ -293,31 +257,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         };
     }
 
-    /// <summary>
-    ///     A non-blocking probe of <c>.provision.lock</c>: never creates it and releases it at once. Only called with the
-    ///     in-process gate free, so a holder is another instance or host.
-    /// </summary>
-    private async Task<bool> IsProvisionLockHeldElsewhereAsync()
-    {
-        try
-        {
-            await using var probe = new FileStream(Path.Combine(_cacheRoot, ProvisionLockFileName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            return false;
-        }
-        catch (FileNotFoundException)
-        {
-            return false;
-        }
-        catch (IOException)
-        {
-            return true;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     private static ManagedPythonActionResult Busy()
     {
         return new ManagedPythonActionResult
@@ -327,25 +266,41 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         };
     }
 
-    private async Task<ManagedPythonActionResult> RemoveUnderGateAsync(CancellationToken cancellationToken)
+    private static ManagedPythonActionResult Leased()
     {
-        // One critical section with AcquireExecutionLease: a lease taken before it is seen here, and one taken after it
-        // finds no cached runtime and queues on the gate this remove (or repair) holds.
+        return new ManagedPythonActionResult
+        {
+            Outcome = ManagedPythonActionOutcome.Busy,
+            Message = "A run_python call is using the compute runtime. Try again when it finishes."
+        };
+    }
+
+    /// <summary>
+    ///     One critical section with <see cref="AcquireExecutionLease" />: a lease taken before it is seen here, and one taken
+    ///     after it finds no cached runtime and queues on the gate the caller (a remove or repair) holds.
+    /// </summary>
+    private bool TryDropRuntimeUnlessLeased()
+    {
         lock (_leaseLock)
         {
             if (_executionLeases > 0)
             {
-                return new ManagedPythonActionResult
-                {
-                    Outcome = ManagedPythonActionOutcome.Busy,
-                    Message = "A run_python call is using the compute runtime. Try again when it finishes."
-                };
+                return false;
             }
 
             Volatile.Write(ref _runtime, null);
-            _removing = true;
+            return true;
+        }
+    }
+
+    private async Task<ManagedPythonActionResult> RemoveUnderGateAsync(CancellationToken cancellationToken)
+    {
+        if (!TryDropRuntimeUnlessLeased())
+        {
+            return Leased();
         }
 
+        _removing = true;
         try
         {
             return await RemoveFilesAsync(cancellationToken);
@@ -358,7 +313,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
 
     private async Task<ManagedPythonActionResult> RemoveFilesAsync(CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(_cacheRoot))
+        if (!Directory.Exists(_directory.CacheRoot))
         {
             Volatile.Write(ref _runtime, null);
             Volatile.Write(ref _lastFailure, null);
@@ -371,7 +326,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         FileStream provisionLock;
         try
         {
-            provisionLock = await ManagedPythonToolchain.AcquireExclusiveLockAsync(Path.Combine(_cacheRoot, ProvisionLockFileName),
+            provisionLock = await ManagedPythonToolchain.AcquireExclusiveLockAsync(_directory.ProvisionLockPath,
                 RemoveLockWait,
                 cancellationToken);
         }
@@ -391,17 +346,12 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             Volatile.Write(ref _lastFailure, null);
             try
             {
-                SetTreeWritable(VenvDirectory, writable: true);
-                if (Directory.Exists(VenvDirectory))
-                {
-                    Directory.Delete(VenvDirectory, recursive: true);
-                }
-
-                File.Delete(StatePath);
-                File.Delete(Path.Combine(_cacheRoot, LegacyStateFileName));
-                TryDeleteDirectory(Path.Combine(_cacheRoot, ".work"));
+                _directory.DeleteVenvTrees();
+                File.Delete(_directory.StatePath);
+                File.Delete(_directory.LegacyStatePath);
+                ComputeRuntimeDirectory.TryDeleteDirectory(_directory.WorkDirectory);
                 // Nothing points into the pre-shared-store toolchain once the venv is gone.
-                _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot);
+                _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_directory.CacheRoot);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -450,23 +400,27 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     /// <summary>The provision body; the caller holds <see cref="_provisionGate" />. Records the outcome for the status read.</summary>
-    private async Task<ComputePythonRuntime> ProvisionUnderGateAsync(CancellationToken cancellationToken)
+    private async Task<ComputePythonRuntime> ProvisionUnderGateAsync(bool rebuild, CancellationToken cancellationToken)
     {
-        if (TakeCachedRuntime() is { } cached)
+        if (!rebuild && TakeCachedRuntime() is { } cached)
         {
             return cached;
         }
 
         try
         {
-            var resolved = await ProvisionAsync(cancellationToken);
+            var resolved = await ProvisionAsync(rebuild, cancellationToken);
             Volatile.Write(ref _lastFailure, null);
             Volatile.Write(ref _runtime, resolved);
             return resolved;
         }
         catch (ComputeEnvironmentException exception)
         {
-            Volatile.Write(ref _lastFailure, exception.Message);
+            if (await ServePreviousAsync(exception.Message) is { } previous)
+            {
+                return previous;
+            }
+
             throw;
         }
         catch (Exception exception) when (IsProvisioningFailure(exception, cancellationToken))
@@ -475,8 +429,55 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             // and an HTTP-timeout TaskCanceledException, none of which ComputeToolGateway converts: unwrapped they fault the whole invocation instead of returning the model-safe rejection.
             _logger.LogWarning(exception, "Provisioning the compute Python runtime failed.");
             const string Message = "The pinned compute runtime could not be provisioned on this node.";
-            Volatile.Write(ref _lastFailure, Message);
+            if (await ServePreviousAsync(Message) is { } previous)
+            {
+                return previous;
+            }
+
             throw new ComputeEnvironmentException(Message, exception);
+        }
+    }
+
+    /// <summary>
+    ///     Records a failed provision and, when the venv the staged swap left in place still has its record and its CPython,
+    ///     caches and returns it: an offline node keeps a working, if outdated, runtime until a restart or repair retries.
+    /// </summary>
+    private async Task<ComputePythonRuntime?> ServePreviousAsync(string failure)
+    {
+        Volatile.Write(ref _lastFailure, failure);
+        var installed = await _directory.ReadInstalledStateAsync(CancellationToken.None);
+        if (installed is null || !RunsOnStore(_directory.InterpreterPath, installed.PythonInstallDirectory))
+        {
+            return null;
+        }
+
+        ComputeRuntimeDirectory.SetTreeWritable(_directory.VenvDirectory, writable: false);
+        _logger.LogWarning("Rebuilding the compute Python runtime failed ({Failure}); the previous runtime stays in service.", failure);
+        var previous = new ComputePythonRuntime
+        {
+            InterpreterPath = _directory.InterpreterPath,
+            ReadOnlyTrees = [_directory.VenvRoot, installed.PythonInstallDirectory]
+        };
+        Volatile.Write(ref _runtime, previous);
+        return previous;
+    }
+
+    /// <summary>
+    ///     True when <paramref name="interpreter" /> finally resolves to an existing file under <paramref name="pythonInstallDirectory" />,
+    ///     the tree the jail binds. <c>File.Exists</c> alone answers true for a dangling link.
+    /// </summary>
+    private static bool RunsOnStore(string interpreter, string pythonInstallDirectory)
+    {
+        try
+        {
+            var link = new FileInfo(interpreter);
+            var target = link.ResolveLinkTarget(returnFinalTarget: true) ?? link;
+            return target.Exists
+                   && target.FullName.StartsWith(Path.TrimEndingDirectorySeparator(pythonInstallDirectory) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -495,61 +496,83 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
     }
 
-    private async Task<ComputePythonRuntime> ProvisionAsync(CancellationToken cancellationToken)
+    private async Task<ComputePythonRuntime> ProvisionAsync(bool rebuild, CancellationToken cancellationToken)
     {
-        var project = Path.Combine(_scriptsDirectory, ProjectFileName);
-        var lockfile = Path.Combine(_scriptsDirectory, LockfileName);
-        if (!File.Exists(project) || !File.Exists(lockfile))
+        if (!File.Exists(_directory.ProjectPath) || !File.Exists(_directory.LockfilePath))
         {
             throw new ComputeEnvironmentException("The pinned compute runtime lockfile is missing from this installation.");
         }
 
-        CreateOwnerOnlyDirectory(_cacheRoot);
-        await using var provisionLock = await AcquireProvisionLockAsync(Path.Combine(_cacheRoot, ProvisionLockFileName), cancellationToken);
+        ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(_directory.CacheRoot);
+        await using var provisionLock = await AcquireProvisionLockAsync(_directory.ProvisionLockPath, cancellationToken);
 
         // Before anything can run: an older build's scratch directory is state a new call must not inherit, and this is the
         // last moment at which nothing has been offered yet. Warm and cold path both reach here, at most once per process.
         SweepLegacyScratch();
+        _directory.Recover();
 
-        var expected = BuildIdentity(await ComputeFileShaAsync(lockfile, cancellationToken));
-        var venvDirectory = VenvDirectory;
-        var venvRoot = VenvRoot;
-        var interpreter = InterpreterPath;
-        var installed = await ReadInstalledStateAsync(cancellationToken);
-        if (File.Exists(interpreter) && installed is not null && MismatchesAgainst(installed, expected).Count == 0)
+        var expected = await _directory.ComputeExpectedIdentityAsync(cancellationToken);
+        var venvDirectory = _directory.VenvDirectory;
+        var interpreter = _directory.InterpreterPath;
+        var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
+        if (!rebuild && File.Exists(interpreter) && installed is not null && _directory.MismatchesAgainst(installed, expected).Count == 0)
         {
             // Re-applied on the warm path too: a venv provisioned by an older build, or left writable by an interrupted run,
             // would otherwise stay writable for the life of the process. At most once per process — the runtime is cached above it.
-            SetTreeWritable(venvDirectory, writable: false);
-            return Adopt(interpreter, venvRoot);
+            ComputeRuntimeDirectory.SetTreeWritable(venvDirectory, writable: false);
+            return Adopt(interpreter, _directory.VenvRoot);
         }
 
         _logger.LogInformation("Provisioning the compute Python runtime from the pinned lockfile.");
-
-        var workDirectory = Path.Combine(_cacheRoot, ".work");
-        var isolatedHome = Path.Combine(workDirectory, ".home");
-        var isolatedTmp = Path.Combine(workDirectory, ".tmp");
-        CreateOwnerOnlyDirectory(workDirectory);
-        CreateOwnerOnlyDirectory(isolatedHome);
-        CreateOwnerOnlyDirectory(isolatedTmp);
-        CreateOwnerOnlyDirectory(venvDirectory);
-
-        // Before the delete, so an offline node that cannot fetch uv keeps its old venv.
-        var uv = await _acquirer.EnsureUvAsync(_toolchain.Root, LogLine, cancellationToken);
-
-        // A re-provision has to write over a tree the previous one locked down. The old .venv goes entirely: uv sync keeps
-        // an existing venv's pyvenv.cfg home and absolute bin/python symlink, which may name a CPython root the jail no longer binds.
-        SetTreeWritable(venvDirectory, writable: true);
-        if (Directory.Exists(venvRoot))
+        var staging = _directory.StagingDirectory;
+        try
         {
-            // ponytail: delete-then-sync; a sync that fails offline leaves no runtime until online. Staged swap (Training's) if that bites.
-            Directory.Delete(venvRoot, recursive: true);
+            await SyncStagingAsync(staging, cancellationToken);
+        }
+        catch
+        {
+            ComputeRuntimeDirectory.TryDeleteTree(staging);
+            throw;
         }
 
-        // uv resolves the environment beside the pyproject it is pointed at, so the committed pair is copied into the
-        // venv directory rather than the shipped (read-only) scripts directory being used as a working tree.
-        File.Copy(project, Path.Combine(venvDirectory, ProjectFileName), overwrite: true);
-        File.Copy(lockfile, Path.Combine(venvDirectory, LockfileName), overwrite: true);
+        // Only the proven tree is swapped in, and the record lands with it, so a half-finished sync is never a warm cache.
+        await _directory.SwapAsync(new ComputeRuntimeDirectory.InstalledState
+        {
+            Identity = expected,
+            PythonInstallDirectory = _toolchain.PythonInstallDirectory
+        });
+        File.Delete(_directory.LegacyStatePath);
+        ComputeRuntimeDirectory.TryDeleteDirectory(_directory.WorkDirectory);
+        ComputeRuntimeDirectory.SetTreeWritable(venvDirectory, writable: false);
+        return Adopt(interpreter, _directory.VenvRoot);
+    }
+
+    /// <summary>
+    ///     Syncs the pinned closure into a fresh staging project and imports it once. The live venv is not touched, so any
+    ///     failure here, offline ones included, leaves it in service.
+    /// </summary>
+    private async Task SyncStagingAsync(string staging, CancellationToken cancellationToken)
+    {
+        var workDirectory = _directory.WorkDirectory;
+        var isolatedHome = Path.Combine(workDirectory, ".home");
+        var isolatedTmp = Path.Combine(workDirectory, ".tmp");
+        ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(workDirectory);
+        ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(isolatedHome);
+        ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(isolatedTmp);
+
+        var uv = await _acquirer.EnsureUvAsync(_toolchain.Root, LogLine, cancellationToken);
+
+        // uv resolves beside the pyproject it is pointed at, so the committed pair is copied in. A fresh project, because uv
+        // sync keeps an existing venv's pyvenv.cfg home, which may name a CPython root the jail no longer binds.
+        if (Directory.Exists(staging))
+        {
+            // Recover's best-effort delete failed; reusing the tree would keep its stale .venv home.
+            throw new ComputeEnvironmentException("A leftover compute runtime staging tree could not be removed.");
+        }
+
+        ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(staging);
+        File.Copy(_directory.ProjectPath, Path.Combine(staging, ComputeRuntimeDirectory.ProjectFileName), overwrite: true);
+        File.Copy(_directory.LockfilePath, Path.Combine(staging, ComputeRuntimeDirectory.LockfileName), overwrite: true);
 
         var environment = ManagedPythonEnvironment.BuildUvEnvironment(isolatedHome,
             isolatedTmp,
@@ -562,9 +585,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         // --locked makes uv fail rather than re-resolve when the lockfile and pyproject.toml disagree, which is what
         // makes this reproducible instead of merely repeatable.
         var syncExit = await _processRunner.RunAsync(uv,
-            ["sync", "--locked", "--project", venvDirectory],
+            ["sync", "--locked", "--project", staging],
             environment,
-            venvDirectory,
+            staging,
             LogLine,
             SyncTimeout,
             cancellationToken);
@@ -573,22 +596,24 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             throw new ComputeEnvironmentException("Installing the pinned compute runtime packages failed.");
         }
 
-        if (!File.Exists(interpreter))
+        var stagedInterpreter = ManagedPythonToolchain.VenvInterpreterPath(Path.Combine(staging, ".venv"));
+        if (!File.Exists(stagedInterpreter))
         {
             throw new ComputeEnvironmentException("The provisioned compute runtime did not contain a Python interpreter.");
         }
 
-        // Written only after the interpreter is proven present, so a half-finished sync is never mistaken for a warm
-        // cache on the next call.
-        await WriteInstalledStateAsync(new InstalledState
+        // A sync that exits 0 over a closure that cannot import must not replace a working venv.
+        var probeExit = await _processRunner.RunAsync(stagedInterpreter,
+            ["-I", "-c", "import numpy, scipy, sympy"],
+            environment,
+            staging,
+            LogLine,
+            ProbeTimeout,
+            cancellationToken);
+        if (probeExit != 0)
         {
-            Identity = expected,
-            PythonInstallDirectory = _toolchain.PythonInstallDirectory
-        }, cancellationToken);
-        File.Delete(Path.Combine(_cacheRoot, LegacyStateFileName));
-        TryDeleteDirectory(workDirectory);
-        SetTreeWritable(venvDirectory, writable: false);
-        return Adopt(interpreter, venvRoot);
+            throw new ComputeEnvironmentException("The provisioned compute runtime failed its import check.");
+        }
     }
 
     /// <summary>
@@ -608,7 +633,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     /// <summary>The runtime for a proven venv, after dropping the pre-shared-store toolchain it no longer points into.</summary>
     private ComputePythonRuntime Adopt(string interpreter, string venvRoot)
     {
-        if (!ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot))
+        if (!ManagedPythonToolchain.TryDeleteLegacyToolchain(_directory.CacheRoot))
         {
             _logger.LogWarning("The compute runtime's legacy uv, pythons or uv-cache directory could not be removed; nothing uses it any more.");
         }
@@ -644,7 +669,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     /// </remarks>
     private void SweepLegacyScratch()
     {
-        var legacy = Path.Combine(_cacheRoot, LegacyScratchDirectoryName);
+        var legacy = _directory.LegacyScratchDirectory;
         if (!Directory.Exists(legacy))
         {
             return;
@@ -663,112 +688,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         }
     }
 
-    /// <summary>
-    ///     Clears (or restores) the write bits across the venv tree.
-    /// </summary>
-    /// <remarks>
-    ///     Scripts reach the interpreter through <c>sys.executable</c>, and a writable <c>site-packages</c> lets one call drop a module
-    ///     every later approved call imports — a single approval turned into persistent code execution. <b>This is defence in depth and no
-    ///     longer the boundary:</b> the boundary is the read-only bind mount under
-    ///     <see cref="XE_Local_AI_Engine.Client.Services.Sandbox.SandboxIsolationMode.Filesystem" />, where an <c>os.chmod</c> and a write
-    ///     both answer <c>EROFS</c>. The mode bits still cover OUTSIDE that namespace: the engine's own processes, an operator's shell.
-    /// </remarks>
-    private static void SetTreeWritable(string root, bool writable)
-    {
-        if (OperatingSystem.IsWindows() || !Directory.Exists(root))
-        {
-            return;
-        }
-
-        const UnixFileMode WriteBits = UnixFileMode.UserWrite | UnixFileMode.GroupWrite | UnixFileMode.OtherWrite;
-        var rootInfo = new DirectoryInfo(root);
-        foreach (var entry in rootInfo.EnumerateFileSystemInfos("*", SearchOption.AllDirectories).Append(rootInfo))
-        {
-            try
-            {
-                // chmod follows a symlink, and bin/python links into the shared CPython store, which is not this tree's to lock.
-                if (entry.LinkTarget is not null)
-                {
-                    continue;
-                }
-
-                var mode = entry.UnixFileMode;
-                entry.UnixFileMode = writable ? mode | UnixFileMode.UserWrite : mode & ~WriteBits;
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // A dangling symlink or a file removed under the walk is not worth failing a provision over.
-            }
-        }
-    }
-
     private void LogLine(string line)
     {
         _logger.LogDebug("compute runtime provision: {Line}", line);
-    }
-
-    private static ManagedPythonEnvironmentIdentity BuildIdentity(string lockfileSha256)
-    {
-        return new ManagedPythonEnvironmentIdentity
-        {
-            ProfileId = ProfileId,
-            PythonMinor = ManagedPythonPins.PythonMinor,
-            LockfileSha256 = lockfileSha256,
-            ProfileRevision = ProfileRevision,
-            Rid = ManagedPythonPins.Current.Rid,
-            UvVersion = ManagedPythonPins.UvVersion
-        };
-    }
-
-    /// <summary>The identity mismatches, plus <c>toolchainStore</c> when the venv was built against another CPython root, which it keeps pointing into.</summary>
-    private List<string> MismatchesAgainst(InstalledState installed, ManagedPythonEnvironmentIdentity expected)
-    {
-        var mismatches = installed.Identity.MismatchesAgainst(expected).ToList();
-        if (!string.Equals(installed.PythonInstallDirectory, _toolchain.PythonInstallDirectory, StringComparison.Ordinal))
-        {
-            mismatches.Add("toolchainStore");
-        }
-
-        return mismatches;
-    }
-
-    private async Task<ManagedPythonEnvironmentIdentity?> ExpectedIdentityAsync(CancellationToken cancellationToken)
-    {
-        var lockfile = Path.Combine(_scriptsDirectory, LockfileName);
-        try
-        {
-            return BuildIdentity(await ComputeFileShaAsync(lockfile, cancellationToken));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private async Task<InstalledState?> ReadInstalledStateAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            if (!File.Exists(StatePath))
-            {
-                return null;
-            }
-
-            await using var stream = new FileStream(StatePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return await JsonSerializer.DeserializeAsync<InstalledState>(stream, cancellationToken: cancellationToken);
-        }
-        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
-        {
-            // An unreadable record is treated as absent: re-syncing an already-correct venv is cheap and idempotent,
-            // whereas trusting a record we could not read would serve a closure nothing verified.
-            return null;
-        }
-    }
-
-    private async Task WriteInstalledStateAsync(InstalledState state, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(StatePath, FileMode.Create, FileAccess.Write, FileShare.None);
-        await JsonSerializer.SerializeAsync(stream, state, cancellationToken: cancellationToken);
     }
 
     private static ManagedPythonEnvironmentStatus Status(ManagedPythonEnvironmentState state,
@@ -784,83 +706,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             Installed = installed,
             Mismatches = mismatches ?? []
         };
-    }
-
-    private static async Task<string> ComputeFileShaAsync(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
-    }
-
-    private static void CreateOwnerOnlyDirectory(string path)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            // Inherits the per-user %LOCALAPPDATA% ACL; no ACL code of its own (ADR 0016).
-            Directory.CreateDirectory(path);
-            return;
-        }
-
-        Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort sweep of the provision scratch directory.
-        }
-    }
-
-    /// <summary>
-    ///     The machine-global compute cache root, under the same base the llama.cpp binaries and the training runtime
-    ///     use so one provision serves every node profile on the box and the existing uninstaller sweep already reaches it.
-    /// </summary>
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(RuntimeCacheDirectory.Resolve(),
-            "compute-runtime");
-    }
-
-    /// <summary>
-    ///     Resolves the directory holding <c>pyproject.toml</c> / <c>uv.lock</c>.
-    /// </summary>
-    /// <remarks>
-    ///     The published app carries them beside the executable and a dev or test run reads them out of the working
-    ///     tree, which is why the repo path is a fallback rather than the only answer: the repo root is outside the
-    ///     publish glob and does not exist in a shipped install. Mirrors
-    ///     <c>TrainingRuntimeLayout.ResolveScriptsDirectory</c>.
-    /// </remarks>
-    private static string ResolveScriptsDirectory()
-    {
-        var published = Path.Combine(AppContext.BaseDirectory, PublishedScriptsDirectoryName);
-        if (File.Exists(Path.Combine(published, LockfileName)))
-        {
-            return published;
-        }
-
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, RepositoryScriptsRelativePath);
-            if (File.Exists(Path.Combine(candidate, LockfileName)))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        // Nothing found: return the published path so the missing-lockfile refusal names the location a shipped install
-        // would actually use, rather than inventing one.
-        return published;
     }
 
     /// <summary>One in-flight execution; disposing it more than once releases it once.</summary>
@@ -885,13 +730,5 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                 owner._executionLeases--;
             }
         }
-    }
-
-    /// <summary>The persisted record: the identity plus the store the venv links into.</summary>
-    private sealed class InstalledState
-    {
-        public required ManagedPythonEnvironmentIdentity Identity { get; init; }
-
-        public required string PythonInstallDirectory { get; init; }
     }
 }

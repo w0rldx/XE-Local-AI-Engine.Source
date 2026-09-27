@@ -2311,7 +2311,7 @@ Trust/read-only controls are intentionally outcome-tested. A bind beneath chain-
 
 ### Wiring a caller onto the isolated mode: five things the generic layer will not tell you
 
-- Bind the venv **and** uv `pythons` root read-only; venv Python points through a version alias. Do not bind the broader compute cache.
+- Bind the venv **and** uv `pythons` root read-only; venv Python points through a version alias. Do not bind the compute root or the shared toolchain store (only `python/pythons` is bound).
 - Execute the venv symlink, not its realpath, or `sys.prefix` loses site-packages.
 - Descriptor `RESOLVE_NO_SYMLINKS` checks every path component; `Path.GetFullPath` is insufficient. Report the offending component.
 - Environment paths are sandbox paths (`/work`, `/work/home`, `/tmp`), not host jail paths.

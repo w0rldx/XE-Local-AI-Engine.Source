@@ -218,6 +218,91 @@ public sealed class UvBinaryAcquirerTests : IDisposable
         AssertEx.Equal(Path.GetDirectoryName(winner)!, string.Join(" | ", Directory.GetDirectories(Path.Combine(_root, "uv"))), "the losing staging tree is cleaned up");
     }
 
+    [Test]
+    public async Task EnsureUv_OnAColdAcquisition_SweepsTheStagingAndStaleTreesACrashLeftBehind()
+    {
+        var archive = BuildUvArchive("ours");
+        var store = Path.Combine(_root, "uv");
+        var leftovers = new[]
+        {
+            Path.Combine(store, $"{ManagedPythonPins.UvVersion}.{Guid.NewGuid():N}.tmp"),
+            Path.Combine(store, $"{ManagedPythonPins.UvVersion}.{Guid.NewGuid():N}.stale"),
+            Path.Combine(store, $"0.0.1.{Guid.NewGuid():N}.tmp")
+        };
+        foreach (var leftover in leftovers)
+        {
+            _ = Directory.CreateDirectory(leftover);
+            await File.WriteAllTextAsync(Path.Combine(leftover, "partial"), "half an extract");
+        }
+
+        var otherVersion = Path.Combine(store, "0.0.1");
+        _ = Directory.CreateDirectory(otherVersion);
+        using var handler = new ArchiveHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+
+        var path = await new UvBinaryAcquirer(http, Sha256(archive)).EnsureUvAsync(_root, _ => { }, CancellationToken.None);
+
+        AssertEx.Equal("ours", await File.ReadAllTextAsync(path));
+        AssertEx.True(leftovers.All(static leftover => !Directory.Exists(leftover)), "every abandoned staging and stale tree is swept");
+        AssertEx.True(Directory.Exists(otherVersion), "a complete version directory is never swept");
+        AssertEx.True(File.Exists(Path.Combine(store, ".acquire.lock")), "the lock file is never swept");
+    }
+
+    [Test]
+    public async Task EnsureUv_OnAWarmCacheHit_TakesNoLockAndSweepsNothing()
+    {
+        TrainingRuntimeTestInfrastructure.SeedCachedUv(_root);
+        var leftover = Path.Combine(_root, "uv", $"{ManagedPythonPins.UvVersion}.{Guid.NewGuid():N}.tmp");
+        _ = Directory.CreateDirectory(leftover);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) =>
+            throw new InvalidOperationException("A cache hit must not reach the network."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+
+        _ = await new UvBinaryAcquirer(http).EnsureUvAsync(_root, _ => { }, CancellationToken.None);
+
+        // Without the lock another acquirer may own the sibling, so the warm path must leave it alone.
+        AssertEx.True(Directory.Exists(leftover));
+    }
+
+    [Test]
+    public async Task EnsureUv_WhenALeftoverCannotBeDeleted_StillAcquires()
+    {
+        if (!OperatingSystem.IsWindows() && string.Equals(Environment.UserName, "root", StringComparison.Ordinal))
+        {
+            Skip.Test("root ignores directory write permission, so the leftover cannot be made undeletable.");
+        }
+
+        var archive = BuildUvArchive("ours");
+        var leftover = Path.Combine(_root, "uv", $"{ManagedPythonPins.UvVersion}.{Guid.NewGuid():N}.tmp");
+        _ = Directory.CreateDirectory(leftover);
+        var pinned = Path.Combine(leftover, "partial");
+        await File.WriteAllTextAsync(pinned, "half an extract");
+        using var handler = new ArchiveHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+
+        // Windows refuses to delete an open file; Unix refuses to unlink from a directory without write permission.
+        await using var held = OperatingSystem.IsWindows() ? new FileStream(pinned, FileMode.Open, FileAccess.Read, FileShare.None) : null;
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(leftover, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        try
+        {
+            var path = await new UvBinaryAcquirer(http, Sha256(archive)).EnsureUvAsync(_root, _ => { }, CancellationToken.None);
+
+            AssertEx.Equal("ours", await File.ReadAllTextAsync(path));
+            AssertEx.True(File.Exists(pinned), "the undeletable leftover stays for the next cold acquisition");
+        }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(leftover, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
     private static ManagedPythonUvAsset WindowsAsset(byte[] archive)
     {
         return ManagedPythonPins.WindowsX64 with { Sha256 = Sha256(archive) };

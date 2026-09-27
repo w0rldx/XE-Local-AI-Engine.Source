@@ -81,11 +81,22 @@ no layout change forces the multi-GB Training environment to reinstall. Both loc
   The lockdown also skips symlinks, since `chmod` follows `bin/python` into the shared CPython store.
 - The compute sandbox binds the venv and the shared CPython root read-only; it never binds the store above them. The
   jail therefore sees every managed interpreter in the store, including ones other features or checkouts installed.
-- **Migration.** Compute records the store's `pythons` path beside the lockfile digest; a mismatch deletes
-  `venv/.venv` before the sync (its `pyvenv.cfg` `home` and `bin/python` link would keep naming the old root), then the
-  legacy `compute-runtime/{uv,pythons,uv-cache}`. uv is acquired before the delete, so an offline node without uv
-  keeps its old venv; the remaining ceiling is an offline node whose `uv sync` fails after the delete, which has no
-  compute runtime until it is online again — a staged swap like Training's is the upgrade path. Training never force-reinstalls: its legacy dirs go only once the
+- **Migration.** Compute records the store's `pythons` path beside the lockfile digest; a mismatch rebuilds through a
+  **staged swap** like Training's: `uv sync` into a fresh `compute-runtime/venv.staging/` (never over the old `.venv`,
+  whose `pyvenv.cfg` `home` and `bin/python` link would keep naming the old root), an import check of the staged
+  interpreter (`python -I -c "import numpy, scipy, sympy"`), then `venv/` → `venv.backup/`, `venv.staging/` → `venv/`,
+  an atomic record replace, and the backup deleted. The adopted path stays `venv/.venv`; a uv venv survives the rename
+  because `pyvenv.cfg` names the store by absolute path and `sys.prefix` follows the interpreter (proven live). Any
+  failure before the swap leaves the old venv in service: when it still has a record and a resolvable interpreter it is
+  served (cached until a restart or repair retries) and status reads `Ready` with the failure as its reason, Training's
+  precedent; without one the state is `Failed` as before. A crash between the renames is recovered under the
+  provision lock at the next provision (a lone `venv.backup/` is renamed back). Repair uses the same path, so a failed
+  repair keeps the old venv. The legacy `compute-runtime/{uv,pythons,uv-cache}` go only after a successful adopt.
+  Ceiling: a venv of the pre-identity build (`installed-compute-lock.sha256`) has no record to serve it from, so an
+  offline first start after that upgrade reports `Failed`, but keeps the old tree for the next online attempt.
+  Console-script shebangs in `venv/.venv/bin` still name the staging path after the rename; nothing uses them, since `run_python` execs `python -I -`.
+  The disk layout (paths, record, identity, swap, recovery) lives in `ComputeRuntimeDirectory`; the gate, lease,
+  cached runtime and status mapping stay in `ComputePythonEnvironment`. Training never force-reinstalls: its legacy dirs go only once the
   active venv's `pyvenv.cfg` `home` is under the store — after `Ready`, outside the adopt rollback, re-checked at
   startup and at the next install — or on Remove.
 

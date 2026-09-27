@@ -76,6 +76,8 @@ public sealed class UvBinaryAcquirer
             return executable;
         }
 
+        SweepAbandonedStaging(Path.Combine(cacheRoot, "uv"));
+
         var tempArchive = Path.Combine(Path.GetTempPath(), $"uv-{Guid.NewGuid():N}-{asset.AssetName}");
         try
         {
@@ -107,6 +109,29 @@ public sealed class UvBinaryAcquirer
         }
 
         return executable;
+    }
+
+    /// <summary>Removes the <c>.tmp</c> staging and <c>.stale</c> trees a crashed acquisition left behind.</summary>
+    /// <remarks>
+    ///     Only called under the acquire lock, so no live acquirer owns them. Complete version directories and the lock file
+    ///     never match. Best-effort: a leftover that will not delete is retried on the next cold acquisition.
+    /// </remarks>
+    private static void SweepAbandonedStaging(string uvStore)
+    {
+        string[] leftovers;
+        try
+        {
+            leftovers = [.. Directory.GetDirectories(uvStore, "*.tmp"), .. Directory.GetDirectories(uvStore, "*.stale")];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var leftover in leftovers)
+        {
+            TryDeleteDirectory(leftover);
+        }
     }
 
     private static string ThrowIfBlank(string value)

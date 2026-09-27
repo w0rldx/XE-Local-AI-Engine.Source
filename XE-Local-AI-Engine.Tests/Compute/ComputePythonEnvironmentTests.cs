@@ -41,6 +41,10 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
 
     private string VenvRoot => Path.Combine(CacheRoot, "venv", ".venv");
 
+    private string StagingDirectory => Path.Combine(CacheRoot, "venv.staging");
+
+    private string BackupDirectory => Path.Combine(CacheRoot, "venv.backup");
+
     public void Dispose()
     {
         _http.Dispose();
@@ -74,20 +78,34 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(CacheRoot, "installed-compute-lock.sha256"), "0123");
         File.SetUnixFileMode(VenvRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
-        var staleSeenBySync = true;
+        var stagingHadAVenv = true;
+        var liveVenvKeptDuringSync = false;
         var runner = new FakeProcessRunner((file, args, environment, _) =>
         {
-            staleSeenBySync = File.Exists(staleMarker);
-            WriteVenv(Path.Combine(CacheRoot, "venv"), environment["UV_PYTHON_INSTALL_DIR"]);
+            if (args[0] == "sync")
+            {
+                stagingHadAVenv = Directory.Exists(Path.Combine(args[^1], ".venv"));
+                liveVenvKeptDuringSync = File.Exists(staleMarker);
+                WriteVenv(args[^1], environment["UV_PYTHON_INSTALL_DIR"]);
+            }
+
             return 0;
         });
         using var environment = Create(runner);
 
         var runtime = await environment.GetRuntimeAsync();
 
-        AssertEx.False(staleSeenBySync, "uv sync keeps an existing venv's home and bin/python link, so the old venv must be gone first");
-        AssertEx.Equal(1, runner.Invocations.Count, "one uv sync");
+        AssertEx.False(stagingHadAVenv, "uv sync keeps an existing venv's home and bin/python link, so it must sync into a fresh project");
+        AssertEx.True(liveVenvKeptDuringSync, "the live venv stays in service until the staged one is proven");
+        AssertEx.False(File.Exists(staleMarker), "the swap replaced the old venv");
+        AssertEx.Equal(2, runner.Invocations.Count, "one uv sync, one import check");
         var sync = runner.Invocations[0];
+        AssertEx.Equal(StagingDirectory, sync.Args[^1]);
+        var probe = runner.Invocations[1];
+        AssertEx.Equal(Path.Combine(StagingDirectory, ".venv", "bin", "python"), probe.File);
+        AssertEx.Equal("-I,-c,import numpy, scipy, sympy", string.Join(",", probe.Args));
+        AssertEx.False(Directory.Exists(StagingDirectory), "the staging tree was renamed in");
+        AssertEx.False(Directory.Exists(BackupDirectory), "the parked old venv was dropped");
         AssertEx.Equal(Toolchain.PythonInstallDirectory, sync.Environment["UV_PYTHON_INSTALL_DIR"]);
         AssertEx.Equal(Toolchain.CacheDirectory, sync.Environment["UV_CACHE_DIR"]);
         AssertEx.Equal("copy", sync.Environment["UV_LINK_MODE"], "a hardlinked venv would share its inodes, and so its stripped write bits, with the cache");
@@ -140,7 +158,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
 
         var runtime = await environment.GetRuntimeAsync();
 
-        AssertEx.Equal(1, runner.Invocations.Count, "a moved store invalidates the venv");
+        AssertEx.Equal(1, UvSyncs(runner), "a moved store invalidates the venv");
         AssertEx.Equal(moved.PythonInstallDirectory, runner.Invocations[0].Environment["UV_PYTHON_INSTALL_DIR"]);
         AssertEx.Equal(moved.PythonInstallDirectory, runtime.ReadOnlyTrees[1]);
     }
@@ -224,7 +242,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         AssertEx.Empty(runner.Invocations);
 
         _ = await upgraded.GetRuntimeAsync();
-        AssertEx.Equal(1, runner.Invocations.Count, "the mismatch that status reports is the one the provision acts on");
+        AssertEx.Equal(1, UvSyncs(runner), "the mismatch that status reports is the one the provision acts on");
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, (await upgraded.ReadStatusAsync(CancellationToken.None)).State);
     }
 
@@ -328,7 +346,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         AssertEx.Equal(ManagedPythonEnvironmentState.NotProvisioned, (await environment.ReadStatusAsync(CancellationToken.None)).State);
 
         _ = await environment.GetRuntimeAsync();
-        AssertEx.Equal(2, runner.Invocations.Count, "the cached runtime went with the venv");
+        AssertEx.Equal(2, UvSyncs(runner), "the cached runtime went with the venv");
     }
 
     [Test]
@@ -398,7 +416,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     {
         var syncEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSync = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // The venv lands before the record, so mid-sync the disk reads like an interrupted provision.
+        // Mid-sync the disk holds a staging tree and no record, which reads like an absent or interrupted provision.
         using var other = Create(new GatedRunner(async (uvEnvironment, projectDirectory) =>
         {
             WriteVenv(projectDirectory, uvEnvironment["UV_PYTHON_INSTALL_DIR"]);
@@ -481,8 +499,322 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
 
         var runtime = await environment.GetRuntimeAsync();
 
-        AssertEx.Equal(2, runner.Invocations.Count, "a cached runtime whose interpreter is gone is not handed out");
+        AssertEx.Equal(2, UvSyncs(runner), "a cached runtime whose interpreter is gone is not handed out");
         AssertEx.True(File.Exists(runtime.InterpreterPath));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Rebuild_SwapsTheStagedVenvIn_ReplacesTheRecord_AndLocksTheNewTreeDown()
+    {
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        File.SetUnixFileMode(VenvRoot, File.GetUnixFileMode(VenvRoot) | UnixFileMode.UserWrite);
+        var oldMarker = Path.Combine(VenvRoot, "old.marker");
+        await File.WriteAllTextAsync(oldMarker, "the previous build");
+        await File.WriteAllTextAsync(Path.Combine(ScriptsDirectory, "uv.lock"), "version = 2\n");
+        using var upgraded = Create(SucceedingRunner());
+
+        var runtime = await upgraded.GetRuntimeAsync();
+
+        AssertEx.Equal(Path.Combine(VenvRoot, "bin", "python"), runtime.InterpreterPath, "the adopted path does not move with the staging tree");
+        AssertEx.False(File.Exists(oldMarker));
+        AssertEx.False(Directory.Exists(StagingDirectory));
+        AssertEx.False(Directory.Exists(BackupDirectory));
+        AssertEx.Equal(UnixFileMode.None, File.GetUnixFileMode(VenvRoot) & UnixFileMode.UserWrite);
+        var status = await upgraded.ReadStatusAsync(CancellationToken.None);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Ready, status.State);
+        AssertEx.Null(status.Reason);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Rebuild_WhenTheStagedSyncFails_KeepsServingThePreviousVenv_AndReadsReadyWithTheFailure()
+    {
+        using (var first = Create(StoreLinkedRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        // An offline node after an upgrade: the lockfile moved on and uv cannot fetch the new closure.
+        await File.WriteAllTextAsync(Path.Combine(ScriptsDirectory, "uv.lock"), "version = 2\n");
+        var runner = new FakeProcessRunner((_, _, _) => 1);
+        using var upgraded = Create(runner);
+
+        var runtime = await upgraded.GetRuntimeAsync();
+        var again = await upgraded.GetRuntimeAsync();
+
+        AssertEx.Equal(Path.Combine(VenvRoot, "bin", "python"), runtime.InterpreterPath);
+        AssertEx.True(File.Exists(runtime.InterpreterPath), "the previous venv was never touched");
+        AssertEx.Equal(Toolchain.PythonInstallDirectory, runtime.ReadOnlyTrees[1]);
+        AssertEx.True(ReferenceEquals(runtime, again), "the same cached fallback");
+        AssertEx.Equal(1, runner.Invocations.Count, "the fallback is cached; only a restart or a repair retries the rebuild");
+        AssertEx.False(Directory.Exists(StagingDirectory), "the failed staging tree is discarded");
+        var status = await upgraded.ReadStatusAsync(CancellationToken.None);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Ready, status.State);
+        AssertEx.Equal("Installing the pinned compute runtime packages failed. The previous compute runtime stays in service.", status.Reason);
+        AssertEx.Equal("lockfile", string.Join(",", status.Mismatches));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Rebuild_WhenTheImportCheckFails_NeverAdoptsTheStagedVenv()
+    {
+        using (var first = Create(StoreLinkedRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(ScriptsDirectory, "uv.lock"), "version = 2\n");
+        using var upgraded = Create(new FakeProcessRunner((_, args, environment, _) =>
+        {
+            if (args[0] != "sync")
+            {
+                return 1;
+            }
+
+            WriteVenv(args[^1], environment["UV_PYTHON_INSTALL_DIR"]);
+            File.WriteAllText(Path.Combine(args[^1], ".venv", "staged.marker"), "never adopted");
+            return 0;
+        }));
+
+        var runtime = await upgraded.GetRuntimeAsync();
+
+        AssertEx.False(File.Exists(Path.Combine(VenvRoot, "staged.marker")));
+        AssertEx.True(File.Exists(runtime.InterpreterPath));
+        AssertEx.Equal("The provisioned compute runtime failed its import check. The previous compute runtime stays in service.",
+            (await upgraded.ReadStatusAsync(CancellationToken.None)).Reason);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Provision_AfterACrashBetweenTheSwapRenames_RestoresTheParkedVenv_AndIsWarm()
+    {
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        // The first rename landed, the second never ran; a staging tree is left too.
+        Directory.Move(Path.Combine(CacheRoot, "venv"), BackupDirectory);
+        WriteVenv(StagingDirectory, Toolchain.PythonInstallDirectory);
+        var runner = SucceedingRunner();
+        using var restarted = Create(runner);
+
+        var runtime = await restarted.GetRuntimeAsync();
+
+        AssertEx.Empty(runner.Invocations);
+        AssertEx.True(File.Exists(runtime.InterpreterPath));
+        AssertEx.False(Directory.Exists(BackupDirectory));
+        AssertEx.False(Directory.Exists(StagingDirectory));
+        AssertEx.Equal(ManagedPythonEnvironmentState.Ready, (await restarted.ReadStatusAsync(CancellationToken.None)).State);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Repair_WhenTheRebuildFails_KeepsThePreviousVenvInService()
+    {
+        using (var first = Create(StoreLinkedRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        var runner = new FakeProcessRunner((_, _, _) => 1);
+        using var environment = Create(runner);
+
+        AssertEx.Equal(ManagedPythonActionOutcome.Started, (await environment.RepairAsync(CancellationToken.None)).Outcome);
+        await environment.PendingRepair;
+
+        var status = await environment.ReadStatusAsync(CancellationToken.None);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Ready, status.State);
+        AssertEx.Equal("Installing the pinned compute runtime packages failed. The previous compute runtime stays in service.", status.Reason);
+        AssertEx.Empty(status.Mismatches);
+        var runtime = await environment.GetRuntimeAsync();
+        AssertEx.True(File.Exists(runtime.InterpreterPath));
+        AssertEx.Equal(1, runner.Invocations.Count, "the repair's one failed sync; the call after it is served the kept venv");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Dispose_DuringABackgroundRepair_ReleasesTheGateQuietly_AndKeepsThePreviousVenv()
+    {
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        var syncEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var neverReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var environment = Create(new GatedRunner(async (_, _, ct) =>
+        {
+            syncEntered.TrySetResult();
+            await neverReleased.Task.WaitAsync(ct);
+        }));
+        AssertEx.Equal(ManagedPythonActionOutcome.Started, (await environment.RepairAsync(CancellationToken.None)).Outcome);
+        await syncEntered.Task;
+
+        environment.Dispose();
+        await environment.PendingRepair;
+
+        AssertEx.True(environment.PendingRepair.IsCompletedSuccessfully, "a shutdown under a repair must not leave a faulted task behind");
+        AssertEx.True(File.Exists(Path.Combine(VenvRoot, "bin", "python")));
+        AssertEx.False(Directory.Exists(StagingDirectory));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Rebuild_WhenThePreviousInterpreterDangles_IsNotServed_AndReadsFailed()
+    {
+        using (var first = Create(StoreLinkedRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        // The store the old venv links into lost its CPython: bin/python is now a dangling symlink.
+        File.Delete(StoreInterpreter);
+        await File.WriteAllTextAsync(Path.Combine(ScriptsDirectory, "uv.lock"), "version = 2\n");
+        using var upgraded = Create(new FakeProcessRunner((_, _, _) => 1));
+
+        _ = await AssertEx.ThrowsAsync<ComputeEnvironmentException>(() => upgraded.GetRuntimeAsync());
+
+        var status = await upgraded.ReadStatusAsync(CancellationToken.None);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Failed, status.State);
+        AssertEx.Equal("Installing the pinned compute runtime packages failed.", status.Reason);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Rebuild_WhenThePreviousInterpreterIsNotOnTheStore_IsNotServed()
+    {
+        // SucceedingRunner writes bin/python as a plain file: nothing the jail's store bind could run.
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(ScriptsDirectory, "uv.lock"), "version = 2\n");
+        using var upgraded = Create(new FakeProcessRunner((_, _, _) => 1));
+
+        _ = await AssertEx.ThrowsAsync<ComputeEnvironmentException>(() => upgraded.GetRuntimeAsync());
+        AssertEx.Equal(ManagedPythonEnvironmentState.Failed, (await upgraded.ReadStatusAsync(CancellationToken.None)).State);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Rebuild_WhenTheRecordCannotBeReplaced_RollsTheSwapBack_AndTheOldVenvIsLive()
+    {
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        File.SetUnixFileMode(VenvRoot, File.GetUnixFileMode(VenvRoot) | UnixFileMode.UserWrite);
+        var oldMarker = Path.Combine(VenvRoot, "old.marker");
+        await File.WriteAllTextAsync(oldMarker, "the previous build");
+        // A directory where the record goes: the swap's renames succeed, then the atomic record replace fails.
+        var statePath = Path.Combine(CacheRoot, "installed-compute-runtime.json");
+        File.Delete(statePath);
+        _ = Directory.CreateDirectory(statePath);
+        var runner = SucceedingRunner();
+        using var environment = Create(runner);
+
+        _ = await AssertEx.ThrowsAsync<ComputeEnvironmentException>(() => environment.GetRuntimeAsync());
+
+        AssertEx.Equal(1, UvSyncs(runner), "the rebuild reached the swap");
+        AssertEx.True(File.Exists(oldMarker), "the old venv was renamed back into place");
+        AssertEx.False(Directory.Exists(BackupDirectory));
+        AssertEx.False(File.Exists(Path.Combine(StagingDirectory, ".venv", "old.marker")), "the rolled-back tree in staging is the new one");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Provision_WithAParkedVenvBesideALiveOne_DropsTheParkedOne_AndIsWarm()
+    {
+        using (var first = Create(SucceedingRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        // A swap that finished but died before its cleanup: the parked tree is still locked down.
+        WriteVenv(BackupDirectory, Toolchain.PythonInstallDirectory);
+        File.SetUnixFileMode(Path.Combine(BackupDirectory, ".venv"), UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        await File.WriteAllTextAsync(Path.Combine(CacheRoot, "installed-compute-runtime.json.tmp"), "{ half");
+        var runner = SucceedingRunner();
+        using var restarted = Create(runner);
+
+        var runtime = await restarted.GetRuntimeAsync();
+
+        AssertEx.Empty(runner.Invocations);
+        AssertEx.True(File.Exists(runtime.InterpreterPath));
+        AssertEx.False(Directory.Exists(BackupDirectory));
+        AssertEx.False(File.Exists(Path.Combine(CacheRoot, "installed-compute-runtime.json.tmp")));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Remove_AlsoDeletesTheStagingAndParkedTrees()
+    {
+        using var environment = Create(SucceedingRunner());
+        _ = await environment.GetRuntimeAsync();
+        WriteVenv(StagingDirectory, Toolchain.PythonInstallDirectory);
+        WriteVenv(BackupDirectory, Toolchain.PythonInstallDirectory);
+        File.SetUnixFileMode(Path.Combine(BackupDirectory, ".venv"), UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+        AssertEx.Equal(ManagedPythonActionOutcome.Completed, (await environment.RemoveAsync(CancellationToken.None)).Outcome);
+
+        AssertEx.False(Directory.Exists(StagingDirectory));
+        AssertEx.False(Directory.Exists(BackupDirectory));
+        AssertEx.False(Directory.Exists(Path.Combine(CacheRoot, "venv")));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Rebuild_WhenTheShippedLockfileVanishes_WhileServingThePreviousVenv_StillReadsReady()
+    {
+        using (var first = Create(StoreLinkedRunner()))
+        {
+            _ = await first.GetRuntimeAsync();
+        }
+
+        File.Delete(Path.Combine(ScriptsDirectory, "uv.lock"));
+        using var environment = Create(SucceedingRunner());
+
+        var runtime = await environment.GetRuntimeAsync();
+
+        AssertEx.True(File.Exists(runtime.InterpreterPath));
+        var status = await environment.ReadStatusAsync(CancellationToken.None);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Ready, status.State, "status matches what run_python is handed");
+        AssertEx.Equal("The pinned compute runtime lockfile is missing from this installation. The previous compute runtime stays in service.", status.Reason);
+    }
+
+    private string StoreInterpreter => Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-linux-x86_64-gnu", "bin", "python3.13");
+
+    /// <summary>Like <see cref="SucceedingRunner" />, but bin/python is a real symlink into the store, as uv writes it.</summary>
+    private FakeProcessRunner StoreLinkedRunner()
+    {
+        return new FakeProcessRunner((_, args, environment, _) =>
+        {
+            if (args[0] != "sync")
+            {
+                return 0;
+            }
+
+            WriteVenv(args[^1], environment["UV_PYTHON_INSTALL_DIR"]);
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(StoreInterpreter)!);
+            File.WriteAllText(StoreInterpreter, "#!/bin/sh\n");
+            var python = Path.Combine(args[^1], ".venv", "bin", "python");
+            File.Delete(python);
+            _ = File.CreateSymbolicLink(python, StoreInterpreter);
+            return 0;
+        });
     }
 
     private ComputePythonEnvironment Create(IPythonToolRunner runner)
@@ -495,13 +827,23 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
             Toolchain);
     }
 
-    /// <summary>A uv whose sync completes only when the test says so.</summary>
+    private static int UvSyncs(FakeProcessRunner runner)
+    {
+        return runner.Invocations.Count(static invocation => invocation.Args[0] == "sync");
+    }
+
+    /// <summary>A uv whose sync completes only when the test says so; the import check passes at once.</summary>
     private sealed class GatedRunner : IPythonToolRunner
     {
-        private readonly Func<IReadOnlyDictionary<string, string>, string, Task> _sync;
+        private readonly Func<IReadOnlyDictionary<string, string>, string, CancellationToken, Task> _sync;
         private int _syncCount;
 
         public GatedRunner(Func<IReadOnlyDictionary<string, string>, string, Task> sync)
+            : this((environment, projectDirectory, _) => sync(environment, projectDirectory))
+        {
+        }
+
+        public GatedRunner(Func<IReadOnlyDictionary<string, string>, string, CancellationToken, Task> sync)
         {
             _sync = sync;
         }
@@ -516,8 +858,13 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
             TimeSpan timeout,
             CancellationToken ct)
         {
+            if (args[0] != "sync")
+            {
+                return 0;
+            }
+
             _ = Interlocked.Increment(ref _syncCount);
-            await _sync(environment, args[^1]);
+            await _sync(environment, args[^1], ct);
             return 0;
         }
     }
