@@ -95,7 +95,7 @@ therefore requires nesting its namespace to match: a file in `Endpoints/{Area}/V
 `using …{Area}.V1.Mappers;` (a **child** namespace is *not* auto-visible to its parent). A **parent**
 namespace *is* auto-visible to its children, so a mapper in `…V1.Mappers` sees the DTOs in `…V1` with no
 `using`. Moving a type between files *in the same folder* stays a zero-risk pure move (no namespace/`using`
-change). See `docs/agent-knowledge.md` for the full trap.
+change).
 
 **The one deliberate exception — `Dtos/`.** DTO files live in `Endpoints/{Area}/V1/Dtos/` but keep the
 **flat** `…{Area}.V1` namespace, and IDE0130 is disabled for `**/Endpoints/**/V1/Dtos/*.cs` in
@@ -739,5 +739,5 @@ hook (`core/formatting/TimeFormatting.ts`).
 - [09-api-and-hubs.md](09-api-and-hubs.md) — FastEndpoints route families, hubs, OpenAPI→hey-api.
 - [10-react-client.md](10-react-client.md) — React client architecture.
 - [13-testing-and-validation.md](13-testing-and-validation.md) — the gates these conventions ride on.
-- `docs/agent-knowledge.md` — the hard-won traps (IDE0130, Release-only analyzers, bare-`TODO` build break).
+- `docs/agent-knowledge.md` — the hard-won traps (Release-only analyzers).
 - `.editorconfig`, `Directory.Build.props`, `doctor.config.jsonc` — where the auto-enforced rules live.

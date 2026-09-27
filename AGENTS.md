@@ -5,10 +5,10 @@ loopback-only `/api/local/v1` endpoints and SignalR hubs, persists to SQLite wit
 supervises `llama-server` / `sd-server` child processes for local inference. .NET 10 + Aspire, React 19 +
 Vite + pnpm, Python (uv) for training tooling.
 
-This file is instructions, not documentation. Before a non-trivial change, use the navigation in
-`docs/agent-knowledge.md` to read §0, the relevant numbered sections, and the corrected stale beliefs.
-Follow its evidence links when changing a rule or investigating the same failure. For architecture, start
-at `docs/wiki/Home.md` and read the pages for the affected subsystem.
+This file is instructions, not documentation. Before a non-trivial change, read the index
+`docs/agent-knowledge.md` (§0 and its routing table), then the `docs/agent-knowledge/` topic files your change
+touches, including their stale-beliefs tables. Follow evidence links when changing a rule or investigating the
+same failure. For architecture, start at `docs/wiki/Home.md` and read the pages for the affected subsystem.
 
 ## Working rules
 
@@ -32,8 +32,9 @@ at `docs/wiki/Home.md` and read the pages for the affected subsystem.
   EF migration designer files. Regenerate and commit the result.
 - Cite `file` + symbol, never `file:line`, for code that is being edited (lines drift, symbols survive).
 - Agents may propose updates to durable standards or project intelligence; promotion needs human approval.
-- `docs/agent-knowledge.md` entries are written as rule → failure prevented → authority. Add one when you
-  pay for a new trap; never quote a count or timing from a doc as current, the script's own output wins.
+- Agent-knowledge entries (topic files under `docs/agent-knowledge/`) are written as rule → failure prevented →
+  authority, body <= 900 chars. Propose one in `docs/agent-knowledge/proposed.md` when you pay for a new trap;
+  never quote a count or timing from a doc as current, the script's own output wins.
 
 ## Repository map
 
@@ -189,6 +190,7 @@ Opt-in live runners (nothing invokes them; ask before running, run before a test
 
 ## Where to look
 
-- `docs/agent-knowledge.md` — hard-won rules by area (§1 build/test, §2 runtime, §3 models, §4 agents, §5 frontend).
+- `docs/agent-knowledge.md` — index of hard-won rules (§0 orientation, routing table, §6 not built); topic files
+  in `docs/agent-knowledge/` by area (§1 build/test/CI, §2 runtime, §3 models, §4 agents, §5 frontend).
 - `docs/wiki/` — architecture; `docs/adr/` — decisions; `docs/roadmaps/` — status records.
 - `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` — what a PR must state.

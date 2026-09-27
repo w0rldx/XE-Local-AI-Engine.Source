@@ -232,7 +232,7 @@ Codex-only levels `minimal` and `xhigh` are offered only for Codex models; they 
 
 On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) maps a carried-over effort onto a different model's available set **without collapsing reasoning intent** (e.g. switching from a Codex model to a binary-only local model): a reasoning-OFF source (`none`) stays `none` when offered; any reasoning-ON source maps to the available reasoning-ON level of nearest intensity rank (`xhigh→high`, `minimal→low` onto a graded set; any graded level→`on` onto a binary set), falling back to the set's first entry only when no comparable level exists. The effort that actually drives the turn is persisted on the message metadata (`ReasoningEffort`, `NodeChatStreamService.cs`) so it survives reload.
 
-An `auto` effort that grades a turn as the FAST tier (`DefaultReasoningEffortDispatcher`) swaps it onto the local GGUF model named by the node setting `AutoEffortFastModelName`, when one is set. Provisioning such a model in a dev run (GGUF import is desktop-only) is documented in `docs/agent-knowledge.md` §2, next to the `HuggingFace__ModelsDirectory` bullet.
+An `auto` effort that grades a turn as the FAST tier (`DefaultReasoningEffortDispatcher`) swaps it onto the local GGUF model named by the node setting `AutoEffortFastModelName`, when one is set. Provisioning such a model in a dev run (GGUF import is desktop-only) is documented in `docs/agent-knowledge/dev-runtime.md` ("A dev run provisions models through a worktree-private `HuggingFace__ModelsDirectory`").
 
 **Live-validated behaviour (7/7 PASS on a fresh host, 2026-09-04).** Every
 non-Normal turn's `EffortDispatched` notice carries a `noticeDetail` code. Three codes were observed live: a swap

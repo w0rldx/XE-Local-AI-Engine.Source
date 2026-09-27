@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when the code-grounded wiki has fallen behind an inventory the code owns.
+"""Fail when the docs have fallen behind an inventory the code owns, or agent-knowledge outgrows its caps.
 
 `docs/wiki/` claims to enumerate things the code defines — one row per SignalR hub, one row per
 nested route family in `LocalApiRoutes`, one section per React feature area, one entry per solution
@@ -15,7 +15,12 @@ Every inventory must be non-empty. An inventory that silently resolves to zero i
 directory, a renamed source file, a regex that stopped matching — would make its check vacuously
 green, which is the one outcome a guard must never produce.
 
-Exit codes: 0 clean, 1 something is missing from a page, 2 a check could not run at all.
+The agent-knowledge checks are a growth guard rather than an inventory mention check: the always-read
+index `docs/agent-knowledge.md` must link every topic file under `docs/agent-knowledge/`, stay under its
+byte cap and keep its `## 0.`..`## 7.` anchors (code comments cite them), and every rule entry in a topic
+file must stay short. A previous compaction regrew within a month; the caps make that a CI failure.
+
+Exit codes: 0 clean, 1 something is missing from a page or over a cap, 2 a check could not run at all.
 """
 
 from __future__ import annotations
@@ -47,6 +52,22 @@ MAP_HUB_RE = re.compile(r"MapHub<\s*(?P<hub>[A-Za-z0-9_]+)\s*>")
 NESTED_ROUTE_CLASS_RE = re.compile(r"^ {4}public static class (?P<name>[A-Za-z0-9_]+)\b", re.MULTILINE)
 SOLUTION_PROJECT_RE = re.compile(r"<Project\s+Path=\"(?P<path>[^\"]+)\"")
 NUMBERED_WIKI_PAGE_GLOB = "[0-9][0-9]-*.md"
+
+AGENT_KNOWLEDGE_INDEX = Path("docs/agent-knowledge.md")
+AGENT_KNOWLEDGE_DIR = Path("docs/agent-knowledge")
+AGENT_KNOWLEDGE_EVIDENCE = "docs/agent-knowledge-evidence.md"
+# Pending proposals collect here until promoted; the entry caps and the PROPOSED ban do not apply to it.
+AGENT_KNOWLEDGE_PROPOSED = "proposed.md"
+# The index is read in full before every non-trivial change, so its size is paid on every task.
+AGENT_KNOWLEDGE_INDEX_MAX_BYTES = 12288
+# A topic file is read whole when its area is touched; above this it stops being a quick read.
+AGENT_KNOWLEDGE_TOPIC_MAX_BYTES = 32768
+# An entry is rule, failure prevented and authority; anything longer is narrative for the evidence ledger.
+AGENT_KNOWLEDGE_ENTRY_MAX_CHARS = 900
+# Inbound code comments cite `docs/agent-knowledge.md §N`, so these section anchors must survive.
+AGENT_KNOWLEDGE_SECTIONS = range(8)
+MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
+ENTRY_HEADING_RE = re.compile(r"^###\s+(?P<title>.*)$", re.MULTILINE)
 BUILD_OUTPUT_DIRS = frozenset({"bin", "obj"})
 
 
@@ -61,8 +82,12 @@ class Missing:
     check: str
     name: str
     doc: Path
+    # Set for a violation that is not an absence (a size cap, a misplaced heading); replaces the MISSING wording.
+    problem: str = ""
 
     def render(self) -> str:
+        if self.problem:
+            return f"OVER-CAP {self.check}: {self.doc.as_posix()}: {self.problem}"
         return f"MISSING {self.check}: {self.name} — expected in {self.doc.as_posix()}"
 
 
@@ -178,12 +203,98 @@ def check_solution_projects(root: Path) -> CheckResult:
     return build_result(check, PROJECT_LAYOUT_PAGE, read_text(root, PROJECT_LAYOUT_PAGE), inventory)
 
 
+def agent_knowledge_topic_files(root: Path, check: str) -> list[Path]:
+    topic_dir = root / AGENT_KNOWLEDGE_DIR
+    if not topic_dir.is_dir():
+        raise InventoryError(f"{AGENT_KNOWLEDGE_DIR.as_posix()} does not exist under {root}")
+    files = sorted(topic_dir.glob("*.md"))
+    require_non_empty(check, AGENT_KNOWLEDGE_DIR.as_posix(), (path.name for path in files))
+    return files
+
+
+def check_agent_knowledge_index(root: Path) -> CheckResult:
+    """The index links every topic file, stays under its byte cap, and keeps its `## 0.`..`## 7.` anchors."""
+    check = "agent-knowledge-index"
+    names = tuple(path.name for path in agent_knowledge_topic_files(root, check))
+    index_text = read_text(root, AGENT_KNOWLEDGE_INDEX)
+    index = AGENT_KNOWLEDGE_INDEX
+
+    missing = [
+        Missing(check, name, index)
+        for name in names
+        if not re.search(rf"\]\(\s*[^)\s]*agent-knowledge/{re.escape(name)}(?:#[^)]*)?\s*\)", index_text)
+    ]
+    missing.extend(
+        Missing(check, f"## {section}.", index)
+        for section in AGENT_KNOWLEDGE_SECTIONS
+        if not re.search(rf"^## {section}\.", index_text, re.MULTILINE)
+    )
+    size = len(index_text.encode("utf-8"))
+    if size > AGENT_KNOWLEDGE_INDEX_MAX_BYTES:
+        missing.append(
+            Missing(
+                check,
+                "size",
+                index,
+                f"index is {size} bytes, cap {AGENT_KNOWLEDGE_INDEX_MAX_BYTES}; move detail into a topic file",
+            )
+        )
+    return CheckResult(check=check, doc=index, inventory=names, missing=tuple(missing))
+
+
+def check_agent_knowledge_entries(root: Path) -> CheckResult:
+    """Every topic file but proposed.md stays under its byte cap, with short entries and no PROPOSED heading."""
+    check = "agent-knowledge-entries"
+    files = [path for path in agent_knowledge_topic_files(root, check) if path.name != AGENT_KNOWLEDGE_PROPOSED]
+    inventory = require_non_empty(check, AGENT_KNOWLEDGE_DIR.as_posix(), (path.name for path in files))
+
+    missing: list[Missing] = []
+    for path in files:
+        doc = AGENT_KNOWLEDGE_DIR / path.name
+        text = path.read_text(encoding="utf-8")
+        size = len(text.encode("utf-8"))
+        if size > AGENT_KNOWLEDGE_TOPIC_MAX_BYTES:
+            missing.append(
+                Missing(
+                    check,
+                    path.name,
+                    doc,
+                    f"file is {size} bytes, cap {AGENT_KNOWLEDGE_TOPIC_MAX_BYTES}; "
+                    f"condense entries or move narrative to {AGENT_KNOWLEDGE_EVIDENCE}",
+                )
+            )
+        # ponytail: headings inside fenced code blocks are not skipped; a `###` line in a fence splits an entry.
+        for match in ENTRY_HEADING_RE.finditer(text):
+            title = match.group("title").strip()
+            if title.startswith("PROPOSED"):
+                missing.append(
+                    Missing(
+                        check, title, doc, f'"### {title}" is a pending proposal; move it to {AGENT_KNOWLEDGE_PROPOSED}'
+                    )
+                )
+            next_heading = MARKDOWN_HEADING_RE.search(text, match.end())
+            body = text[match.end() : next_heading.start() if next_heading else len(text)].strip()
+            if len(body) > AGENT_KNOWLEDGE_ENTRY_MAX_CHARS:
+                missing.append(
+                    Missing(
+                        check,
+                        title,
+                        doc,
+                        f'entry "### {title}" is {len(body)} chars, cap {AGENT_KNOWLEDGE_ENTRY_MAX_CHARS}; '
+                        f"move narrative to {AGENT_KNOWLEDGE_EVIDENCE}",
+                    )
+                )
+    return CheckResult(check=check, doc=AGENT_KNOWLEDGE_DIR, inventory=inventory, missing=tuple(missing))
+
+
 CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_signalr_hubs,
     check_local_api_route_families,
     check_react_features,
     check_wiki_pages_linked,
     check_solution_projects,
+    check_agent_knowledge_index,
+    check_agent_knowledge_entries,
 )
 
 
@@ -194,7 +305,10 @@ def default_repo_root() -> Path:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="docs-inventory-check",
-        description="Fail when docs/wiki/ has fallen behind an inventory the code owns.",
+        description=(
+            "Fail when docs/wiki/ has fallen behind an inventory the code owns, "
+            "or docs/agent-knowledge outgrows its size caps."
+        ),
     )
     parser.add_argument(
         "--repo-root",

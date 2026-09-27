@@ -106,6 +106,31 @@ PROJECT_LAYOUT_MD = """# Project Layout
 - `Contoso.One/Plugins/Contoso.Nested/` — nested project (`Contoso.Nested`)
 """
 
+AGENT_KNOWLEDGE_INDEX_MD = (
+    "# Agent knowledge\n\n"
+    + "".join(f"## {n}. Section {n}\n\nSee [topic](agent-knowledge/build.md#s{n}).\n\n" for n in range(8))
+    + "Pending: [proposed](agent-knowledge/proposed.md).\n"
+)
+
+BUILD_TOPIC_MD = """# Build
+
+### Short rule
+
+Do the thing; it prevents the failure. Authority: a test.
+
+## Subsection
+
+### Another rule
+
+Also short.
+"""
+
+PROPOSED_TOPIC_MD = """# Proposed
+
+### PROPOSED: a long pending rule
+
+""" + ("narrative " * 200)
+
 
 class DocsInventoryCheckTests(unittest.TestCase):
     def make_repo(self) -> Path:
@@ -134,6 +159,12 @@ class DocsInventoryCheckTests(unittest.TestCase):
         (wiki / "02-project-layout.md").write_text(PROJECT_LAYOUT_MD, encoding="utf-8")
         (wiki / "09-api-and-hubs.md").write_text(API_AND_HUBS_MD, encoding="utf-8")
         (wiki / "10-react-client.md").write_text(REACT_CLIENT_MD, encoding="utf-8")
+
+        (root / "docs" / "agent-knowledge.md").write_text(AGENT_KNOWLEDGE_INDEX_MD, encoding="utf-8")
+        topics = root / "docs" / "agent-knowledge"
+        topics.mkdir()
+        (topics / "build.md").write_text(BUILD_TOPIC_MD, encoding="utf-8")
+        (topics / "proposed.md").write_text(PROPOSED_TOPIC_MD, encoding="utf-8")
 
         return root
 
@@ -272,6 +303,100 @@ class DocsInventoryCheckTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
         self.assertIn("MISSING signalr-hubs: BetaHub — expected in docs/wiki/09-api-and-hubs.md", out)
         self.assertIn("1 missing", out)
+
+    def test_agent_knowledge_index_passes_when_every_topic_is_linked(self) -> None:
+        result = MODULE.check_agent_knowledge_index(self.make_repo())
+
+        self.assertEqual(("build.md", "proposed.md"), result.inventory)
+        self.assertEqual((), result.missing)
+
+    def test_agent_knowledge_index_reports_an_unlinked_topic_file(self) -> None:
+        root = self.make_repo()
+        (root / "docs" / "agent-knowledge" / "frontend.md").write_text("# Frontend\n", encoding="utf-8")
+
+        result = MODULE.check_agent_knowledge_index(root)
+
+        self.assertEqual(["frontend.md"], [item.name for item in result.missing])
+        self.assertEqual(
+            "MISSING agent-knowledge-index: frontend.md — expected in docs/agent-knowledge.md",
+            result.missing[0].render(),
+        )
+
+    def test_agent_knowledge_index_reports_an_oversize_index(self) -> None:
+        root = self.make_repo()
+        index = root / "docs" / "agent-knowledge.md"
+        index.write_text(AGENT_KNOWLEDGE_INDEX_MD + "x" * MODULE.AGENT_KNOWLEDGE_INDEX_MAX_BYTES, encoding="utf-8")
+
+        result = MODULE.check_agent_knowledge_index(root)
+
+        self.assertEqual(1, len(result.missing))
+        rendered = result.missing[0].render()
+        self.assertTrue(rendered.startswith("OVER-CAP agent-knowledge-index: docs/agent-knowledge.md: index is "))
+        self.assertIn(f"cap {MODULE.AGENT_KNOWLEDGE_INDEX_MAX_BYTES}", rendered)
+
+    def test_agent_knowledge_index_reports_a_missing_section_anchor(self) -> None:
+        root = self.make_repo()
+        self.drop(root, "docs/agent-knowledge.md", "## 3. Section 3")
+
+        result = MODULE.check_agent_knowledge_index(root)
+
+        self.assertEqual(["## 3."], [item.name for item in result.missing])
+
+    def test_agent_knowledge_index_raises_on_an_empty_topic_directory(self) -> None:
+        root = self.make_repo()
+        for path in (root / "docs" / "agent-knowledge").iterdir():
+            path.unlink()
+
+        with self.assertRaises(MODULE.InventoryError):
+            MODULE.check_agent_knowledge_index(root)
+        with self.assertRaises(MODULE.InventoryError):
+            MODULE.check_agent_knowledge_entries(root)
+
+    def test_agent_knowledge_entries_pass_and_exempt_proposed(self) -> None:
+        # proposed.md holds an oversize PROPOSED entry in the fixture; it must not be flagged.
+        result = MODULE.check_agent_knowledge_entries(self.make_repo())
+
+        self.assertEqual(("build.md",), result.inventory)
+        self.assertEqual((), result.missing)
+
+    def test_agent_knowledge_entries_report_an_oversize_entry(self) -> None:
+        root = self.make_repo()
+        topic = root / "docs" / "agent-knowledge" / "build.md"
+        body = "y" * (MODULE.AGENT_KNOWLEDGE_ENTRY_MAX_CHARS + 1)
+        topic.write_text(BUILD_TOPIC_MD.replace("Also short.", body), encoding="utf-8")
+
+        result = MODULE.check_agent_knowledge_entries(root)
+
+        self.assertEqual(["Another rule"], [item.name for item in result.missing])
+        self.assertEqual(
+            f'OVER-CAP agent-knowledge-entries: docs/agent-knowledge/build.md: entry "### Another rule" is '
+            f"{MODULE.AGENT_KNOWLEDGE_ENTRY_MAX_CHARS + 1} chars, cap {MODULE.AGENT_KNOWLEDGE_ENTRY_MAX_CHARS}; "
+            "move narrative to docs/agent-knowledge-evidence.md",
+            result.missing[0].render(),
+        )
+
+    def test_agent_knowledge_entries_report_an_oversize_file(self) -> None:
+        root = self.make_repo()
+        topic = root / "docs" / "agent-knowledge" / "build.md"
+        # Many short entries: every entry is under its cap, only the file total is over.
+        entry = "### Rule\n\n" + "z" * 500 + "\n\n"
+        count = MODULE.AGENT_KNOWLEDGE_TOPIC_MAX_BYTES // len(entry) + 1
+        topic.write_text("# Build\n\n" + entry * count, encoding="utf-8")
+
+        result = MODULE.check_agent_knowledge_entries(root)
+
+        self.assertEqual(["build.md"], [item.name for item in result.missing])
+        self.assertIn(f"cap {MODULE.AGENT_KNOWLEDGE_TOPIC_MAX_BYTES}", result.missing[0].render())
+
+    def test_agent_knowledge_entries_report_a_stray_proposed_heading(self) -> None:
+        root = self.make_repo()
+        topic = root / "docs" / "agent-knowledge" / "build.md"
+        topic.write_text(BUILD_TOPIC_MD + "\n### PROPOSED: new rule\n\nShort.\n", encoding="utf-8")
+
+        result = MODULE.check_agent_knowledge_entries(root)
+
+        self.assertEqual(["PROPOSED: new rule"], [item.name for item in result.missing])
+        self.assertIn("move it to proposed.md", result.missing[0].render())
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()
