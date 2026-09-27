@@ -1796,7 +1796,7 @@ is rebuilt from the database; folding costs the model nothing it still needs.
 
 Its projection mirrors `ConversationContextBuilder.Build` exactly — the same selected-path collapse, anchor space
 and completed/non-empty filter — and **counts reasoning even where the provider will drop it**. Verified against
-Microsoft.Extensions.AI.OpenAI 10.9.0: the Chat Completions client converts text, URI, data and
+Microsoft.Extensions.AI.OpenAI 10.9.0 and 10.10.0: the Chat Completions client converts text, URI, data and
 hosted-file content only, so a historical `TextReasoningContent` never reaches a llama.cpp session;
 only the Responses API client (Codex) replays it, and must. Over-counting a Chat-Completions provider
 makes the bound fire slightly early, while under-counting a Responses-API one would make it fire too

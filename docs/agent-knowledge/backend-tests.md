@@ -152,6 +152,15 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** `TUnit.Playwright`'s `BrowserTest` registers its browser under one fixed service key per worker, so the first class to launch on a worker decides Chromium's command line and every later class's `BrowserTypeLaunchOptions` is discarded without a warning. A suite needing its own launch switches launches its own browser in a `[Before(Test)]` hook and drives its own page. **Prevents:** two suites that differ by a launch switch silently sharing the first one's, invisible from the test source. **Authority:** `XEFakeAudioE2ETestBase.LaunchFakeAudioBrowserAsync`; upstream `TUnit.Playwright` `BrowserTest.BrowserSetup`. [evidence](../agent-knowledge-evidence.md#tunitplaywright-caches-one-browser-per-worker-so-per-class-launch-arguments-are-silently-ignored)
 
+### A test host can never reach `LaunchMode.Desktop` — two independent walls, not a convention
+
+**Rule:** `Program.CreateAppCoreAsync` resolves `launchMode` only when `customization is null`; every
+`TestServerWebAppFactory` host passes a `ProgramAppCustomization` and runs `Headless`. Even without that,
+`VelopackInstall.IsManaged()` reads `VelopackLocator.Current`, which throws until `VelopackApp.SetLocator` runs (never in
+a fixture). A test of an `IDesktopOnlyEndpoint` therefore asserts the endpoint's ABSENCE. **Prevents:** trying to opt a
+test into desktop mode through args or env. **Authority:** `Program.CreateAppCoreAsync`, `VelopackInstall.IsManaged`,
+`ValidateExecutableEndpointTests`.
+
 ## Covered elsewhere
 
 - Development Mode is ON by default in the test host, so a Development-gated surface IS mapped there — `docs/wiki/17-writing-tests.md` ("Per-host knobs (there is no `WithWebHostBuilder`)"); `docs/wiki/09-api-and-hubs.md` (hub table); an absence test builds a factory with `EnableDevelopmentMode = false`, never the shared one

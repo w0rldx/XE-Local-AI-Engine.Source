@@ -63,7 +63,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         AssertEx.Equal(expected: 5000L, await ScalarAsync<long>(connection, "PRAGMA busy_timeout;"));
         AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA synchronous;")); // 1 == NORMAL
 
-        // Prove real writability — BEGIN IMMEDIATE alone does not (agent-knowledge): actually create and read a row.
+        // Prove real writability — BEGIN IMMEDIATE alone does not: actually create and read a row.
         await ExecuteAsync(connection, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");
         await ExecuteAsync(connection, "INSERT INTO t(v) VALUES('written');");
         AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM t;"));
