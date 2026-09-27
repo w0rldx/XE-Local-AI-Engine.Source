@@ -314,9 +314,13 @@ public sealed class GraphWorkflowCancelTests
         return runId;
     }
 
-    private static async Task<GraphWorkflowNodeRunSnapshot> AdvanceUntilCancelledAsync(GraphWorkflowHarness harness, Guid runId, int maxTicks = 40)
+    /// <summary>Ticks until the released turn has been settled, under a failure deadline rather than a tick count.</summary>
+    private static async Task<GraphWorkflowNodeRunSnapshot> AdvanceUntilCancelledAsync(GraphWorkflowHarness harness, Guid runId)
     {
-        for (var tick = 0; tick < maxTicks; tick++)
+        // The release lands the turn on a thread-pool continuation; on a starved pool any fixed tick count can run out
+        // first, and forty back-to-back ticks did, in 14 s, under a loaded parallel run.
+        var deadline = DateTimeOffset.UtcNow + TestBudgets.Contended;
+        while (true)
         {
             var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze");
             if (GraphWorkflowStateMachine.IsTerminal(nodeRun.Status))
@@ -324,10 +328,17 @@ public sealed class GraphWorkflowCancelTests
                 return nodeRun;
             }
 
-            _ = await harness.AdvanceAsync(runId);
-        }
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new AssertionException($"Run {runId} left its agent node unsettled within {TestBudgets.Contended}.");
+            }
 
-        throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");
+            _ = await harness.AdvanceAsync(runId);
+
+            // real-timer: NOT a wait for the event — the loop polls a real condition under a failure deadline, and this
+            // hands the thread pool back so the released turn's continuation can run (see GraphWorkflowHarness.AdvanceUntilAsync).
+            await Task.Delay(GraphWorkflowHarness.PollPause);
+        }
     }
 
     /// <summary>
