@@ -188,6 +188,19 @@ jobs:
             --output '${{ matrix.publish-dir }}'
           scripts/tests/windows-framework-launcher-smoke.ps1 -PublishDirectory '${{ matrix.publish-dir }}'
 
+      # Production SPA builds emit no source maps; one in the payload would be served anonymously by the node. Same
+      # rule as the *.map entry in package-rc.sh / package-tester-win.ps1, which this workflow does not run.
+      - name: Verify payload carries no source maps
+        shell: bash
+        run: |
+          set -euo pipefail
+          maps="$(find "${{ matrix.publish-dir }}" -name '*.map' -print)"
+          if [[ -n "$maps" ]]; then
+            echo "::error::Source maps found in the publish output; production builds must emit none:"
+            printf '%s\n' "$maps"
+            exit 1
+          fi
+
       - name: Verify packaged update release track
         shell: bash
         run: |

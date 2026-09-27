@@ -757,9 +757,10 @@ Write-Host ">> Publish output verified (SPA present)."
 # stayed invisible, and a maintainer who sees this throw learns the publish directory was executed in.
 #
 # These patterns are the state/secret classes specifically — logs and the dead-letter queue leak host paths, while
-# dp-keys / node.sqlite / node.key / *.enc would leak real secrets. A strict allow-list of expected filenames would
-# be stronger still, but authoring one requires a captured inventory of a real win-x64 publish; add it here once
-# that inventory exists rather than guessing at it and failing a release on a legitimate file.
+# dp-keys / node.sqlite / node.key / *.enc would leak real secrets. *.map is the one debug-artifact class: production
+# SPA builds emit no source maps, so one here means the bundle was built with them. A strict allow-list of expected
+# filenames would be stronger still, but authoring one requires a captured inventory of a real win-x64 publish; add
+# it here once that inventory exists rather than guessing at it and failing a release on a legitimate file.
 $forbiddenPublishArtifacts = @(
     @{ Pattern = "logs";             Reason = "log output from running the app in the publish directory (leaks host paths)" },
     @{ Pattern = "dead-letter-queue"; Reason = "dead-letter queue created beside the executable on every launch" },
@@ -770,7 +771,8 @@ $forbiddenPublishArtifacts = @(
     @{ Pattern = "node.key";         Reason = "node encryption key" },
     @{ Pattern = "*.enc";            Reason = "encrypted secret store (HF token, GitHub token, provider credentials)" },
     @{ Pattern = "desktop-port.txt"; Reason = "persisted desktop loopback port" },
-    @{ Pattern = "*.log";            Reason = "log file" }
+    @{ Pattern = "*.log";            Reason = "log file" },
+    @{ Pattern = "*.map";            Reason = "source map (debug artifact; production builds emit none)" }
 )
 $leakedArtifacts = [System.Collections.Generic.List[string]]::new()
 foreach ($forbidden in $forbiddenPublishArtifacts) {
@@ -781,16 +783,17 @@ foreach ($forbidden in $forbiddenPublishArtifacts) {
 }
 if ($leakedArtifacts.Count -gt 0) {
     throw @"
-Runtime state found in the publish output. Packing would ship it to testers:
+Runtime state or debug artifacts found in the publish output. Packing would ship them to testers:
 
 $($leakedArtifacts -join "`n")
 
-This means the application was executed from '$publishDir'. Never run the published executable in place —
+Runtime state means the application was executed from '$publishDir'. Never run the published executable in place —
 it writes logs, queues and (in desktop mode) its database and keys next to itself. Delete that directory and
 re-run this script. Smoke-test the packed Portable.zip instead, which is what testers actually receive.
+A *.map means the SPA was built with source maps; rebuild it without them.
 "@
 }
-Write-Host ">> Publish output carries no runtime state (no logs, queues, keys or databases)."
+Write-Host ">> Publish output carries no runtime state or source maps (no logs, queues, keys, databases or *.map)."
 
 $publishedUpdateConfigPath = Join-Path $publishDir "appsettings.AppUpdate.json"
 if (-not (Test-Path $publishedUpdateConfigPath -PathType Leaf)) {

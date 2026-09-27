@@ -12,6 +12,8 @@ DEV_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "dev-build.yml"
 PACKAGE_VERSIONS = REPO_ROOT / "Directory.Packages.props"
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build-and-test.yml"
 VERSION_READER = REPO_ROOT / "scripts" / "read-release-version.py"
+PACKAGE_RC = REPO_ROOT / "publish" / "package-rc.sh"
+PACKAGE_TESTER_WIN = REPO_ROOT / "publish" / "package-tester-win.ps1"
 
 
 class ReleaseWorkflowContractTests(unittest.TestCase):
@@ -177,6 +179,41 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIsNotNone(build_job)
         self.assertNotIn("vpk upload github", build_job.group("body"))
         self.assertIn("actions/upload-artifact", build_job.group("body"))
+
+    def test_payload_source_map_gate_runs_on_every_rid_after_the_last_publish_and_before_pack(self) -> None:
+        step = re.search(
+            r"\n(?P<indent>\s+)- name: Verify payload carries no source maps\n(?P<body>.*?)(?=\n(?P=indent)- name:)",
+            self.package_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(step)
+        body = step.group("body")
+        self.assertNotIn("if:", body)
+        self.assertIn("shell: bash", body)
+        self.assertIn("set -euo pipefail", body)
+        self.assertIn("find \"${{ matrix.publish-dir }}\" -name '*.map'", body)
+        self.assertIn("exit 1", body)
+        gate = self.package_source.index("name: Verify payload carries no source maps")
+        self.assertLess(self.package_source.index("name: Build and test Windows framework launcher"), gate)
+        self.assertLess(gate, self.package_source.index("name: Generate and validate payload SPDX"))
+        self.assertLess(gate, self.package_source.index("name: Pack portable artifact with Velopack"))
+
+    def test_local_packaging_forbidden_artifact_lists_stay_in_step_and_reject_source_maps(self) -> None:
+        rc_block = re.search(
+            r"local forbidden=\((?P<body>.*?)\n\s*\)", PACKAGE_RC.read_text(encoding="utf-8"), re.DOTALL
+        )
+        win_block = re.search(
+            r"\$forbiddenPublishArtifacts = @\((?P<body>.*?)\n\)",
+            PACKAGE_TESTER_WIN.read_text(encoding="utf-8"),
+            re.DOTALL,
+        )
+        self.assertIsNotNone(rc_block)
+        self.assertIsNotNone(win_block)
+        rc_entries = re.findall(r'"([^"|]+)\|([^"]+)"', rc_block.group("body"))
+        win_entries = re.findall(r'Pattern = "([^"]+)";\s+Reason = "([^"]+)"', win_block.group("body"))
+        self.assertGreater(len(rc_entries), 0)
+        self.assertEqual(rc_entries, win_entries)
+        self.assertIn(("*.map", "source map (debug artifact; production builds emit none)"), rc_entries)
 
     def test_one_protected_serial_job_owns_explicit_bound_draft_creation(self) -> None:
         prepare_job = re.search(

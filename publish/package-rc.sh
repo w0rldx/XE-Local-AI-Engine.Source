@@ -199,7 +199,8 @@ assert_no_runtime_state() {
 # publish directory was executed in.
 #
 # Complements assert_no_runtime_state, which scans the STAGE for node-settings.json / *.enc / *.pin. This one scans the
-# publish output for the state and secret classes, and names why each is disqualifying.
+# publish output for the state and secret classes (plus source maps, a debug artifact), and names why each is
+# disqualifying.
 assert_publish_output_clean() {
   local pub="$1" entry pattern reason match
   local leaks=""
@@ -216,6 +217,7 @@ assert_publish_output_clean() {
     "*.enc|encrypted secret store (HF token, GitHub token, provider credentials)"
     "desktop-port.txt|persisted desktop loopback port"
     "*.log|log file"
+    "*.map|source map (debug artifact; production builds emit none)"
   )
 
   for entry in "${forbidden[@]}"; do
@@ -230,14 +232,15 @@ assert_publish_output_clean() {
   done
 
   if [[ -n "${leaks}" ]]; then
-    echo "Error: runtime state found in the publish output. Zipping would ship it to testers:" >&2
+    echo "Error: runtime state or debug artifacts found in the publish output. Zipping would ship them to testers:" >&2
     printf '%s' "${leaks}" >&2
-    echo "This means the application was executed from '${pub}'. Never run the published binary in place — it writes" >&2
-    echo "logs, queues and (in desktop mode) its database and keys next to itself. Re-run this script; it wipes the" >&2
-    echo "publish directory first. Smoke-test the zip instead, which is what a tester actually receives." >&2
+    echo "Runtime state means the application was executed from '${pub}'. Never run the published binary in" >&2
+    echo "place — it writes logs, queues and (in desktop mode) its database and keys next to itself. Re-run this" >&2
+    echo "script; it wipes the publish directory first. Smoke-test the zip instead, which is what a tester actually" >&2
+    echo "receives. A *.map means the SPA was built with source maps; rebuild it without them." >&2
     exit 1
   fi
-  echo ">> Publish output carries no runtime state (no logs, queues, keys or databases)."
+  echo ">> Publish output carries no runtime state or source maps (no logs, queues, keys, databases or *.map)."
 }
 
 # Refuse to ship configuration that reads as live but is really placeholder text — the counterpart of the

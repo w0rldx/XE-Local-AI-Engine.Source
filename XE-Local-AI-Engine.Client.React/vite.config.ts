@@ -142,10 +142,9 @@ export default defineConfig(({ command, mode }) => {
 			aspNetCoreDevelopmentCertificate({ certificateName: "c0re.client.react.web" }),
 			tablerDevelopmentBugfix(),
 		],
-		// Emit hidden source maps so production stacks captured by the diagnostics snapshot subsystem
-		// symbolicate, without exposing a `//# sourceMappingURL` to end users.
+		// Production builds intentionally emit no source maps: nothing consumes them and the host would serve them
+		// anonymously. To symbolicate a stack, rebuild the tag locally with `vite build --sourcemap`.
 		build: {
-			sourcemap: "hidden",
 			rolldownOptions: {
 				output: {
 					codeSplitting: {
