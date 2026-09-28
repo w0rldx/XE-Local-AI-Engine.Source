@@ -88,5 +88,15 @@ public enum TurnNoticeKind
     ///     RULE and never a signal value — no message length, no conversation depth, no score, and never any message
     ///     text.
     /// </remarks>
-    EffortDispatched = 7
+    EffortDispatched = 7,
+
+    /// <summary>
+    ///     The agent's enabled playbook memory was withheld from a CLOUD-hosted effective model.
+    /// </summary>
+    /// <remarks>
+    ///     The same <c>KnowledgeBase:AllowCloudModelAccess</c> egress gate as knowledge and attachments; silent when the
+    ///     playbook is off or empty. <see cref="TurnNoticePayload.Detail" /> names the effective model, or for an
+    ///     orchestration the affected participants' names — never memory content.
+    /// </remarks>
+    PlaybookWithheld = 8
 }

@@ -255,6 +255,24 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    [Arguments(false, true, true, "Specialist")]
+    [Arguments(true, true, true, "")]
+    [Arguments(false, false, true, "")]
+    [Arguments(false, true, false, "")]
+    public async Task ResolveAsync_NamesPlaybookWithheldParticipants_OnlyWhenEnabledMemoryWasWithheld(bool allowCloudKnowledgeAccess,
+        bool specialistPlaybookEnabled,
+        bool hasEnabledActions,
+        string expectedNames)
+    {
+        // Only the cloud-pinned Specialist can be withheld; the local Triage (playbook on, one action) never is. The
+        // flag on, the playbook off or an empty enabled set leave nothing withheld and so nothing for the notice.
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess, specialistPlaybookEnabled, hasEnabledActions);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(expectedNames, string.Join(", ", resolved!.PlaybookWithheldParticipantNames));
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAllParticipantsLocal_AggregateIsNotCloud()
     {
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
@@ -273,17 +291,22 @@ public sealed class OrchestrationResolverTests
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CloudParticipantModel = "azure-foundry-deploy";
 
-    private static async Task<ResolvedOrchestration?> ResolveWithCloudPinnedParticipantAsync(bool allowCloudKnowledgeAccess)
+    private static async Task<ResolvedOrchestration?> ResolveWithCloudPinnedParticipantAsync(bool allowCloudKnowledgeAccess,
+        bool specialistPlaybookEnabled = true,
+        bool hasEnabledActions = true)
     {
         // Both participants carry one enabled playbook action, so the playbook egress gate is observable per participant.
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: [KnowledgeSearchToolName], playbookEnabled: true);
-        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel, allowedTools: [KnowledgeSearchToolName], playbookEnabled: true);
+        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel, allowedTools: [KnowledgeSearchToolName],
+            playbookEnabled: specialistPlaybookEnabled);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
 
         var store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                     .Returns(callInfo => Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(callInfo.ArgAt<Guid>(0), "Stay terse.", priority: 1)]));
+                     .Returns(callInfo => Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(hasEnabledActions
+                         ? [EnabledAction(callInfo.ArgAt<Guid>(0), "Stay terse.", priority: 1)]
+                         : []));
 
         // REAL offer provider so the actual withholding is observed. BOTH participant models are tool-capable, so the
         // knowledge tools WOULD be offered but for the per-participant locality gate.

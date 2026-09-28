@@ -77,7 +77,10 @@ public sealed record ResolvedAgentRuntime(
     bool EffectiveModelIsCloud = false,
     AgentDefinitionKind Kind = AgentDefinitionKind.Single,
     IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
-    // Per-agent opt-out from the send-time tool-relevance filter, and the ONE member kept off the wire: this record
-    // is serialized into the frozen v1 benchmark snapshot, whose bytes are re-hashed. See the wiki section above.
+    // Per-agent opt-out from the send-time tool-relevance filter. It and PlaybookWithheld are kept off the wire: this
+    // record is serialized into the frozen v1 benchmark snapshot, whose bytes are re-hashed. See the wiki section above.
     [property: JsonIgnore]
-    bool DisableToolRelevanceFilter = false);
+    bool DisableToolRelevanceFilter = false,
+    // Enabled playbook memory was withheld from a cloud effective model; drives the PlaybookWithheld turn notice.
+    [property: JsonIgnore]
+    bool PlaybookWithheld = false);

@@ -2,6 +2,7 @@ import { Group, Text, ThemeIcon } from "@mantine/core";
 import {
 	IconArrowsExchange,
 	IconBolt,
+	IconBookOff,
 	IconFilter,
 	IconHistory,
 	IconInfoCircle,
@@ -34,6 +35,8 @@ function noticeIcon(noticeKind: string) {
 			return IconFilter;
 		case "EffortDispatched":
 			return IconBolt;
+		case "PlaybookWithheld":
+			return IconBookOff;
 		default:
 			return IconInfoCircle;
 	}
@@ -54,6 +57,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.toolsFiltered";
 		case "EffortDispatched":
 			return "chat.notices.effortDispatched";
+		case "PlaybookWithheld":
+			return "chat.notices.playbookWithheld";
 		default:
 			return undefined;
 	}

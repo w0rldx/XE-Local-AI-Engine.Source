@@ -856,12 +856,16 @@ builder reads only the leading five — so adding one changes neither an existin
   and AES-GCM decrypt on every send; the common non-orchestrator path skips the reload entirely.
 - `DisableToolRelevanceFilter` — the per-agent opt-out from the send-time relevance filter, which narrows only the
   array handed to the provider, never the offer or the prompt.
+- `PlaybookWithheld` — enabled playbook memory existed but was withheld from a cloud effective model under the
+  `KnowledgeBase:AllowCloudModelAccess` gate; the send and regenerate paths turn it into ONE
+  `TurnNoticeKind.PlaybookWithheld` notice. An orchestration carries the same fact per participant as
+  `ResolvedOrchestration.PlaybookWithheldParticipantNames`, which the notice lists instead.
 
-`DisableToolRelevanceFilter` is also the one member kept **off the wire** (`[JsonIgnore]`). This record is serialized
-verbatim into the frozen v1 benchmark runtime snapshot, whose stored bytes are re-hashed to validate
+`DisableToolRelevanceFilter` and `PlaybookWithheld` are the members kept **off the wire** (`[JsonIgnore]`). This
+record is serialized verbatim into the frozen v1 benchmark runtime snapshot, whose stored bytes are re-hashed to validate
 `configurationHash`, so a new member emitting `false` would change the bytes of every already-frozen run and stop each
 one replaying with "configuration hash is invalid" (`BenchmarkRuntimeSnapshotV1CompatibilityTests` guards this).
-Omitting it is the honest shape as well: `BenchmarkRunExecutor.BuildPrimaryPackage` never threads the flag into the
+Omitting the filter flag is the honest shape as well: `BenchmarkRunExecutor.BuildPrimaryPackage` never threads it into the
 replayed `RuntimePackage`, so a frozen run always generates under the node-level filter setting whatever the agent
 asked for. Nothing else serializes the record — the agent-definition endpoint DTOs carry their own copy of the flag.
 

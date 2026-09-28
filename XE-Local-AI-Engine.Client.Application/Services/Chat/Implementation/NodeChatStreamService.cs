@@ -658,6 +658,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             });
         }
 
+        if (resolution.PlaybookWithheldNotice(requestId) is { } playbookWithheldNotice)
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
+        }
+
         if (attachmentsAllowed)
         {
             return;

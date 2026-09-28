@@ -149,4 +149,10 @@ public sealed class ResolvedOrchestration
     ///     <see langword="null" /> when no participant is cloud. Used to name the cloud model in the attachments-withheld notice.
     /// </summary>
     public required string? FirstCloudParticipantModel { get; init; }
+
+    /// <summary>
+    ///     The names of the participants whose enabled playbook memory was withheld from their cloud model, ordered by
+    ///     definition id; empty when none was. Names only, never memory content: the PlaybookWithheld notice lists them.
+    /// </summary>
+    public IReadOnlyList<string> PlaybookWithheldParticipantNames { get; init; } = [];
 }

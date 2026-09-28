@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>The up-front per-turn resolution shared by placeholder/variant stamping and runtime-package construction.</summary>
 internal sealed class ChatTurnResolution
@@ -44,4 +45,40 @@ internal sealed class ChatTurnResolution
     ///     <see cref="OrchestrationResolution.Reason" />/<see cref="OrchestrationResolution.DegradationNotice" />).
     /// </summary>
     public ResolvedOrchestration? Orchestration => OrchestrationOutcome.Orchestration;
+
+    /// <summary>
+    ///     The one PlaybookWithheld notice for this turn, or <see langword="null" /> when no enabled playbook memory was
+    ///     withheld. Shared by the send and regenerate paths so the two cannot drift.
+    /// </summary>
+    /// <remarks>
+    ///     A compiled orchestration runs its participants' prompts, never the orchestrator's own, so it names the
+    ///     withheld participants; any other turn names the effective model, as KnowledgeWithheld does.
+    /// </remarks>
+    public TurnNoticePayload? PlaybookWithheldNotice(Guid invocationId)
+    {
+        if (Orchestration is { } orchestration)
+        {
+            return orchestration.PlaybookWithheldParticipantNames.Count == 0
+                ? null
+                : new TurnNoticePayload
+                {
+                    InvocationId = invocationId,
+                    Kind = TurnNoticeKind.PlaybookWithheld,
+                    Message =
+                        "The learned playbook of some agents in this orchestration was not applied because they run on a cloud model. Enable cloud data access for this node to let playbook memory reach a cloud model.",
+                    Detail = string.Join(", ", orchestration.PlaybookWithheldParticipantNames)
+                };
+        }
+
+        return Resolved?.PlaybookWithheld == true
+            ? new TurnNoticePayload
+            {
+                InvocationId = invocationId,
+                Kind = TurnNoticeKind.PlaybookWithheld,
+                Message =
+                    "This agent's learned playbook was not applied because it runs on a cloud model. Enable cloud data access for this node to let playbook memory reach a cloud model.",
+                Detail = EffectiveModel
+            }
+            : null;
+    }
 }

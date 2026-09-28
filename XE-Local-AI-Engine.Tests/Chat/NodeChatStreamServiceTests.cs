@@ -2800,8 +2800,56 @@ public sealed class NodeChatStreamServiceTests
             "a single-agent definition must never raise the orchestration-degraded notice");
     }
 
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SendMessageAsync_EmitsOnePlaybookWithheldNotice_OnlyWhenTheResolverWithheldMemory(bool playbookWithheld)
+    {
+        // The resolver owns the gate (cloud model, flag off, enabled memory present); the send only surfaces its verdict,
+        // naming the effective model as KnowledgeWithheld does.
+        var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Single, OrchestrationResolution.NotOrchestrated, playbookWithheld, modelProfile: "qwen3:8b");
+
+        var notices = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                  && streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld))
+                            .ToList();
+        AssertEx.Equal(playbookWithheld ? 1 : 0, notices.Count);
+        if (playbookWithheld)
+        {
+            AssertEx.Equal("qwen3:8b", notices[0].NoticeDetail);
+            AssertEx.Contains(notices[0].NoticeMessage, "learned playbook was not applied");
+        }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenOrchestrationWithheldParticipantPlaybooks_EmitsOneNoticeListingThem()
+    {
+        // A compiled orchestration runs its participants' prompts, so the notice lists the withheld participants — and
+        // ignores the orchestrator's own flag, whose persona the orchestration never runs.
+        var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
+            OrchestrationResolution.Compiled(new ResolvedOrchestration
+            {
+                Spec = CreateSampleSpec(),
+                ResolvedSystemPrompt = "Orchestrator prompt.",
+                ModelProfile = null,
+                ReasoningEffort = null,
+                AgentDefinitionVersion = 4,
+                AnyParticipantIsCloud = true,
+                FirstCloudParticipantModel = "azure-specialist-deploy",
+                PlaybookWithheldParticipantNames = ["Researcher", "Writer"]
+            }),
+            playbookWithheld: true);
+
+        AssertEx.ContainsSingle(events,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld),
+            "an orchestration raises at most one playbook-withheld notice");
+        AssertEx.Equal("Researcher, Writer", events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeDetail);
+    }
+
     // Runs one bound-agent send whose orchestration resolver returns the given resolution, and returns the streamed events.
-    private static async Task<List<ChatStreamEvent>> RunOrchestrationDegradeAsync(AgentDefinitionKind kind, OrchestrationResolution resolution)
+    private static async Task<List<ChatStreamEvent>> RunOrchestrationDegradeAsync(AgentDefinitionKind kind,
+        OrchestrationResolution resolution,
+        bool playbookWithheld = false,
+        string? modelProfile = null)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -2815,7 +2863,8 @@ public sealed class NodeChatStreamServiceTests
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
         var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                               .Returns(new ResolvedAgentRuntime("Agent persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4, agentDefinitionId, "Agent", Kind: kind));
+                               .Returns(new ResolvedAgentRuntime("Agent persona.", [], modelProfile, ReasoningEffort: null, AgentDefinitionVersion: 4, agentDefinitionId, "Agent", Kind: kind,
+                                   PlaybookWithheld: playbookWithheld));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(resolution);
 

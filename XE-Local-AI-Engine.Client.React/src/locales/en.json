@@ -224,7 +224,8 @@
 			"historyTruncated": "History truncated",
 			"orchestrationDegraded": "Orchestration not used",
 			"toolsFiltered": "Tools filtered",
-			"effortDispatched": "Reasoning effort resolved"
+			"effortDispatched": "Reasoning effort resolved",
+			"playbookWithheld": "Playbook withheld"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"webReview": {

@@ -242,6 +242,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 });
             }
 
+            if (resolution.PlaybookWithheldNotice(requestId) is { } playbookWithheldNotice)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
+            }
+
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
             var knowledge = useKnowledgeBase && !offerTools

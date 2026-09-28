@@ -1122,10 +1122,29 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         var expected = expectInjected ? SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first." : SystemPrompt;
         AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
-        if (!expectInjected)
-        {
-            await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        }
+        // Withheld enabled memory is reported so the chat turn can raise its PlaybookWithheld notice.
+        AssertEx.Equal(!expectInjected, resolved.PlaybookWithheld);
+    }
+
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task ResolveAsync_OnACloudModelWithoutOptIn_ReportsNothingWithheld_WhenThereIsNoEnabledMemory(bool playbookEnabled, bool hasEnabledActions)
+    {
+        // The gate applies, but a disabled playbook or an empty enabled set has nothing to withhold, so no notice.
+        var resolver = CreateResolverWithPlaybookEgressGate(out var store, out var playbookStore, allowCloudModelAccess: false);
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: CloudPinnedModel, playbookEnabled: playbookEnabled);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(hasEnabledActions
+                         ? [EnabledAction(definition.Id, "Run the tests first.", priority: 1)]
+                         : []));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+        AssertEx.False(resolved.PlaybookWithheld, "nothing was withheld, so the turn must stay silent");
     }
 
     [Test]
@@ -1142,7 +1161,7 @@ public sealed class AgentDefinitionResolverTests
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
-        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        AssertEx.True(resolved.PlaybookWithheld, "the cloud pin withheld enabled memory");
     }
 
     [Test]

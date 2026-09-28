@@ -125,6 +125,20 @@ describe("ChatNoticeRow", () => {
 		).toBeTruthy();
 	});
 
+	it("renders the playbook-withheld notice with its own glyph, label and the withheld agents as detail", () => {
+		// Withheld playbook memory is otherwise only a server log line; the detail names agents, never memory content.
+		const serverText = "a server-owned playbook-withheld sentence";
+		const { container } = renderWithProviders(
+			<ChatNoticeRow part={noticePart({ noticeKind: "PlaybookWithheld", text: serverText, detail: "Researcher, Writer" })} />,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("PlaybookWithheld");
+		expect(screen.getByText(serverText)).toBeTruthy();
+		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("Researcher, Writer");
+		expect(screen.getByLabelText("Playbook withheld")).toBeTruthy();
+		expect(container.querySelector(".tabler-icon-book-off")).toBeTruthy();
+	});
+
 	it("renders the notice detail beside the sentence when the server sent one", () => {
 		// The dispatch reason code is the only record of WHICH rule decided the turn. It was computed and then dropped
 		// on the wire, so nothing showed it; it now rides beside the sentence as the stable code it is.

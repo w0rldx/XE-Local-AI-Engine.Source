@@ -172,7 +172,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ReasoningEffort = orchestrator.ReasoningEffort,
             AgentDefinitionVersion = orchestrator.Version,
             AnyParticipantIsCloud = firstCloudParticipant is not null,
-            FirstCloudParticipantModel = firstCloudParticipantModel
+            FirstCloudParticipantModel = firstCloudParticipantModel,
+            PlaybookWithheldParticipantNames =
+            [
+                .. participants.Values
+                               .Where(static participant => participant.PlaybookWithheld)
+                               .OrderBy(static participant => participant.Definition.Id)
+                               .Select(static participant => participant.Definition.Name)
+            ]
         });
     }
 
@@ -219,11 +226,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
             // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
-            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
+            var (resolvedInstructions, playbookWithheld) = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
             capable[participant.Id] = new ResolvedParticipant
             {
                 Definition = participant,
                 ResolvedInstructions = resolvedInstructions,
+                PlaybookWithheld = playbookWithheld,
                 SupportsThinking = supportsThinking,
                 IsCloud = participantIsCloud,
                 ReasoningBudgetEnforceable = participantCapabilities.ReasoningBudgetEnforceable
@@ -242,27 +250,36 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     blank-scaffold case, skips the prepend, keeping the prompt byte-identical to the persona-only path.
     ///     Without this a participant ran with NO base scaffold, unlike every direct agent send.
     /// </remarks>
-    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud, CancellationToken cancellationToken)
+    private async Task<(string Instructions, bool PlaybookWithheld)> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery,
+        bool participantIsCloud, CancellationToken cancellationToken)
     {
-        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
-        return participant.DisableBaseScaffold
+        var (personaPrompt, playbookWithheld) = await ComposeParticipantPersonaAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
+        var instructions = participant.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
+        return (instructions, playbookWithheld);
     }
 
-    private async Task<string> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud, CancellationToken cancellationToken)
+    private async Task<(string Persona, bool PlaybookWithheld)> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud,
+        CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
         {
-            return participant.Instructions;
+            return (participant.Instructions, false);
         }
 
-        // The same egress gate as the single-agent path, keyed on THIS participant's effective model only.
+        // The same egress gate as the single-agent path, keyed on THIS participant's effective model only, and
+        // reported as withheld only when there IS enabled memory to withhold.
         if (participantIsCloud && !_knowledgeOptions.AllowCloudModelAccess)
         {
-            _logger.LogInformation("Playbook memory for participant {ParticipantId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
-                participant.Id);
-            return participant.Instructions;
+            var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken)).Count > 0;
+            if (withheld)
+            {
+                _logger.LogInformation("Playbook memory for participant {ParticipantId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
+                    participant.Id);
+            }
+
+            return (participant.Instructions, withheld);
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken);
@@ -277,7 +294,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             _retrievalOptions.MaxInjectedMemoryTokens,
             _retrievalOptions.MaxInjectedFailureMemoryTokens,
             _logger);
-        return PlaybookPromptComposer.Compose(participant.Instructions, selected);
+        return (PlaybookPromptComposer.Compose(participant.Instructions, selected), false);
     }
 
     /// <summary>
@@ -413,6 +430,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         public required bool SupportsThinking { get; init; }
 
         public required bool IsCloud { get; init; }
+
+        public required bool PlaybookWithheld { get; init; }
 
         public required bool ReasoningBudgetEnforceable { get; init; }
     }

@@ -224,7 +224,8 @@
 			"historyTruncated": "Verlauf gekürzt",
 			"orchestrationDegraded": "Orchestrierung nicht verwendet",
 			"toolsFiltered": "Tools gefiltert",
-			"effortDispatched": "Reasoning-Aufwand aufgelöst"
+			"effortDispatched": "Reasoning-Aufwand aufgelöst",
+			"playbookWithheld": "Playbook zurückgehalten"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"webReview": {

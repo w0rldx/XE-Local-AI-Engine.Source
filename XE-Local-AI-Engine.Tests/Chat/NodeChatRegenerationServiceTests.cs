@@ -1035,6 +1035,101 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenAgentPlaybookWithheld_EmitsOnePlaybookWithheldNoticeNamingTheModel()
+    {
+        // Send/regenerate parity: a rerun that withholds playbook memory from a cloud model says so, exactly as the send
+        // path does. A DEGRADED orchestrator runs its own persona, so its own flag is the one reported.
+        await using var provider = await BuildProviderAsync("regeneration-playbook-withheld.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Playbook regen",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            AgentDefinitionId = agentDefinitionId
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 11
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator, PlaybookWithheld: true));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                             .Returns(OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools"));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.ContainsSingle(events,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld),
+            "a rerun raises at most one playbook-withheld notice");
+        AssertEx.Equal("qwen3:8b", events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeDetail);
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenConversationUnbound_RegeneratesWithDefaultPromptAndVersion()
     {
         // Parity with the stream-side unbound test (NodeChatStreamServiceTests): an unbound conversation must
