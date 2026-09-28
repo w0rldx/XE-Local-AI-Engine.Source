@@ -81,10 +81,10 @@ public sealed class WindowsPythonToolRunner : IPythonToolRunner
             await TreeKillAsync(process).ConfigureAwait(false);
             throw;
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (timeoutCts.IsCancellationRequested)
         {
             await TreeKillAsync(process).ConfigureAwait(false);
-            throw new ManagedPythonException("A managed Python step exceeded its time budget and was stopped.");
+            throw new ManagedPythonException("A managed Python step exceeded its time budget and was stopped.", exception);
         }
     }
 

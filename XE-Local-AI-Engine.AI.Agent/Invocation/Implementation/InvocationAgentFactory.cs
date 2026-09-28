@@ -196,8 +196,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// </summary>
     /// <remarks>
     ///     Instructions live only in <see cref="BuildSeedMessages" />, unless explicitly omitted. Supplying them to
-    ///     the inner agent would duplicate the system prompt. Named arguments pin the Microsoft.Agents.AI 1.20.0
-    ///     constructor contract. See docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
+    ///     the inner agent would duplicate the system prompt. See docs/wiki/04-agent-mode.md ("Building the agent:
+    ///     instructions once, skills through a context provider").
     /// </remarks>
     private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
@@ -206,36 +206,54 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         if (definition.Skills is not { Count: > 0 } skills)
         {
-            // No-skills path: instructions are NULL on the agent, carried once by the seed system message. Named
-            // arguments pin the ctor order so name/description land as identity.
-            return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
-                instructions: null,
-                name: agentName,
-                description: agentDescription,
-                tools: tools,
-                loggerFactory: _loggerFactory,
-                services: _serviceProvider));
+            // No-skills path: instructions are NULL on the agent, carried once by the seed system message.
+            return BuildApprovalValidatedAgent(_chatClient, agentName, agentDescription, tools, _loggerFactory, _serviceProvider);
         }
 
 #pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent below via AIContextProviders; the agent disposes its context providers with itself.
         var skillsProvider = InvocationSkillsProvider.Create(skills);
 #pragma warning restore CA2000
 
-        return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
+        return BuildApprovalValidatedAgent(_chatClient, agentName, agentDescription, tools, _loggerFactory, _serviceProvider,
+            skillsProvider: skillsProvider);
+    }
+
+    /// <summary>
+    ///     The one construction of an approval-validated <see cref="ChatClientAgent" />; tests build through it so they
+    ///     cannot drift from production.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="ChatClientAgentOptions.DisableApprovalResponseBinding" /> is set on purpose: since
+    ///     Microsoft.Agents.AI 1.22 the default binding client trusts only approval requests recorded in an
+    ///     <see cref="AgentSession" />, and invocation runs are sessionless, so every threadless resume would fail.
+    ///     <see cref="ApprovalResponseValidatingAgent" /> enforces the binding (and exactly-once) instead.
+    /// </remarks>
+    internal static AIAgent BuildApprovalValidatedAgent(IChatClient chatClient,
+        string name,
+        string description,
+        IList<AITool> tools,
+        ILoggerFactory loggerFactory,
+        IServiceProvider services,
+        string? instructions = null,
+        AIContextProvider? skillsProvider = null)
+    {
+        return new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
             new ChatClientAgentOptions
             {
-                Name = agentName,
-                Description = agentDescription,
-                // Instructions are NOT set here — carried once by the seed system message, as on the no-skills path.
-                // Only the agent's own tools ride these ChatOptions; RunOptions.ChatOptions carries the per-turn rest.
+                Name = name,
+                Description = description,
+                // Only the agent's own tools (and a test's instructions) ride these ChatOptions; RunOptions.ChatOptions
+                // carries the per-turn rest.
                 ChatOptions = new ChatOptions
                 {
-                    Tools = tools
+                    Tools = tools,
+                    Instructions = instructions
                 },
-                AIContextProviders = [skillsProvider]
+                AIContextProviders = skillsProvider is null ? null : [skillsProvider],
+                DisableApprovalResponseBinding = true
             },
-            _loggerFactory,
-            _serviceProvider));
+            loggerFactory,
+            services));
     }
 
     /// <summary>

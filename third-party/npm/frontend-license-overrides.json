@@ -34,14 +34,14 @@
         }
       ]
     },
-    "pkg:npm/rrweb@2.1.1": {
+    "pkg:npm/rrweb@2.1.6": {
       "license": "MIT",
       "basis": "The signed npm provenance identifies the pinned upstream gitHead; the exact source license and npm metadata both declare MIT while the npm tarball omits the file.",
       "files": [
         {
-          "path": "third-party/npm/rrweb-2.1.1-LICENSE.txt",
+          "path": "third-party/npm/rrweb-2.1.6-LICENSE.txt",
           "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c",
-          "source": "https://raw.githubusercontent.com/rrweb-io/rrweb/3deb6e7da4528ddb33b5b7ff6a3e805d4ed14930/LICENSE"
+          "source": "https://raw.githubusercontent.com/rrweb-io/rrweb/5b08843faf9cb21c836613489ffd93d455f38181/LICENSE"
         }
       ]
     },

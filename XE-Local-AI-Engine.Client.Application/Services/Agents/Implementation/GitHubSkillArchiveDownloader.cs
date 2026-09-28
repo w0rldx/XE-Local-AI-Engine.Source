@@ -179,9 +179,9 @@ internal sealed partial class GitHubSkillArchiveDownloader
                 {
                     read = await source.ReadAsync(chunk, idleCts.Token);
                 }
-                catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException exception) when (idleCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                 {
-                    throw new HttpRequestException("The repository download stalled with no data received.");
+                    throw new HttpRequestException("The repository download stalled with no data received.", exception);
                 }
 
                 if (read == 0)

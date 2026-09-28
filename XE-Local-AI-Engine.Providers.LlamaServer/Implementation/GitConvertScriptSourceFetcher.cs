@@ -147,9 +147,9 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
             _ = await stderr.ConfigureAwait(false);
             return new ProcessCaptureResult(process.ExitCode, await stdout.ConfigureAwait(false));
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            throw new LlamaRuntimeException("Fetching the pinned llama.cpp conversion scripts exceeded its time limit.");
+            throw new LlamaRuntimeException("Fetching the pinned llama.cpp conversion scripts exceeded its time limit.", exception);
         }
         finally
         {

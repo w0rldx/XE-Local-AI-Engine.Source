@@ -137,9 +137,9 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
         {
             parameters = JsonSerializer.Deserialize<ModelRecommendationCheckParameters>(parametersJson, ParameterSerializerOptions);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new ScheduledJobValidationException("Model recommendation check parameters are not valid JSON.");
+            throw new ScheduledJobValidationException("Model recommendation check parameters are not valid JSON.", exception);
         }
 
         if (parameters is null)

@@ -94,10 +94,10 @@ public sealed class LinuxPythonToolRunner : IPythonToolRunner
             handle.TreeKill();
             throw;
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (timeoutCts.IsCancellationRequested)
         {
             handle.TreeKill();
-            throw new ManagedPythonException("A managed Python step exceeded its time budget and was stopped.");
+            throw new ManagedPythonException("A managed Python step exceeded its time budget and was stopped.", exception);
         }
     }
 }

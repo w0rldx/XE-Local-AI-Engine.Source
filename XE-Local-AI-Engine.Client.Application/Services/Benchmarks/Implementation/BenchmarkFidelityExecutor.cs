@@ -371,9 +371,9 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         {
             return await _perplexity.RunAsync(executable, arguments, watchdog.Token);
         }
-        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!token.IsCancellationRequested)
         {
-            throw new BenchmarkExecutionException(MeasurementTimedOutMessage);
+            throw new BenchmarkExecutionException(MeasurementTimedOutMessage, exception);
         }
     }
 

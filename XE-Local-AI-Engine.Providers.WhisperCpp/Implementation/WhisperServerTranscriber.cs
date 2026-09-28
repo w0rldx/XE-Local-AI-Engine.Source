@@ -128,9 +128,9 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         {
             response = await _httpClient.PostAsync(new Uri(endpoint.BaseAddress, InferenceRoute), content, inferenceCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!ct.IsCancellationRequested)
         {
-            throw new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage);
+            throw new WhisperRuntimeException(WhisperRuntimeException.InferenceTimedOutMessage, exception);
         }
         catch (HttpRequestException exception)
         {

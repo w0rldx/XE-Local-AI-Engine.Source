@@ -27,7 +27,7 @@ public static class RuntimeCacheDirectory
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new InvalidOperationException($"{EnvironmentVariable} is not a valid directory path.");
+            throw new InvalidOperationException($"{EnvironmentVariable} is not a valid directory path.", exception);
         }
     }
 }

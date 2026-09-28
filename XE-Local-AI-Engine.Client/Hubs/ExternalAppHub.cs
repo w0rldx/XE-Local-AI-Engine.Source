@@ -67,9 +67,9 @@ public sealed class ExternalAppHub : Hub
         {
             detail = await _apps.GetAsync(instanceId, cancellationToken);
         }
-        catch (ExternalAppNotFoundException)
+        catch (ExternalAppNotFoundException exception)
         {
-            throw new HubException(InstanceNotFoundMessage);
+            throw new HubException(InstanceNotFoundMessage, exception);
         }
 
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
@@ -91,12 +91,12 @@ public sealed class ExternalAppHub : Hub
                 ReplayTruncated = truncated
             };
         }
-        catch (ExternalAppNotFoundException)
+        catch (ExternalAppNotFoundException exception)
         {
             // The instance was deleted between the two reads. The caller is told what it would have been told had the
             // first read noticed — a generic hub failure would make a routine race look like a node fault.
             await LeaveAfterFailedSubscribeAsync(instanceId);
-            throw new HubException(InstanceNotFoundMessage);
+            throw new HubException(InstanceNotFoundMessage, exception);
         }
         catch
         {

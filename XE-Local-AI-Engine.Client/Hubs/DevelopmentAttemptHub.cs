@@ -32,9 +32,9 @@ public sealed class DevelopmentAttemptHub : Hub
         {
             task = await _managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
         }
-        catch (DevelopmentNotFoundException)
+        catch (DevelopmentNotFoundException exception)
         {
-            throw new HubException("The Development project or task was not found.");
+            throw new HubException("The Development project or task was not found.", exception);
         }
 
         var attempt = task.Attempts.SingleOrDefault(candidate => candidate.Id == attemptId)

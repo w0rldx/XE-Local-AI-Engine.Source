@@ -63,9 +63,9 @@ public sealed class WorkSessionHub : Hub
         {
             session = await _service.GetAsync(sessionId, cancellationToken);
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException exception)
         {
-            throw new HubException("Work session was not found.");
+            throw new HubException("Work session was not found.", exception);
         }
 
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and

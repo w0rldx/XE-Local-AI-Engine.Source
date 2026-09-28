@@ -172,15 +172,15 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             _logger.LogDebug(exception, "Rejected a GGUF import identity during acquisition preflight.");
             throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.", exception);
         }
-        catch (GgufAcquisitionConflictException)
+        catch (GgufAcquisitionConflictException exception)
         {
-            throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
+            throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.", exception);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException exception)
         {
             // Broad on purpose: InstalledModelSnapshotCoordinator.AcquireMutationAsync gives up with InvalidOperationException
             // ("InstalledModelSnapshotUnstable") when members keep changing — a conflict to the operator; narrowing gives a 500.
-            throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
+            throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.", exception);
         }
 
         await using (reservation)

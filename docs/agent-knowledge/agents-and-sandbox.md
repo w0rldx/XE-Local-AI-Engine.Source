@@ -60,7 +60,7 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 ### MAF traps: approval is a wrapper, and runs stay sessionless
 
-**Rule:** wrapping in `ApprovalRequiredAIFunction` is the gate; middleware alone gates nothing. Sessionless runs are deliberate (a resume accepts forged approvals because MAF keeps no consumption ledger); keep `ApprovalResponseValidatingAgent`. Do not re-open this because session serialization round-trips: the gap is the missing ledger. **Prevents:** an ungated tool, or a replayed approval executing twice. **Authority:** `FrameworkApprovalGateTests`, `BudgetedApprovalReplayTests`.
+**Rule:** wrapping in `ApprovalRequiredAIFunction` is the gate; middleware alone gates nothing. Sessionless runs are deliberate (a resume accepts forged approvals because MAF keeps no consumption ledger); keep `ApprovalResponseValidatingAgent`. It enforces the binding, so MAF 1.22's session-backed approval-response binding stays off (`DisableApprovalResponseBinding`, set once in `InvocationAgentFactory.BuildApprovalValidatedAgent`); with it on, every sessionless resume throws. Do not re-open this because session serialization round-trips: the gap is the missing ledger. **Prevents:** an ungated tool, or a replayed approval executing twice. **Authority:** `FrameworkApprovalGateTests`, `BudgetedApprovalReplayTests`, `InvocationAgentFactoryTests.CreateAsync_ThreadlessApprovalResume_ExecutesTheApprovedToolOnce`.
 
 ### The four `gen_ai.tool.*` attribute names track MEAI, and two of them carry a digest rather than the payload
 

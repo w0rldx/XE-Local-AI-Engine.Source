@@ -257,17 +257,13 @@ public sealed class BudgetedApprovalReplayTests
                                                .UseFunctionInvocation(NullLoggerFactory.Instance)
                                                .Build();
         var services = new ServiceCollection().BuildServiceProvider();
-        var agent = new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+        var agent = InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
             "budgeted-approval-replay",
-            SystemPrompt,
             "Combined budgeter / approval-replay / wire gate.",
-            new List<AITool>
-            {
-                queryTool,
-                archiveTool
-            },
+            [queryTool, archiveTool],
             NullLoggerFactory.Instance,
-            services));
+            services,
+            instructions: SystemPrompt);
 
         var budgeter = new ConversationContextBudgeter(new HeuristicTokenEstimator(),
             Options.Create(new ConversationContextBudgetOptions

@@ -116,10 +116,10 @@ public sealed class DevWorkflowAuthoringService
             {
                 _ = await _development.GetProjectAsync(projectId, cancellationToken);
             }
-            catch (DevelopmentNotFoundException)
+            catch (DevelopmentNotFoundException exception)
             {
                 throw new DevWorkflowValidationException($"There is no development project '{projectId}', so the work item cannot be bound to it. "
-                                                         + "Pick an existing project, or leave the project out.");
+                                                         + "Pick an existing project, or leave the project out.", exception);
             }
         }
 

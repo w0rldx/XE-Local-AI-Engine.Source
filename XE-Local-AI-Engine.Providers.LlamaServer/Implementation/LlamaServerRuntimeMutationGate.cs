@@ -196,7 +196,9 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+#pragma warning disable MA0054 // The OCE is the gate's disposal signal, not a cause; ObjectName must stay the owner type and there is no (objectName, inner) ctor.
             throw new ObjectDisposedException(_ownerType.FullName);
+#pragma warning restore MA0054
         }
 
         if (Volatile.Read(ref _disposed) == 0)

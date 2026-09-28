@@ -62,12 +62,12 @@ internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!ct.IsCancellationRequested)
         {
             TryKill(process);
             await IgnoreCancellationAsync(stdoutTask).ConfigureAwait(false);
             await IgnoreCancellationAsync(stderrTask).ConfigureAwait(false);
-            throw new TimeoutException($"The source-build command '{Path.GetFileName(fileName)}' exceeded its time limit.");
+            throw new TimeoutException($"The source-build command '{Path.GetFileName(fileName)}' exceeded its time limit.", exception);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

@@ -544,9 +544,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                 ? document.RootElement.Clone()
                 : throw new GraphWorkflowValidationException("A decision payload is a JSON object.");
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new GraphWorkflowValidationException("A decision payload is a JSON object.");
+            throw new GraphWorkflowValidationException("A decision payload is a JSON object.", exception);
         }
     }
 

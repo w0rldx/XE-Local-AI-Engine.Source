@@ -214,11 +214,11 @@ public sealed class ComparisonReportService : IComparisonReportService
             return JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(evaluation.MembershipJson.Span, TrainingJson.Options)
                    ?? throw new EvaluationRejectedException(UnreadableMembership(side));
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
             // An unreadable membership cannot be shown to match the other side, and a comparison that cannot prove its
             // own precondition must refuse rather than assume it.
-            throw new EvaluationRejectedException(UnreadableMembership(side));
+            throw new EvaluationRejectedException(UnreadableMembership(side), exception);
         }
     }
 

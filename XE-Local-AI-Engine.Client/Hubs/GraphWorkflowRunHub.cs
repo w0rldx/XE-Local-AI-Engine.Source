@@ -62,9 +62,9 @@ public sealed class GraphWorkflowRunHub : Hub
         {
             detail = await _runs.GetRunAsync(runId, cancellationToken);
         }
-        catch (GraphWorkflowNotFoundException)
+        catch (GraphWorkflowNotFoundException exception)
         {
-            throw new HubException("Graph workflow run was not found.");
+            throw new HubException("Graph workflow run was not found.", exception);
         }
 
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
@@ -116,9 +116,9 @@ public sealed class GraphWorkflowRunHub : Hub
         {
             detail = await _runs.GetRunAsync(runId, cancellationToken);
         }
-        catch (GraphWorkflowNotFoundException)
+        catch (GraphWorkflowNotFoundException exception)
         {
-            throw new HubException("Graph workflow run was not found.");
+            throw new HubException("Graph workflow run was not found.", exception);
         }
 
         var nodeRun = detail.NodeRuns.FirstOrDefault(row => string.Equals(row.NodeKey, nodeKey, StringComparison.Ordinal))
@@ -138,9 +138,9 @@ public sealed class GraphWorkflowRunHub : Hub
         {
             stream = _resumeRegistry.ResumeAsync(invocationId, cancellationToken);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException exception)
         {
-            throw new HubException("Graph workflow node turn is no longer live.");
+            throw new HubException("Graph workflow node turn is no longer live.", exception);
         }
 
         await foreach (var @event in stream.WithCancellation(cancellationToken))

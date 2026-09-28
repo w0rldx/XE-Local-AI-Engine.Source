@@ -196,11 +196,11 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
                 Warmup = command.Warmup
             }, scope, cancellationToken);
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException exception)
         {
             // The freeze's "no such installed model" is a bare KeyNotFoundException, which no benchmark handler maps —
             // it would escape as a 500. Here it is an operator-actionable fact about THIS comparison, so it is named.
-            throw new BenchmarkValidationException($"The model '{modelName}' from this comparison is not installed on this node.");
+            throw new BenchmarkValidationException($"The model '{modelName}' from this comparison is not installed on this node.", exception);
         }
     }
 

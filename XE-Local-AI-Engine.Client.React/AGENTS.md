@@ -41,4 +41,6 @@ pnpm audit --prod --audit-level=high
   in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default.
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
 - Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`;
-  UnoCSS runs `presetWind3()` (never wind4); `@types/node` stays at 22.3.0 behind pnpm's trust-downgrade gate.
+  UnoCSS runs `presetWind3()` (never wind4); `@types/node` stays at 22.3.0 behind pnpm's trust-downgrade gate;
+  `jsdom` stays at 30.0.1 until vitest-dev/vitest#11336 ships (30.1 hides the Blob impl symbol, so Vitest's jsdom
+  `Request` shim throws on Blob/FormData bodies).

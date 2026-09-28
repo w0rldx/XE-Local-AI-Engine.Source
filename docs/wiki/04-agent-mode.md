@@ -548,12 +548,13 @@ the `IChatClient` on every invocation alongside the seed message. The agent's `n
 identity only and are not sent to the model as content. The result is wrapped in
 `ApprovalResponseValidatingAgent`.
 
-With no resolved skills the factory uses the stable 7-argument constructor, whose order is
-`(chatClient, instructions, name, description, tools, loggerFactory, services)` — verified at
-Microsoft.Agents.AI 1.20.0, and pinned with named arguments against a positional-order change at a bump. With
-one or more skills it builds a MAF `AgentSkillsProvider` over `AgentInlineSkill` records and constructs the
-agent through the `ChatClientAgentOptions` constructor with that provider on `AIContextProviders`, so the
-experimental surface is reached only when an agent actually has skills. That surface (the full-frontmatter
+Both paths construct the agent through `InvocationAgentFactory.BuildApprovalValidatedAgent`, the one
+`ChatClientAgentOptions` construction the approval tests also build through. It sets
+`DisableApprovalResponseBinding`: since Microsoft.Agents.AI 1.22 MAF's default binding client trusts only approval
+requests recorded in an `AgentSession`, so every sessionless resume would fail; `ApprovalResponseValidatingAgent`
+enforces that binding instead. With one or more skills the factory builds a MAF `AgentSkillsProvider` over
+`AgentInlineSkill` records and passes it on `AIContextProviders`, so the experimental surface is reached only when
+an agent actually has skills. That surface (the full-frontmatter
 `AgentInlineSkill` constructor plus the `AgentSkill[]` provider constructor) shipped `[Experimental]` in
 Microsoft.Agents.AI 1.8.0; the scoped `MAAI001` suppression stays at the pinned version until there is
 explicit graduation evidence. Ownership of the provider transfers to the agent, which disposes its context

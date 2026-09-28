@@ -50,9 +50,9 @@ internal static class DevelopmentCommandProfileImport
             document = JsonSerializer.Deserialize<DevelopmentProfileImportDocument>(bytes, JsonOptions)
                        ?? throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is empty.");
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is not valid JSON.");
+            throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is not valid JSON.", exception);
         }
 
         return new ImportedProfile

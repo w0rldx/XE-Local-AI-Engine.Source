@@ -371,9 +371,9 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         {
             dto = JsonSerializer.Deserialize<RunSavedAgentParametersDto>(parametersJson, ParameterSerializerOptions);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new ScheduledJobValidationException("Run-agent parameters are not valid JSON.");
+            throw new ScheduledJobValidationException("Run-agent parameters are not valid JSON.", exception);
         }
 
         if (dto is null)

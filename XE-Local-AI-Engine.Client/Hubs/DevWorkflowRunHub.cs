@@ -66,9 +66,9 @@ public sealed class DevWorkflowRunHub : Hub
         {
             detail = await _runs.GetAsync(runId, cancellationToken);
         }
-        catch (DevWorkflowNotFoundException)
+        catch (DevWorkflowNotFoundException exception)
         {
-            throw new HubException("Development workflow run was not found.");
+            throw new HubException("Development workflow run was not found.", exception);
         }
 
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and

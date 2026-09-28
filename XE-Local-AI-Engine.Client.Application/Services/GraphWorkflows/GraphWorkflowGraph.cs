@@ -776,7 +776,7 @@ internal sealed class GraphWorkflowGraph
         }
         catch (JsonException exception)
         {
-            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' is invalid: {exception.Message}");
+            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' is invalid: {exception.Message}", exception);
         }
     }
 

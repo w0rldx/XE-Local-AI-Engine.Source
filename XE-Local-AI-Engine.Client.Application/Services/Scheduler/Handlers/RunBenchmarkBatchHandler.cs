@@ -324,9 +324,9 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         {
             dto = JsonSerializer.Deserialize<RunBenchmarkBatchParametersDto>(parametersJson, ParameterSerializerOptions);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new ScheduledJobValidationException("Run-benchmark-batch parameters are not valid JSON.");
+            throw new ScheduledJobValidationException("Run-benchmark-batch parameters are not valid JSON.", exception);
         }
 
         if (dto is null)

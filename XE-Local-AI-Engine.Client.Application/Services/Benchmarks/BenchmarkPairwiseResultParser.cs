@@ -41,9 +41,9 @@ public static class BenchmarkPairwiseResultParser
                     Rationale = rationale
                 };
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw new BenchmarkExecutionException("The pairwise judge output did not match the required schema.");
+            throw new BenchmarkExecutionException("The pairwise judge output did not match the required schema.", exception);
         }
     }
 

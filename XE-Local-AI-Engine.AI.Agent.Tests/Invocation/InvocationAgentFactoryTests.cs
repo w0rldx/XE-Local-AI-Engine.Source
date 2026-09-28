@@ -833,6 +833,47 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task CreateAsync_ThreadlessApprovalResume_ExecutesTheApprovedToolOnce(bool withSkills)
+    {
+        // Runs are sessionless, so since Microsoft.Agents.AI 1.22 the agent must opt out of MAF's session-backed approval
+        // binding (ApprovalResponseValidatingAgent binds instead); without the opt-out this resume throws.
+        const string toolName = "destructive_cleanup";
+        var executed = 0;
+        var registry = new FakeToolRegistry(new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string reason) =>
+            {
+                executed++;
+                return "cleanup performed";
+            },
+            toolName)));
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder(toolName)],
+            ConversationContext = [new ChatMessage(ChatRole.User, "Perform the cleanup now.")],
+            Skills = withSkills
+                ? [new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }]
+                : null
+        };
+
+        using var scripted = new FrameworkApprovalGateTests.ScriptedApprovalChatClient(toolName);
+        var sut = CreateSut(scripted, registry);
+        await using var context = await sut.CreateAsync(definition);
+
+        var first = await context.Agent.RunAsync(context.SeedMessages, session: null, context.RunOptions, CancellationToken.None);
+        var requests = first.Messages.SelectMany(static message => message.Contents).OfType<ToolApprovalRequestContent>().ToList();
+        AssertEx.Equal(expected: 1, requests.Count, "run#1 must pause on exactly one approval request");
+        AssertEx.Equal(expected: 0, executed, "the tool must not execute before approval");
+
+        List<ChatMessage> resume = [.. context.SeedMessages, .. first.Messages, new(ChatRole.User, [requests[0].CreateResponse(approved: true)])];
+        _ = await context.Agent.RunAsync(resume, session: null, context.RunOptions, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, executed, "the approved tool must execute exactly once on the threadless resume");
+    }
+
+    [Test]
     public async Task CreateAsync_OrdersConversationContext_WhenBuildingSeedMessages()
     {
         var definition = new InvocationAgentDefinition

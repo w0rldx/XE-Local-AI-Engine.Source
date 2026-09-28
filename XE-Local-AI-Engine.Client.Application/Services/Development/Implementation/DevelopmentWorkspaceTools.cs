@@ -163,15 +163,17 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             // refusal from an operational failure, and the scanner's neutral type would be read as the latter.
             throw new DevelopmentWorkspaceSecurityException(exception.Message, exception);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
+            throw new InvalidOperationException($"The fixed Development {operation} operation failed.", exception);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // No inner exception on purpose: the filesystem exception's message carries the host worktree path, and
             // this failure is rendered into a tool result the sandboxed model reads.
+#pragma warning disable MA0054 // Deliberately unwrapped, see the comment above: the inner exception would leak the host path.
             throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
+#pragma warning restore MA0054
         }
     }
 
@@ -432,23 +434,33 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     ///     reason to hold the untruncated form is to read structure out of it, the evidence cap keeping the head
     ///     while the structure a test runner emits is at the tail.
     /// </remarks>
-    private Task<SandboxCommandResult> ExecuteRawAsync(string executionPrefix,
+    private async Task<SandboxCommandResult> ExecuteRawAsync(string executionPrefix,
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         string? standardInput,
         TimeSpan timeout,
-        CancellationToken cancellationToken) =>
-        _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
+        CancellationToken cancellationToken)
+    {
+        var pipeDirectory = CreateTestPlatformPipeDirectory();
+        try
         {
-            ExecutionId = executionPrefix + "-" + Guid.NewGuid().ToString("N"),
-            Executable = executable,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            StandardInput = standardInput,
-            Environment = BuildEnvironment(),
-            Timeout = timeout
-        }, cancellationToken);
+            return await _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
+            {
+                ExecutionId = executionPrefix + "-" + Guid.NewGuid().ToString("N"),
+                Executable = executable,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory,
+                StandardInput = standardInput,
+                Environment = BuildEnvironment(pipeDirectory?.FullName),
+                Timeout = timeout
+            }, cancellationToken);
+        }
+        finally
+        {
+            DeleteTestPlatformPipeDirectory(pipeDirectory);
+        }
+    }
 
     private SandboxCommandResult TruncateForEvidence(SandboxCommandResult result)
     {
@@ -483,11 +495,11 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     ///     directory the container has never heard of. The mapping comes from the sandbox handle, so the process
     ///     provider, which identity-maps, still emits host paths.
     /// </remarks>
-    private IReadOnlyDictionary<string, string> BuildEnvironment()
+    private Dictionary<string, string> BuildEnvironment(string? testPlatformPipeDirectory)
     {
         var home = ResolveRuntimeDirectory("home");
         var temporary = ResolveRuntimeDirectory("tmp");
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["HOME"] = home,
             ["TMPDIR"] = temporary,
@@ -504,6 +516,54 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             // one dead entry per task, until cmd.exe gets an EMPTY %PATH%. DOTNET_SKIP_FIRST_TIME_EXPERIENCE is a .NET 10 no-op.
             ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0"
         };
+        if (testPlatformPipeDirectory is not null)
+        {
+            environment["TESTINGPLATFORM_PIPE_DIRECTORY"] = testPlatformPipeDirectory;
+        }
+
+        return environment;
+    }
+
+    /// <summary>
+    ///     A private, short directory for the Microsoft.Testing.Platform IPC socket of a <c>dotnet test</c> the command may run,
+    ///     or null when the sandbox's own temp directory already fits.
+    /// </summary>
+    /// <remarks>
+    ///     MTP 2.4.1 binds a Unix domain socket at <c>{temp}/{32 hex}</c> and aborts the test host (exit 134) when that path
+    ///     exceeds sun_path's 103 bytes. On the identity-mapping process provider TMPDIR is the per-task host directory, over
+    ///     90 bytes below the data root on its own, so every <c>dotnet test</c> died before running a test. The directory is
+    ///     created 0700 (mkdtemp) and removed after the command; a container's <c>/xe-runtime/tmp</c> fits and gets none,
+    ///     which also keeps a host path out of a namespace that cannot see it. Windows pipes are not filesystem sockets.
+    /// </remarks>
+    private DirectoryInfo? CreateTestPlatformPipeDirectory()
+    {
+        const int maxUnixSocketPathBytes = 103;
+        const int pipeFileNameBytes = 33;
+        var hostTemporary = Path.Combine(_session.RuntimePath, "tmp");
+        var temporary = ResolveRuntimeDirectory("tmp");
+        // Mounts stay identity-mapped under SandboxIsolationMode.Filesystem, but its bwrap view binds only /work and a jail /tmp, so no host
+        // path exists there. Dev Mode never runs isolated today: the process provider refuses isolation with a trusted host workspace.
+        var hostChild = _session.SandboxHandle.Isolation == SandboxIsolationMode.None
+                        && string.Equals(temporary, Path.GetFullPath(hostTemporary), StringComparison.Ordinal);
+        if (OperatingSystem.IsWindows() || !hostChild
+                                        || Encoding.UTF8.GetByteCount(temporary) + pipeFileNameBytes <= maxUnixSocketPathBytes)
+        {
+            return null;
+        }
+
+        return Directory.CreateTempSubdirectory("xe-mtp-");
+    }
+
+    private static void DeleteTestPlatformPipeDirectory(DirectoryInfo? directory)
+    {
+        try
+        {
+            directory?.Delete(recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: an empty 0700 directory in the system temp is the whole cost of a failed delete.
+        }
     }
 
     /// <summary>

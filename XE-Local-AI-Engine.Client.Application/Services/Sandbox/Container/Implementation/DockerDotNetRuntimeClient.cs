@@ -129,10 +129,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         {
             throw Classify(exception);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new DockerRuntimeException(DockerDaemonPreflightStatus.DaemonUnreachable,
-                $"The Docker daemon at '{Endpoint.Display}' did not answer within {_probeTimeout.TotalSeconds:0} seconds.");
+                $"The Docker daemon at '{Endpoint.Display}' did not answer within {_probeTimeout.TotalSeconds:0} seconds.", exception);
         }
     }
 
@@ -637,10 +637,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                              sink,
                              deadline.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new DockerRuntimeException(DockerDaemonPreflightStatus.ProbeFailed,
-                $"The pull of '{imageReference}' did not complete within {_pullTimeout.TotalMinutes:0} minutes.");
+                $"The pull of '{imageReference}' did not complete within {_pullTimeout.TotalMinutes:0} minutes.", exception);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

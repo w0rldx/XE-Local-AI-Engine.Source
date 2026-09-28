@@ -103,6 +103,54 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         // and a later restore on the same host attaches to that worker and restores against a deleted directory.
         AssertEx.Equal("1", environment["MSBUILDDISABLENODEREUSE"]);
         AssertEx.Empty(environment.Values.Where(value => value.Contains(session.RuntimePath, StringComparison.Ordinal)));
+
+        // /xe-runtime/tmp already fits a test-platform socket, and a host directory would not exist in this namespace.
+        AssertEx.False(environment.ContainsKey("TESTINGPLATFORM_PIPE_DIRECTORY"));
+    }
+
+    [Test]
+    public async Task BuildEnvironment_WhenTheIdentityMappedTempIsTooDeepForASocket_GivesTheTestPlatformAShortPrivatePipeDirectory()
+    {
+        // The measured defect: MTP 2.4.1 binds `{TMPDIR}/{32 hex}` as a Unix domain socket and aborts the test host (exit 134)
+        // past sun_path's 103 bytes, so under the process provider's identity map every `dotnet test` died before running.
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("Windows named pipes are not filesystem sockets; there is no path limit to work around.");
+        }
+
+        var sandbox = new MappingSandboxRuntimeProvider { IdentityMap = true };
+        var (session, tools) = await PrepareAsync(sandbox);
+        var hostTemporary = Path.Combine(session.RuntimePath, "tmp");
+        AssertEx.True(Encoding.UTF8.GetByteCount(hostTemporary) + 33 > 103,
+            "the fixture's per-task temp directory fits a socket, so this asserts nothing.");
+
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+
+        var environment = AssertEx.NotNull(sandbox.Executed[0].Environment);
+        AssertEx.Equal(hostTemporary, environment["TMPDIR"]);
+        var pipeDirectory = environment["TESTINGPLATFORM_PIPE_DIRECTORY"];
+        AssertEx.True(Encoding.UTF8.GetByteCount(pipeDirectory) + 33 <= 103, $"'{pipeDirectory}' is still too deep for a socket.");
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, sandbox.PipeDirectoryModes[0]);
+        AssertEx.False(Directory.Exists(pipeDirectory), "the per-command pipe directory outlived its command.");
+    }
+
+    [Test]
+    public async Task BuildEnvironment_WhenTheSandboxIsFilesystemIsolated_GivesNoHostPipeDirectory()
+    {
+        // The process handle identity-maps its mounts even under isolation, but the bwrap view binds neither the host system temp nor
+        // the runtime directory, so a host pipe directory would name a path the child cannot see.
+        var sandbox = new MappingSandboxRuntimeProvider
+        {
+            IdentityMap = true,
+            Isolation = SandboxIsolationMode.Filesystem
+        };
+        var (session, tools) = await PrepareAsync(sandbox);
+
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+
+        var environment = AssertEx.NotNull(sandbox.Executed[0].Environment);
+        AssertEx.Equal(Path.Combine(session.RuntimePath, "tmp"), environment["TMPDIR"]);
+        AssertEx.False(environment.ContainsKey("TESTINGPLATFORM_PIPE_DIRECTORY"));
     }
 
     [Test]
@@ -269,6 +317,15 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
 
         public IReadOnlyList<SandboxCommandRequest> Executed => _executed;
 
+        /// <summary>Maps every mount onto its own host path, as the process provider does by contract.</summary>
+        public bool IdentityMap { get; init; }
+
+        /// <summary>The isolation the handle reports as delivered.</summary>
+        public SandboxIsolationMode Isolation { get; init; }
+
+        /// <summary>The mode of each command's TESTINGPLATFORM_PIPE_DIRECTORY, read while the command ran; null when absent.</summary>
+        public List<UnixFileMode?> PipeDirectoryModes { get; } = [];
+
         public string ProviderName => "mapping";
 
         public SandboxProviderCapabilities Capabilities =>
@@ -286,7 +343,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                 new()
                 {
                     HostPath = workspaceRoot,
-                    SandboxPath = WorkspaceTarget,
+                    SandboxPath = IdentityMap ? workspaceRoot : WorkspaceTarget,
                     ReadOnly = false
                 }
             };
@@ -300,7 +357,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                 return new SandboxMountBinding
                 {
                     HostPath = hostPath,
-                    SandboxPath = target,
+                    SandboxPath = IdentityMap ? hostPath : target,
                     ReadOnly = mount.ReadOnly
                 };
             }));
@@ -312,7 +369,8 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = mounts
+                Mounts = mounts,
+                Isolation = Isolation
             };
 
             return Task.FromResult(_handle);
@@ -326,6 +384,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             _executed.Add(request);
+            PipeDirectoryModes.Add(request.Environment?.TryGetValue("TESTINGPLATFORM_PIPE_DIRECTORY", out var pipeDirectory) == true
+                                   && !OperatingSystem.IsWindows()
+                ? File.GetUnixFileMode(pipeDirectory)
+                : null);
 
             // The workspace invariant probes run after EVERY catalog command: HEAD must equal the recorded base commit,
             // and symbolic-ref must fail (a detached HEAD has no branch). Answering both correctly is what keeps these

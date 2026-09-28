@@ -203,11 +203,11 @@ public sealed class TranscriptionHub : Hub
         {
             await _live.PushAudioAsync(sessionId, (TranscriptChannel)channel, pcm16k, Context.ConnectionAborted);
         }
-        catch (ArgumentException)
+        catch (ArgumentException exception)
         {
             // A channel this session does not carry — a client sending You to a Microphone session. Defined here rather
             // than left as an unhandled argument error, so the client gets the same typed code as for an unknown channel.
-            throw new HubException(TranscriptionHubErrors.UnknownChannel);
+            throw new HubException(TranscriptionHubErrors.UnknownChannel, exception);
         }
     }
 

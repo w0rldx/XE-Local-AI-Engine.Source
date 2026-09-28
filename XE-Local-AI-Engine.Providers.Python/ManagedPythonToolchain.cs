@@ -157,9 +157,9 @@ public sealed class ManagedPythonToolchain
                 {
                     await Task.Delay(LockPollInterval, bounded.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                catch (OperationCanceledException exception) when (!ct.IsCancellationRequested)
                 {
-                    throw new ManagedPythonException("Another process kept the Python toolchain busy for too long. Try again later.");
+                    throw new ManagedPythonException("Another process kept the Python toolchain busy for too long. Try again later.", exception);
                 }
             }
         }

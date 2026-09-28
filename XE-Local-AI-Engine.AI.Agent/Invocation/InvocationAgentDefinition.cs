@@ -46,9 +46,8 @@ public sealed class InvocationAgentDefinition
 
     /// <summary>Optional resolved node skills for MAF progressive disclosure.</summary>
     /// <remarks>
-    ///     Empty or null (the default) keeps the no-skills path byte-identical: the factory uses the positional
-    ///     <see cref="IChatClient" /> constructor and attaches no context provider. When non-empty it builds an
-    ///     <c>AgentSkillsProvider</c> from these skills and constructs the agent through the options constructor.
+    ///     Empty or null (the default) attaches no context provider. When non-empty the factory builds an
+    ///     <c>AgentSkillsProvider</c> from these skills and attaches it to the agent's options.
     /// </remarks>
     public IReadOnlyList<InvocationSkill>? Skills { get; init; }
 

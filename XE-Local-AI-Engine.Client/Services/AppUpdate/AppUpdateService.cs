@@ -377,7 +377,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         // (0x80070020) or ERROR_LOCK_VIOLATION (0x80070021), Linux reports EAGAIN (11) from the advisory lock.
         catch (IOException exception) when (exception.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021) or 11)
         {
-            throw new AppUpdateException("Close the native XE window, then apply this update from your browser.");
+            throw new AppUpdateException("Close the native XE window, then apply this update from your browser.", exception);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

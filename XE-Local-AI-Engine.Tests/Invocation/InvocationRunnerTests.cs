@@ -5452,13 +5452,13 @@ public sealed class InvocationRunnerTests
                    var chatClient = model.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
                    return Task.FromResult(new InvocationAgentContext
                    {
-                       Agent = new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+                       Agent = InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
                            "web-review",
-                           definition.Instructions,
                            "Result review gate end to end.",
                            tools,
                            NullLoggerFactory.Instance,
-                           new ServiceCollection().BuildServiceProvider())),
+                           new ServiceCollection().BuildServiceProvider(),
+                           instructions: definition.Instructions),
                        Session = null,
                        SeedMessages = definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList()
                    });

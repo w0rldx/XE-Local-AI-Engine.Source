@@ -146,17 +146,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/types@2.1.4",
+			"id": "frontend:@rrweb/types@2.1.6",
 			"name": "@rrweb/types",
-			"version": "2.1.4",
+			"version": "2.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/types#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/utils@2.1.4",
+			"id": "frontend:@rrweb/utils@2.1.6",
 			"name": "@rrweb/utils",
-			"version": "2.1.4",
+			"version": "2.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/utils#readme",
 			"source": "frontend"
@@ -186,49 +186,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons@3.46.0",
+			"id": "frontend:@tabler/icons@3.47.0",
 			"name": "@tabler/icons",
-			"version": "3.46.0",
+			"version": "3.47.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons-react@3.46.0",
+			"id": "frontend:@tabler/icons-react@3.47.0",
 			"name": "@tabler/icons-react",
-			"version": "3.46.0",
+			"version": "3.47.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/history@1.162.3",
+			"id": "frontend:@tanstack/history@1.162.4",
 			"name": "@tanstack/history",
-			"version": "1.162.3",
+			"version": "1.162.4",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.102.8",
+			"id": "frontend:@tanstack/query-core@5.103.2",
 			"name": "@tanstack/query-core",
-			"version": "5.102.8",
+			"version": "5.103.2",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.102.8",
+			"id": "frontend:@tanstack/react-query@5.103.2",
 			"name": "@tanstack/react-query",
-			"version": "5.102.8",
+			"version": "5.103.2",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.35",
+			"id": "frontend:@tanstack/react-router@1.170.38",
 			"name": "@tanstack/react-router",
-			"version": "1.170.35",
+			"version": "1.170.38",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -242,17 +242,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-virtual@3.14.11",
+			"id": "frontend:@tanstack/react-virtual@3.14.13",
 			"name": "@tanstack/react-virtual",
-			"version": "3.14.11",
+			"version": "3.14.13",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.29",
+			"id": "frontend:@tanstack/router-core@1.171.32",
 			"name": "@tanstack/router-core",
-			"version": "1.171.29",
+			"version": "1.171.32",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -266,9 +266,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/virtual-core@3.17.9",
+			"id": "frontend:@tanstack/virtual-core@3.17.11",
 			"name": "@tanstack/virtual-core",
-			"version": "3.17.9",
+			"version": "3.17.11",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
@@ -1298,9 +1298,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@13.2.0",
+			"id": "frontend:framer-motion@13.4.0",
 			"name": "framer-motion",
-			"version": "13.2.0",
+			"version": "13.4.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2010,25 +2010,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.21.0",
+			"id": "backend:Microsoft.Agents.AI@1.22.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.21.0",
+			"version": "1.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.21.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.22.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.21.0",
+			"version": "1.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.21.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.22.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.21.0",
+			"version": "1.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -2394,14 +2394,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.3",
-			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
-			"version": "10.0.3",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.12",
 			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
 			"version": "10.0.12",
@@ -2426,14 +2418,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.3",
-			"name": "Microsoft.Extensions.FileProviders.Abstractions",
-			"version": "10.0.3",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.12",
 			"name": "Microsoft.Extensions.FileProviders.Abstractions",
 			"version": "10.0.12",
@@ -2445,14 +2429,6 @@
 			"id": "backend:Microsoft.Extensions.FileSystemGlobbing@10.0.12",
 			"name": "Microsoft.Extensions.FileSystemGlobbing",
 			"version": "10.0.12",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.3",
-			"name": "Microsoft.Extensions.Hosting.Abstractions",
-			"version": "10.0.3",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2535,14 +2511,6 @@
 			"version": "10.0.12",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Options@10.0.3",
-			"name": "Microsoft.Extensions.Options",
-			"version": "10.0.3",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
@@ -2770,17 +2738,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@13.2.0",
+			"id": "frontend:motion-dom@13.3.0",
 			"name": "motion-dom",
-			"version": "13.2.0",
+			"version": "13.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:motion-utils@13.0.0",
+			"id": "frontend:motion-utils@13.3.0",
 			"name": "motion-utils",
-			"version": "13.0.0",
+			"version": "13.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -3202,17 +3170,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-error-boundary@6.1.5",
+			"id": "frontend:react-error-boundary@6.1.6",
 			"name": "react-error-boundary",
-			"version": "6.1.5",
+			"version": "6.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://react-error-boundary-lib.vercel.app/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.0.13",
+			"id": "frontend:react-i18next@17.0.14",
 			"name": "react-i18next",
-			"version": "17.0.13",
+			"version": "17.0.14",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3402,25 +3370,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrdom@2.1.4",
+			"id": "frontend:rrdom@2.1.6",
 			"name": "rrdom",
-			"version": "2.1.4",
+			"version": "2.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrdom#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb@2.1.1",
+			"id": "frontend:rrweb@2.1.6",
 			"name": "rrweb",
-			"version": "2.1.1",
+			"version": "2.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb-snapshot@2.1.4",
+			"id": "frontend:rrweb-snapshot@2.1.6",
 			"name": "rrweb-snapshot",
-			"version": "2.1.4",
+			"version": "2.1.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrweb-snapshot#readme",
 			"source": "frontend"
@@ -4106,9 +4074,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:zod@4.6.1",
+			"id": "frontend:zod@4.6.5",
 			"name": "zod",
-			"version": "4.6.1",
+			"version": "4.6.5",
 			"license": "MIT",
 			"homepageUrl": "https://zod.dev",
 			"source": "frontend"

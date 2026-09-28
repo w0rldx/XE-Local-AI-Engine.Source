@@ -841,11 +841,11 @@ internal sealed class HfDownloadClient
         {
             return await source.ReadAsync(buffer, idleCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             downloadMetrics.RecordReadIdleTimeout();
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
-                "The model download stalled with no data received and was retried.");
+                "The model download stalled with no data received and was retried.", exception);
         }
     }
 

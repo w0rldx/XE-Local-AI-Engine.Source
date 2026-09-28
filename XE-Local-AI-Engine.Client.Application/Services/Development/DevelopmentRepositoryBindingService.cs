@@ -205,7 +205,9 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
         {
             // No inner exception on purpose: the filesystem exception's message carries the host path, and this type is
             // rendered to the operator and logged whole.
+#pragma warning disable MA0054 // Deliberately unwrapped, see the comment above: the inner exception would leak the host path.
             throw new DevelopmentWorkspaceSecurityException("The selected repository is unavailable.");
+#pragma warning restore MA0054
         }
     }
 

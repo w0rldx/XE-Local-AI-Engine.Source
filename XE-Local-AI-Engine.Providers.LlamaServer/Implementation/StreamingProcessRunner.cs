@@ -84,10 +84,10 @@ internal static class StreamingProcessRunner
             handle.TreeKill();
             throw;
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (timeoutCts.IsCancellationRequested)
         {
             handle.TreeKill();
-            throw new LlamaRuntimeException("The build step exceeded its time budget and was stopped.");
+            throw new LlamaRuntimeException("The build step exceeded its time budget and was stopped.", exception);
         }
     }
 

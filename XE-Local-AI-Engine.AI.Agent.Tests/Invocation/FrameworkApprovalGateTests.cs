@@ -466,27 +466,24 @@ public sealed class FrameworkApprovalGateTests
 
     private static AIAgent BuildAgent(IChatClient chatClient, AITool tool, IServiceProvider sp)
     {
-        return new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+        return InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
             "ci-approval-gate",
-            "Call the destructive_cleanup tool when asked to perform a cleanup.",
             "Deterministic approval-gate CI guard.",
-            new List<AITool>
-            {
-                tool
-            },
+            [tool],
             NullLoggerFactory.Instance,
-            sp));
+            sp,
+            instructions: "Call the destructive_cleanup tool when asked to perform a cleanup.");
     }
 
     private static AIAgent BuildAgent(IChatClient chatClient, IList<AITool> tools, IServiceProvider sp)
     {
-        return new ApprovalResponseValidatingAgent(new ChatClientAgent(chatClient,
+        return InvocationAgentFactory.BuildApprovalValidatedAgent(chatClient,
             "ci-approval-gate",
-            "Call the destructive tools when asked to perform cleanup.",
             "Deterministic approval-gate CI guard.",
             tools,
             NullLoggerFactory.Instance,
-            sp));
+            sp,
+            instructions: "Call the destructive tools when asked to perform cleanup.");
     }
 
     private static List<ChatMessage> BuildSeed()
@@ -504,7 +501,7 @@ public sealed class FrameworkApprovalGateTests
     ///     <see cref="ToolApprovalRequestContent" />); once a <see cref="FunctionResultContent" /> is present
     ///     in the history (tool executed or rejection synthesised) it returns a plain final message.
     /// </summary>
-    private sealed class ScriptedApprovalChatClient : IChatClient
+    internal sealed class ScriptedApprovalChatClient : IChatClient
     {
         private readonly IReadOnlyList<string> _toolNames;
 
