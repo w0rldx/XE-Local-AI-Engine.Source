@@ -40,4 +40,13 @@ public interface ITokenEstimatorCalibrationStore
     ///     been recorded, leaving an uncalibrated model entirely unaffected by this channel.
     /// </remarks>
     double ResolveObservedCorrection(string? modelName);
+
+    /// <summary>
+    ///     Tokens <paramref name="modelName" />'s chat template spends ONCE per request that offers at least one tool, beyond each tool's own
+    ///     definition: the tool-use instructions and the block that frames the tool list. Zero when nothing has been measured.
+    /// </summary>
+    int ResolveToolTemplatePreamble(string? modelName);
+
+    /// <summary>Stores a measured tool-template preamble for <paramref name="modelName" />, clamped to a sane non-negative bound.</summary>
+    void SetToolTemplatePreamble(string modelName, int preambleTokens);
 }

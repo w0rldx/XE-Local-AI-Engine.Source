@@ -168,6 +168,12 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         // Instructions AND tool definitions (name + description + JSON schema) are fixed per-round input the model never
         // sees as a droppable message; folding both in stops a tool-heavy agent rounding an over-window request through.
         var toolSchemaTokens = ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
+        // The template's once-per-request tool instructions, measured per model by the calibration round; charged only when a tool is offered.
+        if (options?.Tools is { Count: > 0 })
+        {
+            toolSchemaTokens += _calibrationStore.ResolveToolTemplatePreamble(modelId);
+        }
+
         var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken)
                                  + toolSchemaTokens;
 

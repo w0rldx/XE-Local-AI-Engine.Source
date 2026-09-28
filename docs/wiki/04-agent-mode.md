@@ -380,8 +380,19 @@ A tool definition costs its name, description and schema text, the per-message f
 `TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens` (18) for the OpenAI JSON wrapper a chat template renders around
 it — both budgets charge exactly that. Measured on Qwen3.8-27B with the 8 Default Assistant tools: 21.9 tokens of wrapper a
 tool, 4 of them the framing. The offer (`LocalToolOfferProvider`) carries each tool's model-facing description so the outer
-budget sees it; `RuntimePackageConfigHash` and the agentic MCP binding fingerprint still leave it out. Not counted: the
-template's own once-per-request tool instructions (~198 tokens on that template), which vary per template.
+budget sees it; `RuntimePackageConfigHash` and the agentic MCP binding fingerprint still leave it out.
+
+The template's own once-per-request tool instructions (~198 tokens on that template) vary per template, so they are measured
+per model: `LlamaTokenEstimatorCalibrationService`, in the same round as the `/tokenize` divisor, POSTs a fixed system + user
+pair to llama-server's `/v1/messages/count_tokens` (which renders the model's own chat template, tools included) once without
+and once with a fixed two-tool probe set. The preamble is `count(with) - count(without) -` what the budgets already charge for
+the probe tools (framed definition + wrapper, at the divisor just measured), clamped to
+`0..TokenEstimatorCalibrationStore.MaximumToolTemplatePreambleTokens` and stored per model beside the divisor. Both budgets
+add it **once** per request that offers at least one tool (the outer one in its fixed overhead, the inner one in the round's
+tool-schema tokens), never without tools. Fail-quiet: no measurement means 0, a failed probe keeps the prior value, and the
+divisor is stored either way. Measured on Qwen2.5-0.5B (pinned build, CPU): 26 tokens without, 245 with the probe tools, 135
+already charged, preamble 84. The Debug line `calibration measured N chars per token and a tool-template preamble of P tokens`
+shows both numbers.
 
 Per-message and per-tool script-category profiles are memoized by instance in a
 `ConditionalWeakTable` — no leak, the entry dies with its key. This hop re-estimates the full message

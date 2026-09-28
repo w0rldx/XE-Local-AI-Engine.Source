@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -21,16 +22,19 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 {
     private readonly int? _bornDeadExitCode;
     private readonly string? _bornDeadStderrTail;
+    private readonly int? _processId;
     private int _nextPid = 2000;
 
     /// <summary>
     ///     With an exit code, every handed-out handle is already exited — the deterministic stand-in for an sd-server
     ///     that dies during model load, with no timer and no race.
     /// </summary>
-    public FakeImageProcessLauncher(int? bornDeadExitCode = null, string? bornDeadStderrTail = null)
+    /// <remarks>With a <paramref name="processId" />, every handle carries it: a spawn-receipt test passes its own pid.</remarks>
+    public FakeImageProcessLauncher(int? bornDeadExitCode = null, string? bornDeadStderrTail = null, int? processId = null)
     {
         _bornDeadExitCode = bornDeadExitCode;
         _bornDeadStderrTail = bornDeadStderrTail;
+        _processId = processId;
     }
 
     public ConcurrentQueue<ImageServerLaunchSpec> Launches { get; } = new();
@@ -43,7 +47,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-        var handle = new FakeImageProcessHandle(Interlocked.Increment(ref _nextPid));
+        var handle = new FakeImageProcessHandle(_processId ?? Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
         if (_bornDeadExitCode is { } exitCode)
         {
@@ -68,6 +72,8 @@ internal sealed class FakeImageProcessHandle : IProcessTreeHandle
 
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
+    public bool WasDisposed { get; private set; }
+
     public int ProcessId { get; }
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
@@ -88,7 +94,7 @@ internal sealed class FakeImageProcessHandle : IProcessTreeHandle
 
     public void Dispose()
     {
-        // No unmanaged resources in the fake.
+        WasDisposed = true;
     }
 
     /// <summary>Simulates a daemon crash/exit so the next ensure-running sees a dead process, optionally with the diagnostics the real handle would carry.</summary>
@@ -160,17 +166,19 @@ internal sealed class FakeSdBackendSelector : ISdGpuBackendSelector
 internal sealed class FakeSdBinaryManager : IStableDiffusionBinaryManager
 {
     private readonly SdGpuBackend _resolvedBackend;
+    private readonly string _serverExecutablePath;
 
-    public FakeSdBinaryManager(SdGpuBackend resolvedBackend = SdGpuBackend.Cpu)
+    public FakeSdBinaryManager(SdGpuBackend resolvedBackend = SdGpuBackend.Cpu, string serverExecutablePath = "/fake/bin/sd-server")
     {
         _resolvedBackend = resolvedBackend;
+        _serverExecutablePath = serverExecutablePath;
     }
 
     public Task<SdBinary> EnsureBinaryAsync(SdGpuBackend backend, CancellationToken ct)
     {
         return Task.FromResult(new SdBinary
         {
-            ServerExecutablePath = "/fake/bin/sd-server",
+            ServerExecutablePath = _serverExecutablePath,
             Version = "master-913-b167b94",
             Backend = _resolvedBackend,
             IsPinnedFallback = true
@@ -270,7 +278,8 @@ internal static class ImageSupervisorFactory
         FakeSdBackendSelector? backendSelector = null,
         FakeSdBinaryManager? binaryManager = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        ILogger<ImageServerProcessSupervisor>? logger = null)
+        ILogger<ImageServerProcessSupervisor>? logger = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         return new ImageServerProcessSupervisor(modelStore ?? new FakeImageModelStore(),
             backendSelector ?? new FakeSdBackendSelector(),
@@ -285,6 +294,7 @@ internal static class ImageSupervisorFactory
             },
             timeProvider ?? new AdvanceableClock(),
             logger,
-            loadAdmission);
+            loadAdmission,
+            spawnReceipts: spawnReceipts);
     }
 }

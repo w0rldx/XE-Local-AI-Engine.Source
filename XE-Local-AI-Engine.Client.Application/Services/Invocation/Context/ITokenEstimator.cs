@@ -37,6 +37,15 @@ public interface ITokenEstimator
         return TokenEstimatorCalibrationStore.NeutralObservedCorrection;
     }
 
+    /// <summary>
+    ///     The tool-template preamble measured for a model (see <see cref="ITokenEstimatorCalibrationStore.ResolveToolTemplatePreamble" />):
+    ///     charged once per request that offers at least one tool. Zero for an estimator that knows nothing about calibration.
+    /// </summary>
+    int ResolveToolTemplatePreamble(string? modelName)
+    {
+        return 0;
+    }
+
     int EstimateTokensWithDivisor(ChatMessage message, int charsPerToken)
     {
         return EstimateTokens(message);

@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using Microsoft.Extensions.AI;
+
 /// <summary>
 ///     The llama-server HTTP routes the node calls outside the OpenAI-compatible chat surface: <c>/metrics</c>,
-///     <c>/props</c>, <c>/tokenize</c>, and the pooled <c>embeddings</c>/<c>rerank</c> roles the benchmark harness
+///     <c>/props</c>, <c>/tokenize</c>, <c>/v1/messages/count_tokens</c>, and the pooled <c>embeddings</c>/<c>rerank</c> roles the benchmark harness
 ///     measures.
 /// </summary>
 /// <remarks>
@@ -29,6 +31,22 @@ public interface ILlamaServerNativeClient
     ///     a malformed body reads as no token count.
     /// </remarks>
     Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct);
+
+    /// <summary>
+    ///     POSTs a one-turn conversation (<paramref name="systemPrompt" /> + <paramref name="userMessage" />, offering
+    ///     <paramref name="tools" />) to the server root's <c>/v1/messages/count_tokens</c>, which renders it through the model's own
+    ///     chat template and counts the result, over the same guarded transport as <see cref="TokenizeAsync" />.
+    /// </summary>
+    /// <remarks>
+    ///     Only each tool's name, description and JSON schema are sent. Verified on the pinned build (b10201, 8f4646a) with
+    ///     <c>--jinja</c>: the count equals <c>/tokenize</c> over the <c>/apply-template</c> prompt, tools included. Read the count
+    ///     through <see cref="LlamaServerTokenizeResponse.ReadTokenCountAsync" />.
+    /// </remarks>
+    Task<LlamaServerTokenizeResponse> CountPromptTokensAsync(Uri baseAddress,
+        string systemPrompt,
+        string userMessage,
+        IReadOnlyList<AIFunctionDeclaration> tools,
+        CancellationToken ct);
 
     /// <summary>
     ///     POSTs <paramref name="inputs" /> to <c>{baseAddress}/embeddings</c> and returns one vector per input, in

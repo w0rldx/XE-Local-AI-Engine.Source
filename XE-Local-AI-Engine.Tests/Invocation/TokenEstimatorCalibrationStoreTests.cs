@@ -27,6 +27,29 @@ public sealed class TokenEstimatorCalibrationStoreTests
     }
 
     [Test]
+    public void ResolveToolTemplatePreamble_ForAnUnknownModel_IsZero()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+
+        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble(Model));
+        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble(modelName: null));
+    }
+
+    [Test]
+    [Arguments(198, 198)]
+    [Arguments(-40, 0)]
+    [Arguments(50_000, TokenEstimatorCalibrationStore.MaximumToolTemplatePreambleTokens)]
+    public void SetToolTemplatePreamble_StoresPerModelWithinTheBound(int measured, int expected)
+    {
+        var store = new TokenEstimatorCalibrationStore();
+
+        store.SetToolTemplatePreamble(Model, measured);
+
+        AssertEx.Equal(expected, store.ResolveToolTemplatePreamble(Model));
+        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble("another-model"));
+    }
+
+    [Test]
     public void RecordObservedUsage_FirstSample_FoldsFromNeutralRatherThanBeingTakenRaw()
     {
         var store = new TokenEstimatorCalibrationStore();

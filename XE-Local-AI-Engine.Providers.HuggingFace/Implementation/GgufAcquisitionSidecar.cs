@@ -30,11 +30,27 @@ internal static class GgufAcquisitionSidecar
     private static void FlushToDisk(FileStream stream) =>
         stream.Flush(flushToDisk: true);
 
+    public static Task<GgufAcquisitionMetadata?> ReadValidAsync(string sidecarPath,
+        string weightPath,
+        string modelsDirectory,
+        CancellationToken cancellationToken) =>
+        ReadValidAsync(sidecarPath, weightPath, modelsDirectory, ComputeSha256Async, cancellationToken);
+
+    /// <summary>
+    ///     Validates the sidecar against member digests supplied by the caller instead of hashing the members itself.
+    /// </summary>
+    /// <remarks>
+    ///     The installed-model acquire path has already hashed (or memoised) every member it is about to compare, so a
+    ///     second full SHA-256 pass over a multi-gigabyte weight per acquire buys nothing. The recorded digests are still
+    ///     compared; only where the actual digest comes from changes.
+    /// </remarks>
     public static async Task<GgufAcquisitionMetadata?> ReadValidAsync(string sidecarPath,
         string weightPath,
         string modelsDirectory,
+        Func<string, CancellationToken, Task<string>> memberSha256Async,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(memberSha256Async);
         try
         {
             var metadata = await ReadShapeValidAsync(sidecarPath, weightPath, modelsDirectory, cancellationToken).ConfigureAwait(false);
@@ -43,7 +59,7 @@ internal static class GgufAcquisitionSidecar
                 return null;
             }
 
-            var weightHash = await ComputeSha256Async(weightPath, cancellationToken).ConfigureAwait(false);
+            var weightHash = await memberSha256Async(weightPath, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(weightHash, metadata.WeightContentSha256, StringComparison.Ordinal)
                 || new FileInfo(weightPath).Length != metadata.WeightSizeBytes
                 || !string.Equals(GgufMemberFingerprint.Compute(weightHash, metadata.WeightSizeBytes), metadata.WeightMemberFingerprint,
@@ -75,7 +91,7 @@ internal static class GgufAcquisitionSidecar
                     return null;
                 }
 
-                var projectorHash = await ComputeSha256Async(projectorPath, cancellationToken).ConfigureAwait(false);
+                var projectorHash = await memberSha256Async(projectorPath, cancellationToken).ConfigureAwait(false);
                 if (new FileInfo(projectorPath).Length != projectorSize
                     || !string.Equals(projectorHash, projectorExpectedHash, StringComparison.Ordinal)
                     || !string.Equals(GgufMemberFingerprint.Compute(projectorHash, projectorSize), projectorFingerprint, StringComparison.Ordinal))

@@ -122,7 +122,7 @@ public sealed class SupervisorSpawnReceiptTests : IDisposable
     private static FakeProcessLauncher OwnPidLauncher() =>
         new(_ => new FakeProcessHandle(Environment.ProcessId));
 
-    private static long ReadOwnStartTicks()
+    internal static long ReadOwnStartTicks()
     {
         var stat = File.ReadAllText("/proc/self/stat");
         return long.Parse(stat[(stat.LastIndexOf(')') + 2)..].Split(' ')[19], CultureInfo.InvariantCulture);

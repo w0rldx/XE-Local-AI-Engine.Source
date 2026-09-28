@@ -359,6 +359,13 @@ public static class TrainingLifecycleE2ETestDoubles
         public Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public Task<LlamaServerTokenizeResponse> CountPromptTokensAsync(Uri baseAddress,
+            string systemPrompt,
+            string userMessage,
+            IReadOnlyList<AIFunctionDeclaration> tools,
+            CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingsAsync(Uri baseAddress,
             string modelName,
             IReadOnlyList<string> inputs,

@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -25,7 +26,17 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 /// </remarks>
 internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 {
+    private readonly int? _processId;
     private int _nextPid = 3000;
+
+    /// <summary>
+    ///     With a <paramref name="processId" />, every handle carries it (a spawn-receipt test passes its own pid, so the receipt records a
+    ///     real <c>/proc</c> start time).
+    /// </summary>
+    public FakeWhisperProcessLauncher(int? processId = null)
+    {
+        _processId = processId;
+    }
 
     public ConcurrentQueue<WhisperServerLaunchSpec> Launches { get; } = new();
 
@@ -37,7 +48,7 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership transfers to the supervisor under test, which disposes it on teardown.
-        var handle = new FakeWhisperProcessHandle(Interlocked.Increment(ref _nextPid));
+        var handle = new FakeWhisperProcessHandle(_processId ?? Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
         Handles.Add(handle);
         return handle;
@@ -56,6 +67,8 @@ internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
     }
 
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
+
+    public bool WasDisposed { get; private set; }
 
     public int ProcessId { get; }
 
@@ -77,7 +90,7 @@ internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
 
     public void Dispose()
     {
-        // No unmanaged resources in the fake.
+        WasDisposed = true;
     }
 
     /// <summary>Simulates a crash or exit, so the next ensure sees a dead process.</summary>
@@ -160,20 +173,23 @@ internal sealed class FakeWhisperBinaryManager : IWhisperCppBinaryManager
     private readonly WhisperBackend _resolvedBackend;
     private readonly bool _isPinnedFallback;
     private readonly string _version;
+    private readonly string _serverExecutablePath;
 
     public FakeWhisperBinaryManager(WhisperBackend resolvedBackend = WhisperBackend.Cpu,
         bool isPinnedFallback = true,
-        string version = "b5130")
+        string version = "b5130",
+        string serverExecutablePath = "/fake/bin/whisper-server")
     {
         _resolvedBackend = resolvedBackend;
         _isPinnedFallback = isPinnedFallback;
         _version = version;
+        _serverExecutablePath = serverExecutablePath;
     }
 
     public Task<WhisperBinary> EnsureBinaryAsync(WhisperBackend backend, CancellationToken ct) =>
         Task.FromResult(new WhisperBinary
         {
-            ServerExecutablePath = "/fake/bin/whisper-server",
+            ServerExecutablePath = _serverExecutablePath,
             Version = _version,
             Backend = _resolvedBackend,
             IsPinnedFallback = _isPinnedFallback
@@ -268,7 +284,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
         ScriptedWhisperHttpHandler? httpHandler = null,
         string? modelsDirectory = null,
         ILogger<WhisperServerProcessSupervisor>? logger = null,
-        WhisperCudaFailureSignal? cudaFailureSignal = null)
+        WhisperCudaFailureSignal? cudaFailureSignal = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         Launcher = launcher ?? new FakeWhisperProcessLauncher();
         ReadinessProbe = readinessProbe ?? new FakeWhisperReadinessProbe();
@@ -298,7 +315,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
             logger,
             loadAdmission,
             ActivityGate,
-            CudaFailureSignal);
+            CudaFailureSignal,
+            spawnReceipts);
     }
 
     public WhisperServerProcessSupervisor Supervisor { get; }

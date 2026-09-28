@@ -2,13 +2,15 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Production <see cref="ILlamaServerNativeClient" />.</summary>
 /// <remarks>
 ///     Metrics, props and the pooled-role POSTs use the host's default factory client, created per call. Tokenize uses
-///     its own long-lived client whose handler follows no redirect and uses no ambient proxy, because its caller runs
+///     (and the template-rendering count) its own long-lived client whose handler follows no redirect and uses no ambient proxy, because its caller runs
 ///     unattended against an endpoint captured long before the request and must never be steered elsewhere.
 /// </remarks>
 internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
@@ -66,6 +68,44 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
                                                  },
                                                  ct)
                                              .ConfigureAwait(false);
+        return new LlamaServerTokenizeResponse(response);
+    }
+
+    public async Task<LlamaServerTokenizeResponse> CountPromptTokensAsync(Uri baseAddress,
+        string systemPrompt,
+        string userMessage,
+        IReadOnlyList<AIFunctionDeclaration> tools,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentNullException.ThrowIfNull(systemPrompt);
+        ArgumentNullException.ThrowIfNull(userMessage);
+        ArgumentNullException.ThrowIfNull(tools);
+
+        // Anthropic-shaped: llama-server converts it to its OpenAI chat parameters and renders the template, so the count is the prompt the model sees.
+        var toolArray = new JsonArray();
+        foreach (var tool in tools)
+        {
+            toolArray.Add(new JsonObject
+            {
+                ["name"] = tool.Name,
+                ["description"] = tool.Description,
+                ["input_schema"] = JsonNode.Parse(tool.JsonSchema.GetRawText())
+            });
+        }
+
+        var body = new JsonObject
+        {
+            ["system"] = systemPrompt,
+            ["messages"] = new JsonArray(new JsonObject
+            {
+                ["role"] = "user",
+                ["content"] = userMessage
+            }),
+            ["tools"] = toolArray
+        };
+        var countUri = new Uri($"{baseAddress.Scheme}://{baseAddress.Authority}/v1/messages/count_tokens");
+        var response = await _tokenizeClient.PostAsJsonAsync(countUri, body, ct).ConfigureAwait(false);
         return new LlamaServerTokenizeResponse(response);
     }
 

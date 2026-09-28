@@ -105,12 +105,7 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 
 ### two hosts on one box must never share a llama-server BINARY PATH, or one host's reaper kills the other's models
 
-**Rule:** a live round beside another running host gets its own copy of the llama-server build (e.g.
-`.tmp/<round>-data/llama-bin/`) behind `XE_LLAMACPP_SERVER_PATH`; never reuse another host's managed
-`source-build/active/build/bin/llama-server`. The llama-server `StaleProcessReaper` claims every llama-server under its managed path
-(path containment, not ancestry), so a restart of host A reaps host B's models. Diagnose by grepping the OTHER host's log for
-"Reaping stale". **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleProcessReaper` (`Providers.ProcessSupervision`,
-registered in `LlamaServerServiceCollectionExtensions`), `LlamaServerIdleReaper.PruneExitedProcesses`.
+**Rule:** a live round beside another running host still gets its own copy of the MANAGED llama-server build (behind `XE_LLAMACPP_SERVER_PATH`); never point two hosts at another host's `source-build/active/build/bin/llama-server`, because the startup `StaleProcessReaper` still claims every llama-server under its managed root by path. A BYO binary outside the root is safe to share: on Linux it is reaped only through this node's spawn receipts (`runtime/llama-server/<pid>.json`), resolved by pid (/proc exe realpath + starttime), not by process name. **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleProcessReaper`, `ProcessSpawnReceiptStore`, `LlamaServerProcessSupervisor.SpawnCoreAsync`.
 [evidence](../agent-knowledge-evidence.md#two-hosts-on-one-box-must-never-share-a-llama-server-binary-path-or-one-hosts-reaper-kills-the-others-models)
 
 ## Containers, sandbox and External Apps (host side)
@@ -227,6 +222,10 @@ and Windows). On Linux `GetPathRoot` is `/` for every path, gating on a filesyst
 reads as 0. The probe throws `InvalidOperationException` when nothing exists at or above the path: each caller decides what
 unmeasurable means. Test against a real second mount (`SeparateMountScratch`). **Prevents:** wrong-volume disk gates.
 **Authority:** `Providers.Abstractions/DriveInfoFreeSpaceProbe.cs`, `DriveInfoFreeSpaceProbeTests`.
+
+### An ArgumentOutOfRangeException from Microsoft.Data.Sqlite on constant SQL is a masked native prepare failure
+
+**Rule:** treat it as SQLITE_MISUSE/NOMEM leaving the tail pointer unset, not as a caller bug. Read the NodeSqliteDiagnostics Warning lines (sqlite3_config_log result code, the pragma's extended result code) before changing pooling or adding locks. Tests that attach a logger match on a unique marker: the native log hook is process-global and every attached logger sees other tests' messages. **Prevents:** chasing a phantom argument bug, and flaky counts from cross-test SQLite messages. **Authority:** `NodeSqlitePragmas` transient open failure; `NodeSqliteDiagnosticsTests`; wiki 08 "Connection pragmas".
 
 ## Windows
 

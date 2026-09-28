@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -27,6 +28,9 @@ public static class WhisperCppServiceCollectionExtensions
 
     /// <summary>Named HTTP client for loopback health, model-load and transcription requests.</summary>
     public const string RuntimeHttpClientName = "whispercpp-runtime";
+
+    /// <summary>The process name the reaper scans for and the spawn-receipt directory under the node data root.</summary>
+    private const string ServerName = "whisper-server";
 
     /// <summary>Registers the whisper.cpp runtime infrastructure.</summary>
     public static IServiceCollection AddWhisperCppRuntime(this IServiceCollection services)
@@ -79,6 +83,11 @@ public static class WhisperCppServiceCollectionExtensions
         // a plain AddSingleton carrying the real singleton shared with the llama-server and image supervisors.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
 
+        // ONE whisper-server spawn-receipt store, keyed by server name: the supervisor writes the receipts the startup reaper reads back. A
+        // provider-only host registers no INodeDataDirectory, and then receipts are off and only the binaries-root reap applies.
+        services.TryAddKeyedSingleton(ServerName, static (sp, _) =>
+            new ProcessSpawnReceiptStore(sp.GetService<INodeDataDirectory>()?.Root, ServerName, sp.GetRequiredService<ILogger<ProcessSpawnReceiptStore>>()));
+
         // Strictly one supervisor: it owns the node's only whisper-server child process. Built through a factory
         // because its constructor takes the internal launcher and readiness seams.
         services.TryAddSingleton(static sp => new WhisperServerProcessSupervisor(sp.GetRequiredService<IWhisperBackendSelector>(),
@@ -91,7 +100,8 @@ public static class WhisperCppServiceCollectionExtensions
             sp.GetRequiredService<ILogger<WhisperServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<IWhisperRuntimeActivityGate>(),
-            sp.GetRequiredService<WhisperCudaFailureSignal>()));
+            sp.GetRequiredService<WhisperCudaFailureSignal>(),
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
         services.TryAddSingleton<IWhisperServerSupervisor>(static sp => sp.GetRequiredService<WhisperServerProcessSupervisor>());
 
         services.TryAddSingleton<IWhisperTranscriber>(static sp =>
@@ -100,13 +110,14 @@ public static class WhisperCppServiceCollectionExtensions
                 sp.GetRequiredService<WhisperRuntimeOptions>(),
                 sp.GetRequiredService<ILogger<WhisperServerTranscriber>>()));
 
-        // Startup orphan reaper for binaries under our own cache root only; its per-orphan line omits the path, as it always has.
+        // Startup orphan reaper: binaries under our own cache root, plus on Linux any child this node's spawn receipts identify; its log omits the path.
         // AddSingleton, not AddHostedService, which dedupes the StaleProcessReaper type every runtime shares.
         services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("whisper-server"),
             WhisperCppBinaryManager.DefaultWhisperBinariesRoot(),
             "whisper-server",
             logExecutablePath: false,
-            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>(),
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
 
         // The managed Linux CUDA source-build lane. There is no prebuilt Linux CUDA asset upstream, so this is the
         // only way a Linux node gets GPU transcription without a bring-your-own binary.

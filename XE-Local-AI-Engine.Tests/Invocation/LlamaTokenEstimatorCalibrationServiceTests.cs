@@ -63,6 +63,85 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     }
 
     [Test]
+    public async Task TryCalibrateAsync_MeasuresTheToolTemplatePreambleFromRenderedCountsWithAndWithoutTheProbeTools()
+    {
+        var countRequests = new ConcurrentQueue<(Uri Uri, string Body)>();
+        using var handler = new DelegateHandler((_, _) => Task.FromResult(JsonResponse(TokenArray(CalibrationTextTokenCount(divisor: 4)))),
+            async (request, cancellationToken) =>
+            {
+                var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+                countRequests.Enqueue((request.RequestUri!, body));
+                using var document = JsonDocument.Parse(body);
+                return JsonResponse(InputTokens(document.RootElement.GetProperty("tools").GetArrayLength() == 0 ? 40 : 540));
+            });
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        var logger = new CapturingLogger();
+        using var service = CreateService(client, store, logger: logger);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://127.0.0.1:18123/v1"), CancellationToken.None);
+
+        AssertEx.True(calibrated);
+        AssertEx.Equal(expected: 4, store.ResolveDivisor("model-a"));
+        // What the budgeters already charge for the two probe tools: each definition framed as one message, plus the wrapper constant.
+        var probeCharge = LlamaTokenEstimatorCalibrationService.ProbeTools.Sum(static tool =>
+            ((tool.Name.Length + 1 + tool.Description.Length + 1 + tool.JsonSchema.GetRawText().Length) / 4) + 4
+            + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
+        AssertEx.Equal(500 - probeCharge, store.ResolveToolTemplatePreamble("model-a"));
+        AssertEx.ContainsSingle(logger.Preambles, preamble => preamble == 500 - probeCharge);
+
+        var requests = countRequests.ToArray();
+        AssertEx.Equal(expected: 2, requests.Length);
+        AssertEx.True(requests.All(static request => request.Uri.AbsoluteUri == "http://127.0.0.1:18123/v1/messages/count_tokens"));
+        using var without = JsonDocument.Parse(requests[0].Body);
+        using var with = JsonDocument.Parse(requests[1].Body);
+        AssertEx.Equal(LlamaTokenEstimatorCalibrationService.ProbeSystemPrompt, with.RootElement.GetProperty("system").GetString());
+        AssertEx.Equal(LlamaTokenEstimatorCalibrationService.ProbeUserMessage,
+            with.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        AssertEx.Equal(expected: 0, without.RootElement.GetProperty("tools").GetArrayLength());
+        AssertEx.True(with.RootElement.GetProperty("tools").EnumerateArray()
+                          .Select(static tool => tool.GetProperty("name").GetString())
+                          .SequenceEqual(["get_weather", "search_documents"]));
+        AssertEx.Equal("object", with.RootElement.GetProperty("tools")[0].GetProperty("input_schema").GetProperty("type").GetString());
+    }
+
+    [Test]
+    public async Task TryCalibrateAsync_WhenTheTemplateCountFails_StoresTheDivisorAndKeepsThePriorPreamble()
+    {
+        using var handler = new DelegateHandler((_, _) => Task.FromResult(JsonResponse(TokenArray(CalibrationTextTokenCount(divisor: 5)))),
+            (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetToolTemplatePreamble("model-a", preambleTokens: 77);
+        var logger = new CapturingLogger();
+        using var service = CreateService(client, store, logger: logger);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://127.0.0.1:18123/v1"), CancellationToken.None);
+
+        AssertEx.True(calibrated, "the divisor channel does not depend on the template probe");
+        AssertEx.Equal(expected: 5, store.ResolveDivisor("model-a"));
+        AssertEx.Equal(expected: 77, store.ResolveToolTemplatePreamble("model-a"));
+        AssertEx.ContainsSingle(logger.Reasons, static reason => reason == "HttpStatus");
+        AssertEx.ContainsSingle(logger.Preambles, static preamble => preamble is null);
+    }
+
+    [Test]
+    public async Task TryCalibrateAsync_WhenTheConstantsAlreadyOverChargeTheTemplate_StoresZero()
+    {
+        using var handler = new DelegateHandler((_, _) => Task.FromResult(JsonResponse(TokenArray(CalibrationTextTokenCount(divisor: 4)))),
+            (_, _) => Task.FromResult(JsonResponse(InputTokens(60))));
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        using var service = CreateService(client, store);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://127.0.0.1:18123/v1"), CancellationToken.None);
+
+        AssertEx.True(calibrated);
+        AssertEx.True(LlamaTokenEstimatorCalibrationService.CalculateToolTemplatePreamble(60, 60, charsPerToken: 4) < 0);
+        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble("model-a"));
+    }
+
+    [Test]
     public async Task TryCalibrateAsync_ProviderFailureRetainsPriorCalibrationAndLogsBoundedReason()
     {
         using var handler = new DelegateHandler((_, _) =>
@@ -541,18 +620,36 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         return $$"""{"tokens":[{{string.Join(',', Enumerable.Repeat("1", count))}}]}""";
     }
 
+    private static string InputTokens(int count)
+    {
+        return $$"""{"input_tokens":{{count}}}""";
+    }
+
+    /// <summary>Routes <c>/tokenize</c> to the test's handler and <c>count_tokens</c> to a separate one, so a divisor test sees only its own requests.</summary>
+    /// <remarks>The default count answers a consistent pair: 60 without tools, 460 with.</remarks>
     private sealed class DelegateHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _countHandler;
 
-        public DelegateHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
+        public DelegateHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler,
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? countHandler = null)
         {
             _handler = handler;
+            _countHandler = countHandler ?? DefaultCountAsync;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return _handler(request, cancellationToken);
+            return request.RequestUri!.AbsolutePath == "/v1/messages/count_tokens"
+                ? _countHandler(request, cancellationToken)
+                : _handler(request, cancellationToken);
+        }
+
+        private static async Task<HttpResponseMessage> DefaultCountAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            return JsonResponse(InputTokens(body.RootElement.GetProperty("tools").GetArrayLength() == 0 ? 60 : 460));
         }
     }
 
@@ -610,6 +707,18 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
             return TokenEstimatorCalibrationStore.NeutralObservedCorrection;
         }
 
+        public ConcurrentDictionary<string, int> Preambles { get; } = new(StringComparer.Ordinal);
+
+        public int ResolveToolTemplatePreamble(string? modelName)
+        {
+            return modelName is not null && Preambles.TryGetValue(modelName, out var preamble) ? preamble : 0;
+        }
+
+        public void SetToolTemplatePreamble(string modelName, int preambleTokens)
+        {
+            Preambles[modelName] = preambleTokens;
+        }
+
         public void SetDivisor(string modelName, int charsPerToken)
         {
             var write = new CalibrationWrite(modelName, charsPerToken);
@@ -643,6 +752,8 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
 
         public List<int> Divisors { get; } = [];
 
+        public List<int?> Preambles { get; } = [];
+
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
             null;
 
@@ -666,6 +777,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
                 if (values.FirstOrDefault(static pair => pair.Key == "CharsPerToken").Value is int divisor)
                 {
                     Divisors.Add(divisor);
+                    Preambles.Add(values.FirstOrDefault(static pair => pair.Key == "ToolTemplatePreambleTokens").Value as int?);
                 }
             }
         }

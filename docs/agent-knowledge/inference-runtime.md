@@ -113,6 +113,10 @@ constructor. A partial offer is normal: the small arithmetic/time tools can stil
 tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions. **Authority:** `WorkSessionToolGate`,
 `WorkSessionExecutionSupervisor`; wiki 04 (work-session tool gates).
 
+### Budget a pre-flight through the runtime's own first round, and remember what chars/4 cannot see
+
+**Rule:** the outer `ConversationContextBudgeter` counts the system prompt as fixed overhead only when no System message in the history carries it; a pre-flight (benchmark freeze or similar) budgets through `InvocationRunner.BudgetFirstRound`, never a hand-built message list. Tool descriptions and an 18-token per-tool JSON wrapper are counted; the chat template's own tool preamble (~198 tokens on Qwen3.8) is not. **Prevents:** a 2048-token benchmark admitted at freeze and refused at runtime (prompt paid twice, descriptions uncounted: estimate 1189 vs 2052 real). **Authority:** `ConversationContextBudgeterTests` seeded-prompt cases, `InvocationRunnerTests.BudgetFirstRound_*`, `TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens`; live-findings S5, 2026-09-28.
+
 ## Covered elsewhere
 
 - A second patch onto `ChatOptions.RawRepresentationFactory` must compose the first — `docs/wiki/03-local-runtime-and-providers.md`

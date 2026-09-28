@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -50,6 +51,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private readonly IImageServerReadinessProbe _readinessProbe;
     private readonly Task _reaperLoop;
     private readonly CancellationTokenSource _shutdownCts = new();
+
+    // Per-spawn identity receipts the startup reaper reads back after a hard host kill (wiki 03, "Startup orphan reap and spawn receipts"). A
+    // pass-through off Linux and in provider-only hosts and tests that pass none.
+    private readonly ProcessSpawnReceiptStore _spawnReceipts;
     private readonly TimeProvider _timeProvider;
 
     // The process-wide GPU-load admission gate (shared with the llama-server supervisor). A GPU-backed image
@@ -67,7 +72,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         TimeProvider timeProvider,
         ILogger<ImageServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        IImageRuntimeActivityGate? runtimeActivityGate = null)
+        IImageRuntimeActivityGate? runtimeActivityGate = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
@@ -78,6 +84,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new ImageRuntimeActivityGate();
+        _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "sd-server", _logger);
 
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
@@ -387,6 +394,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 Environment.ProcessorCount);
 
             handle = _launcher.Launch(spec);
+
+            // Receipted from here on; every teardown (the catch below, KillDetachedProcess) disposes the handle, which removes it.
+            handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{modelName} port {port}", spawnCt).ConfigureAwait(false);
             _logger.LogInformation("sd-server spawned for model {ModelName} (pid {ProcessId}, port {Port}).",
                 modelName, handle.ProcessId, port);
 

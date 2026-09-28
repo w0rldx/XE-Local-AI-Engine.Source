@@ -49,7 +49,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // Tool schemas, and the system prompt unless the history already carries it (the tool loop budgets the factory's seed), count against the window
         // outside the message list. Folding them in mirrors the inner budgeter, over-counting slightly, the safe direction; the prompt is counted once.
         var divisor = _estimator.ResolveDivisor(modelName);
-        var fixedOverhead = EstimateFixedOverhead(CarriesSystemPrompt(messages, systemPrompt) ? null : systemPrompt, toolDefinitions, divisor);
+        var fixedOverhead = EstimateFixedOverhead(CarriesSystemPrompt(messages, systemPrompt) ? null : systemPrompt, toolDefinitions, divisor, modelName);
         // Same margins the inner provider-round budgeter applies, from the same constants: the shared char heuristic under-counts on markdown and JSON, and an
         // under-count at the window edge is a provider rejection rather than a trim. The flat factor covers an unknown model; the observed correction is tighten-only.
         var observedCorrection = _estimator.ResolveObservedCorrection(modelName);
@@ -497,9 +497,10 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     That is the resolved system prompt, measured as a System message, plus the model-facing definition text of
     ///     each advertised tool, measured as one framed unit each. It reuses the injected <see cref="ITokenEstimator" />
     ///     — deliberately the same conservative, upper-biased estimator the history uses — mirroring the inner
-    ///     <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate, so outer and inner size a round alike.
+    ///     <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate, so outer and inner size a round alike. When at least one
+    ///     tool is counted, the model's measured tool-template preamble is added once, as the inner estimate adds it.
     /// </remarks>
-    private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions, int divisor)
+    private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions, int divisor, string? modelName)
     {
         var overhead = 0;
 
@@ -510,6 +511,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (toolDefinitions is { Count: > 0 })
         {
+            var toolsCounted = false;
             foreach (var definition in toolDefinitions)
             {
                 if (string.IsNullOrEmpty(definition))
@@ -520,6 +522,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 // One framed message plus the measured JSON wrapper per tool, exactly as the inner estimator charges a tool, so a
                 // tool-heavy agent's schema footprint is counted rather than silently ignored.
                 overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor) + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
+                toolsCounted = true;
+            }
+
+            if (toolsCounted)
+            {
+                overhead += _estimator.ResolveToolTemplatePreamble(modelName);
             }
         }
 

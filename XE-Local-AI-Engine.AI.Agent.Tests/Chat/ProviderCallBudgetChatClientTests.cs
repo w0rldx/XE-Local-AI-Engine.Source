@@ -379,6 +379,50 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     [Test]
+    public async Task ApplyBudget_ChargesTheMeasuredToolTemplatePreambleOncePerToolRound_AndNeverWithoutTools()
+    {
+        var store = new RecordingCalibrationStore();
+        store.SetToolTemplatePreamble(ModelId, preambleTokens: 150);
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+        var tools = ManyTools(2);
+
+        var withTools = await CaptureRoundAsync(sut, new ChatOptions
+        {
+            ModelId = ModelId,
+            Tools = tools
+        });
+        var withoutTools = await CaptureRoundAsync(sut, new ChatOptions
+        {
+            ModelId = ModelId
+        });
+        var unmeasuredModel = await CaptureRoundAsync(sut, new ChatOptions
+        {
+            ModelId = "another-model",
+            Tools = tools
+        });
+
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools) + 150, withTools.ToolSchemaTokens, "once per request, not once per tool");
+        AssertEx.Equal(expected: 0, withoutTools.ToolSchemaTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools), unmeasuredModel.ToolSchemaTokens);
+        AssertEx.Equal(withoutTools.EstimatedInputTokens + withTools.ToolSchemaTokens, withTools.EstimatedInputTokens,
+            "the preamble is part of the round's input estimate, not only of the schema metric");
+
+        static async Task<ProviderCallEfficiencySnapshot> CaptureRoundAsync(IChatClient client, ChatOptions options)
+        {
+            using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+                   {
+                       DefaultContextTokens = 16_384,
+                       ReservedOutputTokenFloor = 0
+                   }))
+            {
+                _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "measure this round")], options);
+                return ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+            }
+        }
+    }
+
+    [Test]
     public async Task GetStreamingResponseAsync_RecordsWholeProviderRoundLifetimeIncludingBackpressure()
     {
         using var inner = new TwoUpdateChatClient();
@@ -682,6 +726,16 @@ public sealed class ProviderCallBudgetChatClientTests
         public double ResolveObservedCorrection(string? modelName)
         {
             return _inner.ResolveObservedCorrection(modelName);
+        }
+
+        public int ResolveToolTemplatePreamble(string? modelName)
+        {
+            return _inner.ResolveToolTemplatePreamble(modelName);
+        }
+
+        public void SetToolTemplatePreamble(string modelName, int preambleTokens)
+        {
+            _inner.SetToolTemplatePreamble(modelName, preambleTokens);
         }
     }
 

@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <inheritdoc />
@@ -18,13 +19,17 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
     private readonly ILlamaServerHealthProbe _healthProbe;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly ILogger<TransientLlamaServerLauncher> _logger;
+
+    // The supervisor's own llama-server store, so the one startup reaper also covers a benchmark or smoke child a hard host kill orphaned.
+    private readonly ProcessSpawnReceiptStore _spawnReceipts;
     private readonly IGpuVariantSelector _variantSelector;
 
     public TransientLlamaServerLauncher(ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         ILlamaServerProcessLauncher launcher,
         ILlamaServerHealthProbe healthProbe,
-        ILogger<TransientLlamaServerLauncher> logger)
+        ILogger<TransientLlamaServerLauncher> logger,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
         ArgumentNullException.ThrowIfNull(variantSelector);
@@ -36,6 +41,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         _launcher = launcher;
         _healthProbe = healthProbe;
         _logger = logger;
+        _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", logger);
     }
 
     public async Task<T> RunAsync<T>(TransientLlamaServerRequest request,
@@ -74,6 +80,8 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         var handle = _launcher.Launch(spec);
         try
         {
+            // Inside the try, so a cancelled receipt write still tears the raw handle down; the finally's dispose removes the receipt.
+            handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{modelId} transient port {spec.Port}", ct).ConfigureAwait(false);
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, request.ReadinessTimeout, ct).ConfigureAwait(false);
             return await body(new TransientLlamaServerSession
             {
@@ -165,6 +173,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         LlamaServerLaunchReceipt receipt;
         try
         {
+            handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{modelId} evaluation port {spec.Port}", ct).ConfigureAwait(false);
             await WaitForReadyOrExitAsync(handle,
                 spec.BaseAddress,
                 request.ReadinessTimeout,

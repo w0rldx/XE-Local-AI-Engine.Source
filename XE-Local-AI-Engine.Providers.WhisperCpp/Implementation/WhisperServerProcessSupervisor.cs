@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
@@ -44,6 +45,10 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private readonly Task _reaperLoop;
     private readonly IWhisperRuntimeActivityGate _runtimeActivityGate;
     private readonly CancellationTokenSource _shutdownCts = new();
+
+    // Per-spawn identity receipts the startup reaper reads back after a hard host kill (wiki 03, "Startup orphan reap and spawn receipts"). A
+    // pass-through off Linux and in provider-only hosts and tests that pass none.
+    private readonly ProcessSpawnReceiptStore _spawnReceipts;
     private readonly Lock _stateGate = new();
     private readonly TimeProvider _timeProvider;
     private readonly WhisperCudaFailureSignal _cudaFailureSignal;
@@ -71,7 +76,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         ILogger<WhisperServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         IWhisperRuntimeActivityGate? runtimeActivityGate = null,
-        WhisperCudaFailureSignal? cudaFailureSignal = null)
+        WhisperCudaFailureSignal? cudaFailureSignal = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
@@ -83,6 +89,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         _logger = logger ?? NullLogger<WhisperServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new WhisperRuntimeActivityGate();
         _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();
+        _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "whisper-server", _logger);
 
         // Absent a wired gate (a provider-only host, or a test), default to the no-op floor so GPU-load serialization
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
@@ -472,6 +479,10 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 Environment.ProcessorCount);
 
             handle = _launcher.Launch(spec);
+
+            // Receipted from here on; every teardown (the catch below, KillDetached) disposes the handle, which removes it. An in-place model switch
+            // keeps the same process and so the same receipt; its label keeps naming the model the daemon was spawned with.
+            handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{modelId} port {port}", spawnCt).ConfigureAwait(false);
             _logger.LogInformation("whisper-server spawned for model {ModelId} (pid {ProcessId}, port {Port}).",
                 modelId, handle.ProcessId, port);
 

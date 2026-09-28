@@ -165,13 +165,7 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
 
             // Re-reading a multi-gigabyte weight file per acquire is the whole cost of verification, and the file is
             // unchanged almost every time — the benchmark freeze alone acquires once per queued run.
-            var lastWriteTimeUtc = info.LastWriteTimeUtc;
-            var sha256 = MemberHashMemo.TryGet(absolutePath, info.Length, lastWriteTimeUtc);
-            if (sha256 is null)
-            {
-                sha256 = await GgufAcquisitionSidecar.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
-                MemberHashMemo.Set(absolutePath, info.Length, lastWriteTimeUtc, sha256);
-            }
+            var sha256 = await MemberSha256Async(absolutePath, info.Length, info.LastWriteTimeUtc, cancellationToken).ConfigureAwait(false);
 
             var fingerprint = observation.Role == InstalledModelPhysicalMemberRole.Sidecar
                 ? null
@@ -197,7 +191,10 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
 
             var weightPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, alias.WeightRelativePath);
             var sidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, alias.SidecarRelativePath);
-            if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, weightPath, _options.ModelsDirectory, cancellationToken).ConfigureAwait(false) is null)
+            // The members were hashed (or memoised) just above, so the sidecar compares against those digests rather
+            // than re-reading the whole weight a second time on every acquire.
+            if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, weightPath, _options.ModelsDirectory, MemberSha256Async, cancellationToken)
+                                            .ConfigureAwait(false) is null)
             {
                 throw new InstalledGgufSnapshotException("InstalledModelSidecarInvalid", "The acquired model recovery metadata is invalid.");
             }
@@ -205,6 +202,24 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
 
         VerifyRegistryFingerprints(aliases, members);
         return Array.AsReadOnly(members.ToArray());
+    }
+
+    private Task<string> MemberSha256Async(string absolutePath, CancellationToken cancellationToken)
+    {
+        var info = new FileInfo(absolutePath);
+        return MemberSha256Async(absolutePath, info.Length, info.LastWriteTimeUtc, cancellationToken);
+    }
+
+    private async Task<string> MemberSha256Async(string absolutePath, long length, DateTime lastWriteTimeUtc, CancellationToken cancellationToken)
+    {
+        var sha256 = MemberHashMemo.TryGet(absolutePath, length, lastWriteTimeUtc);
+        if (sha256 is null)
+        {
+            sha256 = await GgufAcquisitionSidecar.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
+            MemberHashMemo.Set(absolutePath, length, lastWriteTimeUtc, sha256);
+        }
+
+        return sha256;
     }
 
     private InstalledModelRegistryAliasSnapshot ToAliasSnapshot(GgufModelRegistryEntry entry)

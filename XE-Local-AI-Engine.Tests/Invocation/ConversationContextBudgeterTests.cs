@@ -611,6 +611,50 @@ public sealed class ConversationContextBudgeterTests
     }
 
     [Test]
+    public void Budget_MeasuredToolTemplatePreamble_IsChargedOncePerToolRound_AndNeverWithoutTools()
+    {
+        var calibrations = new TokenEstimatorCalibrationStore();
+        calibrations.SetToolTemplatePreamble("model-a", preambleTokens: 150);
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()));
+        string[] tools = [new string('t', 40), new string('u', 80)];
+        var perTools = (40 / 4) + 4 + (80 / 4) + 4 + (2 * TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
+
+        var withTools = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: tools, modelName: "model-a");
+        var withoutTools = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: [], modelName: "model-a");
+        var onlyBlankTools = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: [string.Empty], modelName: "model-a");
+        var unmeasuredModel = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: tools, modelName: "model-b");
+
+        AssertEx.Equal(perTools + 150, withTools.FixedOverheadTokens, "once per request, not once per tool");
+        AssertEx.Equal(expected: 0, withoutTools.FixedOverheadTokens);
+        AssertEx.Equal(expected: 0, onlyBlankTools.FixedOverheadTokens);
+        AssertEx.Equal(perTools, unmeasuredModel.FixedOverheadTokens, "an unmeasured model keeps the constant-only charge");
+    }
+
+    [Test]
+    public void Budget_ToolOverheadWithAMeasuredPreamble_AgreesWithTheInnerProviderRoundEstimate()
+    {
+        // The inner boundary adds the same stored preamble once to EstimateTools when ChatOptions.Tools is non-empty
+        // (ProviderCallBudgetChatClientTests pins that side), so the outer charge must be EstimateTools + preamble.
+        const string schema = """{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}""";
+        var offer = new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "calculate",
+            Location = ToolLocation.ClientLocal,
+            Description = new string('d', 400 - "calculate".Length - schema.Length),
+            ParameterSchema = schema
+        };
+        var executable = AIFunctionFactory.CreateDeclaration("calculate", offer.Description, JsonDocument.Parse(schema).RootElement);
+        var calibrations = new TokenEstimatorCalibrationStore();
+        calibrations.SetToolTemplatePreamble("model-a", preambleTokens: 198);
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()));
+
+        var outer = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: InvocationRunner.BuildToolBudgetDefinitions([offer]), modelName: "model-a");
+
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools([executable]) + 198, outer.FixedOverheadTokens);
+    }
+
+    [Test]
     public void Budget_WhenTheHistoryCarriesADifferentSystemMessage_StillCountsTheSystemPromptAsOverhead()
     {
         // Only the prompt itself is recognised: a summary or other System message in the history is history, not the prompt.

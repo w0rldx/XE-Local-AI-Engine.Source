@@ -25,10 +25,18 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     /// <remarks>
     ///     Measured on Qwen3.8-27B (UD-Q4_K_XL, llama-server --jinja, its own tokenizer): the template renders each tool as the OpenAI
     ///     <c>{"type": "function", "function": {...}}</c> JSON, and over the 8 Default Assistant tools that wrapper cost 21.9 tokens a tool
-    ///     against the 4 per-message tokens already counted. The template's once-per-request tool instructions (~198 there) are left out:
-    ///     they differ per template.
+    ///     against the 4 per-message tokens already counted. The template's once-per-request tool instructions (~198 there) are not part of
+    ///     it: they differ per template and are measured per model instead (<see cref="ResolveToolTemplatePreamble" />).
     /// </remarks>
     public const int ToolDefinitionWrapperTokens = 18;
+
+    /// <summary>Upper bound on a measured tool-template preamble.</summary>
+    /// <remarks>
+    ///     Real templates spend a few hundred tokens at most on their tool instructions (~198 on Qwen3.8; the calibration measured 84 on
+    ///     Qwen2.5-0.5B beyond the per-tool constants); a measurement far above that is an artefact of the probe, not a template property,
+    ///     and would shrink every tool round's window by it.
+    /// </remarks>
+    public const int MaximumToolTemplatePreambleTokens = 1024;
 
     /// <summary>The correction of a model nothing has been observed for: multiply/divide by one, i.e. do nothing.</summary>
     public const double NeutralObservedCorrection = 1.0;
@@ -110,6 +118,7 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
     private readonly ConcurrentDictionary<string, int> _divisors = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, double> _observedCorrections = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _toolTemplatePreambles = new(StringComparer.Ordinal);
 
     public int ResolveDivisor(string? modelName)
     {
@@ -122,6 +131,21 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _divisors[modelName] = Math.Clamp(charsPerToken, MinimumCharsPerToken, MaximumCharsPerToken);
+    }
+
+    /// <inheritdoc />
+    public int ResolveToolTemplatePreamble(string? modelName)
+    {
+        return !string.IsNullOrWhiteSpace(modelName) && _toolTemplatePreambles.TryGetValue(modelName, out var preamble)
+            ? preamble
+            : 0;
+    }
+
+    /// <inheritdoc />
+    public void SetToolTemplatePreamble(string modelName, int preambleTokens)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        _toolTemplatePreambles[modelName] = Math.Clamp(preambleTokens, 0, MaximumToolTemplatePreambleTokens);
     }
 
     /// <inheritdoc />

@@ -20,6 +20,9 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 /// </summary>
 public static class LlamaServerServiceCollectionExtensions
 {
+    /// <summary>The process name the reaper scans for and the spawn-receipt directory under the node data root.</summary>
+    private const string ServerName = "llama-server";
+
     /// <summary>
     ///     Backstop deadline on the rerank client, restoring one that Aspire's standard pipeline takes away (see the
     ///     reranker registration).
@@ -166,6 +169,11 @@ public static class LlamaServerServiceCollectionExtensions
         // The llama-perplexity child process for benchmark fidelity measurement.
         services.TryAddSingleton<ILlamaPerplexityRunner, LlamaPerplexityRunner>();
 
+        // ONE llama-server spawn-receipt store, keyed by server name: the supervisor and the transient launcher write the receipts the startup reaper reads back.
+        // Optional data directory: a provider-only host registers none, and then receipts are off and only the binaries-root reap applies.
+        services.TryAddKeyedSingleton(ServerName, static (sp, _) =>
+            new ProcessSpawnReceiptStore(sp.GetService<INodeDataDirectory>()?.Root, ServerName, sp.GetRequiredService<ILogger<ProcessSpawnReceiptStore>>()));
+
         // Path-addressed throwaway spawn for the training export smoke gate. Explicit factory for the same reason the
         // supervisor needs one: it takes the internal launcher/health-probe seams.
         services.TryAddSingleton<TransientLlamaServerLauncher>(static sp =>
@@ -173,7 +181,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<IGpuVariantSelector>(),
                 sp.GetRequiredService<ILlamaServerProcessLauncher>(),
                 sp.GetRequiredService<ILlamaServerHealthProbe>(),
-                sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>()));
+                sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>(),
+                SpawnReceipts(sp)));
         services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
             sp.GetRequiredService<TransientLlamaServerLauncher>());
 
@@ -214,7 +223,7 @@ public static class LlamaServerServiceCollectionExtensions
             launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>(),
             extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>(),
             loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>(),
-            spawnReceipts: CreateSpawnReceiptStore(sp)));
+            spawnReceipts: SpawnReceipts(sp)));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>
@@ -275,7 +284,7 @@ public static class LlamaServerServiceCollectionExtensions
             "llama-server",
             logExecutablePath: true,
             sp.GetRequiredService<ILogger<StaleProcessReaper>>(),
-            CreateSpawnReceiptStore(sp)));
+            SpawnReceipts(sp)));
 
         // Startup notice: an active bring-your-own override is logged once at Warning, so it is obvious that an unverified operator-supplied binary is in use and
         // integrity hash verification is skipped. Nothing is logged when the override is unset, so a normal deploy is byte-behavior-unchanged.
@@ -285,7 +294,6 @@ public static class LlamaServerServiceCollectionExtensions
         return services;
     }
 
-    // Optional data directory: a provider-only host registers none, and then receipts are off and only the binaries-root reap applies.
-    private static ProcessSpawnReceiptStore CreateSpawnReceiptStore(IServiceProvider sp) =>
-        new(sp.GetService<INodeDataDirectory>()?.Root, "llama-server", sp.GetRequiredService<ILogger<ProcessSpawnReceiptStore>>());
+    private static ProcessSpawnReceiptStore SpawnReceipts(IServiceProvider sp) =>
+        sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName);
 }

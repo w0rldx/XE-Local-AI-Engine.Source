@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -26,6 +27,9 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
 {
     /// <summary>Named <see cref="System.Net.Http.HttpClient" /> for sd-server job/readiness HTTP (loopback, short-lived per call).</summary>
     public const string RuntimeHttpClientName = "sdcpp-runtime";
+
+    /// <summary>The process name the reaper scans for and the spawn-receipt directory under the node data root.</summary>
+    private const string ServerName = "sd-server";
 
     /// <summary>
     ///     Registers the sd-server runtime adapter. All registrations are <c>TryAdd</c> so a host may override any
@@ -65,6 +69,11 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         // root overrides it (plain AddSingleton, last-wins) with the real singleton shared with the llama-server supervisor.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
 
+        // ONE sd-server spawn-receipt store, keyed by server name: the supervisor writes the receipts the startup reaper reads back. A provider-only
+        // host registers no INodeDataDirectory, and then receipts are off and only the binaries-root reap applies.
+        services.TryAddKeyedSingleton(ServerName, static (sp, _) =>
+            new ProcessSpawnReceiptStore(sp.GetService<INodeDataDirectory>()?.Root, ServerName, sp.GetRequiredService<ILogger<ProcessSpawnReceiptStore>>()));
+
         // The supervisor owns every resident sd-server child process for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/readiness seams).
         services.TryAddSingleton(static sp => new ImageServerProcessSupervisor(sp.GetRequiredService<IImageModelStore>(),
@@ -76,7 +85,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<ImageServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
-            sp.GetRequiredService<IImageRuntimeActivityGate>()));
+            sp.GetRequiredService<IImageRuntimeActivityGate>(),
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
         services.TryAddSingleton<IImageServerSupervisor>(static sp => sp.GetRequiredService<ImageServerProcessSupervisor>());
 
         // The public image-generation facade. Singleton — it holds no per-request state.
@@ -85,13 +95,14 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
                 sp.GetRequiredService<SdServerJobClient>(),
                 sp.GetRequiredService<IImageServerProgressBroker>()));
 
-        // Startup orphan reaper: kills stale sd-server processes a hard host kill left holding a loopback port + GPU VRAM; it reaps ONLY binaries under our own cache root and never throws.
+        // Startup orphan reaper (never throws): sd-server binaries under our own cache root, plus on Linux any child this node's spawn receipts still identify.
         // AddSingleton, not AddHostedService: every runtime registers the shared StaleProcessReaper type, and AddHostedService dedupes by implementation type, so only the first would run.
         services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("sd-server"),
             StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot(),
             "sd-server",
             logExecutablePath: true,
-            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>(),
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
 
         return services;
     }

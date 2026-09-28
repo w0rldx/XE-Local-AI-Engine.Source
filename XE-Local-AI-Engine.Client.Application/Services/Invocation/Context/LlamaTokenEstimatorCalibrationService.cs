@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 using System.Net;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -10,7 +13,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Each request performs only a bounded due check and queue write, so the <c>/tokenize</c> I/O runs here, outside
 ///     inference, and no timer can revisit a stale endpoint after an eject. A provider failure retains the prior
-///     calibration, or the chars/4 fallback.
+///     calibration, or the chars/4 fallback. The same round measures the model's tool-template preamble: the tokens its
+///     chat template spends once per request that offers tools (see <see cref="CalculateToolTemplatePreamble" />).
 /// </remarks>
 internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService, ITokenEstimatorCalibrationScheduler
 {
@@ -22,6 +26,26 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         "Code: public static int Sum(int left, int right) => left + right; " +
         "Paths: /var/lib/models/example.gguf C:\\models\\example.gguf. " +
         "Repeatable prose keeps this sample independent from prompts, tools, users, and request content.";
+
+    internal const string ProbeSystemPrompt = "You are a helpful assistant.";
+
+    internal const string ProbeUserMessage = "What is the weather in Paris?";
+
+    /// <summary>
+    ///     The FIXED probe tool set, deliberately small and typical: what the template adds beyond these two definitions is the preamble,
+    ///     and it must not depend on which tools a given invocation happens to offer.
+    /// </summary>
+    internal static readonly IReadOnlyList<AIFunctionDeclaration> ProbeTools =
+    [
+        CreateProbeTool("get_weather",
+            "Get the current weather for a city.",
+            """{"type":"object","properties":{"city":{"type":"string","description":"City name"}},"required":["city"]}"""),
+        CreateProbeTool("search_documents",
+            "Search the knowledge base and return the most relevant passages.",
+            """{"type":"object","properties":{"query":{"type":"string","description":"Search text"},"limit":{"type":"integer"}},"required":["query"]}""")
+    ];
+
+    private static readonly HeuristicTokenEstimator ProbeEstimator = new();
 
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
@@ -135,14 +159,36 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
     internal async Task<bool> TryCalibrateAsync(string modelName, Uri llamaServerBaseAddress, CancellationToken cancellationToken)
     {
-        var result = await TryReadDivisorAsync(llamaServerBaseAddress, cancellationToken);
+        var result = await TryMeasureAsync(llamaServerBaseAddress, cancellationToken);
         if (result.Divisor is not { } divisor)
         {
             return false;
         }
 
-        _store.SetDivisor(modelName, divisor);
+        Store(modelName, divisor, result.ToolTemplatePreamble);
         return true;
+    }
+
+    /// <summary>
+    ///     The preamble a template adds once per tool-offering request: the rendered count WITH the probe tools, minus the count
+    ///     without them, minus what the budgeters already charge for the probe tools' own definitions.
+    /// </summary>
+    /// <remarks>
+    ///     The probe charge uses the budgeters' own per-tool formula (a framed definition plus the wrapper constant) at the divisor just
+    ///     measured, so the preamble is exactly the residual they miss and adding it once makes a tool round's estimate meet the template.
+    ///     Negative when the per-tool constants already over-charge this template; the store clamps that to zero.
+    /// </remarks>
+    internal static int CalculateToolTemplatePreamble(int tokensWithTools, int tokensWithoutTools, int charsPerToken)
+    {
+        var probeCharge = 0;
+        foreach (var tool in ProbeTools)
+        {
+            var definition = string.Concat(tool.Name, "\n", tool.Description, "\n", tool.JsonSchema.GetRawText());
+            probeCharge += ProbeEstimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, definition), charsPerToken)
+                           + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
+        }
+
+        return tokensWithTools - tokensWithoutTools - probeCharge;
     }
 
     internal static int CalculateDivisor(int characterCount, int tokenCount)
@@ -191,7 +237,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         CalibrationResult result;
         using (acquisition.Lease)
         {
-            result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken);
+            result = await TryMeasureAsync(work.BaseAddress, cancellationToken);
         }
 
         lock (_sync)
@@ -210,8 +256,17 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
             if (result.Divisor is { } divisor)
             {
-                _store.SetDivisor(work.ModelName, divisor);
+                Store(work.ModelName, divisor, result.ToolTemplatePreamble);
             }
+        }
+    }
+
+    private void Store(string modelName, int divisor, int? toolTemplatePreamble)
+    {
+        _store.SetDivisor(modelName, divisor);
+        if (toolTemplatePreamble is { } preamble)
+        {
+            _store.SetToolTemplatePreamble(modelName, preamble);
         }
     }
 
@@ -239,7 +294,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         }
     }
 
-    private async Task<CalibrationResult> TryReadDivisorAsync(Uri llamaServerBaseAddress, CancellationToken cancellationToken)
+    private async Task<CalibrationResult> TryMeasureAsync(Uri llamaServerBaseAddress, CancellationToken cancellationToken)
     {
         if (!IsLoopbackHttp(llamaServerBaseAddress))
         {
@@ -247,39 +302,62 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             return default;
         }
 
+        var tokenCount = await TryReadCountAsync(ct => _nativeClient.TokenizeAsync(llamaServerBaseAddress, CalibrationText, ct), cancellationToken);
+        if (tokenCount is not { } sampleTokens)
+        {
+            return default;
+        }
+
+        var divisor = CalculateDivisor(CalibrationText.Length, sampleTokens);
+
+        // Both counts or neither: a preamble derived from one fresh and one missing count would be noise. A failure keeps the prior preamble.
+        int? preamble = null;
+        if (await TryReadCountAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, [], ct),
+                cancellationToken) is { } withoutTools
+            && await TryReadCountAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, ProbeTools, ct),
+                cancellationToken) is { } withTools)
+        {
+            preamble = Math.Clamp(CalculateToolTemplatePreamble(withTools, withoutTools, divisor), 0, TokenEstimatorCalibrationStore.MaximumToolTemplatePreambleTokens);
+        }
+
+        LogMeasured(divisor, preamble);
+        return new CalibrationResult(divisor, preamble);
+    }
+
+    /// <summary>Sends one counting request under the endpoint, redirect and status guards and reads its token count, or <see langword="null" /> on any failure.</summary>
+    private async Task<int?> TryReadCountAsync(Func<CancellationToken, Task<LlamaServerTokenizeResponse>> send, CancellationToken cancellationToken)
+    {
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(RequestTimeout);
-            using var response = await _nativeClient.TokenizeAsync(llamaServerBaseAddress, CalibrationText, timeout.Token);
+            using var response = await send(timeout.Token);
 
             if (IsRedirect(response.StatusCode))
             {
                 LogFailure(CalibrationFailureReason.Redirect);
-                return default;
+                return null;
             }
 
             if (response.FinalRequestUri is { } finalAddress && !IsLoopbackHttp(finalAddress))
             {
                 LogFailure(CalibrationFailureReason.FinalEndpointRejected);
-                return default;
+                return null;
             }
 
             if (!response.IsSuccessStatusCode)
             {
                 LogFailure(CalibrationFailureReason.HttpStatus);
-                return default;
+                return null;
             }
 
             if (await response.ReadTokenCountAsync(timeout.Token) is not { } tokenCount)
             {
                 LogFailure(CalibrationFailureReason.InvalidPayload);
-                return default;
+                return null;
             }
 
-            var divisor = CalculateDivisor(CalibrationText.Length, tokenCount);
-            LogMeasured(divisor);
-            return new CalibrationResult(divisor);
+            return tokenCount;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -288,26 +366,34 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         catch (OperationCanceledException)
         {
             LogFailure(CalibrationFailureReason.Timeout);
-            return default;
+            return null;
         }
         catch (HttpRequestException)
         {
             LogFailure(CalibrationFailureReason.RequestFailure);
-            return default;
+            return null;
         }
     }
 
     private void LogFailure(CalibrationFailureReason reason)
     {
         // Bounded, content-free evidence only: no model, URI, port, prompt, tool, user, request, or response data.
-        _logger.LogDebug("llama.cpp token-estimator calibration unavailable ({FailureReason}); retaining the prior bounded divisor.",
+        _logger.LogDebug("llama.cpp token-estimator calibration unavailable ({FailureReason}); retaining the prior bounded calibration.",
             reason.ToString());
     }
 
-    private void LogMeasured(int divisor)
+    private void LogMeasured(int divisor, int? toolTemplatePreamble)
     {
-        // Same bounded evidence as LogFailure: the divisor alone, never the model, endpoint or sample.
-        _logger.LogDebug("llama.cpp token-estimator calibration measured {CharsPerToken} chars per token.", divisor);
+        // Same bounded evidence as LogFailure: the two numbers alone, never the model, endpoint or sample. A null preamble kept the prior one.
+        _logger.LogDebug("llama.cpp token-estimator calibration measured {CharsPerToken} chars per token and a tool-template preamble of {ToolTemplatePreambleTokens} tokens.",
+            divisor,
+            toolTemplatePreamble);
+    }
+
+    private static AIFunctionDeclaration CreateProbeTool(string name, string description, string schema)
+    {
+        using var document = JsonDocument.Parse(schema);
+        return AIFunctionFactory.CreateDeclaration(name, description, document.RootElement.Clone());
     }
 
     private static bool IsRedirect(HttpStatusCode statusCode)
@@ -344,7 +430,8 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
     private readonly record struct CalibrationWork(string ModelName, Uri BaseAddress, long Generation);
 
-    private readonly record struct CalibrationResult(int? Divisor);
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct CalibrationResult(int? Divisor, int? ToolTemplatePreamble);
 
     private enum CalibrationFailureReason
     {
