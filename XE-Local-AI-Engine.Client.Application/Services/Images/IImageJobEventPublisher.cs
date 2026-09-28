@@ -5,26 +5,17 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 ///     Every event carries the <c>JobId</c> (scoping delivery to the per-job group) and a per-job monotonic
 ///     <c>Seq</c>, so a late subscriber can replay the buffer and dedupe events delivered both ways. The default
 ///     implementation is a no-op (<see cref="Implementation.NullImageJobEventPublisher" />); the Client host swaps in
-///     a hub-backed publisher (<c>ImageJobEventPublisher</c> over the <c>ImageJobHub</c>). Payloads carry status and
-///     progress counters only — never a prompt or a path.
+///     a hub-backed publisher (<c>ImageJobEventPublisher</c>) that owns the method name and wire shape. Events carry
+///     status and progress counters only — never a prompt or a path.
 /// </remarks>
 public interface IImageJobEventPublisher
 {
     /// <summary>Pushes one coarse status transition for a job to the subscribed operator clients.</summary>
-    Task PublishStatusAsync(ImageJobStatusHubEvent statusEvent, CancellationToken cancellationToken = default);
+    Task PublishStatusAsync(ImageJobStatusEvent statusEvent, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     Stable SignalR client-method name for image-job status pushes. The React client subscribes to this single method;
-///     each push carries the full coarse status, so the client reconciles by job id and dedupes on <c>Seq</c>.
-/// </summary>
-public static class ImageJobHubEvents
-{
-    public const string StatusChanged = "imageJob.statusChanged";
-}
-
-/// <summary>
-///     Image-job status push payload: the job id, the phase name (the <c>ImageJobStatus</c> value), an optional queue
+///     Image-job status transition: the job id, the phase name (the <c>ImageJobStatus</c> value), an optional queue
 ///     position and elapsed time while generating, the produced image id on success, and a sanitized error on failure.
 /// </summary>
 /// <remarks>
@@ -34,7 +25,7 @@ public static class ImageJobHubEvents
 ///     They are all nullable because the runtime only observes them for part of a job: an absent value means "not
 ///     known here", and the client renders the coarse phase alone rather than substituting a zero.
 /// </remarks>
-public sealed class ImageJobStatusHubEvent
+public sealed class ImageJobStatusEvent
 {
     public required Guid JobId { get; init; }
 
@@ -77,12 +68,4 @@ public sealed class ImageJobStatusHubEvent
     ///     field's nullability exists to prevent.
     /// </summary>
     public long? EstimatedRemainingMs { get; init; }
-}
-
-/// <summary>One buffered event in a job's replay log: the SignalR method name and its seq-stamped payload.</summary>
-public sealed class ImageJobBufferedEvent
-{
-    public required string MethodName { get; init; }
-
-    public required object Payload { get; init; }
 }

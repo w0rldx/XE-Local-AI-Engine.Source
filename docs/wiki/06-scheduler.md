@@ -247,9 +247,9 @@ Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of
 
 `SchedulerHub` (`XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`) is a **server-push-only** hub: it has no client-callable server methods. It is mapped via `MapHub` at the full path `/api/local/v1/scheduler/hub` (`LocalApiRoutes.cs`) and is `[Authorize]`d under the JWT bearer scheme with the `NodeAuthorizationPolicies.Operator` policy — the same operator gate as the other local hubs. See [API & Hubs](09-api-and-hubs.md).
 
-`SchedulerEventPublisher` (`Hubs/SchedulerEventPublisher.cs`) implements `ISchedulerEventPublisher` over `IHubContext<SchedulerHub>` and broadcasts each event to `Clients.All` using the event's `EventType` as the SignalR method name. **Payloads are already sanitized by callers** (no parameters, details, or stack traces). In Application-only/test hosts a no-op `NullSchedulerEventPublisher` is registered (`TryAddSingleton`) and superseded by the hub-backed publisher in the Client host.
+`SchedulerEventPublisher` (`Hubs/SchedulerEventPublisher.cs`) implements `ISchedulerEventPublisher` over `IHubContext<SchedulerHub>`: callers publish domain events (`SchedulerRunEvent` with a `SchedulerRunEventKind`, `SchedulerRunProgressEvent`, `SchedulerDefinitionEvent`), and the publisher picks the SignalR method name, repeats it as the payload's `eventType` and broadcasts the `*HubMessage` wire shape (`Hubs/SchedulerHubContracts.cs`) to `Clients.All`. **Events are already sanitized by callers** (no parameters, details, or stack traces). In Application-only/test hosts a no-op `NullSchedulerEventPublisher` is registered (`TryAddSingleton`) and superseded by the hub-backed publisher in the Client host.
 
-Event names (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs`) and their hub method strings consumed by React:
+Event names (`SchedulerHubEvents`, `Hubs/SchedulerHubContracts.cs`) and their hub method strings consumed by React:
 
 | `SchedulerHubEvents` constant | React method name |
 |---|---|

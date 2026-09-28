@@ -18,18 +18,6 @@ internal sealed class UnavailableModelCapabilityClient : IModelCapabilityClient
     public Task<bool> IsRuntimeReachableAsync(CancellationToken ct) =>
         Task.FromResult(false);
 
-    public Task<string?> GetRuntimeVersionAsync(CancellationToken ct) =>
-        Task.FromResult<string?>(null);
-
     public Task<IReadOnlyList<InstalledModelEntry>> ListInstalledModelsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<InstalledModelEntry>>([]);
-
-    public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<RunningModelSnapshot>>([]);
-
-    public Task<ModelCapabilityDetail> GetModelDetailAsync(string modelName, CancellationToken ct) =>
-        Task.FromResult(new ModelCapabilityDetail
-        {
-            MaxContextTokens = null
-        });
 }

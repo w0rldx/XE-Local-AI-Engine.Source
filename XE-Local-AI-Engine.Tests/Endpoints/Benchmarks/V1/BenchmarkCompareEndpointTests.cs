@@ -22,6 +22,9 @@ public sealed class BenchmarkCompareEndpointTests
     private static readonly Guid ProjectId = Guid.Parse("10000000-0000-0000-0000-000000000001");
     private static readonly Guid AgentId = Guid.Parse("20000000-0000-0000-0000-000000000002");
 
+    /// <summary>The options the fitter writes the blob with; a per-call instance is what CA1869 is about.</summary>
+    private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
+
     [Test]
     public async Task Compare_WithoutOperatorToken_IsUnauthorized()
     {
@@ -273,6 +276,66 @@ public sealed class BenchmarkCompareEndpointTests
             entry => entry.Level == LogLevel.Warning && entry.Message.Contains(fitId.ToString(), StringComparison.Ordinal));
         AssertEx.False(context.Logger.Entries.Any(static entry => entry.Message.Contains("secret-blob", StringComparison.Ordinal)),
             "the Warning must not carry blob content");
+    }
+
+    [Test]
+    public async Task Comparisons_WithANullAndADuplicateFitScoreEntry_ServeEachRunOnceAndWarnOnce()
+    {
+        // The rule the run list, the cells and both exports share: a null element is skipped, the first entry for a run
+        // named twice wins, one Warning per read, never a 500.
+        await using var context = new Context();
+        var fitId = Guid.NewGuid();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkPairwiseCohortState
+               {
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 3,
+                   ComparisonSetVersion = 7,
+                   ReferenceExecutionKey = "judge-key",
+                   ProjectVersion = 4,
+                   Candidates = [],
+                   Comparisons = []
+               });
+        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkPairwiseFitRecord
+               {
+                   Id = fitId,
+                   ProjectId = ProjectId,
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 3,
+                   TaskCaseId = null,
+                   FitKey = "fit-key-1",
+                   JudgeExecutionKey = "judge-key",
+                   ComparisonSetVersion = 7,
+                   FittedSetJson = "[]",
+                   ScoresJson = "[null,"
+                                + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(first, 70, 60, 80, 2, 1000, null), ScoreOptions) + ","
+                                + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(first, 10, 5, 15, 2, 1000, null), ScoreOptions) + ","
+                                + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(second, 30, 20, 40, 2, 1000, null), ScoreOptions) + "]",
+                   Iterations = 42,
+                   BootstrapReplicates = 1000,
+                   CreatedAtUtc = 99
+               });
+        using var client = context.Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, Api + $"/projects/{ProjectId}/comparisons");
+        context.Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var scores = document.RootElement.GetProperty("fit").GetProperty("scores").EnumerateArray().ToArray();
+        AssertEx.Equal(expected: 2, scores.Length);
+        AssertEx.Equal(first, scores[0].GetProperty("runId").GetGuid());
+        AssertEx.Equal(expected: 70, scores[0].GetProperty("score").GetInt32());
+        AssertEx.Equal(second, scores[1].GetProperty("runId").GetGuid());
+        AssertEx.ContainsSingle(context.Logger.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains(fitId.ToString(), StringComparison.Ordinal));
     }
 
     /// <param name="displayOnlyIndexes">Item indexes whose leaf does NOT count toward the score, as a NIAH case does not.</param>

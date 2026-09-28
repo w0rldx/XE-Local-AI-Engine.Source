@@ -90,6 +90,7 @@ export function toMcpServerToolsView(dto: XeLocalAiEngineClientEndpointsMcpV1Mcp
 		// status is a plain string on the wire; cast to the domain union (the panel handles unknown values).
 		status: (dto.status as McpConnectionStatus | undefined) ?? DEFAULT_CONNECTION_STATUS,
 		error: dto.error ?? null,
+		failureReason: dto.failureReason ?? null,
 		tools: (dto.tools ?? []).map((tool) => ({
 			name: tool.name ?? "",
 			description: tool.description ?? "",

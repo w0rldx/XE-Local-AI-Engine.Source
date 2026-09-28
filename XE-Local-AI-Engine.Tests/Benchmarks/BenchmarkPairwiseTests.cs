@@ -6,6 +6,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -175,6 +176,24 @@ public sealed class BenchmarkPairwiseTests
         AssertEx.True(scores.All(static entry => entry.Score is >= 0 and <= 100));
         AssertEx.True(scores.Single(entry => entry.RunId == RunA).Score > scores.Single(entry => entry.RunId == RunB).Score,
             "The run that won both presentation orders must come out ahead.");
+    }
+
+    [Test]
+    [Arguments(ExecutionKey)]
+    [Arguments(null)]
+    public async Task Fitter_PublishesExactlyOneNonNullEntryPerCandidateRun(string? referenceExecutionKey)
+    {
+        // The readers tolerate a null element or a run named twice; this pins that the only writer produces neither,
+        // on the fitted path and on a whole-fit refusal alike.
+        var store = StubStore(out var published, referenceExecutionKey);
+
+        AssertEx.True(await Fitter(store).TryPublishAsync(ProjectId, CancellationToken.None));
+
+        var stored = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry?[]>(published.Value.ScoresJson, ScoreOptions) ?? [];
+        AssertEx.True(stored.All(static entry => entry is not null), "The fitter never writes a null entry.");
+        AssertEx.Equal(expected: 2, stored.Length);
+        AssertEx.Equal(expected: 2, stored.Select(static entry => entry!.RunId).Distinct().Count(), "The fitter never names a run twice.");
+        AssertEx.True(stored.Select(static entry => entry!.RunId).ToHashSet().SetEquals([RunA, RunB]));
     }
 
     [Test]

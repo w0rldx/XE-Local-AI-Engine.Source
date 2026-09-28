@@ -137,45 +137,6 @@ internal sealed class ModelCapabilityProber
         }
     }
 
-    /// <summary>Probes the runtime reachability and version.</summary>
-    public async Task<OllamaRuntimeStatus> DetectOllamaRuntimeAsync(CancellationToken cancellationToken)
-    {
-        var diagnostics = new List<string>();
-
-        try
-        {
-            if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken))
-            {
-                diagnostics.Add(DiagnosticOllamaUnreachable);
-                return new OllamaRuntimeStatus
-                {
-                    Reachable = false,
-                    Version = null,
-                    Diagnostics = diagnostics
-                };
-            }
-
-            var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken);
-            return new OllamaRuntimeStatus
-            {
-                Reachable = true,
-                Version = NormalizeModelName(version),
-                Diagnostics = diagnostics
-            };
-        }
-        catch (HttpRequestException exception)
-        {
-            _logger.LogDebug(exception, "Ollama runtime not reachable (expected in desktop mode without an Ollama daemon).");
-            diagnostics.Add(DiagnosticOllamaUnreachable);
-            return new OllamaRuntimeStatus
-            {
-                Reachable = false,
-                Version = null,
-                Diagnostics = diagnostics
-            };
-        }
-    }
-
     private static IReadOnlyList<string> ResolveConfiguredModelNames(IConfiguration configuration)
     {
         var configuredModelNames = ConfiguredModelKeys

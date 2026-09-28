@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -20,9 +19,6 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
 
     /// <summary>Both presentation orders of every pair, always: the swap is what cancels the judge's position bias.</summary>
     private static readonly int[] ComparisonOrders = [0, 1];
-
-    /// <summary>Web defaults, matching the canonical writer the fit's scores were serialized with.</summary>
-    private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NodeChatDbContext _dbContext;
     private readonly ILogger<BenchmarkStore> _logger;

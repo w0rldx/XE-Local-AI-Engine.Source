@@ -5,7 +5,7 @@
 #   1. Stops any running XE Local AI Engine process and the llama-server / sd-server
 #      child runtimes THIS app spawned (matched strictly by executable path under the
 #      app's own per-user data directory — an unrelated llama-server/Ollama is never
-#      touched, mirroring the app's own StaleLlamaServerReaper).
+#      touched, mirroring the app's own StaleProcessReaper).
 #   2. If a Velopack-managed install is detected, notes that the OS/Velopack uninstall
 #      owns the app binaries and points at it (this script does not delete a managed
 #      install tree — Velopack does).
@@ -84,7 +84,7 @@ exe_path() {
 }
 
 # True when path "$1" is the dir "$2" or lives strictly under it (trailing-separator
-# guard prevents a sibling-prefix false match, matching StaleLlamaServerReaper).
+# guard prevents a sibling-prefix false match, matching StaleProcessReaper).
 is_under_dir() {
   case "$1" in
     "$2"/*) return 0 ;;

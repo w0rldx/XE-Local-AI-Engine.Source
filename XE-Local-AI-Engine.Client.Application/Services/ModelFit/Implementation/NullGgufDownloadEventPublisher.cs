@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 /// <remarks>The Client host registers a hub-backed publisher that supersedes this one.</remarks>
 internal sealed class NullGgufDownloadEventPublisher : IGgufDownloadEventPublisher
 {
-    public Task PublishStatusAsync(GgufDownloadStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public Task PublishStatusAsync(GgufAcquisitionStatus status, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }

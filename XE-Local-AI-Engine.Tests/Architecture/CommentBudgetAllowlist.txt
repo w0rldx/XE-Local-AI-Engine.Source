@@ -1380,7 +1380,6 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerStructuredOutp
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerStructuredOutputTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerThinkingSwitchTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/GitHubLlamaCppReleaseCatalogTests.cs|run|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/LinuxProcessGroupTreeKillTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaCppPinConsistencyTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaCppPinConsistencyTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaCppSourceBuildPrerequisiteTests.cs|run|1
@@ -1441,7 +1440,6 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/RuntimeAcquisitionProgressTests.c
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/RuntimeAcquisitionStatusRegistryTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/RuntimeAcquisitionStatusRegistryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SourceBuildRecoveryTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/StaleLlamaServerReaperTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorAdmissionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorBenchmarkReceiptTests.cs|summary|2
@@ -1469,10 +1467,6 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorStartupCaptureWindowTes
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorTestDoubles.cs|summary|3
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorWedgedReuseTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/TransientLlamaServerEvaluationHarnessTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/WindowsJobObjectTreeKillTests.cs|block|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/WindowsJobObjectTreeKillTests.cs|remarks|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/WindowsJobObjectTreeKillTests.cs|run|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/WindowsJobObjectTreeKillTests.cs|summary|4
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaConnectFailureHandlerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaExceptionTranslatingEmbeddingGeneratorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaLocalModelProviderTests.cs|run|4
@@ -1480,7 +1474,6 @@ XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelInfoReaderTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelInfoReaderTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelServiceTests.cs|run|3
 XE-Local-AI-Engine.Tests/Providers/Ollama/RunningModelSnapshotMappingTests.cs|run|1
-XE-Local-AI-Engine.Tests/Providers/Ollama/RunningModelSnapshotMappingTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalEndpointGuardHandlerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalModelIdTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalOpenAiChatClientWireTests.cs|run|8
@@ -1489,6 +1482,12 @@ XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalOpenAiModelProviderTests
 XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalProviderTestHarness.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompatible/OpenAICompatibleBaseAddressTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompatible/OpenAICompatibleClientFactoryTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/LinuxProcessGroupTreeKillTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/StaleProcessReaperTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/WindowsJobObjectTreeKillTests.cs|block|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/WindowsJobObjectTreeKillTests.cs|remarks|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/WindowsJobObjectTreeKillTests.cs|run|1
+XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/WindowsJobObjectTreeKillTests.cs|summary|4
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/DefaultVulkanDeviceProbeTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/GenerationProgressTrackerTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/ImageServerArgumentBuilderTests.cs|summary|3
@@ -1502,7 +1501,6 @@ XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppRuntimeT
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppSourceBuildTransportTests.cs|run|3
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppSourceBuildTransportTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionSourceRuntimeFoundationTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StaleImageServerReaperTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Training/BaseCheckpointStoreTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/Training/BaseCheckpointStoreTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Training/TrainingRuntimePrerequisiteProbeTests.cs|run|1

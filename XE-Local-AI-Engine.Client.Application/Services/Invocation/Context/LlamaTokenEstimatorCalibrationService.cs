@@ -277,7 +277,9 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                 return default;
             }
 
-            return new CalibrationResult(CalculateDivisor(CalibrationText.Length, tokenCount));
+            var divisor = CalculateDivisor(CalibrationText.Length, tokenCount);
+            LogMeasured(divisor);
+            return new CalibrationResult(divisor);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -300,6 +302,12 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         // Bounded, content-free evidence only: no model, URI, port, prompt, tool, user, request, or response data.
         _logger.LogDebug("llama.cpp token-estimator calibration unavailable ({FailureReason}); retaining the prior bounded divisor.",
             reason.ToString());
+    }
+
+    private void LogMeasured(int divisor)
+    {
+        // Same bounded evidence as LogFailure: the divisor alone, never the model, endpoint or sample.
+        _logger.LogDebug("llama.cpp token-estimator calibration measured {CharsPerToken} chars per token.", divisor);
     }
 
     private static bool IsRedirect(HttpStatusCode statusCode)

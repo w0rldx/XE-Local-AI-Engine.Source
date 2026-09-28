@@ -109,12 +109,14 @@ Four stores hold credential material outside the chat columns — `CloudCredenti
 
 - **One protector per purpose.** Each store derives its own Data Protection purpose, so a blob written for one store can
   never be decrypted as another's. Don't collapse two stores onto a shared purpose.
-- **A secret file is created at 0600, in the same syscall that creates it.** `File.WriteAllBytesAsync` creates at the
-  process umask — 0644 on a default Linux or macOS box — and narrowing it afterwards leaves a window in which another
-  local user can read the file. `CloudCredentialStore.WriteProtectedPayloadAsync` therefore passes
-  `FileStreamOptions.UnixCreateMode`, which closes that window. `UnixCreateMode` applies only on *create*, so
-  `SecureFilePermissions.Apply` still runs afterwards to narrow a pre-existing file left at 0644. This is the same
-  discipline `node.key` follows (§2.1).
+- **A secret file is created at 0600, in the same syscall that creates it, and replaced atomically.** `File.WriteAllBytesAsync`
+  creates at the process umask — 0644 on a default Linux or macOS box — and narrowing it afterwards leaves a window in
+  which another local user can read the file. `SecureFilePermissions.WriteAllBytesAtomicAsync` writes a temp sibling
+  created with `FileStreamOptions.UnixCreateMode` 0600, applies `SecureFilePermissions.Apply` (the Windows ACL) to it,
+  then renames it over the target, so a torn or cancelled write leaves the previous credential intact instead of a blob
+  that no longer decrypts (which the store would quarantine as *missing*). `CloudCredentialStore`, `CodexTokenStore`,
+  `EntraTokenCacheStore`, `EntraAuthCodeAccountStore` and `HfTokenStore` write through it; `ExternalProviderStore`
+  still creates in place with `UnixCreateMode` and narrows afterwards. This is the same discipline `node.key` follows (§2.1).
 - **A decryption failure quarantines the blob rather than propagating.** A row or file that no longer decrypts — a
   rotated operator secret, a corrupted write — would otherwise fail every later save's read-modify-write. The store
   moves it aside and reports the credential as *missing*, not *unreadable*: quarantined means gone.
@@ -742,7 +744,9 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
   `SupportsFilesystemIsolation` — Windows, or a Linux host without bubblewrap — refuses the connection
   before a process exists, with an engine-authored reason that names the tier and is surfaced verbatim rather than
   redacted. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
-  connection attempt.
+  connection attempt. Every failed connection also carries a failure reason (`SandboxUnavailable`, `SandboxRefused`,
+  `ServerNotFound`, `Timeout`, …) that the MCP panel words, so a missing command never reads like a sandbox refusal;
+  see `docs/security/mcp-trust-tiers.md`.
 - **`PrivilegedHost` is the old host launch, kept deliberately.** It is a per-server operator grant, never a fallback
   and never inferred, and its tools are offered as `ToolCategory.WriteExecute` rather than `Network` — because a
   server this node launched unconfined can write files and run commands here, and the class an operator sees and the

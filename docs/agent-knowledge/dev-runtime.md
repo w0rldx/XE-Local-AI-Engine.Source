@@ -107,10 +107,10 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 
 **Rule:** a live round beside another running host gets its own copy of the llama-server build (e.g.
 `.tmp/<round>-data/llama-bin/`) behind `XE_LLAMACPP_SERVER_PATH`; never reuse another host's managed
-`source-build/active/build/bin/llama-server`. `StaleLlamaServerReaper` claims every llama-server under its managed path
+`source-build/active/build/bin/llama-server`. The llama-server `StaleProcessReaper` claims every llama-server under its managed path
 (path containment, not ancestry), so a restart of host A reaps host B's models. Diagnose by grepping the OTHER host's log for
-"Reaping stale". **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleLlamaServerReaper`,
-`LlamaServerIdleReaper.PruneExitedProcesses`.
+"Reaping stale". **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleProcessReaper` (`Providers.ProcessSupervision`,
+registered in `LlamaServerServiceCollectionExtensions`), `LlamaServerIdleReaper.PruneExitedProcesses`.
 [evidence](../agent-knowledge-evidence.md#two-hosts-on-one-box-must-never-share-a-llama-server-binary-path-or-one-hosts-reaper-kills-the-others-models)
 
 ## Containers, sandbox and External Apps (host side)

@@ -283,7 +283,17 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         var installedKeys = await ListInstalledKeysAsync(cancellationToken);
 
         var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
-        var exploreRecommendations = await BuildExploreRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
+
+        // A model the catalog lane already recommends is not repeated as an explore row. Same comparer as installedKeys, and applied before the explore cap so the
+        // lane still fills its limit; rank is the array order of the concatenation, so it stays contiguous.
+        var catalogModelNames = catalogRecommendations.Select(static row => row.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var exploreRecommendations = await BuildExploreRecommendationsAsync(request,
+            quant,
+            ctxTarget,
+            profile,
+            installedKeys,
+            catalogModelNames,
+            cancellationToken);
 
         return [.. catalogRecommendations, .. exploreRecommendations];
     }
@@ -363,6 +373,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         int ctxTarget,
         HardwareProfile profile,
         HashSet<string> installedKeys,
+        HashSet<string> catalogModelNames,
         CancellationToken cancellationToken)
     {
         // Discover candidate repos by the use-case's mapped search terms (see ModelFitUseCaseSearch — the literal
@@ -390,6 +401,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return candidates
                .Where(candidate => candidate is not null)
                .Select(candidate => candidate!)
+               .Where(candidate => !catalogModelNames.Contains(candidate.ModelName))
                .OrderByDescending(candidate => candidate.Estimate.EstimatedBytes / CapabilityBucketBytes)
                .ThenByDescending(candidate => candidate.Downloads)
                .ThenByDescending(candidate => candidate.LastModified)

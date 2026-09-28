@@ -90,8 +90,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await File.WriteAllBytesAsync(_tokenPath, protectedPayload, ct).ConfigureAwait(false);
-            SecureFilePermissions.Apply(_tokenPath);
+            await SecureFilePermissions.WriteAllBytesAtomicAsync(_tokenPath, protectedPayload, ct).ConfigureAwait(false);
         }
         finally
         {

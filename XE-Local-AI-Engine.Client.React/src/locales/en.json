@@ -1723,6 +1723,7 @@
 					"upToDate": "Up to date",
 					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before updating the runtime.",
 					"noPrebuiltHint": "llama.cpp publishes no prebuilt {{variant}} build for this node. Build it with the llama.cpp build from source card below, or choose another variant.",
+					"overrideNotice": "A bring-your-own {{variant}} llama-server is serving models on this node. The installed runtime below is not in use while the override is set.",
 					"installedSourceBuildNotice": "Remove the installed source-built runtime before installing a prebuilt runtime.",
 					"activeSourceBuildNotice": "Wait for the active source build to finish or cancel it before installing a prebuilt runtime.",
 					"openLoadedModels": "Open Loaded models",
@@ -3611,6 +3612,16 @@
 					"disabled": "disabled",
 					"error": "error",
 					"connecting": "connecting…"
+				},
+				"failure": {
+					"Unknown": "The MCP server connection failed.",
+					"ServerNotFound": "The server's command was not found or could not be started. Check the command and that it is installed on this machine.",
+					"SandboxUnavailable": "This node cannot run a server in the sandbox.",
+					"SandboxRefused": "The sandbox refused to start this server.",
+					"Timeout": "Timed out connecting to the MCP server.",
+					"Transport": "The connection to the MCP server failed or closed.",
+					"Protocol": "The MCP server did not complete the MCP handshake.",
+					"Authentication": "The MCP server rejected the credentials, or the TLS negotiation failed."
 				}
 			},
 			"delete": {

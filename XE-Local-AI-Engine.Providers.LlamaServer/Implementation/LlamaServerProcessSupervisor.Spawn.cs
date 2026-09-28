@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Spawn half of <see cref="LlamaServerProcessSupervisor" />: the restart-with-backoff loop, the launch attempt
@@ -262,7 +263,7 @@ public sealed partial class LlamaServerProcessSupervisor
             var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
             var port = await _reaper.AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
-            ILlamaServerProcessHandle? handle = null;
+            IProcessTreeHandle? handle = null;
             long? readinessStartedTimestamp = null;
             var readinessRecorded = false;
             var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
@@ -282,7 +283,10 @@ public sealed partial class LlamaServerProcessSupervisor
                     candidate.Plan,
                     launchTuning.ChatCacheRamMiB,
                     projectorFilePath,
-                    adapterFilePath);
+                    adapterFilePath,
+                    // The id clients route by, so a relayed response names the model rather than its absolute host path. Same capability gate as the
+                    // transient launcher; a runtime without --alias keeps serving under the path.
+                    capabilityManifest.SupportsOption(LlamaServerManagedFlags.Alias) ? key.ModelName : null);
 
                 // Appended LAST so the operator's flags win over the bundled tuning defaults (llama.cpp is last-wins for scalar flags), but BEFORE the diagnostic
                 // metrics/verbosity fill-ins below, so those checks see an operator-supplied flag of the same name and do not duplicate it.
@@ -847,7 +851,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     <c>/health</c> against a dead endpoint for the full readiness budget and then retrying: a crash-on-load is
     ///     deterministic, so retrying it only multiplies the stall by <c>MaxRestartAttempts</c>.
     /// </remarks>
-    private async Task WaitForReadyOrExitAsync(ILlamaServerProcessHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+    private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
         // Cancel the losing side the instant the other wins, so neither the /health poll nor the exit-watcher is left
         // running after the race is decided.
@@ -881,7 +885,7 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>Polls the process's exit flag until it exits or the wait is cancelled (readiness won the race).</summary>
-    private async Task WatchForExitAsync(ILlamaServerProcessHandle handle, CancellationToken ct)
+    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {

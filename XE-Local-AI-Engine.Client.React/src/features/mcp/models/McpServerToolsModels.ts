@@ -7,6 +7,18 @@
 // Connection state for a registered MCP server as seen by the node connection manager.
 export type McpConnectionStatus = "connected" | "disabled" | "error" | "connecting";
 
+// Why the last connect attempt failed; set only with the "error" status. The two sandbox reasons carry an
+// engine-authored remedy in `error`, every other reason a fixed server wording the panel replaces with its own.
+export type McpConnectionFailureReason =
+	| "Unknown"
+	| "ServerNotFound"
+	| "SandboxUnavailable"
+	| "SandboxRefused"
+	| "Timeout"
+	| "Transport"
+	| "Protocol"
+	| "Authentication";
+
 // A tool discovered from a connected MCP server. The name is the qualified executable name
 // (mcp__{server}__{tool}); requiresApproval is the catalog default (ON for MCP tools).
 export interface McpDiscoveredTool {
@@ -19,5 +31,6 @@ export interface McpDiscoveredTool {
 export interface McpServerToolsView {
 	readonly status: McpConnectionStatus;
 	readonly error: string | null;
+	readonly failureReason: McpConnectionFailureReason | null;
 	readonly tools: readonly McpDiscoveredTool[];
 }

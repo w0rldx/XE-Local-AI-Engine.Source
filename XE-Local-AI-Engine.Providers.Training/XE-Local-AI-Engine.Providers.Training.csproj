@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>XE_Local_AI_Engine.Providers.Training</RootNamespace>
-    <!-- LibraryImport source generation for the libc kill(2) tree-kill; same reason as the LlamaServer and
-         StableDiffusionCpp providers, which carry their own process-group handles. -->
+    <!-- LibraryImport source generation for the libc kill(2) tree-kill. Training keeps its own process-group handle
+         rather than Providers.ProcessSupervision's: it re-checks group leadership and process start time before
+         every signal. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>

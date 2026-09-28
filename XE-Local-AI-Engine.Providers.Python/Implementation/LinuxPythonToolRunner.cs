@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 
 /// <summary>
@@ -77,7 +78,7 @@ public sealed class LinuxPythonToolRunner : IPythonToolRunner
         }
 
 #pragma warning disable CA2000 // Ownership transferred to the handle (Wrap disposes on a construction failure); the using disposes the handle.
-        using var handle = LinuxPythonProcessGroupHandle.Wrap(PythonToolRunner.StartStreaming(startInfo, logSink));
+        using var handle = LinuxProcessGroupHandle.Wrap(PythonToolRunner.StartStreaming(startInfo, logSink));
 #pragma warning restore CA2000
         var process = handle.Process;
 

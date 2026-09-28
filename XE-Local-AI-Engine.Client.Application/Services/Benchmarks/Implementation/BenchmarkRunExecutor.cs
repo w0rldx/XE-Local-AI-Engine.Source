@@ -1,0 +1,535 @@
+namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
+
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
+public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
+{
+    private const string FingerprintChangedMessage = "The installed model changed after the benchmark was created.";
+    private const string CapacityRejectedMessage = "The benchmark could not reserve enough local model capacity.";
+    private const string InvocationFailedMessage = "The benchmark invocation failed. See local logs for details.";
+    private const string JudgePolicyChangedMessage = "judge policy changed during run";
+
+    /// <summary>How many times a judge-policy change is re-resolved before the first attempt is committed as failed.</summary>
+    private const int JudgePolicyResolutionAttempts = 3;
+
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly ICapacityService _capacity;
+    private readonly ILocalChatRuntimePackageBuilder _packageBuilder;
+    private readonly IWorkerEventDispatcher _dispatcher;
+    private readonly IInvocationRunner _runner;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly ILlamaServerEndpointBinding _endpointBinding;
+    private readonly IBenchmarkEventBuffer _events;
+    private readonly IBenchmarkCancellationRegistry _cancellations;
+    private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
+    private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
+    private readonly IBenchmarkPairwisePlanner _pairwisePlanner;
+    private readonly BenchmarkAdmissionRetry _admissionRetry;
+    private readonly ILogger<BenchmarkRunExecutor> _logger;
+
+    public BenchmarkRunExecutor(IBenchmarkStore store,
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        ICapacityService capacity,
+        ILocalChatRuntimePackageBuilder packageBuilder,
+        IWorkerEventDispatcher dispatcher,
+        IInvocationRunner runner,
+        ILlamaServerProcessSupervisor supervisor,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerEndpointBinding endpointBinding,
+        IBenchmarkEventBuffer events,
+        IBenchmarkCancellationRegistry cancellations,
+        IRuntimeEnvironmentFactsProvider environmentFacts,
+        IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+        IBenchmarkPairwisePlanner pairwisePlanner,
+        BenchmarkAdmissionRetry admissionRetry,
+        ILogger<BenchmarkRunExecutor> logger)
+    {
+        _store = store;
+        _snapshots = snapshots;
+        _installedModels = installedModels;
+        _capacity = capacity;
+        _packageBuilder = packageBuilder;
+        _dispatcher = dispatcher;
+        _runner = runner;
+        _supervisor = supervisor;
+        _variantSelector = variantSelector;
+        _endpointBinding = endpointBinding;
+        _events = events;
+        _cancellations = cancellations;
+        _environmentFacts = environmentFacts;
+        _judgeRuntimeResolver = judgeRuntimeResolver;
+        _pairwisePlanner = pairwisePlanner;
+        _admissionRetry = admissionRetry;
+        _logger = logger;
+    }
+
+    public async Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        if (work.Kind != BenchmarkWorkKind.Primary)
+        {
+            throw new ArgumentException("Primary executor received non-primary work.", nameof(work));
+        }
+
+        using var registration = _cancellations.Register(work.RunId, BenchmarkWorkKind.Primary, cancellationToken);
+        var token = registration.Token;
+        RuntimeEnvironmentFactsV1? environment = null;
+        try
+        {
+            var snapshot = _snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
+
+            // A row frozen under a different launch-identity scheme is failed BEFORE anything is leased or
+            // spawned, so it never writes an effective identity that could not be compared to its intended one.
+            BenchmarkLaunchIdentityScheme.RequireCurrent(work.Run.PrimaryLaunchIntent);
+            await using var modelLease = await _installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token);
+            if (!BenchmarkSnapshotModelComparer.Matches(snapshot.PrimaryModel, modelLease.Snapshot))
+            {
+                throw new BenchmarkExecutionException(FingerprintChangedMessage);
+            }
+
+            // The host facts this measurement was taken on, captured before anything is reserved or spawned so a
+            // failed launch still carries them. Non-throwing by contract.
+            environment = await _environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
+
+            // Admission sizes to the FROZEN runtime's context and KV type (null ⇒ f16), not the project's: a replay can pin a larger window, and f16 over-books a q8_0/q4_0 run. No launch admission
+            // — this run spawns an exclusive process from frozen arguments the supervisor refuses to launch against. Rejections wait on ONE BenchmarkWaitBudget shared with the exclusive-spawn wait.
+            var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
+                new CapacityRequest
+                {
+                    ModelName = snapshot.PrimaryModel.ModelName,
+                    Role = ModelRole.Chat,
+                    RequiredContextTokens = snapshot.PrimaryRuntime.ContextTokens,
+                    PublishLaunchAdmission = false,
+                    KvCacheType = snapshot.PrimaryRuntime.KvTypeK
+                },
+                new BenchmarkAdmissionContext
+                {
+                    RunId = work.RunId,
+                    Phase = "primary",
+                    RequestedContextTokens = snapshot.RequestedContextTokens,
+                    KvCacheType = snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                    RejectedMessage = CapacityRejectedMessage
+                },
+                waitBudget,
+                _logger,
+                token);
+
+            using var reservation = decision.Reservation;
+            var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);
+            var admission = new BenchmarkContextAdmissionPolicy(snapshot.RequestedContextTokens);
+            using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
+            _events.Append(work.RunId,
+                BenchmarkRunStreamEventKind.PrimaryState,
+                new BenchmarkRunStreamPayload
+                {
+                    State = BenchmarkPrimaryStatus.Running.ToString()
+                });
+
+            var currentVariant = await _variantSelector.SelectVariantAsync(token);
+            if (currentVariant != snapshot.PrimaryRuntime.Variant)
+            {
+                throw new BenchmarkExecutionException("The selected llama.cpp runtime changed after the benchmark was created.");
+            }
+
+            // A model still serving a request refuses the pre-spawn eviction. That is a transient the request clears
+            // itself, so the spawn waits and retries rather than terminalizing this run — see BenchmarkExclusiveSpawn.
+            _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
+                    _supervisor.RunExclusiveBenchmarkAsync(snapshot.PrimaryModel.ModelName,
+                        ModelRole.Chat,
+                        snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
+                        snapshot.PrimaryRuntime.LaunchPolicy,
+                        async (profiling, profilingToken) =>
+                        {
+                            // Durable BEFORE any token is generated: a run that reached readiness keeps
+                            // its evidence no matter how the invocation ends.
+                            await CheckpointAsync(work, profiling.LaunchReceipt, environment);
+                            using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
+                            await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
+                            var context = InvocationExecutionContext.CreatePlain(package,
+                                Guid.Empty,
+                                generationAdmissionPolicy: admission);
+                            await _runner.RunAsync(context, profilingToken);
+                            return true;
+                        },
+                        spawnToken),
+                waitBudget,
+                work.RunId,
+                "primary",
+                _logger,
+                token);
+            token.ThrowIfCancellationRequested();
+
+            var terminal = capture.TerminalState;
+            if (terminal?.Status != InvocationStatus.Completed)
+            {
+                // A run the node cancelled at its own invocation budget is the one failure that can explain itself, and
+                // "the invocation failed" is exactly the message that made the live 307 s cancellation unattributable.
+                throw new BenchmarkExecutionException(InvocationFailedMessage)
+                {
+                    StopReason = terminal?.FailureCategory == FailureCategory.Timeout ? BenchmarkPrimaryStopReasons.Timeout : null
+                };
+            }
+
+            var effectiveContext = admission.EffectiveContextTokens
+                                   ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
+
+            // Coalesced HERE, once: the live stream needs one event per delta, storage needs one part per contiguous run (see BenchmarkOutputParts),
+            // and the stop-reason verdict below has to read the SHAPE of the turn, which a per-delta capture does not show.
+            var parts = BenchmarkOutputParts.Coalesce(capture.Parts);
+            var stopReason = ResolveStopReason(terminal.FinishReason, parts);
+            var durationMs = terminal.GenerationDurationMs ?? 0;
+            var throughput = ToThroughput(terminal.Throughput);
+
+            // tokens/s MEANS decode throughput (tg) whenever the runtime timed the prompt and the decode separately: total tokens over wall clock blends prefill into generation, so one model
+            // measured on a long prompt and a short one gives two incomparable numbers. The blended figure stays the fallback for a runtime that reports no timings, so the column never goes empty.
+            var tokensPerSecond = throughput?.GenerationTokensPerSecond ?? TokenThroughput.FromMilliseconds(terminal.TotalTokens, durationMs);
+            var metricsEvent = _events.Reserve(work.RunId,
+                BenchmarkRunStreamEventKind.Metrics,
+                new BenchmarkRunStreamPayload
+                {
+                    EffectiveContextTokens = effectiveContext,
+                    DurationMs = durationMs,
+                    TotalTokens = terminal.TotalTokens,
+                    TokensPerSecond = tokensPerSecond,
+                    TtftMs = throughput?.TtftMs,
+                    PromptTokens = throughput?.PromptTokens,
+                    PromptTokensPerSecond = throughput?.PromptTokensPerSecond,
+                    GenerationTokens = throughput?.GenerationTokens,
+                    GenerationTokensPerSecond = throughput?.GenerationTokensPerSecond,
+                    CachedPromptTokens = throughput?.CachedPromptTokens,
+                    SegmentCount = throughput?.SegmentCount
+                });
+            var terminalEvent = _events.Reserve(work.RunId,
+                BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
+                new BenchmarkRunStreamPayload
+                {
+                    State = BenchmarkPrimaryStatus.Succeeded.ToString(),
+                    RunVersion = work.Run.Version + 1
+                });
+            var persisted = await MarkPrimarySucceededAsync(work,
+                new BenchmarkPrimarySuccessCommand
+                {
+                    RunId = work.RunId,
+                    ExpectedWorkVersion = work.Version,
+                    OutputPartsJson = BenchmarkExecutionSerialization.SerializeParts(parts),
+                    LastStreamSequence = terminalEvent.Sequence,
+                    EffectiveContextTokens = effectiveContext,
+                    DurationMs = durationMs,
+                    TotalTokens = terminal.TotalTokens,
+                    TokensPerSecond = tokensPerSecond,
+                    // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the run has to carry why it stopped,
+                    // or the ranking and the judge grade an incomplete answer as if it were a finished one.
+                    PrimaryStopReason = stopReason,
+                    Throughput = throughput
+                });
+            _events.PublishReserved(metricsEvent);
+            _events.PublishReserved(terminalEvent with
+            {
+                Payload = terminalEvent.Payload with
+                {
+                    RunVersion = persisted.Version
+                }
+            });
+            _events.EvictPlaintext(work.RunId);
+
+            // A newly succeeded run is newly eligible to be compared against every other one, so this is a no-op in pointwise mode.
+            // In pairwise mode it is the second of the three places a cohort grows, and it is incremental — one more run enqueues 2N comparisons, not the whole tournament again.
+            _ = await _pairwisePlanner.EnsurePairsAsync(work.Run.ProjectId, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _events.EvictPlaintext(work.RunId);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            await TerminalizeCancelledAsync(work, environment);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Benchmark primary work {RunId} failed.", work.RunId);
+            await TerminalizeFailedAsync(work,
+                exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
+                environment,
+                (exception as BenchmarkExecutionException)?.StopReason);
+        }
+    }
+
+    /// <summary>
+    ///     The stop reason to persist: the provider's own token, unless the turn finished cleanly having produced no
+    ///     answer, which is recorded as <see cref="BenchmarkPrimaryStopReasons.Incomplete" />.
+    /// </summary>
+    /// <remarks>
+    ///     The provider cannot report this: a turn stopped on an unanswered tool call reports <c>tool_calls</c> and a
+    ///     thinking model that spent the whole turn reasoning reports <c>stop</c>, both of which read downstream as a
+    ///     finished answer. A <c>length</c> stop keeps its own token — that run IS cut off and
+    ///     <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> annotates it — except when it emitted no answer
+    ///     either: <see cref="BenchmarkPrimaryStopReasons.ReasoningLength" /> then names the reasoning budget to raise.
+    /// </remarks>
+    internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        if (BenchmarkPrimaryStopReasons.IsTruncated(finishReason))
+        {
+            // Out of budget having never left the scratchpad: the same cut-off run, but the operator's fix is a
+            // reasoning budget rather than a bigger output budget, and only this distinction says which.
+            return BenchmarkOutputParts.HasAnswerText(parts) ? finishReason : BenchmarkPrimaryStopReasons.ReasoningLength;
+        }
+
+        return BenchmarkOutputParts.IsUnanswered(parts) ? BenchmarkPrimaryStopReasons.Incomplete : finishReason;
+    }
+
+    // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
+    // invocation layer and persisted by the store, and neither may reference the other's contract.
+    private static BenchmarkRunThroughput? ToThroughput(InvocationThroughput? throughput) =>
+        throughput is null
+            ? null
+            : new BenchmarkRunThroughput
+            {
+                TtftMs = throughput.TimeToFirstTokenMs,
+                PromptTokens = throughput.PromptTokens,
+                PromptMs = throughput.PromptMs,
+                GenerationTokens = throughput.GenerationTokens,
+                GenerationMs = throughput.GenerationMs,
+                CachedPromptTokens = throughput.CachedPromptTokens,
+                SegmentCount = throughput.SegmentCount
+            };
+
+    /// <summary>
+    ///     Commits primary success together with the run's first judging, in the store's single transaction.
+    /// </summary>
+    /// <remarks>
+    ///     The judge runtime is resolved for one specific policy revision BEFORE the call; if the project moved to
+    ///     another revision meanwhile the store rolls the whole thing back and this re-resolves against the new one.
+    ///     A bounded number of rounds, then the attempt is committed as failed — the measurement is never lost to a
+    ///     judge-configuration race, and the operator re-judges.
+    /// </remarks>
+    private async Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkClaimedWork work, BenchmarkPrimarySuccessCommand command)
+    {
+        for (var round = 1; round <= JudgePolicyResolutionAttempts; round++)
+        {
+            var revision = await _store.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None);
+            if (revision is null)
+            {
+                return await _store.MarkPrimarySucceededAsync(command, CancellationToken.None);
+            }
+
+            try
+            {
+                return await _store.MarkPrimarySucceededAsync(command with
+                {
+                    JudgeAttempt = await ResolveJudgeSeedAsync(revision)
+                }, CancellationToken.None);
+            }
+            catch (BenchmarkJudgePolicyChangedException) when (round < JudgePolicyResolutionAttempts)
+            {
+                _logger.LogInformation("Benchmark run {RunId}: the judge policy changed while the run was executing; re-resolving.", work.RunId);
+            }
+        }
+
+        // The bounded retry is exhausted. Still atomic: the run keeps its measurement and carries a failed first
+        // attempt the operator can re-judge, rather than losing the measurement to a judge-configuration race.
+        return await _store.MarkPrimarySucceededAsync(command with
+        {
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = null,
+                RuntimeJson = null,
+                RuntimeUnresolvedReason = JudgePolicyChangedMessage
+            }
+        }, CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     The judge runtime for <paramref name="revision" />, or a seed that records why it could not be resolved.
+    ///     Never throws toward the primary result: an unusable judge runtime is a failed judging, not a failed run.
+    /// </summary>
+    private async Task<BenchmarkJudgeAttemptSeed> ResolveJudgeSeedAsync(BenchmarkJudgePolicyRevisionRecord revision)
+    {
+        try
+        {
+            var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
+            var resolution = await _judgeRuntimeResolver.ResolveAsync(policy, CancellationToken.None);
+            return new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = revision.Id,
+                RuntimeJson = new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
+                RuntimeUnresolvedReason = null,
+                LaunchIntent = resolution.Intent
+            };
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Benchmark judge runtime could not be resolved for policy revision {RevisionId}.", revision.Id);
+            return new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = revision.Id,
+                RuntimeJson = null,
+                RuntimeUnresolvedReason = exception.Message
+            };
+        }
+    }
+
+    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
+    {
+        var runtime = snapshot.ResolvedRuntime;
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = runtime.ResolvedSystemPrompt,
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = snapshot.CoreTask,
+                    SortOrder = 0
+                }
+            ],
+            ModelProfile = snapshot.PrimaryModel.ModelName,
+            AgentDefinitionVersion = runtime.AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = runtime.AllowedTools,
+            Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
+            ReasoningEffort = runtime.ReasoningEffort,
+            SamplingOptions = ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
+            Skills = runtime.Skills,
+            IsUnattended = true,
+            CustomTools = runtime.CustomTools,
+            // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe answer for a caller that does not know, and freeze does know. A model whose
+            // chat template renders no reasoning end marker takes the budget and ignores it, so sending one advertises a cap that never held. Null is a pre-member run, keeping the old default.
+            ReasoningBudgetEnforceable = snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true
+        });
+    }
+
+    internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
+        new()
+        {
+            // The sampler is float all the way to the wire; the snapshot keeps the double so the run's own column
+            // does not record a widening artefact.
+            Temperature = (float?)sampling.Temperature,
+            TopP = sampling.TopP,
+            TopK = sampling.TopK,
+            MinP = sampling.MinP,
+            MaxOutputTokens = sampling.MaxOutputTokens,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens,
+            RepeatPenalty = sampling.RepeatPenalty,
+            RepeatLastN = sampling.RepeatLastN,
+            PresencePenalty = sampling.PresencePenalty,
+            FrequencyPenalty = sampling.FrequencyPenalty,
+            Stop = sampling.Stop,
+            Seed = sampling.SeedValue,
+            NumCtx = contextTokens
+        };
+
+    /// <summary>
+    ///     Writes the phase's launch evidence. Insert-if-null and keyed by the work item, so calling it at readiness
+    ///     and again while terminalizing records the first observation and ignores the second.
+    /// </summary>
+    private async Task CheckpointAsync(BenchmarkClaimedWork work,
+        LlamaServerLaunchReceipt? receipt,
+        RuntimeEnvironmentFactsV1? environment)
+    {
+        var command = BenchmarkLaunchEvidence.TryBuild(receipt,
+            environment,
+            work.Run.PrimaryLaunchIntent?.KvCacheTypeSource ?? BenchmarkKvCacheType.SourceAuto);
+        if (command is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await _store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            // Evidence is not worth a measurement. A version race with an operator cancel, or a busy database, must
+            // not turn a healthy run into a failed one — and the token here is None, so nothing caught is a shutdown.
+            _logger.LogWarning(exception, "Benchmark run {RunId}: the launch-evidence checkpoint could not be recorded.", work.RunId);
+        }
+    }
+
+    private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work, RuntimeEnvironmentFactsV1? environment)
+    {
+        await CheckpointAsync(work, receipt: null, environment);
+        var runId = work.RunId;
+        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        if (run is null || run.PrimaryStatus == BenchmarkPrimaryStatus.Cancelled)
+        {
+            _events.EvictPlaintext(runId);
+            return;
+        }
+
+        if (run.PrimaryStatus is not (BenchmarkPrimaryStatus.Running or BenchmarkPrimaryStatus.CancelRequested))
+        {
+            _events.EvictPlaintext(runId);
+            return;
+        }
+
+        var terminal = _events.Reserve(runId,
+            BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkPrimaryStatus.Cancelled.ToString(),
+                RunVersion = run.Version + 1
+            });
+        var persisted = await _store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
+        _events.PublishReserved(terminal with
+        {
+            Payload = terminal.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
+        _events.EvictPlaintext(runId);
+    }
+
+    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work,
+        string message,
+        RuntimeEnvironmentFactsV1? environment,
+        string? primaryStopReason = null)
+    {
+        await CheckpointAsync(work, receipt: null, environment);
+        var runId = work.RunId;
+        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        if (run is null || run.PrimaryStatus is BenchmarkPrimaryStatus.Succeeded or BenchmarkPrimaryStatus.Failed or BenchmarkPrimaryStatus.Cancelled)
+        {
+            _events.EvictPlaintext(runId);
+            return;
+        }
+
+        var terminal = _events.Reserve(runId,
+            BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkPrimaryStatus.Failed.ToString(),
+                RunVersion = run.Version + 1
+            });
+        var persisted = await _store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None);
+        _events.PublishReserved(terminal with
+        {
+            Payload = terminal.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
+        _events.EvictPlaintext(runId);
+    }
+}

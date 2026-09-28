@@ -25,16 +25,3 @@ internal sealed class InstalledModelInventoryResult
     /// <summary>Diagnostics raised while probing (for example runtime-unreachable).</summary>
     public required IReadOnlyList<string> Diagnostics { get; init; }
 }
-
-/// <summary>Result of a model-runtime reachability/version probe.</summary>
-internal sealed class OllamaRuntimeStatus
-{
-    /// <summary>True when the runtime endpoint responded as running.</summary>
-    public required bool Reachable { get; init; }
-
-    /// <summary>Normalized runtime version string when reachable; otherwise <c>null</c>.</summary>
-    public required string? Version { get; init; }
-
-    /// <summary>Diagnostics raised while probing (for example runtime-unreachable).</summary>
-    public required IReadOnlyList<string> Diagnostics { get; init; }
-}

@@ -134,7 +134,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             return;
         }
 
-        await SafePublishRunAsync(run, SchedulerHubEvents.RunStarted);
+        await SafePublishRunAsync(run, SchedulerRunEventKind.Started);
 
         // The stored definition is NEVER mutated: a per-fire override is merged, whitelisted keys only, onto the copy of the
         // parameters the handler sees. A cron fire without overrides passes the stored parameters through unchanged.
@@ -170,7 +170,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 summary,
                 cancellationToken: CancellationToken.None);
 
-            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunCompleted);
+            await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Completed);
         }
         catch (OperationCanceledException)
         {
@@ -192,7 +192,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 cancellationToken: CancellationToken.None);
 
             await SafePublishRunAsync(updated ?? run,
-                wasCancelRequested ? SchedulerHubEvents.RunCancelled : SchedulerHubEvents.RunFailed);
+                wasCancelRequested ? SchedulerRunEventKind.Cancelled : SchedulerRunEventKind.Failed);
 
             // Re-throw so Quartz observes the interrupt / shutdown.
             throw;
@@ -223,7 +223,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 errorDetails: exception.GetType().FullName,
                 cancellationToken: CancellationToken.None);
 
-            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunFailed);
+            await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Failed);
         }
     }
 
@@ -365,14 +365,14 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         };
     }
 
-    private async Task SafePublishRunAsync(ScheduledJobRunRecord record, string eventType)
+    private async Task SafePublishRunAsync(ScheduledJobRunRecord record, SchedulerRunEventKind kind)
     {
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            var runEvent = new SchedulerRunHubEvent
+            var runEvent = new SchedulerRunEvent
             {
-                EventType = eventType,
+                Kind = kind,
                 RunId = record.Id,
                 ScheduledJobId = record.ScheduledJobId,
                 TemplateId = record.TemplateId,
@@ -391,7 +391,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to publish scheduler event {EventType} for run {RunId}.", eventType, record.Id);
+            _logger.LogWarning(exception, "Failed to publish scheduler run event {Kind} for run {RunId}.", kind, record.Id);
         }
     }
 
@@ -400,9 +400,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent
+            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressEvent
                 {
-                    EventType = SchedulerHubEvents.RunProgress,
                     RunId = runId,
                     ScheduledJobId = scheduledJobId,
                     Message = message,

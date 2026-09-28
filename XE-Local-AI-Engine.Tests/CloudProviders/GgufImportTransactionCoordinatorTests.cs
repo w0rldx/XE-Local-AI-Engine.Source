@@ -334,9 +334,9 @@ public sealed class GgufImportTransactionCoordinatorTests
         await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Completed);
 
         var events = publisher.Events.ToArray();
-        AssertEx.True(events.Select(static value => value.Phase).SequenceEqual(["Validating", "Copying", "Committing", "Completed"],
+        AssertEx.True(events.Select(static value => value.Phase.ToString()).SequenceEqual(["Validating", "Copying", "Committing", "Completed"],
             StringComparer.Ordinal));
-        AssertEx.True(events.All(static value => value.UpdatedAtUtc is not null));
+        AssertEx.True(events.All(static value => value.UpdatedAtUtc != default));
         AssertEx.True(events.Zip(events.Skip(1), static (left, right) => left.UpdatedAtUtc < right.UpdatedAtUtc).All(static value => value));
     }
 
@@ -740,11 +740,11 @@ public sealed class GgufImportTransactionCoordinatorTests
 
     private sealed class RecordingPublisher : IGgufDownloadEventPublisher
     {
-        public ConcurrentQueue<GgufDownloadStatusHubEvent> Events { get; } = new();
+        public ConcurrentQueue<GgufAcquisitionStatus> Events { get; } = new();
 
-        public Task PublishStatusAsync(GgufDownloadStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(GgufAcquisitionStatus status, CancellationToken cancellationToken = default)
         {
-            Events.Enqueue(statusEvent);
+            Events.Enqueue(status);
             return Task.CompletedTask;
         }
     }

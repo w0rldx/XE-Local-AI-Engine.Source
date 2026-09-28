@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     The host's only door onto the <c>Providers.LlamaServer</c> contracts: prerequisite checklist, managed
@@ -23,6 +24,7 @@ public sealed class LlamaCppRuntimeOrchestrationService
     private readonly ILlamaCppSourceBuildActivity _buildActivity;
 
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
     private readonly ILlamaCppSourceBuildPrerequisiteProbe _sourceBuildPrerequisiteProbe;
     private readonly ILlamaCppSourceBuildService _sourceBuildService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
@@ -39,9 +41,11 @@ public sealed class LlamaCppRuntimeOrchestrationService
         ILlamaCppSourceBuildService sourceBuildService,
         ILlamaCppUpdateState updateState,
         ILlamaServerProcessSupervisor supervisor,
-        IRuntimeAcquisitionStatusRegistry acquisitionStatus)
+        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
+        LlamaServerRuntimeOverrideOptions overrideOptions)
     {
         ArgumentNullException.ThrowIfNull(acquisitionStatus);
+        ArgumentNullException.ThrowIfNull(overrideOptions);
         ArgumentNullException.ThrowIfNull(binaryManager);
         ArgumentNullException.ThrowIfNull(buildActivity);
         ArgumentNullException.ThrowIfNull(installedRuntimeStore);
@@ -54,6 +58,7 @@ public sealed class LlamaCppRuntimeOrchestrationService
         _binaryManager = binaryManager;
         _buildActivity = buildActivity;
         _installedRuntimeStore = installedRuntimeStore;
+        _overrideOptions = overrideOptions;
         _sourceBuildPrerequisiteProbe = sourceBuildPrerequisiteProbe;
         _sourceBuildService = sourceBuildService;
         _supervisor = supervisor;
@@ -63,6 +68,9 @@ public sealed class LlamaCppRuntimeOrchestrationService
 
     /// <summary>The last observed llama.cpp update/runtime snapshot, which a runtime-status response is rendered from.</summary>
     public LlamaCppUpdateSnapshot CurrentUpdateSnapshot => _updateState.Current;
+
+    /// <summary>The variant a bring-your-own <c>llama-server</c> override serves with; <see langword="null" /> when none is set.</summary>
+    public GpuVariant? OverrideVariant => _overrideOptions.IsActive ? _overrideOptions.Variant : null;
 
     /// <summary>The source-build toolchain checklist for one backend, so a refusal can name which prerequisite is missing.</summary>
     public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeSourceBuildPrerequisitesAsync(LlamaCppSourceBackend backend, CancellationToken ct)

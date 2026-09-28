@@ -140,5 +140,12 @@ describe("toMcpServerToolsView", () => {
 
 		expect(view.status).toBe("error");
 		expect(view.error).toBe("redacted reason");
+		expect(view.failureReason).toBeNull();
+	});
+
+	it("carries the failure reason", () => {
+		const view = toMcpServerToolsView({ status: "error", error: "x", failureReason: "ServerNotFound", tools: [] });
+
+		expect(view.failureReason).toBe("ServerNotFound");
 	});
 });

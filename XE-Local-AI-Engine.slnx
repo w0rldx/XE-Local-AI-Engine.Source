@@ -30,6 +30,7 @@
         <Project Path="XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.OpenAICompat/XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.OpenAICompatible.Core/XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Providers.ProcessSupervision/XE-Local-AI-Engine.Providers.ProcessSupervision.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.Python/XE-Local-AI-Engine.Providers.Python.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.StableDiffusionCpp/XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.WhisperCpp/XE-Local-AI-Engine.Providers.WhisperCpp.csproj"/>

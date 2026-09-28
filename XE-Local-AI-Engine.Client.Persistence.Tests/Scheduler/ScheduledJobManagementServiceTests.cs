@@ -1056,8 +1056,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var record = await service.CreateJobAsync(ValidCronInput());
 
-        await publisher.Received(1).PublishDefinitionAsync(Arg.Is<SchedulerDefinitionHubEvent>(e =>
-                e.EventType == SchedulerHubEvents.JobDefinitionChanged &&
+        await publisher.Received(1).PublishDefinitionAsync(Arg.Is<SchedulerDefinitionEvent>(e =>
                 e.ScheduledJobId == record.Id &&
                 e.Action == "created"),
             Arg.Any<CancellationToken>());

@@ -159,13 +159,16 @@ public sealed class ListMcpServersResponse
 /// <remarks>
 ///     <see cref="Status" /> is "connected" (connected and its tools listed), "disabled" (not enabled, so not
 ///     connected), or "error" (the last connect or list attempt failed, with <see cref="Error" /> carrying a short
-///     redacted reason). The tools list is the discovered set when connected and empty otherwise.
+///     redacted reason and <see cref="FailureReason" /> its kind, serialized as its string name through the globally
+///     registered <c>JsonStringEnumConverter</c>). The tools list is the discovered set when connected and empty otherwise.
 /// </remarks>
 public sealed class McpServerToolsResponse
 {
     public required string Status { get; init; }
 
     public string? Error { get; init; }
+
+    public McpConnectionFailureReason? FailureReason { get; init; }
 
     public required IReadOnlyList<McpDiscoveredToolResponse> Tools { get; init; }
 }

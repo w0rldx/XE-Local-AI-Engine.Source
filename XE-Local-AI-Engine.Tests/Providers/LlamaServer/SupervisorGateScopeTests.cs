@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -252,7 +253,7 @@ public sealed class SupervisorGateScopeTests
 
         public ConcurrentBag<LatchedProcessHandle> Handles { get; } = new();
 
-        public ILlamaServerProcessHandle Launch(LlamaServerLaunchSpec spec)
+        public IProcessTreeHandle Launch(LlamaServerLaunchSpec spec)
         {
             var pid = Interlocked.Increment(ref _nextPid);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
@@ -263,7 +264,7 @@ public sealed class SupervisorGateScopeTests
         }
     }
 
-    private sealed class LatchedProcessHandle : ILlamaServerProcessHandle
+    private sealed class LatchedProcessHandle : IProcessTreeHandle
     {
         private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly KillLatch? _killLatch;
@@ -283,6 +284,8 @@ public sealed class SupervisorGateScopeTests
         public bool HasExited => Volatile.Read(ref _exited) != 0;
 
         public int? ExitCode => null;
+
+        public string? StderrTail => null;
 
         public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
         {

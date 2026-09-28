@@ -218,7 +218,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         return ImageJobDeleteOutcome.Deleted;
     }
 
-    public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId)
+    public IReadOnlyList<ImageJobStatusEvent> SnapshotBufferedEvents(Guid jobId)
     {
         return _eventLogs.TryGetValue(jobId, out var log) ? log.Snapshot() : [];
     }
@@ -532,8 +532,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         // Seq is assigned for EVERY push, buffered or not, so the client's monotonic dedupe stays correct across the
         // two delivery paths; only the retention in the replay log is conditional.
-        var payload = (ImageJobStatusHubEvent)log.Append(ImageJobHubEvents.StatusChanged,
-            seq => new ImageJobStatusHubEvent
+        var payload = log.Append(seq => new ImageJobStatusEvent
             {
                 JobId = jobId,
                 Phase = status.ToString(),
@@ -562,7 +561,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _ = PublishStatusAsync(jobId, payload);
     }
 
-    private async Task PublishStatusAsync(Guid jobId, ImageJobStatusHubEvent payload)
+    private async Task PublishStatusAsync(Guid jobId, ImageJobStatusEvent payload)
     {
         try
         {
@@ -696,16 +695,6 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
     }
 
-    /// <summary>One buffered event in a job's replay log: the SignalR method name, the seq-stamped payload, and its seq.</summary>
-    private sealed record BufferedEvent
-    {
-        public required string MethodName { get; init; }
-
-        public required object Payload { get; init; }
-
-        public required long Seq { get; init; }
-    }
-
     /// <summary>A per-job ordered, bounded event log for late-subscriber replay.</summary>
     /// <remarks>
     ///     Seq assignment and append are atomic under a lock, so concurrent publishes never collide on a seq or append
@@ -713,7 +702,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     /// </remarks>
     private sealed class JobEventLog
     {
-        private readonly List<BufferedEvent> _events = [];
+        private readonly List<ImageJobStatusEvent> _events = [];
         private readonly Lock _gate = new();
         private readonly int _maxEvents;
 
@@ -730,8 +719,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         /// <summary>Set to the terminal event's timestamp once a terminal status is buffered; drives eviction.</summary>
         public long? TerminalAtUnixMs { get; private set; }
 
-        public object Append(string methodName,
-            Func<long, object> payloadFactory,
+        public ImageJobStatusEvent Append(Func<long, ImageJobStatusEvent> payloadFactory,
             bool isTerminal,
             long terminalAtUnixMs,
             bool buffer,
@@ -747,12 +735,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
                 if (buffer)
                 {
-                    _events.Add(new BufferedEvent
-                    {
-                        MethodName = methodName,
-                        Payload = payload,
-                        Seq = seq
-                    });
+                    _events.Add(payload);
                     if (_events.Count > _maxEvents)
                     {
                         _events.RemoveAt(index: 0);
@@ -769,21 +752,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             }
         }
 
-        public IReadOnlyList<ImageJobBufferedEvent> Snapshot()
+        public IReadOnlyList<ImageJobStatusEvent> Snapshot()
         {
             lock (_gate)
             {
-                var copy = new List<ImageJobBufferedEvent>(_events.Count);
-                foreach (var buffered in _events)
-                {
-                    copy.Add(new ImageJobBufferedEvent
-                    {
-                        MethodName = buffered.MethodName,
-                        Payload = buffered.Payload
-                    });
-                }
-
-                return copy;
+                return [.. _events];
             }
         }
     }

@@ -297,9 +297,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-publish", Now, Now, CancellationToken.None);
 
-        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunStarted && e.RunId == RunId),
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Started && e.RunId == RunId),
             Arg.Any<CancellationToken>());
-        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunCompleted && e.RunId == RunId),
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Completed && e.RunId == RunId),
             Arg.Any<CancellationToken>());
     }
 
@@ -311,8 +311,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-publish-progress", scheduledFireTimeUtc: null, Now, CancellationToken.None);
 
-        await publisher.Received(1).PublishRunProgressAsync(Arg.Is<SchedulerRunProgressHubEvent>(e =>
-                e.EventType == SchedulerHubEvents.RunProgress &&
+        await publisher.Received(1).PublishRunProgressAsync(Arg.Is<SchedulerRunProgressEvent>(e =>
                 e.RunId == RunId &&
                 e.Message == "step" &&
                 e.Percent == 25),

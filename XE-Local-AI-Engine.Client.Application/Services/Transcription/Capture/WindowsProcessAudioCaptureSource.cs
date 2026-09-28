@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 /// <remarks>
 ///     Type-level <see cref="SupportedOSPlatformAttribute" /> rather than a CA1416 suppression, matching
-///     <c>WindowsImageJobObjectProcessHandle</c>; <c>AddNodeTranscription</c> registers this only behind
+///     <c>WindowsJobObjectProcessHandle</c>; <c>AddNodeTranscription</c> registers this only behind
 ///     <c>OperatingSystem.IsWindows()</c>, which is what makes the attribute honest. There is one capture scope and it
 ///     is not a choice: <see cref="ProcessLoopbackMode" />'s other member, <c>ExcludeTargetProcessTree</c>, means
 ///     everything on the endpoint EXCEPT the target, so it appears nowhere in this product.

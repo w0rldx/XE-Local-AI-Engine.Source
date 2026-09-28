@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -11,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     DI wiring for the llama-server local-model provider stack (binary manager + GPU probe/selector + the
@@ -265,12 +267,13 @@ public static class LlamaServerServiceCollectionExtensions
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 
-        // Startup orphan reaper: a hard host kill skips the supervisor's graceful DisposeAsync teardown, orphaning a server that still holds its loopback port and VRAM and blocks the next start.
-        // It matches ONLY binaries under our own llama.cpp cache root, so an unrelated llama-server is never touched, and never throws out of StartAsync, so it cannot block startup.
-        services.TryAddSingleton<IStaleLlamaServerProcessScanner, OsStaleLlamaServerProcessScanner>();
-        services.AddHostedService(static sp => new StaleLlamaServerReaper(sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
+        // Startup orphan reaper: a hard host kill skips graceful teardown and orphans a server holding its port and VRAM; it reaps ONLY binaries under our own llama.cpp cache root and never throws.
+        // AddSingleton, not AddHostedService: every runtime registers the shared StaleProcessReaper type, and AddHostedService dedupes by implementation type, so only the first would run.
+        services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("llama-server"),
             LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
-            sp.GetRequiredService<ILogger<StaleLlamaServerReaper>>()));
+            "llama-server",
+            logExecutablePath: true,
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
 
         // Startup notice: an active bring-your-own override is logged once at Warning, so it is obvious that an unverified operator-supplied binary is in use and
         // integrity hash verification is skipped. Nothing is logged when the override is unset, so a normal deploy is byte-behavior-unchanged.

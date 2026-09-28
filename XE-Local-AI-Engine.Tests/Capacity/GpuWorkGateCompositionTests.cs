@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The node registers exactly one GPU-work gate, so training, benchmarks and image jobs all admit through the same instance.</summary>

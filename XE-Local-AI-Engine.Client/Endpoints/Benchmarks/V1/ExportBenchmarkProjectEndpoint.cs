@@ -80,11 +80,6 @@ public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRo
         }, ct);
     }
 
-    private static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision)
-    {
-        var policy = revision?.PolicyJson is { } payload && !payload.IsEmpty
-            ? BenchmarkJudgeSerialization.DeserializePolicy(payload.Span)
-            : null;
-        return BenchmarkEndpointMapper.ToJudgePolicy(revision, policy);
-    }
+    private static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision) =>
+        BenchmarkEndpointMapper.ToJudgePolicy(revision, BenchmarkJudgeSerialization.DeserializeRevisionPolicy(revision));
 }

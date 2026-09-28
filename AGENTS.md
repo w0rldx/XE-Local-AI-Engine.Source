@@ -46,9 +46,12 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
 - `XE-Local-AI-Engine.AI.Agent` / `AI.Contracts` — Microsoft Agent Framework wiring / shared DTOs.
 - `XE-Local-AI-Engine.Providers.*` — runtimes and model sources; each depends only on `Providers.Abstractions`
   (reviewed exceptions: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`;
-  `Training` also uses `Providers.Python`, which itself references only `Providers.Abstractions`).
+  `Training` also uses `Providers.Python`; `LlamaServer`, `StableDiffusionCpp`, `WhisperCpp` and `Python` also use
+  `Providers.ProcessSupervision`, which references only `Providers.Abstractions`; `Python` references just those two).
 - `XE-Local-AI-Engine.Providers.Python` — shared managed-Python layer: pinned uv acquisition, uv environment
   allowlist, scrubbed tree-killed runner (ADR 0016). No feature semantics.
+- `XE-Local-AI-Engine.Providers.ProcessSupervision` — shared child-process containment: Linux process-group, Windows
+  Job Object and plain handles, stderr tail, stale-process reaper. No feature semantics.
 - `XE-Local-AI-Engine.AppHost` / `ServiceDefaults` — dev-only Aspire orchestration and telemetry defaults.
 - `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
 - `XE-Local-AI-Engine.Desktop` — Avalonia NativeWebView shell: window, activation, optionally engine lifetime; talks to

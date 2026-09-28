@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;

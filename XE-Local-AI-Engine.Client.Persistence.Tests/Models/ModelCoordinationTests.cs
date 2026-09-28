@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 [Category(TestCategories.Unit)]

@@ -70,6 +70,58 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
+    public async Task EnsureRunning_AliasSupported_ServesUnderTheRoutedModelIdNotItsPath()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        var aliasIndex = spec!.Arguments.ToList().IndexOf("--alias");
+        AssertEx.True(aliasIndex >= 0, "llama-server must answer to the routed model id instead of echoing the GGUF path.");
+        AssertEx.Equal("llama3", spec.Arguments[aliasIndex + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_AliasUnsupported_LaunchesWithoutIt()
+    {
+        const string helpWithoutAlias = """
+                                        -m, --model FNAME
+                                        --host HOST
+                                        --port PORT
+                                        --parallel N
+                                        --no-warmup
+                                        -c, --ctx-size N
+                                        -t, --threads N
+                                        -tb, --threads-batch N
+                                        --jinja
+                                        --cache-ram N
+                                        """;
+        var binary = new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cpu,
+            IsPinnedFallback = true
+        };
+        var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
+            executableLengthBytes: 1,
+            DateTimeOffset.UnixEpoch,
+            executableSha256: new string('a', 64),
+            version: "b10201",
+            helpWithoutAlias);
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            capabilityManifestProbe: new FakeLlamaServerCapabilityManifestProbe(manifest));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.False(spec!.Arguments.Contains("--alias"), "a runtime without --alias must not be handed the flag.");
+    }
+
+    [Test]
     public async Task EnsureRunning_EmbeddingRole_LaunchArgsContainEmbeddingsAndNonNonePooling()
     {
         var launcher = new FakeProcessLauncher();

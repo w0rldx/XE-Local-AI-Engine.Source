@@ -22,10 +22,6 @@ internal static class FakeOllamaEndpointMapper
 
         app.MapMethods("/", [HttpMethods.Head], () => Results.Ok());
         app.MapGet("/", () => Results.Text("Ollama is running"));
-        app.MapGet("/api/version", () => Results.Json(new
-        {
-            version = "0.0.0-fake"
-        }, SerializerOptions));
         app.MapGet("/api/ps", (Delegate)((HttpContext context) => PsEndpoint.HandleAsync(context, state)));
         app.MapGet("/api/tags", (Delegate)((HttpContext context) => TagsEndpoint.HandleAsync(context, state)));
         app.MapPost("/api/show", (Delegate)((HttpContext context) => ShowEndpoint.HandleAsync(context, state)));

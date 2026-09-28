@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>XE_Local_AI_Engine.Providers.LlamaServer</RootNamespace>
-    <!-- Required by LibraryImport source-gen marshalling stubs (Linux killpg + Windows Job Object P/Invoke). -->
+    <!-- Required by LibraryImport source-gen marshalling stubs (the libc stat/geteuid ownership check on a
+         bring-your-own runtime override). Process containment lives in Providers.ProcessSupervision. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -19,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.ProcessSupervision\XE-Local-AI-Engine.Providers.ProcessSupervision.csproj"/>
     <!-- The shared OpenAI-compatible wire layer (client construction + the request-body patch/chaining discipline).
          A deliberate, reviewed second edge for a provider project: it is a leaf transport library with no project
          references of its own, not a sibling provider, so the "providers never reach across to each other" rule the

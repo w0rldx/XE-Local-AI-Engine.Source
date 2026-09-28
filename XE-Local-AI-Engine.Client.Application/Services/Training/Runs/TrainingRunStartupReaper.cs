@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// <remarks>
 ///     Every recorded field is validated before anything is signalled — pid alive, process-group id, executable realpath,
 ///     <c>/proc</c> start time, and the run token in the child's own environment — because any mismatch means a recycled pid.
-///     That is the <c>SandboxOrphanReaper</c> model; <c>StaleLlamaServerReaper</c>'s kill-by-executable-root model would reap
+///     That is the <c>SandboxOrphanReaper</c> model; <c>StaleProcessReaper</c>'s kill-by-executable-root model would reap
 ///     any Python this node runs, since the trainer's executable is the shared venv interpreter. The scratch sweep is age-gated
 ///     like <c>GgufAcquisitionArtifactStartupReaper</c>: a <c>work/</c> directory past the stale window holds decrypted data.
 /// </remarks>

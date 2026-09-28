@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 /// <summary>
 ///     Projects created before the command-profile column existed carry a null profile and cannot execute. The

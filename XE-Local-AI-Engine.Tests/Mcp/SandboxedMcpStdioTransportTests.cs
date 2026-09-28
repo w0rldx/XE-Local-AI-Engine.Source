@@ -130,6 +130,44 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
+    public async Task ConnectAsync_CommandMissingOnTheHost_ThrowsFileNotFoundBeforeAnySandboxExists()
+    {
+        // Inside the jail a missing command is only an early exit, which the connection manager could not tell from any other, so
+        // the transport checks up front and the manager reports ServerNotFound.
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+        var transport = new SandboxedMcpStdioTransport(StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/nonexistent/xe-mcp-missing-server"
+            },
+            provider,
+            IdentityProvider(),
+            NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLoggerFactory.Instance);
+
+        _ = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
+
+        _ = await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    [Test]
+    public async Task PrivilegedHostLaunch_OfAMissingCommand_FailsAsAnIOExceptionWrappingTheWin32Error()
+    {
+        // Pins the SDK shape McpServerConnectionManager classifies as ServerNotFound: StdioClientTransport wraps a failed
+        // Process.Start in IOException("Failed to connect transport."). A new SDK that changes it turns this red first.
+        var record = StdioRecord(McpTrustTier.PrivilegedHost) with
+        {
+            Command = "/nonexistent/xe-mcp-missing-server"
+        };
+
+        var exception = await AssertEx.ThrowsAsync<IOException>(() => CreateFactory().CreateAsync(record, CancellationToken.None));
+
+        AssertEx.True(exception.InnerException is System.ComponentModel.Win32Exception, $"expected a Win32Exception inner exception, got {exception.InnerException?.GetType().Name ?? "none"}");
+    }
+
+    [Test]
     public void ResolveReadOnlyTrees_BindsTheWorkingDirectory_AndDropsATreeTheChainAlreadyOwns()
     {
         // The command's own directory is where a stdio server's launcher lives and the working directory is where its

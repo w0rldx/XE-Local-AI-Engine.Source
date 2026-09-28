@@ -17,21 +17,11 @@ internal sealed class StableDiffusionCppSourceBuildEventPublisher : IStableDiffu
     public Task PublishStatusAsync(StableDiffusionCppSourceBuildStatusEvent statusEvent, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        return _hubContext.Clients.All.SendAsync(StableDiffusionCppSourceBuildEvents.StatusChanged,
-            StableDiffusionCppSourceBuildStatusHubMessage.FromContract(statusEvent), ct);
+        return _hubContext.Clients.All.SendAsync(StableDiffusionCppSourceBuildHubEvents.StatusChanged,
+            ToHubMessage(statusEvent), ct);
     }
-}
 
-internal sealed class StableDiffusionCppSourceBuildStatusHubMessage
-{
-    public required string Phase { get; init; }
-    public required IReadOnlyList<string> AppendedLogLines { get; init; }
-    public required long AppendedLogStartSequence { get; init; }
-    public required bool Terminal { get; init; }
-    public string? SanitizedError { get; init; }
-    public StableDiffusionCppSourceBuildDescriptorHubMessage? CurrentBuild { get; init; }
-
-    public static StableDiffusionCppSourceBuildStatusHubMessage FromContract(StableDiffusionCppSourceBuildStatusEvent statusEvent)
+    private static StableDiffusionCppSourceBuildStatusHubMessage ToHubMessage(StableDiffusionCppSourceBuildStatusEvent statusEvent)
     {
         return new StableDiffusionCppSourceBuildStatusHubMessage
         {
@@ -40,24 +30,11 @@ internal sealed class StableDiffusionCppSourceBuildStatusHubMessage
             AppendedLogStartSequence = statusEvent.AppendedLogStartSequence,
             Terminal = statusEvent.Terminal,
             SanitizedError = statusEvent.SanitizedError,
-            CurrentBuild = statusEvent.CurrentBuild is null
-                ? null
-                : StableDiffusionCppSourceBuildDescriptorHubMessage.FromContract(statusEvent.CurrentBuild)
+            CurrentBuild = statusEvent.CurrentBuild is null ? null : ToDescriptorHubMessage(statusEvent.CurrentBuild)
         };
     }
-}
 
-internal sealed class StableDiffusionCppSourceBuildDescriptorHubMessage
-{
-    public required Guid BuildId { get; init; }
-    public required string Backend { get; init; }
-    public required string Source { get; init; }
-    public required string Repository { get; init; }
-    public required string RevisionMode { get; init; }
-    public string? RequestedCommit { get; init; }
-    public string? ResolvedCommit { get; init; }
-
-    public static StableDiffusionCppSourceBuildDescriptorHubMessage FromContract(StableDiffusionCppSourceBuildDescriptor descriptor)
+    private static StableDiffusionCppSourceBuildDescriptorHubMessage ToDescriptorHubMessage(StableDiffusionCppSourceBuildDescriptor descriptor)
     {
         var response = descriptor.ToResponse();
         return new StableDiffusionCppSourceBuildDescriptorHubMessage

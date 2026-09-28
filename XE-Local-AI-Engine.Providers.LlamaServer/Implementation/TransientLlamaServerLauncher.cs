@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <inheritdoc />
 internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLauncher
@@ -309,7 +310,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
     ///     Races readiness against the child dying. Without the exit arm, a model the runtime cannot load would burn
     ///     the whole readiness budget before reporting a failure the first second already proved.
     /// </summary>
-    private async Task WaitForReadyOrExitAsync(ILlamaServerProcessHandle handle,
+    private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle,
         Uri baseAddress,
         TimeSpan readinessTimeout,
         CancellationToken ct,
@@ -344,7 +345,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         }
     }
 
-    private static async Task WatchForExitAsync(ILlamaServerProcessHandle handle, CancellationToken ct)
+    private static async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
     {
         while (!handle.HasExited)
         {

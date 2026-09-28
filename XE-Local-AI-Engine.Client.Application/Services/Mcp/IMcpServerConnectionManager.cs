@@ -34,7 +34,8 @@ public interface IMcpServerConnectionManager
 /// </summary>
 /// <remarks>
 ///     <see cref="LastError" /> carries a short, redacted reason when the last connect or list attempt failed, with no
-///     host paths or secrets, and is <c>null</c> for a connected server. <see cref="Tools" /> lists the discovered
+///     host paths or secrets, and is <c>null</c> for a connected server; <see cref="FailureReason" /> classifies the same
+///     failure so the panel can word it, and is <c>null</c> exactly when <see cref="LastError" /> is. <see cref="Tools" /> lists the discovered
 ///     tools the management panel renders — qualified names, descriptions, approval flags — and is empty for a
 ///     disabled or errored server.
 /// </remarks>
@@ -49,6 +50,8 @@ public sealed record McpServerConnectionStatus
     public required int ToolCount { get; init; }
 
     public string? LastError { get; init; }
+
+    public McpConnectionFailureReason? FailureReason { get; init; }
 
     public required IReadOnlyList<McpServerToolInfo> Tools { get; init; }
 }

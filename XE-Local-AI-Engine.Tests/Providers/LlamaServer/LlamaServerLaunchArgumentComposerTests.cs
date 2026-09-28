@@ -45,6 +45,33 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     }
 
     [Test]
+    public void Composer_WhenAliasGiven_EmitsItSoTheServerNeverReportsTheModelPath()
+    {
+        var spec = BuildChatSpec(modelAlias: "org/model-GGUF:Q4_K_M");
+
+        var aliasIndex = spec.Arguments.ToList().IndexOf("--alias");
+        AssertEx.True(aliasIndex >= 0, "a supported runtime must be told the id clients route by.");
+        AssertEx.Equal("org/model-GGUF:Q4_K_M", spec.Arguments[aliasIndex + 1]);
+        AssertEx.Equal(expected: 1, spec.Arguments.Count(static argument => argument == "--alias"));
+    }
+
+    [Test]
+    public void Composer_WhenNoAlias_OmitsTheFlag()
+    {
+        var spec = BuildChatSpec(modelAlias: null);
+
+        AssertEx.False(spec.Arguments.Contains("--alias"), "a runtime without --alias support must not be handed the flag.");
+    }
+
+    [Test]
+    public void ManagedFlags_ReserveTheAliasTheComposerEmits()
+    {
+        // An operator alias would rename the model under the node's routing id, so it is refused on write and stripped on read like -m.
+        AssertEx.Contains(LlamaServerManagedFlags.All, "--alias");
+        AssertEx.Contains(LlamaServerManagedFlags.All, "-a");
+    }
+
+    [Test]
     [Arguments("-v")]
     [Arguments("--verbose")]
     [Arguments("--log-verbose")]
@@ -61,6 +88,18 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     public void HasVerbosityArgument_WhenNoVerbosityFlag_ReturnsFalse()
     {
         AssertEx.False(LlamaServerLaunchArgumentComposer.HasVerbosityArgument(["-m", "/fake/model.gguf", "--parallel", "1", "--no-warmup"]));
+    }
+
+    private static LlamaServerLaunchSpec BuildChatSpec(string? modelAlias)
+    {
+        return LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey("qwen3", ModelRole.Chat),
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Replay(ctxSize: 4096),
+            chatCacheReuse: 0,
+            modelAlias: modelAlias);
     }
 
     [Test]

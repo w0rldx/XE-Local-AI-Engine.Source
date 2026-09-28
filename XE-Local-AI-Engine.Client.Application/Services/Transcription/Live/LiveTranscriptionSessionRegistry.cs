@@ -302,6 +302,23 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     }
 
     /// <summary>
+    ///     Test seam: completes once every frame admitted so far has finished its handler, backlog bookkeeping
+    ///     included. Nothing in the product awaits it; ending a session drains the same chains itself.
+    /// </summary>
+    internal Task WhenAdmittedFramesHandledAsync(Guid sessionId)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            return Task.CompletedTask;
+        }
+
+        lock (session.Gate)
+        {
+            return Task.WhenAll(session.Lanes.Values.Select(static lane => lane.Chain));
+        }
+    }
+
+    /// <summary>
     ///     Ends every live session as cancelled, with a bounded drain so a wedged lane cannot hold the process open.
     /// </summary>
     public async ValueTask DisposeAsync()

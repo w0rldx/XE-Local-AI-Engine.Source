@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -38,7 +39,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 
     public int LaunchCount => Launches.Count;
 
-    public IImageServerProcessHandle Launch(ImageServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(ImageServerLaunchSpec spec)
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
@@ -55,7 +56,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 }
 
 /// <summary>An in-memory image-server handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeImageProcessHandle : IImageServerProcessHandle
+internal sealed class FakeImageProcessHandle : IProcessTreeHandle
 {
     private int _exited;
     private int _killed;
@@ -74,6 +75,10 @@ internal sealed class FakeImageProcessHandle : IImageServerProcessHandle
     public int? ExitCode { get; private set; }
 
     public string? StderrTail { get; private set; }
+
+    // The image and transcription supervisors never wait on a handle; a change that starts to must give this fake a real wait.
+    public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
+        throw new NotSupportedException("This supervisor does not wait on its process handle.");
 
     public void TreeKill()
     {

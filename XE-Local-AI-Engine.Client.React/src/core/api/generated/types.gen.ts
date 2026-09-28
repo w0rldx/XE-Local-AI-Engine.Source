@@ -4062,6 +4062,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = {
 	status: string;
 	error?: string | null;
+	failureReason?: XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason | null;
 	tools: Array<XeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse>;
 };
 
@@ -4393,6 +4394,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespons
 	isSourceBuild: boolean;
 	rebuildAvailable: boolean;
 	checkedAtUtc?: number | null;
+	overrideVariant?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = "cpu" | "vulkan" | "cuda";
@@ -6463,6 +6465,16 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 	| "Embedding"
 	| "Indexed"
 	| "Failed";
+
+export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
+	| "Unknown"
+	| "ServerNotFound"
+	| "SandboxUnavailable"
+	| "SandboxRefused"
+	| "Timeout"
+	| "Transport"
+	| "Protocol"
+	| "Authentication";
 
 export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
 

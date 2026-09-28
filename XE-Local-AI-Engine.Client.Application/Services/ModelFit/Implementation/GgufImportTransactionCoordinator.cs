@@ -447,31 +447,20 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
     private void Publish(GgufAcquisitionStatus status)
     {
-        _ = PublishAsync(new GgufDownloadStatusHubEvent
-        {
-            ModelName = status.ModelName,
-            Phase = status.Phase.ToString(),
-            CompletedBytes = status.CompletedBytes,
-            TotalBytes = status.TotalBytes,
-            SanitizedError = status.SanitizedError,
-            OperationId = status.OperationId,
-            OperationKind = status.OperationKind.ToString(),
-            ErrorCode = status.ErrorCode,
-            UpdatedAtUtc = status.UpdatedAtUtc
-        });
+        _ = PushStatusAsync(status);
     }
 
-    private async Task PublishAsync(GgufDownloadStatusHubEvent statusEvent)
+    private async Task PushStatusAsync(GgufAcquisitionStatus status)
     {
         try
         {
             // Fire-and-forget status push with no request token in scope; cancellation is intentionally not
             // propagated (MA0032/CA2016 opt-out).
-            await _eventPublisher.PublishStatusAsync(statusEvent, CancellationToken.None);
+            await _eventPublisher.PublishStatusAsync(status, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            _logger.LogDebug(exception, "Could not push GGUF acquisition status for {ModelName}.", statusEvent.ModelName);
+            _logger.LogDebug(exception, "Could not push GGUF acquisition status for {ModelName}.", status.ModelName);
         }
     }
 

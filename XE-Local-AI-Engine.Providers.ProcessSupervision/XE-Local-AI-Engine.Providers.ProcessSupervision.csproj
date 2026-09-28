@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.ProcessSupervision</RootNamespace>
+    <!-- Required by LibraryImport source-gen marshalling stubs (Linux kill + Windows Job Object P/Invoke). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- The one copy of the child-process containment the runtime providers share: the Linux process-group, Windows Job
+       Object and plain handles, the stderr tail and the stale-process scanner + reaper. A LEAF below the providers that
+       use it, holding the unsafe interop so Providers.Abstractions stays free of it; like Providers.Python it takes
+       Providers.Abstractions only, for PathContainment. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tests assert the stderr tail's pure path sanitizer directly. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
+</Project>

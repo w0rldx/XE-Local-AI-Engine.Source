@@ -125,6 +125,7 @@ internal static class McpServerMapper
                 _ => throw new UnreachableException($"Unknown MCP server tools status '{view.Status}'.")
             },
             Error = view.Error,
+            FailureReason = view.FailureReason,
             // The qualified name mcp__{serverSlug}__{tool} is the authoritative offered and executable name; the React
             // panel may strip the prefix for display.
             Tools =

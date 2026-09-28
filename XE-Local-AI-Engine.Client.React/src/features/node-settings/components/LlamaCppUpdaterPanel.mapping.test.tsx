@@ -53,5 +53,19 @@ describe("LlamaCppUpdaterPanel over the real query mapping", () => {
 		// of the file.
 		expect(await screen.findByTestId("llamacpp-updater-state-uptodate")).toBeTruthy();
 		expect(screen.queryByTestId("llamacpp-updater-state-notchecked")).toBeNull();
+		expect(screen.queryByTestId("llamacpp-updater-override-notice")).toBeNull();
+	});
+
+	it("says a bring-your-own override serves instead of the installed runtime", async () => {
+		server.use(
+			jsonRoute("get", "model-fit/llamacpp/runtime", { ...runtimeStatusDto, overrideVariant: "cuda" }),
+			jsonRoute("get", "model-fit/llamacpp/source-build/status", sourceBuildStatusDto),
+		);
+		renderWithProviders(<LlamaCppUpdaterPanel />);
+
+		// The installed CPU build stays listed; the notice is what stops the card implying that build serves.
+		expect((await screen.findByTestId("llamacpp-updater-override-notice")).textContent).toBe(
+			"A bring-your-own CUDA llama-server is serving models on this node. The installed runtime below is not in use while the override is set.",
+		);
 	});
 });

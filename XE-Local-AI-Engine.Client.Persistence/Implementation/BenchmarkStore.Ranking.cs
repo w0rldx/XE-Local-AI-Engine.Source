@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using static XE_Local_AI_Engine.Client.Persistence.Implementation.BenchmarkRankingPolicy;
@@ -329,21 +327,10 @@ public sealed partial class BenchmarkStore
             };
         }
 
-        BenchmarkPairwiseScoreEntry[] entries;
-        try
+        // Ranked as if no fit were published when the blob is unreadable, the same rule every other ScoresJson reader applies.
+        var entries = BenchmarkPairwiseFitScores.TryRead(fit, _logger);
+        if (entries is null)
         {
-            entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
-        }
-        catch (JsonException exception)
-        {
-            // Ranked as if no fit were published, the same rule every other ScoresJson reader applies. The exception is
-            // not attached: its message quotes the offending token, which is blob content.
-            _logger.LogWarning("Benchmark pairwise fit {FitId} of project {ProjectId} has unreadable scores (line {LineNumber}, byte {BytePosition}); "
-                               + "it is ranked as no pairwise score.",
-                fit.Id,
-                fit.ProjectId,
-                exception.LineNumber,
-                exception.BytePositionInLine);
             return new PairwiseRanking
             {
                 Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(),

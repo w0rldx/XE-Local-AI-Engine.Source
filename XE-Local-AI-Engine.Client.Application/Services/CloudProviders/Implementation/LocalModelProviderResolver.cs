@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.OpenAICompat;

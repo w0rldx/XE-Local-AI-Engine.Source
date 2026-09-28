@@ -262,6 +262,46 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Ranking_CurrentFitWithANullAndADuplicateEntry_SkipsTheNullKeepsTheFirstAndWarnsOncePerRead()
+    {
+        // The fitter never writes either, but a blob that does must not fail the run list or the cell table with an
+        // ArgumentException from ToDictionary. Same rule as the listing and the exports: skip null, first entry wins.
+        await using var context = await CreateSchemaAsync("ranking-duplicate.sqlite");
+        var logger = new RecordingLogger();
+        var store = new BenchmarkStore(context, TimeProvider.System, logger);
+        var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
+        _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
+        var setVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
+        AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:duplicate", setVersion, runs,
+            scoresJson: DefectiveScoresJson(runs[0], runs[1]))));
+        var fit = AssertEx.NotNull(await store.GetActivePairwiseFitAsync(project.Id));
+
+        var ranked = await store.ListAllRunsAsync(project.Id);
+        AssertEx.Equal(expected: 1, logger.Warnings.Count, "One read of a defective blob warns once.");
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
+        var cells = await store.ListCellsAsync(project.Id);
+
+        foreach (var items in new[] { ranked.Items, page.Items })
+        {
+            AssertEx.Equal<int?>(70, items.Single(run => run.Id == runs[0]).QualityScore, "The first entry for a run named twice wins.");
+            AssertEx.Equal<int?>(30, items.Single(run => run.Id == runs[1]).QualityScore);
+        }
+
+        AssertEx.True(cells.Cells.Any(static cell => cell.Quality is not null), "The cell table still ranks from the normalized fit.");
+        AssertEx.True(logger.Warnings.All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)));
+    }
+
+    /// <summary>A blob the fitter cannot write: a null element, then <paramref name="first" /> twice (70, then 10).</summary>
+    private static string DefectiveScoresJson(Guid first, Guid second) =>
+        "[null,"
+        + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(first, 70, 60, 80, 2, 1000, null), ScoreOptions)
+        + ","
+        + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(first, 10, 5, 15, 2, 1000, null), ScoreOptions)
+        + ","
+        + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(second, 30, 20, 40, 2, 1000, null), ScoreOptions)
+        + "]";
+
+    [Test]
     public async Task Ranking_ProjectThatNeverEnqueuedAComparison_StaysOnThePointwisePath()
     {
         await using var context = await CreateSchemaAsync("ranking-pointwise.sqlite");

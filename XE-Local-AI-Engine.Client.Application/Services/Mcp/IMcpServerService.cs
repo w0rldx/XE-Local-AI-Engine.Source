@@ -70,6 +70,9 @@ public sealed class McpServerToolsView
     /// <summary>The redacted reason; set only for <see cref="McpServerToolsStatus.Error" />.</summary>
     public required string? Error { get; init; }
 
+    /// <summary>What kind of failure <see cref="Error" /> describes; set only for <see cref="McpServerToolsStatus.Error" />.</summary>
+    public McpConnectionFailureReason? FailureReason { get; init; }
+
     /// <summary>Discovered tools; empty unless <see cref="McpServerToolsStatus.Connected" />.</summary>
     public required IReadOnlyList<McpServerToolInfo> Tools { get; init; }
 }

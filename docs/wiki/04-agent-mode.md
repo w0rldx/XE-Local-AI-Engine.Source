@@ -1028,6 +1028,19 @@ Development Mode, Dev Workflows, knowledge-repository import and host patch appl
 that legitimately stores CRLF — Development Mode derives that policy from the repository's own index
 (`DevelopmentWorkspaceWhitespacePolicy`) precisely so that it is not forced.
 
+**Which host git carries the hardening environment, and which deliberately does not.** `HostGitRunner` and
+`DevelopmentPatchEvidenceService` (its exact-bytes runner, which clears the environment and points `HOME` at the
+attempt's runtime directory) both apply every entry of `AgentHomeGitHardening.Environment` on top of the `-c` pins and
+the `.git/config` rewrite: the evidence service's `add -A` runs over an agent-written tree, so a driver defined in the
+system file or in that `HOME`'s `.gitconfig` would otherwise run when an in-tree `.gitattributes` names it.
+`TrustedDevelopmentHostApplyPort` deliberately **inherits** the operator's environment and global and system
+configuration: it runs against the operator's own registered repository with a human-approved patch hash, and that
+configuration is what makes the apply correct there — commit identity, credential helpers, `safe.directory` for
+other-owner or mounted repositories, and `core.autocrlf` on Windows, where changing it would change the applied bytes
+against the approved `PatchHash`. Its closure is the `-c` exec-key pins alone, and it never rewrites that repository's
+`.git/config` (`TrustedDevelopmentHostApplyPortHardeningTests`). The residual is stated: an approved patch whose
+`.gitattributes` names a driver the operator's own configuration already defines.
+
 Two residuals are stated rather than claimed away. The rewrite happens immediately before the invocation, so a
 process a `run_command` deliberately double-forked could in principle rewrite the file again in between — the
 same window Development Mode accepts, and not closable on a soft jail with no filesystem boundary. And a model

@@ -452,6 +452,7 @@ public sealed class McpServerEndpointTests
                 Connected = false,
                 ToolCount = 0,
                 LastError = "connect timed out",
+                FailureReason = McpConnectionFailureReason.Timeout,
                 Tools = []
             }
         ]);
@@ -465,6 +466,9 @@ public sealed class McpServerEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("error", body.Status);
         AssertEx.Equal("connect timed out", body.Error);
+        AssertEx.Equal(McpConnectionFailureReason.Timeout, body.FailureReason);
+        // The reason travels as its string name, the wire shape the generated client's union type is built from.
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "\"failureReason\":\"Timeout\"");
     }
 
     [Test]

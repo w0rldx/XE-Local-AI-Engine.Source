@@ -102,7 +102,7 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton(SandboxProviderSelector.ResolveAgent);
         builder.Services.AddSingleton(SandboxProviderSelector.ResolveDevelopment);
         // Startup sweep for sandbox children orphaned by a hard host kill (which skips the provider's Dispose/KillAsync
-        // paths entirely), mirroring AddHostedService<StaleLlamaServerReaper> in the llama.cpp provider.
+        // paths entirely), mirroring the llama.cpp provider's startup StaleProcessReaper.
         builder.Services.AddHostedService<SandboxOrphanReaper>();
         // AgentHome layout initializer. Materializes the worker-local /agent-home tree idempotently and can run while
         // AgentHome itself is disabled.

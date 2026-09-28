@@ -14,7 +14,7 @@ internal readonly record struct TrainingProcessStat(int Pgid, long StartTicks);
 /// <remarks>
 ///     The receipt-validation half of the <c>SandboxOrphanReaper</c> model: identity is proven from several
 ///     independent fields before anything is signalled, never from an executable-path match alone the way
-///     <c>StaleLlamaServerReaper</c> does it.
+///     the shared <c>StaleProcessReaper</c> does it.
 /// </remarks>
 internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessInspector
 {

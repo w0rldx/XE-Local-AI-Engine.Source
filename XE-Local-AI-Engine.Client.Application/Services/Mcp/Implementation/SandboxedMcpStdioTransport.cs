@@ -197,6 +197,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or change this server to the Privileged host tier if it genuinely needs access to this machine.");
         }
 
+        // In the jail a missing command is just an early exit. The jail inherits this PATH and sees only host trees, so a command
+        // absent here is absent there; a registration setting its own PATH is left to the launch.
+        if (!_record.Environment.ContainsKey("PATH") && ResolveExecutablePath(_record.Command) is null)
+        {
+            throw new FileNotFoundException($"The MCP server '{_record.Name}' command was not found on this node's PATH.");
+        }
+
         var identity = await _identityProvider.GetAsync(cancellationToken);
         var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken);
 

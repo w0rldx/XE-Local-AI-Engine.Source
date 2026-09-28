@@ -43,6 +43,8 @@ public sealed class LlamaLaunchArgumentParserTests
     [Arguments("--host 0.0.0.0", "--host")]
     [Arguments("--port 9999", "--port")]
     [Arguments("--top-k 40 --host=0.0.0.0", "--host")]
+    [Arguments("--alias my-model", "--alias")]
+    [Arguments("-a my-model", "-a")]
     // Memory-fit placement family — owned by the allocator/policy, so also rejected.
     [Arguments("-c 8192", "-c")]
     [Arguments("--ctx-size 8192", "--ctx-size")]

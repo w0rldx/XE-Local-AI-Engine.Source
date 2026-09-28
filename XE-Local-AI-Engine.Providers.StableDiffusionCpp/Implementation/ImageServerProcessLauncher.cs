@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
@@ -34,14 +36,14 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     }
 
     /// <inheritdoc />
-    public IImageServerProcessHandle Launch(ImageServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(ImageServerLaunchSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
         var label = spec.ModelName;
 
         // Retains the child's last stderr lines so a crash during model load is reported with the runtime's own words.
-        var stderrTail = new ImageServerStderrTail();
+        var stderrTail = new ProcessStderrTail();
 
         if (OperatingSystem.IsWindows())
         {
@@ -79,14 +81,18 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     }
 
     [SupportedOSPlatform("windows")]
-    private IImageServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
+#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
         var process = StartProcess(startInfo, label, stderrTail);
-        return WindowsImageJobObjectProcessHandle.Wrap(process, stderrTail);
+        return WindowsJobObjectProcessHandle.Wrap(process,
+            static ex => new StableDiffusionRuntimeException("The image runtime could not be contained for safe shutdown.", ex),
+            stderrTail);
+#pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
-    private IImageServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchLinux(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
         // Run sd-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the draining wired in StartProcess still captures the server's output.
@@ -95,18 +101,18 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxImageProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
+        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private IImageServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainImageProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
+        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
         var process = new Process
         {
@@ -142,7 +148,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     ///     Starts the detached drain loop for one of the child's streams. Detached on purpose: the handle owns the
     ///     process lifetime, and the loop ends by itself at EOF when the process exits or is tree-killed.
     /// </summary>
-    private void StartDrain(StreamReader reader, string label, ImageServerStderrTail? stderrTail)
+    private void StartDrain(StreamReader reader, string label, ProcessStderrTail? stderrTail)
     {
         _ = Task.Run(() => DrainAsync(reader, label, stderrTail), CancellationToken.None);
     }
@@ -154,7 +160,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     ///     Reads into a char buffer rather than calling <c>ReadLineAsync</c>, whose carriage-return handling waits to
     ///     see whether a line feed follows — the exact one-frame stall the splitter exists to avoid.
     /// </remarks>
-    private async Task DrainAsync(StreamReader reader, string label, ImageServerStderrTail? stderrTail)
+    private async Task DrainAsync(StreamReader reader, string label, ProcessStderrTail? stderrTail)
     {
         var buffer = new char[DrainBufferLength];
         var splitter = new SdOutputFrameSplitter(frame => ForwardLine(label, frame, stderrTail));
@@ -183,7 +189,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         splitter.Flush();
     }
 
-    private void ForwardLine(string label, string? line, ImageServerStderrTail? stderrTail)
+    private void ForwardLine(string label, string? line, ProcessStderrTail? stderrTail)
     {
         if (string.IsNullOrWhiteSpace(line))
         {

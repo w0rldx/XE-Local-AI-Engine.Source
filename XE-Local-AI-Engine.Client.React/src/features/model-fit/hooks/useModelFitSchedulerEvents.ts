@@ -46,7 +46,7 @@ const IGNORED_RUN_EVENTS = ["scheduler.runStarted", "scheduler.runProgress"] as 
 // to absorb client/server clock skew in the on-connect catch-up.
 const CLOCK_SKEW_TOLERANCE_MS = 1000;
 
-// Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). The event NAME discriminates the
+// Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubMessage). The event NAME discriminates the
 // outcome, so `status` is intentionally NOT typed — its C# enum wire-casing is unverified. errorMessage/runId are the
 // only extra fields read, and they are narrowed defensively because the payload is untrusted wire data.
 interface SchedulerRunEventPayload {

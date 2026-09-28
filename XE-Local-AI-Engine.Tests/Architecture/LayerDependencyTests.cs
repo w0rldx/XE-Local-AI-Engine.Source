@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -39,7 +40,7 @@ public sealed class LayerDependencyTests
     // root namespace, so that single prefix covers both. Persistence lives under
     // the distinct "...Client.Persistence" sub-namespace.
     // Non-vacuity floors for the two build-file scans below, set under the counts measured on 2026-09-16 (6
-    // repository .props/.targets files, 20 production projects; 22 once Providers.Python joined on 2026-09-27) so a
+    // repository .props/.targets files, 20 production projects; 22 once Providers.Python joined on 2026-09-27, 23 with Providers.ProcessSupervision) so a
     // planned addition or removal is not brittle.
     // A floor equal to its measurement is not rounded down: deleting one .props file would turn a real regression
     // into a red herring about the floor.
@@ -56,7 +57,8 @@ public sealed class LayerDependencyTests
     // forbidding OpenAICompatNamespace also forbids the shared transport core — correct for Abstractions (which must
     // depend on neither), and WRONG for LlamaServer, which legitimately depends on the core. The exact-name
     // assembly-reference maps above are the authoritative guard for those edges; do not add OpenAICompatNamespace to a
-    // provider's forbidden list.
+    // provider's forbidden list. "…Providers.ProcessSupervision" was checked against the same trap when it was added: it
+    // is a prefix of no other project's namespace and none is a prefix of it ("…Providers.Python" is not).
     private const string OpenAICompatNamespace = "XE_Local_AI_Engine.Providers.OpenAICompat";
     private const string LlamaServerNamespace = "XE_Local_AI_Engine.Providers.LlamaServer";
     private const string HuggingFaceNamespace = "XE_Local_AI_Engine.Providers.HuggingFace";
@@ -66,6 +68,7 @@ public sealed class LayerDependencyTests
     private const string WhisperCppNamespace = "XE_Local_AI_Engine.Providers.WhisperCpp";
     private const string TrainingNamespace = "XE_Local_AI_Engine.Providers.Training";
     private const string PythonNamespace = "XE_Local_AI_Engine.Providers.Python";
+    private const string ProcessSupervisionNamespace = "XE_Local_AI_Engine.Providers.ProcessSupervision";
     private const string AbstractionsNamespace = "XE_Local_AI_Engine.Providers.Abstractions";
     private const string AiAgentNamespace = "XE_Local_AI_Engine.AI.Agent";
 
@@ -81,6 +84,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
     private static readonly Assembly TrainingAssembly = typeof(ITrainingRuntimeService).Assembly;
     private static readonly Assembly PythonAssembly = typeof(ManagedPythonPins).Assembly;
+    private static readonly Assembly ProcessSupervisionAssembly = typeof(StaleProcessReaper).Assembly;
     private static readonly Assembly WhisperCppAssembly = typeof(WhisperCppReleasePins).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
@@ -155,10 +159,12 @@ public sealed class LayerDependencyTests
             // discipline — a duplicated copy is how the two would drift into sending different bodies for the same
             // intent. OpenAICompatible.Core is a LEAF with no project references of its own, so this widens the graph
             // by one downward edge and does not weaken the rule that matters: no provider references a sibling provider.
+            // The ProcessSupervision edge is the same kind of reviewed leaf edge; see its own entry below.
             ["XE-Local-AI-Engine.Providers.LlamaServer"] =
             [
                 "XE-Local-AI-Engine.Providers.Abstractions",
-                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
             ],
             ["XE-Local-AI-Engine.Providers.Ollama"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.OpenAICompat"] =
@@ -167,10 +173,21 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] = [],
+            // DELIBERATE, reviewed leaf (2026-09-27): the one copy of child-process containment four providers used to carry.
+            // It references Providers.Abstractions only and no provider, so its consumers still reach no sibling PROVIDER.
+            ["XE-Local-AI-Engine.Providers.ProcessSupervision"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             // The shared uv/Python machinery: a LEAF below every provider, but unlike the reference-free
-            // OpenAICompatible.Core it references Providers.Abstractions (for SetsidLocator).
-            ["XE-Local-AI-Engine.Providers.Python"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            // OpenAICompatible.Core it references Providers.Abstractions (for SetsidLocator) and ProcessSupervision.
+            ["XE-Local-AI-Engine.Providers.Python"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ],
+            ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ],
             // DELIBERATE, reviewed sibling edge (2026-09-27): Training installs through the uv pipeline it shares with
             // the compute tool, and Providers.Python references no provider, so no provider reaches a sibling PROVIDER.
             ["XE-Local-AI-Engine.Providers.Training"] =
@@ -178,7 +195,11 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Abstractions",
                 "XE-Local-AI-Engine.Providers.Python"
             ],
-            ["XE-Local-AI-Engine.Providers.WhisperCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
+            ["XE-Local-AI-Engine.Providers.WhisperCpp"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ]
         };
 
     // The direct-re-add guard that the compile-asset wall cannot provide (slice S5). PrivateAssets="compile" on
@@ -324,6 +345,12 @@ public sealed class LayerDependencyTests
                 "Microsoft.Extensions.AI.Abstractions",
                 "Microsoft.Extensions.AI.OpenAI"
             ],
+            // The stale reaper is an IHostedService; both packages are already in every host graph transitively.
+            ["XE-Local-AI-Engine.Providers.ProcessSupervision"] =
+            [
+                "Microsoft.Extensions.Hosting.Abstractions",
+                "Microsoft.Extensions.Logging.Abstractions"
+            ],
             ["XE-Local-AI-Engine.Providers.Python"] = [],
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] =
             [
@@ -445,7 +472,8 @@ public sealed class LayerDependencyTests
             [LlamaServerAssembly] =
             [
                 "XE-Local-AI-Engine.Providers.Abstractions",
-                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
             ],
             [OllamaAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [OpenAICompatAssembly] =
@@ -454,14 +482,27 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             [OpenAICompatibleCoreAssembly] = [],
-            [PythonAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            [StableDiffusionCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [ProcessSupervisionAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [PythonAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ],
+            [StableDiffusionCppAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ],
             [TrainingAssembly] =
             [
                 "XE-Local-AI-Engine.Providers.Abstractions",
                 "XE-Local-AI-Engine.Providers.Python"
             ],
-            [WhisperCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [WhisperCppAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.ProcessSupervision"
+            ],
             [ApplicationAssembly] =
             [
                 "XE-Local-AI-Engine.AI.Agent",
@@ -757,7 +798,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void StableDiffusionCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertTypesScanned(StableDiffusionCppAssembly, StableDiffusionCppNamespace, 100);
+        // 90, down from 100: its process handles, scanner, reaper and stderr tail moved to Providers.ProcessSupervision.
+        AssertTypesScanned(StableDiffusionCppAssembly, StableDiffusionCppNamespace, 90);
 
         AssertNoDependency(StableDiffusionCppAssembly,
             StableDiffusionCppNamespace,
@@ -808,6 +850,29 @@ public sealed class LayerDependencyTests
             StableDiffusionCppNamespace,
             WhisperCppNamespace,
             TrainingNamespace);
+    }
+
+    [Test]
+    public void ProvidersProcessSupervision_DoesNotDependOnApplicationPersistenceHostOrAnyProvider()
+    {
+        AssertTypesScanned(ProcessSupervisionAssembly, ProcessSupervisionNamespace, 8);
+
+        // Its four consumers are named explicitly: a helper that "just needs" one of their exception types would reverse
+        // the edge, which is why the Job Object containment failure is a factory argument.
+        AssertNoDependency(ProcessSupervisionAssembly,
+            ProcessSupervisionNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            OpenAICompatNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
+            CapabilitiesNamespace,
+            StableDiffusionCppNamespace,
+            WhisperCppNamespace,
+            TrainingNamespace,
+            PythonNamespace);
     }
 
     [Test]
@@ -875,7 +940,8 @@ public sealed class LayerDependencyTests
             CodexOAuthNamespace,
             CapabilitiesNamespace,
             OpenAICompatNamespace,
-            WhisperCppNamespace);
+            WhisperCppNamespace,
+            ProcessSupervisionNamespace);
     }
 
     [Test]

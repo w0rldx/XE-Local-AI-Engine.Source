@@ -28,12 +28,6 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
     }
 
     /// <inheritdoc />
-    public async Task<string?> GetRuntimeVersionAsync(CancellationToken ct)
-    {
-        return await _ollamaClient.GetVersionAsync(ct).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc />
     public async Task<IReadOnlyList<InstalledModelEntry>> ListInstalledModelsAsync(CancellationToken ct)
     {
         var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
@@ -42,30 +36,5 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
             Name = model.Name,
             Digest = model.Digest
         }).ToArray();
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct)
-    {
-        var runningModels = await _ollamaClient.ListRunningModelsAsync(ct).ConfigureAwait(false);
-        return runningModels
-               .Select(RunningModelSnapshotMapper.ToSnapshot)
-               .ToArray();
-    }
-
-    /// <inheritdoc />
-    public async Task<ModelCapabilityDetail> GetModelDetailAsync(string modelName, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-
-        var response = await _ollamaClient.ShowModelAsync(modelName, ct).ConfigureAwait(false);
-        var maxContextTokens = OllamaModelInfoReader.TryGetContextLength(response.Info?.ExtraInfo, out var contextLength)
-            ? contextLength
-            : (int?)null;
-
-        return new ModelCapabilityDetail
-        {
-            MaxContextTokens = maxContextTokens
-        };
     }
 }

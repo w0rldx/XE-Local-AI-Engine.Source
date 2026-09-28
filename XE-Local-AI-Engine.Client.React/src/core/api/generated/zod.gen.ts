@@ -4154,12 +4154,6 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse = z.o
 	requiresApproval: z.boolean(),
 });
 
-export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({
-	status: z.string(),
-	error: z.string().nullish(),
-	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse),
-});
-
 export const zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = z.object({
 	enabled: z.boolean().optional(),
 });
@@ -4521,6 +4515,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 	isSourceBuild: z.boolean(),
 	rebuildAvailable: z.boolean(),
 	checkedAtUtc: z.int().nullish(),
+	overrideVariant: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = z.object({
@@ -7099,6 +7094,24 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRe
 	documentId: z.guid(),
 	status: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
 	deduplicated: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason = z.enum([
+	"Unknown",
+	"ServerNotFound",
+	"SandboxUnavailable",
+	"SandboxRefused",
+	"Timeout",
+	"Transport",
+	"Protocol",
+	"Authentication",
+]);
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({
+	status: z.string(),
+	error: z.string().nullish(),
+	failureReason: zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason.nullish(),
+	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpDiscoveredToolResponse),
 });
 
 export const zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = z.enum(["delegate", "agentic"]);

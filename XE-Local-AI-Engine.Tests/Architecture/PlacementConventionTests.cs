@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -63,6 +64,7 @@ public sealed class PlacementConventionTests
         typeof(ExternalOpenAiModelProvider).Assembly,
         typeof(OpenAICompatibleClientFactory).Assembly,
         typeof(ManagedPythonPins).Assembly,
+        typeof(StaleProcessReaper).Assembly,
         typeof(IStableDiffusionBinaryManager).Assembly,
         typeof(ITrainingRuntimeService).Assembly,
         // Anchored on a public static class rather than the binary-manager interface the other providers use: the

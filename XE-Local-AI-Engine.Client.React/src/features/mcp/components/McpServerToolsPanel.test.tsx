@@ -15,20 +15,6 @@ vi.mock("@/features/mcp/queries/useMcpServers", () => ({
 	useMcpServerTools: useMcpServerToolsMock,
 }));
 
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({
-		t: (_key: string, defaultValue?: string, options?: Record<string, unknown>) => {
-			let text = defaultValue ?? _key;
-			if (options) {
-				for (const [name, value] of Object.entries(options)) {
-					text = text.replace(`{{${name}}}`, String(value));
-				}
-			}
-			return text;
-		},
-	}),
-}));
-
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -83,7 +69,7 @@ describe("McpServerToolsPanel", () => {
 	});
 
 	it("renders nothing when no server is selected", () => {
-		mockTools({ status: "disabled", error: null, tools: [] });
+		mockTools({ status: "disabled", error: null, failureReason: null, tools: [] });
 
 		const { container } = renderWithProviders(<McpServerToolsPanel serverId={null} />);
 
@@ -92,13 +78,12 @@ describe("McpServerToolsPanel", () => {
 	});
 
 	it("renders the connecting status as a distinct connecting label, not an error", () => {
-		mockTools({ status: "connecting", error: null, tools: [] });
+		mockTools({ status: "connecting", error: null, failureReason: null, tools: [] });
 
 		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
 
-		// The i18n mock returns the raw status as the fallback; the real "connecting…" label is verified by the
-		// locale parity check. What matters here is that connecting renders its own label, NOT the error one.
-		expect(screen.getByText("connecting")).toBeTruthy();
+		// Connecting renders its own label, NOT the error one.
+		expect(screen.getByText("connecting…")).toBeTruthy();
 		expect(screen.queryByText("error")).toBeNull();
 		// A connecting server (no error) does not render the red connection-error alert.
 		expect(screen.queryByTestId("mcp-server-tools-connection-error")).toBeNull();
@@ -108,6 +93,7 @@ describe("McpServerToolsPanel", () => {
 		mockTools({
 			status: "connected",
 			error: null,
+			failureReason: null,
 			tools: [{ name: "mcp__fs__read", description: "Reads a file.", requiresApproval: true }],
 		});
 
@@ -119,18 +105,59 @@ describe("McpServerToolsPanel", () => {
 		expect(screen.getByText("read")).toBeTruthy();
 	});
 
-	it("renders the error status and the redacted connection error", () => {
-		mockTools({ status: "error", error: "redacted reason", tools: [] });
+	it("renders the error status and the redacted connection error when no reason is reported", () => {
+		mockTools({ status: "error", error: "redacted reason", failureReason: null, tools: [] });
 
 		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
 
 		expect(screen.getByText("error")).toBeTruthy();
-		expect(screen.getByTestId("mcp-server-tools-connection-error")).toBeTruthy();
+		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain("redacted reason");
+	});
+
+	it("words a missing server command by its reason instead of the server's generic text", () => {
+		mockTools({
+			status: "error",
+			error: "The MCP server's command was not found or could not be started.",
+			failureReason: "ServerNotFound",
+			tools: [],
+		});
+
+		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+
+		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toBe(
+			"The server's command was not found or could not be started. Check the command and that it is installed on this machine.",
+		);
+	});
+
+	it("shows a sandbox refusal with the engine's remedy beneath it, distinct from a missing command", () => {
+		mockTools({
+			status: "error",
+			error: "Point the server's command or working directory at the directory holding its own files instead.",
+			failureReason: "SandboxRefused",
+			tools: [],
+		});
+
+		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+
+		const alert = screen.getByTestId("mcp-server-tools-connection-error");
+		expect(alert.textContent).toContain("The sandbox refused to start this server.");
+		expect(alert.textContent).toContain("Point the server's command or working directory");
+		expect(alert.textContent).not.toContain("was not found");
+	});
+
+	it("shows the engine's remedy when this node cannot sandbox at all", () => {
+		mockTools({ status: "error", error: "Install bubblewrap (bwrap).", failureReason: "SandboxUnavailable", tools: [] });
+
+		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+
+		const alert = screen.getByTestId("mcp-server-tools-connection-error");
+		expect(alert.textContent).toContain("This node cannot run a server in the sandbox.");
+		expect(alert.textContent).toContain("Install bubblewrap (bwrap).");
 	});
 
 	it("falls back gracefully to the raw label for an unknown status", () => {
 		// An unexpected status string must not crash — it renders the raw value (graceful fallback).
-		mockTools({ status: "future-state" as McpServerToolsView["status"], error: null, tools: [] });
+		mockTools({ status: "future-state" as McpServerToolsView["status"], error: null, failureReason: null, tools: [] });
 
 		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
 

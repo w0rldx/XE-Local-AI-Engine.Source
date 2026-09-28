@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { statusColor } from "@/features/mcp/models/McpStatusModel";
+import { hasEngineDetail, statusColor } from "@/features/mcp/models/McpStatusModel";
 import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
 import { toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 
@@ -15,7 +15,7 @@ interface McpServerToolsPanelProps {
 
 // Live discovered-tools + connection-status view for one MCP server (dynamic tool-catalog GetServerTools). Fetches on demand
 // when a server row is expanded. A disabled server reports "disabled" with no tools; a failed connection reports
-// "error" with a redacted message.
+// "error" with a message worded by its failure reason, plus the engine's remedy for a sandbox refusal.
 export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {
 	const { t } = useTranslation();
 	const toolsQuery = useMcpServerTools(serverId);
@@ -55,7 +55,16 @@ export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {
 				) : null}
 
 				{toolsQuery.data?.error ? (
-					<InlineErrorAlert message={toolsQuery.data.error} data-testid="mcp-server-tools-connection-error" />
+					<InlineErrorAlert
+						message={
+							toolsQuery.data.failureReason
+								? t(`pages.mcp.tools.failure.${toolsQuery.data.failureReason}`, toolsQuery.data.error)
+								: toolsQuery.data.error
+						}
+						data-testid="mcp-server-tools-connection-error"
+					>
+						{hasEngineDetail(toolsQuery.data.failureReason) ? <Text size="xs">{toolsQuery.data.error}</Text> : undefined}
+					</InlineErrorAlert>
 				) : null}
 
 				{toolsQuery.data && !toolsQuery.data.error && toolsQuery.data.tools.length === 0 ? (

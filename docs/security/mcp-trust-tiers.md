@@ -78,8 +78,17 @@ probe, so `NetworkPolicy = None` is enforced by the same mechanism `run_python` 
 refused before a process is launched. The refusal is engine-authored (it names no host path and no secret) and travels
 verbatim on `McpServerConnectionStatus.LastError` to the MCP settings page, naming the tier, the reason, and the two
 ways out — install bubblewrap plus the user-namespace support the containment probe reports as missing, or move the
-server to `PrivilegedHost` deliberately. This is the one MCP connection error that is not redacted to a generic
+server to `PrivilegedHost` deliberately. This is the one MCP connection error family that is not redacted to a fixed
 string, because a generic string here would be indistinguishable from the server simply being broken.
+
+Every failed status also carries `McpServerConnectionStatus.FailureReason` (`failureReason` on the tools response),
+which the settings page words in the operator's language. A sandbox failure is `SandboxUnavailable` when this node
+cannot isolate at all and `SandboxRefused` when it can but refused this registration (a denied root) or could not
+establish the boundary or launch the chain. A command that does not exist is `ServerNotFound` on both tiers: the
+`PrivilegedHost` launch fails in `Process.Start`, and the `Sandboxed` transport checks the command against the `PATH`
+the jail inherits before any sandbox is created, since inside the jail it would only be an early exit. `Timeout`,
+`Transport`, `Protocol`, `Authentication` and `Unknown` cover the rest with one fixed wording each; the exception
+itself is logged at Warning and never reaches the UI.
 
 **Windows.** `HostSandboxContainmentProbe` reports `SandboxContainment.None` on Windows because there is no Job
 Object containment implementation. `Sandboxed` is unavailable there, so every stdio server refuses to start with the

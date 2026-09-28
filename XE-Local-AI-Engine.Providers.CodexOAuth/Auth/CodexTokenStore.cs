@@ -90,8 +90,7 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await File.WriteAllBytesAsync(_tokensPath, protectedPayload, cancellationToken).ConfigureAwait(false);
-            SecureFilePermissions.Apply(_tokensPath);
+            await SecureFilePermissions.WriteAllBytesAtomicAsync(_tokensPath, protectedPayload, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

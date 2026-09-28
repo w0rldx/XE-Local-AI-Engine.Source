@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
@@ -372,7 +373,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         var port = await AllocatePortAsync(spawnCt).ConfigureAwait(false);
 
-        IImageServerProcessHandle? handle = null;
+        IProcessTreeHandle? handle = null;
         try
         {
             // The binary's OWN backend drives the launch flags — a bring-your-own override may serve a different backend
@@ -446,7 +447,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     sd-server binds its socket only after a successful model load, so an exit-before-ready is a deterministic
     ///     load failure: surface it immediately instead of polling a dead endpoint for the full budget.
     /// </remarks>
-    private async Task WaitForReadyOrExitAsync(IImageServerProcessHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
+    private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -480,7 +481,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     The exit code and sanitized stderr tail of a child that died during load, appended to the user-facing
     ///     sentence. Empty when the OS reported neither.
     /// </summary>
-    private static string DescribeExit(IImageServerProcessHandle handle)
+    private static string DescribeExit(IProcessTreeHandle handle)
     {
         var code = handle.ExitCode is { } exitCode
             ? string.Create(CultureInfo.InvariantCulture, $" The runtime reported exit code {exitCode}.")
@@ -489,7 +490,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return code + tail;
     }
 
-    private async Task WatchForExitAsync(IImageServerProcessHandle handle, CancellationToken ct)
+    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -866,7 +867,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // 0 while running, 1 once it died on its own (and was logged), 2 once the supervisor tore it down on purpose.
         private int _exitKind;
 
-        public RunningServer(IImageServerProcessHandle handle,
+        public RunningServer(IProcessTreeHandle handle,
             ImageServerEndpoint endpoint,
             int port,
             DateTimeOffset startedUtc,
@@ -880,7 +881,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             Port = port;
         }
 
-        public IImageServerProcessHandle Handle { get; }
+        public IProcessTreeHandle Handle { get; }
 
         public IImageRuntimeActivityLease ResidentLease { get; }
 

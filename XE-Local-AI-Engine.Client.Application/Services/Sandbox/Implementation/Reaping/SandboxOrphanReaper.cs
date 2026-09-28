@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Startup <see cref="IHostedService" /> that reaps sandbox children orphaned by a previous run of THIS app, and the stale jails they
-///     left behind; the direct structural mirror of <c>StaleLlamaServerReaper</c>.
+///     left behind; the direct structural mirror of <c>StaleProcessReaper</c>.
 /// </summary>
 /// <remarks>
 ///     A hard host kill skips <c>Dispose</c> and <c>KillAsync</c>, leaving the child process group running and its jail on disk. Three

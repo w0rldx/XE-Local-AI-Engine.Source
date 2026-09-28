@@ -65,7 +65,7 @@ public sealed class SupervisorBenchmarkReceiptTests
         // and nothing beyond the placement probe this change adds. The port is allocated per spawn, so the assertion
         // starts at the first flag whose value the launch decides.
         var tail = string.Join(' ', spec!.Arguments.SkipWhile(static a => !string.Equals(a, "--parallel", StringComparison.Ordinal)));
-        AssertEx.Equal("--parallel 1 --no-warmup --metrics -c 8192 --n-gpu-layers 24 -ctk q8_0 -ctv q8_0 --flash-attn on "
+        AssertEx.Equal("--parallel 1 --no-warmup --alias llama3 --metrics -c 8192 --n-gpu-layers 24 -ctk q8_0 -ctv q8_0 --flash-attn on "
                        + "--jinja --cache-ram 0 -lv 4",
             tail);
         AssertEx.False(spec.Arguments.Contains("-t"), "A GPU spawn carries no CPU thread policy.");

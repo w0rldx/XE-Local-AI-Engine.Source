@@ -34,9 +34,7 @@ public sealed class BenchmarkRecordService
     {
         ArgumentNullException.ThrowIfNull(project);
         var revision = await _store.GetCurrentJudgePolicyRevisionAsync(project.Id, cancellationToken);
-        var policy = revision?.PolicyJson is { } payload && !payload.IsEmpty
-            ? BenchmarkJudgeSerialization.DeserializePolicy(payload.Span)
-            : null;
+        var policy = BenchmarkJudgeSerialization.DeserializeRevisionPolicy(revision);
         return new BenchmarkProjectDetail
         {
             Project = project,

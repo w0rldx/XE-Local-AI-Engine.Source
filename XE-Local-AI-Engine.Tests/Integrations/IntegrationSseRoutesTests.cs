@@ -29,8 +29,10 @@ public sealed class IntegrationSseRoutesTests
 {
     private const string EventStream = "text/event-stream";
 
-    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
-    public required TestServerWebAppFactory Factory { get; init; }
+    [ClassDataSource<IntegrationSseRoutesHostFixture>(Shared = SharedType.PerClass)]
+    public required IntegrationSseRoutesHostFixture Host { get; init; }
+
+    private TestServerWebAppFactory Factory => Host.Factory;
 
     /// <summary>Test 30 — the two shapes of an accepted invoke, chosen by <c>Accept</c>.</summary>
     [Test]
@@ -65,17 +67,28 @@ public sealed class IntegrationSseRoutesTests
         var seeded = await SeedAsync(client, "invoke-queue-full");
 
         // The per-principal admission cap is 2, and every seeded row counts as active.
-        for (var index = 0; index < 2; index++)
+        var held = new List<Guid>();
+        try
         {
-            _ = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false, active: true);
+            for (var index = 0; index < 2; index++)
+            {
+                held.Add(await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false, active: true));
+            }
+
+            using var response = await SendAsync(client, HttpMethod.Post, IntegrationApiRoutes.Invoke(seeded.TriggerName), seeded.BroadKey, EventStream);
+
+            AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            AssertEx.Equal("5", response.Headers.RetryAfter?.ToString());
+            AssertEx.Equal("application/json", response.Content.Headers.ContentType?.MediaType,
+                "Every rejection happens before the Accept branch, so it is a real status on an unstarted response.");
         }
-
-        using var response = await SendAsync(client, HttpMethod.Post, IntegrationApiRoutes.Invoke(seeded.TriggerName), seeded.BroadKey, EventStream);
-
-        AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        AssertEx.Equal("5", response.Headers.RetryAfter?.ToString());
-        AssertEx.Equal("application/json", response.Content.Headers.ContentType?.MediaType,
-            "Every rejection happens before the Accept branch, so it is a real status on an unstarted response.");
+        finally
+        {
+            foreach (var executionId in held)
+            {
+                await TerminalizeAsync(executionId);
+            }
+        }
     }
 
     /// <summary>Test 32 — resume.</summary>
@@ -195,27 +208,34 @@ public sealed class IntegrationSseRoutesTests
         using var client = Factory.CreateClient();
         var seeded = await SeedAsync(client, "events-json");
         var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false, active: true);
-        for (var sequence = 2; sequence <= 6; sequence++)
+        try
         {
-            await PersistEventAsync(executionId, sequence, IntegrationStreamEventTypes.ToolStarted, $$"""{"name":"tool{{sequence}}"}""");
+            for (var sequence = 2; sequence <= 6; sequence++)
+            {
+                await PersistEventAsync(executionId, sequence, IntegrationStreamEventTypes.ToolStarted, $$"""{"name":"tool{{sequence}}"}""");
+            }
+
+            // Not tracked at all, which is the exact state a restart or a TTL sweep leaves behind.
+            AssertEx.False(Factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>().IsTracked(executionId));
+
+            using var page = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=0&limit=5000", seeded.BroadKey, "application/json");
+
+            AssertEx.Equal(HttpStatusCode.OK, page.StatusCode, "The persisted shape reads the database, so it never answers 410.");
+            var rows = AssertEx.NotNull(await page.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
+            AssertEx.True(rows.Length <= IntegrationEventPage.MaxLimit, "A limit of 5000 is clamped, because a bounded page is the point.");
+            AssertEx.True(rows.Select(static row => row.Sequence).SequenceEqual([1L, 2L, 3L, 4L, 5L, 6L]));
+            AssertEx.Empty(rows.Where(static row => row.EventType.StartsWith("assistant.", StringComparison.Ordinal)));
+            AssertEx.Equal("""{"name":"tool2"}""", rows[1].DetailJson, "detailJson crosses the wire as decrypted text.");
+
+            // Paging is by watermark: hand the last sequence back and get the next page with no repeat.
+            using var next = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=3", seeded.BroadKey, "application/json");
+            var tail = AssertEx.NotNull(await next.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
+            AssertEx.True(tail.Select(static row => row.Sequence).SequenceEqual([4L, 5L, 6L]), "sinceSeq is exclusive.");
         }
-
-        // Not tracked at all, which is the exact state a restart or a TTL sweep leaves behind.
-        AssertEx.False(Factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>().IsTracked(executionId));
-
-        using var page = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=0&limit=5000", seeded.BroadKey, "application/json");
-
-        AssertEx.Equal(HttpStatusCode.OK, page.StatusCode, "The persisted shape reads the database, so it never answers 410.");
-        var rows = AssertEx.NotNull(await page.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
-        AssertEx.True(rows.Length <= IntegrationEventPage.MaxLimit, "A limit of 5000 is clamped, because a bounded page is the point.");
-        AssertEx.True(rows.Select(static row => row.Sequence).SequenceEqual([1L, 2L, 3L, 4L, 5L, 6L]));
-        AssertEx.Empty(rows.Where(static row => row.EventType.StartsWith("assistant.", StringComparison.Ordinal)));
-        AssertEx.Equal("""{"name":"tool2"}""", rows[1].DetailJson, "detailJson crosses the wire as decrypted text.");
-
-        // Paging is by watermark: hand the last sequence back and get the next page with no repeat.
-        using var next = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=3", seeded.BroadKey, "application/json");
-        var tail = AssertEx.NotNull(await next.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
-        AssertEx.True(tail.Select(static row => row.Sequence).SequenceEqual([4L, 5L, 6L]), "sinceSeq is exclusive.");
+        finally
+        {
+            await TerminalizeAsync(executionId);
+        }
     }
 
     /// <summary>Test 36c — the link that makes the recovery route discoverable without reading the docs.</summary>
@@ -270,22 +290,29 @@ public sealed class IntegrationSseRoutesTests
     {
         using var client = Factory.CreateClient();
         var seeded = await SeedAsync(client, "admin-events");
-        // Left live on purpose: the closing row a terminalized seed writes would sit above the three this asserts on.
+        // Live until the assertions are done: the closing row a terminalized seed writes would sit above the three this asserts on.
         var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false, active: true);
-        await PersistEventAsync(executionId, sequence: 2, IntegrationStreamEventTypes.ToolStarted, """{"name":"read_file"}""");
-        await PersistEventAsync(executionId, sequence: 3, IntegrationStreamEventTypes.ExecutionCompleted, detailJson: null);
+        try
+        {
+            await PersistEventAsync(executionId, sequence: 2, IntegrationStreamEventTypes.ToolStarted, """{"name":"read_file"}""");
+            await PersistEventAsync(executionId, sequence: 3, IntegrationStreamEventTypes.ExecutionCompleted, detailJson: null);
 
-        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
-            client,
-            HttpMethod.Get,
-            $"/api/local/v1/integrations/executions/{executionId:D}/events");
+            using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+                client,
+                HttpMethod.Get,
+                $"/api/local/v1/integrations/executions/{executionId:D}/events");
 
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<EventListBody>(IntegrationEndpointPayloads.Json));
-        AssertEx.True(body.Items.Select(static item => item.Sequence).SequenceEqual([1L, 2L, 3L]), "The accepted event is row one, and the page ascends.");
-        AssertEx.Equal("""{"name":"read_file"}""", body.Items[1].DetailJson, "The store hands back decrypted text; no consumer ever sees the stored byte[].");
-        AssertEx.Empty(body.Items.Where(static item => item.EventType.StartsWith("assistant.", StringComparison.Ordinal)),
-            "Per-token deltas are stream-only and the final text lives on the owned conversation.");
+            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<EventListBody>(IntegrationEndpointPayloads.Json));
+            AssertEx.True(body.Items.Select(static item => item.Sequence).SequenceEqual([1L, 2L, 3L]), "The accepted event is row one, and the page ascends.");
+            AssertEx.Equal("""{"name":"read_file"}""", body.Items[1].DetailJson, "The store hands back decrypted text; no consumer ever sees the stored byte[].");
+            AssertEx.Empty(body.Items.Where(static item => item.EventType.StartsWith("assistant.", StringComparison.Ordinal)),
+                "Per-token deltas are stream-only and the final text lives on the owned conversation.");
+        }
+        finally
+        {
+            await TerminalizeAsync(executionId);
+        }
     }
 
     /// <summary>Test 38 — the loopback middleware passes a non-browser caller that sends no Origin.</summary>
@@ -487,26 +514,35 @@ public sealed class IntegrationSseRoutesTests
 
         if (!active)
         {
-            // Closed on the way out: the factory is shared across this class, and a row left Accepted counts against
-            // the node-wide admission cap for every later test in it.
-            AssertEx.True(await store.TryTerminalizeAsync(new IntegrationTerminalizeCommand
-            {
-                ExecutionId = executionId,
-                ExpectedVersion = 0,
-                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
-                {
-                    IntegrationExecutionStatus.Accepted
-                },
-                NewStatus = IntegrationExecutionStatus.Completed,
-                Sequence = 1_000,
-                EventType = IntegrationStreamEventTypes.ExecutionCompleted,
-                EndedAtUtc = now,
-                FailureCategory = null,
-                FailureSummary = null
-            }));
+            await TerminalizeAsync(executionId);
         }
 
         return executionId;
+    }
+
+    /// <summary>
+    ///     Closes a seeded row, so it stops counting against the shared host's admission caps. An <c>active</c> seed is
+    ///     closed in its test's own <c>finally</c>, once the assertions are done.
+    /// </summary>
+    private async Task TerminalizeAsync(Guid executionId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        AssertEx.True(await scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>()
+                                 .TryTerminalizeAsync(new IntegrationTerminalizeCommand
+                                 {
+                                     ExecutionId = executionId,
+                                     ExpectedVersion = 0,
+                                     ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
+                                     {
+                                         IntegrationExecutionStatus.Accepted
+                                     },
+                                     NewStatus = IntegrationExecutionStatus.Completed,
+                                     Sequence = 1_000,
+                                     EventType = IntegrationStreamEventTypes.ExecutionCompleted,
+                                     EndedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                     FailureCategory = null,
+                                     FailureSummary = null
+                                 }));
     }
 
     private async Task PersistEventAsync(Guid executionId, long sequence, string eventType, string? detailJson)
@@ -615,6 +651,29 @@ public sealed class IntegrationSseRoutesTests
     private sealed record StatusLinksBody(Guid ExecutionId, LinksBody Links);
 
     private sealed record LinksBody(string Self, string Events);
+}
+
+/// <summary>The shared host of <see cref="IntegrationSseRoutesTests" />, with room for every row its concurrent tests hold.</summary>
+/// <remarks>
+///     Every seeded row is active from its accept until it is closed, and the default node-wide cap of 8 counts every
+///     principal, so a burst of concurrent seeds refused the one real invoke with a 503. The per-principal cap of 2,
+///     which the queue-full test asserts, is untouched.
+/// </remarks>
+public sealed class IntegrationSseRoutesHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = new()
+    {
+        AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["Integrations:MaxQueuedExecutions"] = "64"
+        }
+    };
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
 }
 
 /// <summary>

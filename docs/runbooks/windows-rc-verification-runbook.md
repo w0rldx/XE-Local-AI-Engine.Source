@@ -25,7 +25,7 @@ function llama  { Get-Process llama-server -ErrorAction SilentlyContinue | Selec
 ```
 
 Note `llama-server` — the OS process table carries no extension on Windows, even though the file on disk is
-`llama-server.exe` (`OsStaleLlamaServerProcessScanner.LlamaServerProcessName`).
+`llama-server.exe` (the process name the llama.cpp provider hands the shared `OsStaleProcessScanner`).
 
 ### What changed since the last revision of this runbook
 
@@ -40,6 +40,11 @@ what is left for you:
   tree-kill *and* the `TerminateProcess` hard-kill path in the ordinary backend suite, with a negative control
   showing Windows does not reap orphans on its own. What you still add is a real `llama-server.exe` holding real
   VRAM through a real driver.
+- **Since 2026-09-27 the sd-server and whisper-server launchers contain their child through the same
+  `WindowsJobObjectProcessHandle`** (`Providers.ProcessSupervision`) instead of their own copies, so
+  `WindowsJobObjectTreeKillTests` now covers all three runtimes. That suite has not yet run on Windows against the
+  shared class: run it on this host (`--treenode-filter '/*/*/WindowsJobObjectTreeKillTests/*'`) and record the
+  result; a real `sd-server.exe` / `whisper-server.exe` tree-kill is still owed on real Windows.
 - **Check 5** — the `core.autocrlf` question is answered (the `i/` column is unaffected; the design is right), and
   the CRLF gate failure plus its fix are reproduced end-to-end on real Windows git. NTFS junctions now have tests.
   `MAX_PATH` on a box with long paths *disabled* is still open.
@@ -163,7 +168,7 @@ check 2 to confirm — that is a P0: the Job Object is the only orphan defence o
 
 ## 2. Stale-orphan reaper on the next start (second-order confirmation of check 1)
 
-**What it proves.** Independently confirms whether the Job Object held. `StaleLlamaServerReaper` is an
+**What it proves.** Independently confirms whether the Job Object held. The llama-server `StaleProcessReaper` is an
 `IHostedService` that on every start scans for `llama-server` processes under this app's own binaries root and
 kills them — so **reaper lines in the log mean the Job Object did NOT hold**, even if check 1 looked clean
 because you were slow to observe.
@@ -892,6 +897,35 @@ degraded state, now with a truthful vendor.
 **Also record even if everything passes**: the wall-clock delay between launching the app and the first-run
 provisioning line appearing. The adapter query is now on that path for non-NVIDIA boxes and its cost has not been
 measured on Windows.
+
+---
+
+## 10. Host wiring moved by the 2026-09-27 project cleanup
+
+Linux-proven only; nothing below has run on Windows. Each item is pass/fail.
+
+1. **Launch mode through `NodeLaunchContext`.** `Program.CreateAppCoreAsync` now resolves
+   `DesktopLaunch.ResolveLaunchMode` + `VelopackInstall.IsManaged()` once and registers `NodeLaunchContext`. Start the
+   Velopack-installed RC with no `XE_LAUNCH_MODE` and no `--desktop`: it must come up in Desktop mode, and on a fresh
+   profile `FirstRunModelProvisioningService` must provision exactly as before (first-run line in the log, model
+   offered or downloaded). Start the raw published exe from a console with no flags: it must stay headless and
+   first-run provisioning must follow that mode. **Fail:** a managed install that starts headless, or first-run
+   provisioning that runs in the wrong mode.
+2. **`FfmpegExecutableLocator` on Windows.** With `ffmpeg.exe` on `PATH`, the whisper runtime status must report
+   ffmpeg found and an upload of a non-WAV file must transcribe; with `ffmpeg.exe` removed from `PATH` (new
+   console), the status must report it missing, not an exception. **Fail:** ffmpeg present but
+   reported missing, or a 500.
+3. **JWT events (`NodeJwtBearerEvents`).** Sign in, reload, let the access token refresh, then change the password in a
+   second browser: the first browser's next API call or SignalR reconnect must be refused (security-stamp check) and
+   land on the sign-in page. A SignalR hub must connect with the token from the query string. **Fail:** an old
+   session that keeps working after the password change, or hubs that never connect.
+4. **Hub wire DTOs moved into `Client/Hubs`.** In the desktop shell, watch a llama.cpp runtime acquisition or
+   source build, an image-runtime source build, a GGUF download, an image job, a scheduler run and a knowledge
+   document indexing: each progress/status view must update live without a page reload, and the browser console
+   must show no SignalR deserialization errors. **Fail:** a view that updates only after reload.
+5. **Shared process containment.** Covered by checks 1 and 2 (`WindowsJobObjectProcessHandle` now serves
+   llama-server, sd-server and whisper-server): repeat check 1's hard kill once with an image job running and once
+   with live transcription running, and confirm no `sd-server.exe` / `whisper-server.exe` survives.
 
 ---
 

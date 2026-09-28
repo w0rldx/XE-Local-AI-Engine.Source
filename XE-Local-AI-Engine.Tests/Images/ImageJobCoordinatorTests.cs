@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -36,7 +37,7 @@ public sealed class ImageJobCoordinatorTests
         // regardless of any later transition the detached worker makes.
         var buffered = harness.Coordinator.SnapshotBufferedEvents(jobId);
         AssertEx.NotEmpty(buffered);
-        var first = (ImageJobStatusHubEvent)buffered[0].Payload;
+        var first = buffered[0];
         AssertEx.Equal(ImageJobStatus.Queued.ToString(), first.Phase);
         AssertEx.Equal(expected: 0L, first.Seq);
         AssertEx.Equal(jobId, first.JobId);
@@ -185,7 +186,7 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("cold spawn"), CancellationToken.None);
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
 
-        var phases = harness.Coordinator.SnapshotBufferedEvents(jobId).Select(static item => ((ImageJobStatusHubEvent)item.Payload).Phase).ToList();
+        var phases = harness.Coordinator.SnapshotBufferedEvents(jobId).Select(static item => item.Phase).ToList();
         var firstGenerating = phases.IndexOf(ImageJobStatus.Generating.ToString());
         AssertEx.True(firstGenerating > 0, "The job must have been published Generating.");
         AssertEx.False(phases.Skip(firstGenerating).Contains(ImageJobStatus.Queued.ToString()), $"The job was rewound to Queued: {string.Join(", ", phases)}");
@@ -411,7 +412,7 @@ public sealed class ImageJobCoordinatorTests
     public async Task ImageJobHub_WhenLateSubscriber_ReplaysBufferedEventsInSeqOrder()
     {
         var jobId = Guid.NewGuid();
-        var event0 = new ImageJobStatusHubEvent
+        var event0 = new ImageJobStatusEvent
         {
             JobId = jobId,
             Phase = ImageJobStatus.Queued.ToString(),
@@ -422,7 +423,7 @@ public sealed class ImageJobCoordinatorTests
             OccurredAtUtc = 1,
             Seq = 0
         };
-        var event1 = new ImageJobStatusHubEvent
+        var event1 = new ImageJobStatusEvent
         {
             JobId = jobId,
             Phase = ImageJobStatus.Generating.ToString(),
@@ -435,19 +436,7 @@ public sealed class ImageJobCoordinatorTests
         };
 
         var coordinator = Substitute.For<IImageJobCoordinator>();
-        coordinator.SnapshotBufferedEvents(jobId).Returns(new[]
-        {
-            new ImageJobBufferedEvent
-            {
-                MethodName = ImageJobHubEvents.StatusChanged,
-                Payload = event0
-            },
-            new ImageJobBufferedEvent
-            {
-                MethodName = ImageJobHubEvents.StatusChanged,
-                Payload = event1
-            }
-        });
+        coordinator.SnapshotBufferedEvents(jobId).Returns([event0, event1]);
 
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
@@ -470,8 +459,8 @@ public sealed class ImageJobCoordinatorTests
         await groups.Received(1).AddToGroupAsync("conn-1", ImageJobHub.JobGroup(jobId), Arg.Any<CancellationToken>());
         Received.InOrder(() =>
         {
-            caller.SendCoreAsync(ImageJobHubEvents.StatusChanged, Arg.Is<object?[]>(args => args.Length == 1 && ReferenceEquals(args[0], event0)), Arg.Any<CancellationToken>());
-            caller.SendCoreAsync(ImageJobHubEvents.StatusChanged, Arg.Is<object?[]>(args => args.Length == 1 && ReferenceEquals(args[0], event1)), Arg.Any<CancellationToken>());
+            caller.SendCoreAsync(ImageJobHubEvents.StatusChanged, Arg.Is<object?[]>(args => args.Length == 1 && ((ImageJobStatusHubMessage)args[0]!).Seq == 0), Arg.Any<CancellationToken>());
+            caller.SendCoreAsync(ImageJobHubEvents.StatusChanged, Arg.Is<object?[]>(args => args.Length == 1 && ((ImageJobStatusHubMessage)args[0]!).Seq == 1), Arg.Any<CancellationToken>());
         });
     }
 

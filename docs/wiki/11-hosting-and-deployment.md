@@ -125,8 +125,8 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `SchedulerHistoryRetentionService`, `SchedulerJobDetailReconciliationService` | `NodeSchedulerServiceCollectionExtensions` | scheduler history sweep and the Quartz job-detail startup self-heal (see [Scheduler](06-scheduler.md)) |
 | `KeepModelWarmBackgroundService`, `LlamaCppUpdateCheckService` | `AddNodeModelRuntimeExtensions` | opt-in local-model residency keeper, and the one-shot llama.cpp runtime update check (see [Local Runtime & Providers](03-local-runtime-and-providers.md)) |
 | `ImageJobStartupReconciler`, `DevelopmentStartupReconciler`, `LocalModelDeletionStartupReconciler`, `SandboxOrphanReaper`, `DetachedInvocationReaper` | their feature modules | restart reconciliation and orphan reaping |
-| `StaleLlamaServerReaper`, `CudaBuildStartupService`, `LlamaServerRuntimeOverrideStartupNotice` | `Providers.LlamaServer` | see [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| `StaleImageServerReaper`, `StableDiffusionCppSourceBuildLifecycle` | `Providers.StableDiffusionCpp` | see [Image Generation](14-image-generation.md) |
+| `StaleProcessReaper` (llama-server instance), `CudaBuildStartupService`, `LlamaServerRuntimeOverrideStartupNotice` | `Providers.LlamaServer` | see [Local Runtime & Providers](03-local-runtime-and-providers.md) |
+| `StaleProcessReaper` (sd-server instance), `StableDiffusionCppSourceBuildLifecycle` | `Providers.StableDiffusionCpp` | see [Image Generation](14-image-generation.md) |
 | `GgufAcquisitionArtifactStartupReaper` | `Providers.HuggingFace` | sweeps partial GGUF acquisition artifacts left by a previous run |
 
 ### First-run model provisioning (desktop)
@@ -308,7 +308,7 @@ Windows. Installation never enables autostart by default.
 - **Linux `SIGHUP`** (terminal close) → a `PosixSignalRegistration` with `context.Cancel = true` → `StopApplication()`.
 - **Windows `CTRL_CLOSE_EVENT` / logoff / shutdown** → a `SetConsoleCtrlHandler` callback (kept rooted so the GC can't reclaim the native delegate) that calls `StopApplication()` then **blocks up to ~4s** (`ConsoleCloseDrainBudget`, safely under Windows' ~5s force-kill window) for the drain.
 
-The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/Implementation/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
+The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.ProcessSupervision/WindowsJobObjectProcessHandle.cs`, shared by the llama-server, sd-server and whisper-server launchers) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
 
 ---
 
@@ -423,7 +423,7 @@ Windows Portable ZIP or Linux AppImage:
 - `publish/windows/uninstall-xe-local-ai-engine.ps1` (packaged as `Uninstall-XE-Local-AI-Engine.ps1`) — PowerShell 5.1-compatible.
 - `publish/linux/uninstall-xe-local-ai-engine.sh` (packaged as `uninstall-xe-local-ai-engine.sh`) — plain POSIX `sh`.
 
-Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring `StaleLlamaServerReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
+Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring the startup `StaleProcessReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
 
 - **Velopack-managed install detected** (a `current/` dir or `Update`/`Update.exe` helper at the data-dir root — on the default Windows layout the managed install root *is* the data dir): the script **does not delete** the tree. It delegates to Velopack (on Windows it can best-effort invoke `Update.exe --uninstall`; otherwise it points at the OS "Apps & features" uninstall) and stops. This is the safety valve that prevents brute-force-deleting a live managed install.
 - **Portable / manual install** (no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.

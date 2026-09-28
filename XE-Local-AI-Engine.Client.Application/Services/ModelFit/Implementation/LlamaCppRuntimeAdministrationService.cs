@@ -94,7 +94,8 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             UpdateAvailable = snapshot.UpdateAvailable,
             IsOffline = snapshot.IsOffline,
             RunningProcessCount = _processSupervisor.CountRunningProcesses(),
-            CheckedAtUtc = snapshot.CheckedAtUtc
+            CheckedAtUtc = snapshot.CheckedAtUtc,
+            OverrideVariant = _overrideOptions.IsActive ? _overrideOptions.Variant : null
         };
     }
 

@@ -1723,6 +1723,7 @@
 					"upToDate": "Aktuell",
 					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
 					"noPrebuiltHint": "llama.cpp veröffentlicht für diesen Knoten keinen vorgefertigten {{variant}}-Build. Erstelle ihn über die Karte „llama.cpp aus Quellcode bauen“ unten oder wähle eine andere Variante.",
+					"overrideNotice": "Ein eigener {{variant}}-llama-server (Bring your own) stellt auf diesem Knoten die Modelle bereit. Die unten installierte Laufzeit wird nicht verwendet, solange die Überschreibung gesetzt ist.",
 					"installedSourceBuildNotice": "Entferne die installierte, aus Quellcode erstellte Laufzeit, bevor eine vorgefertigte Laufzeit installiert wird.",
 					"activeSourceBuildNotice": "Warte, bis der aktive Quellbuild abgeschlossen ist, oder brich ihn ab, bevor eine vorgefertigte Laufzeit installiert wird.",
 					"openLoadedModels": "Geladene Modelle öffnen",
@@ -3611,6 +3612,16 @@
 					"disabled": "deaktiviert",
 					"error": "Fehler",
 					"connecting": "verbindet…"
+				},
+				"failure": {
+					"Unknown": "Die Verbindung zum MCP-Server ist fehlgeschlagen.",
+					"ServerNotFound": "Der Befehl des Servers wurde nicht gefunden oder konnte nicht gestartet werden. Prüfe den Befehl und ob er auf diesem Rechner installiert ist.",
+					"SandboxUnavailable": "Dieser Knoten kann keinen Server in der Sandbox ausführen.",
+					"SandboxRefused": "Die Sandbox hat den Start dieses Servers verweigert.",
+					"Timeout": "Zeitüberschreitung beim Verbinden mit dem MCP-Server.",
+					"Transport": "Die Verbindung zum MCP-Server ist fehlgeschlagen oder wurde geschlossen.",
+					"Protocol": "Der MCP-Server hat den MCP-Handshake nicht abgeschlossen.",
+					"Authentication": "Der MCP-Server hat die Anmeldedaten abgelehnt, oder die TLS-Aushandlung ist fehlgeschlagen."
 				}
 			},
 			"delete": {

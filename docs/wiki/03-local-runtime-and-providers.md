@@ -48,7 +48,7 @@ Both come from **Microsoft.Extensions.AI (MEAI)**. The provider returns them; th
 
 `Client.Application/Services/CloudProviders/Implementation/LocalModelProviderResolver.cs` collects all registered `ILocalModelProvider`s into a **case-insensitive map keyed by `ProviderName`** (last registration wins, so a host can override a provider). It resolves a `defaultProviderName` and carries `MaxLoadedProcesses`. With Ollama de-orchestrated in dev, the default resolves to `llamacpp`.
 
-Other abstraction-project contracts worth knowing: `IModelCapabilityClient` (runtime/version/installed/running probes), `INodeDataDirectory` (where node data lives), `IProcessVramBudgetProbe` (llama.cpp's process-local VRAM budget, §2.5), `IGgufMetadataReader` (header facts incl. MoE expert count), and the `Gguf/*` family (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`, `GgufModelName`, `GgufFilePath`) which is the shared GGUF vocabulary the llama-server and HuggingFace projects both speak. The same `Gguf/` folder now also holds the **quant-quality single source of truth** — `QuantLadder` (the curated best→worst quant ladder + `Q3_K_M` quality floor) and `GgufQuantQuality` (coarse `GgufQuantTier` classifier) — moved here so both the advisor's memory-fit step-down and the download picker's per-row badge read one table. The advisor side is detailed in [07-model-fit.md](07-model-fit.md).
+Other abstraction-project contracts worth knowing: `IModelCapabilityClient` (runtime-reachability and installed-model probes), `INodeDataDirectory` (where node data lives), `IProcessVramBudgetProbe` (llama.cpp's process-local VRAM budget, §2.5), `IGgufMetadataReader` (header facts incl. MoE expert count), and the `Gguf/*` family (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`, `GgufModelName`, `GgufFilePath`) which is the shared GGUF vocabulary the llama-server and HuggingFace projects both speak. The same `Gguf/` folder now also holds the **quant-quality single source of truth** — `QuantLadder` (the curated best→worst quant ladder + `Q3_K_M` quality floor) and `GgufQuantQuality` (coarse `GgufQuantTier` classifier) — moved here so both the advisor's memory-fit step-down and the download picker's per-row badge read one table. The advisor side is detailed in [07-model-fit.md](07-model-fit.md).
 
 ---
 
@@ -289,7 +289,7 @@ mutation gate remain the implemented seams.
 
 ### No-orphan shutdown guarantee
 
-This is the safety property the launcher exists for. `LlamaServerProcessLauncher.Launch` picks an OS-specific containment primitive so closing the handle tree-kills the whole descendant tree:
+This is the safety property the launcher exists for. `LlamaServerProcessLauncher.Launch` picks an OS-specific containment primitive so closing the handle tree-kills the whole descendant tree. The three handles live in `Providers.ProcessSupervision` and are shared with the sd-server and whisper-server launchers:
 
 | OS | Containment | Tree-kill mechanism |
 |---|---|---|
@@ -346,7 +346,7 @@ Rule 2 is what makes an in-app CUDA build usable on Linux: `ICudaManagedBuildSig
 
 Sources 1 and 2 short-circuit acquisition completely — no download, no cache write, no `installed-runtime.json` mutation. Both are constrained by a **no-silent-CPU invariant**: a configured-but-broken override, or a recorded source build that is missing/invalid/variant-mismatched, throws a sanitized failure (`ManagedSourceBuildUnavailableMessage`) rather than falling through to a CPU binary that would then be launched with GPU placement flags. For a recorded-but-invalid source build the record and the cached signal are cleared first, so the node self-heals to the normal path on the next serve.
 
-**The BYO override** (`Options/LlamaServerRuntimeOverrideOptions.cs`) is built **only** from process environment variables — `XE_LLAMACPP_SERVER_PATH` (absolute path) and `XE_LLAMACPP_VARIANT` (`cpu`/`cuda`/`vulkan`, default `cuda`) — via `FromEnvironment()`. It is never bound from `IConfiguration`, the node-settings store, or any request DTO: a lower-trust write to that path would be arbitrary-binary execution at app privilege, and skipping the SHA256 pin is sound *only* under that containment. A set-but-unparseable variant fails fast at startup. The binary is served as the override's **own** declared variant, never the caller-passed one.
+**The BYO override** (`Options/LlamaServerRuntimeOverrideOptions.cs`) is built **only** from process environment variables — `XE_LLAMACPP_SERVER_PATH` (absolute path) and `XE_LLAMACPP_VARIANT` (`cpu`/`cuda`/`vulkan`, default `cuda`) — via `FromEnvironment()`. It is never bound from `IConfiguration`, the node-settings store, or any request DTO: a lower-trust write to that path would be arbitrary-binary execution at app privilege, and skipping the SHA256 pin is sound *only* under that containment. A set-but-unparseable variant fails fast at startup. The binary is served as the override's **own** declared variant, never the caller-passed one. The runtime-status response (`GET model-fit/llamacpp/runtime`) carries that variant as `overrideVariant` (never the path) so the Node Settings runtime card can say the override, not the installed build, is serving.
 
 **3-tier tag resolution** for the prebuilt path (`ResolveActiveTagAsync`, `LlamaCppBinaryManager.cs`):
 
@@ -514,7 +514,7 @@ Three properties are load-bearing:
 
 - **Two flag families are refused on write and stripped on read** by `LlamaLaunchArgumentParser.ParseSanitized`
   (`Services/Inference/LlamaLaunchArgumentParser.cs`), over the provider's `LlamaServerManagedFlags` — the same list
-  `LlamaServerLaunchArgumentComposer` emits from, so a newly managed flag is one edit: *reachability* (`-m`/`--model`, `--host`, `--port`) and the
+  `LlamaServerLaunchArgumentComposer` emits from, so a newly managed flag is one edit: *reachability* (`-m`/`--model`, `--host`, `--port`, and `-a`/`--alias`, which the composer sets to the routed model id so relayed responses never name the GGUF host path) and the
   *memory-fit placement* family (`-c`, `-ngl`, `-ts`, `-ot`, `-ctk`/`-ctv`, `-fa`, `--parallel`, `-b`/`-ub` and
   their long aliases), plus `--lora`/`--lora-scaled`. Placement is decided before admission and recorded in the
   memory ledger, so a post-hoc override would invalidate the ledger, defeat the KV-quant safe-config retry, and

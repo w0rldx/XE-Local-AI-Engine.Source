@@ -44,7 +44,7 @@ public sealed class ImageJobHub : Hub
 
         foreach (var bufferedEvent in _coordinator.SnapshotBufferedEvents(jobId))
         {
-            await Clients.Caller.SendAsync(bufferedEvent.MethodName, bufferedEvent.Payload, ct);
+            await Clients.Caller.SendAsync(ImageJobHubEvents.StatusChanged, ImageJobEventPublisher.ToHubMessage(bufferedEvent), ct);
         }
     }
 

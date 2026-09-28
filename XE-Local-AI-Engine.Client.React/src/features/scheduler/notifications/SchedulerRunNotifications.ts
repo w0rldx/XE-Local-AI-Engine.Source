@@ -19,7 +19,7 @@ const TERMINAL_EVENT_NAMES = new Set(["scheduler.runCompleted", "scheduler.runFa
 
 type Translate = (key: string) => string;
 
-// Sanitized run payload (camelCase wire shape of SchedulerRunHubEvent). Only the safe display fields are read; the
+// Sanitized run payload (camelCase wire shape of SchedulerRunHubMessage). Only the safe display fields are read; the
 // payload is untrusted wire data, so every field is narrowed defensively and non-strings become undefined.
 function readStringField(payload: unknown, key: "runId" | "errorMessage"): string | undefined {
 	if (typeof payload !== "object" || payload === null) {

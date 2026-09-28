@@ -63,6 +63,9 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<L
         _localChatClientCacheInvalidator.ClearClientCache();
         var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct);
         var installed = await _runtime.ReadInstalledRuntimeAsync(ct);
-        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct);
+        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed,
+            recommendedTag,
+            runningProcessCount,
+            _runtime.OverrideVariant), ct);
     }
 }

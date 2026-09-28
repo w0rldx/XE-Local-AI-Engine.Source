@@ -327,37 +327,24 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         PublishStatus(status);
     }
 
-    // Maps the internal status to the sanitized hub event at the broadcast boundary (no internal type leaks) and pushes it
-    // fire-and-forget: the synchronous Progress<T> callback must not block byte flow, so a push failure is only debug-logged.
+    // Pushes fire-and-forget: the synchronous Progress<T> callback must not block byte flow, so a push failure is only
+    // debug-logged. The hub publisher owns the wire projection.
     private void PublishStatus(GgufAcquisitionStatus status)
     {
-        var hubEvent = new GgufDownloadStatusHubEvent
-        {
-            ModelName = status.ModelName,
-            Phase = status.Phase.ToString(),
-            CompletedBytes = status.CompletedBytes,
-            TotalBytes = status.TotalBytes,
-            SanitizedError = status.SanitizedError,
-            OperationId = status.OperationId,
-            OperationKind = status.OperationKind.ToString(),
-            ErrorCode = status.ErrorCode,
-            UpdatedAtUtc = status.UpdatedAtUtc
-        };
-
-        _ = PublishStatusAsync(hubEvent);
+        _ = PushStatusAsync(status);
     }
 
-    private async Task PublishStatusAsync(GgufDownloadStatusHubEvent hubEvent)
+    private async Task PushStatusAsync(GgufAcquisitionStatus status)
     {
         try
         {
             // Fire-and-forget from a synchronous Progress<T> callback: there is no request token here, and the push
             // must outlive the caller, so cancellation is intentionally not propagated (MA0032/CA2016 opt-out).
-            await _eventPublisher.PublishStatusAsync(hubEvent, CancellationToken.None);
+            await _eventPublisher.PublishStatusAsync(status, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            _logger.LogDebug(exception, "Could not push the GGUF download status for {ModelName}; the list endpoint still serves it.", hubEvent.ModelName);
+            _logger.LogDebug(exception, "Could not push the GGUF download status for {ModelName}; the list endpoint still serves it.", status.ModelName);
         }
     }
 

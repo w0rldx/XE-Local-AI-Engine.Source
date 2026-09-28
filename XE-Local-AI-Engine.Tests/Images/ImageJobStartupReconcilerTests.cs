@@ -218,9 +218,9 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
 
     private sealed class RecordingImageJobEventPublisher : IImageJobEventPublisher
     {
-        public ConcurrentQueue<ImageJobStatusHubEvent> Published { get; } = new();
+        public ConcurrentQueue<ImageJobStatusEvent> Published { get; } = new();
 
-        public Task PublishStatusAsync(ImageJobStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        public Task PublishStatusAsync(ImageJobStatusEvent statusEvent, CancellationToken cancellationToken = default)
         {
             Published.Enqueue(statusEvent);
             return Task.CompletedTask;

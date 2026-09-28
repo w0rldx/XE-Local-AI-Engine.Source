@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 /// <summary>
 ///     Performs content-free, exact-match authorization immediately before each selected-cloud transport round.

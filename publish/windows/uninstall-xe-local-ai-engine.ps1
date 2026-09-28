@@ -7,7 +7,7 @@
       1. Stops any running XE Local AI Engine process and the llama-server / sd-server
          child runtimes THIS app spawned (matched strictly by executable path under the
          app's own per-user data directory - an unrelated llama-server/Ollama is never
-         touched, mirroring the app's own StaleLlamaServerReaper).
+         touched, mirroring the app's own StaleProcessReaper).
       2. If a Velopack-managed install is detected, notes that Velopack/the OS uninstall
          owns the app binaries and points at it (this script does not delete a managed
          install tree - Velopack does).
@@ -85,7 +85,7 @@ Write-Host ""
 # 1. Stop running processes
 
 # True when $Path is under $Root (or equal), case-insensitive, with a trailing-separator
-# guard so a sibling-prefix directory can never match (mirrors StaleLlamaServerReaper).
+# guard so a sibling-prefix directory can never match (mirrors StaleProcessReaper).
 function Test-UnderDirectory {
     param([string] $Path, [string] $Root)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }

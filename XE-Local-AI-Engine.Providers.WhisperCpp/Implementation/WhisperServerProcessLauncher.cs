@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -27,12 +29,12 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     }
 
     /// <inheritdoc />
-    public IWhisperServerProcessHandle Launch(WhisperServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(WhisperServerLaunchSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
         var label = spec.ModelId;
-        var stderrTail = new WhisperServerStderrTail();
+        var stderrTail = new ProcessStderrTail();
 
         if (OperatingSystem.IsWindows())
         {
@@ -70,14 +72,18 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     }
 
     [SupportedOSPlatform("windows")]
-    private IWhisperServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
+#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
         var process = StartProcess(startInfo, label, stderrTail);
-        return WindowsWhisperJobObjectProcessHandle.Wrap(process, stderrTail);
+        return WindowsJobObjectProcessHandle.Wrap(process,
+            static ex => new WhisperRuntimeException("The transcription runtime could not be contained for safe shutdown.", ex),
+            stderrTail);
+#pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
-    private IWhisperServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchLinux(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
         // Run whisper-server under `setsid` so it leads a new process group; tree-kill is then kill(-pgid). The server
         // inherits setsid's redirected stdout/stderr, so the draining wired in StartProcess still captures its output.
@@ -86,18 +92,18 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxWhisperProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
+        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private IWhisperServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
+    private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainWhisperProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
+        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
         var process = new Process
         {
@@ -133,12 +139,12 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     ///     Starts the detached drain loop for one of the child's streams. Detached on purpose: the handle owns the
     ///     process lifetime, and the loop ends by itself at EOF when the process exits or is tree-killed.
     /// </summary>
-    private void StartDrain(StreamReader reader, string label, WhisperServerStderrTail? stderrTail)
+    private void StartDrain(StreamReader reader, string label, ProcessStderrTail? stderrTail)
     {
         _ = Task.Run(() => DrainAsync(reader, label, stderrTail), CancellationToken.None);
     }
 
-    private async Task DrainAsync(StreamReader reader, string label, WhisperServerStderrTail? stderrTail)
+    private async Task DrainAsync(StreamReader reader, string label, ProcessStderrTail? stderrTail)
     {
         try
         {

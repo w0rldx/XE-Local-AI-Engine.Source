@@ -34,5 +34,6 @@ export function toLlamaCppRuntimeStatus(
 		runningProcessCount: dto.runningProcessCount ?? 0,
 		isSourceBuild: dto.isSourceBuild ?? false,
 		rebuildAvailable: dto.rebuildAvailable ?? false,
+		overrideVariant: dto.overrideVariant ?? null,
 	};
 }

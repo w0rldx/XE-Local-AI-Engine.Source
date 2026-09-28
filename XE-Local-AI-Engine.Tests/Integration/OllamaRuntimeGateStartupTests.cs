@@ -32,16 +32,10 @@ public sealed class OllamaRuntimeGateStartupTests
 
         // Resolving the reporter forces the container to activate the prober, which is where the missing
         // IModelCapabilityClient used to surface as a host-build failure.
-        AssertEx.NotNull(factory.Services.GetRequiredService<ICapabilityReporter>(),
-            "ICapabilityReporter must resolve with XE_OLLAMA_RUNTIME_ENABLED=false; the no-op capability client is what keeps the host buildable.");
+        var reporter = factory.Services.GetRequiredService<ICapabilityReporter>();
 
-        var prober = factory.Services.GetRequiredService<ModelCapabilityProber>();
-        var status = await prober.DetectOllamaRuntimeAsync(CancellationToken.None);
-
-        AssertEx.False(status.Reachable, "With the Ollama runtime gated off the node must report the runtime unreachable, not throw.");
-        AssertEx.Null(status.Version, "An unreachable runtime reports no version.");
-        AssertEx.Contains(status.Diagnostics, "ollama-unreachable",
-            "The gate-off report must carry the same diagnostic a desktop without an Ollama daemon carries.");
+        AssertEx.False(await reporter.VerifyOllamaAndModelAsync(modelName: null, CancellationToken.None),
+            "With the Ollama runtime gated off the preflight must report the runtime unreachable, not throw.");
     }
 
     [Test]
@@ -51,12 +45,7 @@ public sealed class OllamaRuntimeGateStartupTests
         var cancellationToken = CancellationToken.None;
 
         AssertEx.False(await client.IsRuntimeReachableAsync(cancellationToken), "The absent runtime is never reachable.");
-        AssertEx.Null(await client.GetRuntimeVersionAsync(cancellationToken), "The absent runtime reports no version.");
         AssertEx.Empty(await client.ListInstalledModelsAsync(cancellationToken), "The absent runtime has no installed models.");
-        AssertEx.Empty(await client.ListRunningModelsAsync(cancellationToken), "The absent runtime has no running models.");
-
-        var detail = await client.GetModelDetailAsync("any-model", cancellationToken);
-        AssertEx.Null(detail.MaxContextTokens, "The absent runtime cannot report a max context length.");
     }
 
     [Test]

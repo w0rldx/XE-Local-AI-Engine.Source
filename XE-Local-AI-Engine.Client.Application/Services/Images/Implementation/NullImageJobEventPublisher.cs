@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.Images.Implementation;
 /// </summary>
 public sealed class NullImageJobEventPublisher : IImageJobEventPublisher
 {
-    public Task PublishStatusAsync(ImageJobStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public Task PublishStatusAsync(ImageJobStatusEvent statusEvent, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }

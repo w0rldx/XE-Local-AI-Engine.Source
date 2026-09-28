@@ -1,0 +1,89 @@
+namespace XE_Local_AI_Engine.Client.Services.Development.Implementation;
+
+/// <summary>
+///     Detects which code-owned command profile fits a registered repository.
+/// </summary>
+/// <remarks>
+///     Detection is a proposal: it runs against the trusted host repository root at registration time and its result
+///     is shown to the operator for confirmation, because a repository the agent can write must never choose its own
+///     build commands. A repository with no recognizable .NET build system resolves to
+///     <see cref="DevelopmentCommandProfileCatalog.GenericGit" />, named in the confirmation step and stamped on
+///     every artifact the gate produces, so a report that checked only whitespace says so.
+/// </remarks>
+internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandProfileDetector
+{
+    /// <summary>
+    ///     How deep to look for a project file. Solutions are expected at the repository root; a single-project
+    ///     repository commonly nests one or two levels (<c>src/Lib/Lib.csproj</c>). Deeper than this and the right
+    ///     answer is a solution file, not a guess.
+    /// </summary>
+    private const int MaxProjectSearchDepth = 3;
+
+    private const int MaxCandidates = 50;
+
+    public DevelopmentProfileDetection Detect(string repositoryRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repositoryRoot);
+
+        // A solution wins over a project file even when both exist: it is the target that builds and tests the whole
+        // repository, which is what the validation gate is supposed to measure.
+        var solutions = EnumerateRelative(canonical, "*.slnx", 1)
+                        .Concat(EnumerateRelative(canonical, "*.sln", 1))
+                        .Take(MaxCandidates)
+                        .ToArray();
+        if (solutions.Length > 0)
+        {
+            return new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.DotnetSlnx,
+                BuildTarget = solutions[0],
+                Candidates = solutions
+            };
+        }
+
+        var projects = EnumerateRelative(canonical, "*.csproj", MaxProjectSearchDepth)
+                       .Take(MaxCandidates)
+                       .ToArray();
+        return projects.Length > 0
+            ? new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.DotnetCsproj,
+                BuildTarget = projects[0],
+                Candidates = projects
+            }
+            : new DevelopmentProfileDetection
+            {
+                ProfileId = DevelopmentCommandProfileCatalog.GenericGit,
+                BuildTarget = null,
+                Candidates = []
+            };
+    }
+
+    /// <summary>
+    ///     Enumerates matching files as repository-relative forward-slash paths, ordered so detection is deterministic
+    ///     for a given tree.
+    /// </summary>
+    /// <remarks>
+    ///     A non-deterministic first candidate would make the confirmed profile depend on filesystem enumeration
+    ///     order, and so make its digest unstable across machines.
+    /// </remarks>
+    private static IEnumerable<string> EnumerateRelative(string root, string pattern, int maxDepth)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = maxDepth > 1,
+            MaxRecursionDepth = Math.Max(maxDepth - 1, 0),
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+
+        return Directory.EnumerateFiles(root, pattern, options)
+                        .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+                        .Where(static relative => !relative.StartsWith(".git/", StringComparison.OrdinalIgnoreCase)
+                                                  && !relative.Contains("/bin/", StringComparison.OrdinalIgnoreCase)
+                                                  && !relative.Contains("/obj/", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(static relative => relative.Count(static character => character == '/'))
+                        .ThenBy(static relative => relative, StringComparer.Ordinal);
+    }
+}

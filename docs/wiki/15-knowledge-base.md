@@ -21,7 +21,7 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 | Header-boundary chunker | `…/Services/Knowledge/Implementation/HeaderBoundaryChunkingService.cs` (`IChunkingService`) |
 | Chunk embedder | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbedder.cs` (`IKnowledgeChunkEmbedder`) |
 | Exact chunk-embedding reuse | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbeddingCache.cs`, `KnowledgeChunkEmbeddingReuseStore.cs` |
-| Embedding model resolver + prefixer | `…/Services/Knowledge/EmbeddingModelResolver.cs`, `KnowledgeEmbeddingPrefixer.cs` |
+| Embedding model resolver + prefixer | `…/Services/Knowledge/Implementation/EmbeddingModelResolver.cs`, `KnowledgeEmbeddingPrefixer.cs` |
 | Hybrid search orchestrator | `…/Services/Knowledge/Implementation/KnowledgeSearchService.cs` (`IKnowledgeSearchService`) |
 | Optional-stage policy | `…/Services/Knowledge/AdaptiveRetrievalPolicy.cs` |
 | Lexical arm (FTS5) | `…/Services/Knowledge/Implementation/FtsSearch.cs` (`IFtsSearch`) |

@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -32,7 +33,7 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 
     public int LaunchCount => Launches.Count;
 
-    public IWhisperServerProcessHandle Launch(WhisperServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(WhisperServerLaunchSpec spec)
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership transfers to the supervisor under test, which disposes it on teardown.
@@ -44,7 +45,7 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 }
 
 /// <summary>An in-memory handle whose exit and tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeWhisperProcessHandle : IWhisperServerProcessHandle
+internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
 {
     private int _exited;
     private int _killed;
@@ -63,6 +64,10 @@ internal sealed class FakeWhisperProcessHandle : IWhisperServerProcessHandle
     public int? ExitCode { get; private set; }
 
     public string? StderrTail { get; private set; }
+
+    // The image and transcription supervisors never wait on a handle; a change that starts to must give this fake a real wait.
+    public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
+        throw new NotSupportedException("This supervisor does not wait on its process handle.");
 
     public void TreeKill()
     {

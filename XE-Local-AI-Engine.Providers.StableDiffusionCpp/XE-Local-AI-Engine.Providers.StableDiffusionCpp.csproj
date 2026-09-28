@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <RootNamespace>XE_Local_AI_Engine.Providers.StableDiffusionCpp</RootNamespace>
-    <!-- Required by LibraryImport source-gen marshalling stubs (Linux killpg + Windows Job Object P/Invoke). -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.ProcessSupervision\XE-Local-AI-Engine.Providers.ProcessSupervision.csproj"/>
   </ItemGroup>
 
   <ItemGroup>

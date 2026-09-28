@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Default <see cref="ILlamaServerProcessSupervisor" />: a singleton that owns every <c>llama-server</c> child
@@ -931,7 +932,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         private long _evictionOwner;
         private int _ejected;
 
-        public RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
+        public RunningProcess(IProcessTreeHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
         {
             _lastUsedTicks = startedUtc.UtcTicks;
             _lastLivenessProbeTicks = startedUtc.UtcTicks;
@@ -940,7 +941,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             Port = port;
         }
 
-        public ILlamaServerProcessHandle Handle { get; }
+        public IProcessTreeHandle Handle { get; }
 
         public LlamaServerEndpoint Endpoint { get; }
 

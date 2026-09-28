@@ -39202,6 +39202,14 @@
             "type": "string",
             "nullable": true
           },
+          "failureReason": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesMcpMcpConnectionFailureReason"
+              }
+            ]
+          },
           "tools": {
             "type": "array",
             "items": {
@@ -40344,6 +40352,10 @@
           },
           "checkedAtUtc": {
             "type": "integer",
+            "nullable": true
+          },
+          "overrideVariant": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -48017,6 +48029,30 @@
           "Embedding",
           "Indexed",
           "Failed"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesMcpMcpConnectionFailureReason": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Unknown",
+          "ServerNotFound",
+          "SandboxUnavailable",
+          "SandboxRefused",
+          "Timeout",
+          "Transport",
+          "Protocol",
+          "Authentication"
+        ],
+        "enum": [
+          "Unknown",
+          "ServerNotFound",
+          "SandboxUnavailable",
+          "SandboxRefused",
+          "Timeout",
+          "Transport",
+          "Protocol",
+          "Authentication"
         ]
       },
       "XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope": {

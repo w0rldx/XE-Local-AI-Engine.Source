@@ -5,11 +5,6 @@ public interface IStableDiffusionCppSourceBuildEventPublisher
     Task PublishStatusAsync(StableDiffusionCppSourceBuildStatusEvent statusEvent, CancellationToken ct = default);
 }
 
-public static class StableDiffusionCppSourceBuildEvents
-{
-    public const string StatusChanged = "stableDiffusionCppSourceBuild.statusChanged";
-}
-
 public sealed class StableDiffusionCppSourceBuildStatusEvent
 {
     public required StableDiffusionCppSourceBuildPhase Phase { get; init; }

@@ -615,7 +615,7 @@ more than they buy:
 
 That assembly-level attribute plus `AnalysisMode=All` and `TreatWarningsAsErrors` makes every use of an NAudio WASAPI
 type from an unattributed call site a **CA1416 build error**. The repo's existing answer applies: a type-level
-`[SupportedOSPlatform("windows")]` on `WindowsProcessAudioCaptureSource` (as `WindowsImageJobObjectProcessHandle`
+`[SupportedOSPlatform("windows")]` on `WindowsProcessAudioCaptureSource` (as `WindowsJobObjectProcessHandle`
 does) and an `OperatingSystem.IsWindows()` branch at the single DI call site in `AddNodeTranscriptionExtensions`,
 which is what makes the attribute honest. **There is no CA1416 suppression anywhere in the feature**, in product code
 or in tests — a suppression here is exactly how a Windows-only call reaches a Linux host.

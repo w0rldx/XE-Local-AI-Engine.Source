@@ -495,9 +495,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     }
 
     /// <summary>
-    ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it. See
-    ///     <c>CloudCredentialStore.WriteProtectedPayloadAsync</c> for the umask window this closes and why the
-    ///     narrowing pass still runs afterwards.
+    ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it, which closes the
+    ///     umask window; the narrowing pass still runs afterwards for a file an older build left at 0644.
     /// </summary>
     private async Task WriteProtectedPayloadAsync(byte[] protectedPayload, CancellationToken cancellationToken)
     {

@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 /// <summary>Linux <see cref="ISandboxProcessGroupKiller" />.</summary>
 /// <remarks>
-///     Group signalling mirrors <c>LinuxProcessGroupHandle</c> in the llama.cpp provider, the recorded precedent for this shape, with
+///     Group signalling mirrors <c>LinuxProcessGroupHandle</c> in Providers.ProcessSupervision, the recorded precedent for this shape, with
 ///     <c>kill(-pgid, …)</c> targeting the whole group: SIGTERM first, then SIGKILL for anything still standing. Liveness and start time
 ///     come from <c>/proc</c> rather than <see cref="System.Diagnostics.Process" /> because the reaper needs the start time of a process it
 ///     does not own, on the SAME clock the marker recorded — field 22 of <c>/proc/[pid]/stat</c>, in clock ticks since boot.

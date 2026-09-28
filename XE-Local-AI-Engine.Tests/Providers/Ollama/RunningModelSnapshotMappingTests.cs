@@ -9,41 +9,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Verifies that the running-model snapshot (and its memory footprint) maps correctly from Ollama's <c>/api/ps</c>
-///     payload through both surfaces that produce a <see cref="XE_Local_AI_Engine.Providers.Abstractions.RunningModelSnapshot" />:
-///     the provider-neutral <see cref="OllamaModelCapabilityClient" /> and the app-service <see cref="OllamaModelService" />.
-///     A graceful unload is exercised end-to-end against the fake runtime.
+///     payload through <see cref="OllamaModelService" />, the surface that produces a
+///     <see cref="XE_Local_AI_Engine.Providers.Abstractions.RunningModelSnapshot" />. A graceful unload is exercised
+///     end-to-end against the fake runtime.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class RunningModelSnapshotMappingTests
 {
-    [Test]
-    public async Task CapabilityClient_ListRunningModels_MapsSizeAndVram()
-    {
-        await using var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
-        {
-            Models = ["llama3:8b"]
-        }, CancellationToken.None);
-        server.State.RunningModels =
-        [
-            new FakeOllamaState.FakeOllamaRunningModel
-            {
-                Name = "llama3:8b",
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-                SizeBytes = 5_000_000_000,
-                SizeVramBytes = 4_000_000_000
-            }
-        ];
-        using var ollamaClient = new OllamaApiClient(server.BaseAddress);
-        var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
-
-        var running = await capabilityClient.ListRunningModelsAsync(CancellationToken.None);
-
-        var snapshot = AssertEx.NotNull(running.SingleOrDefault());
-        AssertEx.Equal(expected: 5_000_000_000L, snapshot.SizeBytes);
-        AssertEx.Equal(expected: 4_000_000_000L, snapshot.SizeVramBytes);
-        AssertEx.True(snapshot.ExpiresAt.HasValue);
-    }
-
     [Test]
     public async Task ModelService_ListRunningModels_MapsSizeAndVram()
     {

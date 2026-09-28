@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 

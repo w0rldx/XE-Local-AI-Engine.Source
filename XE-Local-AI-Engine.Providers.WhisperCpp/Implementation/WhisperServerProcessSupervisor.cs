@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
@@ -451,7 +452,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         var spawnCt = spawnCts.Token;
 
         SetStarting(starting: true);
-        IWhisperServerProcessHandle? handle = null;
+        IProcessTreeHandle? handle = null;
         var port = 0;
         try
         {
@@ -674,7 +675,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     Waits for the daemon to report healthy, racing that against the process exiting, and throws a typed failure
     ///     on either bad outcome.
     /// </summary>
-    private async Task WaitForReadyOrExitAsync(IWhisperServerProcessHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
+    private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         if (await WaitForReadyOrExitQuietlyAsync(handle, baseAddress, budget, ct).ConfigureAwait(false))
         {
@@ -687,7 +688,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <summary>The same race, reporting a bool so the model-switch path can respawn instead of failing the caller.</summary>
-    private async Task<bool> WaitForReadyOrExitQuietlyAsync(IWhisperServerProcessHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
+    private async Task<bool> WaitForReadyOrExitQuietlyAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -709,7 +710,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         return await readyTask.ConfigureAwait(false);
     }
 
-    private async Task WatchForExitAsync(IWhisperServerProcessHandle handle, CancellationToken ct)
+    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -918,7 +919,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         private WhisperServerEndpoint _endpoint;
 
-        public RunningServer(IWhisperServerProcessHandle handle,
+        public RunningServer(IProcessTreeHandle handle,
             WhisperServerEndpoint endpoint,
             WhisperBinary binary,
             int port,
@@ -934,7 +935,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             Port = port;
         }
 
-        public IWhisperServerProcessHandle Handle { get; }
+        public IProcessTreeHandle Handle { get; }
 
         public WhisperBinary Binary { get; }
 

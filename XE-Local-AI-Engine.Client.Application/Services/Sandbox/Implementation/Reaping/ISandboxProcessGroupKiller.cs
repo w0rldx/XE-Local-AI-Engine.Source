@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 /// <summary>
-///     The OS seam the orphan reaper kills through, mirroring <c>IStaleLlamaServerProcessScanner</c> so the reaper's
+///     The OS seam the orphan reaper kills through, mirroring <c>IStaleProcessScanner</c> so the reaper's
 ///     decision logic can be tested against a fake without signalling anything real.
 /// </summary>
 public interface ISandboxProcessGroupKiller

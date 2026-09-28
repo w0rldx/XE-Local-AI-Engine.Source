@@ -5,6 +5,8 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Production <see cref="ILlamaServerProcessLauncher" />: starts a real <c>llama-server</c> child, contained for
@@ -28,7 +30,7 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
     }
 
     /// <inheritdoc />
-    public ILlamaServerProcessHandle Launch(LlamaServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(LlamaServerLaunchSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
@@ -77,15 +79,18 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
     }
 
     [SupportedOSPlatform("windows")]
-    private ILlamaServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
         // Wrap takes ownership of the process and disposes it on any containment failure.
+#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
         var process = StartProcess(startInfo, label, capture, demote);
-        return WindowsJobObjectProcessHandle.Wrap(process);
+        return WindowsJobObjectProcessHandle.Wrap(process,
+            static ex => new LlamaRuntimeException("The local model runtime could not be contained for safe shutdown.", ex));
+#pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
-    private ILlamaServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
         // Run llama-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the forwarding wired in StartProcess still captures the server's output.
@@ -98,7 +103,7 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 #pragma warning restore CA2000
     }
 
-    private ILlamaServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
         return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture, demote));

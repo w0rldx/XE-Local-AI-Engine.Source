@@ -300,7 +300,25 @@ public sealed partial class BenchmarkStore
                                   RepeatMode = entity.RepeatMode,
                                   SamplingSeed = entity.SamplingSeed,
                                   SamplingTemperature = entity.SamplingTemperature,
-                                  Fidelity = null,
+                                  // Inline for the same reason as Throughput, and the rule ToFidelity uses: absence is FidelityStatus NULL.
+                                  Fidelity = entity.FidelityStatus == null
+                                      ? null
+                                      : new BenchmarkRunFidelity
+                                      {
+                                          Status = entity.FidelityStatus,
+                                          AttemptId = entity.FidelityAttemptId,
+                                          PerplexityMean = entity.PerplexityMean,
+                                          PerplexityStdErr = entity.PerplexityStdErr,
+                                          PerplexityChunks = entity.PerplexityChunks,
+                                          PerplexityContextTokens = entity.PerplexityContextTokens,
+                                          PerplexityCorpusId = entity.PerplexityCorpusId,
+                                          KldMean = entity.KldMean,
+                                          KldP99 = entity.KldP99,
+                                          TopTokenAgreement = entity.TopTokenAgreement,
+                                          KldBaseFingerprint = entity.KldBaseFingerprint,
+                                          KldBaseLogitsDigest = entity.KldBaseLogitsDigest,
+                                          ErrorMessage = entity.FidelityErrorMessage
+                                      },
                                   TaskItemId = entity.TaskItemId,
                                   TaskItemIndex = entity.TaskItemIndex,
                                   CellKey = entity.CellKey,

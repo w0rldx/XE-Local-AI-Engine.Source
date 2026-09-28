@@ -198,6 +198,55 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             "the filter.<driver>.clean payload did NOT execute under the hardened argument vector, so the regression pin above proves nothing.");
     }
 
+    [Test]
+    public async Task PatchEvidenceExport_WithTheFilterDefinedInTheSandboxedHomeConfig_DoesNotExecuteIt()
+    {
+        // The .git/config rewrite cannot reach $HOME/.gitconfig, and HOME is the attempt's runtime directory.
+        // GIT_CONFIG_GLOBAL at the null device is what takes that file out of git's search.
+        var fixture = await CreatePoisonedWorkspaceAsync();
+        var home = Path.Combine(fixture.Session.RuntimePath, "home");
+        Directory.CreateDirectory(home);
+        await File.WriteAllTextAsync(Path.Combine(home, ".gitconfig"),
+            $"[filter \"pwn\"]\n\tclean = {fixture.Payload}\n\tsmudge = cat\n");
+
+        // Non-vacuity: without the hardening environment git does read the planted file.
+        AssertEx.Equal(fixture.Payload, await ReadGlobalConfigAsync(fixture.Session.HostWorktreePath, home, "filter.pwn.clean"));
+
+        var evidence = await new DevelopmentPatchEvidenceService(Options.Create(OptionsValue())).ExportAsync(fixture.Session);
+
+        AssertEx.False(File.Exists(fixture.FilterSentinel),
+            "a filter driver defined in the evidence git's HOME configuration executed on the host.");
+        AssertEx.Contains(evidence.ChangedFiles.Select(static file => file.Path), "feature.txt");
+    }
+
+    private static async Task<string> ReadGlobalConfigAsync(string workspace, string home, string key)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workspace,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("config");
+        startInfo.ArgumentList.Add("--global");
+        startInfo.ArgumentList.Add("--get");
+        startInfo.ArgumentList.Add(key);
+        startInfo.Environment["HOME"] = home;
+        startInfo.Environment.Remove("XDG_CONFIG_HOME");
+        startInfo.Environment.Remove("GIT_CONFIG_GLOBAL");
+
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
+        process.Start();
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return output.Trim();
+    }
+
     private static string[] HardenedArguments()
     {
         // The vector DevelopmentPatchEvidenceService actually runs under, so the control test is not weaker than the
@@ -286,7 +335,8 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         {
             Session = session,
             FilterSentinel = filterSentinel,
-            FsmonitorSentinel = fsmonitorSentinel
+            FsmonitorSentinel = fsmonitorSentinel,
+            Payload = payload
         };
     }
 
@@ -345,5 +395,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         public required string FilterSentinel { get; init; }
 
         public required string FsmonitorSentinel { get; init; }
+
+        public required string Payload { get; init; }
     }
 }

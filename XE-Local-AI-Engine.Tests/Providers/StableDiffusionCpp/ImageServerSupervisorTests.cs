@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -493,7 +494,7 @@ public sealed class ImageServerSupervisorTests
         /// <summary>The first launched daemon — the one this file's admission test evicts.</summary>
         public LatchedImageProcessHandle? Victim { get; private set; }
 
-        public IImageServerProcessHandle Launch(ImageServerLaunchSpec spec)
+        public IProcessTreeHandle Launch(ImageServerLaunchSpec spec)
         {
             var pid = Interlocked.Increment(ref _nextPid);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
@@ -504,7 +505,7 @@ public sealed class ImageServerSupervisorTests
         }
     }
 
-    private sealed class LatchedImageProcessHandle : IImageServerProcessHandle
+    private sealed class LatchedImageProcessHandle : IProcessTreeHandle
     {
         private readonly ImageKillLatch? _killLatch;
         private int _exited;
@@ -526,6 +527,9 @@ public sealed class ImageServerSupervisorTests
         public int? ExitCode => null;
 
         public string? StderrTail => null;
+
+        public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
+            throw new NotSupportedException("The image supervisor does not wait on its process handle.");
 
         public void TreeKill()
         {

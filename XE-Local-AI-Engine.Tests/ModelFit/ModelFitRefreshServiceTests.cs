@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
@@ -514,6 +515,81 @@ public sealed class ModelFitRefreshServiceTests
     }
 
     // Runs one recommend refresh for a single fitting repo and returns the persisted row's score.
+    [Test]
+    public async Task Advisor_Recommend_DropsExploreRowTheCatalogLaneAlreadyRecommends()
+    {
+        // Live shape: the catalog lane recommended unsloth/Qwen3-Coder-30B-A3B at rank 2 and the explore lane found the same repo again at rank 9.
+        const string sharedRepo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF";
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary(sharedRepo),
+                     Summary("org/other-GGUF")
+                 ]));
+        discovery.InspectRepoAsync(sharedRepo, Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail(sharedRepo, File("Q4_K_M", paramCount: 1_000_000_000L))));
+        discovery.InspectRepoAsync("org/other-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/other-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+        var profile = GpuProfile(12 * Gb);
+        var catalog = await CatalogRecommending(sharedRepo, profile);
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, profile, catalog: catalog);
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.ContainsSingle(rows, row => row.ModelName == GgufModelName.Format(sharedRepo, "Q4_K_M"));
+        AssertEx.ContainsSingle(rows, row => row.ModelName == "org/other-GGUF:Q4_K_M");
+        AssertEx.True(rows.Select(row => row.Rank).SequenceEqual(Enumerable.Range(1, rows.Count)), "ranks must stay contiguous after the duplicate is dropped.");
+    }
+
+    private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId, HardwareProfile profile)
+    {
+        var file = File("Q4_K_M", paramCount: 1_000_000_000L);
+        var selected = GgufFileSelector.SelectBestFit(new MemoryFitEstimator(), [file], "Q4_K_M", ctxTarget: 8192, profile)!;
+        var empty = await new EmptyCatalogRecommendationService()
+            .BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, profile, new HashSet<string>(StringComparer.Ordinal), CancellationToken.None);
+        var candidate = new CatalogRecommendationCandidate
+        {
+            Entry = new ModelCatalogEntry("qwen3-coder-30b-a3b",
+                "qwen3",
+                "Qwen3 Coder 30B A3B",
+                "unsloth",
+                repoId,
+                "apache-2.0",
+                "flagship",
+                ["coding"],
+                TotalParamsB: 30,
+                ActiveParamsB: 3,
+                Moe: true,
+                ContextLength: 8192,
+                MinLlamaCppTag: "b10201",
+                ReleaseDate: "2026-01-01",
+                Notes: null),
+            File = selected.File,
+            Estimate = selected.Estimate,
+            ModelName = GgufModelName.Format(repoId, "Q4_K_M"),
+            IsInstalled = false
+        };
+        var catalog = Substitute.For<ICatalogRecommendationService>();
+        catalog.BuildRecommendationsAsync(Arg.Any<string?>(),
+                   Arg.Any<string>(),
+                   Arg.Any<int>(),
+                   Arg.Any<HardwareProfile>(),
+                   Arg.Any<IReadOnlySet<string>>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(new CatalogRecommendationResult
+               {
+                   Recommended = [candidate],
+                   CanRun = [],
+                   CatalogSnapshot = empty.CatalogSnapshot
+               }));
+        return catalog;
+    }
+
     private static async Task<double> ScoreForProfileAsync(HardwareProfile profile)
     {
         var snapshotStore = new InMemoryModelFitSnapshotStore();
@@ -549,7 +625,8 @@ public sealed class ModelFitRefreshServiceTests
         IHuggingFaceGgufDiscovery discovery,
         HardwareProfile profile,
         IGgufModelStore? store = null,
-        ILlamaServerProcessSupervisor? supervisor = null)
+        ILlamaServerProcessSupervisor? supervisor = null,
+        ICatalogRecommendationService? catalog = null)
     {
         var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
         runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
@@ -572,7 +649,7 @@ public sealed class ModelFitRefreshServiceTests
             new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
             snapshotStore,
             recommendationStore,
-            new EmptyCatalogRecommendationService(),
+            catalog ?? new EmptyCatalogRecommendationService(),
             TimeProvider.System,
             NullLogger<ModelFitRefreshService>.Instance);
     }

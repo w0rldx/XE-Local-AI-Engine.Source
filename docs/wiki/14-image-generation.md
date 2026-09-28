@@ -14,7 +14,7 @@ The node generates images **locally** with [stable-diffusion.cpp](https://github
 | Binary manager (managed selection or download / verify / cache) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppBinaryManager.cs` |
 | Managed source build (probe / fetch / build / adopt / recover) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppSourceBuildService.cs` |
 | Installed-runtime state + mutation gate | `…/StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs`, `…/StableDiffusionCpp/Implementation/ImageRuntimeActivityGate.cs` (`Contracts/IImageRuntimeActivityGate.cs`) |
-| Stale-daemon reaper | `…/StableDiffusionCpp/Implementation/StaleImageServerReaper.cs` |
+| Stale-daemon reaper | `StaleProcessReaper` in `XE-Local-AI-Engine.Providers.ProcessSupervision/`, registered for `sd-server` in `StableDiffusionCppRuntimeServiceCollectionExtensions` |
 | Runtime endpoints' door onto the provider (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Images/ImageRuntimeOrchestrationService.cs` — pass-through over `IStableDiffusionCppSourceBuildService`, `IStableDiffusionCppSourceBuildPrerequisiteProbe`, `IStableDiffusionInstalledRuntimeStore`, `IImageRuntimeActivityGate` and `IImageServerSupervisor`; the eight runtime/source-build/job endpoints inject it, never the provider contracts |
 | Runtime options | `…/StableDiffusionCpp/Options/StableDiffusionRuntimeOptions.cs` |
 | SignalR hubs + publishers | `XE-Local-AI-Engine.Client/Hubs/ImageJobHub.cs`, `…/ImageJobEventPublisher.cs`, `…/StableDiffusionCppSourceBuildHub.cs`, `…/StableDiffusionCppSourceBuildEventPublisher.cs` |
@@ -77,7 +77,7 @@ The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeAct
 - **Per-OS tree-kill teardown** on eviction, abort, and shutdown (Linux process group / Windows Job Object), so no `sd-server` survives a supervisor stop.
 - `MaxLoadedProcesses` defaults to **1** — sd-server is VRAM-heavy and typically co-resident with a chat model, so a spawn for a new model evicts an idle LRU daemon first.
 
-Like the text runtime, a `StaleImageServerReaper` runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
+Like the text runtime, a `StaleProcessReaper` instance runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
 
 ## sd-server flags never emitted
 

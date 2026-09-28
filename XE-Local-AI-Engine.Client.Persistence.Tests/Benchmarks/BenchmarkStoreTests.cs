@@ -449,6 +449,68 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ListRuns_ProjectsTheSameFidelityAsTheSingleRunRead()
+    {
+        // The list projection hardcoded Fidelity = null, so the PPL/KLD column and the CSV export read "no measurement"
+        // for every run while the run detail showed the numbers. Every fidelity state goes through both reads here.
+        var databasePath = GetDatabasePath("list-fidelity.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        string?[] states = [null, "queued", "running", "failed", "succeeded"];
+        var runIds = new List<Guid>();
+        foreach (var state in states)
+        {
+            project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+            var run = await store.StartRunAsync(CreateRun(project));
+            runIds.Add(run.Id);
+            var entity = await context.BenchmarkRuns.SingleAsync(row => row.Id == run.Id);
+            entity.FidelityStatus = state;
+            if (state is "failed")
+            {
+                entity.FidelityAttemptId = Guid.NewGuid();
+                entity.FidelityErrorMessage = "llama-perplexity exited 1";
+            }
+            else if (state is "succeeded")
+            {
+                entity.FidelityAttemptId = Guid.NewGuid();
+                entity.PerplexityMean = 6.7977;
+                entity.PerplexityStdErr = 0.074;
+                entity.PerplexityChunks = 200;
+                entity.PerplexityContextTokens = 512;
+                entity.PerplexityCorpusId = "wikitext2";
+                entity.KldMean = 0.012;
+                entity.KldP99 = 0.31;
+                entity.TopTokenAgreement = 0.94;
+                entity.KldBaseFingerprint = "v1:" + new string('b', 64);
+                entity.KldBaseLogitsDigest = "v1:" + new string('c', 64);
+            }
+        }
+
+        _ = await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
+        var all = await store.ListAllRunsAsync(project.Id);
+
+        foreach (var runId in runIds)
+        {
+            var detail = AssertEx.NotNull(await store.GetRunAsync(runId)).Fidelity;
+            AssertEx.Equal(detail, page.Items.Single(item => item.Id == runId).Fidelity, "The page must project the detail's fidelity.");
+            AssertEx.Equal(detail, all.Items.Single(item => item.Id == runId).Fidelity, "The export read must project the detail's fidelity.");
+        }
+
+        AssertEx.Null(page.Items.Single(item => item.Id == runIds[0]).Fidelity, "Never measured is no block, not a block of nulls.");
+        var measured = AssertEx.NotNull(page.Items.Single(item => item.Id == runIds[4]).Fidelity);
+        AssertEx.Equal<double?>(6.7977, measured.PerplexityMean);
+        AssertEx.Equal<double?>(0.94, measured.TopTokenAgreement);
+        AssertEx.Equal("v1:" + new string('c', 64), measured.KldBaseLogitsDigest);
+        AssertEx.Equal("llama-perplexity exited 1", AssertEx.NotNull(page.Items.Single(item => item.Id == runIds[3]).Fidelity).ErrorMessage);
+    }
+
+    [Test]
     public async Task ClaimNext_ConcurrentConsumers_ClaimsLowestSequenceOnce()
     {
         var databasePath = GetDatabasePath("fifo.sqlite");

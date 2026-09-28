@@ -45,4 +45,7 @@ export interface LlamaCppRuntimeStatus {
 	// same reason as the two fields above, and an absent value reads as "never checked" — the honest default, since a
 	// node that has never checked must not claim to be up to date.
 	readonly checkedAtUtc?: number | null;
+	// The variant of an operator bring-your-own llama-server that serves instead of `installed`; null when none is set.
+	// The node never sends the override's path.
+	readonly overrideVariant?: string | null;
 }

@@ -541,7 +541,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var index = 0;
         while (index < arguments.Count)
         {
-            if (arguments[index] is "-m" or "--model" or "--host" or "--port")
+            if (arguments[index] is "-m" or "--model" or "-a" or "--alias" or "--host" or "--port")
             {
                 index += 2;
                 continue;

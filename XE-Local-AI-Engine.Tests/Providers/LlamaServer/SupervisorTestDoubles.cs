@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Shared fakes for the <see cref="LlamaServerProcessSupervisor" /> tests: a process launcher that records the
@@ -37,7 +38,7 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
     /// </summary>
     public IReadOnlyList<string> StartupLines { get; set; } = [];
 
-    public ILlamaServerProcessHandle Launch(LlamaServerLaunchSpec spec)
+    public IProcessTreeHandle Launch(LlamaServerLaunchSpec spec)
     {
         Launches.Enqueue(spec);
 
@@ -60,7 +61,7 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 }
 
 /// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeProcessHandle : ILlamaServerProcessHandle
+internal sealed class FakeProcessHandle : IProcessTreeHandle
 {
     private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly bool _exitOnTreeKill;
@@ -84,6 +85,9 @@ internal sealed class FakeProcessHandle : ILlamaServerProcessHandle
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
     public int? ExitCode { get; private set; }
+
+    // llama-server's launcher keeps no stderr tail; the supervisor never reads one.
+    public string? StderrTail => null;
 
     public void TreeKill()
     {

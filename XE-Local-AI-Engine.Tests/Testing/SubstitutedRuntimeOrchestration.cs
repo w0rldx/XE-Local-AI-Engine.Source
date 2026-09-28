@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Testing;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Builds the REAL <see cref="LlamaCppRuntimeOrchestrationService" /> over the provider contracts a test actually
@@ -29,5 +30,6 @@ internal static class SubstitutedRuntimeOrchestration
             Substitute.For<ILlamaCppSourceBuildService>(),
             Substitute.For<ILlamaCppUpdateState>(),
             supervisor ?? Substitute.For<ILlamaServerProcessSupervisor>(),
-            acquisitionStatus ?? Substitute.For<IRuntimeAcquisitionStatusRegistry>());
+            acquisitionStatus ?? Substitute.For<IRuntimeAcquisitionStatusRegistry>(),
+            new LlamaServerRuntimeOverrideOptions());
 }

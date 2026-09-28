@@ -4,9 +4,9 @@ using System.Buffers;
 using System.Text;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -45,7 +45,7 @@ public sealed class HubJsonProtocolTests
     [Test]
     public void SchedulerRun_SerializesBothOfItsEnumsAsNames()
     {
-        var payload = new SchedulerRunHubEvent
+        var payload = new SchedulerRunHubMessage
         {
             EventType = SchedulerHubEvents.RunCompleted,
             RunId = Guid.Parse("11111111-2222-3333-4444-555555555555"),

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

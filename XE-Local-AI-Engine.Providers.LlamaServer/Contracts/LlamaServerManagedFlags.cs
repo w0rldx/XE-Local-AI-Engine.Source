@@ -15,6 +15,7 @@ public static class LlamaServerManagedFlags
     public const string Model = "-m";
     public const string Host = "--host";
     public const string Port = "--port";
+    public const string Alias = "--alias";
     public const string ContextSize = "-c";
     public const string GpuLayers = "--n-gpu-layers";
     public const string TensorSplit = "-ts";
@@ -32,8 +33,8 @@ public static class LlamaServerManagedFlags
     /// <summary>Every managed spelling, aliases included, in match order.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
-        // Reachability.
-        Model, "--model", Host, Port,
+        // Reachability. The alias is the model id the process answers to, so it stays the id the node routes by.
+        Model, "--model", Host, Port, "-a", Alias,
 
         // Memory-fit placement.
         ContextSize, "--ctx-size",

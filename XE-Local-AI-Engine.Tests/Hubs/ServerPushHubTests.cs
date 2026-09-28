@@ -92,16 +92,21 @@ public sealed class ServerPushHubTests
     public async Task GgufDownloadEventPublisher_PushIsReceivedByAnAuthorizedClient()
     {
         await using var connection = Connect(LocalApiRoutes.ModelFit.DownloadHub);
-        var received = new TaskCompletionSource<GgufDownloadStatusHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = connection.On<GgufDownloadStatusHubEvent>(GgufDownloadHubEvents.StatusChanged, evt => received.TrySetResult(evt));
+        var received = new TaskCompletionSource<GgufDownloadStatusHubMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<GgufDownloadStatusHubMessage>(GgufDownloadHubEvents.StatusChanged, evt => received.TrySetResult(evt));
         await connection.StartAndAwaitRegistrationAsync();
 
-        var published = new GgufDownloadStatusHubEvent
+        var published = new GgufAcquisitionStatus
         {
+            OperationId = Guid.NewGuid(),
+            OperationKind = GgufAcquisitionOperationKind.Download,
             ModelName = "qwen3.5-0.8b-q4_k_m.gguf",
-            Phase = "Running",
+            Phase = GgufAcquisitionPhase.Running,
             CompletedBytes = 512,
             TotalBytes = 4096,
+            StartedAtUtc = DateTimeOffset.UnixEpoch,
+            UpdatedAtUtc = DateTimeOffset.UnixEpoch,
+            ErrorCode = null,
             SanitizedError = null
         };
         await Factory.Services.GetRequiredService<IGgufDownloadEventPublisher>().PublishStatusAsync(published);

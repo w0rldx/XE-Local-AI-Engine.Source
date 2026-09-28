@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -450,6 +451,42 @@ public sealed class BenchmarkExportEndpointTests
             "the Warning must not carry blob content");
     }
 
+    [Test]
+    [Arguments("/export")]
+    [Arguments("/export.csv")]
+    public async Task Export_WithANullAndADuplicateFitScoreEntry_ExportsTheFirstEntryAndWarnsOnce(string suffix)
+    {
+        // The same rule as the run list, the cells and the comparisons listing: skip null, first entry wins, one Warning.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context, Run(BenchmarkPrimaryStatus.Succeeded));
+        var fit = Fit(RunId, Guid.NewGuid(), "[null,"
+                                             + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(RunId, 62, 55, 69, 6, 1000, null), PairwiseScoreOptions) + ","
+                                             + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(RunId, 10, 5, 15, 6, 1000, null), PairwiseScoreOptions) + "]");
+        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (suffix == "/export")
+        {
+            using var document = JsonDocument.Parse(body);
+            var scores = document.RootElement.GetProperty("pairwiseFit").GetProperty("scores").EnumerateArray().ToArray();
+            AssertEx.Equal(expected: 1, scores.Length);
+            AssertEx.Equal(expected: 62, scores[0].GetProperty("score").GetInt32());
+        }
+        else
+        {
+            AssertEx.Contains(body.Split("\r\n")[1], "62,55,69,6,fit-key-1");
+        }
+
+        AssertEx.ContainsSingle(context.Logger.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains(fit.Id.ToString(), StringComparison.Ordinal));
+    }
+
     /// <summary>The options the store writes the blob with; a per-call instance is what CA1869 is about.</summary>
     private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
 
@@ -473,7 +510,7 @@ public sealed class BenchmarkExportEndpointTests
             ErrorMessage = null
         };
 
-    private static BenchmarkPairwiseFitRecord Fit(Guid first, Guid second) =>
+    private static BenchmarkPairwiseFitRecord Fit(Guid first, Guid second, string? scoresJson = null) =>
         new()
         {
             Id = Guid.NewGuid(),
@@ -485,7 +522,7 @@ public sealed class BenchmarkExportEndpointTests
             JudgeExecutionKey = "judge-key",
             ComparisonSetVersion = 7,
             FittedSetJson = "[]",
-            ScoresJson = JsonSerializer.Serialize(new[]
+            ScoresJson = scoresJson ?? JsonSerializer.Serialize(new[]
             {
                 new BenchmarkPairwiseScoreEntry(first, 62, 55, 69, 6, 1000, null),
                 new BenchmarkPairwiseScoreEntry(second, 41, 33, 49, 6, 1000, null)

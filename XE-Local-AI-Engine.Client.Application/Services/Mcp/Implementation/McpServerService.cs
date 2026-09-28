@@ -194,6 +194,7 @@ internal sealed class McpServerService : IMcpServerService
             {
                 Status = McpServerToolsStatus.Error,
                 Error = recordedError,
+                FailureReason = status.FailureReason,
                 Tools = []
             }
             : new McpServerToolsView

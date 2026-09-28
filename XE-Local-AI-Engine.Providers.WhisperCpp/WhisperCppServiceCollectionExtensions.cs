@@ -2,8 +2,10 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
@@ -98,12 +100,13 @@ public static class WhisperCppServiceCollectionExtensions
                 sp.GetRequiredService<WhisperRuntimeOptions>(),
                 sp.GetRequiredService<ILogger<WhisperServerTranscriber>>()));
 
-        // Startup orphan reaper: a hard kill of the host skips the supervisor's graceful teardown, leaving a daemon
-        // holding its loopback port and its memory. It matches ONLY binaries under our own cache root.
-        services.TryAddSingleton<IStaleWhisperServerProcessScanner, OsStaleWhisperServerProcessScanner>();
-        services.AddHostedService(static sp => new StaleWhisperServerReaper(sp.GetRequiredService<IStaleWhisperServerProcessScanner>(),
+        // Startup orphan reaper for binaries under our own cache root only; its per-orphan line omits the path, as it always has.
+        // AddSingleton, not AddHostedService, which dedupes the StaleProcessReaper type every runtime shares.
+        services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("whisper-server"),
             WhisperCppBinaryManager.DefaultWhisperBinariesRoot(),
-            sp.GetRequiredService<ILogger<StaleWhisperServerReaper>>()));
+            "whisper-server",
+            logExecutablePath: false,
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
 
         // The managed Linux CUDA source-build lane. There is no prebuilt Linux CUDA asset upstream, so this is the
         // only way a Linux node gets GPU transcription without a bring-your-own binary.

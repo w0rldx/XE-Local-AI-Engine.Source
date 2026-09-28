@@ -46,7 +46,7 @@ public interface IImageJobCoordinator
     ///     Returns the job's buffered status events (in seq order) for a late hub subscriber to replay. Empty when the job
     ///     has no live replay log (already evicted or never seen).
     /// </summary>
-    IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId);
+    IReadOnlyList<ImageJobStatusEvent> SnapshotBufferedEvents(Guid jobId);
 }
 
 /// <summary>One page of the job history plus the count of rows that exist in total, ignoring paging.</summary>

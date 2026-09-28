@@ -143,6 +143,12 @@ public sealed class LlamaCppRuntimeStatusResponse
     ///     nothing, and read as a permanent "up to date". A manual refresh populates it.
     /// </remarks>
     public long? CheckedAtUtc { get; init; }
+
+    /// <summary>
+    ///     The acceleration variant (<c>cpu|cuda|vulkan</c>) of an operator bring-your-own <c>llama-server</c> that serves
+    ///     instead of <see cref="Installed" />; <c>null</c> when no override is set. The override's path is never sent.
+    /// </summary>
+    public string? OverrideVariant { get; init; }
 }
 
 /// <summary>

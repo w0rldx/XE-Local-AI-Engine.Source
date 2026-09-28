@@ -81,8 +81,7 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken);
-            SecureFilePermissions.Apply(_recordPath);
+            await SecureFilePermissions.WriteAllBytesAtomicAsync(_recordPath, protectedPayload, cancellationToken);
         }
         finally
         {

@@ -4,6 +4,7 @@ using System.Net;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -51,17 +52,16 @@ public sealed class SchedulerHubTests
                                      .WithNodeJsonProtocol()
                                      .Build();
 
-        var received = new TaskCompletionSource<SchedulerDefinitionHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = connection.On<SchedulerDefinitionHubEvent>(SchedulerHubEvents.JobDefinitionChanged,
+        var received = new TaskCompletionSource<SchedulerDefinitionHubMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<SchedulerDefinitionHubMessage>(SchedulerHubEvents.JobDefinitionChanged,
             evt => received.TrySetResult(evt));
 
         await connection.StartAndAwaitRegistrationAsync();
 
         // Publish through the host's hub-backed publisher (supersedes the no-op default in the Client host).
         var publisher = factory.Services.GetRequiredService<ISchedulerEventPublisher>();
-        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent
+        await publisher.PublishDefinitionAsync(new SchedulerDefinitionEvent
         {
-            EventType = SchedulerHubEvents.JobDefinitionChanged,
             ScheduledJobId = scheduledJobId,
             Action = "created",
             OccurredAtUtc = 123L

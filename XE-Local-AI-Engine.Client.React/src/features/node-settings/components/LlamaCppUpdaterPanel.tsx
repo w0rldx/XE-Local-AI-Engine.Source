@@ -4,6 +4,7 @@ import {
 	IconCloudDownload,
 	IconCloudOff,
 	IconDownload,
+	IconInfoCircle,
 	IconPlayerStop,
 	IconRefresh,
 	IconRocket,
@@ -89,6 +90,7 @@ export function LlamaCppUpdaterPanel() {
 	const hasInstalledSourceRuntime = status?.installed?.isSourceBuild === true;
 	const sourceBuildActive = sourceBuildStatusQuery.data?.isRunning === true;
 	const prebuiltMutationBlocked = hasInstalledSourceRuntime || sourceBuildActive;
+	const overrideVariant = status?.overrideVariant ?? null;
 
 	// Effective Select value: the operator's explicit pick, else the installed variant (when it is a known build), else
 	// the cpu fallback. Recomputed on each render so it tracks the resolved status without copying it into state.
@@ -280,6 +282,16 @@ export function LlamaCppUpdaterPanel() {
 								</Stack>
 							) : null}
 						</Group>
+
+						{overrideVariant !== null ? (
+							<Alert color="blue" icon={<IconInfoCircle size={16} />} data-testid="llamacpp-updater-override-notice">
+								{t(
+									"pages.nodeSettings.llamaCpp.updater.overrideNotice",
+									"A bring-your-own {{variant}} llama-server is serving models on this node. The installed runtime below is not in use while the override is set.",
+									{ variant: t(`pages.nodeSettings.llamaCpp.variants.${overrideVariant}`, overrideVariant) },
+								)}
+							</Alert>
+						) : null}
 
 						{isOffline ? (
 							<Alert color="yellow" icon={<IconCloudOff size={16} />} data-testid="llamacpp-updater-offline">

@@ -602,9 +602,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
         await announced.Task.WaitAsync(TestBudgets.Contended);
 
-        // The queued frame finishes while admission closed is still being published: inside the old window.
+        // The queued frame finishes while admission closed is still being published: inside the old window. Its
+        // handler is awaited, not settled, so its PendingBytes decrement lands before the drain-start snapshot.
         transcriber.Release();
-        await AssertEx.SettleAsync();
+        await fixture.Registry.WhenAdmittedFramesHandledAsync(sessionId).WaitAsync(TestBudgets.Contended);
         admissionGate.SetResult();
         await ending.WaitAsync(TestBudgets.Contended);
 

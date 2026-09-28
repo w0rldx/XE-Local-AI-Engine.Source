@@ -47,6 +47,22 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     }
 
     [Test]
+    public async Task TryCalibrateAsync_SuccessLogsOnlyTheMeasuredDivisor()
+    {
+        using var handler = new DelegateHandler((_, _) => Task.FromResult(JsonResponse(TokenArray(CalibrationTextTokenCount(divisor: 5)))));
+        using var client = new HttpClient(handler);
+        var store = new TokenEstimatorCalibrationStore();
+        var logger = new CapturingLogger();
+        using var service = CreateService(client, store, logger: logger);
+
+        var calibrated = await service.TryCalibrateAsync("model-a", new Uri("http://localhost:18123/v1"), CancellationToken.None);
+
+        AssertEx.True(calibrated);
+        AssertEx.ContainsSingle(logger.Divisors, divisor => divisor == store.ResolveDivisor("model-a"));
+        AssertEx.Empty(logger.Reasons);
+    }
+
+    [Test]
     public async Task TryCalibrateAsync_ProviderFailureRetainsPriorCalibrationAndLogsBoundedReason()
     {
         using var handler = new DelegateHandler((_, _) =>
@@ -625,6 +641,8 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     {
         public List<string> Reasons { get; } = [];
 
+        public List<int> Divisors { get; } = [];
+
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
             null;
 
@@ -643,6 +661,11 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
                 if (reason is not null)
                 {
                     Reasons.Add(reason);
+                }
+
+                if (values.FirstOrDefault(static pair => pair.Key == "CharsPerToken").Value is int divisor)
+                {
+                    Divisors.Add(divisor);
                 }
             }
         }

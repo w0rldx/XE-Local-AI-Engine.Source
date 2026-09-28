@@ -188,6 +188,11 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         startInfo.Environment["TMP"] = Path.Combine(session.RuntimePath, "tmp");
         startInfo.Environment["TEMP"] = Path.Combine(session.RuntimePath, "tmp");
         startInfo.Environment["LC_ALL"] = "C";
+        // HOME alone left $HOME/.gitconfig and the system file readable; the node-wide hardening removes both from git's search.
+        foreach (var (name, value) in AgentHomeGitHardening.Environment)
+        {
+            startInfo.Environment[name] = value;
+        }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds));

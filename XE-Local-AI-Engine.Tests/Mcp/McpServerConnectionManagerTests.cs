@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.ComponentModel;
+using System.Net.Sockets;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
+using NSubstitute;
 using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -14,6 +16,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
 using CategoryAttribute = CategoryAttribute;
@@ -197,6 +201,89 @@ public sealed class McpServerConnectionManagerTests
         var broken = statuses.Single(s => s.ServerId == brokenRecord.Id);
         AssertEx.False(broken.Connected);
         AssertEx.NotNull(broken.LastError);
+        AssertEx.Equal(McpConnectionFailureReason.Transport, broken.FailureReason);
+    }
+
+    [Test]
+    public async Task RefreshAsync_PrivilegedHostCommandThatCannotStart_ReportsServerNotFoundWithoutThePath()
+    {
+        // The SDK's stdio launch wraps the failed Process.Start in an IOException; SandboxedMcpStdioTransportTests pins that shape.
+        var status = await RefreshWithFailureAsync(static () => new IOException("Failed to connect transport.",
+            new Win32Exception(2, "An error occurred trying to start process '/opt/secret/server'.")));
+
+        AssertEx.Equal(McpConnectionFailureReason.ServerNotFound, status.FailureReason);
+        AssertEx.Equal("The MCP server's command was not found or could not be started.", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_SandboxedCommandMissingOnHost_ReportsServerNotFound()
+    {
+        var status = await RefreshWithFailureAsync(static () => new FileNotFoundException("The MCP server 'x' command was not found on this node's PATH."));
+
+        AssertEx.Equal(McpConnectionFailureReason.ServerNotFound, status.FailureReason);
+        AssertEx.Equal("The MCP server's command was not found or could not be started.", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalOnAnIsolationCapableNode_ReportsSandboxRefusedWithTheEngineMessage()
+    {
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("The sandbox command could not be launched."), provider);
+
+        AssertEx.Equal(McpConnectionFailureReason.SandboxRefused, status.FailureReason);
+        AssertEx.Equal("The sandbox command could not be launched.", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalOnANodeThatCannotIsolate_ReportsSandboxUnavailable()
+    {
+        // The fake backend advertises no filesystem isolation: the shape of a Windows node or a Linux node without bubblewrap.
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("This node cannot sandbox."));
+
+        AssertEx.Equal(McpConnectionFailureReason.SandboxUnavailable, status.FailureReason);
+        AssertEx.Equal("This node cannot sandbox.", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_ConnectionReset_ReportsTransport()
+    {
+        var status = await RefreshWithFailureAsync(static () => new SocketException((int)SocketError.ConnectionReset));
+
+        AssertEx.Equal(McpConnectionFailureReason.Transport, status.FailureReason);
+    }
+
+    [Test]
+    public async Task RefreshAsync_UnclassifiedFailure_KeepsTheGenericMessageAndReason()
+    {
+        var status = await RefreshWithFailureAsync(static () => new InvalidOperationException("Unsupported MCP transport kind at /home/operator/.secret."));
+
+        AssertEx.Equal(McpConnectionFailureReason.Unknown, status.FailureReason);
+        AssertEx.Equal("The MCP server connection failed.", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_McpProtocolFailure_ReportsProtocol()
+    {
+        var status = await RefreshWithFailureAsync(static () => new McpException("Simulated handshake failure."));
+
+        AssertEx.Equal(McpConnectionFailureReason.Protocol, status.FailureReason);
+        AssertEx.Equal("The MCP server did not complete the MCP handshake.", status.LastError);
+    }
+
+    private static async Task<McpServerConnectionStatus> RefreshWithFailureAsync(Func<Exception> failure, IAgentSandboxRuntimeProvider? sandboxProvider = null)
+    {
+        var record = StdioRecord("Broken");
+        var factory = new FakeMcpClientFactory();
+        factory.FailFor(record.Id, failure);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), sandboxProvider);
+
+        await manager.RefreshAsync();
+
+        var status = manager.GetStatuses().Single();
+        AssertEx.False(status.Connected);
+        return status;
     }
 
     [Test]
@@ -357,9 +444,9 @@ public sealed class McpServerConnectionManagerTests
         return CreateManager(registry, factory, store);
     }
 
-    private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store)
+    private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store, IAgentSandboxRuntimeProvider? sandboxProvider = null)
     {
-        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, Options(), Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()),
+        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, sandboxProvider ?? new FakeSandboxRuntimeProvider(TimeProvider.System), Options(), Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()),
             NullLogger<McpServerConnectionManager>.Instance);
     }
 

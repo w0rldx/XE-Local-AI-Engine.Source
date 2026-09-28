@@ -248,7 +248,8 @@ internal static class ModelFitMapper
     public static LlamaCppRuntimeStatusResponse ToRuntimeStatusResponse(this LlamaCppUpdateSnapshot snapshot,
         InstalledRuntimeState? installed,
         string recommendedTag,
-        int runningProcessCount)
+        int runningProcessCount,
+        GpuVariant? overrideVariant)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
@@ -270,7 +271,8 @@ internal static class ModelFitMapper
             RunningProcessCount = runningProcessCount,
             IsSourceBuild = isSourceBuild,
             RebuildAvailable = rebuildAvailable,
-            CheckedAtUtc = snapshot.CheckedAtUtc?.ToUnixTimeMilliseconds()
+            CheckedAtUtc = snapshot.CheckedAtUtc?.ToUnixTimeMilliseconds(),
+            OverrideVariant = overrideVariant?.ToWireString()
         };
     }
 
@@ -290,7 +292,8 @@ internal static class ModelFitMapper
             RebuildAvailable = isSourceBuild
                                && status.Installed is not null
                                && !string.Equals(status.Installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
-            CheckedAtUtc = status.CheckedAtUtc?.ToUnixTimeMilliseconds()
+            CheckedAtUtc = status.CheckedAtUtc?.ToUnixTimeMilliseconds(),
+            OverrideVariant = status.OverrideVariant?.ToWireString()
         };
     }
 

@@ -226,6 +226,22 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
     }
 
     [Test]
+    public async Task GetStatusAsync_ReportsTheOverrideVariantOnlyWhileAnOverrideIsSet()
+    {
+        var withOverride = CreateService(Substitute.For<ILlamaCppBinaryManager>(),
+            Substitute.For<ILlamaServerProcessSupervisor>(),
+            overrideOptions: new LlamaServerRuntimeOverrideOptions
+            {
+                ServerPath = "/opt/llama/build/bin/llama-server",
+                Variant = GpuVariant.Cuda
+            });
+        var withoutOverride = CreateService(Substitute.For<ILlamaCppBinaryManager>(), Substitute.For<ILlamaServerProcessSupervisor>());
+
+        AssertEx.Equal(GpuVariant.Cuda, (await withOverride.GetStatusAsync()).OverrideVariant);
+        AssertEx.Null((await withoutOverride.GetStatusAsync()).OverrideVariant);
+    }
+
+    [Test]
     public void RuntimeAdministrationViews_DoNotExposeProviderPathsOrHashes()
     {
         Type[] publicViews =
@@ -235,7 +251,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             typeof(LlamaCppInstalledRuntimeView),
             typeof(LlamaCppRuntimeMutationResult)
         ];
-        string[] forbidden = ["ServerExecutablePath", "SourceBuildPath", "Sha256"];
+        string[] forbidden = ["ServerExecutablePath", "SourceBuildPath", "ServerPath", "Sha256"];
 
         foreach (var view in publicViews)
         {
@@ -268,7 +284,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
         INodeRuntimeSettings? runtimeSettings = null,
         ILlamaCppReleaseCatalog? releaseCatalog = null,
-        IGpuVariantSelector? variantSelector = null)
+        IGpuVariantSelector? variantSelector = null,
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
     {
         if (runtimeSettings is null)
         {
@@ -309,7 +326,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             runtimeSettings,
             supervisor,
             Substitute.For<ILocalChatClientCacheInvalidator>(),
-            new LlamaServerRuntimeOverrideOptions(),
+            overrideOptions ?? new LlamaServerRuntimeOverrideOptions(),
             lifetime,
             NullLogger<LlamaCppRuntimeAdministrationService>.Instance,
             TimeProvider.System);

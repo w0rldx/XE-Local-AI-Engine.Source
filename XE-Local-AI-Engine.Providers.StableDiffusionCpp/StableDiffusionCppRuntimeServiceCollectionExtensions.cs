@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -83,12 +85,13 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
                 sp.GetRequiredService<SdServerJobClient>(),
                 sp.GetRequiredService<IImageServerProgressBroker>()));
 
-        // Startup orphan reaper: kills stale sd-server processes THIS app left behind on a previous run, which a hard host kill orphans while they still hold a loopback port + GPU VRAM and so block
-        // the next start. Matches ONLY binaries under our own cache root; best-effort, never throwing out of StartAsync. Mirrors the llama-server reaper.
-        services.TryAddSingleton<IStaleImageServerProcessScanner, OsStaleImageServerProcessScanner>();
-        services.AddHostedService(static sp => new StaleImageServerReaper(sp.GetRequiredService<IStaleImageServerProcessScanner>(),
+        // Startup orphan reaper: kills stale sd-server processes a hard host kill left holding a loopback port + GPU VRAM; it reaps ONLY binaries under our own cache root and never throws.
+        // AddSingleton, not AddHostedService: every runtime registers the shared StaleProcessReaper type, and AddHostedService dedupes by implementation type, so only the first would run.
+        services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("sd-server"),
             StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot(),
-            sp.GetRequiredService<ILogger<StaleImageServerReaper>>()));
+            "sd-server",
+            logExecutablePath: true,
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
 
         return services;
     }

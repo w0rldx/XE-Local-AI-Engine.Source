@@ -29,7 +29,8 @@ internal static class LlamaServerLaunchArgumentComposer
         LlamaServerLaunchPlan? plan = null,
         int chatCacheRamMiB = 0,
         string? projectorFilePath = null,
-        string? adapterFilePath = null)
+        string? adapterFilePath = null,
+        string? modelAlias = null)
     {
         var args = new List<string>
         {
@@ -49,6 +50,13 @@ internal static class LlamaServerLaunchArgumentComposer
             // correctly without it: the readiness probe and the first real request warm it naturally.
             "--no-warmup"
         };
+
+        // The id the server reports as the response model and in /v1/models; without it llama-server reports the model file's absolute path.
+        if (!string.IsNullOrWhiteSpace(modelAlias))
+        {
+            args.Add(LlamaServerManagedFlags.Alias);
+            args.Add(modelAlias);
+        }
 
         // Context, placement, KV-cache/flash-attention and CPU threads, all emitted from ONE projection of this spawn's launch shape so the vector that reaches the
         // process and the shape a receipt records can never drift apart. Precedence lives in the launch policy that produced the plan; the matrix is in wiki 03.

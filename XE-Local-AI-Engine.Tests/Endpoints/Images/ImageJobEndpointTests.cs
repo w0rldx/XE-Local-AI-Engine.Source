@@ -456,7 +456,7 @@ public sealed class ImageJobEndpointTests
             }
         }
 
-        public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId) =>
+        public IReadOnlyList<ImageJobStatusEvent> SnapshotBufferedEvents(Guid jobId) =>
             [];
     }
 }

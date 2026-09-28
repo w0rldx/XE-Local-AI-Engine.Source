@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Globalization;
+using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
@@ -37,6 +39,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly IMcpToolRegistry _registry;
 
+    // Read only on a sandbox failure, to tell "this node cannot sandbox at all" from "the sandbox refused this server".
+    private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
+
     // The store is DbContext-backed and therefore Scoped, so this singleton manager resolves it per refresh through a scope rather
     // than capturing it: a captive dependency would fail ValidateOnBuild and risk concurrent DbContext use.
     private readonly IServiceScopeFactory _scopeFactory;
@@ -50,6 +55,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     public McpServerConnectionManager(IServiceScopeFactory scopeFactory,
         IMcpToolRegistry registry,
         IMcpClientFactory clientFactory,
+        IAgentSandboxRuntimeProvider sandboxProvider,
         IOptions<McpOptions> options,
         IOptions<AgentToolPipelineOptions> pipelineOptions,
         ILogger<McpServerConnectionManager> logger)
@@ -57,6 +63,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+        _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(pipelineOptions);
         _options = options.Value;
@@ -149,7 +156,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 continue;
             }
 
-            var (connected, error) = await ConnectServerAsync(record, slug, cancellationToken);
+            var (connected, error, reason) = await ConnectServerAsync(record, slug, cancellationToken);
             if (connected is not null)
             {
                 _connections[record.Id] = connected;
@@ -164,6 +171,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                     Connected = false,
                     ToolCount = 0,
                     LastError = error,
+                    FailureReason = reason,
                     Tools = []
                 });
             }
@@ -201,15 +209,18 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 Version = record.Version,
                 Slug = slug,
                 Tools = tools
-            }, Error: null);
+            }, Error: null, Reason: null);
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
             // The ONE connection failure that is not redacted: every other message here can echo a command path or URL, so it is
             // clamped, while this one is engine-authored and tells an operator "this node cannot sandbox" from "your server is broken".
-            _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier; it will contribute no tools.", record.Id);
+            var reason = _sandboxProvider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+                ? McpConnectionFailureReason.SandboxRefused
+                : McpConnectionFailureReason.SandboxUnavailable;
+            _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier ({Reason}); it will contribute no tools.", record.Id, reason);
             await DisposePartialClientAsync(client, record.Version, slug);
-            return new ConnectResult(Server: null, ex.Message);
+            return new ConnectResult(Server: null, ex.Message, reason);
         }
         catch (Exception ex) when (ex is McpException
                                        or HttpRequestException
@@ -224,16 +235,17 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         {
             // A connect or list failure for one server must never abort the refresh or leave the others half-applied, so the catch
             // covers the realistic transport, timeout, schema, TLS and configuration set. Caller cancellation is NOT caught: it propagates.
-            _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools; it will contribute no tools.", record.Id);
+            var reason = Classify(ex);
+            _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools ({Reason}); it will contribute no tools.", record.Id, reason);
             await DisposePartialClientAsync(client, record.Version, slug);
-            return new ConnectResult(Server: null, Redact(ex.Message));
+            return new ConnectResult(Server: null, SafeMessage(reason), reason);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The per-server timeout fired (not a caller cancel). Treat it like any other isolated failure.
             _logger.LogWarning("MCP server {ServerId} timed out after {TimeoutSeconds}s; it will contribute no tools.", record.Id, _options.ConnectTimeoutSeconds);
             await DisposePartialClientAsync(client, record.Version, slug);
-            return new ConnectResult(Server: null, "Timed out connecting to the MCP server.");
+            return new ConnectResult(Server: null, SafeMessage(McpConnectionFailureReason.Timeout), McpConnectionFailureReason.Timeout);
         }
     }
 
@@ -416,12 +428,41 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         return slug.Length == 0 ? "server" : slug;
     }
 
-    private static string Redact(string message)
+    /// <summary>
+    ///     Maps a caught connect or list failure to the reason the management panel words.
+    /// </summary>
+    /// <remarks>
+    ///     A missing command surfaces two ways: the SDK's stdio launch wraps the failed <c>Process.Start</c> (a
+    ///     <see cref="Win32Exception" />) in an <see cref="IOException" />, and the Sandboxed transport, whose launch
+    ///     would only fail inside the jail, checks the command up front and throws <see cref="FileNotFoundException" />.
+    ///     Order matters: both are <see cref="IOException" />s, as is the generic transport failure below them.
+    /// </remarks>
+    private static McpConnectionFailureReason Classify(Exception exception)
     {
-        // Connection/transport messages can echo a command path or URL. Keep the failure observable but never surface
-        // a host path or secret to the UI: clamp to a short, generic reason.
-        _ = message;
-        return "The MCP server connection failed.";
+        return exception switch
+        {
+            FileNotFoundException or IOException { InnerException: Win32Exception } => McpConnectionFailureReason.ServerNotFound,
+            AuthenticationException or HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } => McpConnectionFailureReason.Authentication,
+            TimeoutException => McpConnectionFailureReason.Timeout,
+            HttpRequestException or IOException or SocketException => McpConnectionFailureReason.Transport,
+            McpException or JsonException => McpConnectionFailureReason.Protocol,
+            _ => McpConnectionFailureReason.Unknown
+        };
+    }
+
+    private static string SafeMessage(McpConnectionFailureReason reason)
+    {
+        // Connection/transport messages can echo a command path or URL, so the exception text never reaches the UI:
+        // each reason has one fixed wording, and the real exception is logged server-side.
+        return reason switch
+        {
+            McpConnectionFailureReason.ServerNotFound => "The MCP server's command was not found or could not be started.",
+            McpConnectionFailureReason.Authentication => "The MCP server rejected the connection's credentials or its TLS negotiation failed.",
+            McpConnectionFailureReason.Timeout => "Timed out connecting to the MCP server.",
+            McpConnectionFailureReason.Transport => "The connection to the MCP server failed or closed.",
+            McpConnectionFailureReason.Protocol => "The MCP server did not complete the MCP handshake.",
+            _ => "The MCP server connection failed."
+        };
     }
 
     private async ValueTask DisposeClientSafelyAsync(ConnectedServer server)
@@ -447,5 +488,5 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         public required IReadOnlyList<McpRegisteredTool> Tools { get; init; }
     }
 
-    private sealed record ConnectResult(ConnectedServer? Server, string? Error);
+    private sealed record ConnectResult(ConnectedServer? Server, string? Error, McpConnectionFailureReason? Reason);
 }

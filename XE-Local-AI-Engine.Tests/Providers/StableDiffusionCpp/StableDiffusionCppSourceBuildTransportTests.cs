@@ -190,7 +190,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         var hub = Substitute.For<IHubContext<StableDiffusionCppSourceBuildHub>>();
         hub.Clients.Returns(clients);
         var publisher = new StableDiffusionCppSourceBuildEventPublisher(hub);
-        proxy.SendCoreAsync(StableDiffusionCppSourceBuildEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
+        proxy.SendCoreAsync(StableDiffusionCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
              .Returns(call =>
              {
                  payload = call.ArgAt<object?[]>(1)[0];

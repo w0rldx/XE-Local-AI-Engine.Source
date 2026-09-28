@@ -356,7 +356,7 @@ function toImageGenerationPhase(raw: string | null | undefined): ImageGeneration
 // configures (same as the GGUF download hub). Validated with zod before use — an unparseable push is dropped.
 //
 // This schema is HAND-WRITTEN and is not covered by `pnpm openapi:check`, which only regenerates the REST client. A
-// field added to ImageJobStatusHubEvent without a matching entry here is silently dropped with no failing check, so
+// field added to ImageJobStatusHubMessage without a matching entry here is silently dropped with no failing check, so
 // treat the two as one contract when either changes.
 export const imageJobStatusPushSchema = z.object({
 	jobId: z.string(),

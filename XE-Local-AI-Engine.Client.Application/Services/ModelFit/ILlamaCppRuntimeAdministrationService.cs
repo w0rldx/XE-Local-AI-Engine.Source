@@ -25,6 +25,9 @@ public sealed class LlamaCppRuntimeStatus
     public required int RunningProcessCount { get; init; }
 
     public required DateTimeOffset? CheckedAtUtc { get; init; }
+
+    /// <summary>The variant a bring-your-own <c>llama-server</c> override serves with; <see langword="null" /> when none is set.</summary>
+    public GpuVariant? OverrideVariant { get; init; }
 }
 
 public sealed class LlamaCppRuntimeMutationResult
