@@ -28,6 +28,7 @@ function hit(overrides: Record<string, unknown> = {}) {
 		content: "Restart the node.",
 		source: "runbook.md",
 		score: 0.9,
+		scoreKind: "Rerank",
 		chunkIndex: 0,
 		documentStatus: "Indexed",
 		servingLastKnownGood: false,

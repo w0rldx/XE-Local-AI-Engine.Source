@@ -92,7 +92,10 @@ export function KnowledgeDocumentsTable({
 										<Text size="sm">{document.embeddingModel || "—"}</Text>
 										{document.staleModel ? (
 											<Tooltip
-												label={t("pages.knowledgeBase.table.staleTooltip", "Embedded with an older model — reindex to refresh.")}
+												label={t(
+													"pages.knowledgeBase.table.staleTooltip",
+													"Indexed with an older model or parser version — reindex to refresh.",
+												)}
 												withArrow={true}
 											>
 												<Badge color="orange" variant="light" size="xs">

@@ -52,8 +52,16 @@ public sealed class KnowledgeSearchHit
     /// <summary>Constant provenance tag for this retrieval surface.</summary>
     public required string Source { get; init; }
 
-    /// <summary>Relevance score, higher is more relevant: the fused Reciprocal Rank Fusion score, or — when the reranker is enabled and succeeds — the cross-encoder relevance score the hit was reordered by.</summary>
+    /// <summary>Relevance score, higher is more relevant, on the scale <see cref="ScoreKind" /> names. Not a probability; only comparable within one result.</summary>
+    /// <remarks>
+    ///     <see cref="KnowledgeScoreKind.Fusion" />: the fused Reciprocal Rank Fusion score, roughly 0.01 to 0.06.
+    ///     <see cref="KnowledgeScoreKind.Rerank" />: the raw cross-encoder relevance, unbounded and model-specific (bge
+    ///     roughly -11 to +7, qwen3 0 to 1).
+    /// </remarks>
     public required double Score { get; init; }
+
+    /// <summary>Which scale <see cref="Score" /> is on; every hit of one result shares it.</summary>
+    public KnowledgeScoreKind ScoreKind { get; init; }
 
     /// <summary>Global order of the matched chunk within the document.</summary>
     public required int ChunkIndex { get; init; }

@@ -24,6 +24,7 @@ function source(overrides: Partial<ChatMessageSource> = {}): ChatMessageSource {
 		title: "Design Doc",
 		section: "Overview",
 		score: 0.87,
+		scoreKind: "Fusion",
 		...overrides,
 	};
 }
@@ -109,6 +110,32 @@ describe("ChatSourcesStrip", () => {
 
 		fireEvent.click(toggle);
 		expect(toggle.getAttribute("aria-expanded")).toBe("true");
+	});
+
+	// Formatting and localisation live in KnowledgeScoreBadge.test.tsx; this only proves each source renders its kind.
+	it("renders a score-kind badge for each source that records one", () => {
+		renderWithProviders(
+			<ChatSourcesStrip
+				sources={[
+					source({ chunkId: "r", title: "Alpha", score: -2.5, scoreKind: "Rerank" }),
+					source({ chunkId: "f", title: "Beta", score: 0.0164, scoreKind: "Fusion" }),
+				]}
+			/>,
+		);
+		fireEvent.click(screen.getByTestId("chat-sources-toggle"));
+
+		expect(screen.getAllByTestId("knowledge-score-kind").map((badge) => badge.textContent)).toEqual([
+			"Reranked Cross-encoder relevance -2.50",
+			"Hybrid match Fusion score 0.016",
+		]);
+	});
+
+	it("shows a legacy source without a recorded kind as a neutral score, with no kind badge", () => {
+		renderWithProviders(<ChatSourcesStrip sources={[source({ score: 0.03, scoreKind: undefined })]} />);
+		fireEvent.click(screen.getByTestId("chat-sources-toggle"));
+
+		expect(screen.queryByTestId("knowledge-score-kind")).toBeNull();
+		expect(screen.getByText("score 0.03")).toBeTruthy();
 	});
 
 	it("renders nothing when there are no sources", () => {

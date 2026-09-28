@@ -42,6 +42,7 @@ function hit(overrides: Partial<KnowledgeSearchHit> = {}): KnowledgeSearchHit {
 		content: "some content",
 		source: "knowledge-base",
 		score: 0.5,
+		scoreKind: "Fusion",
 		chunkIndex: 0,
 		documentStatus: "Indexed",
 		servingLastKnownGood: false,
@@ -107,6 +108,34 @@ describe("KnowledgeSearchPanel disclosure badge", () => {
 		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit({ servingLastKnownGood: false })])} />);
 
 		expect(screen.queryByTestId("knowledge-last-known-good")).toBeNull();
+	});
+});
+
+describe("KnowledgeSearchPanel score kind", () => {
+	beforeEach(() => {
+		stubMatchMedia();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	// Formatting and localisation live in KnowledgeScoreBadge.test.tsx; this only proves each hit renders its kind.
+	it("renders a score-kind badge per hit instead of a bare number", () => {
+		renderWithProviders(
+			<KnowledgeSearchPanel
+				documents={[]}
+				search={searchBag([
+					hit({ chunkId: "reranked", score: 7.3312, scoreKind: "Rerank" }),
+					hit({ chunkId: "fused", score: 0.03125, scoreKind: "Fusion" }),
+				])}
+			/>,
+		);
+
+		expect(screen.getAllByTestId("knowledge-score-kind").map((badge) => badge.textContent)).toEqual([
+			"Reranked Cross-encoder relevance 7.33",
+			"Hybrid match Fusion score 0.031",
+		]);
 	});
 });
 

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Services.Knowledge;
+
 /// <summary>
 ///     Transport DTO for node chat conversation summary data.
 /// </summary>
@@ -102,6 +104,7 @@ public sealed record NodeChatMessagePart(
 ///     hits fenced into the turn's context.
 /// </summary>
 /// <remarks>
+///     <see cref="ScoreKind" /> names the scale of <see cref="Score" />; it is null on sources persisted before it existed.
 ///     It persists on the assistant message's <c>metadata_json</c> blob, additively and with no migration, so the
 ///     client renders a "Sources" strip on the live refetch and a later reload. It carries only the NON-SENSITIVE
 ///     provenance <see cref="KnowledgeSearchHit" /> already discloses: the title and section are derived from
@@ -112,7 +115,8 @@ public sealed record NodeChatMessageSource(
     Guid ChunkId,
     string Title,
     string? Section,
-    double Score);
+    double Score,
+    KnowledgeScoreKind? ScoreKind = null);
 
 /// <summary>
 ///     Transport DTO for node chat persisted message data, whose <c>Parts</c> is the ordered interleave; it is null

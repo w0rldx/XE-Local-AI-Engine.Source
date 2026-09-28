@@ -24,7 +24,8 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "retrieved passages for document-grounded claims; do not invent facts or fill gaps from prior knowledge; if the "
         + "results do not contain enough information to answer, say so plainly instead of guessing. Typical flow: search "
         + "first, then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
-        + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, and "
+        + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, "
+        + "scoreKind (Fusion or Rerank: the scale of score, comparable only within one result, not a probability), and "
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
 
     /// <summary>

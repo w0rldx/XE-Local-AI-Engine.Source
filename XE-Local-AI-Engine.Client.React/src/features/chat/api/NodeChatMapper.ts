@@ -169,6 +169,7 @@ function mapSources(sources: NodeChatMessageSourceDto[] | null | undefined): Cha
 			section: source.section ?? undefined,
 			// int64/double wire values arrive as numbers; Number() is a defensive normalize against a stray bigint.
 			score: source.score != null ? Number(source.score) : 0,
+			scoreKind: source.scoreKind ?? undefined,
 		});
 	}
 

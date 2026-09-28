@@ -91,12 +91,15 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(chunkGamma, orderedChunkIds[0]);
         AssertEx.Equal(chunkBeta, orderedChunkIds[1]);
         AssertEx.Equal(chunkAlpha, orderedChunkIds[2]);
-        // The top hit carries its rerank relevance score, not the RRF score.
+        // The top hit carries its rerank relevance score, not the RRF score, and every hit says so.
         AssertEx.Equal(0.9, result.Results[0].Score);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Rerank);
     }
 
     [Test]
-    public async Task SearchAsync_RerankerDegrades_KeepsFusionOrder()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SearchAsync_RerankerDegrades_KeepsFusionOrderAndKind(bool countMismatch)
     {
         var databasePath = GetDatabasePath("rerank-degrade.sqlite");
         var documentId = Guid.NewGuid();
@@ -124,10 +127,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
                 Bm25Score = -1.0
             }
         };
-        // Reranker is CONFIGURED but unavailable → returns null → the search must keep the fusion order.
+        // Reranker is CONFIGURED but unavailable (null) or malformed (one score for two documents) → keep the fusion order.
+        IReadOnlyList<double>? scores = countMismatch ? [0.9] : null;
         var reranker = Substitute.For<IRerankerClient>();
         reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-                .Returns((IReadOnlyList<double>?)null);
+                .Returns(scores);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
@@ -142,6 +146,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(2, orderedChunkIds.Count);
         AssertEx.Equal(chunkAlpha, orderedChunkIds[0]);
         AssertEx.Equal(chunkBeta, orderedChunkIds[1]);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
     }
 
     [Test]
@@ -187,6 +192,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
 
         AssertEx.Equal(chunkAlpha, result.Results[0].ChunkId);
         AssertEx.Equal(chunkBeta, result.Results[1].ChunkId);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         await reranker.DidNotReceive().RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
     }
 
@@ -253,19 +259,123 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(2, result.Results.Count); // cut to `limit` after reordering
         AssertEx.Equal(chunkGamma, result.Results[0].ChunkId);
         AssertEx.Equal(chunkAlpha, result.Results[1].ChunkId);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Rerank);
+    }
+
+    [Test]
+    public async Task SearchAsync_SingleCandidate_GateSkipsReranker_AndKeepsFusionKind()
+    {
+        var databasePath = GetDatabasePath("rerank-gate-skip.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkAlpha = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+
+        var ftsHits = new List<FtsSearchHit>
+        {
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
+        };
+        var reranker = RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow);
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, CancellationToken.None);
+
+        AssertEx.Equal(chunkAlpha, result.Results.Single().ChunkId);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
+        await reranker.DidNotReceive().RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SearchAsync_RerankBudgetExpires_KeepsFusionOrderAndKind()
+    {
+        var databasePath = GetDatabasePath("rerank-budget.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkAlpha = Guid.NewGuid();
+        var chunkBeta = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
+
+        var ftsHits = new List<FtsSearchHit>
+        {
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
+        };
+        // The reranker only ever answers by observing cancellation, so the per-search deadline must end the wait.
+        var reranker = Substitute.For<IRerankerClient>();
+        reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo => NeverAnswersAsync(callInfo.ArgAt<CancellationToken>(3)));
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        // real-timer: the service times its deadline with Stopwatch, which a FakeTimeProvider cannot advance. The budget
+        // must outlast cold-start retrieval (migration, JIT, FTS, hydrate) so the rerank starts and the deadline cuts it.
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, retrievalLatencyBudgetMilliseconds: 3000);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, CancellationToken.None);
+
+        AssertEx.Equal(chunkAlpha, result.Results[0].ChunkId);
+        AssertEx.Equal(chunkBeta, result.Results[1].ChunkId);
+        AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
+        // Proves the deadline cut a started rerank, not the early exit that skips reranking once the budget is spent.
+        await reranker.Received(1).RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    private static void AssertAllScoreKind(KnowledgeSearchResult result, KnowledgeScoreKind expected)
+    {
+        AssertEx.True(result.Results.Count > 0, "The search must return hits for the score kind to be checked.");
+        foreach (var hit in result.Results)
+        {
+            AssertEx.Equal(expected, hit.ScoreKind);
+        }
+    }
+
+    private static async Task<IReadOnlyList<double>?> NeverAnswersAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return null;
     }
 
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
         IReadOnlyList<FtsSearchHit> ftsHits,
         IRerankerClient reranker,
-        string rerankerModelName)
+        string rerankerModelName,
+        int retrievalLatencyBudgetMilliseconds = 30_000)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
             RerankerModelName = rerankerModelName,
             AdaptiveRerankingEnabled = false,
-            RetrievalLatencyBudgetMilliseconds = 30_000
+            RetrievalLatencyBudgetMilliseconds = retrievalLatencyBudgetMilliseconds
         });
 
         var ftsSearch = Substitute.For<IFtsSearch>();

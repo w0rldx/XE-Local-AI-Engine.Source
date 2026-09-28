@@ -216,7 +216,11 @@ public sealed class KnowledgeSearchHitResponse
 
     public required string Source { get; init; }
 
+    /// <summary>Relevance on the <see cref="ScoreKind" /> scale; not a probability, only comparable within one result.</summary>
     public required double Score { get; init; }
+
+    /// <summary>Which scale <see cref="Score" /> is on (enum name via the global converter); shared by every hit of one result.</summary>
+    public required KnowledgeScoreKind ScoreKind { get; init; }
 
     public required int ChunkIndex { get; init; }
 

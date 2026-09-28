@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import type { XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind } from "@/core/api/generated";
+
 // Re-exported so chat's own call sites keep importing from here; the type itself lives in core because `agents` also
 // depends on it (see ReasoningEffort.ts for the effort-level doc comment).
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
@@ -96,7 +98,7 @@ export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | 
 
 /**
  * One knowledge-base excerpt that grounded a plain-chat assistant turn. Rendered in the collapsible
- * "Sources" strip under the answer. Carries only non-sensitive provenance (ids, derived title/section, fused score);
+ * "Sources" strip under the answer. Carries only non-sensitive provenance (ids, derived title/section, score + kind);
  * no chunk body text rides here. Maps from the persisted metadata blob via NodeChatMapper.
  */
 export interface ChatMessageSource {
@@ -105,6 +107,8 @@ export interface ChatMessageSource {
 	title: string;
 	section?: string;
 	score: number;
+	// Which scale `score` is on; undefined for sources persisted before the kind was recorded.
+	scoreKind?: XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind;
 }
 
 export type TimelineEventType =

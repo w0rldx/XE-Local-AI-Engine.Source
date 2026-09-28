@@ -600,6 +600,12 @@
 				"label": "Last-known-good",
 				"tooltip": "This document is being re-indexed or its last re-index failed. Results are served from the previously indexed version and may be out of date."
 			},
+			"scoreKind": {
+				"fusion": "Hybrid match",
+				"rerank": "Reranked",
+				"fusionTooltip": "Fusion score {{value}}",
+				"rerankTooltip": "Cross-encoder relevance {{value}}"
+			},
 			"table": {
 				"name": "Name",
 				"source": "Source",
@@ -610,7 +616,7 @@
 				"created": "Created",
 				"actions": "Actions",
 				"stale": "Stale",
-				"staleTooltip": "Embedded with an older model — reindex to refresh."
+				"staleTooltip": "Indexed with an older model or parser version — reindex to refresh."
 			},
 			"actions": {
 				"view": "View details",
@@ -640,7 +646,6 @@
 				"placeholder": "Ask the knowledge base…",
 				"aria": "Search the knowledge base",
 				"submit": "Search",
-				"score": "Score {{score}}",
 				"hint": "Search runs over every indexed document in this knowledge base.",
 				"noResults": "No indexed content matches \"{{query}}\".",
 				"error": "The search could not be completed."

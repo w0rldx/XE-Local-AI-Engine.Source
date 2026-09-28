@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -445,7 +446,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         };
         var sources = new[]
         {
-            new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Deployment Runbook", "Rollback", 0.91d),
+            new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Deployment Runbook", "Rollback", 0.91d, KnowledgeScoreKind.Rerank),
             new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "FAQ", Section: null, 0.42d)
         };
 
@@ -481,11 +482,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal("Deployment Runbook", roundTripped[0].Title);
         AssertEx.Equal("Rollback", roundTripped[0].Section);
         AssertEx.Equal(0.91d, roundTripped[0].Score);
+        AssertEx.Equal(KnowledgeScoreKind.Rerank, roundTripped[0].ScoreKind);
         AssertEx.Equal(sources[1].DocumentId, roundTripped[1].DocumentId);
         AssertEx.Equal(sources[1].ChunkId, roundTripped[1].ChunkId);
         AssertEx.Equal("FAQ", roundTripped[1].Title);
         AssertEx.Null(roundTripped[1].Section);
         AssertEx.Equal(0.42d, roundTripped[1].Score);
+        AssertEx.Null(roundTripped[1].ScoreKind);
         // The terminalize update must NOT drop the rest of the blob while it writes sources.
         AssertEx.Equal("the answer", assistant.Content);
         AssertEx.Equal("thinking", assistant.Reasoning);
@@ -534,6 +537,66 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         AssertEx.Null(assistant.Sources);
         AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task Metadata_LegacySourceWithoutScoreKind_LoadsWithNullKind()
+    {
+        await using var provider = await BuildProviderAsync("sources-legacy-score-kind.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Legacy source score",
+            UserId = "node",
+            CreatedAtUtc = 3460
+        });
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 3461
+        });
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 3462,
+            Content = "legacy answer"
+        });
+
+        // A source persisted before the score kind existed carries no scoreKind key; it must load as unknown (null).
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId,
+            $$"""{"sources":[{"documentId":"{{documentId}}","chunkId":"{{chunkId}}","title":"FAQ","section":null,"score":0.031}]}""");
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
+        var source = AssertEx.NotNull(loaded.Messages.Single(message => message.MessageId == assistantMessageId).Sources).Single();
+
+        AssertEx.Equal(documentId, source.DocumentId);
+        AssertEx.Equal(chunkId, source.ChunkId);
+        AssertEx.Equal(0.031d, source.Score);
+        AssertEx.Null(source.ScoreKind);
+    }
+
+    [Test]
+    public void Metadata_SourceScoreKind_PersistsAsEnumName()
+    {
+        var source = new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Runbook", Section: null, 4.5d, KnowledgeScoreKind.Rerank);
+
+        var json = NodeChatMetadataSerializer.Decode(AssertEx.NotNull(NodeChatMetadataSerializer.SerializeMetadata(null, null, null, null, null, null, null, sources: [source])));
+
+        // The stored form is the name, not the ordinal, so reordering the enum can never reinterpret an old blob.
+        AssertEx.Contains(json, "\"scoreKind\":\"Rerank\"");
+        AssertEx.Equal(KnowledgeScoreKind.Rerank, AssertEx.NotNull(NodeChatMetadataSerializer.DeserializeMetadata(json).Sources).Single().ScoreKind);
     }
 
     [Test]

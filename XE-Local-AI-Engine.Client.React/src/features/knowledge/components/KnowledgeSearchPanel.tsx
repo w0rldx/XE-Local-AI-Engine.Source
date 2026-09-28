@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { KnowledgeScoreBadge } from "@/core/ui/components/KnowledgeScoreBadge/KnowledgeScoreBadge";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import type { KnowledgeDocument } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
@@ -93,9 +94,7 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 									</Stack>
 									<Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
 										{hit.servingLastKnownGood ? <KnowledgeLastKnownGoodBadge /> : null}
-										<Badge variant="light" color="primary" style={{ flexShrink: 0 }}>
-											{t("pages.knowledgeBase.search.score", "Score {{score}}", { score: hit.score.toFixed(2) })}
-										</Badge>
+										<KnowledgeScoreBadge score={hit.score} scoreKind={hit.scoreKind} />
 									</Group>
 								</Group>
 								<Text size="sm" c="dimmed" lineClamp={3}>

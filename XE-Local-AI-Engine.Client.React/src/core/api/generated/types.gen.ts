@@ -3538,6 +3538,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse 
 	content: string;
 	source: string;
 	score: number;
+	scoreKind: XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind;
 	chunkIndex: number;
 	documentStatus: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	servingLastKnownGood: boolean;
@@ -6371,6 +6372,7 @@ export type XeLocalAiEngineClientServicesChatNodeChatMessageSource = {
 	title?: string;
 	section?: string | null;
 	score?: number;
+	scoreKind?: XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind | null;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsCommandDefinition = {
@@ -6465,6 +6467,8 @@ export type XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus =
 	| "Embedding"
 	| "Indexed"
 	| "Failed";
+
+export type XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind = "Fusion" | "Rerank";
 
 export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Unknown"

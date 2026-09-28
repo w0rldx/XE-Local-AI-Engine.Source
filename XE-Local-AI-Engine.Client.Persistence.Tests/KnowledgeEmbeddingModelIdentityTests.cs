@@ -167,6 +167,36 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, legacyId));
     }
 
+    // structured-v2 stored namespaces as code symbols; the v3 bump is what re-queues those documents for re-ingestion.
+    [Test]
+    public async Task ResetStaleDocumentsToPendingAsync_ResetsStructuredV2ParserOnly()
+    {
+        var databasePath = GetDatabasePath("catalog-parser-v2-reset.sqlite");
+        var staleId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, staleId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedDocumentAsync(databasePath, currentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SetIndexVersionsAsync(databasePath, staleId, "structured-v2", KnowledgeIndexVersions.Chunker);
+
+        IReadOnlyList<Guid> reset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            var options = Options.Create(new KnowledgeBaseOptions());
+            var catalog = new KnowledgeDocumentCatalogService(context,
+                CreateOutageProviderResolver(),
+                new EmbeddingModelResolver(options),
+                options,
+                TimeProvider.System);
+            reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(1, reset.Count);
+        AssertEx.Equal(staleId, reset[0]);
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, currentId));
+    }
+
     [Test]
     public async Task ListAsync_WhenPolicySwitchesToNative_FlagsTheMatryoshkaIndexStale()
     {

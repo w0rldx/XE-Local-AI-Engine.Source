@@ -184,6 +184,40 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
     }
 
     [Test]
+    [Arguments(KnowledgeScoreKind.Fusion)]
+    [Arguments(KnowledgeScoreKind.Rerank)]
+    public async Task ExecuteAsync_EmitsScoreKindNextToScore(KnowledgeScoreKind scoreKind)
+    {
+        var handler = CreateHandler(new KnowledgeSearchResult
+        {
+            Results =
+            [
+                new KnowledgeSearchHit
+                {
+                    DocumentId = Guid.NewGuid(),
+                    ChunkId = Guid.NewGuid(),
+                    Title = "Runbook",
+                    Section = null,
+                    Content = "restart the node",
+                    Source = "knowledge_base",
+                    Score = -3.25,
+                    ScoreKind = scoreKind,
+                    ChunkIndex = 0,
+                    DocumentStatus = KnowledgeDocumentStatus.Indexed,
+                    ServingLastKnownGood = false
+                }
+            ]
+        });
+
+        var json = await handler.ExecuteAsync("""{"query":"anything"}""");
+
+        using var document = JsonDocument.Parse(json);
+        var hit = document.RootElement.GetProperty("results")[0];
+        AssertEx.Equal(-3.25, hit.GetProperty("score").GetDouble());
+        AssertEx.Equal(scoreKind.ToString(), hit.GetProperty("scoreKind").GetString());
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenChunkForgesEndMarker_FenceStaysIntact()
     {
         // A chunk body that embeds a verbatim END marker prefix must NOT be able to close the fence: the real end marker

@@ -14,7 +14,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeChatContextComposerTests
 {
-    private static KnowledgeSearchHit Hit(string title, string content, double score, string? section = "Section", Guid? documentId = null, Guid? chunkId = null, bool lastKnownGood = false)
+    private static KnowledgeSearchHit Hit(string title, string content, double score, string? section = "Section", Guid? documentId = null, Guid? chunkId = null, bool lastKnownGood = false,
+        KnowledgeScoreKind scoreKind = KnowledgeScoreKind.Fusion)
     {
         return new KnowledgeSearchHit
         {
@@ -25,6 +26,7 @@ public sealed class KnowledgeChatContextComposerTests
             Content = content,
             Source = "knowledge-base",
             Score = score,
+            ScoreKind = scoreKind,
             ChunkIndex = 0,
             DocumentStatus = lastKnownGood ? KnowledgeDocumentStatus.Extracting : KnowledgeDocumentStatus.Indexed,
             ServingLastKnownGood = lastKnownGood
@@ -60,6 +62,23 @@ public sealed class KnowledgeChatContextComposerTests
         AssertEx.Equal("Design Doc", source.Title);
         AssertEx.Equal("Overview", AssertEx.NotNull(source.Section));
         AssertEx.Equal(0.9, source.Score);
+    }
+
+    [Test]
+    [Arguments(KnowledgeScoreKind.Fusion)]
+    [Arguments(KnowledgeScoreKind.Rerank)]
+    public void Compose_SourcesCarryTheHitScoreKind(KnowledgeScoreKind scoreKind)
+    {
+        var hits = new List<KnowledgeSearchHit>
+        {
+            Hit("Design Doc", "The system uses hybrid retrieval.", score: 2.5, scoreKind: scoreKind)
+        };
+
+        var result = AssertEx.NotNull(KnowledgeChatContextComposer.Compose(hits, charBudget: 10_000));
+
+        var source = result.Sources.Single();
+        AssertEx.Equal(2.5, source.Score);
+        AssertEx.Equal(scoreKind, source.ScoreKind);
     }
 
     [Test]

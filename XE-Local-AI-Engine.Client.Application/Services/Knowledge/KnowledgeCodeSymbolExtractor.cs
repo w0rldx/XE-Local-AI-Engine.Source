@@ -11,9 +11,12 @@ internal static class KnowledgeCodeSymbolExtractor
 {
     private static readonly string[] DeclarationPrefixes =
     [
-        "namespace ", "class ", "interface ", "struct ", "record ", "enum ", "def ", "func ", "function ",
+        "class ", "interface ", "struct ", "record ", "enum ", "def ", "func ", "function ",
         "fn ", "type ", "module ", "trait "
     ];
+
+    // Only a last resort: a namespace is the first line of every file-scoped C# chunk, not the chunk's symbol.
+    private static readonly string[] NamespacePrefixes = ["namespace "];
 
     private static readonly HashSet<string> ControlWords = new(StringComparer.Ordinal)
     {
@@ -39,25 +42,23 @@ internal static class KnowledgeCodeSymbolExtractor
             return null;
         }
 
+        return FindFirstDeclaration(content) ?? FindPrefixedIdentifier(content, NamespacePrefixes);
+    }
+
+    private static string? FindFirstDeclaration(string content)
+    {
         foreach (var rawLine in content.AsSpan().EnumerateLines())
         {
             var line = rawLine.Trim();
-            if (line.IsEmpty || line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith('#'))
+            if (IsSkipped(line))
             {
                 continue;
             }
 
-            foreach (var prefix in DeclarationPrefixes)
+            var symbol = ReadPrefixedIdentifier(line, DeclarationPrefixes);
+            if (symbol is not null)
             {
-                var prefixIndex = line.IndexOf(prefix, StringComparison.Ordinal);
-                if (prefixIndex >= 0)
-                {
-                    var symbol = ReadIdentifier(line[(prefixIndex + prefix.Length)..]);
-                    if (symbol is not null)
-                    {
-                        return symbol;
-                    }
-                }
+                return symbol;
             }
 
             var openParenthesis = line.IndexOf('(');
@@ -76,6 +77,44 @@ internal static class KnowledgeCodeSymbolExtractor
         }
 
         return null;
+    }
+
+    private static string? FindPrefixedIdentifier(string content, string[] prefixes)
+    {
+        foreach (var rawLine in content.AsSpan().EnumerateLines())
+        {
+            var line = rawLine.Trim();
+            var symbol = IsSkipped(line) ? null : ReadPrefixedIdentifier(line, prefixes);
+            if (symbol is not null)
+            {
+                return symbol;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadPrefixedIdentifier(ReadOnlySpan<char> line, string[] prefixes)
+    {
+        foreach (var prefix in prefixes)
+        {
+            var prefixIndex = line.IndexOf(prefix, StringComparison.Ordinal);
+            if (prefixIndex >= 0)
+            {
+                var symbol = ReadIdentifier(line[(prefixIndex + prefix.Length)..]);
+                if (symbol is not null)
+                {
+                    return symbol;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsSkipped(ReadOnlySpan<char> line)
+    {
+        return line.IsEmpty || line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith('#');
     }
 
     private static string? ReadIdentifier(ReadOnlySpan<char> input)

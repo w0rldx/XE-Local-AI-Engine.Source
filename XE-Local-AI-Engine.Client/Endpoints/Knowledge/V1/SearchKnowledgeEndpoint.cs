@@ -69,6 +69,7 @@ public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, S
             Content = hit.Content,
             Source = hit.Source,
             Score = hit.Score,
+            ScoreKind = hit.ScoreKind,
             ChunkIndex = hit.ChunkIndex,
             DocumentStatus = hit.DocumentStatus,
             ServingLastKnownGood = hit.ServingLastKnownGood,

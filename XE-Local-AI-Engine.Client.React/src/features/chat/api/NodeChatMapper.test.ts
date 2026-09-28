@@ -244,13 +244,13 @@ describe("node chat mapper", () => {
 	it("maps the persisted knowledge-base sources onto the message model", () => {
 		const message = mapSingleMessage({
 			sources: [
-				{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82 },
-				{ documentId: "doc-2", chunkId: "chunk-2", title: "Runbook", section: null, score: 0.5 },
+				{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82, scoreKind: "Rerank" },
+				{ documentId: "doc-2", chunkId: "chunk-2", title: "Runbook", section: null, score: 0.5, scoreKind: null },
 			],
 		});
 
 		expect(message.sources).toEqual([
-			{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82 },
+			{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82, scoreKind: "Rerank" },
 			{ documentId: "doc-2", chunkId: "chunk-2", title: "Runbook", section: undefined, score: 0.5 },
 		]);
 	});

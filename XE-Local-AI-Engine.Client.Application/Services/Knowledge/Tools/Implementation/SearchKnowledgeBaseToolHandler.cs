@@ -133,8 +133,8 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 SerializerOptions);
         }
 
-        // Results arrive ordered by descending fused score. Serialize hits while a running content-character budget
-        // holds, so the lowest-scored (least relevant) hits are trimmed first and one wide search cannot flood context.
+        // Results arrive best first (fused, or cross-encoder when reranked; see ScoreKind). A running content budget trims
+        // the least relevant hits first, so one wide search cannot flood context.
         var hits = new List<object>(result.Results.Count);
         var usedChars = 0;
         var truncated = false;
@@ -166,6 +166,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                     new("symbol", hit.Symbol)
                 ]),
                 score = hit.Score,
+                scoreKind = hit.ScoreKind.ToString(),
                 chunkIndex = hit.ChunkIndex,
                 // Disclose staleness in the model-facing provenance: when the owning document is not currently
                 // Indexed, this chunk is a last-known-good projection served during a pending/failed re-index.

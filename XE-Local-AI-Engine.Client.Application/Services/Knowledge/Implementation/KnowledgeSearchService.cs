@@ -191,6 +191,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                 Content = contents[index],
                 Source = SourceTag,
                 Score = selection.Score,
+                ScoreKind = selection.ScoreKind,
                 ChunkIndex = selection.Row.ChunkIndex,
                 DocumentStatus = selection.Row.DocumentStatus,
                 ServingLastKnownGood = servingLastKnownGood,
@@ -301,7 +302,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                 {
                     ChunkId = entry.ChunkId,
                     Row = row,
-                    Score = entry.Score
+                    Score = entry.Score,
+                    ScoreKind = KnowledgeScoreKind.Fusion
                 });
             }
         }
@@ -354,7 +356,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         return pool
                .Select((candidate, index) => candidate with
                {
-                   Score = scores[index]
+                   Score = scores[index],
+                   ScoreKind = KnowledgeScoreKind.Rerank
                })
                .OrderByDescending(static candidate => candidate.Score)
                .Take(limit)
@@ -587,7 +590,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     }
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
-    // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).
+    // stamp on the hit with its kind (Fusion on the fusion/degrade paths, Rerank only on the reranked path).
     private sealed record ChunkSelection
     {
         public required Guid ChunkId { get; init; }
@@ -595,6 +598,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         public required HydratedChunk Row { get; init; }
 
         public required double Score { get; init; }
+
+        public required KnowledgeScoreKind ScoreKind { get; init; }
     }
 
     // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm), the

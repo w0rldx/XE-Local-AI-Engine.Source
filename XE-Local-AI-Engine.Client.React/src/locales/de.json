@@ -600,6 +600,12 @@
 				"label": "Letzter gültiger Stand",
 				"tooltip": "Dieses Dokument wird neu indexiert oder die letzte Neuindexierung ist fehlgeschlagen. Die Ergebnisse stammen aus der zuvor indexierten Version und können veraltet sein."
 			},
+			"scoreKind": {
+				"fusion": "Hybrid-Treffer",
+				"rerank": "Neu bewertet",
+				"fusionTooltip": "Fusionswert {{value}}",
+				"rerankTooltip": "Cross-Encoder-Relevanz {{value}}"
+			},
 			"table": {
 				"name": "Name",
 				"source": "Quelle",
@@ -610,7 +616,7 @@
 				"created": "Erstellt",
 				"actions": "Aktionen",
 				"stale": "Veraltet",
-				"staleTooltip": "Mit einem älteren Modell eingebettet — zum Aktualisieren neu indexieren."
+				"staleTooltip": "Mit einem älteren Modell oder einer älteren Parser-Version indexiert — zum Aktualisieren neu indexieren."
 			},
 			"actions": {
 				"view": "Details anzeigen",
@@ -640,7 +646,6 @@
 				"placeholder": "Die Wissensdatenbank fragen…",
 				"aria": "Wissensdatenbank durchsuchen",
 				"submit": "Suchen",
-				"score": "Wert {{score}}",
 				"hint": "Die Suche läuft über jedes indexierte Dokument in dieser Wissensdatenbank.",
 				"noResults": "Kein indexierter Inhalt passt zu \"{{query}}\".",
 				"error": "Die Suche konnte nicht abgeschlossen werden."
