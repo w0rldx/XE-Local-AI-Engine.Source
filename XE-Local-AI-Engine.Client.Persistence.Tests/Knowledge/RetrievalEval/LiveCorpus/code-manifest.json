@@ -1,0 +1,64 @@
+{
+  "pinnedCode": [
+    {
+      "key": "code/ReciprocalRankFusion.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/ReciprocalRankFusion.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "a7f15f00ac2cf479abd924af5843825995bea2834087979f3bf05eb2a0544a45"
+    },
+    {
+      "key": "code/FtsSearch.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/FtsSearch.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "f2395c9e6b48fc0a652f410b4f6315abcefda1ca87ccde0d73b4e9cd2f936682"
+    },
+    {
+      "key": "code/KnowledgeQueryEmbeddingCache.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeQueryEmbeddingCache.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "d347988c79f9e3aedab1c0ca8d364c43cfad48d4960473b211f5e760aa5eb3c5"
+    },
+    {
+      "key": "code/ChunkTokenApproximation.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Knowledge/ChunkTokenApproximation.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "f1e551aaad0dada938956ea957296d2376622cc30663051e342173d6f1d454d9"
+    },
+    {
+      "key": "code/KnowledgeBlobOrphanSweeper.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeBlobOrphanSweeper.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "396b7bc9309065f80b86d4a27232f028fda396b1b8bc02c1e28f7e2e93548447"
+    },
+    {
+      "key": "code/KnowledgeChatContextComposer.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/KnowledgeChatContextComposer.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "e4292a8be79c5b343f9706a870c7f1b9062bc53bea49a5572dcb0f3fa20caf17"
+    },
+    {
+      "key": "code/AsyncReaderWriterLock.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Chat/AsyncReaderWriterLock.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "99841b238b46da1d49978de6b6577fdefef237d851cae06afff9165fb16100ba"
+    },
+    {
+      "key": "code/ModelKindDetector.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Chat/ModelKindDetector.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "b56371a6902932537be361c2f40045a488ef662790fbd7913a9b9560aac173bf"
+    },
+    {
+      "key": "code/SchedulerHistoryRetentionService.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Scheduler/Implementation/SchedulerHistoryRetentionService.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "738945640c6a5b0ff3183be64fe708065d45eb85f0ded4808b7f5cdc6bc5559f"
+    },
+    {
+      "key": "code/SchedulerJobKeys.cs.txt",
+      "origin": "XE-Local-AI-Engine.Client.Application/Services/Scheduler/SchedulerJobKeys.cs",
+      "commit": "862b2a9c22d63675a41c74192ec66147ee4a8a90",
+      "sha256": "0936207b984ebc079474f0bf7c48d11bafc622302241b75b3a66b9b7117498ce"
+    }
+  ]
+}

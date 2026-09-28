@@ -26,8 +26,11 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     model or reranker degrades gracefully — lexical-only, or fusion order — rather than failing. No query or chunk
 ///     text is ever logged. Scoped: it drives the scoped collaborators through the request-scoped db context.
 /// </remarks>
-public sealed class KnowledgeSearchService : IKnowledgeSearchService
+public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 {
+    /// <summary>Stable EventId of the Warning logged when the query embedding degrades the search to lexical-only.</summary>
+    public const int QueryEmbeddingUnavailableEventId = 4901;
+
     /// <summary>Provenance tag stamped on every hit from this retrieval surface.</summary>
     private const string SourceTag = "knowledge-base";
 
@@ -444,8 +447,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             // Model not pulled / provider down / transport error / unregistered provider name. Degrade to lexical-only.
             // Log the exception type only — never its message, never the query.
-            _logger.LogWarning("Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.",
-                exception.GetType().Name);
+            QueryEmbeddingUnavailable(_logger, exception.GetType().Name);
             return new QueryEmbedding(ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
         }
     }
@@ -598,4 +600,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm), the
     // resolved model name scoping which stored vectors it may meet, and the identity pinning the policy it was built under.
     private sealed record QueryEmbedding(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity);
+
+    [LoggerMessage(EventId = QueryEmbeddingUnavailableEventId, Level = LogLevel.Warning,
+        Message = "Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.")]
+    private static partial void QueryEmbeddingUnavailable(ILogger logger, string exceptionType);
 }

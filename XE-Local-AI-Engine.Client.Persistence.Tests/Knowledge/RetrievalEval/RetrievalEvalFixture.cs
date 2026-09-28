@@ -3,8 +3,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -13,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -38,24 +42,27 @@ internal sealed class RetrievalEvalFixture : IDisposable
     private const int FixtureMaxChunkChars = 220;
     private const int FixtureChunkOverlapChars = 40;
 
+    // One stable repository id for the whole live corpus, as one selected folder would have.
+    private const string RepositorySourceId = "retrievalevallivecorpus";
+
     private readonly string _databasePath;
     private readonly INodeSqliteKeyHolder _keyHolder;
     private readonly KnowledgeBaseOptions _options;
     private readonly IOptions<KnowledgeBaseOptions> _optionsWrapper;
-    private readonly IReadOnlyDictionary<string, string> _synonymToConcept;
+    private readonly ILocalModelProvider _embeddingProvider;
     private readonly List<NodeChatDbContext> _searchContexts = [];
 
     private RetrievalEvalFixture(string databasePath,
         INodeSqliteKeyHolder keyHolder,
         KnowledgeBaseOptions options,
-        IReadOnlyDictionary<string, string> synonymToConcept,
+        ILocalModelProvider embeddingProvider,
         IReadOnlyDictionary<string, Guid> documentIdsByKey)
     {
         _databasePath = databasePath;
         _keyHolder = keyHolder;
         _options = options;
         _optionsWrapper = Options.Create(options);
-        _synonymToConcept = synonymToConcept;
+        _embeddingProvider = embeddingProvider;
         DocumentIdsByKey = documentIdsByKey;
     }
 
@@ -78,23 +85,64 @@ internal sealed class RetrievalEvalFixture : IDisposable
     ///     comparison uses this to ingest a small DISCRIMINATING corpus (engineered so score-agnostic RRF mis-orders the relevant chunk while
     ///     score-aware fusion recovers it) into its own database, without touching the shared baseline corpus.
     /// </summary>
-    public static async Task<RetrievalEvalFixture> BuildAsync(string databasePath,
+    public static Task<RetrievalEvalFixture> BuildAsync(string databasePath,
         INodeSqliteKeyHolder keyHolder,
         IReadOnlyList<RetrievalEvalCorpus.FixtureDocument> documents,
         IReadOnlyDictionary<string, string> synonymToConcept,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
-        ArgumentNullException.ThrowIfNull(keyHolder);
-        ArgumentNullException.ThrowIfNull(documents);
         ArgumentNullException.ThrowIfNull(synonymToConcept);
-
         var options = new KnowledgeBaseOptions
         {
             MaxChunkChars = FixtureMaxChunkChars,
             ChunkOverlapChars = FixtureChunkOverlapChars,
             RerankerModelName = string.Empty
         };
+        return BuildCoreAsync(databasePath,
+            keyHolder,
+            documents,
+            new DeterministicEmbeddingProvider(EmbeddingDimensions, synonymToConcept),
+            options,
+            sourcePathOf: null,
+            cancellationToken);
+    }
+
+    /// <summary>
+    ///     Ingests a labeled corpus the way a production repository import does, for the real-model eval: through the
+    ///     REAL <see cref="KnowledgeDocumentBlobStore" />, with the metadata <c>KnowledgeRepositoryImportService</c> writes.
+    /// </summary>
+    /// <remarks>
+    ///     The real extension picks extractor, content kind, language and code symbol, and fills the FTS
+    ///     <c>source_path</c>/<c>symbol</c> columns. <paramref name="embeddingProvider" /> embeds chunks and queries;
+    ///     <paramref name="options" /> sizes chunks (pass production defaults).
+    /// </remarks>
+    /// <param name="sourcePathOf">Maps a document key to the repository-relative path it is imported under.</param>
+    public static Task<RetrievalEvalFixture> BuildAsync(string databasePath,
+        INodeSqliteKeyHolder keyHolder,
+        IReadOnlyList<RetrievalEvalCorpus.FixtureDocument> documents,
+        ILocalModelProvider embeddingProvider,
+        KnowledgeBaseOptions options,
+        Func<string, string> sourcePathOf,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sourcePathOf);
+        return BuildCoreAsync(databasePath, keyHolder, documents, embeddingProvider, options, sourcePathOf, cancellationToken);
+    }
+
+    private static async Task<RetrievalEvalFixture> BuildCoreAsync(string databasePath,
+        INodeSqliteKeyHolder keyHolder,
+        IReadOnlyList<RetrievalEvalCorpus.FixtureDocument> documents,
+        ILocalModelProvider embeddingProvider,
+        KnowledgeBaseOptions options,
+        Func<string, string>? sourcePathOf,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ArgumentNullException.ThrowIfNull(keyHolder);
+        ArgumentNullException.ThrowIfNull(documents);
+        ArgumentNullException.ThrowIfNull(embeddingProvider);
+        ArgumentNullException.ThrowIfNull(options);
+
         var optionsWrapper = Options.Create(options);
 
         // A copy of the shared at-head template, not a replay of the whole declared chain: what this fixture exercises
@@ -103,14 +151,21 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
         var documentIdsByKey = new Dictionary<string, Guid>(StringComparer.Ordinal);
 
-        // One ingestion context (and connection) for the whole corpus: the ingestion service and the index writer share
-        // it exactly as a request scope would in production.
+        // One ingestion context (and connection) for the whole corpus, shared as a production request scope would.
+        // Only the repository-import path needs a service provider (the real blob store opens a scope per call).
+        await using var repositoryServices = sourcePathOf is null ? null : BuildRepositoryImportServices(databasePath, keyHolder);
         await using (var ingestionContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
         {
-            var blobStore = new InMemoryBlobStore();
+            var memoryStore = new InMemoryBlobStore();
+            IKnowledgeDocumentBlobStore blobStore = sourcePathOf is null
+                ? memoryStore
+                : new KnowledgeDocumentBlobStore(repositoryServices!.GetRequiredService<IServiceScopeFactory>(),
+                    new FixedNodeDataDirectory(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, Path.GetFileNameWithoutExtension(databasePath) + "-data")),
+                    keyHolder,
+                    TimeProvider.System);
             var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
             var chunkingService = new HeaderBoundaryChunkingService(optionsWrapper);
-            var providerResolver = new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, synonymToConcept));
+            var providerResolver = new SingleProviderResolver(embeddingProvider);
             var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper), new KnowledgeEmbeddingPrefixer(), optionsWrapper);
             var indexWriter = new KnowledgeIndexWriter(ingestionContext, TimeProvider.System);
             var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
@@ -129,12 +184,20 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
             foreach (var document in documents)
             {
-                var documentId = Guid.NewGuid();
-                documentIdsByKey[document.Key] = documentId;
-
                 var bytes = Encoding.UTF8.GetBytes(document.Body);
-                blobStore.Register(documentId, bytes);
-                await InsertPendingDocumentRowAsync(ingestionContext, connection, documentId, bytes.Length, cancellationToken);
+                Guid documentId;
+                if (sourcePathOf is null)
+                {
+                    documentId = Guid.NewGuid();
+                    memoryStore.Register(documentId, bytes);
+                    await InsertPendingDocumentRowAsync(ingestionContext, connection, documentId, bytes.Length, cancellationToken);
+                }
+                else
+                {
+                    documentId = await AddAsRepositoryFileAsync(blobStore, extractor, sourcePathOf(document.Key), bytes, options, cancellationToken);
+                }
+
+                documentIdsByKey[document.Key] = documentId;
 
                 await ingestionService.RunAsync(documentId, cancellationToken);
 
@@ -147,7 +210,25 @@ internal sealed class RetrievalEvalFixture : IDisposable
             }
         }
 
-        return new RetrievalEvalFixture(databasePath, keyHolder, options, synonymToConcept, documentIdsByKey);
+        return new RetrievalEvalFixture(databasePath, keyHolder, options, embeddingProvider, documentIdsByKey);
+    }
+
+    /// <summary>The distinct (vector width, vector identity) pairs the ingested chunk vectors were stored with.</summary>
+    public async Task<IReadOnlyList<(long Dim, string Identity)>> ReadVectorShapesAsync(CancellationToken cancellationToken)
+    {
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
+        var connection = context.Database.GetDbConnection();
+        await OpenAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT dim, vector_identity FROM knowledge_chunk_vectors;";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var shapes = new List<(long, string)>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            shapes.Add((reader.GetInt64(0), reader.GetString(1)));
+        }
+
+        return shapes;
     }
 
     /// <summary>The default hybrid search: FTS ∪ vector, fused by the shipped default fusion strategy, no reranker.</summary>
@@ -193,10 +274,25 @@ internal sealed class RetrievalEvalFixture : IDisposable
         return CreateSearchService(HybridProviderResolver(), rerankedOptions, reranker);
     }
 
-    private ILocalModelProviderResolver HybridProviderResolver() =>
-        new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, _synonymToConcept));
+    /// <summary>
+    ///     The hybrid search over the ingestion embedding provider with caller-supplied options and reranker, for the
+    ///     real-model eval's gate, budget and fusion matrix. Only the options' search-time settings are read.
+    /// </summary>
+    /// <param name="logger">The search service's logger (the live eval counts query-embedding degrades); null is silent.</param>
+    public IKnowledgeSearchService CreateSearchService(KnowledgeBaseOptions options, IRerankerClient reranker, ILogger<KnowledgeSearchService>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(reranker);
+        return CreateSearchService(HybridProviderResolver(), options, reranker, logger);
+    }
 
-    private IKnowledgeSearchService CreateSearchService(ILocalModelProviderResolver providerResolver, KnowledgeBaseOptions options, IRerankerClient reranker)
+    private ILocalModelProviderResolver HybridProviderResolver() =>
+        new SingleProviderResolver(_embeddingProvider);
+
+    private IKnowledgeSearchService CreateSearchService(ILocalModelProviderResolver providerResolver,
+        KnowledgeBaseOptions options,
+        IRerankerClient reranker,
+        ILogger<KnowledgeSearchService>? logger = null)
     {
         // A fresh scoped context per search service, mirroring the request-scoped DbContext the real service depends on.
         var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
@@ -215,7 +311,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             Substitute.For<IContextExpansionService>(),
             new NoOpQueryEmbeddingCache(),
             optionsWrapper,
-            NullLogger<KnowledgeSearchService>.Instance);
+            logger ?? NullLogger<KnowledgeSearchService>.Instance);
     }
 
     public void Dispose()
@@ -228,6 +324,48 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _searchContexts.Clear();
     }
 
+
+    // The repository-import shape of one file, as KnowledgeRepositoryImportService builds it. Where that service skips an
+    // unsupported extension, this throws: a labelled document silently left out of the index would bias every metric.
+    private static async Task<Guid> AddAsRepositoryFileAsync(IKnowledgeDocumentBlobStore blobStore,
+        DocumentTextExtractor extractor,
+        string sourcePath,
+        byte[] bytes,
+        KnowledgeBaseOptions options,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(sourcePath);
+        if (!extractor.IsSupported(extension))
+        {
+            throw new InvalidOperationException($"Fixture document '{sourcePath}' has an extension the knowledge extractor does not support.");
+        }
+
+        var result = await blobStore.AddAsync(new KnowledgeDocumentInput
+        {
+            DocumentId = Guid.NewGuid(),
+            OriginalFileName = sourcePath,
+            MimeType = "text/plain",
+            Extension = extension,
+            SizeBytes = bytes.LongLength,
+            ContentHash = Convert.ToHexString(SHA256.HashData(bytes)),
+            Content = bytes,
+            EmbeddingModel = options.EmbeddingModelName,
+            SourcePath = sourcePath.Replace('\\', '/'),
+            SourceKind = "repository",
+            SourceId = RepositorySourceId
+        }, cancellationToken);
+        return result.WasInserted
+            ? result.DocumentId
+            : throw new InvalidOperationException($"Fixture document '{sourcePath}' was not inserted (duplicate source path or content).");
+    }
+
+    // The blob store opens its own scoped context per call, as it does under the host's DI container.
+    private static ServiceProvider BuildRepositoryImportServices(string databasePath, INodeSqliteKeyHolder keyHolder)
+    {
+        var services = new ServiceCollection();
+        _ = services.AddScoped(_ => AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder));
+        return services.BuildServiceProvider();
+    }
 
     private static async Task InsertPendingDocumentRowAsync(NodeChatDbContext context, DbConnection connection, Guid documentId, int sizeBytes, CancellationToken cancellationToken)
     {
@@ -272,6 +410,16 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _ = command.Parameters.Add(parameter);
     }
 
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
+    {
+        public FixedNodeDataDirectory(string root)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(root);
+            Root = root;
+        }
+
+        public string Root { get; }
+    }
 
     /// <summary>In-memory blob source: the ingestion service reads the raw document bytes from here by id.</summary>
     private sealed class InMemoryBlobStore : IKnowledgeDocumentBlobStore

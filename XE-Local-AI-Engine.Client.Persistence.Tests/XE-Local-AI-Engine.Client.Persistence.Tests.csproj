@@ -19,10 +19,17 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="NegativeFence/**/*.cs"/>
+    <Compile Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
+    <None Include="Knowledge/RetrievalEval/LiveCorpus/**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>

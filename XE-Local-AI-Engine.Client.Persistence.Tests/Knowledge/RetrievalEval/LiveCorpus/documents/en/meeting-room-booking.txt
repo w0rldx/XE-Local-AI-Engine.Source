@@ -1,0 +1,12 @@
+Meeting room booking rules
+
+Rooms are booked through the shared calendar. A booking that nobody checks in to within fifteen minutes of its start
+is released automatically so someone else can use the room.
+
+The large room on the third floor seats twenty and has the only video bar with two cameras. It can be booked for at
+most three hours at a time, and recurring bookings for it need approval from the office manager.
+
+Small phone booths cannot be booked at all; they are first come, first served, with a soft limit of thirty minutes.
+
+Please leave the whiteboard clean and return the remote to its charging dock. Catering for meetings with more than
+eight guests must be ordered two working days in advance.

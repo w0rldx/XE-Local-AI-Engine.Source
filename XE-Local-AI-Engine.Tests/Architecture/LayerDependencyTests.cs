@@ -407,7 +407,8 @@ public sealed class LayerDependencyTests
             [
                 "XE-Local-AI-Engine.Client",
                 "XE-Local-AI-Engine.Client.Application",
-                "XE-Local-AI-Engine.Client.Persistence"
+                "XE-Local-AI-Engine.Client.Persistence",
+                "XE-Local-AI-Engine.Providers.LlamaServer"
             ],
             // Built on demand by PersistenceEncryptionTests to prove that persistence entities stay internal, so it is
             // deliberately not a solution member and nothing references it. Its single reference is the point of the probe.

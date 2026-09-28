@@ -1,0 +1,19 @@
+Home network segmentation notes
+
+Why segment at all: smart plugs, cameras and televisions receive firmware updates rarely and often run old
+software. If one of them is compromised, it should not be able to reach the laptop that holds the tax records.
+
+The layout. The trusted LAN stays on the default untagged network. Internet-of-things devices live on VLAN 30.
+Visitors get their own guest VLAN 40 that only reaches the internet. The managed switch tags the access-point
+uplink with both VLANs, and each wireless network name is mapped to one VLAN.
+
+Firewall rules. The router denies all traffic from VLAN 30 to the LAN, but allows established return traffic so
+the phone app can still control a device it contacted first. VLAN 40 is isolated from everything except the
+internet gateway and the DNS resolver.
+
+Discovery across segments. Casting to the television breaks once it sits on another VLAN, because multicast DNS
+does not cross subnets. An mDNS reflector on the router fixes that; enable it only between the LAN and VLAN 30,
+never for the guest network.
+
+Keeping it maintainable. Every device gets a DHCP reservation and a descriptive name, and the address plan is kept
+in a single spreadsheet next to the router password in the password manager.

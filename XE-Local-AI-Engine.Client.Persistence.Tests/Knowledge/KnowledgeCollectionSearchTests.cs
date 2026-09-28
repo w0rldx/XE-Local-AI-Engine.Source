@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge;
 
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -197,7 +199,31 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         AssertEx.Equal("WidgetService > ExecuteAsync", hit.Section);
     }
 
-    private static KnowledgeSearchService CreateLexicalSearchService(NodeChatDbContext context)
+    [Test]
+    public async Task KnowledgeSearch_QueryEmbeddingUnavailable_LogsOneWarningWithTheStableEventId()
+    {
+        var databasePath = GetDatabasePath("search-degrade-event.sqlite");
+        var document = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, document, CollectionA);
+        await SeedChunkAsync(databasePath, document, Guid.NewGuid(), chunkIndex: 0, content: "degrade needle");
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var logger = new EventRecordingLogger();
+        var result = await CreateLexicalSearchService(context, logger)
+            .SearchAsync(new KnowledgeSearchRequest { Query = "needle", Limit = 10, CollectionId = "project-a" }, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, result.Results.Count, "the search must still answer, lexical-only.");
+        var warnings = logger.Entries.Where(static entry => entry.Level >= LogLevel.Warning).ToList();
+        AssertEx.Equal(expected: 1, warnings.Count, string.Join(" | ", warnings.Select(static entry => entry.Message)));
+        var entry = warnings[0];
+        AssertEx.Equal(LogLevel.Warning, entry.Level);
+        AssertEx.Equal(KnowledgeSearchService.QueryEmbeddingUnavailableEventId, entry.EventId.Id);
+        AssertEx.Equal("Knowledge search query embedding unavailable; returning lexical results only. Exception type: InvalidOperationException.",
+            entry.Message);
+    }
+
+    private static KnowledgeSearchService CreateLexicalSearchService(NodeChatDbContext context, ILogger<KnowledgeSearchService>? logger = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
@@ -218,7 +244,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             Substitute.For<IContextExpansionService>(),
             Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
-            NullLogger<KnowledgeSearchService>.Instance);
+            logger ?? NullLogger<KnowledgeSearchService>.Instance);
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
@@ -327,5 +353,37 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
+    }
+
+    // Keeps level, EventId and formatted message of every entry, so a test can pin a log call's stable EventId.
+    private sealed class EventRecordingLogger : ILogger<KnowledgeSearchService>
+    {
+        private readonly ConcurrentQueue<Entry> _entries = new();
+
+        public IReadOnlyList<Entry> Entries => [.. _entries];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            _entries.Enqueue(new Entry
+            {
+                Level = logLevel,
+                EventId = eventId,
+                Message = formatter(state, exception)
+            });
+    }
+
+    private sealed class Entry
+    {
+        public required LogLevel Level { get; init; }
+
+        public required EventId EventId { get; init; }
+
+        public required string Message { get; init; }
     }
 }
