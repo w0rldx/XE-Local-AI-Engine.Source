@@ -69,7 +69,7 @@ export function NodeSettingsKnowledgeModelsCard({
 					)}
 					description={t(
 						"pages.nodeSettings.fields.rerankerModel.description",
-						"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
+						"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Loaded only when memory allows; its VRAM is counted by capacity checks and model recommendations.",
 					)}
 					data={rerankerOptions}
 					value={form.rerankerModelName}

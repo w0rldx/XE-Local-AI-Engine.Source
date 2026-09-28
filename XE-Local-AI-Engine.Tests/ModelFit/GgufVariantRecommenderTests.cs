@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -181,7 +183,54 @@ public sealed class GgufVariantRecommenderTests
         AssertEx.Equal(GgufQuantTier.Balanced, TierOf(result, "Q4_K_M"));
     }
 
-    private static GgufVariantRecommender Build(long? freeVramBytes, GpuVariant variant = GpuVariant.Cuda)
+    [Test]
+    public async Task Annotate_KnowledgeCompanionReserve_ShrinksTheBudgetTheVerdictsUse()
+    {
+        // free = 12 GiB; Q6_K (7 GiB) needs 7 + max(15 %, 1 GiB) ≈ 8.05 GiB and fits. A 4 GiB companion reserve leaves 8 GiB:
+        // Q6_K drops to Tight and the recommendation moves to Q4_K_M, which still fits.
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q6_K", 7 * Gib)
+        };
+
+        var unreserved = await Build(freeVramBytes: 12 * Gib).AnnotateAsync(files, CancellationToken.None);
+        var reserved = await Build(freeVramBytes: 12 * Gib, companionReserveBytes: 4 * Gib).AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(GgufFitVerdict.Fits, VerdictOf(unreserved, "Q6_K"));
+        AssertEx.True(IsRecommended(unreserved, "Q6_K"));
+        AssertEx.Equal(GgufFitVerdict.Tight, VerdictOf(reserved, "Q6_K"));
+        AssertEx.Equal(GgufFitVerdict.Fits, VerdictOf(reserved, "Q4_K_M"));
+        AssertEx.True(IsRecommended(reserved, "Q4_K_M"));
+    }
+
+    [Test]
+    public async Task Annotate_KnowledgeCompanionReserveLargerThanTheBudget_ClampsToWontFit_NotUnknown()
+    {
+        var files = new[] { RepoFile("Q4_K_M", 4 * Gib) };
+
+        var result = await Build(freeVramBytes: 2 * Gib, companionReserveBytes: 64 * Gib).AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(GgufFitVerdict.WontFit, VerdictOf(result, "Q4_K_M"),
+            "A reserve beyond the budget must leave a known, tiny GPU budget, never an unknown one.");
+    }
+
+    [Test]
+    public async Task Annotate_HandsTheReserveTheProbesLiveFigure_AsMeasuredFreeVram()
+    {
+        // The probe's figure is a live free measurement, so the reserve must see it (not the audit's cached one) and skip residents against it.
+        var companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+
+        await Build(freeVramBytes: 12 * Gib, companionReserve: companionReserve).AnnotateAsync([RepoFile("Q4_K_M", 4 * Gib)], CancellationToken.None);
+
+        await companionReserve.Received(1)
+                              .ResolveGpuBytesAsync(Arg.Is<HardwareProfile>(profile => profile.AvailableVramBytes == 12 * Gib), Arg.Any<CancellationToken>());
+    }
+
+    private static GgufVariantRecommender Build(long? freeVramBytes,
+        GpuVariant variant = GpuVariant.Cuda,
+        long companionReserveBytes = 0,
+        IKnowledgeCompanionReserve? companionReserve = null)
     {
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
@@ -190,7 +239,29 @@ public sealed class GgufVariantRecommenderTests
         probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(freeVramBytes));
 
-        return new GgufVariantRecommender(selector, probe, NullLogger<GgufVariantRecommender>.Instance);
+        if (companionReserve is null)
+        {
+            companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+            companionReserve.ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(companionReserveBytes));
+        }
+
+        // A stale cached free figure, which the probe's live one must replace.
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(new HardwareProfile
+                    {
+                        TotalRamBytes = 64 * Gib,
+                        AvailableRamBytes = 48 * Gib,
+                        VramBytes = 32 * Gib,
+                        AvailableVramBytes = 30 * Gib,
+                        VramKnown = true,
+                        GpuVendor = GpuVendor.Nvidia,
+                        GpuAccelAvailable = true,
+                        CpuCores = 16,
+                        FreeDiskBytes = 500 * Gib
+                    }));
+
+        return new GgufVariantRecommender(selector, probe, companionReserve, runtimeAudit, NullLogger<GgufVariantRecommender>.Instance);
     }
 
     [Test]

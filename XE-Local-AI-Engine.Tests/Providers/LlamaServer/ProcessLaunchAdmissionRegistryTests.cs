@@ -88,6 +88,29 @@ public sealed class ProcessLaunchAdmissionRegistryTests
     }
 
     [Test]
+    public void AdmittedPooledKey_CoexistsWithAnAdmittedChatKey()
+    {
+        // A pooled spawn that passed capacity is bound like a chat one, so neither blocks the other; only unbound launches do.
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var chat = Admission(Model);
+        var reranker = Admission("bge-reranker", ModelRole.Reranker);
+        AssertEx.True(registry.TryAcquire(chat, out var chatConsumer));
+        AssertEx.True(registry.TryAcquire(reranker, out var rerankerConsumer), "An admitted chat key must not block a pooled admission.");
+
+        AssertEx.True(registry.TryBeginLaunch("bge-reranker", ModelRole.Reranker, out var rerankerCaptured, out var rerankerTicket));
+        AssertEx.Equal(reranker, rerankerCaptured);
+        AssertEx.True(registry.TryBeginLaunch(Model, ModelRole.Chat, out var chatCaptured, out var chatTicket));
+        AssertEx.Equal(chat, chatCaptured);
+        AssertEx.False(registry.Snapshot("model/b", ModelRole.Chat).HasGlobalBlocker, "Two bound launches leave no global blocker.");
+
+        rerankerTicket!.Dispose();
+        rerankerConsumer!.Dispose();
+        chatTicket!.Dispose();
+        chatConsumer!.Dispose();
+        AssertEx.Empty(registry.Snapshot(Model, ModelRole.Chat).AdmittedKeys.ToArray());
+    }
+
+    [Test]
     public void DistinctUnboundLaunches_CanOverlapWithoutExactAdmission()
     {
         var registry = new ProcessLaunchAdmissionRegistry();
@@ -116,7 +139,7 @@ public sealed class ProcessLaunchAdmissionRegistryTests
         AssertEx.False(registry.Snapshot("MODEL/A", ModelRole.Chat).HasRequestedKey);
     }
 
-    private static ProcessLaunchAdmission Admission(string modelName)
+    private static ProcessLaunchAdmission Admission(string modelName, ModelRole role = ModelRole.Chat)
     {
         var allocation = new ProcessContextAllocation
         {
@@ -131,7 +154,7 @@ public sealed class ProcessLaunchAdmissionRegistryTests
         return new ProcessLaunchAdmission
         {
             ModelName = modelName,
-            Role = ModelRole.Chat,
+            Role = role,
             Variant = GpuVariant.Cuda,
             ResolvedArguments = ResolvedLaunchArguments.Explore(),
             Allocation = allocation

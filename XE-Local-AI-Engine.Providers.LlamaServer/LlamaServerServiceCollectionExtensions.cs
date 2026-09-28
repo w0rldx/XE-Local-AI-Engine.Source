@@ -223,7 +223,8 @@ public static class LlamaServerServiceCollectionExtensions
             launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>(),
             extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>(),
             loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>(),
-            spawnReceipts: SpawnReceipts(sp)));
+            spawnReceipts: SpawnReceipts(sp),
+            pooledLaunchAdmission: sp.GetService<ILlamaServerPooledLaunchAdmission>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>

@@ -76,9 +76,10 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             }
         };
         var reranker = RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow);
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, prewarmer: prewarmer);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest
         {
@@ -86,6 +87,8 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             Limit = 3
         }, CancellationToken.None);
 
+        // A successful rerank means the reranker is warm: no background warm is requested.
+        prewarmer.DidNotReceive().RequestWarm();
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(3, orderedChunkIds.Count);
         AssertEx.Equal(chunkGamma, orderedChunkIds[0]);
@@ -132,15 +135,20 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var reranker = Substitute.For<IRerankerClient>();
         reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                 .Returns(scores);
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, prewarmer: prewarmer);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest
         {
             Query = "the query",
             Limit = 3
         }, CancellationToken.None);
+
+        // The rerank ran and produced no usable scores (cold, busy, failed or malformed), so one warm is requested to bring it up or re-probe it.
+        await reranker.Received(1).RerankAsync(RerankerModel, "the query", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        prewarmer.Received(1).RequestWarm();
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(2, orderedChunkIds.Count);
@@ -283,9 +291,10 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             }
         };
         var reranker = RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow);
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, prewarmer: prewarmer);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest
         {
@@ -296,6 +305,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(chunkAlpha, result.Results.Single().ChunkId);
         AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         await reranker.DidNotReceive().RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        prewarmer.DidNotReceive().RequestWarm();
     }
 
     [Test]
@@ -330,11 +340,12 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var reranker = Substitute.For<IRerankerClient>();
         reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo => NeverAnswersAsync(callInfo.ArgAt<CancellationToken>(3)));
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         // real-timer: the service times its deadline with Stopwatch, which a FakeTimeProvider cannot advance. The budget
         // must outlast cold-start retrieval (migration, JIT, FTS, hydrate) so the rerank starts and the deadline cuts it.
-        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, retrievalLatencyBudgetMilliseconds: 3000);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, retrievalLatencyBudgetMilliseconds: 3000, prewarmer: prewarmer);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest
         {
@@ -347,6 +358,62 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertAllScoreKind(result, KnowledgeScoreKind.Fusion);
         // Proves the deadline cut a started rerank, not the early exit that skips reranking once the budget is spent.
         await reranker.Received(1).RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        // An abandoned rerank may be a hung server, which only the warm's liveness re-probe catches.
+        prewarmer.Received(1).RequestWarm();
+    }
+
+    [Test]
+    public async Task SearchAsync_CallerCancelsDuringRerank_Propagates_AndRequestsNoWarm()
+    {
+        var databasePath = GetDatabasePath("rerank-caller-cancel.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkAlpha = Guid.NewGuid();
+        var chunkBeta = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
+
+        var ftsHits = new List<FtsSearchHit>
+        {
+            new()
+            {
+                ChunkId = chunkAlpha,
+                DocumentId = documentId,
+                Bm25Score = -2.0
+            },
+            new()
+            {
+                ChunkId = chunkBeta,
+                DocumentId = documentId,
+                Bm25Score = -1.0
+            }
+        };
+        var rerankStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reranker = Substitute.For<IRerankerClient>();
+        reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    rerankStarted.TrySetResult();
+                    return NeverAnswersAsync(callInfo.ArgAt<CancellationToken>(3));
+                });
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        using var caller = new CancellationTokenSource();
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, ftsHits, reranker, RerankerModel, prewarmer: prewarmer);
+
+        var search = service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 3
+        }, caller.Token);
+        await rerankStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await caller.CancelAsync();
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => search);
+        prewarmer.DidNotReceive().RequestWarm();
     }
 
     private static void AssertAllScoreKind(KnowledgeSearchResult result, KnowledgeScoreKind expected)
@@ -369,7 +436,8 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         IReadOnlyList<FtsSearchHit> ftsHits,
         IRerankerClient reranker,
         string rerankerModelName,
-        int retrievalLatencyBudgetMilliseconds = 30_000)
+        int retrievalLatencyBudgetMilliseconds = 30_000,
+        IKnowledgeModelPrewarmer? prewarmer = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
@@ -402,7 +470,8 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             Substitute.For<IContextExpansionService>(),
             Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
-            NullLogger<KnowledgeSearchService>.Instance);
+            NullLogger<KnowledgeSearchService>.Instance,
+            prewarmer);
     }
 
     // Score maps keyed by the chunk content prefix, kept as named methods so the reranker stubs avoid nested ternaries.

@@ -31,6 +31,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     /// <summary>Stable EventId of the Warning logged when the query embedding degrades the search to lexical-only.</summary>
     public const int QueryEmbeddingUnavailableEventId = 4901;
 
+    /// <summary>Stable EventId of the Debug entry logged when the rerank misses the retrieval deadline and fusion order is kept.</summary>
+    public const int RerankBudgetExpiredEventId = 4903;
+
     /// <summary>Provenance tag stamped on every hit from this retrieval surface.</summary>
     private const string SourceTag = "knowledge-base";
 
@@ -54,6 +57,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     private readonly IKnowledgeQueryEmbeddingCache _queryEmbeddingCache;
     private readonly KnowledgeBaseOptions _options;
     private readonly ILogger<KnowledgeSearchService> _logger;
+    private readonly IKnowledgeModelPrewarmer? _prewarmer;
 
     public KnowledgeSearchService(NodeChatDbContext dbContext,
         ILocalModelProviderResolver providerResolver,
@@ -66,7 +70,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         IContextExpansionService contextExpansion,
         IKnowledgeQueryEmbeddingCache queryEmbeddingCache,
         IOptions<KnowledgeBaseOptions> options,
-        ILogger<KnowledgeSearchService> logger)
+        ILogger<KnowledgeSearchService> logger,
+        IKnowledgeModelPrewarmer? prewarmer = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
@@ -81,6 +86,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _prewarmer = prewarmer;
     }
 
     public async Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
@@ -347,7 +353,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         RecordStage("rerank", rerankStart);
         if (scores is null || scores.Count != pool.Count)
         {
-            // Reranker unavailable or malformed response: keep the RRF order + score, take the top-`limit`.
+            // Cold, busy, failed or malformed: keep the RRF order + score. Search never spawns the reranker, so ask for a background warm, whose reuse
+            // path also re-probes a live process's liveness, and let the next search rerank.
+            _prewarmer?.RequestWarm();
             return pool.Take(limit).ToList();
         }
 
@@ -381,20 +389,28 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         budgetCts.CancelAfter(remaining);
         try
         {
-            // The linked deadline flows through reranker acquisition and scoring, winning over the provider's larger
-            // internal timeout; WaitAsync bounds the caller even if a provider violates the cancellation contract.
+            // The deadline covers scoring only (the client never spawns) and beats the provider's larger timeout; WaitAsync
+            // bounds the caller even if a provider ignores cancellation. The client abandons, so expiry returns at once.
             return await RerankAsync(query, pool, limit, budgetCts.Token)
                 .WaitAsync(remaining, cancellationToken);
         }
         catch (TimeoutException)
         {
             await budgetCts.CancelAsync();
-            return pool.Take(limit).ToList();
+            return OnRerankBudgetExpired(pool, limit, totalBudget);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && budgetCts.IsCancellationRequested)
         {
-            return pool.Take(limit).ToList();
+            return OnRerankBudgetExpired(pool, limit, totalBudget);
         }
+    }
+
+    // An expired rerank is abandoned mid-flight, so a reranker that accepts and hangs is only ever caught by the warm's liveness re-probe.
+    private List<ChunkSelection> OnRerankBudgetExpired(IReadOnlyList<ChunkSelection> pool, int limit, TimeSpan totalBudget)
+    {
+        RerankBudgetExpired(_logger, pool.Count, (long)totalBudget.TotalMilliseconds);
+        _prewarmer?.RequestWarm();
+        return pool.Take(limit).ToList();
     }
 
     // Returns the query vector plus the resolved model name it was embedded with, the vector-search scope key. On the
@@ -609,4 +625,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     [LoggerMessage(EventId = QueryEmbeddingUnavailableEventId, Level = LogLevel.Warning,
         Message = "Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.")]
     private static partial void QueryEmbeddingUnavailable(ILogger logger, string exceptionType);
+
+    [LoggerMessage(EventId = RerankBudgetExpiredEventId, Level = LogLevel.Debug,
+        Message = "Knowledge rerank missed the {BudgetMs} ms retrieval budget; keeping fusion order for {PoolSize} candidates.")]
+    private static partial void RerankBudgetExpired(ILogger logger, int poolSize, long budgetMs);
 }

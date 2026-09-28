@@ -99,6 +99,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private readonly ILlamaServerLoadTelemetry _loadTelemetry;
 
+    // Capacity admission for cold embedding / reranker spawns; null in provider-only hosts and tests (no gate, today's behaviour).
+    private readonly ILlamaServerPooledLaunchAdmission? _pooledLaunchAdmission;
+
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
     ///     (same-assembly factory) or in tests — the launcher/health-probe seams are internal, so the ctor is internal.
@@ -124,7 +127,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
         ILlamaServerLoadTelemetry? loadTelemetry = null,
         TaskScheduler? detachedSpawnScheduler = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -155,6 +159,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         // shared singleton so what this supervisor observes is what the runtime audit reports.
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
+        _pooledLaunchAdmission = pooledLaunchAdmission;
 
         _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token);
         _reaper = new LlamaServerIdleReaper(_processes,
@@ -398,6 +403,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 return new EnsureDecision(Reused: null, inflight.Task);
             }
 
+            // Pooled roles pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once.
+            var capacityReservation = await AdmitPooledLaunchAsync(key, ct).ConfigureAwait(false);
             IProcessLaunchTicket? launchTicket = null;
             try
             {
@@ -406,15 +413,16 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
                 }
 
-                var started = CreateDetachedSpawn(admission, launchTicket!);
+                var started = CreateDetachedSpawn(admission, launchTicket!, capacityReservation);
                 if (!_inflightSpawns.TryAdd(key, started))
                 {
                     return new EnsureDecision(Reused: null, _inflightSpawns[key].Task);
                 }
 
-                // The published immutable in-flight record now owns the ticket. Clear the local before starting the
-                // detached work so the finally below cannot release a successfully transferred launch reference.
+                // The published immutable in-flight record now owns the ticket and the reservation. Clear the locals before starting the
+                // detached work so the finally below cannot release a successfully transferred reference.
                 launchTicket = null;
+                capacityReservation = null;
                 try
                 {
                     StartDetachedSpawn(key, started);
@@ -424,12 +432,15 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 {
                     _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, started));
                     started.LaunchTicket.Dispose();
+                    started.CapacityReservation?.Dispose();
                     throw;
                 }
             }
             finally
             {
+                // Ticket first, reservation second: the reverse order transiently leaves an orphaned registry entry, a global blocker.
                 launchTicket?.Dispose();
+                capacityReservation?.Dispose();
             }
         }
         finally
@@ -449,7 +460,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     ///     is dropped, so the next ensure retries fresh.
     /// </remarks>
     private static InflightSpawn CreateDetachedSpawn(ProcessLaunchAdmission? admission,
-        IProcessLaunchTicket launchTicket)
+        IProcessLaunchTicket launchTicket,
+        IDisposable? capacityReservation)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
@@ -465,7 +477,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         {
             Completion = completion,
             Admission = admission,
-            LaunchTicket = launchTicket
+            LaunchTicket = launchTicket,
+            CapacityReservation = capacityReservation
         };
     }
 
@@ -488,6 +501,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     // Remove THIS immutable in-flight record (key+value) so a newer record under the same key is untouched.
                     _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight));
                     inflight.LaunchTicket.Dispose();
+                    inflight.CapacityReservation?.Dispose();
                 }
 
                 if (failure is not null)
@@ -515,6 +529,33 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private static Task<RunningProcess> AwaitDetachedSpawnAsync(Task<RunningProcess> spawnTask, CancellationToken ct)
     {
         return spawnTask.WaitAsync(ct);
+    }
+
+    /// <summary>
+    ///     Runs the pooled-role capacity admission for a cold <see cref="ModelRole.Embedding" /> or
+    ///     <see cref="ModelRole.Reranker" /> launch; chat and a host with no gate wired get <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     A refusal is a capacity policy outcome, not a crash, so it is re-flagged non-retryable and surfaces to the caller
+    ///     before any launcher call.
+    /// </remarks>
+    private async Task<IDisposable?> AdmitPooledLaunchAsync(ProcessKey key, CancellationToken ct)
+    {
+        if (_pooledLaunchAdmission is null || key.Role is not (ModelRole.Embedding or ModelRole.Reranker))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _pooledLaunchAdmission.AdmitAsync(key.ModelName, key.Role, ct).ConfigureAwait(false);
+        }
+        catch (LlamaRuntimeException ex)
+        {
+            ex.Data[NonRetryableMarker] = true;
+            _logger.LogWarning("Capacity refused a {Role} llama-server launch for model {ModelName}: {Reason}", key.Role, key.ModelName, ex.Message);
+            throw;
+        }
     }
 
     /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
@@ -560,6 +601,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         public required ProcessLaunchAdmission? Admission { get; init; }
 
         public required IProcessLaunchTicket LaunchTicket { get; init; }
+
+        /// <summary>The pooled-role capacity reservation, released after <see cref="LaunchTicket" /> when the spawn settles.</summary>
+        public required IDisposable? CapacityReservation { get; init; }
 
         public Task<RunningProcess> Task => Completion.Task;
     }

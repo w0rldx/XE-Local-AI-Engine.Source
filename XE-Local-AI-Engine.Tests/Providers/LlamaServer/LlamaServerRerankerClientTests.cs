@@ -11,11 +11,13 @@ using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the local reranker client: it POSTs the query + documents to the rerank-role server's
-///     <c>/v1/rerank</c> route and projects the (possibly score-sorted) results back into an input-aligned score list,
-///     and it degrades to <see langword="null" /> — so the caller keeps its fusion order — whenever the model is not
-///     installed, the server is down, the status is non-success, or the response is malformed.
+///     Verifies the local reranker client: it POSTs to a LEASED, already-running rerank server's <c>/v1/rerank</c> route
+///     and realigns the scores to input order, and degrades to <see langword="null" /> when cold, busy or failing.
 /// </summary>
+/// <remarks>
+///     A search must never cold-spawn the reranker, and its deadline abandons the scoring call rather than cancelling it:
+///     the call keeps its lease until it settles and blocks the model's next rerank as <c>busy</c> meanwhile.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerRerankerClientTests
 {
@@ -66,10 +68,32 @@ public sealed class LlamaServerRerankerClientTests
     }
 
     [Test]
-    public async Task RerankAsync_ModelNotInstalled_ReturnsNullToDegrade()
+    public async Task RerankAsync_WhenNoRerankerIsRunning_DegradesColdWithoutSpawning()
     {
-        // The supervisor rejects the spawn (model not installed / cap reached) with a sanitized LlamaRuntimeException.
+        // A cold reranker used to be spawned inside the search, charging a model load (up to minutes) to a 500 ms budget.
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(ModelName, ModelRole.Reranker).Returns(LlamaServerLeaseAcquisition.NotRunning);
+        using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(supervisor, http, logger);
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
+
+        AssertEx.Null(scores, "A cold reranker must degrade to null.");
+        supervisor.Received(1).TryAcquireInferenceLease(ModelName, ModelRole.Reranker);
+        await supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+        AssertEx.Null(handler.LastRequestUri, "Nothing may be POSTed without a leased process.");
+        AssertEx.Contains(logger.AllText, "Reason: cold", message: "A cold reranker must be distinguishable from a failing one.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenTheLeaseCarriesNoEndpointAndTheReuseEnsureFails_Degrades()
+    {
+        // A supervisor that grants no endpoint falls back to the ensure's reuse path; its failure degrades like any other.
+        using var lease = new RecordingInferenceLease();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(ModelName, ModelRole.Reranker).Returns(LlamaServerLeaseAcquisition.Granted(lease));
         supervisor.EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
                   .Returns<Task<LlamaServerEndpoint>>(_ => throw new LlamaRuntimeException("The requested model is not installed."));
         using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""));
@@ -79,6 +103,8 @@ public sealed class LlamaServerRerankerClientTests
         var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
 
         AssertEx.Null(scores, "An unavailable reranker model must degrade to null.");
+        await supervisor.Received(1).EnsureRunningAsync(ModelName, ModelRole.Reranker, Arg.Any<CancellationToken>());
+        AssertEx.True(lease.Disposed, "A lease taken before a failed ensure must be released.");
     }
 
     [Test]
@@ -167,6 +193,7 @@ public sealed class LlamaServerRerankerClientTests
 
         AssertEx.Null(scores);
         await supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+        supervisor.DidNotReceive().TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>());
     }
 
     // A rerank request held no lease at all, so ActiveLeases stayed 0, profiling's pre-spawn claim succeeded and the
@@ -176,7 +203,7 @@ public sealed class LlamaServerRerankerClientTests
     public async Task RerankAsync_HoldsAnInferenceLeaseForTheRerankerRole_ForTheWholeRoundTrip()
     {
         using var lease = new RecordingInferenceLease();
-        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease));
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
         var heldDuringRequest = false;
         using var handler = new CapturingHandler(_ =>
         {
@@ -192,22 +219,25 @@ public sealed class LlamaServerRerankerClientTests
         AssertEx.Contains(supervisor.LeasedRoles, ModelRole.Reranker);
         AssertEx.True(heldDuringRequest, "The lease must still be held while the scoring request is in flight.");
         AssertEx.True(lease.Disposed, "The lease must be released once the round-trip ends.");
+        AssertEx.Equal(expected: 0, supervisor.EnsureCalls, "A granted lease carries the endpoint; no ensure is needed.");
     }
 
     [Test]
-    public async Task RerankAsync_WhenProfilingOwnsTheKey_DoesNotScoreAgainstTheMeasurement_ThenSucceedsAfterItEnds()
+    public async Task RerankAsync_WhenProfilingOwnsTheKey_DegradesWithoutEnsuringOrScoringTheMeasurement()
     {
-        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.NotRunning);
-        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.ProfilingOwned);
-        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.NotRunning);
+        // Re-ensuring past a measurement would respawn the reranker its teardown evicted: a cold spawn inside a search.
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.ProfilingOwned);
         using var handler = new CapturingHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var client = new LlamaServerRerankerClient(supervisor, http, NullLogger<LlamaServerRerankerClient>.Instance);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(supervisor, http, logger);
 
         var scores = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
 
-        AssertEx.NotNull(scores);
-        AssertEx.Equal(expected: 2, supervisor.EnsureCalls, "The refusal must re-ensure rather than POST to the measurement process.");
+        AssertEx.Null(scores);
+        AssertEx.Equal(expected: 0, supervisor.EnsureCalls, "A profiling-owned key must not be re-ensured from a search.");
+        AssertEx.Null(handler.LastRequestUri, "Nothing may be scored against the measurement process.");
+        AssertEx.Contains(logger.AllText, "Reason: profiling");
     }
 
     [Test]
@@ -224,6 +254,103 @@ public sealed class LlamaServerRerankerClientTests
         AssertEx.Null(handler.LastRequestUri, "Nothing may be scored against the measurement process.");
     }
 
+    [Test]
+    public async Task RerankAsync_WhileAScoringCallIsOutstanding_DegradesBusy_ThenRecoversOnceItSettles()
+    {
+        using var lease = new RecordingInferenceLease();
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
+        using var handler = new GatedHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(supervisor, http, logger);
+
+        var first = client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // Same model, other casing: the slot is keyed like the supervisor's process keys.
+        var second = await client.RerankAsync(ModelName.ToUpperInvariant(), "the query", ["a"], CancellationToken.None);
+
+        AssertEx.Null(second, "A rerank behind an outstanding one must fall back at once instead of queueing on a --parallel 1 server.");
+        AssertEx.Contains(logger.AllText, "Reason: busy");
+        AssertEx.Equal(expected: 1, handler.Requests, "The busy rerank must not reach the server.");
+
+        handler.Release();
+        AssertEx.NotNull(await first, "The outstanding rerank still scores once released.");
+
+        var third = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
+        AssertEx.NotNull(third, "Once the outstanding call settles, the next rerank scores again.");
+        AssertEx.Equal(expected: 2, handler.Requests);
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenTheCallerCancels_AbandonsTheCall_WhichKeepsItsLeaseUntilItSettles()
+    {
+        using var lease = new RecordingInferenceLease();
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
+        using var handler = new GatedHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var client = new LlamaServerRerankerClient(supervisor, http, NullLogger<LlamaServerRerankerClient>.Instance);
+        using var callerCts = new CancellationTokenSource();
+
+        var call = client.RerankAsync(ModelName, "the query", ["a"], callerCts.Token);
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await callerCts.CancelAsync();
+
+        // The caller's wait ends promptly although the server has not answered: the gate is still closed here.
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(10)));
+        AssertEx.False(handler.RequestTokenCancelled, "The caller's cancellation must abandon the HTTP call, not cancel it.");
+        AssertEx.False(lease.Disposed, "The abandoned call keeps its lease: the server is still scoring the pool.");
+
+        handler.Release();
+        await AssertEx.EventuallyAsync(() => lease.Disposed, TimeSpan.FromSeconds(10), "The lease is released once the abandoned call settles.");
+        var next = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
+        AssertEx.NotNull(next, "The settled call frees the model's slot.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenAnAbandonedCallFails_LogsTheFailureOnce()
+    {
+        using var lease = new RecordingInferenceLease();
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
+        using var handler = new GatedHandler(_ => throw new HttpRequestException("Connection reset."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var client = new LlamaServerRerankerClient(supervisor, http, logger);
+        using var callerCts = new CancellationTokenSource();
+
+        var call = client.RerankAsync(ModelName, "the query", ["a"], callerCts.Token);
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await callerCts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        handler.Release();
+        await AssertEx.EventuallyAsync(() => lease.Disposed, TimeSpan.FromSeconds(10), "The failed call must still settle and release its lease.");
+
+        var text = logger.AllText;
+        AssertEx.Equal(expected: 1, CountOccurrences(text, "Knowledge reranking degraded"), $"The detached failure is logged exactly once:{Environment.NewLine}{text}");
+        AssertEx.Contains(text, "Reason: unavailable");
+        AssertEx.False(text.Contains("the query", StringComparison.Ordinal), "Query text must never be logged.");
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        for (var index = text.IndexOf(value, StringComparison.Ordinal); index >= 0; index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static LlamaServerEndpoint RerankEndpoint() =>
+        new()
+        {
+            ModelName = ModelName,
+            Role = ModelRole.Reranker,
+            BaseAddress = Endpoint
+        };
+
     /// <summary>A ready supervisor whose lease acquisition (and sequence) the test controls.</summary>
     private static FakeProcessSupervisor LeasingSupervisor(LlamaServerLeaseAcquisition acquisition)
     {
@@ -234,16 +361,12 @@ public sealed class LlamaServerRerankerClientTests
         };
     }
 
+    /// <summary>A warm reranker: every lease is granted with the endpoint, so no ensure is ever needed.</summary>
     private static ILlamaServerProcessSupervisor ReadySupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult(new LlamaServerEndpoint
-                  {
-                      ModelName = ModelName,
-                      Role = ModelRole.Reranker,
-                      BaseAddress = Endpoint
-                  }));
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), ModelRole.Reranker)
+                  .Returns(_ => LlamaServerLeaseAcquisition.Granted(new RecordingInferenceLease(), RerankEndpoint()));
         return supervisor;
     }
 
@@ -276,6 +399,40 @@ public sealed class LlamaServerRerankerClientTests
                 await Task.Delay(pause, cancellationToken);
             }
 
+            return _responder(request);
+        }
+    }
+
+    /// <summary>Holds every request at a gate the test opens, and records whether the request token was ever cancelled.</summary>
+    private sealed class GatedHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _requests;
+        private int _tokenCancelled;
+
+        public GatedHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int Requests => Volatile.Read(ref _requests);
+
+        public bool RequestTokenCancelled => Volatile.Read(ref _tokenCancelled) != 0;
+
+        public void Release()
+        {
+            _gate.TrySetResult();
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _requests);
+            using var registration = cancellationToken.Register(() => Interlocked.Exchange(ref _tokenCancelled, value: 1));
+            Entered.TrySetResult();
+            await _gate.Task;
             return _responder(request);
         }
     }

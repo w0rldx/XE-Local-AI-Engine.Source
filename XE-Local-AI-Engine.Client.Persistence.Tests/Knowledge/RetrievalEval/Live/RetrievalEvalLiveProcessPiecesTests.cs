@@ -93,9 +93,18 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
                     BoundaryPairCount = 2,
                     EndToEnd = LiveLatency.From([12d, 30d]),
                     RerankStage = LiveLatency.From([]),
-                    Degrades = new Dictionary<string, int> { ["timeout"] = 1 },
+                    Degrades = new Dictionary<string, int> { ["timeout"] = 1, ["cold"] = 4, ["busy"] = 2 },
                     BudgetCancelled = 3,
-                    BacklogDrainMilliseconds = 10400
+                    BacklogDrainMilliseconds = 10400,
+                    PerQuery =
+                    [
+                        Score("a1", answerable: true, 5d, 1d, "Rerank", top1Relevant: true),
+                        Score("a2", answerable: true, 3d, 2.5d, "Rerank", top1Relevant: true),
+                        Score("a3", answerable: true, 0.5d, 0.4d, "Rerank", top1Relevant: false),
+                        Score("n1", answerable: false, 1d, 0.5d, "Rerank", top1Relevant: false),
+                        Score("f1", answerable: true, 0.04d, null, "Fusion", top1Relevant: true),
+                        Score("e1", answerable: false, null, null, null, top1Relevant: false)
+                    ]
                 }
             ],
             Sanity = [new LiveSanityResult { RerankerId = "bge", Passed = true, PairScores = ["pair"] }],
@@ -112,9 +121,27 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
         var config = json.RootElement.GetProperty("Configs")[0];
         AssertEx.False(config.GetProperty("Valid").GetBoolean());
         AssertEx.Equal(30d, config.GetProperty("EndToEnd").GetProperty("Max").GetDouble());
+        AssertEx.Equal(3, json.RootElement.GetProperty("SchemaVersion").GetInt32());
+        AssertEx.Equal(2, config.GetProperty("BusyFallbacks").GetInt32());
+        var perQuery = config.GetProperty("PerQuery");
+        AssertEx.Equal(6, perQuery.GetArrayLength());
+        AssertEx.Equal("Rerank", perQuery[0].GetProperty("Top1ScoreKind").GetString());
+        AssertEx.Equal(4d, perQuery[0].GetProperty("Margin").GetDouble());
+        AssertEx.True(perQuery[0].GetProperty("Top1Relevant").GetBoolean());
 
         var markdown = RetrievalEvalLiveReportWriter.RenderMarkdown(report);
         AssertEx.True(markdown.Contains("| bge20 | INVALID: forced rerank degraded |", StringComparison.Ordinal), markdown);
+        AssertEx.True(markdown.Contains("| 4/2 | 3 |", StringComparison.Ordinal), "cold/busy column: " + markdown);
+        AssertEx.True(markdown.Contains("PROD-cold = every query before any warm-up", StringComparison.Ordinal), markdown);
+
+        // Rerank: answerable top-1 {5, 3, 0.5}, margins {4, 0.5, 0.1}; the fusion group never mixes into it.
+        AssertEx.True(markdown.Contains("| bge20 | Rerank | answerable | 3 | 0.5000/0.5000/3.0000/5.0000/5.0000 | 0.1000/0.1000/0.5000/4.0000/4.0000 |", StringComparison.Ordinal), markdown);
+        AssertEx.True(markdown.Contains("| bge20 | Rerank | no-answer | 1 | 1.0000/1.0000/1.0000/1.0000/1.0000 |", StringComparison.Ordinal), markdown);
+        AssertEx.True(markdown.Contains("| bge20 | Fusion | answerable | 1 | 0.0400/0.0400/0.0400/0.0400/0.0400 | - |", StringComparison.Ordinal), markdown);
+
+        // Rerank threshold: no-answer {1} vs relevant top-1 {5, 3} (a3 excluded) separates at t = 3; Fusion has no no-answer query.
+        AssertEx.True(markdown.Contains("| bge20 | Rerank | 3.0000 | 1.000 | 1.000 (n=1) | 1.000 (n=2) |", StringComparison.Ordinal), markdown);
+        AssertEx.True(markdown.Contains("| bge20 | Fusion | n/a (needs no-answer", StringComparison.Ordinal), markdown);
         AssertEx.True(markdown.Contains("Skipped: no headroom", StringComparison.Ordinal), markdown);
         AssertEx.True(markdown.Contains("- Embedding: resolved 'nomic' (NOT confident", StringComparison.Ordinal), markdown);
         AssertEx.True(markdown.Contains("**ABORTED:** HttpRequestException: boom", StringComparison.Ordinal) && markdown.Contains("(dirty)", StringComparison.Ordinal), markdown);
@@ -166,34 +193,83 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
         AssertEx.Equal(expected, LiveLlamaServer.ListsOnlyAlias(body, "xe-eval-a-1"));
 
     [Test]
-    public async Task FailedLazySpawn_DegradesTheRealRerankerClient_AndVoidsTheProdSpawnRow()
+    public void AbstainThreshold_BreaksTiesToTheLowestThreshold_AndIsNullForAnEmptySide()
     {
-        await using var supervisor = new LiveEndpointSupervisor();
-        supervisor.RegisterLazy("bge", ModelRole.Reranker, static _ => Task.FromException<LiveLlamaServer>(new LiveInfraException("port taken")), CancellationToken.None);
-        using var http = new HttpClient();
+        // No-answer {1, 3} vs relevant {2, 4}: t = 2 and t = 4 both reach 0.75, and the lowest t wins.
+        var tie = AssertEx.NotNull(LiveAbstainThreshold.Find([1d, 3d], [2d, 4d]));
+        AssertEx.Equal(2d, tie.Threshold);
+        AssertEx.Equal(0.75d, tie.BalancedAccuracy);
+        AssertEx.Equal(0.5d, tie.NoAnswerRecall);
+        AssertEx.Equal(1d, tie.AnswerableRetention);
 
-        // The mechanism that made the row look valid: the product client swallows the failed spawn as a degrade.
-        var scores = await new LlamaServerRerankerClient(supervisor, http, new DegradeCapturingLogger()).RerankAsync("bge", "q", ["a", "b"], CancellationToken.None);
-        AssertEx.Null(scores);
-
-        var (server, failure) = await supervisor.AwaitLazyAsync("bge", ModelRole.Reranker);
-        AssertEx.Null(server);
-        var row = RetrievalEvalLiveTests.WithSpawnOutcome(Row("PROD-spawn"), server, failure);
-        AssertEx.False(row.Valid);
-        AssertEx.Equal("reranker spawn failed: port taken", row.InvalidReason);
+        AssertEx.Null(LiveAbstainThreshold.Find([], [1d]));
+        AssertEx.Null(LiveAbstainThreshold.Find([1d], []));
     }
 
     [Test]
-    public async Task NeverStartedLazySpawn_LeavesTheProdSpawnRowValid()
+    public async Task LazyKey_ReportsNotRunning_WhileItsSpawnIsPendingOrFailed()
     {
         await using var supervisor = new LiveEndpointSupervisor();
-        supervisor.RegisterLazy("bge", ModelRole.Reranker, static _ => throw new InvalidOperationException("must not spawn"), CancellationToken.None);
+        var spawn = new TaskCompletionSource<LiveLlamaServer>(TaskCreationOptions.RunContinuationsAsynchronously);
+        supervisor.RegisterLazy("bge", ModelRole.Reranker, _ => spawn.Task, CancellationToken.None);
 
-        var (server, failure) = await supervisor.AwaitLazyAsync("bge", ModelRole.Reranker);
+        AssertEx.Null(supervisor.TryAcquireInferenceLease("bge", ModelRole.Reranker).Lease);
+        AssertEx.False(supervisor.LazyStarted("bge", ModelRole.Reranker));
 
+        var warm = supervisor.WarmLazyAsync("bge", ModelRole.Reranker);
+        AssertEx.True(supervisor.LazyStarted("bge", ModelRole.Reranker));
+        AssertEx.Null(supervisor.TryAcquireInferenceLease("bge", ModelRole.Reranker).Lease);
+
+        spawn.SetException(new LiveInfraException("port taken"));
+        var (server, failure) = await warm;
         AssertEx.Null(server);
-        AssertEx.Null(failure);
-        AssertEx.True(RetrievalEvalLiveTests.WithSpawnOutcome(Row("PROD-spawn"), server, failure).Valid);
+        AssertEx.Equal("port taken", failure);
+        AssertEx.Null(supervisor.TryAcquireInferenceLease("bge", ModelRole.Reranker).Lease);
+    }
+
+    [Test]
+    public async Task RealRerankerClient_OnAColdLazyKey_FallsBackAsColdWithoutStartingTheSpawn()
+    {
+        await using var supervisor = new LiveEndpointSupervisor();
+        supervisor.RegisterLazy("bge", ModelRole.Reranker, static _ => throw new InvalidOperationException("a search must not spawn"), CancellationToken.None);
+        using var http = new HttpClient();
+        var degrades = new DegradeCapturingLogger();
+
+        var scores = await new LlamaServerRerankerClient(supervisor, http, degrades).RerankAsync("bge", "q", ["a", "b"], CancellationToken.None);
+
+        AssertEx.Null(scores);
+        AssertEx.False(supervisor.LazyStarted("bge", ModelRole.Reranker), "a search started the reranker spawn.");
+        AssertEx.Equal("cold", degrades.Degrades.Single().Reason);
+    }
+
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public void ColdRow_IsInvalid_OnlyWhenASearchStartedTheSpawn(bool spawnedBySearch, bool expectedValid)
+    {
+        var row = RetrievalEvalLiveTests.WithColdOutcome(Row("PROD-cold"), spawnedBySearch, warmed: null);
+
+        AssertEx.Equal(expectedValid, row.Valid);
+        AssertEx.Equal(spawnedBySearch ? "a search spawned the cold reranker (spawn charged to a search)" : null, row.InvalidReason);
+    }
+
+    [Test]
+    public async Task Leases_AreCountedPerKey_AndReleaseOnlyWhenTheLastSettles()
+    {
+        await using var supervisor = new LiveEndpointSupervisor();
+        supervisor.Register("bge", ModelRole.Reranker, new Uri("http://127.0.0.1:9/v1"));
+        AssertEx.True(supervisor.WaitForLeasesReleasedAsync("bge", ModelRole.Reranker, CancellationToken.None).IsCompletedSuccessfully);
+
+        var first = supervisor.TryAcquireInferenceLease("bge", ModelRole.Reranker);
+        var second = supervisor.TryAcquireInferenceLease("bge", ModelRole.Reranker);
+        AssertEx.Equal(new Uri("http://127.0.0.1:9/v1"), AssertEx.NotNull(first.Endpoint).BaseAddress);
+        var released = supervisor.WaitForLeasesReleasedAsync("bge", ModelRole.Reranker, CancellationToken.None);
+
+        AssertEx.NotNull(first.Lease).Dispose();
+        first.Lease!.Dispose();
+        AssertEx.False(released.IsCompleted, "a double dispose must not release the other outstanding lease.");
+        AssertEx.NotNull(second.Lease).Dispose();
+        await released;
     }
 
     [Test]
@@ -202,6 +278,20 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
     [Arguments(null, 2048)]
     public void PooledContextTokens_CapsAtTrainContextMinusMargin_AlignedDown(long? trainContext, int expected) =>
         AssertEx.Equal(expected, LiveLlamaServer.PooledContextTokens(ModelRole.Reranker, trainContext));
+
+    private static LiveQueryScore Score(string id, bool answerable, double? top1, double? top2, string? kind, bool top1Relevant) =>
+        new()
+        {
+            QueryId = id,
+            Category = "en-prose",
+            Language = "en",
+            Answerable = answerable,
+            Top1Score = top1,
+            Top2Score = top2,
+            Top1ScoreKind = kind,
+            Top1Relevant = top1Relevant,
+            FirstRelevantRank = top1Relevant ? 1 : 0
+        };
 
     private static LiveConfigResult Row(string id)
     {

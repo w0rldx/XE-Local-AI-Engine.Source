@@ -33,7 +33,8 @@ internal static class SupervisorFactory
         TaskScheduler? detachedSpawnScheduler = null,
         ILlamaCppBinaryManager? binaryManager = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null)
     {
         return new LlamaServerProcessSupervisor(binaryManager ?? new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -63,6 +64,7 @@ internal static class SupervisorFactory
             loadTelemetry: loadTelemetry,
             detachedSpawnScheduler: detachedSpawnScheduler,
             logger: logger,
-            spawnReceipts: spawnReceipts);
+            spawnReceipts: spawnReceipts,
+            pooledLaunchAdmission: pooledLaunchAdmission);
     }
 }

@@ -86,6 +86,8 @@ internal static class AddNodeModelFitExtensions
         // The GGUF variant recommender annotates a repo's selectable files (quality tier, hardware fit verdict, one recommended pick)
         // for the download picker's inspect endpoint. Singleton: stateless over the GPU-variant selector and free-VRAM probe, and never persists.
         builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();
+        // The VRAM the configured knowledge reranker and embedder will claim, which both recommendation paths keep free. Singleton over singletons.
+        builder.Services.AddSingleton<IKnowledgeCompanionReserve, KnowledgeCompanionReserve>();
         // The local model advisor: the single non-bypass path that profiles hardware, discovers candidate GGUF files, estimates memory
         // fit, ranks survivors and replaces the cached snapshot. Only ModelRecommendationCheckHandler invokes it. Scoped, over the scoped stores.
         builder.Services.AddScoped<IModelFitRefreshService, ModelFitRefreshService>();

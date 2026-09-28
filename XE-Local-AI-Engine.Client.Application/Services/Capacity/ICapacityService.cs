@@ -57,4 +57,11 @@ public sealed record CapacityRequest
     ///     bytes are re-sized.
     /// </remarks>
     public string? KvCacheType { get; init; }
+
+    /// <summary>Whether a local byte-budget miss is still admitted: the bytes are booked and the verdict is Allow.</summary>
+    /// <remarks>
+    ///     Set only for the knowledge embedder, which ingestion depends on and which launched unbooked before it was gated. An unknown
+    ///     footprint then allows with no reservation, and a launch admission the registry refuses is dropped, so the launch goes unbound.
+    /// </remarks>
+    public bool NeverRejectOnBudget { get; init; }
 }

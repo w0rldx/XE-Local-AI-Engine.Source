@@ -46,6 +46,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
@@ -111,6 +112,57 @@ public sealed class InvocationRunnerTests
                         .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
                             Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>(),
                             Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_KnowledgeSearchOffered_RequestsOneKnowledgeWarm()
+    {
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, knowledgeModelPrewarmer: prewarmer);
+        var package = WithOfferedTools(RuntimePackageBuilder.Valid().Build(), "search_knowledge_base", "read_document", "read_surrounding_chunks");
+
+        await RunAsync(runner, package);
+
+        // One warm per turn, not one per offered knowledge tool; the completion proves the turn actually ran.
+        prewarmer.Received(1).RequestWarm();
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>(),
+            Arg.Any<long?>(), Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task RunAsync_KnowledgeSearchNotOfferedOrToolsDisabled_RequestsNoKnowledgeWarm(bool offerSearch, bool toolsEnabled)
+    {
+        var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, knowledgeModelPrewarmer: prewarmer, knowledgeToolsEnabled: toolsEnabled);
+        var package = offerSearch
+            ? WithOfferedTools(RuntimePackageBuilder.Valid().Build(), "search_knowledge_base")
+            : WithOfferedTools(RuntimePackageBuilder.Valid().Build(), "read_document");
+
+        await RunAsync(runner, package);
+
+        prewarmer.DidNotReceive().RequestWarm();
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>(),
+            Arg.Any<long?>(), Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
+    }
+
+    private static RuntimePackage WithOfferedTools(RuntimePackage package, params string[] toolNames)
+    {
+        foreach (var toolName in toolNames)
+        {
+            package.AllowedTools.Add(new AllowedToolDto
+            {
+                Id = Guid.NewGuid(),
+                Name = toolName,
+                Location = ToolLocation.ClientLocal,
+                RequiresApproval = false
+            });
+        }
+
+        return package;
     }
 
     [Test]
@@ -4903,7 +4955,9 @@ public sealed class InvocationRunnerTests
         PendingToolCallRegistry? pendingToolCallRegistry = null,
         WebReviewRetriever? webReviewRetriever = null,
         TimeProvider? timeProvider = null,
-        IConversationContextBudgeter? contextBudgeter = null)
+        IConversationContextBudgeter? contextBudgeter = null,
+        IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
+        bool knowledgeToolsEnabled = true)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -5004,6 +5058,11 @@ public sealed class InvocationRunnerTests
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
             CreateScopeFactory(reasoningEffortDispatcherFactory),
+            knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
+            Options.Create(new KnowledgeBaseOptions
+            {
+                AgentToolsEnabled = knowledgeToolsEnabled
+            }),
             NullLogger<InvocationRunner>.Instance,
             timeProvider);
     }

@@ -31,6 +31,8 @@ public sealed class CapacityServiceTests
     private const long Gb = 1024L * 1024 * 1024;
     private const string Model = "bartowski/Model-GGUF:Q4_K_M";
     private const string Llamacpp = LlamaServerProviderConstants.ProviderName;
+    private const string Reranker = "gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M";
+    private const string Embedder = "nomic-ai/nomic-embed-text-v1.5-GGUF:F16";
 
     [Test]
     public async Task Capacity_WhenCloudModel_ReturnsAllow_WithoutProbe()
@@ -956,6 +958,194 @@ public sealed class CapacityServiceTests
     }
 
     // Exactly one Warning, naming the requested model, the reject kind and the resident set.
+    [Test]
+    public async Task Capacity_RerankerAllow_PublishesAPooledAdmissionTheSupervisorBindsToWhileAChatAdmissionIsHeld()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        var service = harness.Build();
+        var chat = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        using var chatReservation = chat.Reservation;
+
+        var reranker = await service.DecideAsync(Reranker, ModelRole.Reranker, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, reranker.Verdict);
+        AssertEx.Equal(2 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.True(harness.LaunchAdmissions.Snapshot(Reranker, ModelRole.Reranker).AdmittedKeys
+                             .Contains(new ProcessLaunchAdmissionKey(Reranker, ModelRole.Reranker)));
+        // Unbound, this launch is refused while the chat admission is published; bound to its own admission it proceeds.
+        var began = harness.LaunchAdmissions.TryBeginLaunch(Reranker, ModelRole.Reranker, out var admission, out var ticket);
+        using (ticket)
+        {
+            AssertEx.True(began, "A pooled spawn with a published admission must launch while a chat admission is held.");
+            AssertEx.Equal(ModelRole.Reranker, AssertEx.NotNull(admission).Role);
+        }
+
+        reranker.Reservation!.Dispose();
+        AssertEx.Equal(1 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Reranker, ModelRole.Reranker).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task Capacity_RerankerOverBudget_Rejects()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(4 * Gb),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Reranker, ModelRole.Reranker, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Reranker, ModelRole.Reranker).HasRequestedKey);
+    }
+
+    [Test]
+    [Arguments(ModelRole.Reranker)]
+    [Arguments(ModelRole.Embedding)]
+    public async Task Capacity_PooledRoleAtTheProcessCap_IsNotRejected(ModelRole role)
+    {
+        // The supervisor's idle reaper evicts a pooled process at the cap, so the gate must not refuse on the count.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            MaxLoadedProcesses = 1,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Reranker, role, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.True(harness.LaunchAdmissions.Snapshot(Reranker, role).HasRequestedKey);
+        decision.Reservation!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_EmbedderOverBudget_WithNeverRejectOnBudget_AllowsAndBooksTheBytes()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(4 * Gb),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(8 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.True(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey);
+        decision.Reservation!.Dispose();
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task Capacity_EmbedderUnderAGlobalBlocker_AllowsWithALedgerReservationAndNoAdmission()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        // An unbound in-flight launch (no admission published anywhere) is a global blocker for every new admission.
+        AssertEx.True(harness.LaunchAdmissions.TryBeginLaunch("direct/launch", ModelRole.Chat, out _, out var unboundTicket));
+        using var blocker = unboundTicket;
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(1 * Gb, harness.Ledger.Reserved.GpuBytes);
+        var snapshot = harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding);
+        AssertEx.True(snapshot.HasGlobalBlocker);
+        AssertEx.False(snapshot.AdmittedKeys.Contains(new ProcessLaunchAdmissionKey(Embedder, ModelRole.Embedding)),
+            "Nothing may be published under a global blocker; the embedder launches unbound, as before it was gated.");
+        decision.Reservation!.Dispose();
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_RerankerUnderAGlobalBlocker_StillRejects()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        AssertEx.True(harness.LaunchAdmissions.TryBeginLaunch("direct/launch", ModelRole.Chat, out _, out var unboundTicket));
+        using var blocker = unboundTicket;
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Reranker, ModelRole.Reranker, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_EmbedderWithUnknownFootprint_AllowsWithoutAReservation()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = ModelFootprint.Unknown
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task Capacity_OllamaResolvingEmbedder_BooksBytesButStaysUnbound()
+    {
+        var harness = new Harness
+        {
+            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(1 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey,
+            "An Ollama-resolved name must never publish a llama.cpp launch admission.");
+        decision.Reservation!.Dispose();
+    }
+
+    private static CapacityRequest EmbedderRequest() => new()
+    {
+        ModelName = Embedder,
+        Role = ModelRole.Embedding,
+        NeverRejectOnBudget = true
+    };
+
     private static void AssertRejectionLogged(Harness harness, string kind, string resident)
     {
         var warnings = harness.Logger.Entries.Where(static entry => entry.Level == LogLevel.Warning).ToArray();
@@ -982,7 +1172,8 @@ public sealed class CapacityServiceTests
     private static ModelFootprint AdmissionFootprint(ResourceFootprint resources,
         int contextTokens,
         string modelName,
-        GpuVariant variant)
+        GpuVariant variant,
+        ModelRole role = ModelRole.Chat)
     {
         var allocation = new ProcessContextAllocation
         {
@@ -997,7 +1188,7 @@ public sealed class CapacityServiceTests
         return ModelFootprint.Known(new ProcessLaunchAdmission
         {
             ModelName = modelName,
-            Role = ModelRole.Chat,
+            Role = role,
             Variant = variant,
             ResolvedArguments = ResolvedLaunchArguments.Explore(),
             Allocation = allocation
@@ -1107,7 +1298,8 @@ public sealed class CapacityServiceTests
                                  return Task.FromResult(AdmissionFootprint(Footprint.Resources,
                                      contextTokens: 8192,
                                      call.ArgAt<string>(0),
-                                     Profile.GpuAccelAvailable ? GpuVariant.Cuda : GpuVariant.Cpu));
+                                     Profile.GpuAccelAvailable ? GpuVariant.Cuda : GpuVariant.Cpu,
+                                     call.ArgAt<ModelRole>(1)));
                              });
             FootprintProvider.TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
                              .Returns(call =>

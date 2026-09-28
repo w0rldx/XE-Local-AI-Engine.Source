@@ -150,6 +150,9 @@ public sealed class CapacityService : ICapacityService
             };
         }
 
+        // Pooled roles (embedder, reranker) are spawned below every caller; the embedder is booked but never refused on budget.
+        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker;
+        var neverReject = request.NeverRejectOnBudget;
         var ollamaWarning = isOllama && running.Count > 0;
         var launchSnapshot = isLlamaServer
             ? _launchAdmissions.Snapshot(modelName, role)
@@ -159,7 +162,8 @@ public sealed class CapacityService : ICapacityService
                 HasRequestedKey = false,
                 HasGlobalBlocker = false
             };
-        if (launchSnapshot.HasRequestedKey || launchSnapshot.HasGlobalBlocker)
+        var canPublish = !launchSnapshot.HasRequestedKey && !launchSnapshot.HasGlobalBlocker;
+        if (!canPublish && !neverReject)
         {
             return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
@@ -171,14 +175,20 @@ public sealed class CapacityService : ICapacityService
             .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct);
         if (!footprint.IsKnown)
         {
+            if (neverReject)
+            {
+                return AllowOverBudget(modelName, role, reservation: null, ollamaWarning);
+            }
+
             return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
-        // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap).
+        // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap). A pooled role skips it:
+        // at the cap the supervisor's idle reaper evicts the least recently used pooled process, or refuses the launch itself.
         var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
                                        .Concat(launchSnapshot.AdmittedKeys)
                                        .ToHashSet();
-        if (activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
+        if (!isPooledRole && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
             return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
@@ -188,11 +198,13 @@ public sealed class CapacityService : ICapacityService
                                    || isLlamaServer
                                    && role == ModelRole.Chat
                                    && _supervisorOptions.Speculative.RequiresExternalDraftModel;
+        var fits = true;
         while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
             if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
-                return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+                fits = false;
+                break;
             }
 
             // A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the reservation
@@ -206,8 +218,14 @@ public sealed class CapacityService : ICapacityService
             footprint = downTiered;
         }
 
-        if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
-            || !FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
+        if (!fits && !neverReject)
+        {
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+        }
+
+        var committed = _footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint);
+        fits = fits && committed && FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad);
+        if (!fits && !neverReject)
         {
             return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
@@ -217,15 +235,42 @@ public sealed class CapacityService : ICapacityService
         using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources));
         if (!isLlamaServer || !request.PublishLaunchAdmission)
         {
-            return reservation.TransferToDecision(ollamaWarning);
+            return fits ? AllowWithinBudget(modelName, role, reservation, ollamaWarning, published: false) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
         }
 
-        if (footprint.Admission is null || !reservation.TryAttach(_launchAdmissions, footprint.Admission))
+        if (canPublish && committed && footprint.Admission is not null && reservation.TryAttach(_launchAdmissions, footprint.Admission))
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return fits ? AllowWithinBudget(modelName, role, reservation, ollamaWarning, published: true) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
+        }
+
+        // Only the embedder reaches here with a refused publication: it keeps the ledger bytes and launches unbound, as before it was gated.
+        return neverReject
+            ? AllowOverBudget(modelName, role, reservation, ollamaWarning)
+            : Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+    }
+
+    /// <summary>The in-budget Allow; a pooled role's admission is logged at Debug, since its spawn happens below every caller and is otherwise silent.</summary>
+    private CapacityDecision AllowWithinBudget(string modelName, ModelRole role, AdmissionReservation reservation, bool ollamaWarning, bool published)
+    {
+        if (role is ModelRole.Embedding or ModelRole.Reranker)
+        {
+            _logger.LogDebug("Capacity admitted pooled {Model} ({Role}); launch admission published: {Published}.", modelName, role, published);
         }
 
         return reservation.TransferToDecision(ollamaWarning);
+    }
+
+    /// <summary>An Allow for a <see cref="CapacityRequest.NeverRejectOnBudget" /> caller that would otherwise have been refused, logged so the overcommit is visible.</summary>
+    private CapacityDecision AllowOverBudget(string modelName, ModelRole role, AdmissionReservation? reservation, bool ollamaWarning)
+    {
+        _logger.LogInformation("Capacity admitted {Model} ({Role}) without a full admission: its budget or launch admission could not be confirmed.",
+            modelName, role);
+        return reservation?.TransferToDecision(ollamaWarning) ?? new CapacityDecision
+        {
+            Verdict = CapacityVerdict.Allow,
+            Reason = ReasonAllow,
+            OllamaEvictionWarning = ollamaWarning
+        };
     }
 
     /// <summary>A rejection whose reason names the requested model and what is loaded, logged at Warning so the refusal is visible in the node log.</summary>

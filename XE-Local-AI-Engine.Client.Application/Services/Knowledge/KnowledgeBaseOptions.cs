@@ -58,7 +58,15 @@ public sealed class KnowledgeBaseOptions
     /// </remarks>
     public bool AdaptiveRerankingEnabled { get; set; } = true;
 
-    /// <summary>Soft end-to-end retrieval target used to skip optional stages; defaults to 500 ms.</summary>
+    /// <summary>
+    ///     Retrieval latency budget, measured from search start: the soft threshold for skipping the optional rerank and
+    ///     the hard deadline for the rerank stage. Defaults to 500 ms.
+    /// </summary>
+    /// <remarks>
+    ///     The adaptive gate skips reranking once 80% of the budget has elapsed; a rerank still running at the full budget
+    ///     is abandoned and the search returns fusion order. Reranker start-up is not inside the budget because search never
+    ///     spawns the reranker: a cold one degrades to fusion and is warmed in the background.
+    /// </remarks>
     public int RetrievalLatencyBudgetMilliseconds { get; set; } = 500;
 
     /// <summary>Periodically enqueue stale-vector documents after a scheduled embedding-model change.</summary>

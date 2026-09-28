@@ -85,6 +85,121 @@ internal sealed record LiveLatency
         ordered[Math.Max(0, (int)Math.Ceiling(percentile * ordered.Length) - 1)];
 }
 
+/// <summary>One query's top-hit scores (D6 capture): the raw material for an abstention-threshold decision.</summary>
+internal sealed record LiveQueryScore
+{
+    public required string QueryId { get; init; }
+
+    public required string Category { get; init; }
+
+    public required string Language { get; init; }
+
+    public required bool Answerable { get; init; }
+
+    public double? Top1Score { get; init; }
+
+    public double? Top2Score { get; init; }
+
+    /// <summary><c>Fusion</c> or <c>Rerank</c>; null when the search returned no hit.</summary>
+    public string? Top1ScoreKind { get; init; }
+
+    public bool Top1Relevant { get; init; }
+
+    /// <summary>1-based rank of the first relevant hit, 0 when none was retrieved.</summary>
+    public int FirstRelevantRank { get; init; }
+
+    public double? Margin => Top1Score - Top2Score;
+}
+
+/// <summary>Nearest-rank five-number summary of a score sample.</summary>
+internal sealed record LiveScoreSpread
+{
+    public required int Count { get; init; }
+
+    public required double Min { get; init; }
+
+    public required double P10 { get; init; }
+
+    public required double P50 { get; init; }
+
+    public required double P90 { get; init; }
+
+    public required double Max { get; init; }
+
+    public static LiveScoreSpread? From(IEnumerable<double> values)
+    {
+        var ordered = values.Order().ToArray();
+        return ordered.Length == 0
+            ? null
+            : new LiveScoreSpread
+            {
+                Count = ordered.Length,
+                Min = ordered[0],
+                P10 = Rank(ordered, 0.10d),
+                P50 = Rank(ordered, 0.50d),
+                P90 = Rank(ordered, 0.90d),
+                Max = ordered[^1]
+            };
+    }
+
+    private static double Rank(double[] ordered, double percentile) =>
+        ordered[Math.Max(0, (int)Math.Ceiling(percentile * ordered.Length) - 1)];
+}
+
+/// <summary>The best single "abstain iff top-1 &lt; t" threshold over one score scale, see <see cref="Find" />.</summary>
+internal sealed record LiveAbstainThreshold
+{
+    public required double Threshold { get; init; }
+
+    public required double BalancedAccuracy { get; init; }
+
+    /// <summary>No-answer queries with top-1 below the threshold, over all no-answer queries.</summary>
+    public required double NoAnswerRecall { get; init; }
+
+    /// <summary>Answerable queries with a relevant top-1 at or above the threshold, over all such queries.</summary>
+    public required double AnswerableRetention { get; init; }
+
+    public required int NoAnswerCount { get; init; }
+
+    public required int AnswerableCount { get; init; }
+
+    /// <summary>
+    ///     Tries every observed top-1 score as t and maximises (no-answer recall + answerable retention) / 2 over no-answer
+    ///     queries vs answerable queries whose top-1 is relevant; ties keep the lowest t. Null when either side is empty.
+    /// </summary>
+    public static LiveAbstainThreshold? Find(IReadOnlyCollection<double> noAnswerTop1, IReadOnlyCollection<double> answerableRelevantTop1)
+    {
+        ArgumentNullException.ThrowIfNull(noAnswerTop1);
+        ArgumentNullException.ThrowIfNull(answerableRelevantTop1);
+        if (noAnswerTop1.Count == 0 || answerableRelevantTop1.Count == 0)
+        {
+            return null;
+        }
+
+        LiveAbstainThreshold? best = null;
+        foreach (var t in noAnswerTop1.Concat(answerableRelevantTop1).Distinct().Order())
+        {
+            var recall = (double)noAnswerTop1.Count(score => score < t) / noAnswerTop1.Count;
+            var retention = (double)answerableRelevantTop1.Count(score => score >= t) / answerableRelevantTop1.Count;
+            var balanced = (recall + retention) / 2d;
+            if (best is null || balanced > best.BalancedAccuracy)
+            {
+                best = new LiveAbstainThreshold
+                {
+                    Threshold = t,
+                    BalancedAccuracy = balanced,
+                    NoAnswerRecall = recall,
+                    AnswerableRetention = retention,
+                    NoAnswerCount = noAnswerTop1.Count,
+                    AnswerableCount = answerableRelevantTop1.Count
+                };
+            }
+        }
+
+        return best;
+    }
+}
+
 /// <summary>One measured configuration (a row of the plan's §4.3 table).</summary>
 internal sealed record LiveConfigResult
 {
@@ -141,15 +256,21 @@ internal sealed record LiveConfigResult
     /// <summary>Rerank calls the search's latency budget cancelled (a fallback the client never logs).</summary>
     public int BudgetCancelled { get; init; }
 
-    /// <summary>Reranker process spawn until its first <c>/health</c> 200 (PROD-cold only).</summary>
+    /// <summary>Rerank calls the client refused because an abandoned call for the model was still outstanding.</summary>
+    public int BusyFallbacks => Degrades.GetValueOrDefault("busy");
+
+    /// <summary>Rerank calls the client refused because the reranker was not running (no search spawns it).</summary>
+    public int ColdFallbacks => Degrades.GetValueOrDefault("cold");
+
+    /// <summary>PROD-cold only: the warm-up the eval performs after the row (as the pre-warmer would), spawn until ready.</summary>
     public double? ColdSpawnToReadyMilliseconds { get; init; }
 
-    /// <summary>End-to-end latency of the first query after the reranker became ready (PROD-cold only).</summary>
+    /// <summary>End-to-end latency of the row's first query (PROD-cold: reranker not running; PROD-fresh: right after the warm-up).</summary>
     public double? ColdFirstQueryMilliseconds { get; init; }
 
     /// <summary>
-    ///     Rerank outcome of the same first query as <see cref="ColdFirstQueryMilliseconds" /> (cold PROD rows only): its
-    ///     own rerank call's outcome, or "not reranked (adaptive gate)" when the gate skipped it.
+    ///     Rerank outcome of the same first query as <see cref="ColdFirstQueryMilliseconds" />: its own rerank call's
+    ///     outcome, or "not reranked (adaptive gate)" when the gate skipped it.
     /// </summary>
     public string? ColdFirstQueryRerankOutcome { get; init; }
 
@@ -158,6 +279,9 @@ internal sealed record LiveConfigResult
     ///     work the row's budget cancelled kept the server busy.
     /// </summary>
     public double? BacklogDrainMilliseconds { get; init; }
+
+    /// <summary>Per-query top-hit scores in query order (D6 capture).</summary>
+    public IReadOnlyList<LiveQueryScore> PerQuery { get; init; } = [];
 }
 
 /// <summary>Result of the Qwen3-style score sanity gate for one reranker.</summary>
@@ -261,7 +385,8 @@ internal sealed record LiveEnvironment
 
 internal sealed record RetrievalEvalLiveReport
 {
-    public int SchemaVersion { get; init; } = 2;
+    /// <summary>3: PROD-spawn became PROD-cold (no search spawns the reranker), PROD-fresh runs after the eval's warm-up, per-query scores.</summary>
+    public int SchemaVersion { get; init; } = 3;
 
     /// <summary>False when the run aborted; the configs measured before the abort are still reported.</summary>
     public required bool Completed { get; init; }
@@ -349,8 +474,13 @@ internal static class RetrievalEvalLiveReportWriter
                  + "gate skips = queries the adaptive gate kept from the reranker (budget, arm agreement or too few candidates; the reason is not observable without a product change). "
                  + "`-full` reranks the whole pool (max pool shown), `-top10` only its top 10.");
         Line(md, string.Empty);
-        Line(md, "| id | valid | R@K | P@K | MRR | nDCG@K | cite | anchor | noAns | e2e p50/p95/max ms | rerank p50/p95/max ms | scored/calls | max pool | gate skips | degrades | budget-cancel | query-embed degrades | cold ready/first ms |");
-        Line(md, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+        Line(md, "Shipped-default rows (schema 3; a search never spawns the reranker, so these do NOT compare 1:1 with schema-2 PROD-spawn/PROD-fresh): "
+                 + "PROD-cold = every query before any warm-up (expected all fusion, cold fallbacks, no spawn charged to a search), then the eval warms the reranker itself "
+                 + "as the pre-warmer would (cold ready = that spawn→ready); PROD-fresh = the first queries right after that warm-up completes; PROD-warm = the same server afterwards. "
+                 + "cold/busy = client fallbacks because the reranker was not running / an abandoned call for it was still outstanding.");
+        Line(md, string.Empty);
+        Line(md, "| id | valid | R@K | P@K | MRR | nDCG@K | cite | anchor | noAns | e2e p50/p95/max ms | rerank p50/p95/max ms | scored/calls | max pool | gate skips | degrades | cold/busy | budget-cancel | query-embed degrades | cold ready/first ms |");
+        Line(md, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var config in report.Configs)
         {
             var o = config.Overall;
@@ -358,7 +488,7 @@ internal static class RetrievalEvalLiveReportWriter
             var cold = config.ColdSpawnToReadyMilliseconds is null && config.ColdFirstQueryMilliseconds is null
                 ? "-"
                 : $"{F1(config.ColdSpawnToReadyMilliseconds)}/{F1(config.ColdFirstQueryMilliseconds)} ({config.ColdFirstQueryRerankOutcome ?? "-"})";
-            Line(md, $"| {config.Id} | {(config.Valid ? "yes" : "INVALID: " + config.InvalidReason)} | {F3(o.RecallAtK)} | {F3(o.PrecisionAtK)} | {F3(o.MeanReciprocalRank)} | {F3(o.NdcgAtK)} | {F3(o.CitationCoverage)} | {F3(o.SourceAnchorCoverage)} | {F3(o.NoAnswerAccuracy)} | {Lat(config.EndToEnd)} | {Lat(config.RerankStage)} | {F0(config.RerankScored)}/{F0(config.RerankCalls)} | {F0(config.MaxRerankPool)} | {(config.GateSkips is { } skips ? F0(skips) : "-")} | {degrades} | {F0(config.BudgetCancelled)} | {F0(config.QueryEmbeddingDegrades)} | {cold} |");
+            Line(md, $"| {config.Id} | {(config.Valid ? "yes" : "INVALID: " + config.InvalidReason)} | {F3(o.RecallAtK)} | {F3(o.PrecisionAtK)} | {F3(o.MeanReciprocalRank)} | {F3(o.NdcgAtK)} | {F3(o.CitationCoverage)} | {F3(o.SourceAnchorCoverage)} | {F3(o.NoAnswerAccuracy)} | {Lat(config.EndToEnd)} | {Lat(config.RerankStage)} | {F0(config.RerankScored)}/{F0(config.RerankCalls)} | {F0(config.MaxRerankPool)} | {(config.GateSkips is { } skips ? F0(skips) : "-")} | {degrades} | {F0(config.ColdFallbacks)}/{F0(config.BusyFallbacks)} | {F0(config.BudgetCancelled)} | {F0(config.QueryEmbeddingDegrades)} | {cold} |");
         }
 
         var drained = report.Configs.Where(static config => config.BacklogDrainMilliseconds is not null).ToList();
@@ -367,8 +497,8 @@ internal static class RetrievalEvalLiveReportWriter
             Line(md, string.Empty);
             Line(md, "## Backlog drain");
             Line(md, string.Empty);
-            Line(md, "The client abandons a budget-cancelled rerank, the single-slot server does not. After each PROD row a 2-document probe rerank with no budget "
-                     + "queues behind that leftover work: its latency (backlog drain ms) is how long cancelled work kept the reranker busy; an idle server answers in tens of ms.");
+            Line(md, "The client abandons a budget-expired rerank and the single-slot server keeps scoring it. After each PROD row a 2-document probe rerank with no budget "
+                     + "queues behind that leftover work: its latency (backlog drain ms) is how long abandoned work kept the reranker busy; an idle server answers in tens of ms.");
             Line(md, string.Empty);
             foreach (var config in drained)
             {
@@ -376,6 +506,7 @@ internal static class RetrievalEvalLiveReportWriter
             }
         }
 
+        AppendScoreDistribution(md, report);
         AppendGroupTable(md, report, "Per category (MRR / nDCG@K / R@K)", static config => config.ByCategory);
         AppendGroupTable(md, report, "Per language (MRR / nDCG@K / R@K)", static config => config.ByLanguage);
 
@@ -615,6 +746,68 @@ internal static class RetrievalEvalLiveReportWriter
             Line(md, $"| {config.Id} | {string.Join(" | ", cells)} |");
         }
     }
+
+    private static void AppendScoreDistribution(StringBuilder md, RetrievalEvalLiveReport report)
+    {
+        var scored = report.Configs.Where(static config => config.PerQuery.Any(static query => query.Top1ScoreKind is not null)).ToList();
+        if (scored.Count == 0)
+        {
+            return;
+        }
+
+        Line(md, string.Empty);
+        Line(md, "## Top-1 score distribution (D6 capture)");
+        Line(md, string.Empty);
+        Line(md, "Grouped by the top hit's ScoreKind: a gate-skipped or degraded query is Fusion even in a rerank config, and the scales do not mix. "
+                 + "margin = top-1 minus top-2 score. Spreads are nearest-rank min/p10/p50/p90/max; queries with no hit are left out. "
+                 + "best t = the observed top-1 score t maximising balanced accuracy of \"abstain iff top-1 < t\" = (no-answer recall + answerable retention) / 2, "
+                 + "where no-answer recall = no-answer queries with top-1 < t over all no-answer queries and answerable retention = answerable queries whose top-1 is relevant "
+                 + "with top-1 >= t over all such queries (answerable queries with an irrelevant top-1 are excluded); ties keep the lowest t. Capture only: no product threshold.");
+        Line(md, string.Empty);
+        Line(md, "| id | kind | group | n | top-1 min/p10/p50/p90/max | margin min/p10/p50/p90/max |");
+        Line(md, "|---|---|---|---|---|---|");
+        var thresholds = new List<string>();
+        foreach (var config in scored)
+        {
+            foreach (var kind in config.PerQuery.Select(static query => query.Top1ScoreKind).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            {
+                var ofKind = config.PerQuery.Where(query => query.Top1ScoreKind == kind).ToList();
+                foreach (var (group, answerable) in (ReadOnlySpan<(string, bool)>)[("answerable", true), ("no-answer", false)])
+                {
+                    var queries = ofKind.Where(query => query.Answerable == answerable).ToList();
+                    if (queries.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    Line(md, $"| {config.Id} | {kind} | {group} | {F0(queries.Count)} | {Spread(queries.Select(static query => query.Top1Score!.Value))} | {Spread(queries.Select(static query => query.Margin).OfType<double>())} |");
+                }
+
+                var best = LiveAbstainThreshold.Find(
+                    [.. ofKind.Where(static query => !query.Answerable).Select(static query => query.Top1Score!.Value)],
+                    [.. ofKind.Where(static query => query.Answerable && query.Top1Relevant).Select(static query => query.Top1Score!.Value)]);
+                thresholds.Add(best is null
+                    ? $"| {config.Id} | {kind} | n/a (needs no-answer and relevant-top-1 answerable queries) | - | - | - |"
+                    : $"| {config.Id} | {kind} | {F4(best.Threshold)} | {F3(best.BalancedAccuracy)} | {F3(best.NoAnswerRecall)} (n={F0(best.NoAnswerCount)}) | {F3(best.AnswerableRetention)} (n={F0(best.AnswerableCount)}) |");
+            }
+        }
+
+        Line(md, string.Empty);
+        Line(md, "| id | kind | best t | balanced acc | no-answer recall | answerable retention |");
+        Line(md, "|---|---|---|---|---|---|");
+        foreach (var line in thresholds)
+        {
+            Line(md, line);
+        }
+    }
+
+    private static string Spread(IEnumerable<double> values) =>
+        LiveScoreSpread.From(values) is { } spread
+            ? $"{F4(spread.Min)}/{F4(spread.P10)}/{F4(spread.P50)}/{F4(spread.P90)}/{F4(spread.Max)}"
+            : "-";
+
+    private static string F4(double value) =>
+        value.ToString("F4", CultureInfo.InvariantCulture);
 
     private static string BoundaryNote(LiveConfigResult config, string group) =>
         group == ChunkBoundaryCategory && config.BoundaryPairCount > 0

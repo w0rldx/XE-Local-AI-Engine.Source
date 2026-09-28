@@ -832,6 +832,49 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.Equal(expected: 32768, larger.ProcessContextTokens);
     }
 
+    [Test]
+    [Arguments("nomic-embed-text-v1.5 F16", ModelRole.Embedding, 794)]
+    [Arguments("bge-reranker-v2-m3 Q4_K_M", ModelRole.Reranker, 733)]
+    public async Task Resolve_PooledRole_BooksAtLeastTheMeasuredVram(string model, ModelRole role, long measuredMib)
+    {
+        // Receipts: box-wide VRAM delta per llama-server on an RTX 5090 (retrieval eval 2026-09-27). The facts are the real headers: no
+        // parameter_count or head_count_kv, so weights = file size, KV = 0, and the fixed runtime overhead covers the compute buffer.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 32 * Gb,
+            facts: PooledReceiptFacts(model));
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            role,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
+        AssertEx.True(allocation.Footprint.GpuBytes >= measuredMib * 1024 * 1024,
+            $"{model} books {allocation.Footprint.GpuBytes / (1024 * 1024)} MiB, below the {measuredMib} MiB measured.");
+    }
+
+    private static GgufModelFootprintFacts PooledReceiptFacts(string model) => model switch
+    {
+        "nomic-embed-text-v1.5 F16" => Facts(quant: "F16",
+            contextLength: 2048,
+            fileSizeBytes: 274_290_560,
+            paramCount: null,
+            blockCount: 12,
+            attentionHeadCount: 12,
+            attentionHeadCountKv: null,
+            embeddingLength: 768),
+        "bge-reranker-v2-m3 Q4_K_M" => Facts(quant: "Q4_K_M",
+            contextLength: 8192,
+            fileSizeBytes: 438_376_864,
+            paramCount: null,
+            blockCount: 24,
+            attentionHeadCount: 16,
+            attentionHeadCountKv: null,
+            embeddingLength: 1024),
+        _ => throw new ArgumentOutOfRangeException(nameof(model), model, "No receipt facts for this model.")
+    };
+
     private static ProcessContextAllocationResolver BuildResolver(HardwareProfile profile,
         long? processBudget = null,
         GgufModelFootprintFacts? facts = null,

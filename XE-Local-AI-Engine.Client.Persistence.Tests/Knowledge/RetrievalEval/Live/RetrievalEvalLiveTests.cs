@@ -201,8 +201,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             var isFirst = index == 0;
             if (isFirst)
             {
-                await RunProductionSpawnAsync(settings, model, supervisor, reranker, runner, record, ct);
-                await RunProductionPooledAsync(settings, model, supervisor, reranker, runner, record, ct);
+                await RunProductionRowsAsync(settings, model, supervisor, reranker, runner, record, ct);
             }
 
             // A budget-cancelled rerank keeps the single-slot server busy after the client gave up, so the sanity gate and
@@ -246,10 +245,10 @@ public sealed class RetrievalEvalLiveTests : IDisposable
     }
 
     /// <summary>
-    ///     The product's real cold path: the reranker is NOT running when the first search arrives, so the supervisor
-    ///     spawns it inside that search's 500 ms budget, detached, and later searches reuse it once it is ready.
+    ///     The shipped-default rows on one lazily spawned server: PROD-cold before any warm-up (a search never spawns the
+    ///     reranker), the eval's own warm-up as the pre-warmer would do it, then PROD-fresh and PROD-warm on that server.
     /// </summary>
-    private async Task RunProductionSpawnAsync(RetrievalEvalLiveSettings settings,
+    private async Task RunProductionRowsAsync(RetrievalEvalLiveSettings settings,
         LiveRerankerModel model,
         LiveEndpointSupervisor supervisor,
         IRerankerClient reranker,
@@ -263,58 +262,50 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             ct);
         try
         {
-            var spawn = await runner.RunAsync("PROD-spawn", $"{model.Id}, shipped defaults (adaptive on, 500 ms), reranker spawned on the first search inside its budget",
+            var coldRow = await runner.RunAsync("PROD-cold", $"{model.Id}, shipped defaults (adaptive on, 500 ms), every query before the reranker was warmed",
                 Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: true, ct);
-            var (spawned, failure) = await supervisor.AwaitLazyAsync(model.Id, ModelRole.Reranker);
-            if (spawned is not null)
+            var spawnedBySearch = supervisor.LazyStarted(model.Id, ModelRole.Reranker);
+
+            var (server, failure) = await supervisor.WarmLazyAsync(model.Id, ModelRole.Reranker);
+            if (server is null)
             {
-                record.Servers.Add(Footprint($"reranker:{model.Id} (PROD-spawn)", ModelRole.Reranker, spawned));
+                record.Configs.Add(WithColdOutcome(coldRow, spawnedBySearch, null));
+                throw new LiveInfraException($"the reranker warm-up for {model.Id} failed: {failure}");
             }
 
-            record.Configs.Add(WithSpawnOutcome(spawn, spawned, failure) with
+            record.Servers.Add(Footprint($"reranker:{model.Id} (warm-up, PROD-fresh, PROD-warm)", ModelRole.Reranker, server));
+            record.Configs.Add(WithColdOutcome(coldRow, spawnedBySearch, server));
+
+            var fresh = await runner.RunAsync("PROD-fresh", $"{model.Id}, shipped defaults (adaptive on, 500 ms), first queries right after the warm-up completed",
+                Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: true, ct);
+            record.Configs.Add(fresh with
             {
-                BacklogDrainMilliseconds = spawned is null ? null : await MeasureBacklogDrainAsync(spawned.BaseAddress, ct)
+                BacklogDrainMilliseconds = await DrainAsync(supervisor, model.Id, server.BaseAddress, ct)
+            });
+
+            var warm = await runner.RunAsync("PROD-warm", $"{model.Id}, shipped defaults (adaptive on, 500 ms), warm",
+                Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: false, ct);
+            record.Configs.Add(warm with
+            {
+                BacklogDrainMilliseconds = await DrainAsync(supervisor, model.Id, server.BaseAddress, ct)
             });
         }
         finally
         {
-            // Kills the spawned server, backlog included, before the next group starts its own.
+            // Kills the server, backlog included, before the forced rows start their own.
             await supervisor.ReleaseLazyAsync(model.Id, ModelRole.Reranker);
         }
     }
 
     /// <summary>
-    ///     PROD-fresh then PROD-warm on one pre-spawned server of their own, as production reuses it; the server is killed
-    ///     before the forced rows, so their budget-cancelled work never reaches another group.
+    ///     Measures the backlog drain, then waits until the client's abandoned calls released their leases, so the next
+    ///     row never starts on a "busy" fallback the previous row left behind.
     /// </summary>
-    private async Task RunProductionPooledAsync(RetrievalEvalLiveSettings settings,
-        LiveRerankerModel model,
-        LiveEndpointSupervisor supervisor,
-        IRerankerClient reranker,
-        ConfigRunner runner,
-        RunRecord record,
-        CancellationToken ct)
+    private async Task<double> DrainAsync(LiveEndpointSupervisor supervisor, string modelName, Uri baseAddress, CancellationToken ct)
     {
-        await using var server = await LiveLlamaServer.StartAsync(settings.ServerPath, model.ModelPath, ModelRole.Reranker, settings.GpuLayers, PooledReadyTimeout, ct);
-        supervisor.Register(model.Id, ModelRole.Reranker, server.BaseAddress);
-        record.Servers.Add(Footprint($"reranker:{model.Id} (PROD-fresh, PROD-warm)", ModelRole.Reranker, server));
-
-        // Fresh: the first query runs right after a spawn that happened OUTSIDE the search budget.
-        var fresh = await runner.RunAsync("PROD-fresh", $"{model.Id}, shipped defaults (adaptive on, 500 ms), first query right after a pre-spawned server became ready",
-            Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: true, ct);
-        record.Configs.Add(fresh with
-        {
-            ColdSpawnToReadyMilliseconds = server.SpawnToReady.TotalMilliseconds,
-            BacklogDrainMilliseconds = await MeasureBacklogDrainAsync(server.BaseAddress, ct)
-        });
-
-        // The drain probe above waited out PROD-fresh's backlog, so warm starts on an idle server.
-        var warm = await runner.RunAsync("PROD-warm", $"{model.Id}, shipped defaults (adaptive on, 500 ms), warm",
-            Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: false, ct);
-        record.Configs.Add(warm with
-        {
-            BacklogDrainMilliseconds = await MeasureBacklogDrainAsync(server.BaseAddress, ct)
-        });
+        var drain = await MeasureBacklogDrainAsync(baseAddress, ct);
+        await supervisor.WaitForLeasesReleasedAsync(modelName, ModelRole.Reranker, ct);
+        return drain;
     }
 
     /// <summary>
@@ -336,14 +327,14 @@ public sealed class RetrievalEvalLiveTests : IDisposable
     }
 
     /// <summary>
-    ///     Folds the lazy spawn into the PROD-spawn row. A failed spawn reaches the reranker client as a runtime failure it
-    ///     degrades on, so every query fell back to fusion order: the row is INVALID, not a valid production number.
+    ///     Folds the warm-up into the PROD-cold row. A search that started the reranker spawn charged a cold spawn to a
+    ///     search, which the product must no longer do: the row is then INVALID, not a production number.
     /// </summary>
-    internal static LiveConfigResult WithSpawnOutcome(LiveConfigResult row, LiveLlamaServer? spawned, string? spawnFailure) =>
+    internal static LiveConfigResult WithColdOutcome(LiveConfigResult row, bool spawnedBySearch, LiveLlamaServer? warmed) =>
         Invalidate(row with
         {
-            ColdSpawnToReadyMilliseconds = spawned?.SpawnToReady.TotalMilliseconds
-        }, spawnFailure is null ? null : $"reranker spawn failed: {spawnFailure}");
+            ColdSpawnToReadyMilliseconds = warmed?.SpawnToReady.TotalMilliseconds
+        }, spawnedBySearch ? "a search spawned the cold reranker (spawn charged to a search)" : null);
 
     /// <summary>
     ///     Records how many queries of a row fell back to lexical-only because the query embedding failed; any such query
@@ -575,7 +566,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
                         Options(model.Id, adaptive: true, ProductionBudgetMilliseconds), reranker, forced: false, cold: false, ct);
                     record.Configs.Add(Invalidate(warm, invalidReason) with
                     {
-                        BacklogDrainMilliseconds = await MeasureBacklogDrainAsync(server.BaseAddress, ct)
+                        BacklogDrainMilliseconds = await DrainAsync(supervisor, model.Id, server.BaseAddress, ct)
                     });
                 }
             }
@@ -755,9 +746,24 @@ public sealed class RetrievalEvalLiveTests : IDisposable
                 Degrades = degraded.GroupBy(static degrade => degrade.Reason, StringComparer.Ordinal).ToDictionary(static group => group.Key, static group => group.Count(), StringComparer.Ordinal),
                 BudgetCancelled = budgetCancelled,
                 ColdFirstQueryMilliseconds = cold ? first : null,
-                ColdFirstQueryRerankOutcome = cold && metrics.PerQuery.Count > 0 ? recording.RerankOutcomeOf(0) : null
+                ColdFirstQueryRerankOutcome = cold && metrics.PerQuery.Count > 0 ? recording.RerankOutcomeOf(0) : null,
+                PerQuery = [.. metrics.PerQuery.Select(evaluation => ScoreOf(evaluation, _corpus.Labels[evaluation.QueryId]))]
             }, _queryEmbeddingDegrades.ExceptionTypes.Count);
         }
+
+        internal static LiveQueryScore ScoreOf(QueryEvaluation evaluation, LiveQueryLabel label) =>
+            new()
+            {
+                QueryId = evaluation.QueryId,
+                Category = label.Category,
+                Language = label.Language,
+                Answerable = !evaluation.ExpectsNoAnswer,
+                Top1Score = evaluation.Top1Score,
+                Top2Score = evaluation.Top2Score,
+                Top1ScoreKind = evaluation.Top1ScoreKind?.ToString(),
+                Top1Relevant = evaluation.Top1Relevant,
+                FirstRelevantRank = evaluation.FirstRelevantRank
+            };
 
         // The harness searches the queries in order, one call each, so the i-th recorded hit list belongs to the i-th query.
         private (int BothHalves, int Pairs) CountBoundaryBothHalves(IReadOnlyList<IReadOnlyList<string>> hitContents)

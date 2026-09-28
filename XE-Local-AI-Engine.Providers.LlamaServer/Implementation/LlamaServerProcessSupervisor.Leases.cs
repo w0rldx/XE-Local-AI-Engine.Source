@@ -231,8 +231,10 @@ public sealed partial class LlamaServerProcessSupervisor
             return eviction != 0 ? Refusal(eviction) : LlamaServerLeaseAcquisition.NotRunning;
         }
 
+        // A granted lease is real use: refresh the idle clock, since a leased caller may skip the ensure that otherwise does.
+        running.MarkUsed(_timeProvider.GetUtcNow());
 #pragma warning disable CA2000 // Ownership of the lease transfers to the caller inside the returned acquisition; the interface contract obliges the caller to dispose it.
-        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running));
+        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running), running.Endpoint);
 #pragma warning restore CA2000
     }
 

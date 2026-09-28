@@ -1422,7 +1422,6 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerLaunchProjectionTests.
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerLaunchProjectionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerPortAllocatorTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerProviderContractTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerRerankerClientTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerRerankerResilienceTests.cs|remarks|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerRerankerResilienceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/LlamaServerRerankerResilienceTests.cs|summary|1

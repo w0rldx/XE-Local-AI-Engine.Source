@@ -61,6 +61,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     private static readonly TimeSpan PerHuggingFaceCallTimeout = TimeSpan.FromSeconds(20);
 
     private readonly ICatalogRecommendationService _catalogRecommendationService;
+    private readonly IKnowledgeCompanionReserve _companionReserve;
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly MemoryFitEstimator _estimator;
 
@@ -84,9 +85,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         IModelFitSnapshotStore snapshotStore,
         IModelFitRecommendationStore recommendationStore,
         ICatalogRecommendationService catalogRecommendationService,
+        IKnowledgeCompanionReserve companionReserve,
         TimeProvider timeProvider,
         ILogger<ModelFitRefreshService> logger)
     {
+        _companionReserve = companionReserve ?? throw new ArgumentNullException(nameof(companionReserve));
         _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
         _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
@@ -151,15 +154,20 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         try
         {
-            // Size against the EFFECTIVE profile — degraded to CPU-mode when the device audit reports a silent
-            // CPU fallback — so the advisor never recommends models that only fit in VRAM the runtime cannot actually use.
-            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken);
-            var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken);
+            // Size against the EFFECTIVE (CPU-degraded on a silent fallback) profile, freshly probed: the companion reserve skips residents only
+            // against measured free VRAM, so a cached figure predating a companion's spawn would count it nowhere.
+            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, cancellationToken);
+
+            // Recommendations leave room for the knowledge companions the budget does not already net out. The copy only lowers VRAM figures
+            // (never below one byte), so the advisor's system block is unchanged and its score is normalized against the budget the fits used.
+            var companionReserve = await _companionReserve.ResolveGpuBytesAsync(profile, cancellationToken);
+            var recommendationProfile = KnowledgeCompanionReserve.ApplyTo(profile, companionReserve);
+            var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, recommendationProfile, cancellationToken);
 
             var completedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
             // Serialize the ranked fits to the advisor recommendation JSON and parse them through the reused scaffold.
-            var advisorJson = SerializeAdvisorJson(recommendations, profile);
+            var advisorJson = SerializeAdvisorJson(recommendations, recommendationProfile);
             var parse = RecommendationJsonParser.Parse(advisorJson);
             if (!parse.IsSuccess)
             {

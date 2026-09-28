@@ -26,6 +26,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -94,6 +96,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // to the next turn without a restart (INodeRuntimeSettings' own doc forbids capturing a migrated value in a field).
     private readonly INodeRuntimeSettings _runtimeSettings;
 
+    // Warms the reranker/embedder once per turn that offers knowledge search, since search itself never spawns the reranker.
+    private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
+    private readonly bool _knowledgeToolsEnabled;
+
     public InvocationRunner(Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
         IOrchestrationAgentFactory orchestrationAgentFactory,
@@ -116,6 +122,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         InvocationLifecycleTracker lifecycleTracker,
         IExternalProviderRegistry externalProviderRegistry,
         IServiceScopeFactory scopeFactory,
+        IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
+        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<InvocationRunner> logger,
         TimeProvider? timeProvider = null)
     {
@@ -146,6 +154,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _spawnOptions = spawnOptions.Value;
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _knowledgeModelPrewarmer = knowledgeModelPrewarmer ?? throw new ArgumentNullException(nameof(knowledgeModelPrewarmer));
+        ArgumentNullException.ThrowIfNull(knowledgeOptions);
+        _knowledgeToolsEnabled = knowledgeOptions.Value.AgentToolsEnabled;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -365,6 +376,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
             var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
             var effectiveContextTokens = localRuntime.EffectiveContextTokens;
+
+            // Once per turn, AFTER the chat model is ready so the companions never race its launch for admission or VRAM.
+            // Fire-and-forget: the first knowledge search may still find them cold and fall back to fusion order.
+            if (_knowledgeToolsEnabled && package.AllowedTools.Any(static tool => string.Equals(tool.Name, SearchKnowledgeBaseToolDefinition.ToolName, StringComparison.Ordinal)))
+            {
+                _knowledgeModelPrewarmer.RequestWarm();
+            }
 
             // Fold the launched effective window into the turn policy (precedence: TurnPolicy.WithEffectiveContext) so the OUTER budgeter sizes history against the
             // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorised model never had.

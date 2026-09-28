@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -22,14 +23,20 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     private const double HeadroomFraction = 0.15d; // Not derived from ModelFitSafetyMarginPercent: that cannot reproduce max(15 %, 1 GiB).
     private const long MinHeadroomBytes = 1024L * 1024 * 1024; // ~1 GiB floor for fixed KV/runtime overhead.
 
+    private readonly IKnowledgeCompanionReserve _companionReserve;
     private readonly ILogger<GgufVariantRecommender> _logger;
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
+    private readonly IRuntimeDeviceAudit _runtimeAudit;
     private readonly IGpuVariantSelector _variantSelector;
 
     public GgufVariantRecommender(IGpuVariantSelector variantSelector,
         IProcessVramBudgetProbe processVramBudgetProbe,
+        IKnowledgeCompanionReserve companionReserve,
+        IRuntimeDeviceAudit runtimeAudit,
         ILogger<GgufVariantRecommender> logger)
     {
+        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
+        _companionReserve = companionReserve ?? throw new ArgumentNullException(nameof(companionReserve));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
         _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -74,15 +81,24 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return annotations;
     }
 
-    // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once. Any
-    // non-cancellation failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
+    // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once, less the knowledge companions' reserve.
+    // Any non-cancellation failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
     private async Task<long?> TryResolveFreeVramAsync(CancellationToken ct)
     {
         try
         {
             var variant = await _variantSelector.SelectVariantAsync(ct);
             var backend = InferenceBackends.FromVariant(variant);
-            return await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+            var budget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+            if (budget is not > 0)
+            {
+                return budget;
+            }
+
+            // The probe's figure is a live free measurement (llama.cpp's own device query), so it stands in as the profile's measured free VRAM.
+            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
+            var reserve = await _companionReserve.ResolveGpuBytesAsync(profile with { AvailableVramBytes = budget }, ct);
+            return Math.Max(1, budget.Value - reserve);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

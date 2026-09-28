@@ -4,6 +4,7 @@ using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -224,6 +225,25 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         {
             return GetEnumerator();
         }
+    }
+
+    [Test]
+    public async Task GenerateAsync_WhenCapacityRefusesTheColdEmbedderLaunch_ThrowsIOException_ForTheLexicalFallback()
+    {
+        // A pooled-role capacity refusal must land in the same transport-failure set, so ingestion and the playbook ranker
+        // fall back to lexical instead of failing on an exception type nobody catches.
+        var admission = Substitute.For<ILlamaServerPooledLaunchAdmission>();
+        admission.AdmitAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+                 .Returns<Task<IDisposable?>>(_ => throw new LlamaRuntimeException("Not enough free memory to load the embedding model."));
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, pooledLaunchAdmission: admission);
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, "nomic-embed-text-v1.5", TimeSpan.FromSeconds(30));
+
+        var exception = await AssertEx.ThrowsAsync<IOException>(() => generator.GenerateAsync(["chunk"]));
+
+        await admission.Received(1).AdmitAsync("nomic-embed-text-v1.5", ModelRole.Embedding, Arg.Any<CancellationToken>());
+        AssertEx.True(exception.InnerException is LlamaRuntimeException, "The capacity refusal must be the cause.");
+        AssertEx.Equal(expected: 0, launcher.LaunchCount, "A refused launch never reaches the launcher.");
     }
 
     private static string EmbeddingResponseWith(string vector)

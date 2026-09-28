@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -8,15 +9,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Reranks candidate documents against a query by spawning or reusing a rerank-role <c>llama-server</c> for the
-///     resolved reranker model and POSTing <c>/v1/rerank</c>.
+///     Reranks candidate documents against a query by leasing an already-running rerank-role <c>llama-server</c> for the
+///     resolved reranker model and POSTing <c>/v1/rerank</c>. It never spawns one: a cold reranker degrades.
 /// </summary>
 /// <remarks>
-///     It does NOT go through the OpenAI SDK — <c>/v1/rerank</c> is a raw llama-server route with no SDK method — so it
-///     calls the endpoint directly with an injected <see cref="HttpClient" />, the plain-client pattern the health probe
-///     uses. Any failure to obtain scores — model not installed, the supervisor rejecting the spawn on the loaded-cap,
-///     the server down, a transport error, a malformed or mismatched response — returns <see langword="null" />, so the
-///     caller keeps its fusion order, mirroring the embedding degrade-to-lexical path. Query and document text are never logged.
+///     <c>/v1/rerank</c> has no OpenAI SDK method, so it is POSTed with an injected <see cref="HttpClient" />. A cold,
+///     busy, ejecting or profiling reranker, a transport error or a malformed response returns <see langword="null" />,
+///     so the caller keeps its fusion order. The caller's deadline abandons the scoring call, never cancels it: it
+///     settles in the background under the client's own budget. Query and document text are never logged.
 /// </remarks>
 public sealed class LlamaServerRerankerClient : IRerankerClient
 {
@@ -26,12 +26,6 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     ///     registration in <c>LlamaServerServiceCollectionExtensions</c>.
     /// </summary>
     public const string HttpClientName = "llamaserver-reranker";
-
-    /// <summary>
-    ///     How many times a rerank re-ensures around a profiling spawn before degrading to fusion order. Profiling
-    ///     holds the per-key single-flight gate through its own teardown, so one re-ensure normally suffices.
-    /// </summary>
-    private const int MaxProfilingReEnsures = 3;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -64,6 +58,9 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     private readonly ILogger<LlamaServerRerankerClient> _logger;
     private readonly TimeSpan? _requestTimeoutOverride;
 
+    // Models with a scoring call still settling, keyed like the supervisor's process keys; the value is unused.
+    private readonly ConcurrentDictionary<string, byte> _outstanding = new(StringComparer.OrdinalIgnoreCase);
+
     public LlamaServerRerankerClient(ILlamaServerProcessSupervisor supervisor,
         HttpClient httpClient,
         ILogger<LlamaServerRerankerClient> logger,
@@ -80,9 +77,9 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     ///     allowance, capped.
     /// </summary>
     /// <remarks>
-    ///     It bounds a reranker that accepts the request then hangs mid-scoring, without stalling knowledge search for
-    ///     the shared <see cref="HttpClient.Timeout" />. A fired timeout is a linked-token cancellation, not the
-    ///     caller's, so it degrades to null like the other failure modes.
+    ///     It bounds the detached scoring call — and so how long it holds the lease and blocks the next rerank — for a
+    ///     reranker that accepts the request then hangs mid-scoring. It is the call's only token, never the caller's, so
+    ///     a fired timeout degrades to null like the other failure modes.
     /// </remarks>
     internal static TimeSpan ResolveRequestTimeout(int documentCount)
     {
@@ -109,46 +106,91 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         // their own budget) wins outright.
         var requestTimeout = _requestTimeoutOverride ?? ResolveRequestTimeout(documents.Count);
 
+        // One scoring call per model at a time: the server is --parallel 1 and keeps scoring an abandoned call, so queueing behind it only grows a backlog.
+        if (!_outstanding.TryAdd(modelName, value: 0))
+        {
+            LogDegrade("busy", documents.Count, requestTimeout, "OutstandingRerank");
+            return null;
+        }
+
+        ILlamaServerInferenceLease? lease = null;
+        var detached = false;
         try
         {
-            // Hold an inference lease exactly as the chat path does: leaseless, this role's ActiveLeases stays 0, so a profiling pre-spawn eviction claims the process and
-            // tree-kills the rerank mid-flight and an operator eject drains past it. A key a measurement spawn owns is re-ensured, its endpoint being the port that spawn may now answer on.
-            LlamaServerEndpoint endpoint;
-            ILlamaServerInferenceLease? acquired;
-            var attempt = 0;
-            while (true)
+            // Lease FIRST, and never ensure-spawn: a cold reranker is warmed outside the search, so its load time is never charged to a search budget. The lease
+            // keeps a profiling pre-spawn eviction or an operator eject from killing the scoring round-trip mid-flight.
+            var acquisition = _supervisor.TryAcquireInferenceLease(modelName, ModelRole.Reranker);
+            if (acquisition.ProcessEvicting)
             {
-                endpoint = await _supervisor.EnsureRunningAsync(modelName, ModelRole.Reranker, cancellationToken).ConfigureAwait(false);
-                var acquisition = _supervisor.TryAcquireInferenceLease(modelName, ModelRole.Reranker);
-                if (acquisition.ProcessEvicting)
-                {
-                    LogDegrade("ejecting", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.Evicting));
-                    return null;
-                }
-
-                if (!acquisition.ProcessProfiling)
-                {
-                    acquired = acquisition.Lease;
-                    break;
-                }
-
-                if (attempt++ >= MaxProfilingReEnsures)
-                {
-                    LogDegrade("profiling", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.ProfilingOwned));
-                    return null;
-                }
+                LogDegrade("ejecting", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.Evicting));
+                return null;
             }
 
-            using var lease = acquired;
+            if (acquisition.ProcessProfiling)
+            {
+                LogDegrade("profiling", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.ProfilingOwned));
+                return null;
+            }
+
+            if (acquisition.Lease is null)
+            {
+                LogDegrade("cold", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.NotRunning));
+                return null;
+            }
+
+            lease = acquisition.Lease;
+
+            // The lease pins the live process, so an ensure here only takes the reuse path; it runs only for a supervisor that grants no endpoint.
+            var endpoint = acquisition.Endpoint
+                           ?? await _supervisor.EnsureRunningAsync(modelName, ModelRole.Reranker, cancellationToken).ConfigureAwait(false);
 
             // BaseAddress is the OpenAI-compatible ".../v1" base (no trailing slash); the raw rerank route is ".../v1/rerank".
             var requestUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri}/rerank");
+            var scoring = ScoreDetachedAsync(modelName, lease, requestUri, query, documents, requestTimeout);
+            detached = true;
 
-            // Bound the scoring round-trip on its own linked token, so a reranker that accepts then hangs mid-scoring degrades rather than stalling for the whole
-            // HttpClient.Timeout. A fired timeout cancels timeoutCts and NOT the caller token, so it lands in the degrade catch below; a real caller cancellation still propagates.
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(requestTimeout);
+            // Abandon, don't cancel: the caller's deadline ends only its WAIT. The server scores the pool either way, so the call keeps its lease and the model's
+            // outstanding slot until it settles, and a real caller cancellation still propagates as OperationCanceledException.
+            return await scoring.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (!detached && exception is LlamaRuntimeException or HttpRequestException or IOException or OperationCanceledException)
+        {
+            // Only the no-endpoint fallback ensure reaches here: the reranker is unavailable, so degrade to the existing fusion order.
+            LogDegrade("unavailable", documents.Count, requestTimeout, exception.GetType().Name);
+            return null;
+        }
+        finally
+        {
+            if (!detached)
+            {
+                lease?.Dispose();
+                _outstanding.TryRemove(modelName, out _);
+            }
+        }
+    }
 
+    /// <summary>
+    ///     The scoring round-trip, detached from every caller token: bounded only by <paramref name="requestTimeout" />,
+    ///     it owns the lease and the model's outstanding slot and releases both when it settles.
+    /// </summary>
+    /// <remarks>
+    ///     Never faults: every failure is logged here once and settles as <see langword="null" />, so an abandoned call can
+    ///     never surface as an unobserved task exception. Shutdown is bounded by the same 30 s ceiling.
+    /// </remarks>
+    private async Task<IReadOnlyList<double>?> ScoreDetachedAsync(string modelName,
+        ILlamaServerInferenceLease lease,
+        Uri requestUri,
+        string query,
+        IReadOnlyList<string> documents,
+        TimeSpan requestTimeout)
+    {
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(requestTimeout);
             using var response = await _httpClient
                                        .PostAsJsonAsync(requestUri, new RerankRequest
                                        {
@@ -172,20 +214,20 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
 
             return scores;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception exception)
         {
-            // A caller cancellation is a real cancellation, not a degrade — propagate it.
-            throw;
-        }
-        catch (Exception exception) when (exception is LlamaRuntimeException or HttpRequestException or IOException or JsonException or OperationCanceledException)
-        {
-            // Model not installed, cap reached, server down, transport error, scoring timeout or malformed body: degrade to the existing fusion order. The reason
-            // separates "ran out of time on this pool" — raise the budget, shrink the pool, or the box is too slow — from "there is no reranker"; both look identical otherwise.
+            // Server down, transport error, scoring timeout or malformed body. The reason separates "ran out of time on this pool" — raise the budget,
+            // shrink the pool, or the box is too slow — from "there is no reranker"; both look identical otherwise.
             LogDegrade(exception is OperationCanceledException ? "timeout" : "unavailable",
                 documents.Count,
                 requestTimeout,
                 exception.GetType().Name);
             return null;
+        }
+        finally
+        {
+            lease.Dispose();
+            _outstanding.TryRemove(modelName, out _);
         }
     }
 

@@ -514,6 +514,116 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.Contains(rawJson!, "is_trusted_publisher");
     }
 
+    [Test]
+    public async Task Advisor_Recommend_KnowledgeCompanionReserve_ShrinksTheRecommendationBudgetOnly()
+    {
+        // A ~1.4 GiB model fits a 12 GiB card, but not the 1 GiB left once an 11 GiB companion reserve is taken off. The catalog lane sees the
+        // same reduced profile, and the advisor's system block is byte-identical to the unreserved run: only recommendations shrink.
+        var unreserved = await RefreshWithCompanionReserveAsync(companionReserveBytes: 0);
+        var reserved = await RefreshWithCompanionReserveAsync(companionReserveBytes: 11 * Gb);
+
+        AssertEx.Equal(expected: 1, unreserved.Rows);
+        AssertEx.Equal(expected: 0, reserved.Rows);
+        AssertEx.Equal(12 * Gb, unreserved.CatalogProfile.VramBytes);
+        AssertEx.Equal(1 * Gb, reserved.CatalogProfile.VramBytes);
+        AssertEx.Equal(1 * Gb, reserved.CatalogProfile.AvailableVramBytes);
+        AssertEx.Equal(AssertEx.NotNull(unreserved.DiagnosticsJson), reserved.DiagnosticsJson);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_SizesAgainstAForcedProfileRefresh_AndHandsThatProfileToTheCompanionReserve()
+    {
+        // The reserve skips resident companions only against measured free VRAM, so a cached figure predating a companion's spawn would count it nowhere.
+        var profile = GpuProfile(12 * Gb, availableVramBytes: 10 * Gb);
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+        var companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([]));
+
+        var advisor = BuildAdvisor(new InMemoryModelFitSnapshotStore(),
+            new InMemoryModelFitRecommendationStore(),
+            discovery,
+            profile,
+            companionReserve: companionReserve,
+            runtimeAudit: runtimeAudit);
+        await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        await runtimeAudit.Received(1).GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+        await runtimeAudit.DidNotReceive().GetEffectiveProfileAsync(forceRefreshProfile: false, Arg.Any<CancellationToken>());
+        await companionReserve.Received(1).ResolveGpuBytesAsync(profile, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_KnowledgeCompanionReserveBeyondTheCard_StaysInGpuMode()
+    {
+        var reserved = await RefreshWithCompanionReserveAsync(companionReserveBytes: 64 * Gb);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, reserved.Status);
+        AssertEx.Equal(1L, reserved.CatalogProfile.VramBytes);
+        AssertEx.Equal(1L, reserved.CatalogProfile.AvailableVramBytes);
+        AssertEx.True(reserved.CatalogProfile is { GpuAccelAvailable: true, VramKnown: true },
+            "The clamp keeps a one-byte GPU budget; flipping to CPU mode would recommend RAM-sized models instead.");
+        AssertEx.Equal(expected: 0, reserved.Rows);
+    }
+
+    private static async Task<CompanionReserveRun> RefreshWithCompanionReserveAsync(long companionReserveBytes)
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/tiny-GGUF")]));
+        discovery.InspectRepoAsync("org/tiny-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/tiny-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+        var companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+        companionReserve.ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(companionReserveBytes));
+
+        HardwareProfile? catalogProfile = null;
+        var empty = new EmptyCatalogRecommendationService();
+        var catalog = Substitute.For<ICatalogRecommendationService>();
+        catalog.BuildRecommendationsAsync(Arg.Any<string?>(),
+                   Arg.Any<string>(),
+                   Arg.Any<int>(),
+                   Arg.Any<HardwareProfile>(),
+                   Arg.Any<IReadOnlySet<string>>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(call =>
+               {
+                   catalogProfile = call.ArgAt<HardwareProfile>(3);
+                   return empty.BuildRecommendationsAsync(call.ArgAt<string?>(0),
+                       call.ArgAt<string>(1),
+                       call.ArgAt<int>(2),
+                       catalogProfile,
+                       call.ArgAt<IReadOnlySet<string>>(4),
+                       call.ArgAt<CancellationToken>(5));
+               });
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(12 * Gb, availableVramBytes: 12 * Gb), catalog: catalog, companionReserve: companionReserve);
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        var snapshot = snapshotStore.Snapshots.Values.Single();
+        return new CompanionReserveRun
+        {
+            Status = result.Status,
+            Rows = recommendationStore.RowsFor(snapshot.Id).Count,
+            CatalogProfile = AssertEx.NotNull(catalogProfile),
+            DiagnosticsJson = snapshot.DiagnosticsJson
+        };
+    }
+
+    private sealed class CompanionReserveRun
+    {
+        public required ModelFitRunStatus Status { get; init; }
+
+        public required int Rows { get; init; }
+
+        public required HardwareProfile CatalogProfile { get; init; }
+
+        public required string? DiagnosticsJson { get; init; }
+    }
+
     // Runs one recommend refresh for a single fitting repo and returns the persisted row's score.
     [Test]
     public async Task Advisor_Recommend_DropsExploreRowTheCatalogLaneAlreadyRecommends()
@@ -626,10 +736,15 @@ public sealed class ModelFitRefreshServiceTests
         HardwareProfile profile,
         IGgufModelStore? store = null,
         ILlamaServerProcessSupervisor? supervisor = null,
-        ICatalogRecommendationService? catalog = null)
+        ICatalogRecommendationService? catalog = null,
+        IKnowledgeCompanionReserve? companionReserve = null,
+        IRuntimeDeviceAudit? runtimeAudit = null)
     {
-        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
-        runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+        if (runtimeAudit is null)
+        {
+            runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+            runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+        }
 
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.ListAsync(Arg.Any<CancellationToken>())
@@ -650,6 +765,7 @@ public sealed class ModelFitRefreshServiceTests
             snapshotStore,
             recommendationStore,
             catalog ?? new EmptyCatalogRecommendationService(),
+            companionReserve ?? Substitute.For<IKnowledgeCompanionReserve>(),
             TimeProvider.System,
             NullLogger<ModelFitRefreshService>.Instance);
     }

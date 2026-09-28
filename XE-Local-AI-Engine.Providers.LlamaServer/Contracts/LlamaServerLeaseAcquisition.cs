@@ -32,10 +32,16 @@ public readonly record struct LlamaServerLeaseAcquisition(
     /// </remarks>
     public static LlamaServerLeaseAcquisition ProfilingOwned { get; } = new(Lease: null, ProcessEvicting: false, ProcessProfiling: true);
 
+    /// <summary>
+    ///     The leased process's endpoint on a granted lease, so a caller that must not spawn can use it without an ensure;
+    ///     <see langword="null" /> on a refusal, or when the granting supervisor does not report one.
+    /// </summary>
+    public LlamaServerEndpoint? Endpoint { get; init; }
+
     /// <summary>A granted lease over a live, non-evicting process. The caller MUST dispose it when the request ends.</summary>
-    public static LlamaServerLeaseAcquisition Granted(ILlamaServerInferenceLease lease)
+    public static LlamaServerLeaseAcquisition Granted(ILlamaServerInferenceLease lease, LlamaServerEndpoint? endpoint = null)
     {
         ArgumentNullException.ThrowIfNull(lease);
-        return new LlamaServerLeaseAcquisition(lease, ProcessEvicting: false);
+        return new LlamaServerLeaseAcquisition(lease, ProcessEvicting: false) { Endpoint = endpoint };
     }
 }

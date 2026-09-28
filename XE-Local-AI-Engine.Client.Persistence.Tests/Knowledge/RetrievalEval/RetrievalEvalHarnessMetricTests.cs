@@ -100,6 +100,41 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
     }
 
     [Test]
+    public async Task EvaluateAsync_CapturesTopTwoScoresKindAndTopOneRelevance()
+    {
+        var relevant = Guid.NewGuid();
+        var ids = new Dictionary<string, Guid>(StringComparer.Ordinal)
+        {
+            ["answer"] = relevant
+        };
+        var reranked = new LabeledQuery("reranked", "reranked query", "answer", "grounded answer");
+        var single = NoAnswerQuery("single", "single hit");
+        var empty = NoAnswerQuery("empty", "no hit");
+        var search = new FixedSearchService(new Dictionary<string, IReadOnlyList<KnowledgeSearchHit>>(StringComparer.Ordinal)
+        {
+            [reranked.Text] = [Hit(relevant, "Answer", "grounded answer", 4.5d, KnowledgeScoreKind.Rerank), Hit(Guid.NewGuid(), "Other", "other", -1.25d, KnowledgeScoreKind.Rerank)],
+            [single.Text] = [Hit(Guid.NewGuid(), "Noise", "noise", 0.03d, KnowledgeScoreKind.Fusion)],
+            [empty.Text] = []
+        });
+
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, [reranked, single, empty], ids, K, CancellationToken.None);
+
+        var top = metrics.PerQuery.Single(result => result.QueryId == "reranked");
+        AssertEx.Equal(4.5d, top.Top1Score);
+        AssertEx.Equal(-1.25d, top.Top2Score);
+        AssertEx.Equal(KnowledgeScoreKind.Rerank, top.Top1ScoreKind);
+        AssertEx.True(top.Top1Relevant);
+        var one = metrics.PerQuery.Single(result => result.QueryId == "single");
+        AssertEx.Equal(0.03d, one.Top1Score);
+        AssertEx.Null(one.Top2Score);
+        AssertEx.Equal(KnowledgeScoreKind.Fusion, one.Top1ScoreKind);
+        AssertEx.False(one.Top1Relevant);
+        var none = metrics.PerQuery.Single(result => result.QueryId == "empty");
+        AssertEx.Null(none.Top1Score);
+        AssertEx.Null(none.Top1ScoreKind);
+    }
+
+    [Test]
     public void RepresentativeCorpus_DefinesEveryRequiredDeterministicScenarioGroup()
     {
         var groups = RetrievalEvalRepresentativeCorpus.AnswerableQueries
@@ -153,7 +188,7 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             ScenarioGroup = "no-answer"
         };
 
-    private static KnowledgeSearchHit Hit(Guid documentId, string title, string content) =>
+    private static KnowledgeSearchHit Hit(Guid documentId, string title, string content, double score = 1d, KnowledgeScoreKind kind = KnowledgeScoreKind.Fusion) =>
         new()
         {
             DocumentId = documentId,
@@ -162,7 +197,8 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             Section = title,
             Content = content,
             Source = "knowledge-base",
-            Score = 1d,
+            Score = score,
+            ScoreKind = kind,
             ChunkIndex = 0,
             DocumentStatus = KnowledgeDocumentStatus.Indexed,
             ServingLastKnownGood = false

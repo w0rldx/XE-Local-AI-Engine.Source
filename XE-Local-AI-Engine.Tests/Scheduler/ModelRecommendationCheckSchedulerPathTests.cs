@@ -198,6 +198,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             snapshotStore,
             new InMemoryModelFitRecommendationStore(),
             new EmptyCatalogRecommendationService(),
+            Substitute.For<IKnowledgeCompanionReserve>(),
             TimeProvider.System,
             NullLogger<ModelFitRefreshService>.Instance);
     }

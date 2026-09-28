@@ -76,6 +76,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         // serves every scoped search; lets a repeated query skip the embedding round trip.
         builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
 
+        // Singleton so every turn and search shares one single-flight warm and one refusal cooldown. Search never spawns
+        // the reranker; the invocation runner (knowledge search offered) and a cold-degraded search request this warm.
+        builder.Services.AddSingleton<IKnowledgeModelPrewarmer, KnowledgeModelPrewarmer>();
+
         // Search lane, SCOPED: every retrieval collaborator reads through the request-scoped NodeChatDbContext connection. The vector
         // backend comes from the scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration capturing a scoped DbContext.
         builder.Services.AddScoped<IFtsSearch, FtsSearch>();

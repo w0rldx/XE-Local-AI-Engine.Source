@@ -147,6 +147,18 @@ public sealed record QueryEvaluation
 
     /// <summary>Observed end-to-end search latency for this query, including query embedding and optional reranking.</summary>
     public double ElapsedMilliseconds { get; init; }
+
+    /// <summary>Score of the top hit, or null when the search returned none.</summary>
+    public double? Top1Score { get; init; }
+
+    /// <summary>Score of the second hit, or null when the search returned fewer than two.</summary>
+    public double? Top2Score { get; init; }
+
+    /// <summary>Scale of <see cref="Top1Score" />: a gate-skipped or degraded search is Fusion even in a rerank config.</summary>
+    public KnowledgeScoreKind? Top1ScoreKind { get; init; }
+
+    /// <summary>True when the top hit belongs to a relevant document.</summary>
+    public bool Top1Relevant { get; init; }
 }
 
 /// <summary>
@@ -324,7 +336,11 @@ public static class RetrievalEvalHarness
             SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits),
             CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits),
             ExpectsNoAnswer = query.ExpectsNoAnswer,
-            NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0
+            NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0,
+            Top1Score = evaluatedHits.Count > 0 ? evaluatedHits[0].Score : null,
+            Top2Score = evaluatedHits.Count > 1 ? evaluatedHits[1].Score : null,
+            Top1ScoreKind = evaluatedHits.Count > 0 ? evaluatedHits[0].ScoreKind : null,
+            Top1Relevant = firstRelevantRank == 1
         };
     }
 
