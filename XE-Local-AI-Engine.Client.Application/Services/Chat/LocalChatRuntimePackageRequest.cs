@@ -48,6 +48,8 @@ public sealed class LocalChatRuntimePackageRequest
 
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
+    public int? ReservedOutputTokensOverride { get; init; }
+
     public bool DisableToolRelevanceFilter { get; init; }
 
     public bool AllowAutoModelSwap { get; init; }

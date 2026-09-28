@@ -219,11 +219,14 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
 /// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
 internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
+    private readonly string _serverExecutablePath;
     private readonly GpuVariant? _servedVariant;
 
-    public FakeBinaryManager(GpuVariant? servedVariant = null)
+    /// <summary>Serves <paramref name="serverExecutablePath" />, a path that need not exist unless the test reads it.</summary>
+    public FakeBinaryManager(GpuVariant? servedVariant = null, string serverExecutablePath = "/fake/bin/llama-server")
     {
         _servedVariant = servedVariant;
+        _serverExecutablePath = serverExecutablePath;
     }
 
     /// <summary>Serves a build of a variant the caller did not ask for, as a recorded source build does.</summary>
@@ -231,7 +234,7 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     {
         return Task.FromResult(new LlamaBinary
         {
-            ServerExecutablePath = "/fake/bin/llama-server",
+            ServerExecutablePath = _serverExecutablePath,
             Version = "b9692",
             Variant = _servedVariant ?? variant,
             IsPinnedFallback = true
@@ -243,7 +246,7 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     {
         return Task.FromResult<LlamaBinary?>(new LlamaBinary
         {
-            ServerExecutablePath = "/fake/bin/llama-server",
+            ServerExecutablePath = _serverExecutablePath,
             Version = "b9692",
             Variant = _servedVariant ?? variant,
             IsPinnedFallback = true

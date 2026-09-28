@@ -56,8 +56,17 @@ public sealed record ConversationBudgetResult
     /// </summary>
     public required bool ExceedsBudget { get; init; }
 
+    /// <summary>Estimated tokens of the system prompt plus every tool definition, the per-round input outside the history.</summary>
+    public required int FixedOverheadTokens { get; init; }
+
+    /// <summary>
+    ///     The token budget the history was measured against: the safety-margined capacity minus the reserved output
+    ///     tokens and <see cref="FixedOverheadTokens" />, floored at zero.
+    /// </summary>
+    public required int EffectiveBudgetTokens { get; init; }
+
     /// <summary>A no-op result that returns the input unchanged (used on the under-budget fast path).</summary>
-    public static ConversationBudgetResult Unchanged(IReadOnlyList<ChatMessage> messages, int estimatedTokens)
+    public static ConversationBudgetResult Unchanged(IReadOnlyList<ChatMessage> messages, int estimatedTokens, int fixedOverheadTokens, int effectiveBudgetTokens)
     {
         return new ConversationBudgetResult
         {
@@ -70,7 +79,9 @@ public sealed record ConversationBudgetResult
             CharsTruncated = 0,
             EstimatedTokensBefore = estimatedTokens,
             EstimatedTokensAfter = estimatedTokens,
-            ExceedsBudget = false
+            ExceedsBudget = false,
+            FixedOverheadTokens = fixedOverheadTokens,
+            EffectiveBudgetTokens = effectiveBudgetTokens
         };
     }
 }

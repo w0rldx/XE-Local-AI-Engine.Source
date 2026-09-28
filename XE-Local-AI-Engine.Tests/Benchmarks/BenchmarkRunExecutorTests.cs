@@ -571,6 +571,70 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenTheContextBudgetRefusedTheRun_ReservesExactlyTheOutputBudgetAndNamesTheWindowAndTheRemedy()
+    {
+        // Live: a 2048-token project with a 512-token cap failed every run as "The benchmark invocation failed" (the 1024 chat floor was
+        // reserved on top). The run reserves exactly its cap, and a refused run names its window and the remedy, never chat advice.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? message = null;
+        var stopReasons = new List<string?>();
+        store.MarkPrimaryFailedAsync(run.Id,
+                 run.Version,
+                 Arg.Do<string>(value => message = value),
+                 Arg.Any<long>(),
+                 Arg.Do<string?>(stopReasons.Add),
+                 Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  var invocationId = call.Arg<InvocationExecutionContext>().Package.InvocationId;
+                  var refused = State(invocationId, InvocationStatus.Failed, string.Empty);
+                  refused.FailureCategory = FailureCategory.ContextWindowExceeded;
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(refused));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new FakeLease(installed);
+        var snapshot = Snapshot(installed) with
+        {
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(maxOutputTokens: 512,
+                reasoningBudgetTokens: null,
+                reasoningBudgetEnforceable: null)
+        };
+        var executor = Executor(store, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 1,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Primary,
+            Attempt = 1,
+            Version = 2,
+            Run = run
+        }, CancellationToken.None);
+
+        AssertEx.Equal<int?>(512, AssertEx.NotNull(assignedPackage).ReservedOutputTokensOverride, "the run reserves exactly its own output cap");
+        AssertEx.Equal(BenchmarkRunExecutor.ContextWindowExceededMessage(8192), message);
+        AssertEx.Contains(message, "8192-token context window");
+        AssertEx.Contains(message, "choose an agent with fewer tools");
+        AssertEx.Null(stopReasons.Single(), "only a timeout carries a stop reason");
+    }
+
+    [Test]
     public async Task Execute_ReplaysTheFrozenReasoningBudgetAndItsFrozenEnforceability()
     {
         // Both halves are FROZEN, not re-resolved: the budget so the run replays the number it was created with, and
@@ -624,6 +688,7 @@ public sealed class BenchmarkRunExecutorTests
         var package = AssertEx.NotNull(assignedPackage);
         AssertEx.Equal<int?>(2048, AssertEx.NotNull(package.SamplingOptions).ReasoningBudgetTokens);
         AssertEx.False(package.ReasoningBudgetEnforceable, "the frozen capability said this model cannot enforce a budget");
+        AssertEx.Null(package.ReservedOutputTokensOverride, "a run with no output cap keeps the node's reserved-output floor");
     }
 
     [Test]

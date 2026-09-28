@@ -132,7 +132,8 @@ describe("McpServerToolsPanel", () => {
 	it("shows a sandbox refusal with the engine's remedy beneath it, distinct from a missing command", () => {
 		mockTools({
 			status: "error",
-			error: "Point the server's command or working directory at the directory holding its own files instead.",
+			error:
+				"The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
 			failureReason: "SandboxRefused",
 			tools: [],
 		});
@@ -141,18 +142,24 @@ describe("McpServerToolsPanel", () => {
 
 		const alert = screen.getByTestId("mcp-server-tools-connection-error");
 		expect(alert.textContent).toContain("The sandbox refused to start this server.");
-		expect(alert.textContent).toContain("Point the server's command or working directory");
+		expect(alert.textContent).toContain("Point it at the directory holding the server's own files.");
 		expect(alert.textContent).not.toContain("was not found");
 	});
 
 	it("shows the engine's remedy when this node cannot sandbox at all", () => {
-		mockTools({ status: "error", error: "Install bubblewrap (bwrap).", failureReason: "SandboxUnavailable", tools: [] });
+		mockTools({
+			status: "error",
+			error:
+				"This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
+			failureReason: "SandboxUnavailable",
+			tools: [],
+		});
 
 		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
 
 		const alert = screen.getByTestId("mcp-server-tools-connection-error");
 		expect(alert.textContent).toContain("This node cannot run a server in the sandbox.");
-		expect(alert.textContent).toContain("Install bubblewrap (bwrap).");
+		expect(alert.textContent).toContain("Install bubblewrap (bwrap) with user-namespace support");
 	});
 
 	it("falls back gracefully to the raw label for an unknown status", () => {

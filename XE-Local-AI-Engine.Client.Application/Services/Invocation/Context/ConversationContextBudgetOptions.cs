@@ -26,6 +26,7 @@ public sealed class ConversationContextBudgetOptions
     ///     always has room to answer. The runner takes the larger of this floor and any explicit per-send
     ///     max-output-tokens override.
     /// </summary>
+    /// <remarks>A package's exact reservation (benchmark primary only) replaces the floor: <c>TurnPolicy.ResolveReservedOutputTokens</c>.</remarks>
     public int ReservedOutputTokenFloor { get; set; } = 1024;
 
     /// <summary>

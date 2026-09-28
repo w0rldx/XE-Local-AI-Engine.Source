@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Globalization;
 using System.Reflection;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -9,6 +10,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunFreezeService
@@ -68,6 +72,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     private readonly IBenchmarkFreezeDependencyService _dependencies;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkPhaseLaunchResolver _launchResolver;
+    private readonly IConversationContextBudgeter _contextBudgeter;
+    private readonly ILocalChatRuntimePackageBuilder _packageBuilder;
+    private readonly ConversationContextBudgetOptions _contextBudgetOptions;
     private readonly TimeProvider _timeProvider;
     private readonly IBenchmarkQueueSignal? _queueSignal;
 
@@ -112,6 +119,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IBenchmarkFreezeDependencyService dependencies,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkPhaseLaunchResolver launchResolver,
+        IConversationContextBudgeter contextBudgeter,
+        ILocalChatRuntimePackageBuilder packageBuilder,
+        IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
         TimeProvider timeProvider,
         ILogger<BenchmarkRunFreezeService> logger,
         IBenchmarkQueueSignal? queueSignal = null)
@@ -126,6 +136,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(dependencies);
         ArgumentNullException.ThrowIfNull(snapshots);
         ArgumentNullException.ThrowIfNull(launchResolver);
+        ArgumentNullException.ThrowIfNull(contextBudgeter);
+        ArgumentNullException.ThrowIfNull(packageBuilder);
+        ArgumentNullException.ThrowIfNull(contextBudgetOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _logger = logger;
         _benchmarkStore = benchmarkStore;
@@ -137,6 +150,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         _dependencies = dependencies;
         _snapshots = snapshots;
         _launchResolver = launchResolver;
+        _contextBudgeter = contextBudgeter;
+        _packageBuilder = packageBuilder;
+        _contextBudgetOptions = contextBudgetOptions.Value;
         _timeProvider = timeProvider;
         _queueSignal = queueSignal;
     }
@@ -316,6 +332,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                                cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
+            EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, primary.ModelName, primarySampling);
             var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
                 eligible,
                 primaryModelName,
@@ -418,6 +435,47 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             ExpectedProjectVersion = expectedProjectVersion,
             Commands = commands
         };
+    }
+
+    /// <summary>
+    ///     Refuses an item whose task, resolved system prompt and tools cannot fit the project's window once the run's output
+    ///     reservation is held back.
+    /// </summary>
+    /// <remarks>
+    ///     Budgets the very package the primary executor will build (<c>BenchmarkRunExecutor.BuildPrimaryPackage</c>)
+    ///     through the runner's own first-round budget (<see cref="InvocationRunner.BudgetFirstRound" />): the same seed, tools, reservation
+    ///     and window, so this refusal and the run's hard stop cannot drift. Without it the project validation (a coarse prompt reserve, no
+    ///     agent overhead) queued runs that could only fail. The launched window can only be smaller, so a pass here is necessary, not sufficient.
+    /// </remarks>
+    private void EnsureTaskFitsContext(BenchmarkProjectRecord project,
+        ResolvedAgentRuntime runtime,
+        int itemIndex,
+        string coreTask,
+        string modelName,
+        BenchmarkSamplingSnapshotV1 sampling)
+    {
+        var package = BenchmarkRunExecutor.BuildPrimaryPackage(_packageBuilder, runtime, coreTask, modelName, sampling, project.ContextTokens, project.InvocationTimeoutSeconds);
+        var budget = InvocationRunner.BudgetFirstRound(_contextBudgeter, package, _contextBudgetOptions, modelName);
+        if (!budget.ExceedsBudget)
+        {
+            return;
+        }
+
+        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, _contextBudgetOptions);
+        _logger.LogInformation("Benchmark freeze refused project {ProjectId} item {ItemIndex}: estimated tokens {Estimated} over an effective budget of {Effective} (capacity {Capacity}, reserving {Reserved}, fixed overhead {FixedOverhead}).",
+            project.Id,
+            itemIndex,
+            budget.EstimatedTokensAfter,
+            budget.EffectiveBudgetTokens,
+            capacity,
+            reserved,
+            budget.FixedOverheadTokens);
+        var needed = budget.FixedOverheadTokens + budget.EstimatedTokensAfter;
+        // Items are numbered from 1 where the project editor shows them; the stored index is 0-based.
+        throw new BenchmarkValidationException(
+            string.Create(CultureInfo.InvariantCulture, $"Task item {itemIndex + 1}, the agent's system prompt and its {runtime.AllowedTools.Count} tool(s) need about {needed} tokens, ")
+            + string.Create(CultureInfo.InvariantCulture, $"which does not fit the project's {capacity}-token context window after reserving {reserved} output tokens and a safety margin. ")
+            + "Raise the context window, lower the output budget, or choose an agent with fewer tools.");
     }
 
     /// <summary>

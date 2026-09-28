@@ -85,7 +85,7 @@ Several redactors enforce "secrets never surface":
 |---|---|---|
 | `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.cs` |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
-| `McpServerConnectionManager.Redact` | clamps MCP connection failures to a generic message so a command path/URL/secret never reaches the UI | `McpServerConnectionManager.Redact` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
+| `McpServerConnectionManager.SafeMessage` | clamps every MCP connection failure, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning | `McpServerConnectionManager.SafeMessage` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
 | `InvocationRunner.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationRunner.RedactAgentRuntimeMessage` in `Services/Invocation/Implementation/InvocationRunner.FailureClassification.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
@@ -100,7 +100,7 @@ diagnosticContext.Set("QueryString", redactedQuery);
 
 The marker used across redactors is the literal `[REDACTED]` (and `[REDACTED:…]`-style markers in the secret scanner). The scanner's "bare high-entropy" regex is deliberately written so the `[`/`]` of an existing marker stays outside the match — a second pass never re-redacts an already-redacted span (`MemoryProposalSecretScanner.cs`).
 
-**Maintainer rule:** any new field that can carry a credential, host path, command, or URL toward the browser, logs, or a saved transcript must pass through (or extend) a redactor. When in doubt, clamp to a generic reason like `McpServerConnectionManager.Redact` does.
+**Maintainer rule:** any new field that can carry a credential, host path, command, or URL toward the browser, logs, or a saved transcript must pass through (or extend) a redactor. When in doubt, clamp to a generic reason like `McpServerConnectionManager.SafeMessage` does.
 
 ### 2.3 Secret files and secret columns: one protector per purpose, 0600 at create, quarantine on failure
 
@@ -736,14 +736,14 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
   jail is the only writable surface it has.
 - **Neither bound tree may cover a sensitive host root.** A tree that equals or contains the home directory, a
   credential store under it (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`), the
-  node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**, naming the
-  path and the tier. Subtrees of those roots stay bindable — `~/.nvm/…/bin` exposes a node install, `$HOME` exposes
+  node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**; the server log
+  names the path and the tier, the MCP panel shows a fixed, path-free remedy. Subtrees of those roots stay bindable — `~/.nvm/…/bin` exposes a node install, `$HOME` exposes
   the operator — which is what keeps `npx`- and `uvx`-based servers usable at the default tier. Comparison happens
   on resolved paths at one gate both trees pass through, and the list is code-owned.
 - **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
   `SupportsFilesystemIsolation` — Windows, or a Linux host without bubblewrap — refuses the connection
-  before a process exists, with an engine-authored reason that names the tier and is surfaced verbatim rather than
-  redacted. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
+  before a process exists, with a fixed, path-free message naming the remedy (install bubblewrap or move the server
+  to `PrivilegedHost`); the exception with its detail stays in the server log. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
   connection attempt. Every failed connection also carries a failure reason (`SandboxUnavailable`, `SandboxRefused`,
   `ServerNotFound`, `Timeout`, …) that the MCP panel words, so a missing command never reads like a sandbox refusal;
   see `docs/security/mcp-trust-tiers.md`.

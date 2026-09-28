@@ -393,6 +393,10 @@ public sealed partial class LlamaServerProcessSupervisor
 
                 readinessStartedTimestamp = _timeProvider.GetTimestamp();
                 handle = _launcher.Launch(spec);
+
+                // Receipted from here on, so a host killed mid-load leaves a record the next start can reap by; every teardown below disposes the handle,
+                // which removes it. A receipt that cannot be written leaves the raw handle, never a failed spawn.
+                handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{key.ModelName}/{key.Role} port {port}", ct).ConfigureAwait(false);
                 _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
                     key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
 

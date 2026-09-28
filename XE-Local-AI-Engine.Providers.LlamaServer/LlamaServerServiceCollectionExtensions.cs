@@ -213,7 +213,8 @@ public static class LlamaServerServiceCollectionExtensions
             layerPlacementReport: sp.GetRequiredService<ILlamaLayerPlacementReport>(),
             launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>(),
             extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>(),
-            loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>()));
+            loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>(),
+            spawnReceipts: CreateSpawnReceiptStore(sp)));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>
@@ -267,13 +268,14 @@ public static class LlamaServerServiceCollectionExtensions
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 
-        // Startup orphan reaper: a hard host kill skips graceful teardown and orphans a server holding its port and VRAM; it reaps ONLY binaries under our own llama.cpp cache root and never throws.
+        // Startup orphan reaper (never throws): binaries under our own llama.cpp cache root, plus on Linux any child this node's spawn receipts still identify (a BYO binary).
         // AddSingleton, not AddHostedService: every runtime registers the shared StaleProcessReaper type, and AddHostedService dedupes by implementation type, so only the first would run.
         services.AddSingleton<IHostedService, StaleProcessReaper>(static sp => new StaleProcessReaper(new OsStaleProcessScanner("llama-server"),
             LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
             "llama-server",
             logExecutablePath: true,
-            sp.GetRequiredService<ILogger<StaleProcessReaper>>()));
+            sp.GetRequiredService<ILogger<StaleProcessReaper>>(),
+            CreateSpawnReceiptStore(sp)));
 
         // Startup notice: an active bring-your-own override is logged once at Warning, so it is obvious that an unverified operator-supplied binary is in use and
         // integrity hash verification is skipped. Nothing is logged when the override is unset, so a normal deploy is byte-behavior-unchanged.
@@ -282,4 +284,8 @@ public static class LlamaServerServiceCollectionExtensions
 
         return services;
     }
+
+    // Optional data directory: a provider-only host registers none, and then receipts are off and only the binaries-root reap applies.
+    private static ProcessSpawnReceiptStore CreateSpawnReceiptStore(IServiceProvider sp) =>
+        new(sp.GetService<INodeDataDirectory>()?.Root, "llama-server", sp.GetRequiredService<ILogger<ProcessSpawnReceiptStore>>());
 }

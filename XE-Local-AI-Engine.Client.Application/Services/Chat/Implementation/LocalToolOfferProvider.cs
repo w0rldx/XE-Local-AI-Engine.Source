@@ -102,10 +102,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // spawn_subagent, run_python and run_in_agent_home are profile-opt-in only and stay out of this whole offer.
         _builtinAllTools =
         [
-            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
-            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
-            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
-            ToOfferDto(askUserDescriptor.Name, askUserDescriptor.ParameterSchema, askUserDescriptor.RequiresApproval, askUserDescriptor.Category)
+            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            ToOfferDto(askUserDescriptor.Name, askUserDescriptor.Description, askUserDescriptor.ParameterSchema, askUserDescriptor.RequiresApproval, askUserDescriptor.Category)
         ];
 
         // The provider-locality-gated variant: knowledge-base read tools AND coder workspace file tools removed, offered
@@ -120,19 +120,20 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // spawn_subagent is offered ONLY to an agent profile that opts in via AllowedToolNames, so it is held out of the
         // whole offer and added back by GetOfferedToolsForProfile alone: an unattended chat turn loads no other model.
-        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
+        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.Description, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
 
         // run_python takes the same profile-opt-in treatment for a sharper reason: it executes model-authored code on
         // the node. WriteExecute plus RequiresApproval is also what makes the unattended paths strip it for free.
-        _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+        _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.Description, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
 
         // run_in_agent_home is profile-opt-in like run_python, which also keeps the deepest schema out of the GBNF grammar
         // llama.cpp compiles per turn. AgentHome:Enabled is enforced at EXECUTION, so the offer stays a static projection.
-        _agentHomeOfferDto = ToOfferDto(AgentHomeToolDefinition.ToolName, AgentHomeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+        _agentHomeOfferDto = ToOfferDto(AgentHomeToolDefinition.ToolName, AgentHomeToolDefinition.Description, AgentHomeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
 
         // emit_output is held out of EVERY projection, so only the integration coordinator can union it in and only it
         // can recompose the raw approval flag through IToolApprovalPolicy: a property of the RUN, not of an agent.
         _emitOutputOfferDto = ToOfferDto(EmitOutputToolDefinition.ToolName,
+            EmitOutputToolDefinition.Description,
             EmitOutputToolDefinition.ParameterSchema,
             requiresApproval: false,
             ToolCategory.ReadLocal);
@@ -140,10 +141,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // WriteExecute is the honest category: every one of these writes durable session rows, and hiding that from a
         // category-based operator policy would blind the layer whose job is to see it.
         _workSessionOfferDtos =
-            [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+            [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
 
         _webAccessOfferDtos =
-            [.. WebAccessToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+            [.. WebAccessToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
 
         // The capability-gated variant, precomputed once: the built-ins minus the coder and knowledge tools and
         // ask_user, returned when the active model is not tool-capable.
@@ -307,7 +308,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return
         [
             .. baseOffer,
-            .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+            .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
     }
 
@@ -347,7 +348,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return
         [
             .. baseOffer,
-            .. customDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+            .. customDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
     }
 
@@ -552,13 +553,15 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return await catalog.GetDescriptorsAsync(cancellationToken);
     }
 
-    private static AllowedToolDto ToOfferDto(string name, string? parameterSchema, bool requiresApproval, ToolCategory category)
+    // The description is the one the executable tool shows the model; the budgets count it (RuntimePackageConfigHash.Compute leaves it out).
+    private static AllowedToolDto ToOfferDto(string name, string? description, string? parameterSchema, bool requiresApproval, ToolCategory category)
     {
         return new AllowedToolDto
         {
             Id = DeriveDeterministicId(name),
             Name = name,
             Location = ToolLocation.ClientLocal,
+            Description = description,
             ParameterSchema = parameterSchema,
             RequiresApproval = requiresApproval,
             Category = category

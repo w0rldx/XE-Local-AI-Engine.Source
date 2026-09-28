@@ -28,11 +28,15 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
@@ -2355,6 +2359,80 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheSystemPromptTakesMostOfTheWindow_CountsItOnceAcrossBothBudgetStages()
+    {
+        // Live 2048/512: the tool-loop stage budgets the seed WITH the prompt as its System message and also charged it as overhead.
+        // ~1100 prompt tokens fit a 2125-token budget once, not twice.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSystemPrompt(new string('p', 4384))
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 2500
+                                           })
+                                           .Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.HistoryTruncated));
+    }
+
+    [Test]
+    public async Task BudgetFirstRound_MeasuresTheSameRequestTheToolLoopStageMeasuresForTheSameBenchmarkPackage()
+    {
+        // The benchmark freeze refuses with BudgetFirstRound; the run fails on the tool-loop stage's hard stop. Built from the same
+        // package, the two must agree on every number, or the freeze admits a run the runtime refuses (the live 2048/512 case).
+        var budgetOptions = new ConversationContextBudgetOptions();
+        var budgeter = new RecordingContextBudgeter(new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(budgetOptions)));
+        AllowedToolDto[] tools =
+        [
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = "calculate",
+                Location = ToolLocation.ClientLocal,
+                Description = "Evaluates an arithmetic expression.",
+                ParameterSchema = """{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}"""
+            }
+        ];
+        var package = BenchmarkRunExecutor.BuildPrimaryPackage(new LocalChatRuntimePackageBuilder(),
+            new ResolvedAgentRuntime(new string('p', 1900), tools, ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1),
+            "What is 2+2? Answer with the number only.",
+            "bench-model",
+            BenchmarkFrozenPolicies.DeterministicSampling(maxOutputTokens: 512),
+            requestedContextTokens: 8192,
+            invocationTimeoutSeconds: 600);
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo => Task.FromResult(new InvocationAgentContext
+               {
+                   Agent = new FakeAIAgent(_ => CreateUpdates("4"), onSessionObserved: null),
+                   Session = null,
+                   SeedMessages = InvocationAgentFactory.BuildSeedMessages(callInfo.Arg<InvocationAgentDefinition>())
+               }));
+
+        await RunAsync(CreateRunner(factory, contextBudgeter: budgeter, contextBudgetOptions: budgetOptions), package);
+        var preflight = InvocationRunner.BudgetFirstRound(budgeter.Inner, package, budgetOptions, "bench-model");
+
+        AssertEx.Equal(expected: 2, budgeter.Results.Count, "one initial-assembly and one tool-loop budget");
+        var toolLoop = budgeter.Results[1];
+        AssertEx.Equal(toolLoop.EstimatedTokensBefore, preflight.EstimatedTokensBefore);
+        AssertEx.Equal(toolLoop.FixedOverheadTokens, preflight.FixedOverheadTokens);
+        AssertEx.Equal(toolLoop.EffectiveBudgetTokens, preflight.EffectiveBudgetTokens);
+        AssertEx.Equal(toolLoop.ExceedsBudget, preflight.ExceedsBudget);
+        AssertEx.Equal(budgeter.Results[0].EstimatedTokensBefore + budgeter.Results[0].FixedOverheadTokens, preflight.EstimatedTokensBefore + preflight.FixedOverheadTokens,
+            "the initial assembly measures the same request, with the prompt as overhead instead of history");
+    }
+
+    [Test]
     public async Task RunAsync_WhenLaunchedWindowExceedsTheConfiguredDefault_BudgetsAgainstTheRealWindow()
     {
         // The regression: the launched window was only ever allowed to SHRINK the configured default, so a model
@@ -3286,6 +3364,24 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 940L, 640);
         AssertEx.True(order.SequenceEqual(["estimate", "completed"], StringComparer.Ordinal),
             "The estimate must reach the invocation state BEFORE the terminal report, or the envelope row is written without it.");
+    }
+
+    [Test]
+    public async Task RunAsync_WithAReservedOutputOverride_SeedsTheProviderBudgetWithItAsTheFloorWhileChatKeepsTheNodeFloor()
+    {
+        // The inner provider-round budget reserves its own floor. A benchmark's exact reservation must reach it too, or the round
+        // refuses the window the outer budget just accepted — the same seam the Development coder scopes its round budget through.
+        var benchmarkFloors = new List<int>();
+        var chatFloors = new List<int>();
+
+        await RunAsync(CreateRunner(agentUpdates: ReservedFloorCapturingUpdates(benchmarkFloors)), RuntimePackageBuilder.Valid().Build() with
+        {
+            ReservedOutputTokensOverride = 512
+        });
+        await RunAsync(CreateRunner(agentUpdates: ReservedFloorCapturingUpdates(chatFloors)), RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expected: 512, benchmarkFloors.Single());
+        AssertEx.Equal(new ProviderCallBudgetOptions().ReservedOutputTokenFloor, chatFloors.Single());
     }
 
     [Test]
@@ -4806,7 +4902,8 @@ public sealed class InvocationRunnerTests
         IExternalProviderRegistry? externalProviderRegistry = null,
         PendingToolCallRegistry? pendingToolCallRegistry = null,
         WebReviewRetriever? webReviewRetriever = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IConversationContextBudgeter? contextBudgeter = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -4883,7 +4980,7 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver,
             new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System),
             resolvedProviderStreamResilience,
-            new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
+            contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
             Options.Create(resolvedContextBudgetOptions),
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
@@ -5761,6 +5858,13 @@ public sealed class InvocationRunnerTests
         yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
     }
 
+    private static async IAsyncEnumerable<AgentResponseUpdate> ReservedFloorCapturingUpdates(List<int> floors)
+    {
+        floors.Add(AssertEx.NotNull(ProviderCallBudget.Current, "The runner seeds the provider-call budget before the agent runs.").Options.ReservedOutputTokenFloor);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "Hello");
+        await Task.Yield();
+    }
+
     private static void RegisterProviderRounds(IReadOnlyList<int> toolSchemaTokensPerRound)
     {
         var budget = AssertEx.NotNull(ProviderCallBudget.Current, "The runner seeds the provider-call budget before the agent runs.");
@@ -5991,6 +6095,31 @@ public sealed class InvocationRunnerTests
         {
             Disposed = true;
             return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>The real budgeter, with every result it handed the runner kept in call order.</summary>
+    private sealed class RecordingContextBudgeter : IConversationContextBudgeter
+    {
+        public RecordingContextBudgeter(IConversationContextBudgeter inner)
+        {
+            Inner = inner;
+        }
+
+        public IConversationContextBudgeter Inner { get; }
+
+        public List<ConversationBudgetResult> Results { get; } = [];
+
+        public ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
+            int contextTokenCapacity,
+            int reservedOutputTokens,
+            string? systemPrompt = null,
+            IReadOnlyList<string>? toolDefinitions = null,
+            string? modelName = null)
+        {
+            var result = Inner.Budget(messages, contextTokenCapacity, reservedOutputTokens, systemPrompt, toolDefinitions, modelName);
+            Results.Add(result);
+            return result;
         }
     }
 

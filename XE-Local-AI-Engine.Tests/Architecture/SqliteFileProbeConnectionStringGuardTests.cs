@@ -59,6 +59,8 @@ public sealed class SqliteFileProbeConnectionStringGuardTests
             + "connection CLOSES the handle, and the last close checkpoints the WAL into the main file the scan reads."),
         ("XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDowngradeSafetyServiceTests.cs", "{databasePath};Mode=ReadOnly",
             "Read-only by design: the count must not be able to alter what it counts."),
+        ("XE-Local-AI-Engine.Client.Persistence.Tests/NodeSqliteDiagnosticsTests.cs", ":memory:",
+            "In-memory database: the test provokes a prepare error to reach SQLite's log, never a file."),
         ("XE-Local-AI-Engine.Client.Persistence.Tests/NativeSqliteVersionTests.cs", ":memory:",
             "In-memory database: the test reads the native library's version, not a file."),
         ("XE-Local-AI-Engine.Client.Persistence.Tests/Training/TrainingEvaluationEncryptionTests.cs", "{databasePath};Foreign Keys=False",

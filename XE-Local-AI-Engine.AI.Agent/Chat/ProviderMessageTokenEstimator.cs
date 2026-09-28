@@ -117,7 +117,7 @@ internal static class ProviderMessageTokenEstimator
         foreach (var tool in tools)
         {
             var profile = PerToolCharacterProfileCache.GetValue(tool, ComputeToolCharacterProfile);
-            total += (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens;
+            total += (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
         }
 
         return total;
@@ -128,7 +128,8 @@ internal static class ProviderMessageTokenEstimator
         var profile = new TokenCharacterProfile();
         profile.Add(tool.Name);
         profile.Add(tool.Description);
-        if (tool is AIFunction function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
+        // The declaration, not AIFunction: a declaration-only tool (a handoff) still sends its schema.
+        if (tool is AIFunctionDeclaration function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
         {
             profile.Add(function.JsonSchema.GetRawText());
         }

@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests;
 
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -92,6 +94,25 @@ public sealed class ProviderMessageTokenEstimatorTests
         // The per-tool character profile is memoized by tool instance because this hop re-estimates the whole tool list
         // on EVERY provider round; a second pass over the same instance must produce the identical estimate.
         AssertEx.Equal(first, ProviderMessageTokenEstimator.EstimateTools(tools));
+    }
+
+    [Test]
+    public void EstimateTools_ChargesEachToolTheMeasuredWrapperOnTopOfItsTextAndFraming()
+    {
+        // Qwen3.8 renders each tool as OpenAI JSON; the wrapper measured 21.9 tokens a tool, 4 of them the per-message framing.
+        AITool[] tools = [AIFunctionFactory.CreateDeclaration("t", new string('d', 39), JsonDocument.Parse("{}").RootElement)];
+
+        AssertEx.Equal((1 + 39 + 2) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
+    }
+
+    [Test]
+    public void EstimateTools_CountsTheSchemaOfADeclarationOnlyTool()
+    {
+        // A handoff tool is a bare AIFunctionDeclaration, yet its schema goes out on the wire like any function's.
+        const string schema = """{"type":"object","properties":{"reason":{"type":"string"}}}""";
+        AITool[] tools = [AIFunctionFactory.CreateDeclaration("h", description: null, JsonDocument.Parse(schema).RootElement)];
+
+        AssertEx.Equal((1 + schema.Length) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
     }
 
     [Test]

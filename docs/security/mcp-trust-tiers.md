@@ -47,7 +47,8 @@ because a third-party server has no reason to write into the tree it was install
 
 **Neither tree may cover a sensitive host root.** Both go through one gate
 (`SandboxedMcpStdioTransport.AddBindableTree`), and a tree that **equals or contains** any of the following is
-**refused** — the connection fails, naming the path and the tier, rather than mounting it:
+**refused** — the connection fails rather than mounting it. The Warning in the server log names the path and the
+tier; the MCP settings page shows the fixed `SandboxRefused` message, which names no path:
 
 | Denied root | Why |
 |---|---|
@@ -75,11 +76,13 @@ probe, so `NetworkPolicy = None` is enforced by the same mechanism `run_python` 
 
 **Fail-closed, and how the operator sees it.** A host whose sandbox provider does not advertise
 `SupportsFilesystemIsolation` cannot serve this tier, and the tier does **not** degrade: the connection attempt is
-refused before a process is launched. The refusal is engine-authored (it names no host path and no secret) and travels
-verbatim on `McpServerConnectionStatus.LastError` to the MCP settings page, naming the tier, the reason, and the two
-ways out — install bubblewrap plus the user-namespace support the containment probe reports as missing, or move the
-server to `PrivilegedHost` deliberately. This is the one MCP connection error family that is not redacted to a fixed
-string, because a generic string here would be indistinguishable from the server simply being broken.
+refused before a process is launched. `McpServerConnectionStatus.LastError` carries the fixed `SandboxUnavailable`
+message to the MCP settings page, naming the two ways out — install bubblewrap with the user-namespace support the
+containment probe reports as missing, or move the server to `PrivilegedHost` deliberately. Like every MCP connection
+error it is one fixed string per failure reason, so it names no host path and no secret; the exception, with the
+missing capability and any path it names, is logged at Warning. The sandbox reasons keep their own wording, and the
+panel shows it beneath the reason, because a generic string here would be indistinguishable from the server simply
+being broken.
 
 Every failed status also carries `McpServerConnectionStatus.FailureReason` (`failureReason` on the tools response),
 which the settings page words in the operator's language. A sandbox failure is `SandboxUnavailable` when this node
@@ -87,8 +90,8 @@ cannot isolate at all and `SandboxRefused` when it can but refused this registra
 establish the boundary or launch the chain. A command that does not exist is `ServerNotFound` on both tiers: the
 `PrivilegedHost` launch fails in `Process.Start`, and the `Sandboxed` transport checks the command against the `PATH`
 the jail inherits before any sandbox is created, since inside the jail it would only be an early exit. `Timeout`,
-`Transport`, `Protocol`, `Authentication` and `Unknown` cover the rest with one fixed wording each; the exception
-itself is logged at Warning and never reaches the UI.
+`Transport`, `Protocol`, `Authentication` and `Unknown` cover the rest with one fixed wording each; on every reason
+the exception itself is logged at Warning and never reaches the UI.
 
 **Windows.** `HostSandboxContainmentProbe` reports `SandboxContainment.None` on Windows because there is no Job
 Object containment implementation. `Sandboxed` is unavailable there, so every stdio server refuses to start with the

@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Unit tests for the startup <see cref="StaleProcessReaper" /> the llama-server, sd-server and whisper-server
@@ -170,6 +172,225 @@ public sealed class StaleProcessReaperTests
         AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
     }
 
+    // --- Spawn-receipt reap (Linux: the receipt store is disabled elsewhere) ---------------------------------------------------------
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenPidStartTimeAndExecutableAllMatch_KillsWithRecordedStartTime_AndRemovesIt()
+    {
+        // A bring-your-own binary lives OUTSIDE the managed root, so only the receipt can claim it.
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5001, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5001, ForeignServer)]);
+        scanner.Stats[5001] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5001, StartTicks: 777);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count);
+        AssertEx.Equal((5001, 777L), scanner.GuardedKills[0]);
+        AssertEx.Equal(expected: 0, scanner.KilledPids.Count, "A receipt-reaped pid must not be killed a second time by the path match.");
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenStartTimeDiffers_PidReuse_SignalsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5002, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5002, ForeignServer)]);
+        scanner.Stats[5002] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5002, StartTicks: 778);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenExecutableDiffers_SignalsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5003, startTicks: 777, "/opt/other-build/llama-server"));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5003, ForeignServer)]);
+        scanner.Stats[5003] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5003, StartTicks: 777);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenProcessGone_SignalsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5004, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([]);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenProcStatUnreadable_SignalsNothing_AndRemovesIt()
+    {
+        // The process is listed with the right binary, but its /proc stat cannot be read: identity is unproven.
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5005, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5005, ForeignServer)]);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenUnparseable_SignalsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.WriteRaw(5006, "{ not json");
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5006, ForeignServer)]);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenProcessIsThisHostsOwnChild_SignalsNothing_AndKeepsIt()
+    {
+        // Spawned by this run before the reaper got to it: live, ours, and its receipt is still current.
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5007, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5007, ForeignServer)]);
+        scanner.Stats[5007] = new ProcessStat(Environment.ProcessId, ProcessGroupId: 5007, StartTicks: 777);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 1, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_WhenIdentityChangesBeforeTheSignal_CountsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5008, startTicks: 777, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5008, ForeignServer)])
+        {
+            GuardedKillResult = false
+        };
+        scanner.Stats[5008] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5008, StartTicks: 777);
+        var logger = new RecordingLogger<StaleProcessReaper>();
+
+        await new StaleProcessReaper(scanner, BinariesRoot, ServerName, logExecutablePath: true, logger, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count, "The guarded kill is the one that re-reads the start time.");
+        AssertEx.False(logger.Entries.Any(entry => entry.Message.StartsWith("Reaped ", StringComparison.Ordinal)), "A refused signal is not a reap.");
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_ForABinaryNamedUnlikeTheScannedProcess_IsReapedByPid()
+    {
+        // A bring-your-own binary may carry any file name, so the name-filtered scan never lists it; the receipt resolves the pid itself.
+        const string byoServer = "/opt/byo/llama-server-cuda";
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5010, startTicks: 777, byoServer));
+        var scanner = new FakeStaleProcessScanner([]);
+        scanner.Executables[5010] = byoServer;
+        scanner.Stats[5010] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5010, StartTicks: 777);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count);
+        AssertEx.Equal((5010, 777L), scanner.GuardedKills[0]);
+        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments("/usr/bin/bash", 777L)]
+    [Arguments("/opt/byo/llama-server-cuda", 778L)]
+    public async Task Receipt_WhenPidIsNowAnUnrelatedProcess_SignalsNothing_AndRemovesIt(string liveExecutable, long liveStartTicks)
+    {
+        // The recorded pid was recycled: a different binary, or the same binary started later. Neither is the process this node spawned.
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5011, startTicks: 777, "/opt/byo/llama-server-cuda"));
+        var scanner = new FakeStaleProcessScanner([]);
+        scanner.Executables[5011] = liveExecutable;
+        scanner.Stats[5011] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5011, liveStartTicks);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipts_Enabled_SameBinaryWithoutReceipt_OutsideRoot_IsNotReaped_WhileManagedRootOrphanStillIs()
+    {
+        // Another host's process of the same BYO binary has no receipt here, so nothing claims it; the managed-root path match is unchanged.
+        using var receipts = new ReceiptDirectory();
+        var ourManaged = OurServerPath("b9700", "cuda");
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(6001, ForeignServer), new StaleProcess(6002, ourManaged)]);
+        scanner.Stats[6001] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 6001, StartTicks: 1);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, scanner.GuardedKills.Count);
+        AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
+        AssertEx.Equal(expected: 6002, scanner.KilledPids[0]);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipts_StillReapWhenBinariesRootUnresolved()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5009, startTicks: 9, ForeignServer));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5009, ForeignServer)]);
+        scanner.Stats[5009] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5009, StartTicks: 9);
+
+        await CreateReaper(scanner, binariesRoot: null, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count);
+        AssertEx.Equal((5009, 9L), scanner.GuardedKills[0]);
+        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+    }
+
+    private static void AssertNothingSignalled(FakeStaleProcessScanner scanner)
+    {
+        AssertEx.Equal(expected: 0, scanner.GuardedKills.Count, "A partial identity match must never signal.");
+        AssertEx.Equal(expected: 0, scanner.KilledPids.Count, "A process outside the managed root must never be path-reaped.");
+    }
+
+    private static ProcessSpawnReceipt Receipt(int pid, long startTicks, string executablePath) =>
+        new()
+        {
+            Pid = pid,
+            StartTicks = startTicks,
+            ExecutablePath = executablePath,
+            Label = "model/Chat port 18080"
+        };
+
+    private static StaleProcessReaper CreateReaper(IStaleProcessScanner scanner, string? binariesRoot, ProcessSpawnReceiptStore receipts) =>
+        new(scanner, binariesRoot, ServerName, logExecutablePath: true, NullLogger<StaleProcessReaper>.Instance, receipts);
+
     private static StaleProcessReaper CreateReaper(IStaleProcessScanner scanner, string? binariesRoot) =>
         new(scanner, binariesRoot, ServerName, logExecutablePath: true, NullLogger<StaleProcessReaper>.Instance);
 
@@ -189,6 +410,15 @@ public sealed class StaleProcessReaperTests
         {
             _candidates = candidates;
             _throwOnEnumerate = throwOnEnumerate;
+
+            // A process the name scan lists has a readable executable; tests add pids the scan never sees.
+            foreach (var candidate in candidates)
+            {
+                if (candidate.ExecutablePath is { } path)
+                {
+                    Executables[candidate.Pid] = path;
+                }
+            }
         }
 
         public List<int> KilledPids { get; } = [];
@@ -210,5 +440,54 @@ public sealed class StaleProcessReaperTests
         {
             KilledPids.Add(pid);
         }
+
+        public Dictionary<int, ProcessStat> Stats { get; } = [];
+
+        public Dictionary<int, string> Executables { get; } = [];
+
+        public List<(int Pid, long StartTicks)> GuardedKills { get; } = [];
+
+        public bool GuardedKillResult { get; init; } = true;
+
+        public ProcessStat? ReadStat(int pid) =>
+            Stats.TryGetValue(pid, out var stat) ? stat : null;
+
+        public string? ReadExecutablePath(int pid) =>
+            Executables.GetValueOrDefault(pid);
+
+        public bool KillIfSameProcess(int pid, long expectedStartTicks)
+        {
+            GuardedKills.Add((pid, expectedStartTicks));
+            return GuardedKillResult;
+        }
+    }
+
+    /// <summary>A throwaway node data root whose <c>runtime/llama-server</c> directory the reaper's store reads.</summary>
+    private sealed class ReceiptDirectory : IDisposable
+    {
+        private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
+        private readonly string _root = Path.Combine(Path.GetTempPath(), $"xe-receipts-{Guid.NewGuid():N}");
+
+        public ReceiptDirectory()
+        {
+            Store = new ProcessSpawnReceiptStore(_root, ServerName, NullLogger.Instance);
+            Directory.CreateDirectory(ReceiptsPath);
+        }
+
+        public ProcessSpawnReceiptStore Store { get; }
+
+        public int Count => Directory.EnumerateFiles(ReceiptsPath, "*.json").Count();
+
+        private string ReceiptsPath => Path.Combine(_root, "runtime", ServerName);
+
+        public void Write(ProcessSpawnReceipt receipt) =>
+            WriteRaw(receipt.Pid, JsonSerializer.Serialize(receipt, WebJson));
+
+        public void WriteRaw(int pid, string json) =>
+            File.WriteAllText(Path.Combine(ReceiptsPath, $"{pid}.json"), json);
+
+        public void Dispose() =>
+            Directory.Delete(_root, recursive: true);
     }
 }

@@ -16,7 +16,7 @@ export function statusColor(status: McpConnectionStatus): string {
 	return "gray";
 }
 
-// The sandbox reasons are the only ones whose server message is an engine-authored remedy worth showing verbatim.
+// The sandbox reasons are the only ones whose server message is a fixed, path-free remedy worth showing verbatim.
 export function hasEngineDetail(reason: McpConnectionFailureReason | null): boolean {
 	return reason === "SandboxUnavailable" || reason === "SandboxRefused";
 }

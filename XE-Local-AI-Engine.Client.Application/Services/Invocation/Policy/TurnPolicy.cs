@@ -79,14 +79,7 @@ public sealed record TurnPolicy
 
         var timeouts = package.Timeouts;
 
-        // Mirrors the pre-existing InvocationRunner.ResolveContextBudget: the per-send num_ctx override wins, else the
-        // configured default; the reserved-output floor is widened by any explicit max-output-tokens override.
-        var requestedContext = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0 ? numCtx : (int?)null;
-        var capacity = requestedContext ?? budgetOptions.DefaultContextTokens;
-        var requestedOutput = package.SamplingOptions?.MaxOutputTokens is { } maxOutput && maxOutput > 0
-            ? maxOutput
-            : 0;
-        var reserved = Math.Max(budgetOptions.ReservedOutputTokenFloor, requestedOutput);
+        var (requestedContext, capacity, reserved) = ResolveContextBudget(package, budgetOptions);
 
         return new TurnPolicy
         {
@@ -110,6 +103,36 @@ public sealed record TurnPolicy
             CircuitBreakerFailureThreshold = resilienceOptions.CircuitBreakerFailureThreshold,
             CircuitBreakerBreakDuration = TimeSpan.FromSeconds(resilienceOptions.CircuitBreakerBreakDurationSeconds)
         };
+    }
+
+    /// <summary>The pre-launch window and output reservation of a package's turn, before <see cref="WithEffectiveContext" /> folds in a launched window.</summary>
+    /// <remarks>
+    ///     The per-send <c>num_ctx</c> override wins, else the configured default. The benchmark freeze budgets against the same numbers
+    ///     (<c>InvocationRunner.BudgetFirstRound</c>), so its pre-flight refusal cannot drift from what <see cref="Resolve" /> sets.
+    /// </remarks>
+    internal static (int? RequestedContextTokens, int ContextCapacityTokens, int ReservedOutputTokens) ResolveContextBudget(RuntimePackage package,
+        ConversationContextBudgetOptions budgetOptions)
+    {
+        var requestedContext = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0 ? numCtx : (int?)null;
+        var reserved = ResolveReservedOutputTokens(package.ReservedOutputTokensOverride,
+            package.SamplingOptions?.MaxOutputTokens,
+            budgetOptions.ReservedOutputTokenFloor);
+        return (requestedContext, requestedContext ?? budgetOptions.DefaultContextTokens, reserved);
+    }
+
+    /// <summary>The output tokens held back from the window before the input is measured.</summary>
+    /// <remarks>
+    ///     An explicit override (the benchmark primary's own max output tokens) is taken exactly; otherwise the floor, widened by
+    ///     any explicit max-output-tokens.
+    /// </remarks>
+    public static int ResolveReservedOutputTokens(int? reservedOutputTokensOverride, int? maxOutputTokens, int floor)
+    {
+        if (reservedOutputTokensOverride is { } exact && exact >= 0)
+        {
+            return exact;
+        }
+
+        return Math.Max(floor, maxOutputTokens is { } maxOutput && maxOutput > 0 ? maxOutput : 0);
     }
 
     /// <summary>

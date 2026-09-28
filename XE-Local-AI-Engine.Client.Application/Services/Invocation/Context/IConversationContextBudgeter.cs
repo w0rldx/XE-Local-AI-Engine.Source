@@ -19,13 +19,14 @@ public interface IConversationContextBudgeter
     /// </summary>
     /// <remarks>
     ///     Returns the input unchanged and reference-equal when it already fits; an always-keep set that alone exceeds the budget is kept anyway and flagged
-    ///     trimmed, since the caller's per-message validator bounds individual message size. The system prompt and each tool definition never appear in the
-    ///     history yet count against the window, so each is folded in as one framed unit — mirroring the inner budgeter, over-counting slightly, the safe direction.
+    ///     trimmed, since the caller's per-message validator bounds individual message size. Each tool definition, and the system prompt unless the history
+    ///     already carries it, count against the window without being droppable, so each is folded in as one framed unit — mirroring the inner budgeter,
+    ///     over-counting slightly, the safe direction. The prompt is counted exactly once either way.
     /// </remarks>
     /// <param name="messages">The ordered history to budget.</param>
     /// <param name="contextTokenCapacity">The model's effective context window in tokens.</param>
     /// <param name="reservedOutputTokens">Tokens to hold back for the model's response.</param>
-    /// <param name="systemPrompt">The resolved system prompt, prepended AFTER this history; <see langword="null" /> counts as none.</param>
+    /// <param name="systemPrompt">The resolved system prompt, overhead unless a System message in the history carries it; <see langword="null" /> is none.</param>
     /// <param name="toolDefinitions">Each advertised tool's model-facing name, description and parameter schema; <see langword="null" /> or empty counts as none.</param>
     /// <param name="modelName">Resolved provider model identity used only to select an existing token calibration.</param>
     ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,

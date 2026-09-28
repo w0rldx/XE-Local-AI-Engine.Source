@@ -96,6 +96,11 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             {
                 return;
             }
+            catch (Exception exception) when (NodeSqliteContention.IsTransientOpenFailure(exception))
+            {
+                _logger.LogWarning(exception, "Durable MCP agent run dispatch iteration could not open the node database; the worker will retry.");
+                await DelayAfterFailureAsync(stoppingToken);
+            }
             catch (Exception exception)
             {
                 NodeSqliteContention.Record("raw", exception, _logger);

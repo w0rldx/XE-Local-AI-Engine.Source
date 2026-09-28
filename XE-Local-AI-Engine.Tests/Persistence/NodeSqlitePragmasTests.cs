@@ -304,6 +304,68 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             "The failing pragma must be named in the log, or the failure is undiagnosable.");
     }
 
+    /// <summary>
+    ///     The raw-open helper used to pass no logger, so a tuning pragma SQLite refused vanished without a trace. It now
+    ///     reaches the attached host logger.
+    /// </summary>
+    [Test]
+    public async Task OpenAndConfigureAsync_SendsASwallowedTuningPragmaFailureToTheAttachedLogger()
+    {
+        var logger = new LogCapturingLogger();
+        using var attachment = NodeSqliteDiagnostics.Attach(logger, TimeProvider.System);
+        await using var connection = new PragmaScriptedConnection("busy_timeout");
+
+        await NodeSqlitePragmas.OpenAndConfigureAsync(connection, CancellationToken.None);
+
+        AssertEx.True(logger.Warnings.Exists(entry => entry.Contains("busy_timeout", StringComparison.Ordinal)
+                                                      && entry.Contains("extended result code", StringComparison.Ordinal)),
+            "The swallowed busy_timeout failure must reach the attached logger, with the extended result code slot.");
+    }
+
+    /// <summary>
+    ///     A pragma the driver cannot even prepare surfaces as an out-of-range slice, not a <see cref="SqliteException" />.
+    ///     Both apply paths fail the open as a transient, Warning-level failure that names the pragma.
+    /// </summary>
+    [Test]
+    public async Task UnpreparablePragma_FailsTheOpenAsTransient_WithAWarningNotAnError()
+    {
+        var logger = new LogCapturingLogger();
+        await using var connection = new PragmaScriptedConnection("busy_timeout",
+            _ => new ArgumentOutOfRangeException("Specified argument was out of the range of valid values.", innerException: null));
+
+        var asyncFailure = await AssertEx.ThrowsAsync<NodeSqliteTransientOpenException>(() =>
+            NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None));
+        var syncFailure = AssertEx.Throws<NodeSqliteTransientOpenException>(() =>
+            NodeSqlitePragmas.Apply(connection, NodeSqlitePragmaSettings.Default, logger));
+
+        AssertEx.True(asyncFailure.InnerException is ArgumentOutOfRangeException && syncFailure.InnerException is ArgumentOutOfRangeException,
+            "The original exception must be kept as the inner exception.");
+        AssertEx.Empty(logger.Errors, "A transient open failure is logged at Warning, not Error.");
+        AssertEx.Equal(expected: 2, logger.Warnings.Count(entry => entry.Contains("busy_timeout", StringComparison.Ordinal)));
+        AssertEx.False(connection.Executed.Exists(sql => sql.Contains("foreign_keys", StringComparison.Ordinal)),
+            "The open fails at the unpreparable pragma; no later pragma runs on that handle.");
+    }
+
+    /// <summary>
+    ///     On a real handle the failure log carries SQLite's extended result code. Switching into WAL inside an open
+    ///     transaction is a refusal SQLite really makes (SQLITE_ERROR, 1), so no scripted connection is needed.
+    /// </summary>
+    [Test]
+    public async Task TuningPragmaFailureOnARealHandle_LogsTheExtendedResultCode()
+    {
+        var logger = new LogCapturingLogger();
+        await using var connection = new SqliteConnection($"Data Source={Path.Combine(_dir, "in-transaction.sqlite")}");
+        await connection.OpenAsync();
+        await ExecuteAsync(connection, "BEGIN;");
+
+        await NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None);
+
+        AssertEx.True(logger.Warnings.Exists(entry => entry.Contains("journal_mode", StringComparison.Ordinal)
+                                                      && entry.Contains("extended result code 1)", StringComparison.Ordinal)),
+            "The refused journal_mode switch must be logged with the handle's extended result code.");
+        await ExecuteAsync(connection, "ROLLBACK;");
+    }
+
     [Test]
     public async Task SharedCacheConnection_SkipsWalWithoutLoggingAWarning()
     {
@@ -377,10 +439,13 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     private sealed class PragmaScriptedConnection : DbConnection
     {
         private readonly string _failingPragma;
+        private readonly Func<string, Exception> _failure;
+        private bool _opened;
 
-        public PragmaScriptedConnection(string failingPragma)
+        public PragmaScriptedConnection(string failingPragma, Func<string, Exception>? failure = null)
         {
             _failingPragma = failingPragma;
+            _failure = failure ?? (commandText => new SqliteException($"SQLite Error 5: 'database is locked' on {commandText}", 5));
         }
 
         public List<string> Executed { get; } = [];
@@ -395,7 +460,8 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
         public override string ServerVersion => "3.0.0";
 
-        public override ConnectionState State => ConnectionState.Open;
+        // Closed until opened, so OpenAndConfigureAsync takes its open-then-apply path; ApplyAsync ignores the state.
+        public override ConnectionState State => _opened ? ConnectionState.Open : ConnectionState.Closed;
 
         public override void ChangeDatabase(string databaseName) =>
             throw new NotSupportedException();
@@ -406,6 +472,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
         public override void Open()
         {
+            _opened = true;
         }
 
         public int Execute(string commandText)
@@ -413,7 +480,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             Executed.Add(commandText);
             if (commandText.Contains(_failingPragma, StringComparison.Ordinal))
             {
-                throw new SqliteException($"SQLite Error 5: 'database is locked' on {commandText}", 5);
+                throw _failure(commandText);
             }
 
             return 0;
@@ -476,12 +543,35 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         }
     }
 
-    // Captures Warning and Error entries so a test can assert the pragma path stayed quiet, or named what failed.
+    // Captures Warning and Error entries so a test can assert the pragma path stayed quiet, or named what failed. Locked,
+    // and read as snapshots: once attached to NodeSqliteDiagnostics it also receives other threads' SQLite messages.
     private sealed class LogCapturingLogger : ILogger
     {
-        public List<string> Warnings { get; } = [];
+        private readonly Lock _gate = new();
+        private readonly List<string> _warnings = [];
+        private readonly List<string> _errors = [];
 
-        public List<string> Errors { get; } = [];
+        public List<string> Warnings
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _warnings];
+                }
+            }
+        }
+
+        public List<string> Errors
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _errors];
+                }
+            }
+        }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
             null;
@@ -491,16 +581,19 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            switch (logLevel)
+            lock (_gate)
             {
-                case LogLevel.Warning:
-                    Warnings.Add(formatter(state, exception));
-                    break;
-                case LogLevel.Error:
-                    Errors.Add(formatter(state, exception));
-                    break;
-                default:
-                    break;
+                switch (logLevel)
+                {
+                    case LogLevel.Warning:
+                        _warnings.Add(formatter(state, exception));
+                        break;
+                    case LogLevel.Error:
+                        _errors.Add(formatter(state, exception));
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
 using Microsoft.Data.Sqlite;
+using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 
 /// <summary>
 ///     Classifies and records node SQLite write-contention failures (SQLITE_BUSY / SQLITE_LOCKED) that outlived the connection's <c>busy_timeout</c>.
@@ -36,6 +37,24 @@ public static class NodeSqliteContention
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     True when <paramref name="exception" /> (or an inner exception) is a
+    ///     <see cref="NodeSqliteTransientOpenException" />: a fresh connection whose first pragma the driver could not
+    ///     prepare. The connection was already disposed; a retry loop logs it at Warning and retries.
+    /// </summary>
+    public static bool IsTransientOpenFailure(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is NodeSqliteTransientOpenException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

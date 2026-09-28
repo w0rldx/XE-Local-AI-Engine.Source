@@ -48,6 +48,21 @@ public sealed class NodeSqliteContentionTests : IDisposable
     }
 
     [Test]
+    public void IsTransientOpenFailure_RecognisesTheUnpreparablePragmaFailure_AndNothingElse()
+    {
+        var transient = new NodeSqliteTransientOpenException("could not prepare PRAGMA busy_timeout",
+            new ArgumentOutOfRangeException("Specified argument was out of the range of valid values.", innerException: null));
+
+        AssertEx.True(NodeSqliteContention.IsTransientOpenFailure(transient));
+        AssertEx.True(NodeSqliteContention.IsTransientOpenFailure(new InvalidOperationException("wrapped", transient)),
+            "A wrapper around the open failure is still a transient open failure.");
+        AssertEx.False(NodeSqliteContention.IsTransientOpenFailure(new ArgumentOutOfRangeException("Specified argument was out of the range of valid values.", innerException: null)),
+            "A bare out-of-range exception is a caller bug until the pragma path says otherwise.");
+        AssertEx.False(NodeSqliteContention.IsTransientOpenFailure(new SqliteException("database is locked", 5)));
+        AssertEx.False(NodeSqliteContention.IsTransientOpenFailure(exception: null));
+    }
+
+    [Test]
     public void Record_IsNoOp_ForNonContentionException()
     {
         using var capture = new BusyMeterCapture();

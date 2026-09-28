@@ -58,6 +58,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Endpoints.Common;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hubs;
+    using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
     using XE_Local_AI_Engine.Client.Services.Development;
@@ -417,6 +418,13 @@ namespace XE_Local_AI_Engine.Client
             customization?.ConfigureBuilder?.Invoke(builder);
 
             var app = builder.Build();
+
+            // SQLite's own error log and the raw-open pragma failures reach this host's logger until it stops. The native hook is process-global and
+            // registered once; see docs/wiki/08-data-and-persistence.md ("Connection pragmas").
+            var sqliteDiagnostics = NodeSqliteDiagnostics.Attach(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(NodeSqliteDiagnostics).FullName!),
+                app.Services.GetRequiredService<TimeProvider>());
+            app.Lifetime.ApplicationStopped.Register(sqliteDiagnostics.Dispose);
+
             if (parentLifetime is not null)
             {
                 app.Services.GetRequiredService<DesktopParentLifetime>().Bind(app.Lifetime);

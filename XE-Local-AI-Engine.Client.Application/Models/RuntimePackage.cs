@@ -160,5 +160,16 @@ public sealed record RuntimePackage
     /// </remarks>
     public JsonElement? ResponseJsonSchema { get; init; }
 
+    /// <summary>
+    ///     OPTIONAL exact output-token reservation that REPLACES the node's reserved-output floor for this invocation, at both the
+    ///     outer conversation budget and the inner provider-round budget.
+    /// </summary>
+    /// <remarks>
+    ///     Set only by the benchmark primary executor, to the project's own max output tokens: a benchmark caps its answer
+    ///     explicitly, so holding back the chat floor on top of that cap refused small-window projects that fit. Every other path
+    ///     leaves it null and keeps the floor. Excluded from <see cref="ConfigHash" /> (mirrors <see cref="SamplingOptions" />).
+    /// </remarks>
+    public int? ReservedOutputTokensOverride { get; init; }
+
     public required string ConfigHash { get; init; }
 }

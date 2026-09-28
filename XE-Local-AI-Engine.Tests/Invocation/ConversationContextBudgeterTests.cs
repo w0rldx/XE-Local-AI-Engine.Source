@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
@@ -516,10 +519,10 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.False(ContainsText(withPrompt.Messages, "user-msg-0"), "the oldest turn drops once the prompt overhead is counted");
         AssertEx.True(ContainsText(withPrompt.Messages, "user-msg-1"), "only one turn needs to drop for the prompt-only overhead");
 
-        // Adding a 16-char tool definition folds in 16 more tokens: effective budget 34 -> a SECOND turn must drop,
-        // proving the tool-schema footprint is counted on top of the system prompt.
+        // A 16-char tool definition folds in 34 more tokens (its text plus the 18-token wrapper): at capacity 88 the effective budget
+        // is 34, so a SECOND turn must drop, proving the tool-schema footprint is counted on top of the system prompt.
         var withPromptAndTool = sut.Budget(messages,
-            contextTokenCapacity: CapacityFor(70),
+            contextTokenCapacity: CapacityFor(88),
             reservedOutputTokens: 0,
             systemPrompt: new string('s', 20),
             toolDefinitions: [new string('t', 16)]);
@@ -528,6 +531,119 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 4, withPromptAndTool.MessagesDropped);
         AssertEx.False(ContainsText(withPromptAndTool.Messages, "user-msg-1"), "the tool-schema overhead forces a second turn to drop");
         AssertEx.True(ContainsText(withPromptAndTool.Messages, "user-msg-2"), "the protected recent turns are still kept");
+    }
+
+    [Test]
+    public void Budget_WhenTheHistoryAlreadyCarriesTheSystemPrompt_CountsItOnceAndKeepsTheHistoryTheInitialAssemblyKept()
+    {
+        // Live: the tool-loop stage budgets the factory's seed, the prompt as the leading System message, while also passing that prompt as
+        // overhead, so a ~480-token prompt cost ~960 and a round the initial assembly admitted trimmed or failed one step later.
+        var systemPrompt = new string('s', 20);
+        string[] tools = [new string('t', 16)];
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2);
+        List<ChatMessage> history = [User("user-msg-0"), Assistant("asst-msg-0"), User("user-msg-1"), Assistant("asst-msg-1"), User("user-msg-2")];
+        List<ChatMessage> seeded = [System(systemPrompt), .. history];
+
+        // 50 history + 20 prompt + 34 tool (16 chars + the 18-token wrapper) = 104: exactly the budget, whichever shape carries the prompt.
+        var initial = sut.Budget(history, CapacityFor(104), reservedOutputTokens: 0, systemPrompt, tools);
+        var toolLoop = sut.Budget(seeded, CapacityFor(104), reservedOutputTokens: 0, systemPrompt, tools);
+
+        AssertEx.False(initial.Trimmed, "the initial assembly fits");
+        AssertEx.Equal(expected: 34, toolLoop.FixedOverheadTokens, "the prompt already in the history is not overhead a second time");
+        AssertEx.False(toolLoop.Trimmed, "the seeded round is the same request and fits too");
+        AssertEx.True(ReferenceEquals(seeded, toolLoop.Messages));
+        AssertEx.True(ContainsText(toolLoop.Messages, "user-msg-0"), "the oldest turn is kept, not dropped to pay for the prompt twice");
+        AssertEx.Equal(initial.EstimatedTokensBefore + initial.FixedOverheadTokens, toolLoop.EstimatedTokensBefore + toolLoop.FixedOverheadTokens,
+            "both shapes size the same request");
+    }
+
+    [Test]
+    public void Budget_WhenTheSeededPromptRoundIsOverBudget_TrimsHistoryButNeverTheSystemMessage()
+    {
+        var systemPrompt = new string('s', 20);
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2);
+        List<ChatMessage> seeded = [System(systemPrompt), User("user-msg-0"), Assistant("asst-msg-0"), User("user-msg-1"), Assistant("asst-msg-1"), User("user-msg-2")];
+
+        // 70 in the history, budget 84 - 34 = 50: the oldest droppable turn goes, the prompt it shares turn 0 with stays.
+        var result = sut.Budget(seeded, CapacityFor(84), reservedOutputTokens: 0, systemPrompt, [new string('t', 16)]);
+
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 2, result.MessagesDropped);
+        AssertEx.Equal(ChatRole.System, result.Messages[0].Role);
+        AssertEx.Equal(systemPrompt, result.Messages[0].Text);
+        AssertEx.False(ContainsText(result.Messages, "user-msg-0"));
+    }
+
+    [Test]
+    public void Budget_EachToolDefinition_CostsItsTextPlusTheMeasuredWrapper()
+    {
+        // The outer and inner (ProviderMessageTokenEstimator.EstimateTools) budgets charge a tool alike: its text, the per-message framing,
+        // and the JSON wrapper measured on Qwen3.8 (21.9 tokens a tool, 4 of them already the framing).
+        var sut = CreateSut(CharCountEstimator());
+
+        var result = sut.Budget([User("hello")], contextTokenCapacity: 1000, reservedOutputTokens: 0, toolDefinitions: [new string('t', 10), new string('u', 30)]);
+
+        AssertEx.Equal(expected: 18, TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
+        AssertEx.Equal(10 + 30 + (2 * TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens), result.FixedOverheadTokens);
+    }
+
+    [Test]
+    public void Budget_ToolOverhead_AgreesWithTheInnerProviderRoundEstimate_DescriptionsIncluded()
+    {
+        // The outer budget reads the offer DTO; the inner one reads the executable tool. Same name, description and schema: same cost.
+        const string schema = """{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}""";
+        var description = new string('d', 400 - "calculate".Length - schema.Length);
+        var offer = new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "calculate",
+            Location = ToolLocation.ClientLocal,
+            Description = description,
+            ParameterSchema = schema
+        };
+        var executable = AIFunctionFactory.CreateDeclaration("calculate", description, JsonDocument.Parse(schema).RootElement);
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions()));
+
+        var outer = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: InvocationRunner.BuildToolBudgetDefinitions([offer]));
+
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools([executable]), outer.FixedOverheadTokens);
+        AssertEx.Equal((400 / 4) + 4 + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, outer.FixedOverheadTokens, "the description is counted");
+    }
+
+    [Test]
+    public void Budget_WhenTheHistoryCarriesADifferentSystemMessage_StillCountsTheSystemPromptAsOverhead()
+    {
+        // Only the prompt itself is recognised: a summary or other System message in the history is history, not the prompt.
+        var sut = CreateSut(CharCountEstimator());
+
+        var result = sut.Budget([System("a compaction summary"), User("hello")], contextTokenCapacity: 1000, reservedOutputTokens: 0, systemPrompt: new string('s', 20));
+
+        AssertEx.Equal(expected: 20, result.FixedOverheadTokens);
+    }
+
+    [Test]
+    public void Budget_LiveSmallWindowBenchmark_FitsWithTheOutputCapReservedButNotWithTheChatFloor()
+    {
+        // The live 2048-token benchmark: ~720 tokens of system prompt + tool definitions and an 11-token task. The margined window is
+        // 1740; reserving the 512-token output cap leaves 508 for the task, reserving the 1024 chat floor leaves nothing.
+        var messages = new List<ChatMessage>
+        {
+            User(new string('q', 11))
+        };
+        var sut = CreateSut(CharCountEstimator());
+        var systemPrompt = new string('s', 500);
+        // 202 chars of tool text plus the 18-token wrapper: 220 tokens of tools, 720 of overhead.
+        string[] tools = [new string('t', 202)];
+
+        var capped = sut.Budget(messages, contextTokenCapacity: 2048, reservedOutputTokens: 512, systemPrompt, tools);
+        var floored = sut.Budget(messages, contextTokenCapacity: 2048, reservedOutputTokens: 1024, systemPrompt, tools);
+
+        AssertEx.False(capped.ExceedsBudget, "the task fits once only the output cap is reserved");
+        AssertEx.Equal(expected: 720, capped.FixedOverheadTokens);
+        AssertEx.Equal(TokenEstimatorCalibrationStore.ApplyEstimateMargins(2048, TokenEstimatorCalibrationStore.NeutralObservedCorrection) - 512 - 720, capped.EffectiveBudgetTokens);
+        AssertEx.True(floored.ExceedsBudget, "the chat floor leaves no room for the task at all");
+        AssertEx.Equal(expected: 720, floored.FixedOverheadTokens);
+        AssertEx.Equal(expected: 0, floored.EffectiveBudgetTokens, "the effective budget is floored at zero, never negative");
     }
 
     [Test]

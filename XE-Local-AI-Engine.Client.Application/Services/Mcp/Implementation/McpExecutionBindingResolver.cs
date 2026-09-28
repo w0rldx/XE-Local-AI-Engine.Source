@@ -245,7 +245,9 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
                 writer.WriteString("location", tool.Location.ToString());
                 writer.WriteString("category", tool.Category.ToString());
                 writer.WriteBoolean("requiresApproval", tool.RequiresApproval);
-                writer.WriteString("description", tool.Description);
+                // An agentic binding carries the offer's tools, whose description every stored binding_fingerprint row was computed over as
+                // null: kept null so those rows still match, and a description-only change stays outside binding drift as before.
+                writer.WriteString("description", inboundContext.IsAgentic ? null : tool.Description);
                 writer.WriteString("parameterSchema", tool.ParameterSchema);
                 writer.WriteEndObject();
             }

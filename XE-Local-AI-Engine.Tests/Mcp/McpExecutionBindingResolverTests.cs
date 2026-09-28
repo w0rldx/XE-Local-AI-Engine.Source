@@ -103,6 +103,33 @@ public sealed class McpExecutionBindingResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenAgenticOfferToolsGainDescriptions_KeepsTheStoredFingerprintByteIdentical()
+    {
+        // Offer tools once carried no description, so every stored agentic binding_fingerprint was computed over null. The offer now
+        // carries the model-facing description (for the context budget); a queued durable run must still match after the upgrade.
+        var definition = Definition("Agentic", AgentDefinitionSource.Manual, seedSlug: null);
+        var described = new Harness();
+        described.Register(definition, Tool("read_file", ToolCategory.ReadLocal, description: "Read a UTF-8 text file."));
+        var bare = new Harness();
+        bare.Register(definition, Tool("read_file", ToolCategory.ReadLocal) with { Description = null });
+        var request = new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = "xemcp_abc123"
+            }
+        };
+
+        var withDescription = AssertEx.NotNull((await described.Resolver.ResolveAsync(request, CancellationToken.None)).Binding);
+        var withoutDescription = AssertEx.NotNull((await bare.Resolver.ResolveAsync(request, CancellationToken.None)).Binding);
+
+        AssertEx.Equal(withoutDescription.BindingFingerprint, withDescription.BindingFingerprint);
+        AssertEx.Equal("Read a UTF-8 text file.", withDescription.AllowedTools.Single().Description, "the binding itself still carries the description");
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAgenticCallerBindsAnAgentWithWebTools_LeavesThemOut()
     {
         // Agentic scope auto-approves every call, which would bypass the web result review.

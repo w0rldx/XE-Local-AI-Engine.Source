@@ -83,6 +83,45 @@ public sealed class TurnPolicyTests
     }
 
     [Test]
+    public void Resolve_WithAReservedOutputOverride_ReservesExactlyItWhileChatKeepsTheFloor()
+    {
+        // The benchmark primary caps its answer at the project's max output tokens and reserves exactly that; holding back the
+        // 1024 floor on top of a 512 cap refused a 2048-token project that fit. Chat (no override) keeps the documented floor.
+        var sampling = new SamplingOptions
+        {
+            NumCtx = 2048,
+            MaxOutputTokens = 512
+        };
+        var budgetOptions = new ConversationContextBudgetOptions
+        {
+            ReservedOutputTokenFloor = 1024
+        };
+        var chat = RuntimePackageBuilder.Valid().WithSamplingOptions(sampling).Build();
+        var benchmark = chat with
+        {
+            ReservedOutputTokensOverride = 512
+        };
+
+        var chatPolicy = TurnPolicy.Resolve(chat, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5));
+        var benchmarkPolicy = TurnPolicy.Resolve(benchmark, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5));
+
+        AssertEx.Null(chat.ReservedOutputTokensOverride, "an ordinary package carries no override");
+        AssertEx.Equal(expected: 1024, chatPolicy.ReservedOutputTokens, "chat keeps the larger of the floor and its max output tokens");
+        AssertEx.Equal(expected: 512, benchmarkPolicy.ReservedOutputTokens, "the override replaces the floor, it does not widen it");
+        AssertEx.Equal(expected: 2048, benchmarkPolicy.ContextCapacityTokens);
+    }
+
+    [Test]
+    public void ResolveReservedOutputTokens_TakesAnOverrideExactlyAndOtherwiseWidensTheFloor()
+    {
+        AssertEx.Equal(expected: 512, TurnPolicy.ResolveReservedOutputTokens(512, maxOutputTokens: 512, floor: 1024));
+        AssertEx.Equal(expected: 4096, TurnPolicy.ResolveReservedOutputTokens(4096, maxOutputTokens: 512, floor: 1024), "an override may exceed the floor too");
+        AssertEx.Equal(expected: 1024, TurnPolicy.ResolveReservedOutputTokens(null, maxOutputTokens: 512, floor: 1024));
+        AssertEx.Equal(expected: 2048, TurnPolicy.ResolveReservedOutputTokens(null, maxOutputTokens: 2048, floor: 1024));
+        AssertEx.Equal(expected: 1024, TurnPolicy.ResolveReservedOutputTokens(null, maxOutputTokens: null, floor: 1024));
+    }
+
+    [Test]
     public void Resolve_WhenNoNumCtxOverride_FallsBackToConfiguredDefaultContextTokens()
     {
         var package = RuntimePackageBuilder.Valid().Build();

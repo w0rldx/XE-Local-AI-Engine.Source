@@ -391,7 +391,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         return tools;
     }
 
-    private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)
+    /// <summary>The turn's opening message list: the instructions as the leading System message unless omitted, then the conversation.</summary>
+    /// <remarks>Internal for the runner's pre-launch budget (<c>InvocationRunner.BudgetFirstRound</c>), which must measure this exact shape.</remarks>
+    internal static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)
     {
         List<ChatMessage> messages = definition.OmitSystemPrompt
             ? []

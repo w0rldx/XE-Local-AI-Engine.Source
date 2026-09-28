@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
@@ -85,6 +86,10 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private readonly IGpuVariantSelector _variantSelector;
     private readonly TaskScheduler _detachedSpawnScheduler;
 
+    // Per-spawn identity receipts under the node data directory, so the next start can reap this node's orphans wherever the binary lives. Disabled
+    // (a pass-through) off Linux and in provider-only hosts and tests that pass none.
+    private readonly ProcessSpawnReceiptStore _spawnReceipts;
+
     // The process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
     // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
     private readonly IGpuModelLoadAdmission _loadAdmission;
@@ -118,7 +123,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         IProcessLaunchAdmissionRegistry? launchAdmissions = null,
         ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
         ILlamaServerLoadTelemetry? loadTelemetry = null,
-        TaskScheduler? detachedSpawnScheduler = null)
+        TaskScheduler? detachedSpawnScheduler = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -137,6 +143,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
         _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
+        _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", _logger);
 
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.

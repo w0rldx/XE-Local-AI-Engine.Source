@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -105,6 +108,31 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         AssertEx.False(serialized.Contains("disableToolRelevanceFilter", StringComparison.OrdinalIgnoreCase),
             "the opt-out must leave no trace on the frozen wire shape");
         AssertEx.Equal(LiteralV1Snapshot, serialized, "the v1 wire shape and its configuration hash are frozen — the opt-out cannot move either");
+    }
+
+    [Test]
+    public void Deserialize_ToolsFrozenWithOrWithoutDescriptions_BothValidate()
+    {
+        // Runs frozen before the offer carried tool descriptions stored "description":null; newer runs store the text. The hash is a
+        // self-integrity check over the stored payload, so both must replay.
+        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var bare = new AllowedToolDto
+        {
+            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            Name = "read_file",
+            Location = ToolLocation.ClientLocal,
+            ParameterSchema = "{\"type\":\"object\"}",
+            Category = ToolCategory.ReadLocal
+        };
+        byte[] Frozen(AllowedToolDto tool) =>
+            factory.Serialize(factory.Create(Input() with { ResolvedRuntime = Input().ResolvedRuntime with { AllowedTools = [tool] } }));
+
+        var legacy = Frozen(bare);
+        var described = Frozen(bare with { Description = "Read a UTF-8 text file." });
+
+        AssertEx.True(Encoding.UTF8.GetString(legacy).Contains("\"description\":null", StringComparison.Ordinal));
+        AssertEx.True(legacy.AsSpan().SequenceEqual(factory.Serialize(factory.Deserialize(legacy))), "a pre-description run still replays");
+        AssertEx.Equal("Read a UTF-8 text file.", factory.Deserialize(described).ResolvedRuntime.AllowedTools.Single().Description);
     }
 
     [Test]

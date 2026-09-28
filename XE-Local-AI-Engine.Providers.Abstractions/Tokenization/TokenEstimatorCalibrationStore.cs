@@ -21,6 +21,15 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     /// </remarks>
     public const double EstimateSafetyFactor = 0.85;
 
+    /// <summary>Tokens each tool definition costs beyond its name, description and schema text and the per-message framing already charged.</summary>
+    /// <remarks>
+    ///     Measured on Qwen3.8-27B (UD-Q4_K_XL, llama-server --jinja, its own tokenizer): the template renders each tool as the OpenAI
+    ///     <c>{"type": "function", "function": {...}}</c> JSON, and over the 8 Default Assistant tools that wrapper cost 21.9 tokens a tool
+    ///     against the 4 per-message tokens already counted. The template's once-per-request tool instructions (~198 there) are left out:
+    ///     they differ per template.
+    /// </remarks>
+    public const int ToolDefinitionWrapperTokens = 18;
+
     /// <summary>The correction of a model nothing has been observed for: multiply/divide by one, i.e. do nothing.</summary>
     public const double NeutralObservedCorrection = 1.0;
 

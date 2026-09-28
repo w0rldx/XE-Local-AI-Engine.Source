@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
@@ -301,6 +302,25 @@ public sealed partial class InvocationRunner
         };
     }
 
+    /// <summary>A package's first provider round, budgeted exactly as the tool-loop stage budgets it before any window is launched.</summary>
+    /// <remarks>
+    ///     The agent factory's own seed over the rendered conversation, the same tool definitions, and the window and reservation
+    ///     <see cref="TurnPolicy.Resolve" /> sets. The benchmark freeze refuses with it, so its pre-flight and the run's hard stop cannot
+    ///     drift; the launched window can only be smaller, so a pass there is necessary, not sufficient.
+    /// </remarks>
+    internal static ConversationBudgetResult BudgetFirstRound(IConversationContextBudgeter budgeter,
+        RuntimePackage package,
+        ConversationContextBudgetOptions budgetOptions,
+        string resolvedModel)
+    {
+        ArgumentNullException.ThrowIfNull(budgeter);
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(budgetOptions);
+        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, budgetOptions);
+        var seed = InvocationAgentFactory.BuildSeedMessages(BuildInvocationDefinition(package, resolvedModel, BuildChatMessages(package), effectiveContextTokens: null));
+        return budgeter.Budget(seed, capacity, reserved, package.ResolvedSystemPrompt, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel);
+    }
+
     /// <summary>
     ///     Applies the turn's already-resolved <see cref="TurnPolicy.ContextCapacityTokens" /> and
     ///     <see cref="TurnPolicy.ReservedOutputTokens" /> to a message list, reference-equal when nothing was trimmed.
@@ -321,8 +341,8 @@ public sealed partial class InvocationRunner
         StreamTransport transport,
         ContextBudgetNoticeGate gate)
     {
-        // The system prompt (blank when omitted) and tool schemas sit outside this history. Count both as fixed
-        // overhead, matching the inner budgeter so the hard stop measures the actual request.
+        // Tool schemas sit outside every stage's history; the system prompt (blank when omitted) sits outside the initial assembly but
+        // leads the tool loop's seed. The budgeter counts the prompt once either way, so the hard stop measures the actual request.
         var result = _contextBudgeter.Budget(messages,
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,
@@ -339,7 +359,7 @@ public sealed partial class InvocationRunner
         {
             gate.Logged = true;
             _logger.LogWarning(
-                "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), stripped reasoning from {ReasoningStripped} message(s), excerpted {ProtectedResultsExcerpted} protected tool result(s), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved} (still over budget: {Overflow}).",
+                "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), stripped reasoning from {ReasoningStripped} message(s), excerpted {ProtectedResultsExcerpted} protected tool result(s), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved}, fixed overhead {FixedOverhead} (system prompt + tools), effective history budget {EffectiveBudget} (still over budget: {Overflow}).",
                 package.InvocationId,
                 stage,
                 result.MessagesDropped,
@@ -351,6 +371,8 @@ public sealed partial class InvocationRunner
                 result.EstimatedTokensAfter,
                 turnPolicy.ContextCapacityTokens,
                 turnPolicy.ReservedOutputTokens,
+                result.FixedOverheadTokens,
+                result.EffectiveBudgetTokens,
                 result.ExceedsBudget);
         }
 
@@ -565,16 +587,17 @@ public sealed partial class InvocationRunner
     /// <remarks>
     ///     It reads the raw <see cref="AllowedToolDto" /> schema string, present for BOTH Api-side and client-local
     ///     tools, rather than the built bridge, whose client-local placeholders carry no schema until the factory
-    ///     swaps them — so the schema footprint is counted for every tool.
+    ///     swaps them — so the schema footprint is counted for every tool. The benchmark freeze renders the same
+    ///     definitions for its pre-flight budget, so the refusal there and the hard stop here cannot disagree.
     /// </remarks>
-    private static IReadOnlyList<string> BuildToolBudgetDefinitions(RuntimePackage package)
+    internal static IReadOnlyList<string> BuildToolBudgetDefinitions(IReadOnlyList<AllowedToolDto> allowedTools)
     {
-        if (package.AllowedTools.Count == 0)
+        if (allowedTools.Count == 0)
         {
             return [];
         }
 
-        return [.. package.AllowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", tool.ParameterSchema))];
+        return [.. allowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", tool.ParameterSchema))];
     }
 
     private static IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)

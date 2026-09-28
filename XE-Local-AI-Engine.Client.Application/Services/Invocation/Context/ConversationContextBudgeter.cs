@@ -46,10 +46,10 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     {
         ArgumentNullException.ThrowIfNull(messages);
 
-        // The system prompt is prepended AFTER this history and tool JSON schemas never appear in the message list, yet both count against the launched window.
-        // Folding their estimate in stops the budget being measured against history alone; it mirrors the inner budgeter, over-counting slightly, the safe direction.
+        // Tool schemas, and the system prompt unless the history already carries it (the tool loop budgets the factory's seed), count against the window
+        // outside the message list. Folding them in mirrors the inner budgeter, over-counting slightly, the safe direction; the prompt is counted once.
         var divisor = _estimator.ResolveDivisor(modelName);
-        var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, divisor);
+        var fixedOverhead = EstimateFixedOverhead(CarriesSystemPrompt(messages, systemPrompt) ? null : systemPrompt, toolDefinitions, divisor);
         // Same margins the inner provider-round budgeter applies, from the same constants: the shared char heuristic under-counts on markdown and JSON, and an
         // under-count at the window edge is a provider rejection rather than a trim. The flat factor covers an unknown model; the observed correction is tighten-only.
         var observedCorrection = _estimator.ResolveObservedCorrection(modelName);
@@ -61,7 +61,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (messages.Count == 0 || estimatedBefore <= effectiveBudget)
         {
-            return ConversationBudgetResult.Unchanged(messages, estimatedBefore);
+            return ConversationBudgetResult.Unchanged(messages, estimatedBefore, fixedOverhead, effectiveBudget);
         }
 
         var count = messages.Count;
@@ -269,7 +269,9 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             CharsTruncated = charsTruncated,
             EstimatedTokensBefore = estimatedBefore,
             EstimatedTokensAfter = estimatedAfter,
-            ExceedsBudget = estimatedAfter > effectiveBudget
+            ExceedsBudget = estimatedAfter > effectiveBudget,
+            FixedOverheadTokens = fixedOverhead,
+            EffectiveBudgetTokens = effectiveBudget
         };
     }
 
@@ -515,13 +517,36 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                     continue;
                 }
 
-                // One framed message per tool mirrors the inner estimator's per-tool framing overhead, so a tool-heavy
-                // agent's schema footprint is counted rather than silently ignored.
-                overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor);
+                // One framed message plus the measured JSON wrapper per tool, exactly as the inner estimator charges a tool, so a
+                // tool-heavy agent's schema footprint is counted rather than silently ignored.
+                overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor) + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
             }
         }
 
         return overhead;
+    }
+
+    /// <summary>Whether the history already carries the resolved system prompt as one of its System messages.</summary>
+    /// <remarks>
+    ///     Text equality rather than position: any other System message (a compaction summary) is history and does not stand in for the
+    ///     prompt. A System message is never dropped by any pass, so the prompt counted there is counted for the whole round.
+    /// </remarks>
+    private static bool CarriesSystemPrompt(IReadOnlyList<ChatMessage> messages, string? systemPrompt)
+    {
+        if (string.IsNullOrEmpty(systemPrompt))
+        {
+            return false;
+        }
+
+        foreach (var message in messages)
+        {
+            if (message.Role == ChatRole.System && string.Equals(message.Text, systemPrompt, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Frames one fixed-overhead text as the System message it is measured as, reusing the instance per text.</summary>

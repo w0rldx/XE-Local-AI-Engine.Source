@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -179,7 +181,10 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             {
                 // A run the node cancelled at its own invocation budget is the one failure that can explain itself, and
                 // "the invocation failed" is exactly the message that made the live 307 s cancellation unattributable.
-                throw new BenchmarkExecutionException(InvocationFailedMessage)
+                throw new BenchmarkExecutionException(terminal?.FailureCategory == FailureCategory.ContextWindowExceeded
+                    // A context refusal is the other: the invocation's own text is chat advice, so the run names the window and the remedy.
+                    ? ContextWindowExceededMessage(snapshot.RequestedContextTokens)
+                    : InvocationFailedMessage)
                 {
                     StopReason = terminal?.FailureCategory == FailureCategory.Timeout ? BenchmarkPrimaryStopReasons.Timeout : null
                 };
@@ -269,6 +274,11 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 (exception as BenchmarkExecutionException)?.StopReason);
         }
     }
+
+    /// <summary>The fixed, path-free failure text for a run the context budget refused.</summary>
+    internal static string ContextWindowExceededMessage(int requestedContextTokens) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"The benchmark task did not fit the requested {requestedContextTokens}-token context window once the output budget, the agent's system prompt and its tools were reserved. Raise the project's context window, or choose an agent with fewer tools.");
 
     /// <summary>
     ///     The stop reason to persist: the provider's own token, unless the turn finished cleanly having produced no
@@ -386,8 +396,29 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
 
     private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
     {
-        var runtime = snapshot.ResolvedRuntime;
-        return _packageBuilder.Build(new LocalChatRuntimePackageRequest
+        return BuildPrimaryPackage(_packageBuilder,
+            snapshot.ResolvedRuntime,
+            snapshot.CoreTask,
+            snapshot.PrimaryModel.ModelName,
+            snapshot.PrimarySampling,
+            snapshot.RequestedContextTokens,
+            invocationTimeoutSeconds);
+    }
+
+    /// <summary>The primary invocation's package, built from the frozen pieces rather than the serialized snapshot.</summary>
+    /// <remarks>The freeze budgets this same package before it queues a run, so its pre-flight refusal and the run's hard stop cannot drift.</remarks>
+    internal static RuntimePackage BuildPrimaryPackage(ILocalChatRuntimePackageBuilder packageBuilder,
+        ResolvedAgentRuntime runtime,
+        string coreTask,
+        string modelName,
+        BenchmarkSamplingSnapshotV1 sampling,
+        int requestedContextTokens,
+        int? invocationTimeoutSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(packageBuilder);
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(sampling);
+        return packageBuilder.Build(new LocalChatRuntimePackageRequest
         {
             InvocationId = Guid.NewGuid(),
             ConversationId = Guid.NewGuid(),
@@ -398,23 +429,26 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 {
                     Id = Guid.NewGuid(),
                     Role = MessageRole.User,
-                    Content = snapshot.CoreTask,
+                    Content = coreTask,
                     SortOrder = 0
                 }
             ],
-            ModelProfile = snapshot.PrimaryModel.ModelName,
+            ModelProfile = modelName,
             AgentDefinitionVersion = runtime.AgentDefinitionVersion,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = runtime.AllowedTools,
             Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
             ReasoningEffort = runtime.ReasoningEffort,
-            SamplingOptions = ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
+            SamplingOptions = ToSamplingOptions(sampling, requestedContextTokens),
             Skills = runtime.Skills,
             IsUnattended = true,
             CustomTools = runtime.CustomTools,
             // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe answer for a caller that does not know, and freeze does know. A model whose
             // chat template renders no reasoning end marker takes the budget and ignores it, so sending one advertises a cap that never held. Null is a pre-member run, keeping the old default.
-            ReasoningBudgetEnforceable = snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true
+            ReasoningBudgetEnforceable = sampling.ReasoningBudgetEnforceable ?? true,
+            // The answer is already capped at the project's max output tokens, so exactly that is reserved rather than the chat floor on
+            // top of it, which refused small-window projects that fit. No cap keeps the floor. The freeze pre-flight reserves the same.
+            ReservedOutputTokensOverride = sampling.MaxOutputTokens
         });
     }
 

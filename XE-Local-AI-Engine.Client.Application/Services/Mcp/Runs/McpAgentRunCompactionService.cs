@@ -43,6 +43,10 @@ internal sealed class McpAgentRunCompactionService : BackgroundService
             {
                 return;
             }
+            catch (Exception exception) when (NodeSqliteContention.IsTransientOpenFailure(exception))
+            {
+                _logger.LogWarning(exception, "Durable MCP agent run payload compaction could not open the node database; the next interval will retry.");
+            }
             catch (Exception exception)
             {
                 NodeSqliteContention.Record("raw", exception, _logger);

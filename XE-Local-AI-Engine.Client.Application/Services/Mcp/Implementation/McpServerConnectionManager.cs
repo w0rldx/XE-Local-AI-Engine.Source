@@ -213,14 +213,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
-            // The ONE connection failure that is not redacted: every other message here can echo a command path or URL, so it is
-            // clamped, while this one is engine-authored and tells an operator "this node cannot sandbox" from "your server is broken".
+            // The reason still tells an operator "this node cannot sandbox" from "your server is broken", but the exception text
+            // can name a sensitive host path (a denied root, the home directory), so it stays in the log like every other failure.
             var reason = _sandboxProvider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
                 ? McpConnectionFailureReason.SandboxRefused
                 : McpConnectionFailureReason.SandboxUnavailable;
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier ({Reason}); it will contribute no tools.", record.Id, reason);
             await DisposePartialClientAsync(client, record.Version, slug);
-            return new ConnectResult(Server: null, ex.Message, reason);
+            return new ConnectResult(Server: null, SafeMessage(reason), reason);
         }
         catch (Exception ex) when (ex is McpException
                                        or HttpRequestException
@@ -452,10 +452,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
     private static string SafeMessage(McpConnectionFailureReason reason)
     {
-        // Connection/transport messages can echo a command path or URL, so the exception text never reaches the UI:
-        // each reason has one fixed wording, and the real exception is logged server-side.
+        // Connection, transport and sandbox messages can echo a command path, URL or protected host path, so the exception text
+        // never reaches the UI: each reason has one fixed wording, and the real exception is logged server-side.
         return reason switch
         {
+            McpConnectionFailureReason.SandboxUnavailable => "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
+            McpConnectionFailureReason.SandboxRefused => "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
             McpConnectionFailureReason.ServerNotFound => "The MCP server's command was not found or could not be started.",
             McpConnectionFailureReason.Authentication => "The MCP server rejected the connection's credentials or its TLS negotiation failed.",
             McpConnectionFailureReason.Timeout => "Timed out connecting to the MCP server.",

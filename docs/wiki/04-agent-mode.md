@@ -290,7 +290,8 @@ pass-through.
 - **The window** is the per-send `num_ctx` the invocation factory writes onto
   `ChatOptions.AdditionalProperties` when one is set — read here so the per-round window matches the
   window the provider is actually launched with — otherwise `ProviderCallBudgetOptions.DefaultContextTokens`;
-  minus the larger of the reserved output floor and the round's own `MaxOutputTokens`.
+  minus the larger of the reserved output floor and the round's own `MaxOutputTokens`. The floor is the
+  scope's: the runner seeds the node's, or a package's `ReservedOutputTokensOverride` (benchmark primary only).
 - **Two margins, comparison-only.** It measures against `TokenEstimatorCalibrationStore.EstimateSafetyFactor`
   of the window rather than the whole of it, because the char heuristic under-counts by roughly a tenth
   on markdown and JSON and an under-count at the window edge is a provider *rejection* rather than a
@@ -374,6 +375,13 @@ This is the AI.Agent-layer twin of `HeuristicTokenEstimator` in the application 
 budgeter uses. The two live in separate assemblies by the layer arrow (Application → AI.Agent), so the
 entry points remain intentionally mirrored: **a change to divisor selection, or to the per-image charge,
 must be mirrored in both.** Script-category weighting is shared through `TokenCharacterProfile`.
+
+A tool definition costs its name, description and schema text, the per-message framing, and
+`TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens` (18) for the OpenAI JSON wrapper a chat template renders around
+it — both budgets charge exactly that. Measured on Qwen3.8-27B with the 8 Default Assistant tools: 21.9 tokens of wrapper a
+tool, 4 of them the framing. The offer (`LocalToolOfferProvider`) carries each tool's model-facing description so the outer
+budget sees it; `RuntimePackageConfigHash` and the agentic MCP binding fingerprint still leave it out. Not counted: the
+template's own once-per-request tool instructions (~198 tokens on that template), which vary per template.
 
 Per-message and per-tool script-category profiles are memoized by instance in a
 `ConditionalWeakTable` — no leak, the entry dies with its key. This hop re-estimates the full message
@@ -1311,7 +1319,14 @@ human-**approval** wait always uses the node-global pending-tool-call age, never
 `ToolResultTimeout` — a person is not a tool call.
 
 Context budgeting (`ContextCapacityTokens` / `ReservedOutputTokens`) is orthogonal to all three: it bounds
-what history is *sent* to the provider, not how long the provider is given to answer.
+what history is *sent* to the provider, not how long the provider is given to answer. `ReservedOutputTokens`
+is the larger of `ReservedOutputTokenFloor` and the package's own `MaxOutputTokens`, unless the package carries
+`ReservedOutputTokensOverride` — set only by the benchmark primary executor, to the project's output cap — which
+is taken exactly, and is also the floor of that invocation's provider-round budget (`ProviderCallBudget` scope).
+The outer budget runs at two points, the initial assembly (conversation only) and each tool-loop round (the agent
+factory's seed: the system prompt as its leading System message, then the conversation). Tool definitions are
+always fixed overhead; the system prompt is fixed overhead only when the history does not already carry it, so both
+stages size the same request and a prompt is never paid for twice (`ConversationContextBudgeter.Budget`).
 `RetryEnabled` / `MaxRetries` / `CircuitBreakerEnabled` govern only the pre-first-token send of the **first**
 segment (`ProviderStreamResilience`). `MaxToolIterationsPerRequest` and
 `MaxConsecutiveInvalidToolCallsPerTool` are the node-global tool-pipeline ceilings that the DI-wired

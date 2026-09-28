@@ -224,16 +224,29 @@ public sealed class McpServerConnectionManagerTests
         AssertEx.Equal("The MCP server's command was not found or could not be started.", status.LastError);
     }
 
-    [Test]
-    public async Task RefreshAsync_SandboxRefusalOnAnIsolationCapableNode_ReportsSandboxRefusedWithTheEngineMessage()
-    {
-        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
-        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+    private const string SandboxRefusedMessage = "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.";
 
-        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("The sandbox command could not be launched."), provider);
+    private const string SandboxUnavailableMessage = "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.";
+
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalOnAnIsolationCapableNode_ReportsSandboxRefusedWithTheFixedMessage()
+    {
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("The sandbox command could not be launched."), IsolationCapableProvider());
 
         AssertEx.Equal(McpConnectionFailureReason.SandboxRefused, status.FailureReason);
-        AssertEx.Equal("The sandbox command could not be launched.", status.LastError);
+        AssertEx.Equal(SandboxRefusedMessage, status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalNamingAHostPath_NeverReportsThePath()
+    {
+        // The shape SandboxedMcpStdioTransport throws for a denied root: both paths stay in the server log, never in LastError.
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException(
+            "The MCP server 'x' is registered at the Sandboxed trust tier and would bind '/home/operator' into its sandbox, which contains the sensitive host path '/home/operator/.ssh'."),
+            IsolationCapableProvider());
+
+        AssertEx.Equal(SandboxRefusedMessage, status.LastError);
+        AssertEx.False(status.LastError!.Contains("/home/operator", StringComparison.Ordinal));
     }
 
     [Test]
@@ -243,7 +256,14 @@ public sealed class McpServerConnectionManagerTests
         var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("This node cannot sandbox."));
 
         AssertEx.Equal(McpConnectionFailureReason.SandboxUnavailable, status.FailureReason);
-        AssertEx.Equal("This node cannot sandbox.", status.LastError);
+        AssertEx.Equal(SandboxUnavailableMessage, status.LastError);
+    }
+
+    private static IAgentSandboxRuntimeProvider IsolationCapableProvider()
+    {
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+        return provider;
     }
 
     [Test]

@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using SQLitePCL;
 
 /// <summary>
 ///     Applies the node SQLite pragmas (busy_timeout, foreign_keys, WAL, synchronous) on open. EF's interceptor and
@@ -53,7 +54,7 @@ public static class NodeSqlitePragmas
         }
 
         await connection.OpenAsync(cancellationToken);
-        await ApplyAsync(connection, _settings, logger: null, cancellationToken);
+        await ApplyAsync(connection, _settings, NodeSqliteDiagnostics.Logger, cancellationToken);
     }
 
     /// <summary>Applies the pragmas to an already-open connection (synchronous path — EF may open synchronously).</summary>
@@ -67,14 +68,14 @@ public static class NodeSqlitePragmas
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(settings);
 
-        TryExecute(logger, "busy_timeout", () =>
+        TryExecute(logger, connection, "busy_timeout", () =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = BusyTimeoutSql(settings);
             command.ExecuteNonQuery();
         });
 
-        ExecuteRequired(logger, "foreign_keys", () =>
+        ExecuteRequired(logger, connection, "foreign_keys", () =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = ForeignKeysSql;
@@ -86,7 +87,7 @@ public static class NodeSqlitePragmas
             return;
         }
 
-        TryExecute(logger, "journal_mode", () =>
+        TryExecute(logger, connection, "journal_mode", () =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA journal_mode=WAL;";
@@ -94,7 +95,7 @@ public static class NodeSqlitePragmas
             WarnIfNotWal(logger, mode);
         });
 
-        TryExecute(logger, "synchronous", () =>
+        TryExecute(logger, connection, "synchronous", () =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = SynchronousSql(settings);
@@ -111,14 +112,14 @@ public static class NodeSqlitePragmas
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(settings);
 
-        await TryExecuteAsync(logger, "busy_timeout", async () =>
+        await TryExecuteAsync(logger, connection, "busy_timeout", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = BusyTimeoutSql(settings);
             await command.ExecuteNonQueryAsync(cancellationToken);
         });
 
-        await ExecuteRequiredAsync(logger, "foreign_keys", async () =>
+        await ExecuteRequiredAsync(logger, connection, "foreign_keys", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = ForeignKeysSql;
@@ -130,7 +131,7 @@ public static class NodeSqlitePragmas
             return;
         }
 
-        await TryExecuteAsync(logger, "journal_mode", async () =>
+        await TryExecuteAsync(logger, connection, "journal_mode", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA journal_mode=WAL;";
@@ -138,7 +139,7 @@ public static class NodeSqlitePragmas
             WarnIfNotWal(logger, mode);
         });
 
-        await TryExecuteAsync(logger, "synchronous", async () =>
+        await TryExecuteAsync(logger, connection, "synchronous", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = SynchronousSql(settings);
@@ -195,35 +196,47 @@ public static class NodeSqlitePragmas
 
     // The enforcement pragma never degrades: it is the guarantee this type exists to make, on connection strings this
     // process did not build, so a failure fails the open and the caller retries rather than getting an unchecked one.
-    private static void ExecuteRequired(ILogger? logger, string pragma, Action execute)
+    private static void ExecuteRequired(ILogger? logger, DbConnection connection, string pragma, Action execute)
     {
         try
         {
             execute();
         }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw TransientOpenFailure(logger, connection, pragma, exception);
+        }
         catch (Exception exception)
         {
-            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma} (extended result code {ExtendedResultCode}); failing the connection open.",
+                pragma,
+                ExtendedResultCode(connection));
             throw;
         }
     }
 
-    private static async Task ExecuteRequiredAsync(ILogger? logger, string pragma, Func<Task> execute)
+    private static async Task ExecuteRequiredAsync(ILogger? logger, DbConnection connection, string pragma, Func<Task> execute)
     {
         try
         {
             await execute();
         }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw TransientOpenFailure(logger, connection, pragma, exception);
+        }
         catch (Exception exception)
         {
-            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma} (extended result code {ExtendedResultCode}); failing the connection open.",
+                pragma,
+                ExtendedResultCode(connection));
             throw;
         }
     }
 
     // Tuning pragmas only, and only SqliteException degrades. Anything else means the command failed for a reason
     // SQLite did not report, so it is named and rethrown rather than swallowed.
-    private static void TryExecute(ILogger? logger, string pragma, Action execute)
+    private static void TryExecute(ILogger? logger, DbConnection connection, string pragma, Action execute)
     {
         try
         {
@@ -231,16 +244,22 @@ public static class NodeSqlitePragmas
         }
         catch (SqliteException exception)
         {
-            logger?.LogWarning(exception, "Node SQLite could not apply PRAGMA {Pragma}; continuing without it.", pragma);
+            WarnDegraded(logger, connection, pragma, exception);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw TransientOpenFailure(logger, connection, pragma, exception);
         }
         catch (Exception exception)
         {
-            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma} (extended result code {ExtendedResultCode}); failing the connection open.",
+                pragma,
+                ExtendedResultCode(connection));
             throw;
         }
     }
 
-    private static async Task TryExecuteAsync(ILogger? logger, string pragma, Func<Task> execute)
+    private static async Task TryExecuteAsync(ILogger? logger, DbConnection connection, string pragma, Func<Task> execute)
     {
         try
         {
@@ -248,12 +267,58 @@ public static class NodeSqlitePragmas
         }
         catch (SqliteException exception)
         {
-            logger?.LogWarning(exception, "Node SQLite could not apply PRAGMA {Pragma}; continuing without it.", pragma);
+            WarnDegraded(logger, connection, pragma, exception);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw TransientOpenFailure(logger, connection, pragma, exception);
         }
         catch (Exception exception)
         {
-            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma} (extended result code {ExtendedResultCode}); failing the connection open.",
+                pragma,
+                ExtendedResultCode(connection));
             throw;
+        }
+    }
+
+    private static void WarnDegraded(ILogger? logger, DbConnection connection, string pragma, SqliteException exception)
+    {
+        logger?.LogWarning(exception, "Node SQLite could not apply PRAGMA {Pragma} (extended result code {ExtendedResultCode}); continuing without it.",
+            pragma,
+            ExtendedResultCode(connection));
+    }
+
+    // The pragma text is fixed, so this is the driver slicing it by a tail pointer a failed native prepare never wrote
+    // (MISUSE or NOMEM), not a caller bug: fail the open as a type a retry loop logs at Warning (NodeSqliteTransientOpenException).
+    private static NodeSqliteTransientOpenException TransientOpenFailure(ILogger? logger, DbConnection connection, string pragma, ArgumentOutOfRangeException exception)
+    {
+        var extendedResultCode = ExtendedResultCode(connection);
+        logger?.LogWarning(exception, "Node SQLite could not prepare PRAGMA {Pragma} (extended result code {ExtendedResultCode}); failing the connection open as transient.",
+            pragma,
+            extendedResultCode);
+        return new NodeSqliteTransientOpenException(
+            string.Create(CultureInfo.InvariantCulture, $"Node SQLite could not prepare PRAGMA {pragma} on a freshly opened connection (extended result code {extendedResultCode})."),
+            exception);
+    }
+
+    // What the handle last reported (MISUSE 21 vs NOMEM 7 vs BUSY 5...), read only to decorate a failure already being
+    // reported; null for a connection that is not an open Microsoft.Data.Sqlite handle.
+    private static int? ExtendedResultCode(DbConnection connection)
+    {
+        if (connection is not SqliteConnection { Handle: { IsInvalid: false, IsClosed: false } handle })
+        {
+            return null;
+        }
+
+        try
+        {
+            return raw.sqlite3_extended_errcode(handle);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Closed between the check and the call.
+            return null;
         }
     }
 }

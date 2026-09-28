@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
@@ -16,6 +15,8 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// </remarks>
 public sealed class OsStaleProcessScanner : IStaleProcessScanner
 {
+    private const int Sigkill = 9;
+
     private readonly string _processName;
 
     /// <summary>
@@ -92,25 +93,42 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
         }
     }
 
+    /// <inheritdoc />
+    public ProcessStat? ReadStat(int pid) =>
+        LinuxProcFs.TryReadStat(pid);
+
+    /// <inheritdoc />
+    public string? ReadExecutablePath(int pid) =>
+        LinuxProcFs.TryReadExecutablePath(pid);
+
+    /// <inheritdoc />
+    public bool KillIfSameProcess(int pid, long expectedStartTicks)
+    {
+        // Never pid 0/1/-1 (caller's group, init, everything) and never this host.
+        if (pid <= 1 || pid == Environment.ProcessId)
+        {
+            return false;
+        }
+
+        // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
+        if (LinuxProcFs.TryReadStat(pid) is not { } stat || stat.StartTicks != expectedStartTicks)
+        {
+            return false;
+        }
+
+        // A server launched under setsid leads its own group, so the group signal reaps any child it forked; one that does not lead a group
+        // shares it with something else, so only its pid is safe.
+        var target = stat.ProcessGroupId == pid ? -pid : pid;
+        return LinuxProcFs.Signal(target, Sigkill);
+    }
+
     private static string? ResolveExecutablePath(Process process)
     {
         if (OperatingSystem.IsLinux())
         {
             // /proc/<pid>/exe is a symlink to the real binary; resolving it avoids ProcessModule.FileName, which can
             // throw for a process this user does not own.
-            try
-            {
-                var procExe = new FileInfo($"/proc/{process.Id.ToString(CultureInfo.InvariantCulture)}/exe");
-                return procExe.ResolveLinkTarget(returnFinalTarget: true)?.FullName;
-            }
-            catch (IOException)
-            {
-                return null;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return null;
-            }
+            return LinuxProcFs.TryReadExecutablePath(process.Id);
         }
 
         try

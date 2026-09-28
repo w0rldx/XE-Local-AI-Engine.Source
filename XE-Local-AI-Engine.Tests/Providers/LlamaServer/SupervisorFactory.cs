@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>Builds a <see cref="LlamaServerProcessSupervisor" /> over fakes with sensible test defaults.</summary>
 internal static class SupervisorFactory
@@ -31,7 +32,8 @@ internal static class SupervisorFactory
         ILlamaServerLoadTelemetry? loadTelemetry = null,
         TaskScheduler? detachedSpawnScheduler = null,
         ILlamaCppBinaryManager? binaryManager = null,
-        ILogger<LlamaServerProcessSupervisor>? logger = null)
+        ILogger<LlamaServerProcessSupervisor>? logger = null,
+        ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         return new LlamaServerProcessSupervisor(binaryManager ?? new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -60,6 +62,7 @@ internal static class SupervisorFactory
             extraArgumentsResolver: extraArgumentsResolver,
             loadTelemetry: loadTelemetry,
             detachedSpawnScheduler: detachedSpawnScheduler,
-            logger: logger);
+            logger: logger,
+            spawnReceipts: spawnReceipts);
     }
 }

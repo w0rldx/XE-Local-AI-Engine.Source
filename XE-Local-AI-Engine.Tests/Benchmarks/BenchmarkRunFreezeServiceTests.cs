@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -10,6 +11,8 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -253,6 +256,26 @@ public sealed class BenchmarkRunFreezeServiceTests
             "The budget is frozen per run, so a later project edit cannot change what an existing run replays.");
         AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
             "No budget means context-limited, which is the sampling every existing snapshot already hashes.");
+    }
+
+    [Test]
+    public async Task Start_WhenTheTaskCannotFitTheWindowAfterTheOutputReservation_RefusesAtFreezeWithTheReason()
+    {
+        // Live: validation accepted a project whose runs the runtime budget could only refuse, so the freeze runs that budget itself:
+        // ~2.7k tokens of system prompt in 4096 fit beside a 512-token cap, not beside the 1024 floor an uncapped project reserves.
+        var prompt = new string('p', 10_800);
+        var floored = new FreezeHarness(agentSystemPrompt: prompt);
+        var capped = new FreezeHarness(agentSystemPrompt: prompt, maxOutputTokens: 512);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(async () => await floored.StartAsync());
+        _ = await capped.StartAsync();
+
+        AssertEx.Contains(refusal.Message, "Task item 1,", message: "items are numbered from 1, as the project editor shows them");
+        AssertEx.Contains(refusal.Message, "4096-token context window");
+        AssertEx.Contains(refusal.Message, "reserving 1024 output tokens");
+        AssertEx.Contains(refusal.Message, "choose an agent with fewer tools");
+        AssertEx.Equal(expected: 0, floored.StoreCalls, "a refused freeze queues nothing");
+        AssertEx.Equal(expected: 1, capped.StoreCalls, "reserving exactly the 512-token cap, the same prompt fits");
     }
 
     [Test]
@@ -751,7 +774,8 @@ public sealed class BenchmarkRunFreezeServiceTests
             bool unverifiableModel = false,
             IReadOnlyList<string>? itemPrompts = null,
             string? taskItemSetHash = null,
-            IReadOnlyList<int>? probeContextTokens = null)
+            IReadOnlyList<int>? probeContextTokens = null,
+            string agentSystemPrompt = "prompt")
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
@@ -783,7 +807,7 @@ public sealed class BenchmarkRunFreezeServiceTests
             Resolver = Substitute.For<IAgentDefinitionResolver>();
             // The task text is the RETRIEVAL QUERY, so it differs per item; the resolution itself is held constant.
             Resolver.ResolveAsync(AgentId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
-                    .Returns(Runtime(AgentId));
+                    .Returns(Runtime(AgentId, agentSystemPrompt));
             var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
             // ReasoningBudgetEnforceable is left at its own default (true) on purpose: it is the inert answer for a
             // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
@@ -829,6 +853,9 @@ public sealed class BenchmarkRunFreezeServiceTests
                     FallbackStore(optimizedConfigDisabled),
                     LaunchPolicy(),
                     new LlamaServerLaunchPolicyOptions()),
+                new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions())),
+                new LocalChatRuntimePackageBuilder(),
+                Options.Create(new ConversationContextBudgetOptions()),
                 TimeProvider.System,
                 NullLogger<BenchmarkRunFreezeService>.Instance);
         }
@@ -1007,8 +1034,8 @@ public sealed class BenchmarkRunFreezeServiceTests
                 UpdatedAtUtc = 1
             };
 
-        private static ResolvedAgentRuntime Runtime(Guid id) =>
-            new("prompt", [], null, null, 3, id, "Agent", Kind: AgentDefinitionKind.Single);
+        private static ResolvedAgentRuntime Runtime(Guid id, string systemPrompt) =>
+            new(systemPrompt, [], null, null, 3, id, "Agent", Kind: AgentDefinitionKind.Single);
 
         private static InstalledModelSnapshot CreateInstalledModel(string name)
         {

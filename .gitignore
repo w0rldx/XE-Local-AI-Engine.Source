@@ -466,6 +466,7 @@ XE-Local-AI-Engine.Client/development/
 XE-Local-AI-Engine.Client/external-apps/
 XE-Local-AI-Engine.Client/logs/
 XE-Local-AI-Engine.Client/models/
+XE-Local-AI-Engine.Client/runtime/
 XE-Local-AI-Engine.Client/training/
 
 # Internal agent tooling + planning archive — untracked pending migration to the

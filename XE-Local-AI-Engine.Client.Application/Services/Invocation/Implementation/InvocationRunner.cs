@@ -204,7 +204,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         _apiToolCallBridge.SetToolResultTimeout(package.InvocationId, turnPolicy.ToolResultTimeout);
 
-        using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions, harnessStartedTimestamp);
+        using var providerBudgetScope = ProviderCallBudget.BeginScope(ResolveProviderCallBudgetOptions(package), harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
 
         // Declared ahead of the terminal-telemetry local function below, which reads the readiness duration off it: a
@@ -594,6 +594,29 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolApprovalCoordinator.ResolveUserQuestionResult(evt);
     }
 
+    /// <summary>The provider-boundary budget for this invocation: the node options, with a package's exact output reservation as the floor.</summary>
+    /// <remarks>
+    ///     The same seam the Development coder uses. Without it the inner round keeps the node floor and refuses the window the outer
+    ///     budget (<see cref="TurnPolicy.ReservedOutputTokens" />) just accepted.
+    /// </remarks>
+    private ProviderCallBudgetOptions ResolveProviderCallBudgetOptions(RuntimePackage package)
+    {
+        if (package.ReservedOutputTokensOverride is not { } reserved || reserved < 0)
+        {
+            return _providerCallBudgetOptions;
+        }
+
+        return new ProviderCallBudgetOptions
+        {
+            MaxProviderCallsPerInvocation = _providerCallBudgetOptions.MaxProviderCallsPerInvocation,
+            MaxCumulativeInputTokens = _providerCallBudgetOptions.MaxCumulativeInputTokens,
+            DefaultContextTokens = _providerCallBudgetOptions.DefaultContextTokens,
+            ReservedOutputTokenFloor = reserved,
+            RecentMessagesToKeep = _providerCallBudgetOptions.RecentMessagesToKeep,
+            OversizedToolResultExcerptChars = _providerCallBudgetOptions.OversizedToolResultExcerptChars
+        };
+    }
+
     /// <summary>Emits the terminal token-usage counter for a completed turn, and nothing when the model reported no usage.</summary>
     /// <remarks>
     ///     Called once from the shared completion block, never the per-tool-loop usage-arrival site, so a multi-round tool
@@ -655,7 +678,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // Built once for the whole turn: the offer list is fixed for the invocation, and the budgeter's framing memo is
         // keyed on these string instances (see ApplyContextBudgetAsync).
-        var toolBudgetDefinitions = BuildToolBudgetDefinitions(package);
+        var toolBudgetDefinitions = BuildToolBudgetDefinitions(package.AllowedTools);
         var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
@@ -1046,7 +1069,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // The workflow seed is budgeted exactly the way the single-agent path budgets its initial assembly (see TurnPolicy), so a long
         // conversation cannot silently overrun the window any participant is launched with.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken);
 
