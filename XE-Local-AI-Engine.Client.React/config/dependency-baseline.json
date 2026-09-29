@@ -103,6 +103,8 @@
   "[\"no-cross-feature\",\"src/features/onboarding/data/TourAdvanceSignals.ts\",\"src/features/chat/queries/NodeChatQueryKeys.ts\"]",
   "[\"no-cross-feature\",\"src/features/runtime-resources/components/RuntimeResourcesWidget.tsx\",\"src/features/loaded-models/models/RunningModelsModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/runtime-resources/components/RuntimeResourcesWidget.tsx\",\"src/features/loaded-models/queries/useRunningModels.ts\"]",
+  "[\"no-cross-feature\",\"src/features/runtime-resources/components/RuntimeResourcesWidget.tsx\",\"src/features/node-settings/queries/useImageRuntime.ts\"]",
+  "[\"no-cross-feature\",\"src/features/runtime-resources/components/RuntimeResourcesWidget.tsx\",\"src/features/transcription/queries/useTranscriptionQueries.ts\"]",
   "[\"no-cross-feature\",\"src/features/skills/components/SkillForm.tsx\",\"src/features/assist/components/AssistActions.tsx\"]",
   "[\"no-cross-feature\",\"src/features/skills/components/SkillForm.tsx\",\"src/features/assist/models/AssistModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/skills/models/SkillModels.ts\",\"src/features/assist/models/AssistModels.ts\"]",

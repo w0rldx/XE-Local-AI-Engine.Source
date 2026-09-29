@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
@@ -59,6 +60,10 @@ internal static class AddNodeTranscriptionExtensions
         // The six runtime and source-build endpoints' only path to the provider. Singleton, matching the four it wraps: the activity
         // gate, backend selector, source-build prerequisite probe and source-build service WhisperCppServiceCollectionExtensions TryAdds.
         builder.Services.AddSingleton<WhisperRuntimeOrchestrationService>();
+
+        // The widget's image and whisper resident list. It lives here, not with the llama.cpp door, because it reads the transcription
+        // options bound above. The image supervisor and gate it also takes are the singletons AddNodeImages registers.
+        builder.Services.AddSingleton<RuntimeResidentsService>();
 
         builder.Services.AddSingleton<ITranscriptionRuntimeService, TranscriptionRuntimeService>();
 

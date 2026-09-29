@@ -56,4 +56,10 @@ public interface IImageServerSupervisor
     ///     <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends (completed / failed / cancelled).
     /// </remarks>
     IImageServerJobLease? TryAcquireJobLease(string modelName);
+
+    /// <summary>
+    ///     Lists the daemons in the process table from memory alone: no gate, no probe. Cheap enough to poll; may briefly
+    ///     disagree with the activity gate's resident count during a spawn or teardown.
+    /// </summary>
+    IReadOnlyList<ImageServerResidentSnapshot> GetResidents();
 }

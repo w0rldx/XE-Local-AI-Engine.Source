@@ -17256,6 +17256,40 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/runtime-residents": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getRuntimeResidents",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/models": {
       "get": {
         "tags": [
@@ -41232,6 +41266,81 @@
           "sanitizedError": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentKindDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Image",
+          "Transcription"
+        ],
+        "enum": [
+          "image",
+          "transcription"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runtime",
+          "state",
+          "canEject"
+        ],
+        "properties": {
+          "runtime": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentKindDto"
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentStateDto"
+          },
+          "backend": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+              }
+            ]
+          },
+          "canEject": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentStateDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Starting",
+          "Idle",
+          "Active",
+          "Exited"
+        ],
+        "enum": [
+          "starting",
+          "idle",
+          "active",
+          "exited"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentResponse"
+            }
           }
         }
       },

@@ -393,6 +393,11 @@ public sealed class StableDiffusionCppRuntimeTests
         {
             return _lease;
         }
+
+        public IReadOnlyList<ImageServerResidentSnapshot> GetResidents()
+        {
+            return [];
+        }
     }
 
     private sealed class FakeJobLease : IImageServerJobLease

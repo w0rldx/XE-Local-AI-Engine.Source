@@ -396,6 +396,9 @@ public static class LocalApiRoutes
         // Live whole-machine RAM and per-GPU VRAM usage for the top-bar gauge (ILiveMemorySampler), aggregates only.
         public const string Resources = "model-fit/resources";
 
+        // The image and whisper daemons held in memory (in-memory supervisor state + activity gates); llama.cpp stays on Running.
+        public const string RuntimeResidents = "model-fit/runtime-residents";
+
         // GGUF repo discovery (IHuggingFaceGgufDiscovery search). The literal "browse" segment keeps it distinct.
         public const string GgufBrowse = "model-fit/gguf/browse";
 

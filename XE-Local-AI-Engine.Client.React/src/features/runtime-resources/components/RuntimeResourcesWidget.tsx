@@ -1,5 +1,6 @@
 import { Anchor, Badge, Button, Group, Popover, Progress, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconPlayerEject, IconStack2 } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,11 +11,21 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { DESKTOP_NAV_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import { getRuntimeResidentsQueryKey, getRuntimeResourcesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 import { useEjectRunningModel, useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
-import { HIGH_USAGE_PERCENT, type MemoryUsage, usagePercent } from "@/features/runtime-resources/models/RuntimeResourcesModels";
+import { useEjectImageRuntime } from "@/features/node-settings/queries/useImageRuntime";
+import { RuntimeResidentRow } from "@/features/runtime-resources/components/RuntimeResidentRow";
+import {
+	HIGH_USAGE_PERCENT,
+	type MemoryUsage,
+	type ResidentRuntime,
+	usagePercent,
+} from "@/features/runtime-resources/models/RuntimeResourcesModels";
+import { useRuntimeResidents } from "@/features/runtime-resources/queries/useRuntimeResidents";
 import { useRuntimeResources } from "@/features/runtime-resources/queries/useRuntimeResources";
+import { useEjectTranscriptionRuntime } from "@/features/transcription/queries/useTranscriptionQueries";
 
 type ResidentState = "exited" | "unresponsive" | "busy" | "transient" | "idle";
 
@@ -65,8 +76,8 @@ function UsageRow({ label, usage }: { label: string; usage: MemoryUsage }) {
 	);
 }
 
-// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models the engine holds, with a
-// graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
+// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models, image and transcription
+// processes the engine holds, each with a graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
 // node with the model-fit surface, because both endpoints sit behind the Operator policy.
 export function RuntimeResourcesWidget() {
 	const { t } = useTranslation();
@@ -77,6 +88,11 @@ export function RuntimeResourcesWidget() {
 	const resourcesQuery = useRuntimeResources(enabled);
 	const runningModelsQuery = useRunningModels(enabled);
 	const ejectMutation = useEjectRunningModel();
+	// Image and transcription rows each follow their own capability; with both off the residents poll never fires.
+	const residentsQuery = useRuntimeResidents(enabled && (nodeCapabilities.images || nodeCapabilities.transcription));
+	const ejectImageMutation = useEjectImageRuntime();
+	const ejectTranscriptionMutation = useEjectTranscriptionRuntime();
+	const queryClient = useQueryClient();
 	const [opened, setOpened] = useState(false);
 
 	const resources = resourcesQuery.data;
@@ -85,6 +101,10 @@ export function RuntimeResourcesWidget() {
 	}
 
 	const residents = runningModelsQuery.data ?? [];
+	const runtimeResidents = (residentsQuery.data ?? []).filter((resident) =>
+		resident.runtime === "image" ? nodeCapabilities.images : nodeCapabilities.transcription,
+	);
+	const residentCount = residents.length + runtimeResidents.length;
 	const firstGpu = resources.gpus[0];
 	// Keyed by model AND role: the same model can run as chat and as embedding at once.
 	const ejecting = ejectMutation.isPending ? ejectMutation.variables : undefined;
@@ -120,6 +140,27 @@ export function RuntimeResourcesWidget() {
 					toast.error(apiErrorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
 			},
 		);
+
+	const runtimeEjectMutations = { image: ejectImageMutation, transcription: ejectTranscriptionMutation };
+	// The mutations already refresh their own feature's status query; this refreshes the widget's two polls. No force:
+	// a 409 (job running or queued, spawn in flight) carries the server's reason, shown as the toast.
+	const handleRuntimeEject = (runtime: ResidentRuntime) =>
+		runtimeEjectMutations[runtime].mutate(undefined, {
+			onSuccess: () =>
+				Promise.all([
+					queryClient.invalidateQueries({ queryKey: getRuntimeResidentsQueryKey() }),
+					queryClient.invalidateQueries({ queryKey: getRuntimeResourcesQueryKey() }),
+				]),
+			onError: (error) =>
+				toast.error(
+					apiErrorMessage(
+						error,
+						runtime === "image"
+							? t("pages.nodeSettings.imageRuntime.sourceBuild.ejectError", "Could not eject the image-runtime processes.")
+							: t("pages.transcription.runtime.ejectFailed", "Could not eject the runtime."),
+					),
+				),
+		});
 
 	return (
 		<Popover
@@ -161,7 +202,7 @@ export function RuntimeResourcesWidget() {
 					<Group gap={4} wrap="nowrap">
 						<IconStack2 size={14} />
 						<Text size="xs" data-testid="runtime-resources-count">
-							{residents.length}
+							{residentCount}
 						</Text>
 					</Group>
 				</UnstyledButton>
@@ -184,9 +225,9 @@ export function RuntimeResourcesWidget() {
 					)}
 
 					<Text size="sm" fw={500}>
-						{t("runtimeResources.residents", "Loaded llama.cpp models")}
+						{t("runtimeResources.residents", "Loaded models")}
 					</Text>
-					{residents.length === 0 ? (
+					{residentCount === 0 ? (
 						<Text size="sm" c="dimmed">
 							{t("runtimeResources.noResidents", "No models are loaded.")}
 						</Text>
@@ -206,6 +247,9 @@ export function RuntimeResourcesWidget() {
 											{model.modelName}
 										</Text>
 										<Group gap={4}>
+											<Badge size="xs" variant="outline" color="gray">
+												{t("runtimeResources.runtime.llamaCpp", "llama.cpp")}
+											</Badge>
 											{model.role ? (
 												<Badge size="xs" variant="outline">
 													{model.role}
@@ -233,6 +277,14 @@ export function RuntimeResourcesWidget() {
 							);
 						})
 					)}
+					{runtimeResidents.map((resident) => (
+						<RuntimeResidentRow
+							key={`${resident.runtime}-${resident.modelId ?? "starting"}`}
+							resident={resident}
+							ejecting={runtimeEjectMutations[resident.runtime].isPending}
+							onEject={() => handleRuntimeEject(resident.runtime)}
+						/>
+					))}
 
 					<Anchor component={Link} to="/loaded-models" size="sm" onClick={() => setOpened(false)}>
 						{t("runtimeResources.openLoadedModels", "Manage loaded models")}

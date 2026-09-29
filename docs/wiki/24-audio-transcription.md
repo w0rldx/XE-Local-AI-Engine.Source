@@ -77,6 +77,19 @@ the recommendation itself is used only when nothing is installed, so the downloa
 (`TranscriptionRuntimeService.ResolveEffectiveModelIdAsync`). The runtime status reports the result as
 `effectiveModelId`, and the Transcription page warns when that model is not installed.
 
+**Residency: which route to read, and which flag.** `GET transcription/runtime` is not a poll target:
+`TranscriptionRuntimeService.GetRuntimeAsync` loads the node settings, reads the installed-runtime record and
+recomputes the model recommendation (device audit plus backend selection) on every call. The cheap read is
+`GET model-fit/runtime-residents`: `RuntimeResidentsService` takes `IWhisperServerSupervisor.GetStatus()` and the
+activity gate's snapshot, both in memory, and reports one transcription row (`starting`, `active` while
+`ActiveTranscriptionCount > 0`, otherwise `idle`; none when stopped or when `Transcription:Enabled` is off) with the
+catalog id (null while starting or switching) and the daemon's own backend. The top-bar widget polls it. The row's
+`canEject` and the snapshot's `isBusy` answer different questions: `isBusy` ("may the runtime be rebuilt or removed")
+counts a resident daemon and gates the source-build card's Build and Remove; `canEject` ("would
+`POST transcription/runtime/eject` be refused") repeats `WhisperRuntimeActivityGate.TryAcquireEvictionReservation`
+(a reservation, an in-flight transcription, a spawn) and ignores residency. Between chunks of a live session the row
+flickers between `active` and `idle`; that is the gate's real state, not smoothed.
+
 ## Sessions and transcripts
 
 Two entities, both `internal sealed record class`, both mapped in `Configurations/`:

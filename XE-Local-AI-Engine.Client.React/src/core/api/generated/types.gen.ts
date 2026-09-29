@@ -4589,6 +4589,22 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResp
 	sanitizedError?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = "image" | "transcription";
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse = {
+	runtime: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto;
+	modelId?: string | null;
+	state: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto;
+	backend?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto | null;
+	canEject: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto = "starting" | "idle" | "active" | "exited";
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse = {
 	totalRamBytes: number;
 	availableRamBytes: number;
@@ -16778,6 +16794,33 @@ export type EjectRunningModelResponses = {
 };
 
 export type EjectRunningModelResponse = EjectRunningModelResponses[keyof EjectRunningModelResponses];
+
+export type GetRuntimeResidentsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/runtime-residents";
+};
+
+export type GetRuntimeResidentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetRuntimeResidentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse;
+};
+
+export type GetRuntimeResidentsResponse = GetRuntimeResidentsResponses[keyof GetRuntimeResidentsResponses];
 
 export type ListLocalModelsData = {
 	body?: never;

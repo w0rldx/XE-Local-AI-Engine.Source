@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { capabilityState, toastMock } = vi.hoisted(() => ({
-	capabilityState: { modelFit: true },
+	capabilityState: { modelFit: true, images: true, transcription: true },
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 vi.mock("@/capabilities/NodeCapabilities", async (importOriginal) => {
@@ -17,6 +17,12 @@ vi.mock("@/capabilities/NodeCapabilities", async (importOriginal) => {
 			get modelFit() {
 				return capabilityState.modelFit;
 			},
+			get images() {
+				return capabilityState.images;
+			},
+			get transcription() {
+				return capabilityState.transcription;
+			},
 		},
 	};
 });
@@ -24,11 +30,11 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { RuntimeResourcesWidget } from "@/features/runtime-resources/components/RuntimeResourcesWidget";
-import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
+import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-// Both polls run against MSW through the real generated SDK and response validation. A test that expects the widget
+// All three polls run against MSW through the real generated SDK and response validation. A test that expects the widget
 // to stay dark declares no route, so any request it made would fail the test as undeclared.
 const server = setupMswServer();
 
@@ -57,12 +63,45 @@ function resident(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-function serve(gpus: unknown[], residents: unknown[] = []): void {
+function runtimeResident(overrides: Record<string, unknown> = {}) {
+	return { runtime: "image", modelId: "sdxl-turbo", state: "idle", backend: null, canEject: true, ...overrides };
+}
+
+function serve(gpus: unknown[], residents: unknown[] = [], runtimeResidents: unknown[] = []): void {
 	server.use(
 		jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus }),
 		jsonRoute("get", "model-fit/running", { items: residents }),
+		jsonRoute("get", "model-fit/runtime-residents", { items: runtimeResidents }),
 	);
 }
+
+const idleActivity = {
+	spawnReadinessCount: 0,
+	residentProcessCount: 0,
+	mutationReserved: false,
+	evictionReserved: false,
+	isBusy: false,
+};
+
+const imageRuntimeStatus = { managedRuntime: null, activity: { ...idleActivity, activeJobCount: 0 } };
+
+const transcriptionRuntimeStatus = {
+	enabled: true,
+	state: "stopped",
+	backend: null,
+	binarySource: null,
+	binaryVersion: null,
+	loadedModelId: null,
+	selectedModelId: null,
+	recommendedModelId: "base",
+	effectiveModelId: "base",
+	supportsTranscode: true,
+	idleTimeoutMinutes: 10,
+	vadInstalled: false,
+	processCaptureSupported: false,
+	managedRuntime: null,
+	activity: { ...idleActivity, activeTranscriptionCount: 0 },
+};
 
 async function openPopover(): Promise<HTMLElement> {
 	renderWithProviders(<RuntimeResourcesWidget />, { withRouter: true });
@@ -72,6 +111,8 @@ async function openPopover(): Promise<HTMLElement> {
 
 beforeEach(() => {
 	capabilityState.modelFit = true;
+	capabilityState.images = true;
+	capabilityState.transcription = true;
 	useNodeAuthStore.getState().actions.setToken({ accessToken: "token", expiresAtUtc: "2099-01-01T00:00:00Z" });
 });
 
@@ -155,6 +196,137 @@ describe("RuntimeResourcesWidget", () => {
 		await waitFor(() =>
 			expect(toastMock.warning).toHaveBeenCalledWith("'qwen3-4b' is still finishing a response, so it was left running."),
 		);
+	});
+
+	it("lists image and transcription residents with their runtime, state and backend", async () => {
+		serve(
+			[gpu(0, 32, 8)],
+			[resident()],
+			[
+				runtimeResident({ state: "active" }),
+				runtimeResident({ runtime: "transcription", modelId: "large-v3-turbo", backend: "cuda" }),
+			],
+		);
+
+		const dropdown = await openPopover();
+
+		expect(within(dropdown).getByText("Loaded models")).toBeTruthy();
+		expect(within(within(dropdown).getByTestId("runtime-resources-row-qwen3-4b")).getByText("llama.cpp")).toBeTruthy();
+		const image = await within(dropdown).findByTestId("runtime-resources-row-image-sdxl-turbo");
+		expect(within(image).getByText("sdxl-turbo")).toBeTruthy();
+		expect(within(image).getByText("Images")).toBeTruthy();
+		expect(within(image).getByText("Active")).toBeTruthy();
+		const transcription = within(dropdown).getByTestId("runtime-resources-row-transcription-large-v3-turbo");
+		expect(within(transcription).getByText("large-v3-turbo")).toBeTruthy();
+		expect(within(transcription).getByText("Transcription")).toBeTruthy();
+		expect(within(transcription).getByText("CUDA")).toBeTruthy();
+		expect(within(transcription).getByText("Idle")).toBeTruthy();
+		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("3");
+		expect(within(dropdown).queryByText("No models are loaded.")).toBeNull();
+	});
+
+	it("shows a starting placeholder for a resident without a model id and cannot eject it", async () => {
+		serve([gpu(0, 32, 8)], [], [runtimeResident({ runtime: "transcription", modelId: null, state: "starting" })]);
+
+		const dropdown = await openPopover();
+
+		const row = await within(dropdown).findByTestId("runtime-resources-row-transcription-starting");
+		expect(within(row).getByText("Starting…")).toBeTruthy();
+		expect(within(row).getByText("Starting")).toBeTruthy();
+		expect(within(row).getByRole("button", { name: "Eject transcription runtime" })).toHaveProperty("disabled", true);
+		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("1");
+	});
+
+	it("hides image rows when the images surface is off", async () => {
+		capabilityState.images = false;
+		serve([gpu(0, 32, 8)], [], [runtimeResident(), runtimeResident({ runtime: "transcription", modelId: "base" })]);
+
+		const dropdown = await openPopover();
+
+		await within(dropdown).findByTestId("runtime-resources-row-transcription-base");
+		expect(within(dropdown).queryByTestId("runtime-resources-row-image-sdxl-turbo")).toBeNull();
+		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("1");
+	});
+
+	it("hides transcription rows when the transcription surface is off", async () => {
+		capabilityState.transcription = false;
+		serve([gpu(0, 32, 8)], [], [runtimeResident(), runtimeResident({ runtime: "transcription", modelId: "base" })]);
+
+		const dropdown = await openPopover();
+
+		await within(dropdown).findByTestId("runtime-resources-row-image-sdxl-turbo");
+		expect(within(dropdown).queryByTestId("runtime-resources-row-transcription-base")).toBeNull();
+	});
+
+	it("never asks for image or transcription residents when both surfaces are off", async () => {
+		capabilityState.images = false;
+		capabilityState.transcription = false;
+		// No residents route: a request for one would fail the test as undeclared.
+		server.use(
+			jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+			jsonRoute("get", "model-fit/running", { items: [resident()] }),
+		);
+
+		const dropdown = await openPopover();
+
+		expect(await within(dropdown).findByTestId("runtime-resources-row-qwen3-4b")).toBeTruthy();
+		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("1");
+	});
+
+	it("disables eject while the server says the runtime cannot be ejected", async () => {
+		serve([gpu(0, 32, 8)], [], [runtimeResident({ canEject: false })]);
+
+		const dropdown = await openPopover();
+
+		expect(await within(dropdown).findByRole("button", { name: "Eject image runtime" })).toHaveProperty("disabled", true);
+	});
+
+	it("ejects each runtime through its own endpoint and refreshes the residents", async () => {
+		const ejected: string[] = [];
+		let residentReads = 0;
+		server.use(
+			jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+			jsonRoute("get", "model-fit/running", { items: [] }),
+			http.get(localApiPath("model-fit/runtime-residents"), () => {
+				residentReads += 1;
+				return HttpResponse.json({
+					items: [runtimeResident(), runtimeResident({ runtime: "transcription", modelId: "base", backend: "cpu" })],
+				});
+			}),
+			http.post(localApiPath("images/runtime/eject"), () => {
+				ejected.push("image");
+				return HttpResponse.json(imageRuntimeStatus);
+			}),
+			http.post(localApiPath("transcription/runtime/eject"), () => {
+				ejected.push("transcription");
+				return HttpResponse.json(transcriptionRuntimeStatus);
+			}),
+		);
+
+		const dropdown = await openPopover();
+		fireEvent.click(await within(dropdown).findByRole("button", { name: "Eject image runtime" }));
+		await waitFor(() => expect(residentReads).toBe(2));
+		fireEvent.click(within(dropdown).getByRole("button", { name: "Eject transcription runtime" }));
+
+		await waitFor(() => expect(residentReads).toBe(3));
+		expect(ejected).toEqual(["image", "transcription"]);
+		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+
+	it("shows the server's reason when the image eject is refused", async () => {
+		serve([gpu(0, 32, 8)], [], [runtimeResident()]);
+		server.use(
+			domainErrorRoute("post", "images/runtime/eject", 409, {
+				reason: "runtime-busy",
+				message: "An image job is still running.",
+				activity: { ...idleActivity, activeJobCount: 1 },
+			}),
+		);
+
+		const dropdown = await openPopover();
+		fireEvent.click(await within(dropdown).findByRole("button", { name: "Eject image runtime" }));
+
+		await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("An image job is still running."));
 	});
 
 	it("renders nothing and polls nothing below the desktop breakpoint", async () => {

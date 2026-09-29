@@ -66,6 +66,10 @@ On success the image is persisted encrypted-at-rest **before** the job is marked
 
 The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeActivityGate`) also serializes runtime mutation against generation, spawn/readiness, and resident-daemon eviction. A source build or removal returns `409 runtime-busy` while one of those leases is active. Eject the resident image runtime first, then build/remove.
 
+**Two questions, two flags.** `isBusy` on the activity snapshot (`ImageRuntimeActivitySnapshot.IsBusy`, reported by `GET images/runtime`) answers "may the runtime be rebuilt or removed right now" and counts a resident daemon, which is why the source-build card disables Build and Remove while one is loaded. `canEject` on `GET model-fit/runtime-residents` answers "would an eject be refused right now" and does not count residents, since removing them is what an eject is for: it repeats the refusal conditions of `ImageRuntimeActivityGate.TryAcquireEvictionReservation` (a mutation or eviction reservation, an active job lease, a spawn in flight). The coordinator takes the job lease in `EnqueueAsync`, before the queued row is written, so a queued job already blocks an eject. Never read `isBusy` as "work is running".
+
+**The resident snapshot.** `IImageServerSupervisor.GetResidents` lists the process table as `ImageServerResidentSnapshot` rows (model name, holds a job lease, exited but not yet reaped, last used) without taking the admission gate, so a slow teardown cannot stall a poll. `RuntimeResidentsService` (`Client.Application`, `Services/ModelFit`) turns it into the image rows of `GET model-fit/runtime-residents` for the top-bar widget: `active` with a lease, `exited` for an unreaped child, otherwise `idle`, plus one `starting` row without a model id while a spawn is in flight and the table is still empty. The rows and `canEject` come from two reads and can briefly disagree during a spawn or teardown.
+
 ## The process supervisor
 
 `ImageServerProcessSupervisor` (`IImageServerSupervisor`, **Singleton**, `IAsyncDisposable`) owns every resident `sd-server` child. It mirrors `LlamaServerProcessSupervisor` (reduced: no role split, no benchmark profiling, no external-endpoint attach — the image runtime is one resident daemon per model):
@@ -339,7 +343,7 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 | `GetImageModelCatalogEndpoint` | `GET images/models/catalog` | The curated image-model catalog. |
 | `BrowseImageRepositoriesEndpoint` / `InspectImageRepositoryEndpoint` | `GET images/models/browse` · `…/inspect` | Hugging Face image-repository discovery and per-repo file inspection. |
 | `GetImageRuntimeStatusEndpoint` | `GET images/runtime` | Inspect managed-runtime validity and the process-wide activity gate. |
-| `EjectImageRuntimeEndpoint` | `POST images/runtime/eject` | Evict resident `sd-server` processes before a build/remove mutation. |
+| `EjectImageRuntimeEndpoint` | `POST images/runtime/eject` | Evict resident `sd-server` processes before a build/remove mutation. The top-bar widget calls it too, enabled by `canEject` from `GET model-fit/runtime-residents` ([Model Fit](07-model-fit.md#endpoints)). |
 | `GetStableDiffusionCppSourceBuildPrerequisitesEndpoint` / `GetStableDiffusionCppSourceBuildStatusEndpoint` | `GET images/runtime/source-build/prerequisites` · `…/status` | Probe Linux build prerequisites for the selected backend, and hydrate build status (the hub pushes the rest). |
 | `Start`/`Cancel`/`RemoveStableDiffusionCppSourceBuildEndpoint` | `POST images/runtime/source-build(/cancel\|remove)` | Manage the source-build lifecycle and installed runtime. |
 

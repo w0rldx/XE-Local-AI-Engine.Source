@@ -259,6 +259,30 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task LocalOpenApiDocument_DescribesRuntimeResidentsSurface()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var paths = document.RootElement.GetProperty("paths");
+
+        const string residentsPath = "/api/local/v1/model-fit/runtime-residents";
+        AssertEx.True(paths.TryGetProperty(residentsPath, out var residents), $"Expected the runtime-residents path '{residentsPath}'.");
+        AssertResponses(paths, residentsPath, "get", ["200", "401", "403"]);
+        AssertEx.Equal("getRuntimeResidents", residents.GetProperty("get").GetProperty("operationId").GetString());
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaProperties(schemas, "RuntimeResidentsResponse", ["items"]);
+        AssertSchemaProperties(schemas, "RuntimeResidentResponse", ["runtime", "modelId", "state", "backend", "canEject"]);
+        AssertSchemaEnum(schemas, "RuntimeResidentKindDto", ["image", "transcription"]);
+        AssertSchemaEnum(schemas, "RuntimeResidentStateDto", ["starting", "idle", "active", "exited"]);
+    }
+
+    [Test]
     public async Task LocalOpenApiDocument_DescribesGgufImportAndBenchmarkSurfaces()
     {
         var factory = Factory;

@@ -153,16 +153,19 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
     public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
         Task.FromResult<WhisperRuntimeException?>(null);
 
+    /// <summary>What <see cref="GetStatus" /> reports; a test replaces it to put the daemon in another state.</summary>
+    public WhisperRuntimeStatusSnapshot Status { get; set; } = new()
+    {
+        State = WhisperRuntimeState.Ready,
+        LoadedModelId = "tiny",
+        Backend = null,
+        BinaryVersion = null,
+        BinarySource = null,
+        SupportsTranscode = true
+    };
+
     public WhisperRuntimeStatusSnapshot GetStatus() =>
-        new()
-        {
-            State = WhisperRuntimeState.Ready,
-            LoadedModelId = "tiny",
-            Backend = null,
-            BinaryVersion = null,
-            BinarySource = null,
-            SupportsTranscode = true
-        };
+        Status;
 }
 
 /// <summary>

@@ -4708,6 +4708,10 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusRe
 	sanitizedError: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = z.enum(["image", "transcription"]);
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto = z.enum(["starting", "idle", "active", "exited"]);
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse = z.object({
 	totalRamBytes: z.int(),
 	availableRamBytes: z.int(),
@@ -5693,6 +5697,18 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentUpda
 });
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto = z.enum(["cpu", "cuda"]);
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse = z.object({
+	runtime: zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto,
+	modelId: z.string().nullish(),
+	state: zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto,
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto.nullish(),
+	canEject: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse),
+});
 
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto = z.enum(["pinned", "managed", "byo"]);
 
@@ -11091,6 +11107,11 @@ export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1E
  * Success
  */
 export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+
+/**
+ * Success
+ */
+export const zGetRuntimeResidentsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse;
 
 /**
  * Success

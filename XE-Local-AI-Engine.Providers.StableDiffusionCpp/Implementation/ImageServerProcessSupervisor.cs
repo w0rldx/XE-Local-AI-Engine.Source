@@ -245,6 +245,22 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return new ImageJobLease(this, modelName, running, _timeProvider);
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<ImageServerResidentSnapshot> GetResidents()
+    {
+        // Enumerating the concurrent table is lock-free; the admission gate is never taken, so a slow teardown cannot stall a poll.
+        return
+        [
+            .. _processes.Select(static entry => new ImageServerResidentSnapshot
+            {
+                ModelName = entry.Key,
+                HasActiveJobLease = entry.Value.IsLeased,
+                HasExited = entry.Value.Handle.HasExited,
+                LastUsedUtc = entry.Value.LastUsedUtc
+            })
+        ];
+    }
+
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited daemon: hands back its endpoint when it is healthy
     ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged.

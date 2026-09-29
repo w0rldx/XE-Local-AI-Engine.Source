@@ -65,16 +65,26 @@
 		"gpu": "GPU {{index}} VRAM",
 		"usage": "{{used}} used of {{total}}, {{available}} available",
 		"vramUnavailable": "VRAM usage unavailable",
-		"residents": "Loaded llama.cpp models",
+		"residents": "Loaded models",
 		"noResidents": "No models are loaded.",
 		"ejectLabel": "Eject {{modelName}}",
 		"openLoadedModels": "Manage loaded models",
+		"startingModel": "Starting…",
+		"ejectImageRuntime": "Eject image runtime",
+		"ejectTranscriptionRuntime": "Eject transcription runtime",
+		"runtime": {
+			"llamaCpp": "llama.cpp",
+			"image": "Images",
+			"transcription": "Transcription"
+		},
 		"state": {
 			"busy": "Busy",
 			"idle": "Idle",
 			"transient": "Unloads soon",
 			"unresponsive": "Unresponsive",
-			"exited": "Exited"
+			"exited": "Exited",
+			"starting": "Starting",
+			"active": "Active"
 		}
 	},
 	"common": {
