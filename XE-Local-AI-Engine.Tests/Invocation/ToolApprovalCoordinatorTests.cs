@@ -497,6 +497,139 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.NotNull(retrievals[requests[2]].Preview);
     }
 
+    [Test]
+    public async Task RequestWebConsentAsync_WhenDenied_SendsNothing_AndTheModelGetsTheDeclineText()
+    {
+        using var server = new WebReviewTestServer();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = "  HTTPS://News.Example.com/tidal  "
+        });
+
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        var card = cards.Single();
+        var preview = AssertEx.NotNull(card.WebReview);
+        AssertEx.Equal(WebReviewPreview.RequestStage, preview.Stage);
+        AssertEx.Equal(WebReviewTestServer.PageUrl, preview.Url, "the card shows the URL in the form the fetch sends it");
+        AssertEx.Null(preview.Query);
+        AssertEx.Null(preview.Text);
+        AssertEx.Equal(expected: false, card.SessionScopeEligible, "consent is per request, never for the session");
+        AssertEx.False(pending.IsCompleted, "the request waits on the user");
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = card.RequestId,
+            Approved = false
+        }, ApprovalScope.Session);
+        var refusal = AssertEx.NotNull(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        AssertEx.Null(refusal.Preview, "a declined request has no result to review");
+        AssertEx.Contains(refusal.ModelText, ToolApprovalCoordinator.WebRequestDeclinedMessage);
+        AssertEx.Empty(server.Requests, "a declined request never leaves the node");
+        await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, "web-request deny");
+    }
+
+    [Test]
+    public async Task RequestWebConsentAsync_WhenAllowed_ShowsTheTrimmedQuery_AndLetsTheRequestGo()
+    {
+        using var server = new WebReviewTestServer();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
+        var request = WebRequest(WebSearchToolDefinition.ToolName, new
+        {
+            query = "  tidal power ",
+            maxResults = 3
+        });
+
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        var preview = AssertEx.NotNull(cards.Single().WebReview);
+        AssertEx.Equal(WebReviewPreview.RequestStage, preview.Stage);
+        AssertEx.Equal("tidal power", preview.Query);
+        AssertEx.Null(preview.Url);
+        AssertEx.Empty(server.Requests, "nothing is sent while the card is open");
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = cards.Single().RequestId,
+            Approved = true
+        });
+
+        AssertEx.Null(await pending.WaitAsync(TimeSpan.FromSeconds(5)), "consent returns no refusal");
+        await AssertAuditedAsync(auditRecorder, WebSearchToolDefinition.ToolName, "web-request approve");
+    }
+
+    [Test]
+    public async Task RequestWebConsentAsync_WhenNobodyAnswersWithinTheAge_DeclinesInsteadOfExpiring()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher, timeProvider: timeProvider);
+        var request = WebRequest(WebFetchToolDefinition.ToolName, new
+        {
+            url = WebReviewTestServer.PageUrl
+        });
+
+        var pending = coordinator.RequestWebConsentAsync(RuntimePackageBuilder.Valid().Build(), request, static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => !cards.IsEmpty && timeProvider.ArmedTimerCount > 0, TimeSpan.FromSeconds(5));
+        timeProvider.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        var refusal = AssertEx.NotNull(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        AssertEx.Contains(refusal.ModelText, ToolApprovalCoordinator.WebRequestTimeoutMessage);
+        await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, "web-request timeout");
+    }
+
+    [Test]
+    [Arguments("unattended")]
+    [Arguments("auto")]
+    [Arguments("blank-call-id")]
+    [Arguments("invalid-arguments")]
+    [Arguments("empty-query")]
+    [Arguments("blocked-url")]
+    public async Task RequestWebConsentAsync_WhenThereIsNoOneToAskOrNothingToSend_ShowsNoCard(string situation)
+    {
+        var (dispatcher, cards) = LifecycleRecordingDispatcher();
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
+        var package = situation switch
+        {
+            "unattended" => RuntimePackageBuilder.Valid().AsUnattended().Build(),
+            "auto" => RuntimePackageBuilder.Valid().AutoAcceptingWebContent().Build(),
+            _ => RuntimePackageBuilder.Valid().Build()
+        };
+        var request = situation switch
+        {
+            "blank-call-id" => WebRequest(WebFetchToolDefinition.ToolName, new
+            {
+                url = WebReviewTestServer.PageUrl
+            }, callId: ""),
+            "invalid-arguments" => new ToolApprovalRequestContent("approval-1",
+                new FunctionCallContent("call-1", WebFetchToolDefinition.ToolName, JsonSerializer.Deserialize<Dictionary<string, object?>>("""{"url":5}"""))),
+            "empty-query" => WebRequest(WebSearchToolDefinition.ToolName, new
+            {
+                query = "   "
+            }),
+            "blocked-url" => WebRequest(WebFetchToolDefinition.ToolName, new
+            {
+                url = "http://10.0.0.1/admin"
+            }),
+            _ => WebRequest(WebFetchToolDefinition.ToolName, new
+            {
+                url = WebReviewTestServer.PageUrl
+            })
+        };
+
+        var refusal = await coordinator.RequestWebConsentAsync(package, request, static _ => { }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Null(refusal, "the retrieval step decides these calls: it refuses them or auto mode fetches");
+        AssertEx.Empty(cards);
+    }
+
     private static async Task<string> ReviewAsync(ToolApprovalCoordinator coordinator, RuntimePackage package, ToolApprovalRequestContent request)
     {
         var retrievals = await coordinator.RetrieveWebContentAsync(package, [request], CancellationToken.None);

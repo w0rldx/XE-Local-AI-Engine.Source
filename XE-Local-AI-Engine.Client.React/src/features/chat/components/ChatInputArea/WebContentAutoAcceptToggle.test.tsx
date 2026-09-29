@@ -104,7 +104,7 @@ describe("WebContentAutoAcceptToggle", () => {
 		).toBeTruthy();
 		expect(
 			screen.getByText(
-				"With auto-accept on, retrieved content goes to the model in this conversation without being shown to you first.",
+				"With auto-accept on, the model's web requests in this conversation are sent without asking you, and their results reach the model without being shown to you first.",
 			),
 		).toBeTruthy();
 		expect(screen.getByText("You can turn it off again at any time.")).toBeTruthy();

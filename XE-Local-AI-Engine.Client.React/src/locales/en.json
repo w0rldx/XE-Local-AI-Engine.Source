@@ -247,6 +247,13 @@
 			"resultsLabel": "Search results",
 			"missingPreview": "Reload the page to review this web content before the model reads it.",
 			"reload": "Reload"
+		},
+		"webRequest": {
+			"fetchHeading": "The model wants to open this address",
+			"searchHeading": "The model wants to search the web for",
+			"explanation": "Nothing is sent until you allow it.",
+			"allow": "Allow",
+			"deny": "Deny"
 		}
 	},
 	"pages": {
@@ -1382,7 +1389,7 @@
 				"off": "Web content is shown to you for review first",
 				"noticeTitle": "Auto-accept web content?",
 				"noticeInjection": "Web pages and search results can contain hidden instructions (prompt injection) written to make the model leak your data or take actions you did not ask for.",
-				"noticeUnreviewed": "With auto-accept on, retrieved content goes to the model in this conversation without being shown to you first.",
+				"noticeUnreviewed": "With auto-accept on, the model's web requests in this conversation are sent without asking you, and their results reach the model without being shown to you first.",
 				"noticeReversible": "You can turn it off again at any time.",
 				"confirm": "Enable auto-accept"
 			}
@@ -2103,7 +2110,7 @@
 				},
 				"webAccessEnabled": {
 					"label": "Allow web search and page fetching",
-					"description": "When enabled, the model can send search queries to DuckDuckGo or SearXNG and download public web pages. Retrieved content is shown to you for review before the model sees it. Off by default."
+					"description": "When enabled, the model can send search queries to DuckDuckGo or SearXNG and download public web pages. You are asked before each request is sent, and retrieved content is shown to you for review before the model sees it. Off by default."
 				},
 				"webSearchSearxngUrl": {
 					"label": "SearXNG URL",
@@ -3161,6 +3168,7 @@
 				"tools": {
 					"label": "Tools",
 					"requiresApproval": "requires approval",
+					"webReviewed": "Asks before sending, reviews the result",
 					"autoExecute": "auto-execute",
 					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools.",
 					"loading": "Loading tools…",

@@ -208,7 +208,7 @@ Work sessions take the **other half** of that pattern deliberately: `WorkSession
 
 | Hub | Path | Direction | Purpose | Owner page |
 |---|---|---|---|---|
-| `LocalChatHub` | `/api/local/v1/chat/hub` | client→server **streaming** methods | `SendMessage`, `RegenerateMessage`, `ResumeMessage` — each returns `IAsyncEnumerable<ChatStreamEvent>` (server-streaming) | [Chat](05-chat.md) |
+| `LocalChatHub` | `/api/local/v1/chat/hub` | client→server **streaming** methods | `SendMessage`, `RegenerateMessage`, `ResumeMessage` — each returns `IAsyncEnumerable<ChatStreamEvent>` (server-streaming). The tool-approval event's web preview carries `stage` (`request` = consent before the call, `result` = review after it) and a nullable `query` (set for `web_search`) | [Chat](05-chat.md) |
 | `SchedulerHub` | `/api/local/v1/scheduler/hub` | server→client push only | No client-callable methods; the class body is empty. Events are broadcast via `SchedulerEventPublisher` + `IHubContext<SchedulerHub>` | [Scheduler](06-scheduler.md) |
 | `GgufDownloadHub` | `/api/local/v1/model-fit/gguf/downloads/hub` | server→client push only | Empty class body. Sanitized GGUF download-progress events broadcast via `GgufDownloadEventPublisher` + `IHubContext<GgufDownloadHub>`. Replaces the per-second `GET model-fit/gguf/downloads` poll; the list endpoint stays for the one-shot hydrate on mount | [Model Fit](07-model-fit.md) |
 | `LlamaCppSourceBuildHub` | `/api/local/v1/model-fit/llamacpp/source-build/hub` | server→client push only | Empty class body. In-app source-build phase + appended log lines via `LlamaCppSourceBuildEventPublisher`; the status GET stays for the one-shot hydrate on mount | [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |

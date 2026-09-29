@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -64,6 +65,13 @@ internal sealed class WebFetchService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>The model's <c>url</c> argument as the fetch sends it; the consent card shows this same form.</summary>
+    internal static bool TryParseRequestUrl(string? url, [NotNullWhen(true)] out Uri? requested)
+    {
+        requested = null;
+        return !string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url.Trim(), UriKind.Absolute, out requested);
+    }
+
     /// <summary>
     ///     The open-internet form of the custom-tool guard: no host allow-list, full private-address deny list.
     /// </summary>
@@ -111,7 +119,7 @@ internal sealed class WebFetchService
             return WebFetchOutcome.Refused("web-access-disabled", "Web access is disabled on this node.");
         }
 
-        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var requested))
+        if (!TryParseRequestUrl(url, out var requested))
         {
             return WebFetchOutcome.Refused("invalid-url", "web_fetch requires an absolute http or https 'url'.");
         }

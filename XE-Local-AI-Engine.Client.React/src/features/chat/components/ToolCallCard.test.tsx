@@ -551,5 +551,100 @@ describe("ToolCallCard", () => {
 			await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
 			expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-web", approved: false } });
 		});
+
+		it("treats a preview without a stage as the result review (an older node's replay)", () => {
+			renderWithProviders(<ToolCallCard part={reviewPart()} />);
+
+			expect(screen.getByText("Review web content before the model reads it")).toBeTruthy();
+			expect(screen.queryByTestId("chat-web-request-web_fetch")).toBeNull();
+		});
+	});
+
+	describe("web request consent", () => {
+		function consentPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
+			return toolPart({
+				id: "call-web",
+				name: "web_fetch",
+				state: "waiting",
+				requiresApproval: true,
+				pendingApprovalRequestId: "consent-web",
+				pendingApprovalSessionScopeEligible: false,
+				pendingWebReview: { toolName: "web_fetch", stage: "request", url: "https://example.com/[x](y)?q=**secret**" },
+				...overrides,
+			});
+		}
+
+		it("shows the exact URL as plain text with Allow and Deny, and no Reload or session button", () => {
+			const { container } = renderWithProviders(<ToolCallCard part={consentPart()} />);
+
+			expect(screen.getByText("The model wants to open this address")).toBeTruthy();
+			expect(screen.getByTestId("chat-web-request-target").textContent).toBe("https://example.com/[x](y)?q=**secret**");
+			expect(screen.getByText("Nothing is sent until you allow it.")).toBeTruthy();
+			expect(screen.getByRole("button", { name: "Allow" })).toBeTruthy();
+			expect(screen.getByRole("button", { name: "Deny" })).toBeTruthy();
+			expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
+			expect(screen.queryByTestId("chat-tool-call-approve-session-web_fetch")).toBeNull();
+			expect(screen.queryByTestId("chat-tool-call-approval-actions-web_fetch")).toBeNull();
+			expect(screen.queryByText("Review web content before the model reads it")).toBeNull();
+			expect(container.querySelector("a")).toBeNull();
+			expect(container.querySelector("strong")).toBeNull();
+		});
+
+		it("shows the exact search query for web_search", () => {
+			renderWithProviders(
+				<ToolCallCard
+					part={consentPart({
+						name: "web_search",
+						pendingWebReview: { toolName: "web_search", stage: "request", query: "my private notes" },
+					})}
+				/>,
+			);
+
+			expect(screen.getByText("The model wants to search the web for")).toBeTruthy();
+			expect(screen.getByTestId("chat-web-request-target").textContent).toBe("my private notes");
+		});
+
+		it("allows the request once", async () => {
+			renderWithProviders(<ToolCallCard part={consentPart()} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+
+			await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+			expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({
+				body: { requestId: "consent-web", approved: true, scope: "Once" },
+			});
+		});
+
+		it("denies the request", async () => {
+			renderWithProviders(<ToolCallCard part={consentPart()} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "Deny" }));
+
+			await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+			expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "consent-web", approved: false } });
+		});
+
+		it("re-arms for the result review that follows an allowed request", async () => {
+			const { rerender } = renderWithProviders(<ToolCallCard part={consentPart()} />);
+			fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+			await waitFor(() => expect(screen.queryByRole("button", { name: "Allow" })).toBeNull());
+
+			rerender(
+				<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
+					<MantineProvider env="test" theme={testMantineTheme}>
+						<ToolCallCard
+							part={consentPart({
+								pendingApprovalRequestId: "review-web",
+								pendingWebReview: { toolName: "web_fetch", stage: "result", url: "https://example.com/", text: "page" },
+							})}
+						/>
+					</MantineProvider>
+				</QueryClientProvider>,
+			);
+
+			expect(screen.getByText("Review web content before the model reads it")).toBeTruthy();
+			expect(screen.getByRole("button", { name: "Add to conversation" })).toBeTruthy();
+			expect(screen.queryByTestId("chat-web-request-web_fetch")).toBeNull();
+		});
 	});
 });

@@ -852,7 +852,7 @@ and by the four work-session state tools inside a work-session step (§5.4). `sp
 non-tool-capable model gets an **empty** offer before per-name gating. `web_search` and `web_fetch` join the
 *default* offer only while the node's Web access setting is on, never for a model outside the trust boundary; a
 bound agent gets them only through `AllowedToolNames`. Both are approval-flagged like `ask_user`: the flag is the
-pause the result review uses, so unattended paths strip them, and orchestration participants and agentic MCP scope
+pause the request consent and result review use, so unattended paths strip them, and orchestration participants and agentic MCP scope
 are never offered them ([Security and privacy](12-security-and-privacy.md), ADR 0017). See [Chat](05-chat.md) for how
 the selected agent surfaces as per-message attribution.
 

@@ -613,13 +613,17 @@ is the decision record.
   model inside `UntrustedContentFraming` fences with the untrusted trust label. Bodies are never logged; URLs and queries
   only at Debug, because a query string is what an injected page would use to exfiltrate. When an OTLP exporter is
   configured (development or opt-in telemetry), the HttpClient spans carry each fetched URL as `url.full`.
-- **Result review (prompt-injection gate).** Retrieved content enters the model's context only after the user accepted
-  it on a review card; a rejection hands the model a decline note. The gate reuses the approval pause
-  (`ToolApprovalCoordinator.RequestWebReviewAsync`): the host retrieves first, then parks the turn with a preview, and the
+- **Request consent (exfiltration gate).** Before any outbound request the turn parks on a consent card showing the exact
+  URL (`web_fetch`) or query (`web_search`); Deny sends nothing and the model gets a decline note. Consent is per request
+  (no session or domain scope) and covers the initial URL only: redirect hops stay server-side, SSRF-checked per hop (max 5),
+  and the review shows the final URL. Parallel web calls get one card each, sequentially. Audit rows:
+  `web-request approve|deny|timeout`.
+- **Result review (prompt-injection gate).** After an allowed request, retrieved content enters the model's context only
+  after the user accepted it on a review card; a rejection hands the model a decline note. The gate reuses the approval pause
+  (`ToolApprovalCoordinator.RequestWebReviewAsync`): the host retrieves, then parks the turn with a preview, and the
   tool delegate only returns what the review stored in a per-invocation scope — any other caller gets a refusal.
-  There is no approval before the request, so a URL that carries data out has already been requested when the user
-  reviews. A per-conversation **auto-accept** mode skips the card; the first time a user enables it they acknowledge a
-  risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants, agentic
+  A per-conversation **auto-accept** mode skips both the consent and the review card (its notice says requests go out
+  unconfirmed); the first time a user enables it they acknowledge a risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants, agentic
   MCP scope and workflow-owned work sessions (no operator to review) are not offered the tools.
 - **Graphs.** Agent nodes are never offered either tool. A Tool node may run `web_fetch` only against its own
   allowlist of URL prefixes (path-segment boundary; private addresses stay blocked even when listed), which is the

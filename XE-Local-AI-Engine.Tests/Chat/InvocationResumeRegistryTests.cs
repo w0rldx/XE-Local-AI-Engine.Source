@@ -431,6 +431,7 @@ public sealed class InvocationResumeRegistryTests
             WebReview = new WebReviewPreview
             {
                 ToolName = "web_search",
+                Stage = WebReviewPreview.ResultStage,
                 Backend = "duckduckgo",
                 Results =
                 [
@@ -461,6 +462,53 @@ public sealed class InvocationResumeRegistryTests
         var preview = AssertEx.NotNull(events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested).WebReview);
         AssertEx.Equal("duckduckgo", preview.Backend);
         AssertEx.Equal("https://example.org/tidal-power", AssertEx.NotNull(preview.Results).Single().Url);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenAWebRequestConsentIsPending_ReplaysItsStageAndQuery()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
+        parked.PendingApproval = new InvocationApprovalState
+        {
+            RequestId = "consent-1",
+            Description = "Allow web_search to send this request?",
+            RequestedAt = DateTimeOffset.UtcNow,
+            CallId = "call-web-3",
+            ToolName = "web_search",
+            SessionScopeEligible = false,
+            WebReview = new WebReviewPreview
+            {
+                ToolName = "web_search",
+                Stage = WebReviewPreview.RequestStage,
+                Query = "tidal power"
+            }
+        };
+        RaiseState(dispatcher, parked);
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "done"));
+        await consumer;
+
+        var replayed = events.Single(evt => evt.Type == ChatStreamEventTypes.ApprovalRequested);
+        AssertEx.Equal("consent-1", replayed.ApprovalRequestId);
+        var preview = AssertEx.NotNull(replayed.WebReview);
+        AssertEx.Equal(WebReviewPreview.RequestStage, preview.Stage);
+        AssertEx.Equal("tidal power", preview.Query);
+        AssertEx.Null(preview.Results);
     }
 
     [Test]

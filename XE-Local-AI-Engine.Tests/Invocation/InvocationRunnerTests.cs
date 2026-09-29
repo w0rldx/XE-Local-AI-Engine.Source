@@ -1550,12 +1550,19 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(factory, eventDispatcher: dispatcher, webReviewRetriever: server.CreateRetriever());
 
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build());
-        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
+        var consent = await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: true);
+        AssertEx.Equal("call-web-fetch", consent.CallId);
+        var consentPreview = AssertEx.NotNull(consent.WebReview);
+        AssertEx.Equal(WebReviewPreview.RequestStage, consentPreview.Stage);
+        AssertEx.Equal(WebReviewTestServer.PageUrl, consentPreview.Url);
+        await AssertEx.EventuallyAsync(() => cards.Count == 2, TimeSpan.FromSeconds(5));
 
-        var card = cards.Single();
+        var card = cards.Last();
         AssertEx.Equal("call-web-fetch", card.CallId, "the review attaches to the tool-call card the model is waiting on");
-        AssertEx.Equal(WebReviewTestServer.PageText, AssertEx.NotNull(card.WebReview).Text);
-        AssertEx.Equal(WebReviewTestServer.PageUrl, server.Requests.Single().AbsoluteUri, "fetched once, before the card, with no allow-list");
+        var reviewPreview = AssertEx.NotNull(card.WebReview);
+        AssertEx.Equal(WebReviewPreview.ResultStage, reviewPreview.Stage);
+        AssertEx.Equal(WebReviewTestServer.PageText, reviewPreview.Text);
+        AssertEx.Equal(WebReviewTestServer.PageUrl, server.Requests.Single().AbsoluteUri, "fetched once, after consent and before the review, with no allow-list");
         AssertEx.False(runTask.IsCompleted, "the turn holds until the user reviews the content");
 
         runner.ResolveApprovalResult(new ApprovalResolvedEvent
@@ -1586,12 +1593,8 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(factory, eventDispatcher: dispatcher, approvalAuditRecorder: auditRecorder, webReviewRetriever: server.CreateRetriever());
 
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build());
-        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = cards.Single().RequestId,
-            Approved = false
-        });
+        await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: true);
+        await ResolveWebCardAsync(runner, cards, expectedCount: 2, approved: false);
         await runTask;
 
         AssertEx.True(AssertEx.NotNull(resumeMessages).SelectMany(static message => message.Contents).OfType<ToolApprovalResponseContent>().Single().Approved,
@@ -1647,6 +1650,118 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAWebRequestIsDenied_NothingIsSentAndTheHandlerReturnsTheDeclineText()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
+        var handlerResults = new ConcurrentQueue<string>();
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults),
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, approvalAuditRecorder: auditRecorder, webReviewRetriever: server.CreateRetriever());
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build());
+        await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: false);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment, "a declined request continues the turn");
+        AssertEx.Empty(server.Requests, "a declined request never leaves the node");
+        AssertEx.Equal(expected: 1, cards.Count, "nothing was retrieved, so there is no result to review");
+        AssertEx.True(AssertEx.NotNull(resumeMessages).SelectMany(static message => message.Contents).OfType<ToolApprovalResponseContent>().Single().Approved,
+            "the call is still approved, so the model reads our decline text");
+        AssertEx.Contains(handlerResults.Single(), ToolApprovalCoordinator.WebRequestDeclinedMessage);
+        await auditRecorder.Received(1)
+                           .RecordAsync(Arg.Any<Guid?>(),
+                               WebFetchToolDefinition.ToolName,
+                               Arg.Any<ToolCategory>(),
+                               "web-request deny",
+                               Arg.Any<string>(),
+                               Arg.Any<long>(),
+                               Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAWebConsentTimesOut_NothingIsSentAndTheTurnContinues()
+    {
+        // A zero pending age expires the consent the moment it parks: a timeout declines like ask_user, it never fails the turn.
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        var handlerResults = new ConcurrentQueue<string>();
+        var segment = 0;
+        var factory = CreateFactory(_ => ++segment == 1 ? WebFetchRequestUpdates() : ExecuteWebFetchHandlerUpdates(handlerResults));
+        var runner = CreateRunner(factory,
+            eventDispatcher: dispatcher,
+            webReviewRetriever: server.CreateRetriever(),
+            workerOptions: new WorkerNodeOptions
+            {
+                NodeName = "worker",
+                MaxResponseSizeMb = 10,
+                MaxPendingToolCallAgeMinutes = 0
+            });
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true).Build())
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 2, segment);
+        AssertEx.Empty(server.Requests);
+        AssertEx.Equal(WebReviewPreview.RequestStage, AssertEx.NotNull(cards.Single().WebReview).Stage);
+        AssertEx.Contains(handlerResults.Single(), ToolApprovalCoordinator.WebRequestTimeoutMessage);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_FetchDeniedAndSearchAllowedInOneSegment_OnlyTheSearchIsSentAndReviewed()
+    {
+        using var server = new WebReviewTestServer();
+        var (dispatcher, cards) = WebReviewDispatcher();
+        UserQuestionLifecyclePayload? question = null;
+        dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
+        var stash = new UserQuestionAnswerStash(TimeProvider.System);
+        using var model = new WebReviewScriptedChatClient();
+        var runner = CreateRunner(RealPipelineFactory(model, stash),
+            eventDispatcher: dispatcher,
+            userQuestionAnswerStash: stash,
+            webReviewRetriever: server.CreateRetriever());
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithAllowedTool(WebFetchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(WebSearchToolDefinition.ToolName, requiresApproval: true)
+                                           .WithAllowedTool(AskUserTool.ToolName, requiresApproval: true)
+                                           .Build();
+
+        var runTask = RunAsync(runner, package);
+        AssertEx.Equal(WebFetchToolDefinition.ToolName, (await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: false)).ToolName);
+        var searchConsent = await ResolveWebCardAsync(runner, cards, expectedCount: 2, approved: true);
+        AssertEx.Equal("tidal power", AssertEx.NotNull(searchConsent.WebReview).Query);
+        var review = await ResolveWebCardAsync(runner, cards, expectedCount: 3, approved: true);
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, review.ToolName);
+        AssertEx.Equal(WebReviewPreview.ResultStage, AssertEx.NotNull(review.WebReview).Stage);
+        await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(10));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = AssertEx.NotNull(question).RequestId,
+            Answers =
+            [
+                new UserQuestionAnswer
+                {
+                    Question = "Which auth method?",
+                    Selected = ["API key"],
+                    Other = null
+                }
+            ]
+        });
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal("all done", model.FinalText);
+        AssertEx.False(server.Requests.Any(static uri => uri.AbsoluteUri == WebReviewTestServer.PageUrl), "the denied fetch was never sent");
+        AssertEx.Equal(expected: 1, server.Requests.Count, "only the allowed search went out");
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.FetchCallId], ToolApprovalCoordinator.WebRequestDeclinedMessage);
+        AssertEx.Contains(model.Results[WebReviewScriptedChatClient.SearchCallId], WebReviewTestServer.SearchHitUrl);
+        AssertEx.Equal(expected: 3, cards.Count);
+    }
+
+    [Test]
     public async Task RunAsync_TwoWebCallsAndAskUserInOneSegment_ThroughTheRealFunctionPipeline_EachReachesTheModelAsReviewed()
     {
         // The real ChatClientAgent + FunctionInvokingChatClient + production tool wrapping: the only proof that the handlers
@@ -1668,20 +1783,14 @@ public sealed class InvocationRunnerTests
                                            .Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(10));
-        AssertEx.Equal(expected: 2, server.Requests.Count, "both web calls are retrieved before the first card");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = cards.Single().RequestId,
-            Approved = true
-        });
-        await AssertEx.EventuallyAsync(() => cards.Count == 2, TimeSpan.FromSeconds(10));
-        AssertEx.Equal(WebSearchToolDefinition.ToolName, cards.Last().ToolName);
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = cards.Last().RequestId,
-            Approved = false
-        });
+        AssertEx.Equal(WebFetchToolDefinition.ToolName, (await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: true)).ToolName);
+        AssertEx.Empty(server.Requests, "no request is sent until every consent of the segment is answered");
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, (await ResolveWebCardAsync(runner, cards, expectedCount: 2, approved: true)).ToolName);
+        await AssertEx.EventuallyAsync(() => cards.Count == 3, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(expected: 2, server.Requests.Count, "both web calls are retrieved before the first review card");
+        AssertEx.Equal(WebReviewPreview.ResultStage, AssertEx.NotNull(cards.Last().WebReview).Stage);
+        await ResolveWebCardAsync(runner, cards, expectedCount: 3, approved: true);
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, (await ResolveWebCardAsync(runner, cards, expectedCount: 4, approved: false)).ToolName);
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(10));
         runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
         {
@@ -1731,13 +1840,10 @@ public sealed class InvocationRunnerTests
                                            .Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => !cards.IsEmpty, TimeSpan.FromSeconds(10));
-        AssertEx.Equal(WebSearchToolDefinition.ToolName, cards.Single().ToolName, "the failed fetch has nothing to review, so the search card is the only one");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = cards.Single().RequestId,
-            Approved = true
-        });
+        await ResolveWebCardAsync(runner, cards, expectedCount: 1, approved: true);
+        await ResolveWebCardAsync(runner, cards, expectedCount: 2, approved: true);
+        var review = await ResolveWebCardAsync(runner, cards, expectedCount: 3, approved: true);
+        AssertEx.Equal(WebSearchToolDefinition.ToolName, review.ToolName, "the failed fetch has nothing to review, so the search review is the only one");
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(10));
         runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
         {
@@ -1760,7 +1866,7 @@ public sealed class InvocationRunnerTests
             "the exception text is logged by type only and never handed to the model");
         AssertEx.Contains(model.Results[WebReviewScriptedChatClient.SearchCallId], WebReviewTestServer.SearchHitUrl);
         AssertEx.Contains(model.Results[WebReviewScriptedChatClient.AskCallId], "API key");
-        AssertEx.Equal(expected: 1, cards.Count);
+        AssertEx.Equal(expected: 3, cards.Count, "two consents and one review");
     }
 
     [Test]
@@ -5574,6 +5680,22 @@ public sealed class InvocationRunnerTests
             ResolveCallId = static () => "call-web-fetch"
         }.ExecuteAsync("{}"));
         yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    // Waits for the Nth web card, answers it and returns it: consents and reviews share the one approval transport.
+    private static async Task<ApprovalLifecyclePayload> ResolveWebCardAsync(InvocationRunner runner,
+        ConcurrentQueue<ApprovalLifecyclePayload> cards,
+        int expectedCount,
+        bool approved)
+    {
+        await AssertEx.EventuallyAsync(() => cards.Count == expectedCount, TimeSpan.FromSeconds(10));
+        var card = cards.Last();
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = card.RequestId,
+            Approved = approved
+        });
+        return card;
     }
 
     private static (IWorkerEventDispatcher Dispatcher, ConcurrentQueue<ApprovalLifecyclePayload> Cards) WebReviewDispatcher()

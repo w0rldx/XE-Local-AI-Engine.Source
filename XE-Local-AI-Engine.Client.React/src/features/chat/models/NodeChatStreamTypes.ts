@@ -55,11 +55,15 @@ export interface NodeChatWebSearchResultDto {
 	snippet: string;
 }
 
-// `web_fetch` fills the page fields; `web_search` fills `backend` and `results`. All but `toolName` and `url` are
-// server-controlled text.
+// Two stages share this shape. `request` is the pre-send consent: `url` (web_fetch) or `query` (web_search) is exactly what
+// will be sent, nothing has left the node yet. `result` is the review of what came back: `web_fetch` fills the page
+// fields, `web_search` fills `backend` and `results`. A missing `stage` (an older node's replay) is a result review.
+// All but `toolName`, `stage`, `url` and `query` are server-controlled text.
 export interface NodeChatWebReviewPreviewDto {
 	toolName: string;
+	stage?: "request" | "result" | null;
 	url?: string | null;
+	query?: string | null;
 	finalUrl?: string | null;
 	title?: string | null;
 	contentType?: string | null;

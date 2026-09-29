@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 
 /// <summary>
 ///     Owns every human round-trip an invocation can park on: tool approvals, the session-scoped approval memo, the
-///     <c>ask_user</c> question flow and the web result review.
+///     <c>ask_user</c> question flow and the web request consent and result review.
 /// </summary>
 /// <remarks>
 ///     Separate from <see cref="InvocationRunner" /> so the security-critical ordering rules are reviewable in one
@@ -35,6 +35,17 @@ public sealed class ToolApprovalCoordinator
     private const string UnattendedApprovalDecision = "unattended-unavailable";
 
     private const string WebContentAutoAcceptDecision = "web-content auto-accept";
+
+    // The pre-request consent's outcomes, one row each, so the trail tells a declined request from a declined result.
+    private const string WebRequestApproveDecision = "web-request approve";
+
+    private const string WebRequestDenyDecision = "web-request deny";
+
+    private const string WebRequestTimeoutDecision = "web-request timeout";
+
+    internal const string WebRequestDeclinedMessage = "The user declined to send this web request, so nothing was sent.";
+
+    internal const string WebRequestTimeoutMessage = "The user did not approve this web request in time, so nothing was sent.";
 
     internal const string WebContentDeclinedMessage = "The user declined to add this web content to the conversation.";
 
@@ -210,6 +221,58 @@ public sealed class ToolApprovalCoordinator
                 approvalRequestedTimestamp,
                 cancellationToken);
             throw new ApprovalExpiredException(approvalToolName);
+        }
+    }
+
+    /// <summary>
+    ///     Asks the user before a web call sends anything; <see langword="null" /> means go ahead, otherwise the refusal the
+    ///     model gets instead.
+    /// </summary>
+    /// <remarks>
+    ///     No card when unattended, with no call id or in auto mode (the retrieval handles those) or when the arguments are
+    ///     refused before sending. Per request only, never session scope; a timeout declines instead of failing the turn.
+    /// </remarks>
+    internal async Task<WebReviewRetrieval?> RequestWebConsentAsync(RuntimePackage package,
+        ToolApprovalRequestContent approvalRequest,
+        Action<bool> setInvocationDeadline,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(approvalRequest);
+        ArgumentNullException.ThrowIfNull(setInvocationDeadline);
+
+        if (package.IsUnattended
+            || package.AutoAcceptWebContent
+            || string.IsNullOrEmpty(approvalRequest.ToolCall.CallId)
+            || approvalRequest.ToolCall is not FunctionCallContent call
+            || WebReviewRetriever.DescribeRequest(call) is not { } preview)
+        {
+            return null;
+        }
+
+        var requestedTimestamp = Stopwatch.GetTimestamp();
+        try
+        {
+            var consented = await ParkForDecisionAsync(package,
+                approvalRequest,
+                call.Name,
+                $"Allow {call.Name} to send this request?",
+                sessionApprovalKey: null,
+                preview,
+                setInvocationDeadline,
+                cancellationToken);
+
+            await RecordApprovalDecisionAuditAsync(package,
+                call.Name,
+                consented ? WebRequestApproveDecision : WebRequestDenyDecision,
+                requestedTimestamp,
+                cancellationToken);
+            return consented ? null : WebReviewRetrieval.Refusal("user-declined-request", WebRequestDeclinedMessage);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            await RecordApprovalDecisionAuditAsync(package, call.Name, WebRequestTimeoutDecision, requestedTimestamp, cancellationToken);
+            return WebReviewRetrieval.Refusal("request-consent-timeout", WebRequestTimeoutMessage);
         }
     }
 

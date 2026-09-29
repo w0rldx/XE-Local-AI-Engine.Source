@@ -138,3 +138,64 @@ export function WebReviewCard({ preview, busy, onAccept, onReject }: WebReviewCa
 		</Stack>
 	);
 }
+
+/**
+ * The web request consent gate: what `web_fetch`/`web_search` is ABOUT to send, shown before anything leaves the node.
+ * The URL or query is model-composed, so it renders as plain text (never a link). Allow approves the parked call once
+ * (the request is sent, and its result comes back as a second, result-stage review); Deny sends nothing. No session scope.
+ */
+export function WebRequestConsentCard({ preview, busy, onAccept, onReject }: WebReviewCardProps) {
+	const { t } = useTranslation();
+	const headingId = useId();
+	const isSearch = preview.toolName === "web_search";
+	const target = (isSearch ? preview.query : preview.url) ?? "";
+
+	return (
+		<Stack
+			gap="xs"
+			className={classes["tool-body"]}
+			role="group"
+			aria-labelledby={headingId}
+			data-testid={`chat-web-request-${preview.toolName}`}
+		>
+			<Group gap={6} wrap="nowrap">
+				<IconWorldSearch size={14} aria-hidden={true} />
+				<Text id={headingId} size="sm" fw={600}>
+					{isSearch
+						? t("chat.webRequest.searchHeading", "The model wants to search the web for")
+						: t("chat.webRequest.fetchHeading", "The model wants to open this address")}
+				</Text>
+			</Group>
+			<Text size="xs" ff="monospace" style={plainTextStyle} data-testid="chat-web-request-target">
+				{target}
+			</Text>
+			<Text size="xs" c="dimmed">
+				{t("chat.webRequest.explanation", "Nothing is sent until you allow it.")}
+			</Text>
+			<Group gap="xs" wrap="wrap">
+				<Button
+					size="compact-xs"
+					color="teal"
+					variant="light"
+					leftSection={<IconCheck size={12} />}
+					loading={busy}
+					onClick={onAccept}
+					data-testid={`chat-web-request-allow-${preview.toolName}`}
+				>
+					{t("chat.webRequest.allow", "Allow")}
+				</Button>
+				<Button
+					size="compact-xs"
+					color="red"
+					variant="light"
+					leftSection={<IconX size={12} />}
+					loading={busy}
+					onClick={onReject}
+					data-testid={`chat-web-request-deny-${preview.toolName}`}
+				>
+					{t("chat.webRequest.deny", "Deny")}
+				</Button>
+			</Group>
+		</Stack>
+	);
+}

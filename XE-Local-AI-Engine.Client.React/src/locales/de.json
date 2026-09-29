@@ -247,6 +247,13 @@
 			"resultsLabel": "Suchergebnisse",
 			"missingPreview": "Laden Sie die Seite neu, um diesen Webinhalt zu prüfen, bevor das Modell ihn liest.",
 			"reload": "Neu laden"
+		},
+		"webRequest": {
+			"fetchHeading": "Das Modell möchte diese Adresse öffnen",
+			"searchHeading": "Das Modell möchte im Web suchen nach",
+			"explanation": "Es wird nichts gesendet, bevor Sie es erlauben.",
+			"allow": "Erlauben",
+			"deny": "Ablehnen"
 		}
 	},
 	"pages": {
@@ -1382,7 +1389,7 @@
 				"off": "Webinhalte werden Ihnen zuerst zur Prüfung angezeigt",
 				"noticeTitle": "Webinhalte automatisch übernehmen?",
 				"noticeInjection": "Webseiten und Suchergebnisse können versteckte Anweisungen enthalten (Prompt-Injection), die das Modell dazu bringen sollen, Ihre Daten preiszugeben oder Aktionen auszuführen, um die Sie nicht gebeten haben.",
-				"noticeUnreviewed": "Mit automatischer Übernahme gehen abgerufene Inhalte in dieser Unterhaltung an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
+				"noticeUnreviewed": "Mit automatischer Übernahme werden die Webanfragen des Modells in dieser Unterhaltung ohne Rückfrage gesendet, und ihre Ergebnisse gehen an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
 				"noticeReversible": "Sie können die Funktion jederzeit wieder ausschalten.",
 				"confirm": "Automatische Übernahme aktivieren"
 			}
@@ -2103,7 +2110,7 @@
 				},
 				"webAccessEnabled": {
 					"label": "Websuche und Abruf von Webseiten erlauben",
-					"description": "Wenn aktiviert, kann das Modell Suchanfragen an DuckDuckGo oder SearXNG senden und öffentliche Webseiten herunterladen. Abgerufene Inhalte werden Ihnen zur Prüfung angezeigt, bevor das Modell sie sieht. Standardmäßig deaktiviert."
+					"description": "Wenn aktiviert, kann das Modell Suchanfragen an DuckDuckGo oder SearXNG senden und öffentliche Webseiten herunterladen. Vor jeder Anfrage werden Sie gefragt, und abgerufene Inhalte werden Ihnen zur Prüfung angezeigt, bevor das Modell sie sieht. Standardmäßig deaktiviert."
 				},
 				"webSearchSearxngUrl": {
 					"label": "SearXNG-URL",
@@ -3161,6 +3168,7 @@
 				"tools": {
 					"label": "Tools",
 					"requiresApproval": "Freigabe erforderlich",
+					"webReviewed": "Fragt vor dem Senden, prüft das Ergebnis",
 					"autoExecute": "automatisch",
 					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren.",
 					"loading": "Tools werden geladen…",

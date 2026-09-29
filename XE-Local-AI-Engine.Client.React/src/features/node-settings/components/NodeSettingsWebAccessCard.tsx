@@ -29,7 +29,7 @@ export function NodeSettingsWebAccessCard({ form, errors, onChange }: Props) {
 					label={t("pages.nodeSettings.fields.webAccessEnabled.label", "Allow web search and page fetching")}
 					description={t(
 						"pages.nodeSettings.fields.webAccessEnabled.description",
-						"When enabled, the model can send search queries to DuckDuckGo or SearXNG and download public web pages. Retrieved content is shown to you for review before the model sees it. Off by default.",
+						"When enabled, the model can send search queries to DuckDuckGo or SearXNG and download public web pages. You are asked before each request is sent, and retrieved content is shown to you for review before the model sees it. Off by default.",
 					)}
 					checked={form.webAccessEnabled}
 					onChange={(event) => onChange("webAccessEnabled", event.currentTarget.checked)}

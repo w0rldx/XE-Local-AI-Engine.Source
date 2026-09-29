@@ -128,7 +128,7 @@ export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebCont
 					<Text size="sm">
 						{t(
 							"pages.chat.webAutoAccept.noticeUnreviewed",
-							"With auto-accept on, retrieved content goes to the model in this conversation without being shown to you first.",
+							"With auto-accept on, the model's web requests in this conversation are sent without asking you, and their results reach the model without being shown to you first.",
 						)}
 					</Text>
 					<Text size="sm">{t("pages.chat.webAutoAccept.noticeReversible", "You can turn it off again at any time.")}</Text>

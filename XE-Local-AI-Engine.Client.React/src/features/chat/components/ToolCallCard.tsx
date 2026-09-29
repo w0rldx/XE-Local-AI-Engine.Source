@@ -13,7 +13,7 @@ import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
-import { WebReviewCard } from "@/features/chat/components/WebReviewCard";
+import { WebRequestConsentCard, WebReviewCard } from "@/features/chat/components/WebReviewCard";
 import { agentHomeRunIdWithPatch } from "@/features/chat/models/AgentHomePatchToolResult";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
@@ -219,6 +219,14 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 				</details>
 				{part.pendingQuestion ? (
 					<AskUserQuestionCard pending={part.pendingQuestion} />
+				) : awaitingApproval && part.pendingWebReview?.stage === "request" ? (
+					// Pre-send consent: "may this request leave the node?". Allow = approve once, Deny = deny; never a session.
+					<WebRequestConsentCard
+						preview={part.pendingWebReview}
+						busy={resolveApproval.isPending}
+						onAccept={() => handleApprovalDecision(true, "Once")}
+						onReject={() => handleApprovalDecision(false)}
+					/>
 				) : awaitingApproval && part.pendingWebReview ? (
 					// A web content review is an approval with a different question: not "may this run?" but "may the model
 					// read what it fetched?". Accept = approve once, Reject = deny; never a session scope.

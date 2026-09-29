@@ -161,6 +161,7 @@ public sealed class AskUserColdLoadResumeTests
             WebReview = new WebReviewPreview
             {
                 ToolName = "web_fetch",
+                Stage = WebReviewPreview.ResultStage,
                 Url = "https://news.example.com/tidal",
                 FinalUrl = "https://news.example.com/2026/tidal",
                 Title = "Tidal energy",

@@ -7,7 +7,7 @@
   Custom Tools, MCP, the sandbox substrate (ADR 0007) or the Training runtime (ADR 0005).
 - **Authority:** Operator decisions taken 2026-09-27: .NET-native implementation (no Python); DuckDuckGo HTML as the default search
   backend with an operator-configured SearXNG URL replacing it; delivery before 1.0; graphs get no open search and fetch only
-  against a user-maintained allowlist; retrieved content is reviewed by the user before it enters context, with a per-conversation auto mode behind a one-time risk notice; SmartReader for main-content extraction;
+  against a user-maintained allowlist; each request is consented to before it is sent and retrieved content is reviewed before it enters context, with a per-conversation auto mode behind a one-time risk notice; SmartReader for main-content extraction;
   allowlist entries are URL prefixes.
 
 ## Context
@@ -36,9 +36,12 @@ Training, the `run_python` sandbox has no network, and the Python environments a
    a content-type allowlist. No proxy, no cookies.
 4. **Untrusted output.** Fetched text and search results re-enter context inside `UntrustedContentFraming` fences with the
    untrusted trust label. Fetched bodies are never logged.
-5. **Result review.** Content either tool retrieves reaches the model only after the user reviewed and accepted it; a rejection
-   hands the model a decline note instead. There is no approval before the request, so the request itself has already been sent
-   when the review happens. A per-conversation auto mode skips the review; the first time a user enables it they acknowledge a risk
+5. **Request consent, then result review.** Nothing goes out until the user allowed that exact request: a consent card shows the
+   URL (`web_fetch`) or query (`web_search`), and a denial sends nothing and hands the model a decline note. Consent is per request
+   (no session or domain scope) and covers the initial URL; redirect hops stay server-side (SSRF-checked per hop) and the review
+   shows the final URL. After an allowed request, content either tool retrieves reaches the model only after the user reviewed and
+   accepted it; a rejection hands the model a decline note instead. Parallel web calls get one card each, one after another. A
+   per-conversation auto mode skips both the consent and the review, and its notice says requests go out unconfirmed; the first time a user enables it they acknowledge a risk
    notice. The review reuses the approval pause (both tools are approval-flagged, like `ask_user`), so unattended runs never fetch
    and the tools are withheld where no one could review (orchestration participants, agentic MCP scope). The node administrator
    is the only user, so auto mode also skips a review the node approval policy would add.
@@ -55,6 +58,14 @@ Training, the `run_python` sandbox has no network, and the Python environments a
   supported way out. Scraping that surface is at odds with DuckDuckGo's terms; the operator accepted that risk.
 - A new NuGet dependency (SmartReader, with AngleSharp) enters the license inventory.
 - Fencing reduces but does not remove prompt injection; the review is what keeps injected text out of context, and auto mode
-  gives that up by the user's choice. A URL that leaks data is still requested before anyone reviews it.
+  gives that up by the user's choice. Consent covers only the initial URL, so a redirect target that carries data out is still
+  requested (SSRF-checked, at most 5 hops) and only the review sees the final URL.
 - Headless dataset generation mocks `Network` tools, so teacher datasets may contain fabricated web results.
 - Browser rendering, research orchestration and paid search APIs remain out of scope; adding one is a new decision.
+
+## Amendment 2026-09-29: consent before the request
+
+Decision item 5 originally reviewed only the result and sent the request unconfirmed. That left a hole: a model-composed URL or
+query could carry data out (in the path, query string or search terms) before any user decision. The user is now asked before
+the request is sent, and the result review runs after it. Auto mode skips both. Unattended runs, graph Tool nodes (allowlist),
+orchestration, agentic MCP and workflow-owned work sessions are unchanged: they never run the web tools interactively.

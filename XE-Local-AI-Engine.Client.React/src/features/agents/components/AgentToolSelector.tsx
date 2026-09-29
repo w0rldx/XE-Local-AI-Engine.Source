@@ -179,7 +179,9 @@ export function AgentToolSelector({
 									label={
 										<Badge size="xs" variant="light" color={requiresApproval ? "orange" : "teal"}>
 											{requiresApproval
-												? t("pages.agents.form.tools.requiresApproval", "requires approval")
+												? webAccessToolNames.has(tool.name)
+													? t("pages.agents.form.tools.webReviewed", "Asks before sending, reviews the result")
+													: t("pages.agents.form.tools.requiresApproval", "requires approval")
 												: t("pages.agents.form.tools.autoExecute", "auto-execute")}
 										</Badge>
 									}

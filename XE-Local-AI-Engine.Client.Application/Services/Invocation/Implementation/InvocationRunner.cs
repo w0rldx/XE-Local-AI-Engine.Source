@@ -1009,19 +1009,42 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
                 currentMessages.AddRange(foldedMessages);
 
-                // Every web call of the segment is retrieved at once, before the first review card; the tool time is not charged to the model.
+                // Each web call is consented to one card at a time, outside the tool window; the consented ones are then retrieved at once, before the first
+                // review card, and the tool time is not charged to the model. A refused request has no preview, so the loop below hands its text to the model.
                 IReadOnlyDictionary<ToolApprovalRequestContent, WebReviewRetrieval> webRetrievals = FrozenDictionary<ToolApprovalRequestContent, WebReviewRetrieval>.Empty;
                 if (pendingApprovals.Exists(ToolApprovalCoordinator.IsWebReviewRequest))
                 {
-                    _lifecycleTracker.SetToolExecuting(executing: true);
-                    try
+                    var consented = new List<ToolApprovalRequestContent>();
+                    var retrievals = new Dictionary<ToolApprovalRequestContent, WebReviewRetrieval>();
+                    foreach (var webRequest in pendingApprovals.Where(ToolApprovalCoordinator.IsWebReviewRequest))
                     {
-                        webRetrievals = await _toolApprovalCoordinator.RetrieveWebContentAsync(package, pendingApprovals, invocationToken);
+                        if (await _toolApprovalCoordinator.RequestWebConsentAsync(package, webRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken) is { } refusal)
+                        {
+                            retrievals[webRequest] = refusal;
+                        }
+                        else
+                        {
+                            consented.Add(webRequest);
+                        }
                     }
-                    finally
+
+                    if (consented.Count > 0)
                     {
-                        _lifecycleTracker.SetToolExecuting(executing: false);
+                        _lifecycleTracker.SetToolExecuting(executing: true);
+                        try
+                        {
+                            foreach (var (webRequest, retrieval) in await _toolApprovalCoordinator.RetrieveWebContentAsync(package, consented, invocationToken))
+                            {
+                                retrievals[webRequest] = retrieval;
+                            }
+                        }
+                        finally
+                        {
+                            _lifecycleTracker.SetToolExecuting(executing: false);
+                        }
                     }
+
+                    webRetrievals = retrievals;
                 }
 
                 var approvalResponses = new List<AIContent>(pendingApprovals.Count);

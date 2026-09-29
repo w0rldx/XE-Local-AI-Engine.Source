@@ -241,6 +241,16 @@ describe("AgentToolSelector", () => {
 		expect(screen.queryByTestId("agent-tool-web-access-hint-web_search")).toBeNull();
 	});
 
+	it("labels a web tool's approval as a consent before sending plus a result review", () => {
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, webSearch], isLoading: false, error: null });
+
+		renderSelector({ webAccessEnabled: true, selectedToolNames: ["web_search", "mcp__filesystem-tools__read"] });
+
+		expect(screen.getByTestId("agent-tool-row-web_search").textContent).toContain("Asks before sending, reviews the result");
+		expect(screen.getByTestId("agent-tool-row-web_search").textContent).not.toContain("requires approval");
+		expect(screen.getByTestId("agent-tool-row-mcp__filesystem-tools__read").textContent).toContain("requires approval");
+	});
+
 	it("shows ask_user checked and locked for an ordinary agent, with a note", () => {
 		const askUser: ToolCatalogEntry = {
 			name: "ask_user",

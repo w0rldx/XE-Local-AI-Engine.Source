@@ -123,6 +123,7 @@ public sealed class WorkerEventDispatcherApprovalSlotTests
             WebReview = new WebReviewPreview
             {
                 ToolName = "web_fetch",
+                Stage = WebReviewPreview.ResultStage,
                 Url = "https://example.com/",
                 Text = "Example Domain"
             }

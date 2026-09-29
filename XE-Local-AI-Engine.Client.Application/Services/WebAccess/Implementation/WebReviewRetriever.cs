@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>Runs one chat web call for the result review gate: validates the model's arguments, then fetches or searches.</summary>
 /// <remarks>
@@ -23,6 +24,34 @@ public sealed class WebReviewRetriever
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>What <see cref="RetrieveAsync" /> would send (normalised URL or trimmed query); null when it would refuse before sending.</summary>
+    internal static WebReviewPreview? DescribeRequest(FunctionCallContent call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+
+        try
+        {
+            var arguments = SerializeArguments(call);
+            if (IsSearch(call))
+            {
+                var query = arguments.Deserialize<WebSearchToolRequest>(SerializerOptions)?.Query;
+                return string.IsNullOrWhiteSpace(query) ? null : RequestPreview(call.Name, url: null, query.Trim());
+            }
+
+            if (!WebFetchService.TryParseRequestUrl(arguments.Deserialize<WebFetchToolRequest>(SerializerOptions)?.Url, out var requested))
+            {
+                return null;
+            }
+
+            WebFetchService.ValidatePublicUrl(requested);
+            return RequestPreview(call.Name, requested.AbsoluteUri, query: null);
+        }
+        catch (Exception exception) when (exception is JsonException or CustomToolExecutionException)
+        {
+            return null;
+        }
+    }
+
     internal async Task<WebReviewRetrieval> RetrieveAsync(FunctionCallContent call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(call);
@@ -30,7 +59,7 @@ public sealed class WebReviewRetriever
         JsonElement arguments;
         try
         {
-            arguments = JsonSerializer.SerializeToElement(call.Arguments ?? new Dictionary<string, object?>(StringComparer.Ordinal), SerializerOptions);
+            arguments = SerializeArguments(call);
         }
         catch (JsonException exception)
         {
@@ -39,7 +68,7 @@ public sealed class WebReviewRetriever
 
         try
         {
-            if (string.Equals(call.Name, WebSearchToolDefinition.ToolName, StringComparison.Ordinal))
+            if (IsSearch(call))
             {
                 var search = arguments.Deserialize<WebSearchToolRequest>(SerializerOptions);
                 return ToRetrieval(await _searchService.SearchAsync(search?.Query, search?.MaxResults, cancellationToken));
@@ -61,6 +90,21 @@ public sealed class WebReviewRetriever
         }
     }
 
+    private static JsonElement SerializeArguments(FunctionCallContent call) =>
+        JsonSerializer.SerializeToElement(call.Arguments ?? new Dictionary<string, object?>(StringComparer.Ordinal), SerializerOptions);
+
+    private static bool IsSearch(FunctionCallContent call) =>
+        string.Equals(call.Name, WebSearchToolDefinition.ToolName, StringComparison.Ordinal);
+
+    private static WebReviewPreview RequestPreview(string toolName, string? url, string? query) =>
+        new()
+        {
+            ToolName = toolName,
+            Stage = WebReviewPreview.RequestStage,
+            Url = url,
+            Query = query
+        };
+
     private static WebReviewRetrieval ToRetrieval(WebFetchOutcome outcome) =>
         new()
         {
@@ -69,6 +113,7 @@ public sealed class WebReviewRetriever
                 ? new WebReviewPreview
                 {
                     ToolName = WebFetchToolDefinition.ToolName,
+                    Stage = WebReviewPreview.ResultStage,
                     Url = page.Url,
                     FinalUrl = page.FinalUrl,
                     Title = page.Title,
@@ -88,6 +133,7 @@ public sealed class WebReviewRetriever
                 ? new WebReviewPreview
                 {
                     ToolName = WebSearchToolDefinition.ToolName,
+                    Stage = WebReviewPreview.ResultStage,
                     Backend = outcome.Backend,
                     Results = results
                 }

@@ -687,6 +687,46 @@ describe("node chat stream state", () => {
 		expect(resolvedPart?.kind === "tool" ? resolvedPart.pendingWebReview : "not a tool").toBeUndefined();
 	});
 
+	it("replaces a web request consent with the result review the node raises for the same call", () => {
+		const consent = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-web",
+				toolName: "web_search",
+				approvalRequestId: "consent-web",
+				sessionScopeEligible: false,
+				webReview: { toolName: "web_search", stage: "request", query: "weather berlin" },
+				content: null,
+				delta: null,
+			}),
+		);
+		const resultPreview = { toolName: "web_search", stage: "result" as const, backend: "searxng", results: [] };
+		const review = applyNodeChatStreamEvent(
+			consent.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				sequence: 6,
+				toolCallId: "call-web",
+				toolName: "web_search",
+				approvalRequestId: "review-web",
+				sessionScopeEligible: false,
+				webReview: resultPreview,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const tools = review.streamingMessage.parts?.filter((part) => part.kind === "tool") ?? [];
+		expect(tools).toHaveLength(1);
+		expect(tools[0]).toMatchObject({
+			id: "call-web",
+			state: "waiting",
+			pendingApprovalRequestId: "review-web",
+			pendingWebReview: resultPreview,
+		});
+	});
+
 	it("renders an approval raised after a stream resume as a web review only when the event carries the call identity", () => {
 		// Live round D1: after a reload the resumed stream sent the third web call's approval before the node had folded
 		// the call id, tool name and preview onto the pending slot. With no tool card to attach to, the reducer builds a
