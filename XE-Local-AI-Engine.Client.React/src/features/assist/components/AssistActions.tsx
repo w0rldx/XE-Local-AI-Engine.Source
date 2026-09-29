@@ -20,7 +20,7 @@ interface AssistActionsProps {
 }
 
 /**
- * The "Draft with AI" / "Improve with AI" entry point both editors embed, plus the dialog it opens.
+ * The "Draft with AI" / "Improve with AI" entry point the agent, skill and image forms embed, plus the dialog it opens.
  *
  * Eligibility shown here is a UI HINT only — the server re-checks the model fail-closed on every draft. It exists so
  * a node with no installed chat model explains itself up front instead of failing on the first Generate.
@@ -61,7 +61,7 @@ export function AssistActions({ surface, existing, onApply, onDiscard }: AssistA
 							onClick={() => setMode("Create")}
 							data-testid="assist-open-create"
 						>
-							{t("assist.draftButton", "Draft with AI")}
+							{surface === "image" ? t("assist.promptButton", "Write prompt with AI") : t("assist.draftButton", "Draft with AI")}
 						</Button>
 					</Box>
 				</Tooltip>

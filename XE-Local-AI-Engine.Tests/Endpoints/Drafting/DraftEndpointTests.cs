@@ -26,6 +26,7 @@ public sealed class DraftEndpointTests
 {
     private const string AgentDraftRoute = "/api/local/v1/agents/draft";
     private const string SkillDraftRoute = "/api/local/v1/skills/draft";
+    private const string ImagePromptDraftRoute = "/api/local/v1/images/prompts/draft";
 
     private static object BuildCreateBody(string brief = "An agent that reviews Terraform plans before apply.")
     {
@@ -314,6 +315,108 @@ public sealed class DraftEndpointTests
         AssertEx.Equal(expected: 1, stub.SkillCallCount);
     }
 
+    [Test]
+    public async Task DraftImagePrompt_WhenSuccessful_ReturnsPromptAndNegativePromptAndPassesTheCurrentPromptsOn()
+    {
+        var stub = new StubConfigDraftService(DraftResult.Success(new ConfigDraft
+        {
+            Name = string.Empty,
+            Description = "blurry, watermark",
+            Content = "A red fox in a misty birch forest at dawn, soft volumetric light, watercolor.",
+            Rationale = null,
+            Assumptions = [],
+            Confidence = 0.7d,
+            GeneratedAtUtc = DateTimeOffset.UnixEpoch.AddSeconds(1_700_000_000),
+            ContentHash = "0123456789abcdef"
+        }));
+        await using var factory = CreateFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory,
+            client,
+            ImagePromptDraftRoute,
+            new
+            {
+                mode = "improve",
+                modelName = "qwen3.5:0.8b",
+                brief = "More atmospheric.",
+                existingPrompt = "a fox",
+                existingNegativePrompt = "blurry"
+            });
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Contains(document.RootElement.GetProperty("prompt").GetString(), "red fox");
+        AssertEx.Equal("blurry, watermark", document.RootElement.GetProperty("negativePrompt").GetString());
+        AssertEx.Equal("Improve", document.RootElement.GetProperty("generationMetadata").GetProperty("mode").GetString());
+        var forwarded = AssertEx.NotNull(stub.LastRequest);
+        AssertEx.Equal("a fox", forwarded.ExistingContent);
+        AssertEx.Equal("blurry", forwarded.ExistingDescription);
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_WhenNodeBusy_Returns409WithTypedCode()
+    {
+        var stub = new StubConfigDraftService(DraftResult.Failed(DraftFailureKind.NodeBusy,
+            "The node is running another task; try again once it finishes."));
+        await using var factory = CreateFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory, client, ImagePromptDraftRoute, BuildCreateBody("A fox in a forest."));
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("NodeBusy", document.RootElement.GetProperty("code").GetString());
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_WhenModelNotEligible_Returns400()
+    {
+        var stub = new StubConfigDraftService(DraftResult.Failed(DraftFailureKind.ModelNotEligible,
+            "The selected model is not an installed chat model served by a node-local runtime."));
+        await using var factory = CreateFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory, client, ImagePromptDraftRoute, BuildCreateBody("A fox in a forest."));
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_WhenExistingPromptOverCap_Returns400WithoutCallingService()
+    {
+        var stub = new StubConfigDraftService(DraftResult.Success(BuildDraft()));
+        await using var factory = CreateFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory,
+            client,
+            ImagePromptDraftRoute,
+            new
+            {
+                mode = "improve",
+                modelName = "qwen3.5:0.8b",
+                brief = "More atmospheric.",
+                existingPrompt = new string('p', count: 2001)
+            });
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal(expected: 0, stub.CallCount);
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_WhenNoBearerToken_ReturnsUnauthorized()
+    {
+        var stub = new StubConfigDraftService(DraftResult.Success(BuildDraft()));
+        await using var factory = CreateFactory(stub);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory, client, ImagePromptDraftRoute, BuildCreateBody(), authenticated: false);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertEx.Equal(expected: 0, stub.CallCount);
+    }
+
     private static async Task<(long Agents, long Skills)> CountRowsAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
@@ -355,7 +458,11 @@ public sealed class DraftEndpointTests
 
         public int SkillCallCount { get; private set; }
 
-        public int CallCount => AgentCallCount + SkillCallCount;
+        public int ImagePromptCallCount { get; private set; }
+
+        public ConfigDraftRequest? LastRequest { get; private set; }
+
+        public int CallCount => AgentCallCount + SkillCallCount + ImagePromptCallCount;
 
         public Task<DraftResult> DraftAgentDefinitionAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
         {
@@ -366,6 +473,13 @@ public sealed class DraftEndpointTests
         public Task<DraftResult> DraftSkillAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
         {
             SkillCallCount++;
+            return Task.FromResult(_result);
+        }
+
+        public Task<DraftResult> DraftImagePromptAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
+        {
+            ImagePromptCallCount++;
+            LastRequest = request;
             return Task.FromResult(_result);
         }
     }

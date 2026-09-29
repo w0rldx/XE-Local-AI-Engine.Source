@@ -1,0 +1,147 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"question": "What are the main risks of keeping API keys and passwords in a source code repository, and what should a small team do to avoid them?"
+				}
+			}
+		},
+		{
+			"key": "research",
+			"kind": "Agent",
+			"label": "Agent: research the question",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {
+				"agentDefinitionId": null,
+				"instructions": "Answer the question in the run input (the `question` field of the Start node's output below). Use your tools where they help: search the knowledge base first for anything the operator has stored on the subject, and use any other tool that brings in real information. Then write a clear answer of 150 to 250 words for a non-expert reader. End with a short \"Sources\" list naming each tool you used and what it gave you. If no tool found anything relevant, say so in the Sources list and mark the answer as based on general knowledge.",
+				"model": null,
+				"reasoningEffort": null,
+				"responseJsonSchema": null,
+				"includeUpstreamOutputs": true
+			}
+		},
+		{
+			"key": "check",
+			"kind": "LlmCall",
+			"label": "Check the answer",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You are a careful reviewer. You judge an answer against the question it was meant to answer and never rewrite it.",
+				"prompt": "The `answer` data block was written by an agent in reply to the `question` data block. Review it in at most 120 words: does it answer the question, is anything wrong, overstated or missing, and does its Sources list say honestly where the information came from? Finish with one line that reads either \"Verdict: looks good\" or \"Verdict: needs changes\".",
+				"inputBindings": {
+					"question": "run.input.question",
+					"answer": "upstream.research.output.text"
+				}
+			}
+		},
+		{
+			"key": "review",
+			"kind": "Pause",
+			"label": "Approve the answer",
+			"position": {
+				"x": 840,
+				"y": 130
+			},
+			"config": {
+				"prompt": "Read the agent's answer in the Agent: research the question node's output and the reviewer's notes in the Check the answer node's output. Approve to finish the run with the agent's answer as its result, or reject it and say in the comment what is wrong.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "end_approved",
+			"kind": "End",
+			"label": "Approved",
+			"position": {
+				"x": 1120,
+				"y": 0
+			},
+			"config": {
+				"outcome": "approved",
+				"resultPath": "upstream.research.output.text"
+			}
+		},
+		{
+			"key": "end_rejected",
+			"kind": "End",
+			"label": "Rejected",
+			"position": {
+				"x": 1120,
+				"y": 260
+			},
+			"config": {
+				"outcome": "rejected",
+				"resultPath": "upstream.review.output.comment"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "research"
+		},
+		{
+			"key": "e2",
+			"from": "research",
+			"to": "check"
+		},
+		{
+			"key": "e3",
+			"from": "check",
+			"to": "review"
+		},
+		{
+			"key": "e4",
+			"from": "review",
+			"to": "end_approved",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e5",
+			"from": "research",
+			"to": "end_approved",
+			"label": "context"
+		},
+		{
+			"key": "e6",
+			"from": "review",
+			"to": "end_rejected",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e7",
+			"from": "research",
+			"to": "end_rejected",
+			"label": "context"
+		}
+	]
+}

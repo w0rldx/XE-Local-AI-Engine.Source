@@ -47,7 +47,8 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 // Answers the three locality gates for an external id, which the threaded per-turn cloud flag cannot see: such an id
                 // falls THROUGH cloud selection by design, so without it a declared-cloud endpoint would be offered workspace, KB and run_python.
                 sp.GetRequiredService<IModelTrustResolver>(),
-                knowledgeOptions.AllowCloudModelAccess);
+                knowledgeOptions.AllowCloudModelAccess,
+                sp.GetRequiredService<ILogger<LocalToolOfferProvider>>());
         });
         // The catalog read composed with the node approval policy, which the provider above deliberately never consults.
         // Singleton, like both seams it composes.

@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
+import { AssistActions } from "@/features/assist/components/AssistActions";
+import type { AssistDraft } from "@/features/assist/models/AssistModels";
 import {
 	clearImageFormOverrides,
 	imageFormValuesForModel,
@@ -18,6 +20,9 @@ import {
 	imageGenerationFormSchema,
 	imageSamplers,
 } from "@/features/images/models/ImageModels";
+
+// Image prompts carry no provenance to drop on discard.
+const noop = () => undefined;
 
 interface ImageGenerationFormProps {
 	models: readonly ImageModelView[];
@@ -114,6 +119,19 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		}
 	}, [handleModelChange, models, values.modelName]);
 
+	// A drafted prompt replaces the prompt; a drafted negative prompt replaces the current one only when the model gave one.
+	const applyPromptDraft = useCallback((draft: AssistDraft) => {
+		setValues((current) => ({
+			...current,
+			prompt: draft.content,
+			negativePrompt: draft.description.trim() ? draft.description : current.negativePrompt,
+		}));
+	}, []);
+	const assistExisting = useMemo(
+		() => ({ name: "", description: values.negativePrompt ?? "", content: values.prompt }),
+		[values.negativePrompt, values.prompt],
+	);
+
 	const selectedModel = models.some((model) => model.modelName === values.modelName)
 		? values.modelName
 		: (models[0]?.modelName ?? null);
@@ -131,6 +149,8 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				onChange={(value) => handleModelChange(value ?? "")}
 				data-testid="image-form-model"
 			/>
+
+			<AssistActions surface="image" existing={assistExisting} onApply={applyPromptDraft} onDiscard={noop} />
 
 			<Textarea
 				label={t("pages.images.form.prompt.label", "Prompt")}

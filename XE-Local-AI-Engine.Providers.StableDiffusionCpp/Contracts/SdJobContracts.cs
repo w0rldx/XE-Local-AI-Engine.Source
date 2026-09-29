@@ -53,4 +53,10 @@ internal sealed record SdJobState
 
     /// <summary>The seed the server actually used, when it reported one.</summary>
     public long? Seed { get; init; }
+
+    /// <summary>The server's raw error code when <see cref="SdJobStatus.Failed" />; unsanitized, never surfaced to the operator as-is.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>The server's raw error message when <see cref="SdJobStatus.Failed" />; unsanitized, never surfaced to the operator as-is.</summary>
+    public string? ErrorMessage { get; init; }
 }

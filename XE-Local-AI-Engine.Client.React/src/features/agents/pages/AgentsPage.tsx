@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { getNodeSettingsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -24,7 +24,11 @@ import { GoldenConversationPanel } from "@/features/agents/components/GoldenConv
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { useAgentEditorDialog } from "@/features/agents/hooks/useAgentEditorDialog";
 import { toSaveAgentDefinitionRequest } from "@/features/agents/models/AgentDefinitionMappers";
-import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
+import {
+	type AgentDefinition,
+	type AgentDefinitionFormValues,
+	isDefaultAssistantDefinition,
+} from "@/features/agents/models/AgentDefinitionModels";
 import {
 	deserializeOrchestrationTopology,
 	emptyOrchestrationTopology,
@@ -90,6 +94,8 @@ export function AgentsPage() {
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
 	const { data: modelsData } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	// The node switches that withhold tools from the offer; the tool selector marks what they gate.
+	const { data: nodeSettings } = useQuery(withResponseValidation(getNodeSettingsOptions()));
 
 	const createMutation = useCreateAgentDefinition();
 	const updateMutation = useUpdateAgentDefinition();
@@ -265,6 +271,8 @@ export function AgentsPage() {
 						submitError={submitError}
 						onSubmit={handleSubmit}
 						onDirtyChange={setIsEditorDirty}
+						isDefaultAssistant={editingDefinition ? isDefaultAssistantDefinition(editingDefinition) : false}
+						webAccessEnabled={nodeSettings?.webAccessEnabled}
 					/>
 					{/* Per-agent playbook governance. Only meaningful for a persisted agent (has an id);
 						    a brand-new agent must be saved first. Capability-gated under agentManagement. */}

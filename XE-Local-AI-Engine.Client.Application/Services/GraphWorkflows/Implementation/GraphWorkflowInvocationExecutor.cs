@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -545,7 +544,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
 
             var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
-            if (!IsChatModel(effectiveModel, classification))
+            if (!LocalGgufModelKindClassifier.IsChatModel(effectiveModel, classification))
             {
                 return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
             }
@@ -725,26 +724,6 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         return true;
-    }
-
-    internal static bool IsChatModel(string modelName, ModelClassificationRecord? classification)
-    {
-        if (LocalGgufModelKindClassifier.Classify(modelName) == ModelKind.Draft)
-        {
-            return false;
-        }
-
-        if (classification?.OverrideKind is { } overrideKind)
-        {
-            return overrideKind == ModelKind.Chat;
-        }
-
-        return classification?.DetectedKind switch
-        {
-            ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft => false,
-            ModelKind.Chat => true,
-            _ => LocalGgufModelKindClassifier.Classify(modelName) == ModelKind.Chat
-        };
     }
 
     /// <summary>

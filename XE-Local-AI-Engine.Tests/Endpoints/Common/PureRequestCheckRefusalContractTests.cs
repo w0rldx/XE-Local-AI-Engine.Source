@@ -68,6 +68,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     [Arguments(ApiPrefix + "/skills/draft")]
     [Arguments(ApiPrefix + "/agents/draft")]
+    [Arguments(ApiPrefix + "/images/prompts/draft")]
     public async Task Draft_WhenModelAndBriefAreBothMissing_ReportsOnlyTheModel(string route)
     {
         await using var factory = new TestServerWebAppFactory();
@@ -85,6 +86,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     [Arguments(ApiPrefix + "/skills/draft")]
     [Arguments(ApiPrefix + "/agents/draft")]
+    [Arguments(ApiPrefix + "/images/prompts/draft")]
     public async Task Draft_WhenOnlyTheBriefIsMissing_ReportsTheBrief(string route)
     {
         await using var factory = new TestServerWebAppFactory();

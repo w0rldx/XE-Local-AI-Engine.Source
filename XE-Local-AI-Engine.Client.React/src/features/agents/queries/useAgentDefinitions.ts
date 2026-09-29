@@ -4,6 +4,7 @@ import type { XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 import {
 	createAgentDefinitionMutation,
 	deleteAgentDefinitionMutation,
+	getDefaultAssistantToolOfferOptions,
 	getToolCapableModelsOptions,
 	listAgentDefinitionsOptions,
 	updateAgentDefinitionMutation,
@@ -43,6 +44,17 @@ export function useToolCapableModels() {
 	return useQuery({
 		...withResponseValidation(getToolCapableModelsOptions()),
 		select: (data) => data.models ?? [],
+	});
+}
+
+// The tool names a chat turn offers the seeded Default Assistant on `modelProfile` (blank = the node's local default),
+// as the server computes them: capability, trust boundary and node switches included. Only fetched while `enabled`.
+export function useDefaultAssistantToolOffer(modelProfile: string | null, enabled: boolean) {
+	const modelName = modelProfile?.trim() ? modelProfile : null;
+	return useQuery({
+		...withResponseValidation(getDefaultAssistantToolOfferOptions({ query: { modelName } })),
+		select: (data) => data.toolNames ?? [],
+		enabled,
 	});
 }
 

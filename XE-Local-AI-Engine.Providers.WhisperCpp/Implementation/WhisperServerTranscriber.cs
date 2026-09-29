@@ -74,14 +74,32 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
             throw new ArgumentException("An explicit language mode requires a language code.", nameof(request));
         }
 
+        // A forced language is never detected, whatever the caller asked: there is nothing to learn from the probabilities.
+        var languageProbabilities = request.DetectLanguage && request.LanguageMode != WhisperLanguageMode.Explicit;
+        try
+        {
+            return await TranscribeLeasedAsync(modelId, request, languageProbabilities, ct).ConfigureAwait(false);
+        }
+        catch (WhisperRuntimeException exception) when (languageProbabilities && exception.ProcessExited)
+        {
+            // The upstream no-speech bug PostInferenceAsync retries as a 500 kills the Windows build (exit -1073741819) instead.
+            // The dead daemon is torn down, so this respawns it, and without probabilities the window cannot hit the bug again.
+            _logger.LogWarning("whisper-server died on a request that asked for language probabilities; retrying once without them.");
+            return await TranscribeLeasedAsync(modelId, request, languageProbabilities: false, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<WhisperTranscriptionResult> TranscribeLeasedAsync(string modelId,
+        WhisperTranscriptionRequest request,
+        bool languageProbabilities,
+        CancellationToken ct)
+    {
         // Ensure-then-lease is two steps, and the daemon is mutable, so another caller can complete a model switch
         // between them. One retry covers that; a second failure surfaces rather than spinning through a switch storm.
         var (endpoint, lease) = await EnsureLeasedAsync(modelId, ct).ConfigureAwait(false);
 
         using (lease)
         {
-            // A forced language is never detected, whatever the caller asked: there is nothing to learn from the probabilities.
-            var languageProbabilities = request.DetectLanguage && request.LanguageMode != WhisperLanguageMode.Explicit;
             var result = await PostInferenceAsync(endpoint, request, languageProbabilities, ct).ConfigureAwait(false);
             lease.Touch();
             return result;

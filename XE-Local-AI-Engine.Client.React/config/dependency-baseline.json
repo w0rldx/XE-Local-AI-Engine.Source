@@ -66,6 +66,8 @@
   "[\"no-cross-feature\",\"src/features/devWorkflows/components/DevWorkflowAgentNodePanel.tsx\",\"src/features/workSessions/hooks/useWorkSessionHub.ts\"]",
   "[\"no-cross-feature\",\"src/features/development/hooks/useDevelopmentPageController.ts\",\"src/features/devWorkflows/models/DevWorkflowModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/images/components/ImageDownloadRow.tsx\",\"src/features/models/models/DownloadRateEstimate.ts\"]",
+  "[\"no-cross-feature\",\"src/features/images/components/ImageGenerationForm.tsx\",\"src/features/assist/components/AssistActions.tsx\"]",
+  "[\"no-cross-feature\",\"src/features/images/components/ImageGenerationForm.tsx\",\"src/features/assist/models/AssistModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/images/components/ImageModelBrowsePanel.tsx\",\"src/features/models/models/DownloadRateEstimate.ts\"]",
   "[\"no-cross-feature\",\"src/features/images/components/ImageModelCatalogPanel.tsx\",\"src/features/models/models/DownloadRateEstimate.ts\"]",
   "[\"no-cross-feature\",\"src/features/images/components/ImageModelManager.tsx\",\"src/features/models/hooks/useDownloadRateEstimates.ts\"]",

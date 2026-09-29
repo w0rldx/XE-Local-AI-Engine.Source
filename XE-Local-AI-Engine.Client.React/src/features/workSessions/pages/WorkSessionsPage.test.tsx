@@ -33,6 +33,7 @@ function agentsRoute() {
 				reasoningEffort: null,
 				kind: "Single",
 				allowedToolNames: [],
+				isDefaultAssistant: false,
 				toolApprovals: {},
 				allowedSkillIds: [],
 				orchestrationTopologyJson: null,

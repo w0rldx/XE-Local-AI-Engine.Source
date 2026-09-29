@@ -1,9 +1,12 @@
 // The sample workflows the "New workflow" dialog offers under "Start from". Each is a plain wire graph posted through
 // the ordinary create call, so a created sample is an ordinary definition. Every sample runs on any installed GGUF chat
-// model and nothing else: no Tool, Agent or Chat-only nodes, and no model pin. Prompts inside the graphs are
-// model-facing node config and stay English; only the name and description shown in the picker are translated.
+// model and nothing else: no Tool or Chat-only nodes and no model pin. An Agent node is allowed only without an
+// agentDefinitionId, because an unbound Agent runs the built-in default persona with the local tools, which every fresh
+// install has; a bound agent would need setup first. Prompts inside the graphs are model-facing node config and stay
+// English; only the name and description shown in the picker are translated.
 
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import agentResearchAndCheck from "@/features/graphWorkflows/samples/agent-research-and-check.json";
 import briefWithReviewLoop from "@/features/graphWorkflows/samples/brief-with-review-loop.json";
 import parallelPerspectives from "@/features/graphWorkflows/samples/parallel-perspectives.json";
 import summarizeWithApproval from "@/features/graphWorkflows/samples/summarize-with-approval.json";
@@ -52,5 +55,14 @@ export const GRAPH_WORKFLOW_SAMPLES: readonly GraphWorkflowSample[] = [
 		descriptionKey: "pages.graphWorkflows.samples.briefWithReviewLoop.description",
 		defaultDescription:
 			"Drafts a brief, has it checked for accuracy and clarity in parallel, revises it, and asks a person only when the model is unsure.",
+	},
+	{
+		id: "agent-research-and-check",
+		graph: agentResearchAndCheck as GraphWorkflowGraph,
+		nameKey: "pages.graphWorkflows.samples.agentResearchAndCheck.name",
+		defaultName: "Agent research with check",
+		descriptionKey: "pages.graphWorkflows.samples.agentResearchAndCheck.description",
+		defaultDescription:
+			"An agent answers a question with its tools and lists its sources, a second model checks the answer, and a person approves it.",
 	},
 ];

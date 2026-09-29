@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -156,12 +157,12 @@ public sealed class GraphWorkflowGraphTests
             UpdatedAtUtc = 0
         };
 
-        AssertEx.False(GraphWorkflowInvocationExecutor.IsChatModel("installed.gguf", classification));
+        AssertEx.False(LocalGgufModelKindClassifier.IsChatModel("installed.gguf", classification));
     }
 
     [Test]
     public void LlmCallModelPolicy_AllowsAnUnclassifiedOrdinaryInstalledGguf() =>
-        AssertEx.True(GraphWorkflowInvocationExecutor.IsChatModel("ordinary-model.gguf", classification: null));
+        AssertEx.True(LocalGgufModelKindClassifier.IsChatModel("ordinary-model.gguf", classification: null));
 
     [Test]
     [Arguments("""{ "prompt": "Go.", "samplingOptions": { "temperature": -1 } }""")]

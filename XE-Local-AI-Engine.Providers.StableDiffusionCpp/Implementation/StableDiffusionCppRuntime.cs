@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -19,12 +21,20 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
+    // Bounds the daemon's own error text in the log: it is foreign input of unknown size.
+    private const int MaxLoggedErrorLength = 300;
+
     private readonly SdServerJobClient _jobClient;
     private readonly IImageServerSupervisor _supervisor;
     private readonly IImageServerProgressBroker _progressBroker;
+    private readonly ILogger<StableDiffusionCppRuntime> _logger;
 
-    public StableDiffusionCppRuntime(IImageServerSupervisor supervisor, SdServerJobClient jobClient, IImageServerProgressBroker progressBroker)
+    public StableDiffusionCppRuntime(IImageServerSupervisor supervisor,
+        SdServerJobClient jobClient,
+        IImageServerProgressBroker progressBroker,
+        ILogger<StableDiffusionCppRuntime> logger)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _jobClient = jobClient ?? throw new ArgumentNullException(nameof(jobClient));
         _progressBroker = progressBroker ?? throw new ArgumentNullException(nameof(progressBroker));
@@ -79,6 +89,7 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
                     case SdJobStatus.Failed:
                         tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
+                        await RecycleAfterFailedJobAsync(request.ModelName, state, jobLease).ConfigureAwait(false);
                         throw new StableDiffusionRuntimeException("The image runtime failed to generate the image.");
 
                     case SdJobStatus.Expired:
@@ -154,6 +165,45 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         {
             await _supervisor.RestartAsync(modelName, CancellationToken.None).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Logs the daemon's own reason for a failed job and evicts that daemon, so the next generation spawns a fresh
+    ///     process instead of reusing one left in a broken state (a CUDA out-of-memory failure keeps failing every job).
+    /// </summary>
+    /// <remarks>
+    ///     The lease is released first: eviction is only safe once no job holds the daemon, and generations are
+    ///     serialized by <c>ImageJobCoordinator</c>'s single generation slot, which this call still holds.
+    /// </remarks>
+    private async Task RecycleAfterFailedJobAsync(string modelName, SdJobState state, IImageServerJobLease? jobLease)
+    {
+        _logger.LogWarning("sd-server job for model {ModelName} failed ({ErrorCode}): {ErrorMessage}. Evicting the daemon; the next generation starts a fresh one.",
+            modelName, Bound(state.ErrorCode) ?? "(none)", Bound(state.ErrorMessage) ?? "(none)");
+
+        jobLease?.Dispose();
+        await _supervisor.EvictAsync(modelName, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>Strips control characters (no log forging) and truncates foreign error text to a bounded length.</summary>
+    internal static string? Bound(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder(Math.Min(text.Length, MaxLoggedErrorLength + 1));
+        foreach (var ch in text)
+        {
+            if (builder.Length == MaxLoggedErrorLength)
+            {
+                return builder.Append('\u2026').ToString();
+            }
+
+            _ = builder.Append(char.IsControl(ch) ? ' ' : ch);
+        }
+
+        return builder.ToString().Trim();
     }
 
     private static StableDiffusionRuntimeException DaemonExited(int? exitCode, Exception? cause)

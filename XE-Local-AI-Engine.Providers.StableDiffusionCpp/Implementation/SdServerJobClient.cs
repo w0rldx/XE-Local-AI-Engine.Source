@@ -161,7 +161,9 @@ internal sealed class SdServerJobClient
             return new SdJobState
             {
                 Status = status,
-                QueuePosition = payload?.QueuePosition
+                QueuePosition = payload?.QueuePosition,
+                ErrorCode = payload?.Error?.Code,
+                ErrorMessage = payload?.Error?.Message
             };
         }
 

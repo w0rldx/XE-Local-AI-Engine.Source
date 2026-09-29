@@ -3,8 +3,10 @@
 	"assist": {
 		"draftButton": "Draft with AI",
 		"improveButton": "Improve with AI",
+		"promptButton": "Write prompt with AI",
 		"noModelHint": "No local chat model is installed on this node, so nothing can draft yet.",
 		"intro": "A model on this node writes a draft from your description. Nothing is saved until you apply it and save the form yourself.",
+		"imageIntro": "A model on this node writes a prompt from your description. Applying it only fills the prompt field; nothing is generated until you start the image generation yourself.",
 		"demotionToast": "Saved as an imported skill and left disabled. Review the generated instructions, then enable it.",
 		"dialog": {
 			"draftTitle": "Draft with AI",
@@ -20,7 +22,10 @@
 			"improveLabel": "What should change?",
 			"createDescription": "Describe the job in your own words — the model turns it into a draft.",
 			"improveDescription": "Describe the revision. The current content is sent as the starting point.",
-			"placeholder": "Review supplier invoices against the agreed rate card and flag anything unusual."
+			"placeholder": "Review supplier invoices against the agreed rate card and flag anything unusual.",
+			"imageCreateLabel": "What should the image show?",
+			"imageCreateDescription": "Describe your idea in a few words — the model turns it into a detailed prompt.",
+			"imagePlaceholder": "A fox in a forest at dawn"
 		},
 		"actions": {
 			"generate": "Generate",
@@ -42,7 +47,9 @@
 			"nameLabel": "Name",
 			"descriptionLabel": "Description",
 			"instructionsLabel": "Instructions",
-			"bodyLabel": "Body"
+			"bodyLabel": "Body",
+			"promptLabel": "Prompt",
+			"negativePromptLabel": "Negative prompt"
 		},
 		"rationale": {
 			"toggle": "Why this draft",
@@ -3099,6 +3106,7 @@
 				"nodeDefault": "Node default",
 				"editAria": "Edit {{name}}",
 				"deleteAria": "Delete {{name}}",
+				"allTools": "All",
 				"columns": {
 					"name": "Name",
 					"kind": "Kind",
@@ -3157,7 +3165,11 @@
 					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools.",
 					"loading": "Loading tools…",
 					"loadError": "Could not load the tool catalog.",
-					"empty": "No tools available."
+					"empty": "No tools available.",
+					"defaultAssistantNote": "The default assistant uses every tool available to its model.",
+					"defaultOfferError": "Could not load the default assistant's tools.",
+					"alwaysOffered": "Always available: an agent can always ask you a question.",
+					"webAccessRequired": "Requires web access in Node Settings"
 				},
 				"orchestration": {
 					"label": "Orchestration",
@@ -6642,6 +6654,10 @@
 				"briefWithReviewLoop": {
 					"name": "Brief with review loop",
 					"description": "Drafts a brief, has it checked for accuracy and clarity in parallel, revises it, and asks a person only when the model is unsure."
+				},
+				"agentResearchAndCheck": {
+					"name": "Agent research with check",
+					"description": "An agent answers a question with its tools and lists its sources, a second model checks the answer, and a person approves it."
 				}
 			}
 		},

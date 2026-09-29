@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
@@ -15,22 +13,8 @@ vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
 }));
 
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({
-		t: (_key: string, defaultValue?: string, options?: Record<string, unknown>) => {
-			let text = defaultValue ?? _key;
-			if (options) {
-				for (const [name, value] of Object.entries(options)) {
-					text = text.replace(`{{${name}}}`, String(value));
-				}
-			}
-			return text;
-		},
-	}),
-}));
-
 import { AgentToolSelector } from "@/features/agents/components/AgentToolSelector";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const catalog: ToolCatalogEntry[] = [
 	{
@@ -53,46 +37,14 @@ const catalog: ToolCatalogEntry[] = [
 	},
 ];
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
 interface HarnessProps {
 	selectedToolNames?: string[];
 	toolApprovals?: Record<string, boolean>;
 	toolCapable?: boolean;
+	isDefaultAssistant?: boolean;
+	webAccessEnabled?: boolean | null;
+	defaultOfferToolNames?: readonly string[];
+	defaultOfferError?: boolean;
 }
 
 function renderSelector(props: HarnessProps = {}) {
@@ -105,14 +57,19 @@ function renderSelector(props: HarnessProps = {}) {
 			toolCapable={props.toolCapable ?? true}
 			onToggleTool={onToggleTool}
 			onToggleApproval={onToggleApproval}
+			isDefaultAssistant={props.isDefaultAssistant}
+			webAccessEnabled={props.webAccessEnabled}
+			defaultOfferToolNames={props.defaultOfferToolNames}
+			defaultOfferError={props.defaultOfferError}
 		/>,
+		// The web-access hint is a router link; a router mounts asynchronously, so those tests await with findBy*.
+		{ withRouter: props.webAccessEnabled === false || props.webAccessEnabled === null },
 	);
 	return { onToggleTool, onToggleApproval };
 }
 
 describe("AgentToolSelector", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		useToolCatalogMock.mockReturnValue({ data: catalog, isLoading: false, error: null });
 	});
 
@@ -191,5 +148,117 @@ describe("AgentToolSelector", () => {
 		renderSelector();
 
 		expect(screen.getByTestId("agent-tool-catalog-loading")).toBeTruthy();
+	});
+	const webSearch: ToolCatalogEntry = {
+		name: "web_search",
+		description: "Searches the web.",
+		requiresApproval: true,
+		source: { kind: "builtin", serverSlug: null },
+		category: "Network",
+		effectiveRequiresApproval: true,
+		sessionScopeEligible: false,
+	};
+	const runPython: ToolCatalogEntry = {
+		name: "run_python",
+		description: "Runs Python.",
+		requiresApproval: true,
+		source: { kind: "builtin", serverSlug: null },
+		category: "WriteExecute",
+		effectiveRequiresApproval: true,
+		sessionScopeEligible: false,
+	};
+
+	it("checks and locks exactly the server's Default Assistant offer, whatever the catalog holds", () => {
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, webSearch, runPython], isLoading: false, error: null });
+
+		renderSelector({
+			isDefaultAssistant: true,
+			selectedToolNames: [],
+			webAccessEnabled: true,
+			defaultOfferToolNames: ["GetCurrentTime", "ask_user"],
+		});
+
+		expect(screen.getByTestId("agent-tool-default-offer-note").textContent).toContain(
+			"The default assistant uses every tool available to its model.",
+		);
+		const checkbox = (name: string) => screen.getByTestId<HTMLInputElement>(`agent-tool-checkbox-${name}`);
+		expect(checkbox("GetCurrentTime").checked).toBe(true);
+		// ask_user is not in the mocked catalog: the server listed it, so it is still shown, checked.
+		expect(checkbox("ask_user").checked).toBe(true);
+		for (const name of ["mcp__filesystem-tools__read", "web_search", "run_python"]) {
+			expect(checkbox(name).checked).toBe(false);
+		}
+		for (const name of ["GetCurrentTime", "ask_user", "web_search"]) {
+			expect(checkbox(name).disabled).toBe(true);
+			expect(screen.getByTestId<HTMLInputElement>(`agent-tool-approval-${name}`).disabled).toBe(true);
+		}
+	});
+
+	it("shows a loading state instead of guessing while the Default Assistant's offer loads", () => {
+		renderSelector({ isDefaultAssistant: true, defaultOfferToolNames: undefined });
+
+		expect(screen.getByTestId("agent-tool-catalog-loading")).toBeTruthy();
+		expect(screen.queryByTestId("agent-tool-row-GetCurrentTime")).toBeNull();
+	});
+
+	it("shows an error instead of guessing when the Default Assistant's offer fails to load", () => {
+		renderSelector({ isDefaultAssistant: true, defaultOfferError: true });
+
+		expect(screen.getByTestId("agent-tool-default-offer-error").textContent).toContain(
+			"Could not load the default assistant's tools.",
+		);
+		expect(screen.queryByTestId("agent-tool-row-GetCurrentTime")).toBeNull();
+	});
+
+	it("does not show the default-offer note for an ordinary agent", () => {
+		renderSelector();
+
+		expect(screen.queryByTestId("agent-tool-default-offer-note")).toBeNull();
+	});
+
+	// null is a fresh node's never-saved switch, which the server reads as off.
+	it.each([false, null])("links a web tool to Node Settings while web access is %s", async (webAccessEnabled) => {
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, webSearch], isLoading: false, error: null });
+
+		renderSelector({ isDefaultAssistant: true, webAccessEnabled, defaultOfferToolNames: ["GetCurrentTime"] });
+
+		const hint = await screen.findByTestId("agent-tool-web-access-hint-web_search");
+		expect(hint.textContent).toContain("Requires web access in Node Settings");
+		expect(hint.getAttribute("href")).toBe("/node-settings?section=knowledge");
+		expect(screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-web_search").checked).toBe(false);
+		// Only the web tools carry the hint.
+		expect(screen.queryByTestId("agent-tool-web-access-hint-GetCurrentTime")).toBeNull();
+	});
+
+	it("shows no web-access hint while web access is on or still loading", () => {
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, webSearch], isLoading: false, error: null });
+
+		renderSelector({ webAccessEnabled: true });
+		expect(screen.queryByTestId("agent-tool-web-access-hint-web_search")).toBeNull();
+		cleanup();
+
+		renderSelector({ webAccessEnabled: undefined });
+		expect(screen.queryByTestId("agent-tool-web-access-hint-web_search")).toBeNull();
+	});
+
+	it("shows ask_user checked and locked for an ordinary agent, with a note", () => {
+		const askUser: ToolCatalogEntry = {
+			name: "ask_user",
+			description: "Asks the operator.",
+			requiresApproval: true,
+			source: { kind: "builtin", serverSlug: null },
+			category: "ReadLocal",
+			effectiveRequiresApproval: true,
+			sessionScopeEligible: false,
+		};
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, askUser], isLoading: false, error: null });
+
+		renderSelector({ selectedToolNames: [] });
+
+		const checkbox = screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-ask_user");
+		expect(checkbox.checked).toBe(true);
+		expect(checkbox.disabled).toBe(true);
+		expect(screen.getByTestId("agent-tool-always-offered-note").textContent).toContain("Always available");
+		expect(screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-GetCurrentTime").disabled).toBe(false);
 	});
 });

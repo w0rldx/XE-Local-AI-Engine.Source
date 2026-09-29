@@ -53,6 +53,8 @@ export interface AgentDefinition {
 	// put in front of the model on every round. Defaults to false (follow the node setting). Never an authorisation
 	// change: a filtered-out tool is one the model was not shown, not one it may not call.
 	readonly disableToolRelevanceFilter: boolean;
+	// Server provenance: true only for the seeded Default Assistant (seeded row + its seed slug), never name-based.
+	readonly isDefaultAssistant: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
@@ -89,6 +91,12 @@ export interface AgentDefinitionFormValues {
 	// demote — an agent definition carries no Imported/Enabled fence — so this is the only thing a draft leaves
 	// behind. `null` (an ordinary edit) tells the server to preserve whatever provenance the row already has.
 	generationMetadata: GenerationMetadata | null;
+}
+
+// The seeded Default Assistant, which the backend offers every tool available to its model and whose (empty) allowed
+// list it never reads. Keyed on the server's provenance flag, so an operator agent sharing the name is never matched.
+export function isDefaultAssistantDefinition(definition: AgentDefinition): boolean {
+	return definition.isDefaultAssistant;
 }
 
 const reasoningEffortSchema = z.enum(["none", "low", "medium", "high"]);

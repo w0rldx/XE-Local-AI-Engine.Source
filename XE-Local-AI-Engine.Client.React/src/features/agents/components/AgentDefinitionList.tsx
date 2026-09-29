@@ -56,7 +56,9 @@ export function AgentDefinitionList({ definitions, isMutating, onEdit, onDelete 
 								</Badge>
 							</Table.Td>
 							<Table.Td>{definition.modelProfile ?? t("pages.agents.list.nodeDefault", "Node default")}</Table.Td>
-							<Table.Td>{definition.allowedToolNames.length}</Table.Td>
+							<Table.Td>
+								{definition.isDefaultAssistant ? t("pages.agents.list.allTools", "All") : definition.allowedToolNames.length}
+							</Table.Td>
 							<Table.Td>{definition.version}</Table.Td>
 							<Table.Td>
 								<Group gap="xs" wrap="nowrap">

@@ -26,6 +26,7 @@ const { hooksMock, playbookHooksMock, confirmMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useAgentDefinitions: vi.fn(),
 		useToolCapableModels: vi.fn(),
+		useDefaultAssistantToolOffer: vi.fn(),
 		useCreateAgentDefinition: vi.fn(),
 		useUpdateAgentDefinition: vi.fn(),
 		useDeleteAgentDefinition: vi.fn(),
@@ -70,6 +71,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 		queryKey: [{ _id: "listLocalModels" }],
 		queryFn: async () => ({ items: [] }),
 	})),
+	// The tool selector's node switches (web access, custom tools); ambient here, so stubbed without a request.
+	getNodeSettingsOptions: vi.fn(() => ({
+		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+		queryKey: [{ _id: "getNodeSettings" }],
+		queryFn: async () => ({ webAccessEnabled: true, customToolsEnabled: true }),
+	})),
 }));
 // The agent form's tool selector fetches the catalog via useToolCatalog (dynamic tool-catalog). Mock it so opening the
 // editor never issues a real request and renders deterministically.
@@ -103,6 +110,7 @@ const sampleDefinition: AgentDefinition = {
 	memoryExtractionEnabled: true,
 	disableBaseScaffold: false,
 	disableToolRelevanceFilter: false,
+	isDefaultAssistant: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,
@@ -159,6 +167,7 @@ describe("AgentsPage", () => {
 		useAgentManagementStore.setState({ editorTarget: null });
 		hooksMock.useAgentDefinitions.mockReturnValue({ data: [sampleDefinition], isLoading: false, error: null });
 		hooksMock.useToolCapableModels.mockReturnValue({ data: ["qwen3:8b"] });
+		hooksMock.useDefaultAssistantToolOffer.mockReturnValue({ data: undefined, isError: false });
 		hooksMock.useCreateAgentDefinition.mockReturnValue(makeMutation());
 		hooksMock.useUpdateAgentDefinition.mockReturnValue(makeMutation());
 		hooksMock.useDeleteAgentDefinition.mockReturnValue(makeMutation());
@@ -184,6 +193,27 @@ describe("AgentsPage", () => {
 		expect(screen.getByTestId("agent-definitions-table")).toBeTruthy();
 		expect(screen.getByTestId("agent-definition-row-agent-1")).toBeTruthy();
 		expect(screen.getByText("Research assistant")).toBeTruthy();
+	});
+
+	it("shows All instead of a tool count for the Default Assistant", () => {
+		const defaultAssistant: AgentDefinition = {
+			...sampleDefinition,
+			id: "agent-default",
+			allowedToolNames: [],
+			isDefaultAssistant: true,
+		};
+		hooksMock.useAgentDefinitions.mockReturnValue({
+			data: [sampleDefinition, defaultAssistant],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPage();
+
+		const cells = (id: string) =>
+			[...screen.getByTestId(`agent-definition-row-${id}`).querySelectorAll("td")].map((cell) => cell.textContent);
+		expect(cells("agent-default")[3]).toBe("All");
+		expect(cells("agent-1")[3]).toBe("1");
 	});
 
 	it("shows the empty state when there are no definitions", () => {

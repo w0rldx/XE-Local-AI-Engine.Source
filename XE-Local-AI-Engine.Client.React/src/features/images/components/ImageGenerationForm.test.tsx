@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
@@ -9,7 +10,31 @@ import { ImageGenerationForm } from "@/features/images/components/ImageGeneratio
 import { imageFormOverridesKeyPrefix } from "@/features/images/models/ImageFormOverrides";
 import type { ImageModelView } from "@/features/images/models/ImageModels";
 import en from "@/locales/en.json";
+import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
+import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+// The form embeds the prompt assist, which reads the installed chat models and the running set on mount.
+setupMswServer(
+	jsonRoute("get", "models", {
+		isAvailable: true,
+		items: [
+			{
+				modelName: "qwen3-4b",
+				provider: "llamacpp",
+				kind: "Chat",
+				detectedKind: "Chat",
+				capabilities: [],
+				isSelected: true,
+				isReasoningCapable: false,
+				isToolCapable: false,
+				isOverridden: false,
+			},
+		],
+	}),
+	jsonRoute("get", "models/running", { isAvailable: true, ollamaConfigured: false, items: [] }),
+);
 
 // The sampler/seed pair is the one row whose left half carries a *name*: split two-up at 768px the Select was too
 // narrow for "Euler a" and rendered it as "Eule". It therefore goes two-up only from `lg`.
@@ -176,5 +201,42 @@ describe("ImageGenerationForm per-model overrides", () => {
 
 		expect(cfgInput().value).toBe("6");
 		expect(screen.queryByRole("button", { name: resetLabel })).toBeNull();
+	});
+});
+
+describe("ImageGenerationForm prompt assist", () => {
+	beforeEach(() => localStorage.clear());
+	afterEach(cleanup);
+
+	it("fills the prompt and negative prompt from an applied AI draft", async () => {
+		let sent: Record<string, unknown> | undefined;
+		server.use(
+			http.post(localApiPath("images/prompts/draft"), async ({ request }) => {
+				sent = (await request.json()) as Record<string, unknown>;
+				return HttpResponse.json({
+					prompt: "A red fox in a misty birch forest at dawn, soft volumetric light, watercolor",
+					negativePrompt: "blurry, watermark",
+					generationMetadata: { model: "qwen3-4b", mode: "Create", assumptions: [], confidence: 0.7 },
+				});
+			}),
+		);
+		renderForm();
+
+		const open = await screen.findByTestId("assist-open-create");
+		await waitFor(() => expect(open).toHaveProperty("disabled", false));
+		expect(open.textContent).toBe(en.assist.promptButton);
+		fireEvent.click(open);
+		fireEvent.change(await screen.findByTestId("assist-brief"), { target: { value: "a fox in a forest" } });
+		fireEvent.click(screen.getByTestId("assist-generate"));
+		await screen.findByTestId("assist-result");
+		fireEvent.click(screen.getByTestId("assist-apply"));
+
+		await waitFor(() =>
+			expect((screen.getByTestId("image-form-prompt") as HTMLTextAreaElement).value).toBe(
+				"A red fox in a misty birch forest at dawn, soft volumetric light, watercolor",
+			),
+		);
+		expect((screen.getByTestId("image-form-negative-prompt") as HTMLTextAreaElement).value).toBe("blurry, watermark");
+		expect(sent).toMatchObject({ mode: "Create", modelName: "qwen3-4b", brief: "a fox in a forest" });
 	});
 });

@@ -43,7 +43,7 @@ interface GenerationAssistDialogProps {
 const ELAPSED_TICK_MS = 1000;
 
 /**
- * Draft (or revise) an agent's instructions / a skill's body with a node-local model.
+ * Draft (or revise) an agent's instructions / a skill's body / an image prompt with a node-local model.
  *
  * The dialog owns the whole generate → review → apply loop and persists nothing: Apply hands the reviewed fields and
  * the opaque provenance block to the parent form, which saves through the normal CRUD endpoint. Every failure the
@@ -150,8 +150,13 @@ export function GenerationAssistDialog({
 	const status = mutation.error instanceof ApiError ? mutation.error.statusCode : undefined;
 	const showFailure = mutation.isError && !isCancelled;
 
+	const isImage = surface === "image";
 	const surfaceContentLabel =
-		surface === "agent" ? t("assist.result.instructionsLabel", "Instructions") : t("assist.result.bodyLabel", "Body");
+		surface === "agent"
+			? t("assist.result.instructionsLabel", "Instructions")
+			: isImage
+				? t("assist.result.promptLabel", "Prompt")
+				: t("assist.result.bodyLabel", "Body");
 
 	return (
 		<DialogShell
@@ -191,10 +196,15 @@ export function GenerationAssistDialog({
 		>
 			<Stack gap="md" px="md" pb="md">
 				<Text size="sm" c="dimmed" data-testid="assist-intro">
-					{t(
-						"assist.intro",
-						"A model on this node writes a draft from your description. Nothing is saved until you apply it and save the form yourself.",
-					)}
+					{isImage
+						? t(
+								"assist.imageIntro",
+								"A model on this node writes a prompt from your description. Applying it only fills the prompt field; nothing is generated until you start the image generation yourself.",
+							)
+						: t(
+								"assist.intro",
+								"A model on this node writes a draft from your description. Nothing is saved until you apply it and save the form yourself.",
+							)}
 				</Text>
 
 				<Select
@@ -217,17 +227,25 @@ export function GenerationAssistDialog({
 					label={
 						mode === "Improve"
 							? t("assist.brief.improveLabel", "What should change?")
-							: t("assist.brief.createLabel", "What should this do?")
+							: isImage
+								? t("assist.brief.imageCreateLabel", "What should the image show?")
+								: t("assist.brief.createLabel", "What should this do?")
 					}
 					description={
 						mode === "Improve"
 							? t("assist.brief.improveDescription", "Describe the revision. The current content is sent as the starting point.")
-							: t("assist.brief.createDescription", "Describe the job in your own words — the model turns it into a draft.")
+							: isImage
+								? t(
+										"assist.brief.imageCreateDescription",
+										"Describe your idea in a few words — the model turns it into a detailed prompt.",
+									)
+								: t("assist.brief.createDescription", "Describe the job in your own words — the model turns it into a draft.")
 					}
-					placeholder={t(
-						"assist.brief.placeholder",
-						"Review supplier invoices against the agreed rate card and flag anything unusual.",
-					)}
+					placeholder={
+						isImage
+							? t("assist.brief.imagePlaceholder", "A fox in a forest at dawn")
+							: t("assist.brief.placeholder", "Review supplier invoices against the agreed rate card and flag anything unusual.")
+					}
 					value={brief}
 					onChange={(event) => setBrief(event.currentTarget.value)}
 					maxLength={ASSIST_BRIEF_MAX}
@@ -265,17 +283,23 @@ export function GenerationAssistDialog({
 
 				{draft ? (
 					<Stack gap="md" data-testid="assist-result">
-						<TextInput
-							label={t("assist.result.nameLabel", "Name")}
-							value={draft.name}
-							onChange={(event) => {
-								const value = event.currentTarget.value;
-								setDraft((current) => (current ? { ...current, name: value } : current));
-							}}
-							data-testid="assist-result-name"
-						/>
+						{isImage ? null : (
+							<TextInput
+								label={t("assist.result.nameLabel", "Name")}
+								value={draft.name}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									setDraft((current) => (current ? { ...current, name: value } : current));
+								}}
+								data-testid="assist-result-name"
+							/>
+						)}
 						<Textarea
-							label={t("assist.result.descriptionLabel", "Description")}
+							label={
+								isImage
+									? t("assist.result.negativePromptLabel", "Negative prompt")
+									: t("assist.result.descriptionLabel", "Description")
+							}
 							value={draft.description}
 							autosize={true}
 							minRows={2}
@@ -285,13 +309,28 @@ export function GenerationAssistDialog({
 							}}
 							data-testid="assist-result-description"
 						/>
-						<MarkdownEditorField
-							label={surfaceContentLabel}
-							value={draft.content}
-							minRows={8}
-							onChange={(value) => setDraft((current) => (current ? { ...current, content: value } : current))}
-							data-testid="assist-result-content"
-						/>
+						{isImage ? (
+							// A prompt is plain text, not Markdown.
+							<Textarea
+								label={surfaceContentLabel}
+								value={draft.content}
+								autosize={true}
+								minRows={4}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									setDraft((current) => (current ? { ...current, content: value } : current));
+								}}
+								data-testid="assist-result-content"
+							/>
+						) : (
+							<MarkdownEditorField
+								label={surfaceContentLabel}
+								value={draft.content}
+								minRows={8}
+								onChange={(value) => setDraft((current) => (current ? { ...current, content: value } : current))}
+								data-testid="assist-result-content"
+							/>
+						)}
 
 						<Group justify="flex-start">
 							<Button

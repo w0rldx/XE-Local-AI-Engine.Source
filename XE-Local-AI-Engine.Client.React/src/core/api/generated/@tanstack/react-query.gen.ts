@@ -130,6 +130,7 @@ import {
 	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
 	draftAgentDefinition,
+	draftImagePrompt,
 	draftSkill,
 	ejectImageRuntime,
 	ejectRunningModel,
@@ -166,6 +167,7 @@ import {
 	getCloudSettings,
 	getComparison,
 	getCustomTool,
+	getDefaultAssistantToolOffer,
 	getDevelopmentArtifact,
 	getDevelopmentCapability,
 	getDevelopmentProject,
@@ -770,6 +772,9 @@ import type {
 	DraftAgentDefinitionData,
 	DraftAgentDefinitionError,
 	DraftAgentDefinitionResponse,
+	DraftImagePromptData,
+	DraftImagePromptError,
+	DraftImagePromptResponse,
 	DraftSkillData,
 	DraftSkillError,
 	DraftSkillResponse,
@@ -857,6 +862,8 @@ import type {
 	GetComparisonResponse,
 	GetCustomToolData,
 	GetCustomToolResponse,
+	GetDefaultAssistantToolOfferData,
+	GetDefaultAssistantToolOfferResponse,
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactResponse,
 	GetDevelopmentCapabilityData,
@@ -1869,6 +1876,28 @@ export const createAgentDefinitionMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getDefaultAssistantToolOfferQueryKey = (options?: Options<GetDefaultAssistantToolOfferData>) =>
+	createQueryKey("getDefaultAssistantToolOffer", options);
+
+export const getDefaultAssistantToolOfferOptions = (options?: Options<GetDefaultAssistantToolOfferData>) =>
+	queryOptions<
+		GetDefaultAssistantToolOfferResponse,
+		AxiosError<DefaultError>,
+		GetDefaultAssistantToolOfferResponse,
+		ReturnType<typeof getDefaultAssistantToolOfferQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDefaultAssistantToolOffer({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDefaultAssistantToolOfferQueryKey(options),
+	});
 
 export const draftAgentDefinitionMutation = (
 	options?: Partial<Options<DraftAgentDefinitionData>>,
@@ -6769,6 +6798,26 @@ export const deleteImageModelMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteImageModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const draftImagePromptMutation = (
+	options?: Partial<Options<DraftImagePromptData>>,
+): UseMutationOptions<DraftImagePromptResponse, AxiosError<DraftImagePromptError>, Options<DraftImagePromptData>> => {
+	const mutationOptions: UseMutationOptions<
+		DraftImagePromptResponse,
+		AxiosError<DraftImagePromptError>,
+		Options<DraftImagePromptData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await draftImagePrompt({
 				...options,
 				...fnOptions,
 				throwOnError: true,

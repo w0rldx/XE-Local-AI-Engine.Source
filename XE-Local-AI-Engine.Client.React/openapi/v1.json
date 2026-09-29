@@ -470,6 +470,50 @@
         ]
       }
     },
+    "/api/local/v1/agents/default-tool-offer": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "getDefaultAssistantToolOffer",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/agents/draft": {
       "post": {
         "tags": [
@@ -13261,6 +13305,83 @@
         ]
       }
     },
+    "/api/local/v1/images/prompts/draft": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "draftImagePrompt",
+        "requestBody": {
+          "x-name": "DraftImagePromptRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1DraftImagePromptRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImagePromptDraftResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/images/runtime": {
       "get": {
         "tags": [
@@ -25154,6 +25275,7 @@
           "disableBaseScaffold",
           "disableToolRelevanceFilter",
           "allowedSkillIds",
+          "isDefaultAssistant",
           "version",
           "createdAtUtc",
           "updatedAtUtc"
@@ -25221,6 +25343,9 @@
               "type": "string",
               "format": "guid"
             }
+          },
+          "isDefaultAssistant": {
+            "type": "boolean"
           },
           "version": {
             "type": "integer",
@@ -25864,6 +25989,26 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "toolNames"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "toolNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest": {
         "type": "object",
         "additionalProperties": false
@@ -25948,6 +26093,10 @@
         "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GetDefaultAssistantToolOfferRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -35509,6 +35658,31 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsImagesV1DraftImagePromptRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDraftingDraftMode"
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "brief": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingPrompt": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingNegativePrompt": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsImagesV1GetImageModelCatalogResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -35853,6 +36027,26 @@
           },
           "defaultSampler": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImagePromptDraftResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prompt",
+          "negativePrompt",
+          "generationMetadata"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "negativePrompt": {
+            "type": "string"
+          },
+          "generationMetadata": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
           }
         }
       },

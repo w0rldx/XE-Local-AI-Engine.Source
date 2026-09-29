@@ -1,7 +1,8 @@
 import { Alert, Button, CloseButton, Group, Loader, Progress, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
-import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -10,7 +11,12 @@ import type { RateTrackedProgress } from "@/features/models/hooks/useDownloadRat
 import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 import { useRuntimeAcquisitionHub } from "@/features/node-settings/hooks/useRuntimeAcquisitionHub";
 import { type LlamaCppVariant, llamaCppVariants } from "@/features/node-settings/models/LocalRuntimeModels";
-import { type RuntimeAcquisitionStatus, useEnsureLlamaCppBinary } from "@/features/node-settings/queries/useLocalRuntime";
+import {
+	localRuntimeInvalidationKey,
+	localRuntimeQueryIds,
+	type RuntimeAcquisitionStatus,
+	useEnsureLlamaCppBinary,
+} from "@/features/node-settings/queries/useLocalRuntime";
 
 // Global first-run banner for the llama.cpp runtime acquisition, mounted once in the app shell beside the update
 // banner. It exists because the host downloads the runtime on a background service, off the startup path: the whole UI
@@ -89,6 +95,17 @@ export function RuntimeAcquisitionBanner() {
 		return new Map([[rateKeyForStep(stepIndex), { phase, completedBytes, totalBytes }]]);
 	}, [phase, completedBytes, totalBytes, stepIndex]);
 	const rateEstimates = useDownloadRateEstimates(progressByKey, DOWNLOADING_PHASE);
+
+	// The runtime-status query (installed tag, update flag) was read before provisioning finished and nothing else
+	// refetches it, so the update banner would keep the pre-install "update available" answer. Re-read it on completion.
+	const queryClient = useQueryClient();
+	useEffect(() => {
+		if (phase === COMPLETED_PHASE) {
+			queryClient
+				.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.llamaCppRuntime) })
+				.catch(() => undefined);
+		}
+	}, [phase, queryClient]);
 
 	if (status === undefined || phase === IDLE_PHASE || phase === COMPLETED_PHASE) {
 		return null;

@@ -11,11 +11,12 @@ export type GenerationMetadata = XeLocalAiEngineClientEndpointsCommonGenerationM
 /** Create (brief only) or Improve (brief + the content already in the form). PascalCase matches the wire enum. */
 export type AssistMode = XeLocalAiEngineClientServicesDraftingDraftMode;
 
-/** Which surface a draft is for. The two endpoints differ only in what they call the long free-text field. */
-export type AssistSurface = "agent" | "skill";
+/** Which surface a draft is for. The endpoints differ only in what they call their fields. */
+export type AssistSurface = "agent" | "skill" | "image";
 
-// Normalized draft. `content` is the agent's instructions or the skill's body — the dialog and both parent forms
-// only ever handle this one shape, so the surface split stays inside the mutation hook.
+// Normalized draft. `content` is the agent's instructions, the skill's body or the image prompt; for an image
+// `description` is the negative prompt and `name` stays empty. The dialog and the parent forms only ever handle this
+// one shape, so the surface split stays inside the mutation hook.
 export interface AssistDraft {
 	name: string;
 	description: string;

@@ -136,6 +136,7 @@ function agentDefinition(id: string, name: string): Record<string, unknown> {
 		instructions: "Do the thing.",
 		kind: "Single",
 		allowedToolNames: [],
+		isDefaultAssistant: false,
 		toolApprovals: {},
 		playbookEnabled: false,
 		defaultTemporaryChat: false,

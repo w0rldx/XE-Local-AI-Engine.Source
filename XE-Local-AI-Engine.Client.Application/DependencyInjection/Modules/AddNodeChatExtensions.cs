@@ -31,6 +31,7 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<IChatTurnContextBuilder, ChatTurnContextBuilder>();
         builder.Services.AddScoped<ILocalDefaultChatModelResolver, LocalDefaultChatModelResolver>();
         builder.Services.AddScoped<ChatTurnResolver>();
+        builder.Services.AddScoped<IDefaultAssistantToolOfferService, DefaultAssistantToolOfferService>();
         builder.Services.AddScoped<ChatInvocationStatePump>();
         builder.Services.AddScoped<INodeChatStreamService, NodeChatStreamService>();
         builder.Services.AddScoped<INodeChatRegenerationService, NodeChatRegenerationService>();

@@ -155,6 +155,9 @@ public static class LocalApiRoutes
         // Distinct literal segment under the agents surface so it cannot collide with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
 
+        // The seeded Default Assistant's server-computed tool offer for a model; a literal segment like the one above.
+        public const string DefaultAssistantToolOffer = "agents/default-tool-offer";
+
         // AI-assisted drafting. A literal segment under the collection, like the template actions below, so it can
         // never be parsed as an {agentDefinitionId}. Writes nothing — the draft only populates the operator's form.
         public const string Draft = "agents/draft";
@@ -486,6 +489,9 @@ public static class LocalApiRoutes
 
         // Decrypted PNG retrieve. {imageId} is the server-generated image id (never a client-supplied path).
         public const string ImageById = "images/{imageId}";
+
+        // AI-assisted prompt drafting with a node-local chat model. Writes nothing — the draft only fills the form.
+        public const string PromptDraft = "images/prompts/draft";
 
         // Installed image-model registry (GET list).
         public const string Models = "images/models";

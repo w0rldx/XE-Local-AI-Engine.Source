@@ -119,6 +119,7 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 				samples.triageAndRoute.name,
 				samples.parallelPerspectives.name,
 				samples.briefWithReviewLoop.name,
+				samples.agentResearchAndCheck.name,
 			]);
 		});
 

@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -56,7 +58,7 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var supervisor = new FakeImageServerSupervisor(BaseAddress);
         var broker = new ImageServerProgressBroker();
-        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker);
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker, NullLogger<StableDiffusionCppRuntime>.Instance);
         var progress = new RecordingProgress();
 
         var result = await runtime.GenerateAsync(Request(), progress, CancellationToken.None);
@@ -85,7 +87,7 @@ public sealed class StableDiffusionCppRuntimeTests
             _ => Json(HttpStatusCode.OK, "{\"status\":\"completed\",\"result\":{\"images\":[{\"b64_json\":\"" + base64 + "\",\"seed\":7}]}}")
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
 
         var request = Request() with
         {
@@ -115,7 +117,7 @@ public sealed class StableDiffusionCppRuntimeTests
             _ => Json(HttpStatusCode.OK, "{\"status\":\"completed\",\"result\":{\"images\":[{\"b64_json\":\"" + base64 + "\",\"seed\":7}]}}")
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
 
         var result = await runtime.GenerateAsync(Request() with
         {
@@ -174,7 +176,7 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var supervisor = new FakeImageServerSupervisor(BaseAddress);
         var broker = new ImageServerProgressBroker();
-        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker);
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker, NullLogger<StableDiffusionCppRuntime>.Instance);
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), cts.Token));
 
@@ -204,7 +206,7 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var supervisor = new FakeImageServerSupervisor(BaseAddress);
         var broker = new ImageServerProgressBroker();
-        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker);
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), broker, NullLogger<StableDiffusionCppRuntime>.Instance);
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), cts.Token));
 
@@ -213,19 +215,37 @@ public sealed class StableDiffusionCppRuntimeTests
     }
 
     [Test]
-    public async Task Generate_JobFailed_ThrowsSanitized()
+    public async Task Generate_JobFailed_ThrowsSanitizedLogsTheDaemonReasonAndEvictsTheDaemon()
     {
+        // Tester round 4: a failed job (CUDA OOM after a chat model took the VRAM) left the same broken daemon resident,
+        // so every later job failed too, and the log carried no reason at all.
         using var handler = new RuntimeHandler((_, route) => route switch
         {
             "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
-            _ => Json(HttpStatusCode.OK, """{"status":"failed","error":{"code":"oom","message":"internal-cuda-oom-at-0xdeadbeef"}}""")
+            _ => Json(HttpStatusCode.OK, """{"status":"failed","error":{"code":"oom","message":"internal-cuda-oom-at-0xdeadbeef\nforged line"}}""")
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var lease = new FakeJobLease();
+        var supervisor = new FakeImageServerSupervisor(BaseAddress, lease);
+        var logger = new RecordingLogger<StableDiffusionCppRuntime>();
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), new ImageServerProgressBroker(), logger);
 
         var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains("0xdeadbeef", StringComparison.Ordinal), "The failure message must be sanitized (no internal detail).");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "(oom): internal-cuda-oom-at-0xdeadbeef forged line"), "The daemon's own reason must reach the log on one line.");
+        AssertEx.Equal(expected: 1, supervisor.EvictCount);
+        AssertEx.True(lease.DisposedBeforeEvict, "The job lease must be released before the daemon is evicted.");
+        AssertEx.Equal(expected: 0, supervisor.RestartCount);
+    }
+
+    [Test]
+    public void Bound_TruncatesLongForeignErrorText()
+    {
+        var bounded = StableDiffusionCppRuntime.Bound(new string('x', 1000));
+
+        AssertEx.Equal(expected: 301, bounded!.Length);
+        AssertEx.Null(StableDiffusionCppRuntime.Bound("   "));
     }
 
     [Test]
@@ -237,7 +257,7 @@ public sealed class StableDiffusionCppRuntimeTests
             _ => Status(HttpStatusCode.Gone)
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
     }
@@ -256,7 +276,7 @@ public sealed class StableDiffusionCppRuntimeTests
             ExitCode = 137,
             Exited = true
         };
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
 
         var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
@@ -280,7 +300,7 @@ public sealed class StableDiffusionCppRuntimeTests
             throw new HttpRequestException("Connection refused");
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker());
+        var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress, lease), new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
 
         var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
@@ -343,6 +363,11 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task EvictAsync(string modelName, CancellationToken ct)
         {
             EvictCount++;
+            if (_lease is FakeJobLease { Disposed: true } fake)
+            {
+                fake.DisposedBeforeEvict = true;
+            }
+
             return Task.CompletedTask;
         }
 
@@ -376,6 +401,10 @@ public sealed class StableDiffusionCppRuntimeTests
 
         public int? ExitCode { get; init; }
 
+        public bool Disposed { get; private set; }
+
+        public bool DisposedBeforeEvict { get; set; }
+
         public void Touch()
         {
             // Nothing to keep alive: the fake has no idle clock.
@@ -389,7 +418,7 @@ public sealed class StableDiffusionCppRuntimeTests
 
         public void Dispose()
         {
-            // Nothing held.
+            Disposed = true;
         }
     }
 

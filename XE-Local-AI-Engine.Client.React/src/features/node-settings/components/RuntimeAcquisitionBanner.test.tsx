@@ -20,13 +20,15 @@ vi.mock("@/features/node-settings/hooks/useRuntimeAcquisitionHub", () => ({
 	},
 }));
 
-vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
+vi.mock("@/features/node-settings/queries/useLocalRuntime", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/features/node-settings/queries/useLocalRuntime")>()),
 	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false }),
 }));
 
+import { getLlamaCppRuntimeOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
 
 function status(overrides: Partial<RuntimeAcquisitionStatus> & { sequence: number; phase: string }): RuntimeAcquisitionStatus {
 	return { variant: "cuda", tag: "b9692", completedBytes: null, totalBytes: null, stepIndex: 1, stepCount: 1, ...overrides };
@@ -104,6 +106,26 @@ describe("RuntimeAcquisitionBanner", () => {
 		hooksMock.status = status({ sequence: 7, phase: "Completed" });
 		renderBanner();
 		expect(screen.queryByTestId("runtime-acquisition-banner")).toBeNull();
+	});
+
+	it("re-reads the runtime status when acquisition completes, so a pre-install update flag does not linger", () => {
+		// The status query was cached before provisioning installed anything (the backend then reports updateAvailable).
+		const runtimeKey = getLlamaCppRuntimeOptions().queryKey;
+		const queryClient = createTestQueryClient();
+		queryClient.setQueryData(runtimeKey, {
+			recommendedTag: "b9692",
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			isSourceBuild: false,
+			rebuildAvailable: false,
+		});
+		expect(queryClient.getQueryState(runtimeKey)?.isInvalidated).toBe(false);
+
+		hooksMock.status = status({ sequence: 7, phase: "Completed" });
+		renderWithProviders(<RuntimeAcquisitionBanner />, { queryClient });
+
+		expect(queryClient.getQueryState(runtimeKey)?.isInvalidated).toBe(true);
 	});
 
 	it("STAYS visible on failure with the sanitized reason and a working retry", () => {

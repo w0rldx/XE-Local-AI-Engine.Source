@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { draftAgentDefinition, draftSkill } from "@/core/api/generated";
+import { draftAgentDefinition, draftImagePrompt, draftSkill } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import type { AssistDraft, AssistMode, AssistSurface } from "@/features/assist/models/AssistModels";
 
@@ -18,8 +18,8 @@ export interface AssistDraftVariables {
 
 /**
  * The draft mutation for one surface. Calls the generated SDK fn imperatively (the `useLoadedModels` pattern) rather
- * than through the generated `*Mutation()` factory because the two endpoints answer with differently-named long
- * fields — `instructions` vs `body` — and normalizing them here keeps the surface split out of the dialog.
+ * than through the generated `*Mutation()` factory because the endpoints answer with differently-named fields —
+ * `instructions`, `body`, `prompt` — and normalizing them here keeps the surface split out of the dialog.
  *
  * Drafting never persists, so nothing is invalidated on success.
  */
@@ -32,6 +32,23 @@ export function useAssistDraft(surface: AssistSurface) {
 					name: data.name,
 					description: data.description,
 					content: data.instructions,
+					generationMetadata: data.generationMetadata,
+				};
+			}
+
+			if (surface === "image") {
+				const { existingContent, existingDescription, mode, modelName, brief } = body;
+				const { data } = await callWithResponseValidation(
+					draftImagePrompt({
+						body: { mode, modelName, brief, existingPrompt: existingContent, existingNegativePrompt: existingDescription },
+						signal,
+						throwOnError: true,
+					}),
+				);
+				return {
+					name: "",
+					description: data.negativePrompt,
+					content: data.prompt,
 					generationMetadata: data.generationMetadata,
 				};
 			}

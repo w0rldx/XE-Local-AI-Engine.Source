@@ -369,6 +369,9 @@ import type {
 	DraftAgentDefinitionData,
 	DraftAgentDefinitionErrors,
 	DraftAgentDefinitionResponses,
+	DraftImagePromptData,
+	DraftImagePromptErrors,
+	DraftImagePromptResponses,
 	DraftSkillData,
 	DraftSkillErrors,
 	DraftSkillResponses,
@@ -477,6 +480,9 @@ import type {
 	GetCustomToolData,
 	GetCustomToolErrors,
 	GetCustomToolResponses,
+	GetDefaultAssistantToolOfferData,
+	GetDefaultAssistantToolOfferErrors,
+	GetDefaultAssistantToolOfferResponses,
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactErrors,
 	GetDevelopmentArtifactResponses,
@@ -1621,6 +1627,8 @@ import {
 	zDownloadRecommendedRerankerResponse,
 	zDraftAgentDefinitionBody,
 	zDraftAgentDefinitionResponse,
+	zDraftImagePromptBody,
+	zDraftImagePromptResponse,
 	zDraftSkillBody,
 	zDraftSkillResponse,
 	zEjectImageRuntimeBody,
@@ -1689,6 +1697,8 @@ import {
 	zGetComparisonResponse,
 	zGetCustomToolPath,
 	zGetCustomToolResponse,
+	zGetDefaultAssistantToolOfferQuery,
+	zGetDefaultAssistantToolOfferResponse,
 	zGetDevelopmentArtifactPath,
 	zGetDevelopmentArtifactResponse,
 	zGetDevelopmentCapabilityResponse,
@@ -2545,6 +2555,36 @@ export const createAgentDefinition = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getDefaultAssistantToolOffer = <ThrowOnError extends boolean = false>(
+	options?: Options<GetDefaultAssistantToolOfferData, ThrowOnError>,
+): RequestResult<GetDefaultAssistantToolOfferResponses, GetDefaultAssistantToolOfferErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetDefaultAssistantToolOfferResponses, GetDefaultAssistantToolOfferErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetDefaultAssistantToolOfferQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDefaultAssistantToolOfferResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agents/default-tool-offer",
+		...options,
 	});
 
 export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
@@ -9428,6 +9468,40 @@ export const deleteImageModel = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/images/models/{modelName}",
 		...options,
+	});
+
+export const draftImagePrompt = <ThrowOnError extends boolean = false>(
+	options: Options<DraftImagePromptData, ThrowOnError>,
+): RequestResult<DraftImagePromptResponses, DraftImagePromptErrors, ThrowOnError> =>
+	(options.client ?? client).post<DraftImagePromptResponses, DraftImagePromptErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDraftImagePromptBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDraftImagePromptResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/prompts/draft",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(

@@ -184,6 +184,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	disableBaseScaffold: boolean;
 	disableToolRelevanceFilter: boolean;
 	allowedSkillIds: Array<string>;
+	isDefaultAssistant: boolean;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -356,6 +357,11 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionRequest = 
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse = {
+	modelName: string | null;
+	toolNames: Array<string>;
+};
+
 export type XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = {
 	[key: string]: never;
 };
@@ -395,6 +401,10 @@ export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsReques
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1GetDefaultAssistantToolOfferRequest = {
 	[key: string]: never;
 };
 
@@ -3016,6 +3026,14 @@ export type XeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = {
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1DraftImagePromptRequest = {
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	modelName?: string | null;
+	brief?: string | null;
+	existingPrompt?: string | null;
+	existingNegativePrompt?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsImagesV1GetImageModelCatalogResponse = {
 	catalogVersion: string;
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelCatalogEntryResponse>;
@@ -3110,6 +3128,12 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
 	defaultSteps: number;
 	defaultCfgScale: number;
 	defaultSampler: string;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImagePromptDraftResponse = {
+	prompt: string;
+	negativePrompt: string;
+	generationMetadata: XeLocalAiEngineClientEndpointsCommonGenerationMetadata;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = {
@@ -6870,6 +6894,36 @@ export type CreateAgentDefinitionResponses = {
 };
 
 export type CreateAgentDefinitionResponse = CreateAgentDefinitionResponses[keyof CreateAgentDefinitionResponses];
+
+export type GetDefaultAssistantToolOfferData = {
+	body?: never;
+	path?: never;
+	query?: {
+		modelName?: string | null;
+	};
+	url: "/api/local/v1/agents/default-tool-offer";
+};
+
+export type GetDefaultAssistantToolOfferErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDefaultAssistantToolOfferResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse;
+};
+
+export type GetDefaultAssistantToolOfferResponse =
+	GetDefaultAssistantToolOfferResponses[keyof GetDefaultAssistantToolOfferResponses];
 
 export type DraftAgentDefinitionData = {
 	body: XeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
@@ -14256,6 +14310,41 @@ export type DeleteImageModelResponses = {
 };
 
 export type DeleteImageModelResponse = DeleteImageModelResponses[keyof DeleteImageModelResponses];
+
+export type DraftImagePromptData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1DraftImagePromptRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/prompts/draft";
+};
+
+export type DraftImagePromptErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+	422: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+};
+
+export type DraftImagePromptError = DraftImagePromptErrors[keyof DraftImagePromptErrors];
+
+export type DraftImagePromptResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImagePromptDraftResponse;
+};
+
+export type DraftImagePromptResponse = DraftImagePromptResponses[keyof DraftImagePromptResponses];
 
 export type GetImageRuntimeStatusData = {
 	body?: never;

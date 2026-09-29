@@ -617,6 +617,25 @@ public sealed class OpenApiDocumentTests
     }
 
     /// <summary>
+    ///     The Default Assistant offer reads <c>modelName</c> from the query, so the generated client must send it there.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DeclaresTheDefaultAssistantOfferModelNameAsAQueryParameter()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var offer = document.RootElement.GetProperty("paths").GetProperty("/api/local/v1/agents/default-tool-offer").GetProperty("get");
+
+        AssertEx.Contains(offer.GetProperty("parameters").EnumerateArray().Select(static parameter => (parameter.GetProperty("name").GetString(), parameter.GetProperty("in").GetString())),
+            ("modelName", "query"));
+        AssertEx.False(offer.TryGetProperty("requestBody", out _), "A GET that declares a body makes the generated client send the model where the endpoint never reads it.");
+    }
+
+    /// <summary>
     ///     Every declared request body describes something the endpoint really reads, and no bodyless verb declares one
     ///     it does not.
     /// </summary>

@@ -40,7 +40,7 @@ import type {
 } from "@/core/api/generated";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
-import type { AssistDraft, GenerationMetadata } from "@/features/assist/models/AssistModels";
+import type { AssistDraft, AssistSurface, GenerationMetadata } from "@/features/assist/models/AssistModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const models: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse[] = [
@@ -77,7 +77,7 @@ const draftResponse = {
 	},
 };
 
-function renderDialog() {
+function renderDialog(surface: AssistSurface = "skill") {
 	const onApply = vi.fn<(draft: AssistDraft) => void>();
 	const onDiscard = vi.fn<() => void>();
 	const onClose = vi.fn<() => void>();
@@ -88,7 +88,7 @@ function renderDialog() {
 			<MantineProvider env="test" theme={testMantineTheme}>
 				<GenerationAssistDialog
 					opened={true}
-					surface="skill"
+					surface={surface}
 					mode="Create"
 					existing={{ name: "", description: "", content: "" }}
 					models={models}
@@ -255,5 +255,14 @@ describe("GenerationAssistDialog", () => {
 		expect(onDiscard).toHaveBeenCalled();
 		expect(onClose).toHaveBeenCalled();
 		expect(onApply).not.toHaveBeenCalled();
+	});
+
+	// The image form has nothing to save: applying fills the prompt, so its intro must not tell the operator to save.
+	it("gives the image surface its own intro", () => {
+		renderDialog("image");
+
+		expect(screen.getByTestId("assist-intro").textContent).toBe(
+			"A model on this node writes a prompt from your description. Applying it only fills the prompt field; nothing is generated until you start the image generation yourself.",
+		);
 	});
 });

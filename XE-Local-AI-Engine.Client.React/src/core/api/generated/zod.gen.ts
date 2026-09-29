@@ -318,6 +318,11 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookRequest = z.r
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse = z.object({
+	modelName: z.string().nullable(),
+	toolNames: z.array(z.string()),
+});
+
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = z.record(z.string(), z.never());
@@ -338,6 +343,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = 
 export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1GetDefaultAssistantToolOfferRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenAssertionDto = z.object({
 	requiredPhrases: z.array(z.string()).optional(),
@@ -6840,6 +6847,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 	disableBaseScaffold: z.boolean(),
 	disableToolRelevanceFilter: z.boolean(),
 	allowedSkillIds: z.array(z.guid()),
+	isDefaultAssistant: z.boolean(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -6851,6 +6859,20 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1DraftImagePromptRequest = z.object({
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	modelName: z.string().nullish(),
+	brief: z.string().nullish(),
+	existingPrompt: z.string().nullish(),
+	existingNegativePrompt: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImagePromptDraftResponse = z.object({
+	prompt: z.string(),
+	negativePrompt: z.string(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata,
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
@@ -8315,6 +8337,15 @@ export const zCreateAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV
  * Success
  */
 export const zCreateAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse;
+
+export const zGetDefaultAssistantToolOfferQuery = z.object({
+	modelName: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetDefaultAssistantToolOfferResponse = zXeLocalAiEngineClientEndpointsAgentsV1DefaultAssistantToolOfferResponse;
 
 export const zDraftAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
 
@@ -10402,6 +10433,13 @@ export const zDeleteImageModelPath = z.object({
  * No Content
  */
 export const zDeleteImageModelResponse = z.void();
+
+export const zDraftImagePromptBody = zXeLocalAiEngineClientEndpointsImagesV1DraftImagePromptRequest;
+
+/**
+ * Success
+ */
+export const zDraftImagePromptResponse = zXeLocalAiEngineClientEndpointsImagesV1ImagePromptDraftResponse;
 
 /**
  * Success

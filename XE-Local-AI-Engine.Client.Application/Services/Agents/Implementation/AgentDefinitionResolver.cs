@@ -379,8 +379,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 
         // SECURITY INVARIANT: the seeded Default Assistant is the ONLY definition granted the full capability-gated
         // offer; every other stays intersected. Its forge-proof provenance is what an operator row cannot claim.
-        if (definition.Source == AgentDefinitionSource.Seeded
-            && string.Equals(definition.SeedSlug, AgentDefaults.DefaultAgentSeedSlug, StringComparison.Ordinal))
+        if (AgentDefaults.IsDefaultAssistant(definition))
         {
             // The node-default approval policy still applies, tighten-only, so no node-wide policy is bypassable by
             // mode-off chat. Per-agent ToolApprovals are NOT applied: this path reproduces plain chat, which has none.

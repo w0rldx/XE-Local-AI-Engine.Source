@@ -7,9 +7,11 @@ import { useLlamaCppRuntimeStatus } from "@/features/node-settings/queries/useLo
 import { useRuntimeUpdateBannerStore } from "@/features/node-settings/stores/RuntimeUpdateBannerStore";
 
 // Global, subtle "a newer llama.cpp runtime is available" banner, mounted once in the app shell. It subscribes to the
-// read-only runtime-status query (safe on mount — no download side effect) and renders only when the backend's
-// `updateAvailable` flag is set AND the operator has not dismissed THIS recommended tag. Dismiss is per-tag (a later,
-// newer recommended tag re-shows the banner). The CTA deep-links to /node-settings where the updater panel lives.
+// read-only runtime-status query (safe on mount — no download side effect) and renders only when a runtime is installed,
+// the backend's `updateAvailable` flag is set AND the operator has not dismissed THIS recommended tag. The installed
+// check matters on first run: the backend reports an update whenever nothing is installed yet, which is provisioning,
+// not an update. Dismiss is per-tag (a later, newer recommended tag re-shows the banner). The CTA deep-links to the
+// Node Settings "runtimes" section, where the updater panel lives.
 export function LlamaCppUpdateBanner() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -19,7 +21,8 @@ export function LlamaCppUpdateBanner() {
 
 	const status = statusQuery.data;
 	const recommendedTag = status?.recommendedTag ?? "";
-	const shouldShow = status?.updateAvailable === true && recommendedTag.length > 0 && dismissedTag !== recommendedTag;
+	const shouldShow =
+		status?.installed != null && status.updateAvailable && recommendedTag.length > 0 && dismissedTag !== recommendedTag;
 
 	if (!shouldShow) {
 		return null;
@@ -44,7 +47,7 @@ export function LlamaCppUpdateBanner() {
 					<Button
 						size="xs"
 						variant="filled"
-						onClick={() => navigate({ to: "/node-settings" })}
+						onClick={() => navigate({ to: "/node-settings", search: { section: "runtimes" } })}
 						data-testid="llamacpp-update-banner-cta"
 					>
 						{t("pages.nodeSettings.llamaCpp.updateBanner.review", "Review update")}

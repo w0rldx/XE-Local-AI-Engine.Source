@@ -325,6 +325,7 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 | Endpoint | Route | Role |
 |---|---|---|
 | `CreateImageJobEndpoint` | `POST images/jobs` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler). Returns the job id. |
+| `DraftImagePromptEndpoint` | `POST images/prompts/draft` | Turn an image idea into a detailed prompt (and negative prompt) with a node-local chat model, through the shared drafting service (`IConfigDraftService`: fail-closed model eligibility, single draft slot → 409, unusable output → 422). Writes nothing; the form's Apply fills the prompt fields. |
 | `ListImageJobsEndpoint` | `GET images/jobs` | One page of persisted jobs, newest first (`limit`/`offset`, with the unpaged `totalCount`). |
 | `GetImageJobEndpoint` | `GET images/jobs/{jobId}` | One job's current status view. |
 | `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. |
@@ -353,6 +354,8 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 Anything that outlives that drain — a hard crash, a kill, a drain timeout — is terminalized by `ImageJobStartupReconciler` on the next boot. The coordinator's in-memory registry does not survive a restart, so without it a row left `Queued` or `Generating` would never be transitioned again and would show as stuck forever. The reconciler marks them `Failed` with a content-free reason (`ImageJobStartupReconciler.InterruptedReason` — never the prompt or a path) and pushes a status event so a connected UI updates.
 
 An sd-server that dies during a job is named, not hidden: the supervisor logs one Warning with the model, pid and exit code (a deliberate teardown never reads as a crash), and the job fails with "The image server stopped unexpectedly (exit code N). It restarts with the next generation." A death while a status poll is already in flight still waits out that poll's retry window first.
+
+A job the daemon itself reports as `failed` (for example CUDA out of memory after a chat model took the VRAM) is recycled, not reused: `StableDiffusionCppRuntime` logs one Warning with the daemon's error code and message (control characters stripped, bounded length), releases its job lease and evicts the daemon, so the next generation spawns a fresh process instead of failing against the same broken one. The operator still sees the generic "Image generation failed."; the daemon's text is foreign and never shown.
 
 **Interrupted jobs are never auto-retried.** Image generation is expensive and nondeterministic, so the operator resubmits explicitly. This mirrors the scheduler's stale-run reconciliation in `Program`.
 

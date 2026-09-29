@@ -15,6 +15,14 @@ public interface IConfigDraftService
 
     /// <summary>Drafts a skill (MAF-safe name / description / SKILL.md body) from <paramref name="request" />.</summary>
     Task<DraftResult> DraftSkillAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Drafts a text-to-image prompt (and negative prompt) from <paramref name="request" />.</summary>
+    /// <remarks>
+    ///     <see cref="ConfigDraft.Content" /> is the prompt, <see cref="ConfigDraft.Description" /> the negative prompt
+    ///     (empty when none) and <see cref="ConfigDraft.Name" /> is empty. Improve mode reads the current prompt from
+    ///     <c>ExistingContent</c> and the current negative prompt from <c>ExistingDescription</c>.
+    /// </remarks>
+    Task<DraftResult> DraftImagePromptAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Whether the draft starts from nothing (<see cref="Create" />) or revises existing content.</summary>

@@ -93,7 +93,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton<IImageRuntime>(static sp =>
             new StableDiffusionCppRuntime(sp.GetRequiredService<IImageServerSupervisor>(),
                 sp.GetRequiredService<SdServerJobClient>(),
-                sp.GetRequiredService<IImageServerProgressBroker>()));
+                sp.GetRequiredService<IImageServerProgressBroker>(),
+                sp.GetRequiredService<ILogger<StableDiffusionCppRuntime>>()));
 
         // Startup orphan reaper (never throws): sd-server binaries under our own cache root, plus on Linux any child this node's spawn receipts still identify.
         // AddSingleton, not AddHostedService: every runtime registers the shared StaleProcessReaper type, and AddHostedService dedupes by implementation type, so only the first would run.

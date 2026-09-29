@@ -336,6 +336,42 @@ public sealed class WhisperServerTranscriberTests
         AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
     }
 
+    // The same no-speech bug on the Windows build is an access violation, not a 500: the daemon dies, and re-sending the
+    // identical request kills the respawned one too (2026-09-28 tester log).
+    [Test]
+    public async Task Transcribe_DetectingALanguage_WhenTheDaemonDies_RetriesOnceOnAFreshLeaseWithoutProbabilities()
+    {
+        await using var harness = new TranscriberHarness(ResetThenSilent());
+        harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited (exit code -1073741819).")
+        {
+            ProcessExited = true
+        };
+
+        var result = await harness.TranscribeAsync(detectLanguage: true);
+
+        AssertEx.Equal(expected: 2, harness.Handler.RequestBodies.Count);
+        AssertEx.Equal("false", NoLanguageProbabilities(harness.Handler.RequestBodies[0]), "The first request asks for probabilities.");
+        AssertEx.Equal("true", NoLanguageProbabilities(harness.Handler.RequestBodies[1]), "The retry does not.");
+        AssertEx.Equal(expected: 2, harness.Supervisor.EnsureCallCount, "The retry respawns the dead daemon through a fresh ensure.");
+        AssertEx.Equal(expected: 2, harness.Supervisor.LeasesDisposed);
+        AssertEx.Null(result.DetectedLanguageCode);
+    }
+
+    [Test]
+    public async Task Transcribe_WithoutLanguageDetection_WhenTheDaemonDies_DoesNotRetry()
+    {
+        await using var harness = new TranscriberHarness(ResetThenSilent());
+        harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited.")
+        {
+            ProcessExited = true
+        };
+
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
+
+        AssertEx.True(exception.ProcessExited, "The caller's own daemon-death retry keys on this flag.");
+        AssertEx.Equal(expected: 1, harness.Handler.CallCount, "Nothing to drop: the request never asked for probabilities.");
+    }
+
     [Test]
     public async Task Transcribe_RewindsTheAudioAndLeavesTheCallersStreamOpen()
     {
@@ -364,6 +400,16 @@ public sealed class WhisperServerTranscriberTests
     private const string NullStringError = "basic_string: construction from null is not valid";
 
     private const string SilentPayload = """{"text":"","duration":1.0,"segments":[]}""";
+
+    /// <summary>The first request dies with a connection reset, as a crashing daemon's does; every later one is a silent 200.</summary>
+    private static Func<HttpRequestMessage, HttpResponseMessage> ResetThenSilent()
+    {
+        var next = 0;
+        var silent = Sequence((HttpStatusCode.OK, SilentPayload));
+        return request => next++ == 0
+            ? throw new HttpRequestException("An existing connection was forcibly closed by the remote host.")
+            : silent(request);
+    }
 
     private static Func<HttpRequestMessage, HttpResponseMessage> Sequence(params (HttpStatusCode Status, string Body)[] responses)
     {

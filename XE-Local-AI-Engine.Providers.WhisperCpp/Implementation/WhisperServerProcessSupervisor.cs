@@ -834,9 +834,25 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         _logger.LogWarning("whisper-server for model {ModelId} (pid {ProcessId}) exited unexpectedly with exit code {ExitCode}; it is respawned on the next request. Last stderr: {StderrTail}",
             running.ModelId, running.Handle.ProcessId, running.Handle.ExitCode, running.Handle.StderrTail ?? "(none)");
-        NoteCudaFailure(running.Binary, running.Handle.ExitCode);
+        if (!DiedOfLanguageDetectionOnSilence(running.Handle.StderrTail))
+        {
+            NoteCudaFailure(running.Binary, running.Handle.ExitCode);
+        }
+
         KillDetached(running);
     }
+
+    /// <summary>
+    ///     Whether the daemon's last words are the upstream no-speech language-detection bug rather than a backend failure.
+    /// </summary>
+    /// <remarks>
+    ///     When VAD keeps no speech and language probabilities were requested, whisper.cpp logs this line and then builds a
+    ///     string from a null language name: a 500 on Linux, an access violation on the Windows build, CUDA and CPU alike. It
+    ///     says nothing about CUDA, so it must not latch the process-wide CPU fallback; the transcriber retries the window
+    ///     without probabilities. Any other death of the pinned CUDA build still latches.
+    /// </remarks>
+    private static bool DiedOfLanguageDetectionOnSilence(string? stderrTail) =>
+        stderrTail?.Contains("whisper_lang_str_full: unknown language id", StringComparison.Ordinal) == true;
 
     /// <summary>
     ///     Latches the process-wide CPU fallback when the daemon that died was the pinned CUDA prebuilt the vendor rule chose. A

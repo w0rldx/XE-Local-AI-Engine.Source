@@ -1,8 +1,9 @@
 import { Alert, Badge, Checkbox, Group, Loader, Paper, Stack, Switch, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconInfoCircle, IconWorldOff } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
 import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
@@ -17,7 +18,22 @@ interface AgentToolSelectorProps {
 	toolCapable: boolean;
 	onToggleTool: (toolName: string, selected: boolean) => void;
 	onToggleApproval: (toolName: string, requiresApproval: boolean) => void;
+	// The seeded Default Assistant: the backend ignores its allowed-tool list and offers it the whole capability-gated
+	// offer, so the selector shows that offer checked and locked instead of the (empty) stored list.
+	isDefaultAssistant?: boolean;
+	// The Default Assistant's offer as the server computes it for the form's model; undefined while it loads.
+	defaultOfferToolNames?: readonly string[];
+	defaultOfferError?: boolean;
+	// The node's web-access switch, for the hint on the web tools. Undefined while node settings load; null is a
+	// never-saved switch, which the server reads as its default (off).
+	webAccessEnabled?: boolean | null;
 }
+
+// Offered only when the node's web-access switch is on (WebAccessToolCatalog), whatever an agent lists.
+const webAccessToolNames: ReadonlySet<string> = new Set(["web_search", "web_fetch"]);
+
+// Unioned into every agent's offer by the backend (AskUserToolOffer.EnsureOffered), so it cannot be unchecked.
+const askUserToolName = "ask_user";
 
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
@@ -46,24 +62,33 @@ export function AgentToolSelector({
 	toolCapable,
 	onToggleTool,
 	onToggleApproval,
+	isDefaultAssistant = false,
+	defaultOfferToolNames,
+	defaultOfferError = false,
+	webAccessEnabled,
 }: AgentToolSelectorProps) {
 	const { t } = useTranslation();
 	const catalogQuery = useToolCatalog();
 
-	// Render the live catalog plus any already-selected tools that are no longer in it (so they remain
-	// deselectable). Selected-but-absent tools are appended after the catalog, in selection order.
+	// The Default Assistant's checked set is the server's offer, never the (empty) stored list.
+	const checkedToolNames = isDefaultAssistant ? (defaultOfferToolNames ?? []) : selectedToolNames;
+	const defaultOfferLoading = isDefaultAssistant && defaultOfferToolNames === undefined && !defaultOfferError;
+
+	// Render the live catalog plus any checked tools that are not in it (so they stay visible and deselectable).
+	// Checked-but-absent tools are appended after the catalog, in order.
 	const rows = useMemo<ToolCatalogEntry[]>(() => {
 		const catalog = catalogQuery.data ?? [];
 		const catalogNames = new Set(catalog.map((tool) => tool.name));
 		const orphanSelected: ToolCatalogEntry[] = [];
-		for (const name of selectedToolNames) {
+		for (const name of checkedToolNames) {
 			if (!catalogNames.has(name)) {
 				orphanSelected.push(unknownToolEntry(name));
 			}
 		}
 		return [...catalog, ...orphanSelected];
-	}, [catalogQuery.data, selectedToolNames]);
-	const selectedToolNameSet = useMemo(() => new Set(selectedToolNames), [selectedToolNames]);
+	}, [catalogQuery.data, checkedToolNames]);
+	const checkedToolNameSet = useMemo(() => new Set(checkedToolNames), [checkedToolNames]);
+	const webAccessOff = webAccessEnabled === false || webAccessEnabled === null;
 
 	return (
 		<Stack gap="xs" data-testid="agent-tool-selector">
@@ -78,14 +103,26 @@ export function AgentToolSelector({
 					)}
 				</Alert>
 			) : null}
+			{isDefaultAssistant ? (
+				<Alert color="blue" icon={<IconInfoCircle size={16} />} data-testid="agent-tool-default-offer-note">
+					{t("pages.agents.form.tools.defaultAssistantNote", "The default assistant uses every tool available to its model.")}
+				</Alert>
+			) : null}
 
-			{catalogQuery.isLoading ? (
+			{catalogQuery.isLoading || defaultOfferLoading ? (
 				<Group gap="sm" data-testid="agent-tool-catalog-loading">
 					<Loader size="sm" />
 					<Text c="dimmed" size="sm">
 						{t("pages.agents.form.tools.loading", "Loading tools…")}
 					</Text>
 				</Group>
+			) : null}
+
+			{defaultOfferError ? (
+				<InlineErrorAlert
+					message={t("pages.agents.form.tools.defaultOfferError", "Could not load the default assistant's tools.")}
+					data-testid="agent-tool-default-offer-error"
+				/>
 			) : null}
 
 			{catalogQuery.error ? (
@@ -101,12 +138,20 @@ export function AgentToolSelector({
 				</Text>
 			) : null}
 
-			{rows.map((tool) => {
-				const isSelected = selectedToolNameSet.has(tool.name);
+			{(isDefaultAssistant && (defaultOfferLoading || defaultOfferError) ? [] : rows).map((tool) => {
+				// The server's Default Assistant offer already carries ask_user whenever the model gets it.
+				const isAlwaysOffered = !isDefaultAssistant && toolCapable && tool.name === askUserToolName;
+				const isSelected = isAlwaysOffered || checkedToolNameSet.has(tool.name);
+				const locked = !toolCapable || isDefaultAssistant || isAlwaysOffered;
 				// A custom (user-defined) tool always requires approval at runtime (forced by the tool registry),
 				// so the per-tool approval switch is pinned on and locked — flipping it would be a misleading no-op.
 				const isCustom = tool.source.kind === "custom";
-				const requiresApproval = isCustom ? true : (toolApprovals[tool.name] ?? tool.requiresApproval);
+				// The Default Assistant takes no per-agent overrides, only the node policy the catalog already applied.
+				const requiresApproval = isDefaultAssistant
+					? tool.effectiveRequiresApproval
+					: isCustom
+						? true
+						: (toolApprovals[tool.name] ?? tool.requiresApproval);
 
 				return (
 					<Paper withBorder={true} p="xs" key={tool.name} data-testid={`agent-tool-row-${tool.name}`}>
@@ -114,7 +159,7 @@ export function AgentToolSelector({
 							<Group justify="space-between" align="center" wrap="nowrap">
 								<Checkbox
 									checked={isSelected}
-									disabled={!toolCapable}
+									disabled={locked}
 									label={
 										<Group gap="xs" wrap="nowrap" align="center">
 											<Text size="sm" fw={600} ff="monospace">
@@ -130,7 +175,7 @@ export function AgentToolSelector({
 								<Switch
 									size="sm"
 									checked={requiresApproval}
-									disabled={!toolCapable || !isSelected || isCustom}
+									disabled={locked || !isSelected || isCustom}
 									label={
 										<Badge size="xs" variant="light" color={requiresApproval ? "orange" : "teal"}>
 											{requiresApproval
@@ -142,6 +187,25 @@ export function AgentToolSelector({
 									data-testid={`agent-tool-approval-${tool.name}`}
 								/>
 							</Group>
+							{isAlwaysOffered ? (
+								<Text size="xs" c="dimmed" data-testid="agent-tool-always-offered-note">
+									{t("pages.agents.form.tools.alwaysOffered", "Always available: an agent can always ask you a question.")}
+								</Text>
+							) : null}
+							{webAccessOff && webAccessToolNames.has(tool.name) ? (
+								<ButtonLink
+									to="/node-settings"
+									search={{ section: "knowledge" }}
+									variant="subtle"
+									color="yellow"
+									size="compact-xs"
+									leftSection={<IconWorldOff size={14} />}
+									style={{ alignSelf: "flex-start" }}
+									data-testid={`agent-tool-web-access-hint-${tool.name}`}
+								>
+									{t("pages.agents.form.tools.webAccessRequired", "Requires web access in Node Settings")}
+								</ButtonLink>
+							) : null}
 							{tool.description ? (
 								<Text size="xs" c="dimmed">
 									{tool.description}

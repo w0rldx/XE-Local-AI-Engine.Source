@@ -662,6 +662,23 @@ public sealed class WhisperServerSupervisorTests
     }
 
     [Test]
+    public async Task ReportRequestFailure_PinnedCudaDaemonDiedOfSilentWindowLanguageDetection_DoesNotLatchTheCpuFallback()
+    {
+        // The 2026-09-28 Windows tester log: VAD kept no speech, auto-detect was asked for, and the daemon died with an access
+        // violation on CUDA and CPU alike. That is the upstream language-detection bug, not a CUDA failure.
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: true),
+            backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: -1073741819,
+            stderrTail: "whisper_vad_segments_from_probs: Final speech segments after filtering: 0 | whisper_lang_auto_detect_with_state: offset 0ms is past the end of the audio (0ms) | whisper_lang_str_full: unknown language id -2");
+
+        var failure = await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        AssertEx.True(AssertEx.NotNull(failure, "The death itself must still be reported.").ProcessExited, "The transcriber retries on this flag.");
+        AssertEx.Null(harness.CudaFailureSignal.Reason);
+    }
+
+    [Test]
     [Arguments("byo")]
     [Arguments("0123abcd")]
     public async Task ReportRequestFailure_OperatorChosenCudaDaemonExited_DoesNotLatchTheCpuFallback(string version)

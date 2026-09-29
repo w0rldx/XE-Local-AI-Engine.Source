@@ -573,51 +573,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             ? request.ReasoningEffort ?? resolvedEffort
             : resolvedEffort ?? request.ReasoningEffort;
 
-    /// <summary>
-    ///     Resolves whether this turn offers tools and, if so, which ones travel in the runtime package.
-    /// </summary>
-    /// <remarks>
-    ///     Tools are offered only when the client asked, the node tool engine is enabled and the model advertises the
-    ///     capability. A bound definition narrows the offer to its allowed set (node approval policy already applied,
-    ///     custom tools merged, in <see cref="ChatTurnResolver" />); the unbound fallback builds the raw offer here and
-    ///     applies the SAME tighten-only policy, or an unbound turn would bypass a node-wide one. A custom tool on that
-    ///     agentless path is not session-approvable and re-prompts each time, the safe direction.
-    /// </remarks>
-    private async Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken)
-    {
-        var enableTools = await _runtimeSettings.GetEnableToolsAsync(cancellationToken);
-        var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
-        if (!offerTools)
-        {
-            return new ChatToolOffer
-            {
-                OfferTools = false,
-                AllowedTools = null
-            };
-        }
-
-        if (resolution.Resolved?.AllowedTools is { } resolvedAllowedTools)
-        {
-            return new ChatToolOffer
-            {
-                OfferTools = true,
-                AllowedTools = resolvedAllowedTools
-            };
-        }
-
-        var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
-        return new ChatToolOffer
-        {
-            OfferTools = true,
-            AllowedTools =
-            [
-                .. fallbackOffer.Select(tool => tool with
-                {
-                    RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                })
-            ]
-        };
-    }
+    // The send path's offer, resolved through the helper the Default Assistant offer read shares.
+    private Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken) =>
+        ChatToolOfferResolver.ResolveAsync(request.UseLocalTools, resolution, _runtimeSettings, _localToolOfferProvider, _toolApprovalPolicy, cancellationToken);
 
     /// <summary>
     ///     Whether this turn's attachments may travel, the load-bearing cloud-egress gate.
@@ -1035,15 +993,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         public required NodeChatConversationDto Conversation { get; init; }
 
         public required IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
-    }
-
-    // The tool offer for one turn: whether tools are offered at all, and the allow-list that travels in the runtime
-    // package (null whenever nothing is offered).
-    private sealed record ChatToolOffer
-    {
-        public required bool OfferTools { get; init; }
-
-        public required IReadOnlyList<AllowedToolDto>? AllowedTools { get; init; }
     }
 
     // The outcome of staging a conversation's attachments into the AgentHome sandbox. A busy workspace yields BOTH a

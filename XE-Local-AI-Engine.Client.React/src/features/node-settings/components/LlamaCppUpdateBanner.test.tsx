@@ -49,9 +49,9 @@ describe("LlamaCppUpdateBanner", () => {
 		expect(screen.queryByTestId("llamacpp-update-banner")).toBeNull();
 	});
 
-	it("shows the banner when an update is available and deep-links to node-settings", () => {
+	it("shows the banner when an update is available and deep-links to the runtimes section", () => {
 		hooksMock.statusData = {
-			installed: null,
+			installed: { tag: "b9000", variant: "cuda", asset: "llama.zip", installedAtUtc: undefined },
 			recommendedTag: "b9692",
 			upstreamLatestTag: null,
 			updateAvailable: true,
@@ -65,12 +65,27 @@ describe("LlamaCppUpdateBanner", () => {
 		expect(screen.getByTestId("llamacpp-update-banner")).toBeTruthy();
 
 		fireEvent.click(screen.getByTestId("llamacpp-update-banner-cta"));
-		expect(navigateMock).toHaveBeenCalledWith({ to: "/node-settings" });
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/node-settings", search: { section: "runtimes" } });
+	});
+
+	it("renders nothing while no runtime is installed, even though the backend flags an update", () => {
+		// First run: the backend reports updateAvailable whenever nothing is installed yet; that is provisioning.
+		hooksMock.statusData = {
+			installed: null,
+			recommendedTag: "b9692",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+		};
+
+		renderBanner();
+		expect(screen.queryByTestId("llamacpp-update-banner")).toBeNull();
 	});
 
 	it("hides the banner after the operator dismisses the current tag", () => {
 		hooksMock.statusData = {
-			installed: null,
+			installed: { tag: "b9000", variant: "cuda", asset: "llama.zip", installedAtUtc: undefined },
 			recommendedTag: "b9692",
 			upstreamLatestTag: null,
 			updateAvailable: true,

@@ -51,6 +51,16 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        // The resolver gives the Default Assistant the whole capability-gated offer, so a stored list would be dead.
+        if (await _store.GetByIdAsync(id, cancellationToken) is { } existing && AgentDefaults.IsDefaultAssistant(existing))
+        {
+            input = input with
+            {
+                AllowedToolNames = [],
+                ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal)
+            };
+        }
+
         await ValidateAsync(input, cancellationToken);
         return await _store.UpdateAsync(id, input, cancellationToken);
     }

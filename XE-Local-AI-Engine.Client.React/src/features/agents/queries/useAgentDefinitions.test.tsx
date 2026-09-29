@@ -75,6 +75,7 @@ const domainDefinition = {
 	// false for both (the backend default).
 	disableBaseScaffold: false,
 	disableToolRelevanceFilter: false,
+	isDefaultAssistant: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,

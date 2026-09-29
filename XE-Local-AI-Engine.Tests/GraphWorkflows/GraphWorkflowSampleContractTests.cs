@@ -32,22 +32,25 @@ public sealed class GraphWorkflowSampleContractTests
     }
 
     /// <summary>
-    ///     Runnable on a fresh install: no Tool (needs a tool catalog), no Agent (needs agent setup), no ChatInput
-    ///     (needs a chat binding), and no model pin, so every model call falls to the local default.
+    ///     Runnable on a fresh install: no Tool, no ChatInput, no model pin, and an Agent only when unbound (it then runs
+    ///     the built-in default persona).
     /// </summary>
     [Test]
     public void EverySample_NeedsNothingButALocalChatModel()
     {
-        GraphWorkflowNodeKind[] refused = [GraphWorkflowNodeKind.Tool, GraphWorkflowNodeKind.Agent, GraphWorkflowNodeKind.ChatInput];
+        GraphWorkflowNodeKind[] refused = [GraphWorkflowNodeKind.Tool, GraphWorkflowNodeKind.ChatInput];
         foreach (var (name, graph) in Samples())
         {
-            var offending = graph.Nodes.Values.Where(node => refused.Contains(node.Kind)).Select(static node => node.NodeKey);
+            var offending = graph.Nodes.Values.Where(node => refused.Contains(node.Kind)
+                                                             || node.Config is GraphWorkflowAgentConfig { AgentDefinitionId: not null })
+                                 .Select(static node => node.NodeKey);
             AssertEx.Empty(offending, $"{name} carries a node that needs more than a local chat model.");
 
             var pinned = graph.Nodes.Values.Where(static node => node.Config switch
                               {
                                   GraphWorkflowLlmCallConfig config => config.Model is not null,
                                   GraphWorkflowDecisionModelConfig config => config.Model is not null,
+                                  GraphWorkflowAgentConfig config => config.Model is not null,
                                   _ => false
                               })
                               .Select(static node => node.NodeKey);

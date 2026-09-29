@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -62,15 +63,18 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     // The built-in web tools, merged into the WHOLE offer only while WebAccessEnabled is on (ADR 0017).
     private readonly IReadOnlyList<AllowedToolDto> _webAccessOfferDtos;
+    private readonly ILogger<LocalToolOfferProvider> _logger;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
         INodeRuntimeSettings runtimeSettings,
         IServiceScopeFactory scopeFactory,
         IModelTrustResolver modelTrustResolver,
-        bool allowCloudKnowledgeAccess)
+        bool allowCloudKnowledgeAccess,
+        ILogger<LocalToolOfferProvider>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
+        _logger = logger ?? NullLogger<LocalToolOfferProvider>.Instance;
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -330,6 +334,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         if (await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken))
         {
             baseOffer = [.. baseOffer, .. _webAccessOfferDtos];
+        }
+        else
+        {
+            // Debug, not Information: this runs on every offer. It is the line that explains an agent whose web tools
+            // were "dropped" from its allowed set while the node switch is off.
+            _logger.LogDebug("Web tools withheld from the offer: WebAccessEnabled is off (Node Settings, Knowledge section).");
         }
 
         // The node kill-switch is off by default. It is checked here, before the scope and store read, so the common

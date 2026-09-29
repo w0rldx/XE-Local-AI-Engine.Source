@@ -174,6 +174,64 @@ public sealed class DefaultConfigDraftServiceTests
     }
 
     [Test]
+    public async Task DraftImagePrompt_WithIdea_ReturnsPromptAndNegativePromptClampedToTheFormCaps()
+    {
+        var harness = new Harness
+        {
+            EnvelopeJson = $$"""
+                             { "prompt": "  {{new string('p', 2050)}}  ", "negativePrompt": " blurry, watermark ",
+                               "rationale": "Added lighting.", "assumptions": [], "confidence": 0.7 }
+                             """
+        };
+
+        var result = await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
+
+        var draft = AssertEx.NotNull(result.Draft, "A parseable envelope must produce a draft.");
+        AssertEx.Equal(expected: 2000, draft.Content.Length, "The prompt must fit the image form's own cap.");
+        AssertEx.Equal("blurry, watermark", draft.Description);
+        AssertEx.Equal(string.Empty, draft.Name);
+        AssertEx.True(harness.ChatClient.WasCalled, "The draft must run on the node-local provider's client.");
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_EmptyPrompt_ReturnsTypedFailure()
+    {
+        var harness = new Harness
+        {
+            EnvelopeJson = """{ "prompt": "  ", "negativePrompt": "blurry", "rationale": null, "assumptions": [], "confidence": 0.5 }"""
+        };
+
+        var result = await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_EmbeddingModel_RejectsBeforeResolver()
+    {
+        var harness = new Harness();
+        harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelClassificationRecord?>(Classification(ModelKind.Embedding)));
+
+        var result = await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.ModelNotEligible, result.Failure);
+        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DraftImagePrompt_ActiveInvocation_Returns409_NoModelCall()
+    {
+        var harness = new Harness();
+        harness.InvocationRunner.ActiveInvocationCount.Returns(1);
+
+        var result = await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.NodeBusy, result.Failure);
+        harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
+    }
+
+    [Test]
     public async Task DraftService_HostileEnvelope_MetadataCapped()
     {
         var harness = new Harness
@@ -251,9 +309,12 @@ public sealed class DefaultConfigDraftServiceTests
         switch (scenario)
         {
             case "unclassified":
-                // No classification row at all — the case a chat picker would let through, and drafting must not.
+                // An Ollama model with no classification row: drafting must not be the thing that discovers its kind.
                 harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
                        .Returns(Task.FromResult<ModelClassificationRecord?>(null));
+                harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                       .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
+                harness.UseOllama(installedOnLoopback: true);
                 break;
             case "embedding":
                 harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
@@ -298,6 +359,51 @@ public sealed class DefaultConfigDraftServiceTests
         AssertEx.True(result.Succeeded, "An installed, chat-classified GGUF model is eligible.");
         harness.Provider.Received(1).CreateChatClient(Arg.Is<LocalModelSelection>(selection =>
             selection.ModelName == LlamaModel && selection.ProviderName == "llamacpp"));
+    }
+
+    [Test]
+    public async Task Eligibility_InstalledGgufWithoutClassificationRow_Passes()
+    {
+        // A GGUF-only node never writes a row (only the Ollama probe or an override does); the name rule decides.
+        var harness = new Harness();
+        harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelClassificationRecord?>(null));
+
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
+
+        AssertEx.True(result.Succeeded, "An installed chat GGUF with no classification row is eligible.");
+    }
+
+    [Test]
+    [Arguments("nomic-embed-text-v1.5:Q8_0")]
+    [Arguments("bge-reranker-v2-m3:Q8_0")]
+    public async Task Eligibility_InstalledNonChatGgufWithoutClassificationRow_RejectsBeforeResolver(string modelName)
+    {
+        var harness = new Harness();
+        harness.Classifications.GetByNameAsync(modelName, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelClassificationRecord?>(null));
+        harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
+                   new LocalModelDescriptor
+                   {
+                       ModelName = modelName,
+                       ProviderName = "llamacpp",
+                       IsAvailable = true,
+                       SizeBytes = 1024,
+                       ModifiedAt = DraftedAt,
+                       MaxContextTokens = 8192
+                   }
+               ]));
+
+        var result = await harness.Service.DraftAgentDefinitionAsync(new ConfigDraftRequest
+        {
+            Mode = DraftMode.Create,
+            ModelName = modelName,
+            Brief = "Draft an agent."
+        });
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.ModelNotEligible, result.Failure);
+        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -395,7 +501,8 @@ public sealed class DefaultConfigDraftServiceTests
         foreach (var envelopeType in new[]
                  {
                      typeof(AgentDraftEnvelope),
-                     typeof(SkillDraftEnvelope)
+                     typeof(SkillDraftEnvelope),
+                     typeof(ImagePromptDraftEnvelope)
                  })
         {
             var schema = AIJsonUtilities.CreateJsonSchema(envelopeType).GetRawText();

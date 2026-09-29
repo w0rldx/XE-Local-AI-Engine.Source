@@ -3,8 +3,10 @@
 	"assist": {
 		"draftButton": "Mit KI entwerfen",
 		"improveButton": "Mit KI verbessern",
+		"promptButton": "Prompt mit KI schreiben",
 		"noModelHint": "Auf diesem Knoten ist kein lokales Chat-Modell installiert – es kann noch nichts entworfen werden.",
 		"intro": "Ein Modell auf diesem Knoten schreibt aus Ihrer Beschreibung einen Entwurf. Gespeichert wird erst, wenn Sie ihn übernehmen und das Formular selbst speichern.",
+		"imageIntro": "Ein Modell auf diesem Knoten schreibt aus Ihrer Beschreibung einen Prompt. Beim Übernehmen wird nur das Prompt-Feld ausgefüllt; ein Bild entsteht erst, wenn Sie die Bildgenerierung selbst starten.",
 		"demotionToast": "Als importierter Skill gespeichert und deaktiviert gelassen. Prüfen Sie die erzeugten Anweisungen und aktivieren Sie ihn danach.",
 		"dialog": {
 			"draftTitle": "Mit KI entwerfen",
@@ -20,7 +22,10 @@
 			"improveLabel": "Was soll sich ändern?",
 			"createDescription": "Beschreiben Sie die Aufgabe in eigenen Worten – das Modell macht daraus einen Entwurf.",
 			"improveDescription": "Beschreiben Sie die Änderung. Der aktuelle Inhalt wird als Ausgangspunkt mitgeschickt.",
-			"placeholder": "Lieferantenrechnungen gegen die vereinbarte Preisliste prüfen und Auffälligkeiten melden."
+			"placeholder": "Lieferantenrechnungen gegen die vereinbarte Preisliste prüfen und Auffälligkeiten melden.",
+			"imageCreateLabel": "Was soll das Bild zeigen?",
+			"imageCreateDescription": "Beschreiben Sie Ihre Idee in wenigen Worten – das Modell macht daraus einen ausführlichen Prompt.",
+			"imagePlaceholder": "Ein Fuchs in einem Wald bei Sonnenaufgang"
 		},
 		"actions": {
 			"generate": "Entwerfen",
@@ -42,7 +47,9 @@
 			"nameLabel": "Name",
 			"descriptionLabel": "Beschreibung",
 			"instructionsLabel": "Anweisungen",
-			"bodyLabel": "Inhalt"
+			"bodyLabel": "Inhalt",
+			"promptLabel": "Prompt",
+			"negativePromptLabel": "Negativer Prompt"
 		},
 		"rationale": {
 			"toggle": "Warum dieser Entwurf",
@@ -3099,6 +3106,7 @@
 				"nodeDefault": "Node-Standard",
 				"editAria": "{{name}} bearbeiten",
 				"deleteAria": "{{name}} löschen",
+				"allTools": "Alle",
 				"columns": {
 					"name": "Name",
 					"kind": "Typ",
@@ -3157,7 +3165,11 @@
 					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren.",
 					"loading": "Tools werden geladen…",
 					"loadError": "Der Tool-Katalog konnte nicht geladen werden.",
-					"empty": "Keine Tools verfügbar."
+					"empty": "Keine Tools verfügbar.",
+					"defaultAssistantNote": "Der Standard-Assistent nutzt jedes Tool, das seinem Modell zur Verfügung steht.",
+					"defaultOfferError": "Die Tools des Standard-Assistenten konnten nicht geladen werden.",
+					"alwaysOffered": "Immer verfügbar: Ein Agent kann jederzeit eine Rückfrage stellen.",
+					"webAccessRequired": "Erfordert Webzugriff in den Node-Einstellungen"
 				},
 				"orchestration": {
 					"label": "Orchestrierung",
@@ -6642,6 +6654,10 @@
 				"briefWithReviewLoop": {
 					"name": "Kurzinfo mit Prüfschleife",
 					"description": "Entwirft eine Kurzinfo, lässt sie parallel auf Richtigkeit und Verständlichkeit prüfen, überarbeitet sie und fragt nur dann eine Person, wenn das Modell unsicher ist."
+				},
+				"agentResearchAndCheck": {
+					"name": "Agent-Recherche mit Prüfung",
+					"description": "Ein Agent beantwortet eine Frage mit seinen Werkzeugen und nennt seine Quellen, ein zweites Modell prüft die Antwort, und eine Person gibt sie frei."
 				}
 			}
 		},

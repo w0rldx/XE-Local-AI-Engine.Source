@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,6 +47,12 @@ import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { localApiPath } from "@/test/msw/Handlers";
+import { createTestQueryClient } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+// Only the Default Assistant fetches its server-computed tool offer; each such test declares the route itself.
+const server = setupMswServer();
 
 function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
 	return {
@@ -64,6 +72,7 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		memoryExtractionEnabled: true,
 		disableBaseScaffold: false,
 		disableToolRelevanceFilter: false,
+		isDefaultAssistant: false,
 		version: 1,
 		createdAtUtc: 0,
 		updatedAtUtc: 0,
@@ -122,10 +131,24 @@ function installJsdomEnvironmentMocks(): void {
 
 function renderWithProviders(ui: ReactElement) {
 	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
+		<QueryClientProvider client={createTestQueryClient()}>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
+		</QueryClientProvider>,
 	);
+}
+
+/** Serves the Default Assistant offer and records the model each request asked for. */
+function defaultOfferRoute(toolNames: string[]) {
+	const requestedModels: (string | null)[] = [];
+	server.use(
+		http.get(localApiPath("agents/default-tool-offer"), ({ request }) => {
+			requestedModels.push(new URL(request.url).searchParams.get("modelName"));
+			return HttpResponse.json({ modelName: "qwen3:8b", toolNames });
+		}),
+	);
+	return requestedModels;
 }
 
 const baseValues: AgentDefinitionFormValues = {
@@ -152,6 +175,7 @@ function renderForm(overrides: {
 	toolCapableModels?: string[];
 	allDefinitions?: AgentDefinition[];
 	selfId?: string;
+	isDefaultAssistant?: boolean;
 	onSubmit?: (values: AgentDefinitionFormValues) => void;
 }) {
 	const onSubmit = overrides.onSubmit ?? vi.fn();
@@ -172,6 +196,7 @@ function renderForm(overrides: {
 					toolCapableModels={overrides.toolCapableModels ?? []}
 					allDefinitions={overrides.allDefinitions ?? []}
 					selfId={overrides.selfId ?? ""}
+					isDefaultAssistant={overrides.isDefaultAssistant}
 					onSubmit={onSubmit}
 				/>
 				<button type="button" onClick={() => ref.current?.submit()} data-testid="agent-form-submit">
@@ -285,6 +310,49 @@ describe("AgentDefinitionForm", () => {
 		fireEvent.click(screen.getByTestId("agent-form-submit"));
 
 		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }));
+	});
+
+	it("keeps the Default Assistant's allowed tools empty on submit, so the backend still grants the whole offer", () => {
+		defaultOfferRoute(["GetCurrentTime"]);
+		const { onSubmit } = renderForm({
+			initialValues: {
+				name: "Default Assistant",
+				instructions: "Be helpful",
+				modelProfile: "qwen3:8b",
+				allowedToolNames: ["GetCurrentTime"],
+				toolApprovals: { GetCurrentTime: true },
+			},
+			toolCapableModels: ["qwen3:8b"],
+			isDefaultAssistant: true,
+		});
+
+		expect(screen.getByTestId("agent-tool-default-offer-note")).toBeTruthy();
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }));
+	});
+
+	it("checks exactly the server's Default Assistant offer for the selected model, loading until it arrives", async () => {
+		const requestedModels = defaultOfferRoute(["GetCurrentTime", "ask_user"]);
+		renderForm({
+			initialValues: { name: "Default Assistant", instructions: "Be helpful", modelProfile: "qwen3:8b" },
+			toolCapableModels: ["qwen3:8b"],
+			isDefaultAssistant: true,
+		});
+
+		expect(screen.getByTestId("agent-tool-catalog-loading")).toBeTruthy();
+		const current = await screen.findByTestId<HTMLInputElement>("agent-tool-checkbox-GetCurrentTime");
+		expect(current.checked).toBe(true);
+		expect(screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-ask_user").checked).toBe(true);
+		expect(screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-Calculate").checked).toBe(false);
+		expect(requestedModels).toEqual(["qwen3:8b"]);
+	});
+
+	it("does not fetch the Default Assistant offer for an ordinary agent", () => {
+		renderForm({ initialValues: { modelProfile: "qwen3:8b" }, toolCapableModels: ["qwen3:8b"] });
+
+		// setupMswServer fails this test if any undeclared request fires.
+		expect(screen.getByTestId<HTMLInputElement>("agent-tool-checkbox-GetCurrentTime").checked).toBe(false);
 	});
 
 	it("submits playbookEnabled true when the playbook toggle is switched on", () => {

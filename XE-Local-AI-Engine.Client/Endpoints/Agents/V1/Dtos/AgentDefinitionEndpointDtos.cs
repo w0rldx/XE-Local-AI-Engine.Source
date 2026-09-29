@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
+using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -196,6 +197,9 @@ public sealed class AgentDefinitionResponse
     /// <summary>The per-agent skill picklist (skill ids). Always present; empty when no skills are assigned.</summary>
     public required IReadOnlyList<Guid> AllowedSkillIds { get; init; }
 
+    /// <summary>Whether this row is the node's seeded Default Assistant (seeded provenance + its seed slug), never name-based.</summary>
+    public required bool IsDefaultAssistant { get; init; }
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -220,4 +224,23 @@ public sealed class ListAgentDefinitionsResponse
 public sealed class ToolCapableModelsResponse
 {
     public required IReadOnlyList<string> Models { get; init; }
+}
+
+/// <summary>Query for the Default Assistant's tool offer; a blank model means the node's local default chat model.</summary>
+public sealed class GetDefaultAssistantToolOfferRequest
+{
+    // [QueryParam] puts it in the OpenAPI document as a query parameter, not a request body.
+    [QueryParam]
+    public string? ModelName { get; init; }
+}
+
+/// <summary>
+///     The tool names a chat turn offers the seeded Default Assistant on <see cref="ModelName" />, ask_user included,
+///     as the server computes them; empty when the model or node offers no tools.
+/// </summary>
+public sealed class DefaultAssistantToolOfferResponse
+{
+    public required string? ModelName { get; init; }
+
+    public required IReadOnlyList<string> ToolNames { get; init; }
 }

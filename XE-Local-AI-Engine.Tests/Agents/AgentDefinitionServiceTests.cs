@@ -342,6 +342,42 @@ public sealed class AgentDefinitionServiceTests
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task UpdateAsync_DefaultAssistant_PersistsEmptyToolListAndApprovals()
+    {
+        var service = CreateService(out var store, ["list_files"]);
+        var id = Guid.NewGuid();
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(StoredRecord(id) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        });
+        var input = CreateInput(allowedTools: ["list_files"],
+            toolApprovals: new Dictionary<string, bool>
+            {
+                ["list_files"] = true
+            });
+
+        await service.UpdateAsync(id, input);
+
+        await store.Received(1).UpdateAsync(id,
+            Arg.Is<AgentDefinitionInput>(stored => stored.AllowedToolNames.Count == 0 && stored.ToolApprovals.Count == 0),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateAsync_OrdinaryAgent_KeepsItsToolList()
+    {
+        var service = CreateService(out var store, ["list_files"]);
+        var id = Guid.NewGuid();
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(StoredRecord(id));
+        var input = CreateInput(allowedTools: ["list_files"]);
+
+        await service.UpdateAsync(id, input);
+
+        await store.Received(1).UpdateAsync(id, input, Arg.Any<CancellationToken>());
+    }
+
     private static AgentDefinitionService CreateService(out IAgentDefinitionStore store, IReadOnlyList<string>? knownTools = null)
     {
         store = Substitute.For<IAgentDefinitionStore>();

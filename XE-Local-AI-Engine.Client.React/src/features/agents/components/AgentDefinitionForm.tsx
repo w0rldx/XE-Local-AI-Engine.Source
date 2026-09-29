@@ -13,6 +13,7 @@ import {
 } from "@/features/agents/models/AgentDefinitionModels";
 import type { OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
+import { useDefaultAssistantToolOffer } from "@/features/agents/queries/useAgentDefinitions";
 
 import type { AgentModelOption } from "./AgentDefinitionForm.types";
 
@@ -41,6 +42,10 @@ interface AgentDefinitionFormProps {
 	// dialog close-guard and the route nav-guard. The form no longer renders its own Save/Cancel — those live in the
 	// dialog footer and drive submission via the imperative handle.
 	onDirtyChange?: (isDirty: boolean) => void;
+	// The seeded Default Assistant (backend provenance): its tools are the whole offer, shown locked, never saved as a list.
+	isDefaultAssistant?: boolean;
+	// The node's web-access switch, for the selector's hint on the web tools; undefined while loading.
+	webAccessEnabled?: boolean | null;
 	/** Imperative handle exposing submit() so the host dialog footer can drive submission. */
 	ref?: Ref<AgentDefinitionFormHandle>;
 }
@@ -57,6 +62,8 @@ export function AgentDefinitionForm({
 	submitError,
 	onSubmit,
 	onDirtyChange,
+	isDefaultAssistant = false,
+	webAccessEnabled,
 	ref,
 }: AgentDefinitionFormProps) {
 	const [values, setValues] = useState<AgentDefinitionFormValues>(initialValues);
@@ -80,6 +87,9 @@ export function AgentDefinitionForm({
 	useEffect(() => {
 		onDirtyChange?.(JSON.stringify(values) !== JSON.stringify(initialValues));
 	}, [values, initialValues, onDirtyChange]);
+
+	// The Default Assistant's tools are whatever the server offers it on the selected model, never a client guess.
+	const defaultOffer = useDefaultAssistantToolOffer(values.modelProfile, isDefaultAssistant);
 
 	const toolCapable = useMemo(
 		() => isModelToolCapable(values.modelProfile, toolCapableModels),
@@ -157,10 +167,12 @@ export function AgentDefinitionForm({
 		setFieldErrors({});
 		setParticipantsError(undefined);
 		// When the model is not tool-capable, never persist tools — strip them defensively so a stale selection
-		// from before the model was changed cannot leak through.
-		const sanitized: AgentDefinitionFormValues = toolCapable ? values : { ...values, allowedToolNames: [], toolApprovals: {} };
+		// from before the model was changed cannot leak through. The Default Assistant keeps its empty list: the
+		// backend reads that as "the whole offer", so a save never narrows it.
+		const sanitized: AgentDefinitionFormValues =
+			toolCapable && !isDefaultAssistant ? values : { ...values, allowedToolNames: [], toolApprovals: {} };
 		onSubmit(sanitized);
-	}, [onSubmit, toolCapable, values]);
+	}, [isDefaultAssistant, onSubmit, toolCapable, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -191,6 +203,10 @@ export function AgentDefinitionForm({
 				toolCapable={toolCapable}
 				onToggleTool={handleToggleTool}
 				onToggleApproval={handleToggleApproval}
+				isDefaultAssistant={isDefaultAssistant}
+				defaultOfferToolNames={defaultOffer.data}
+				defaultOfferError={defaultOffer.isError}
+				webAccessEnabled={webAccessEnabled}
 			/>
 			<AgentSkillSelector selectedSkillIds={values.allowedSkillIds} onToggleSkill={handleToggleSkill} />
 			{submitError ? <InlineErrorAlert message={submitError} data-testid="agent-form-submit-error" /> : null}

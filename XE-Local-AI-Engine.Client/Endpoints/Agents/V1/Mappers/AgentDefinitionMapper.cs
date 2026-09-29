@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 
 internal static class AgentDefinitionMapper
 {
@@ -32,6 +33,7 @@ internal static class AgentDefinitionMapper
             DisableBaseScaffold = record.DisableBaseScaffold,
             DisableToolRelevanceFilter = record.DisableToolRelevanceFilter,
             AllowedSkillIds = record.AllowedSkillIds ?? [],
+            IsDefaultAssistant = AgentDefaults.IsDefaultAssistant(record),
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
             UpdatedAtUtc = record.UpdatedAtUtc,

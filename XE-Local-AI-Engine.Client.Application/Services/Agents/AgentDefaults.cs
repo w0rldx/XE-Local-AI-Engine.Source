@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     Shared constants for the node-local default chat persona.
 /// </summary>
@@ -15,6 +18,17 @@ public static class AgentDefaults
 
     /// <summary>The data-row display name of the seeded "Default Assistant" definition (not localized).</summary>
     public const string DefaultAgentName = "Default Assistant";
+
+    /// <summary>
+    ///     Whether <paramref name="definition" /> is the seeded Default Assistant: seeded provenance AND the
+    ///     <see cref="DefaultAgentSeedSlug" />, which an operator-authored row cannot claim.
+    /// </summary>
+    public static bool IsDefaultAssistant(AgentDefinitionRecord definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        return definition.Source == AgentDefinitionSource.Seeded
+            && string.Equals(definition.SeedSlug, DefaultAgentSeedSlug, StringComparison.Ordinal);
+    }
 
     /// <summary>
     ///     The forge-proof seed slug of the node-local "Coder (read-only)" definition — a read-only project-access agent

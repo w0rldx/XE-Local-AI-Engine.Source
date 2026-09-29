@@ -46,6 +46,7 @@ export function toAgentDefinition(dto: XeLocalAiEngineClientEndpointsAgentsV1Age
 		memoryExtractionEnabled: dto.memoryExtractionEnabled ?? true,
 		disableBaseScaffold: dto.disableBaseScaffold ?? false,
 		disableToolRelevanceFilter: dto.disableToolRelevanceFilter ?? false,
+		isDefaultAssistant: dto.isDefaultAssistant ?? false,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
 		updatedAtUtc: dto.updatedAtUtc ?? 0,

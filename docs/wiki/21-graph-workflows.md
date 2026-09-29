@@ -1076,8 +1076,10 @@ on save.
 name and description. Picking one prefills the name and description (never over text the operator typed), and the
 create call posts the sample's graph instead of the Start → End starter, so a created sample is an ordinary definition
 with no link back to its file. Every sample must run on any installed node-managed GGUF chat model and nothing else:
-no `Tool`, `Agent` or `ChatInput` node, no `model` pin, a `Standard` graph, and a Start `defaultInput` so the Start Run
-dialog is one click. Prompts inside the graphs are model-facing config and stay English. `GraphWorkflowSamples.test.ts`
+no `Tool` or `ChatInput` node, no `model` pin on any node, a `Standard` graph, and a Start `defaultInput` so the Start
+Run dialog is one click. An `Agent` node is allowed only without `agentDefinitionId`: unbound, it runs the built-in
+default persona with the local tools a fresh install already has (§4.2), which is how `agent-research-and-check` shows
+where an agent fits (Agent → LLM Call check → Pause → End); a bound agent would need setup first. Prompts inside the graphs are model-facing config and stay English. `GraphWorkflowSamples.test.ts`
 holds the client half (validator, lossless canvas round trip, bundle keys), and
 `XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowSampleContractTests.cs` parses every file through the real
 `GraphWorkflowGraph.Parse` and also refuses any warning, so a sample never opens with a note the operator did not cause.
