@@ -17141,6 +17141,40 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/resources": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getRuntimeResources",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResourcesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/running": {
       "get": {
         "tags": [
@@ -40001,6 +40035,31 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GpuMemoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "totalVramBytes",
+          "usedVramBytes",
+          "availableVramBytes"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalVramBytes": {
+            "type": "integer"
+          },
+          "usedVramBytes": {
+            "type": "integer"
+          },
+          "availableVramBytes": {
+            "type": "integer"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1HardwareProfileResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -41096,7 +41155,10 @@
           "role",
           "isResponsive",
           "detail",
-          "detailCode"
+          "detailCode",
+          "isBusy",
+          "lastUsedUtc",
+          "isTransient"
         ],
         "properties": {
           "modelName": {
@@ -41113,6 +41175,17 @@
           },
           "detailCode": {
             "type": "string"
+          },
+          "isBusy": {
+            "type": "boolean"
+          },
+          "lastUsedUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "isTransient": {
+            "type": "boolean"
           }
         }
       },
@@ -41159,6 +41232,29 @@
           "sanitizedError": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResourcesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "totalRamBytes",
+          "availableRamBytes",
+          "gpus"
+        ],
+        "properties": {
+          "totalRamBytes": {
+            "type": "integer"
+          },
+          "availableRamBytes": {
+            "type": "integer"
+          },
+          "gpus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1GpuMemoryResponse"
+            }
           }
         }
       },

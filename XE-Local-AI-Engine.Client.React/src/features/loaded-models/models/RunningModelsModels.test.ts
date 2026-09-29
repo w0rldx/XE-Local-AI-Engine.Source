@@ -5,18 +5,38 @@ import { toEjectRunningModelResult, toRunningModel } from "@/features/loaded-mod
 describe("toRunningModel", () => {
 	it("maps the running-model wire shape to the domain view-model", () => {
 		expect(
-			toRunningModel({ modelName: "qwen3:8b", role: "chat", isResponsive: true, detail: "ok", detailCode: "responsive" }),
+			toRunningModel({
+				modelName: "qwen3:8b",
+				role: "chat",
+				isResponsive: true,
+				detail: "ok",
+				detailCode: "responsive",
+				isBusy: true,
+				lastUsedUtc: "2026-09-29T10:00:00Z",
+				isTransient: true,
+			}),
 		).toEqual({
 			modelName: "qwen3:8b",
 			role: "chat",
 			isResponsive: true,
 			detail: "ok",
 			detailCode: "responsive",
+			isBusy: true,
+			lastUsedUtc: "2026-09-29T10:00:00Z",
+			isTransient: true,
 		});
 	});
 
 	it("keeps a known detail code and drops an unknown one", () => {
-		const wire = { modelName: "m", role: "chat", isResponsive: false, detail: "Process has exited." };
+		const wire = {
+			modelName: "m",
+			role: "chat",
+			isResponsive: false,
+			detail: "Process has exited.",
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+		};
 		expect(toRunningModel({ ...wire, detailCode: "exited" }).detailCode).toBe("exited");
 		expect(toRunningModel({ ...wire, detailCode: "surprise" }).detailCode).toBeNull();
 	});

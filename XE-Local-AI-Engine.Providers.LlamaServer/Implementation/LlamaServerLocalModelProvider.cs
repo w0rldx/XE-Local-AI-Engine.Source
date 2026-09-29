@@ -170,7 +170,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _chatNetworkTimeout, _calibrationScheduler, _endpointBinding);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _chatNetworkTimeout, _calibrationScheduler, _endpointBinding, selection.ResidencyIntent);
     }
 
     /// <inheritdoc />

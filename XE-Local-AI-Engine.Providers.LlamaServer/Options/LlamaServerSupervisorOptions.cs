@@ -13,6 +13,17 @@ public sealed class LlamaServerSupervisorOptions
     /// <summary>Idle duration after which an unused process is evicted by the reaper.</summary>
     public TimeSpan IdleTimeToLive { get; init; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    ///     Idle duration after which a process spawned by a <c>Transient</c> request (an AI Assist draft) and not touched
+    ///     interactively since is evicted. Never longer than <see cref="IdleTimeToLive" />; see
+    ///     <see cref="EffectiveTransientIdleTimeToLive" />.
+    /// </summary>
+    public TimeSpan TransientIdleTimeToLive { get; init; } = TimeSpan.FromMinutes(2);
+
+    /// <summary><see cref="TransientIdleTimeToLive" /> clamped to at most <see cref="IdleTimeToLive" />.</summary>
+    public TimeSpan EffectiveTransientIdleTimeToLive =>
+        TransientIdleTimeToLive < IdleTimeToLive ? TransientIdleTimeToLive : IdleTimeToLive;
+
     /// <summary>Inclusive lower bound of the localhost port range the supervisor allocates from.</summary>
     public int PortRangeStart { get; init; } = 18100;
 
@@ -287,6 +298,11 @@ public sealed class LlamaServerSupervisorOptions
         if (MaxReadinessTimeoutRetries < 0)
         {
             throw new InvalidOperationException($"{nameof(MaxReadinessTimeoutRetries)} must be non-negative (was {MaxReadinessTimeoutRetries}).");
+        }
+
+        if (TransientIdleTimeToLive <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(TransientIdleTimeToLive)} must be positive (was {TransientIdleTimeToLive}).");
         }
 
         if (EjectDrainTimeout <= TimeSpan.Zero)

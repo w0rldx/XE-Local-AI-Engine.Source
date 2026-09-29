@@ -67,6 +67,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
+    private readonly ModelResidencyIntent _residencyIntent;
 
     private IChatClient? _inner;
     private Uri? _innerEndpoint;
@@ -75,7 +76,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         string modelName,
         TimeSpan networkTimeout,
         ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
-        ILlamaServerEndpointBinding? endpointBinding = null)
+        ILlamaServerEndpointBinding? endpointBinding = null,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -83,6 +85,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         _networkTimeout = networkTimeout;
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
         _endpointBinding = endpointBinding;
+        _residencyIntent = residencyIntent;
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -101,7 +104,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             ILlamaServerInferenceLease? lease = null;
             if (!resolved.Bound)
             {
-                var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+                var acquisition = TryAcquireLease();
                 if (acquisition.ProcessEvicting)
                 {
                     _calibrationScheduler.Invalidate(_modelName);
@@ -176,7 +179,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             ILlamaServerInferenceLease? lease = null;
             if (!resolved.Bound)
             {
-                var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+                var acquisition = TryAcquireLease();
                 if (acquisition.ProcessEvicting)
                 {
                     _calibrationScheduler.Invalidate(_modelName);
@@ -566,8 +569,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return (bound, true);
         }
 
-        return (await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false), false);
+        // The intent overloads are called only for a transient client, so a supervisor double that stubs just the plain members keeps serving every other client.
+        var endpoint = _residencyIntent == ModelResidencyIntent.Interactive
+            ? await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false)
+            : await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, _residencyIntent, ct).ConfigureAwait(false);
+        return (endpoint, false);
     }
+
+    private LlamaServerLeaseAcquisition TryAcquireLease() =>
+        _residencyIntent == ModelResidencyIntent.Interactive
+            ? _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat)
+            : _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat, _residencyIntent);
 
     /// <summary>
     ///     Prepares one more attempt around a profiling spawn that owns this model's key, or reports that the bounded

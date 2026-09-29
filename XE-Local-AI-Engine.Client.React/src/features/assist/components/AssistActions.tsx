@@ -6,10 +6,17 @@ import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import type { AssistDraft, AssistExistingContent, AssistMode, AssistSurface } from "@/features/assist/models/AssistModels";
+import {
+	type AssistDraft,
+	type AssistExistingContent,
+	type AssistMode,
+	type AssistSurface,
+	isSameModelName,
+} from "@/features/assist/models/AssistModels";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import { isLocalChatModel } from "@/features/chat/pages/ChatModelOptions";
 import { useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
+import { useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
 
 interface AssistActionsProps {
 	surface: AssistSurface;
@@ -31,13 +38,24 @@ export function AssistActions({ surface, existing, onApply, onDiscard }: AssistA
 
 	const { data: modelsData } = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const loadedModelsQuery = useLoadedModels();
+	const runningModelsQuery = useRunningModels();
 
 	// Same predicate the chat picker uses: installed, classified Chat, non-cloud provider.
 	const models = useMemo(() => (modelsData?.items ?? []).filter(isLocalChatModel), [modelsData]);
-	const loadedModelNames = useMemo(
-		() => (loadedModelsQuery.data?.models ?? []).map((model) => model.modelName),
-		[loadedModelsQuery.data],
-	);
+	// Each picker entry is checked against its own runtime: Ollama entries against Ollama's in-memory list, llama.cpp
+	// entries against the supervisor's live chat processes (an exited or embedding process cannot serve the draft).
+	const loadedModelNames = useMemo(() => {
+		const ollamaNames = (loadedModelsQuery.data?.models ?? []).map((model) => model.modelName);
+		const llamaCppNames = (runningModelsQuery.data ?? [])
+			.filter((model) => model.role === "chat" && model.detailCode !== "exited")
+			.map((model) => model.modelName);
+		return models
+			.filter((model) => {
+				const names = model.provider === "ollama" ? ollamaNames : model.provider === "llamacpp" ? llamaCppNames : [];
+				return names.some((name) => isSameModelName(name, model.modelName));
+			})
+			.map((model) => model.modelName ?? "");
+	}, [models, loadedModelsQuery.data, runningModelsQuery.data]);
 
 	const hasEligibleModel = models.length > 0;
 	const canImprove = existing.content.trim().length > 0;

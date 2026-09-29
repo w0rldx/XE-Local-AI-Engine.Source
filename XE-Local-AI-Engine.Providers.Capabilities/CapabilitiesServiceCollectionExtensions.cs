@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 public static class CapabilitiesServiceCollectionExtensions
 {
     /// <summary>
-    ///     Registers <see cref="IHardwareProfiler" /> as a singleton, along with the live process and environment probe
-    ///     seams.
+    ///     Registers <see cref="IHardwareProfiler" /> and <see cref="ILiveMemorySampler" /> as singletons, along with the
+    ///     live process and environment probe seams.
     /// </summary>
     /// <remarks>
     ///     The profile is cached in-memory and re-probed only on <c>forceRefresh:true</c>.
@@ -38,6 +38,7 @@ public static class CapabilitiesServiceCollectionExtensions
         services.AddSingleton<IProcessProbe, ProcessProbe>();
         services.AddSingleton<IHardwareProbeEnvironment, HardwareProbeEnvironment>();
         services.AddSingleton<IHardwareProfiler, HardwareProfiler>();
+        services.AddSingleton<ILiveMemorySampler, LiveMemorySampler>();
 
         // The probe-timeout metrics seam degrades to a no-op unless the host wires a NodeMetrics-backed implementation
         // (the profiler layer cannot reference the application meter). TryAdd so a host registration always wins.

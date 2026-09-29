@@ -473,7 +473,10 @@ public sealed partial class LlamaServerProcessSupervisor
                     SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
                     LoadObservation = loadObservation,
                     LaunchReceipt = launchReceipt,
-                    IsProfilingOwned = profilingOwned
+                    IsProfilingOwned = profilingOwned,
+
+                    // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
+                    IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
                 };
                 _processes[key] = running;
 

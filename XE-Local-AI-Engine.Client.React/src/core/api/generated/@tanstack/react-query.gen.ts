@@ -226,6 +226,7 @@ import {
 	getNodeSettings,
 	getRunningLocalModels,
 	getRuntimeAcquisitionStatus,
+	getRuntimeResources,
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
@@ -991,6 +992,8 @@ import type {
 	GetRunningLocalModelsResponse,
 	GetRuntimeAcquisitionStatusData,
 	GetRuntimeAcquisitionStatusResponse,
+	GetRuntimeResourcesData,
+	GetRuntimeResourcesResponse,
 	GetScheduledJobData,
 	GetScheduledJobResponse,
 	GetScheduledJobRunData,
@@ -8544,6 +8547,28 @@ export const refreshRecommendationsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getRuntimeResourcesQueryKey = (options?: Options<GetRuntimeResourcesData>) =>
+	createQueryKey("getRuntimeResources", options);
+
+export const getRuntimeResourcesOptions = (options?: Options<GetRuntimeResourcesData>) =>
+	queryOptions<
+		GetRuntimeResourcesResponse,
+		AxiosError<DefaultError>,
+		GetRuntimeResourcesResponse,
+		ReturnType<typeof getRuntimeResourcesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRuntimeResources({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRuntimeResourcesQueryKey(options),
+	});
 
 export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>
 	createQueryKey("listRunningModels", options);

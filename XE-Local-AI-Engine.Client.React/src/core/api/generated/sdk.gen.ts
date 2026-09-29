@@ -657,6 +657,9 @@ import type {
 	GetRuntimeAcquisitionStatusData,
 	GetRuntimeAcquisitionStatusErrors,
 	GetRuntimeAcquisitionStatusResponses,
+	GetRuntimeResourcesData,
+	GetRuntimeResourcesErrors,
+	GetRuntimeResourcesResponses,
 	GetScheduledJobData,
 	GetScheduledJobErrors,
 	GetScheduledJobResponses,
@@ -1798,6 +1801,7 @@ import {
 	zGetNodeSettingsResponse,
 	zGetRunningLocalModelsResponse,
 	zGetRuntimeAcquisitionStatusResponse,
+	zGetRuntimeResourcesResponse,
 	zGetScheduledJobPath,
 	zGetScheduledJobResponse,
 	zGetScheduledJobRunPath,
@@ -11969,6 +11973,36 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getRuntimeResources = <ThrowOnError extends boolean = false>(
+	options?: Options<GetRuntimeResourcesData, ThrowOnError>,
+): RequestResult<GetRuntimeResourcesResponses, GetRuntimeResourcesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetRuntimeResourcesResponses, GetRuntimeResourcesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetRuntimeResourcesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-fit/resources",
+		...options,
 	});
 
 export const listRunningModels = <ThrowOnError extends boolean = false>(

@@ -212,6 +212,9 @@ internal static class ModelFitMapper
             Role = health.Role.ToWireString(),
             IsResponsive = health.IsResponsive,
             Detail = health.Detail,
+            IsBusy = health.IsBusy,
+            LastUsedUtc = health.LastUsedUtc,
+            IsTransient = health.IsTransient,
             DetailCode = (health.HasExited, health.IsResponsive) switch
             {
                 (true, _) => "exited",

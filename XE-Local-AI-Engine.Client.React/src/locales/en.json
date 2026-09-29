@@ -58,6 +58,25 @@
 			"confidence": "The model's own confidence: {{percent}}% — its claim, not a measurement."
 		}
 	},
+	"runtimeResources": {
+		"trigger": "Memory usage and loaded models",
+		"ram": "RAM",
+		"vram": "VRAM",
+		"gpu": "GPU {{index}} VRAM",
+		"usage": "{{used}} used of {{total}}, {{available}} available",
+		"vramUnavailable": "VRAM usage unavailable",
+		"residents": "Loaded llama.cpp models",
+		"noResidents": "No models are loaded.",
+		"ejectLabel": "Eject {{modelName}}",
+		"openLoadedModels": "Manage loaded models",
+		"state": {
+			"busy": "Busy",
+			"idle": "Idle",
+			"transient": "Unloads soon",
+			"unresponsive": "Unresponsive",
+			"exited": "Exited"
+		}
+	},
 	"common": {
 		"loading": "Loading...",
 		"refresh": "Refresh",

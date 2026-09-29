@@ -47,6 +47,10 @@ public sealed partial class LlamaServerProcessSupervisor
                .ToArray();
     }
 
+    /// <summary>Runs one idle-reaper pass now. Test seam, so reaping is asserted without waiting on the reaper's real-time cadence.</summary>
+    internal Task ReapIdleOnceAsync() =>
+        _reaper.ReapIdleOnceAsync();
+
     /// <inheritdoc />
     public Task<bool> WaitForProcessExitAsync(string modelName, ModelRole role, TimeSpan timeout, CancellationToken ct)
     {
@@ -96,7 +100,9 @@ public sealed partial class LlamaServerProcessSupervisor
                     Role = key.Role,
                     IsResponsive = false,
                     Detail = "Process has exited.",
-                    HasExited = true
+                    HasExited = true,
+                    LastUsedUtc = running.LastUsedUtc,
+                    IsTransient = running.IsTransient
                 });
                 continue;
             }
@@ -107,7 +113,10 @@ public sealed partial class LlamaServerProcessSupervisor
                 ModelName = key.ModelName,
                 Role = key.Role,
                 IsResponsive = responsive,
-                Detail = responsive ? "Responsive." : "Not responding to health probe."
+                Detail = responsive ? "Responsive." : "Not responding to health probe.",
+                IsBusy = running.ActiveLeases > 0,
+                LastUsedUtc = running.LastUsedUtc,
+                IsTransient = running.IsTransient
             });
         }
 

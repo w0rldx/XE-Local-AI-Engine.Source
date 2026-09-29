@@ -380,7 +380,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         yield return new AdapterListCommand("wmic", ["path", "win32_VideoController", "get", "name"]);
     }
 
-    private static bool TryParseMemInfoKilobytes(string memInfo, string key, out long kilobytes)
+    internal static bool TryParseMemInfoKilobytes(string memInfo, string key, out long kilobytes)
     {
         kilobytes = 0;
         foreach (var line in memInfo.Split('\n'))

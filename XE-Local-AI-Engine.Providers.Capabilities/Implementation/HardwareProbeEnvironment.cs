@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
@@ -7,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 ///     Live <see cref="IHardwareProbeEnvironment" /> over the real OS. Every read degrades to a safe default
 ///     (<see langword="null" />/empty/0) on failure so the profiler can fall through to its CPU-mode floor.
 /// </summary>
-internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
+internal sealed partial class HardwareProbeEnvironment : IHardwareProbeEnvironment
 {
     private const string ProcMemInfoPath = "/proc/meminfo";
     private const string DrmClassPath = "/sys/class/drm";
@@ -100,6 +101,22 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
     }
 
     /// <inheritdoc />
+    public (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        // GlobalMemoryStatusEx is read on every call; the GC memory figures refresh only after a collection.
+        var status = new MemoryStatusEx
+        {
+            Length = (uint)Marshal.SizeOf<MemoryStatusEx>()
+        };
+        return GlobalMemoryStatusEx(ref status) ? ((long)status.TotalPhys, (long)status.AvailPhys) : null;
+    }
+
+    /// <inheritdoc />
     public long GetFreeDiskBytes(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -115,5 +132,25 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
         {
             return 0;
         }
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
+
+    // MEMORYSTATUSEX; field order mirrors the native layout.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhys;
+        public ulong AvailPhys;
+        public ulong TotalPageFile;
+        public ulong AvailPageFile;
+        public ulong TotalVirtual;
+        public ulong AvailVirtual;
+        public ulong AvailExtendedVirtual;
     }
 }

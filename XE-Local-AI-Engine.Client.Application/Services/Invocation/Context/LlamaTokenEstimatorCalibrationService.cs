@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -58,6 +59,10 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     private readonly TimeProvider _timeProvider;
     private readonly Dictionary<string, CalibrationTarget> _targets = new(StringComparer.Ordinal);
     private readonly Channel<CalibrationWork> _work;
+
+    /// <summary>Calibration is housekeeping: its lease must not give a model loaded only for a draft the interactive idle lifetime.</summary>
+    private const ModelResidencyIntent HousekeepingIntent = ModelResidencyIntent.Transient;
+
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private long _generation;
 
@@ -216,7 +221,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
         // The probe is a real request against the model's process, dispatched long after the chat that scheduled it. Unleased, profiling's pre-spawn claim wins
         // and this POST lands on whatever now answers that port. A refused lease skips the round: calibration is opportunistic and the next request reschedules it.
-        var acquisition = _supervisor.TryAcquireInferenceLease(work.ModelName, ModelRole.Chat);
+        var acquisition = _supervisor.TryAcquireInferenceLease(work.ModelName, ModelRole.Chat, HousekeepingIntent);
         if (acquisition.ProcessEvicting || acquisition.ProcessProfiling)
         {
             lock (_sync)

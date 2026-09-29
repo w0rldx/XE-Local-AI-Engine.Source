@@ -12,6 +12,7 @@ import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMen
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
 import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
+import { RuntimeResourcesWidget } from "@/features/runtime-resources/components/RuntimeResourcesWidget";
 import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
 
 export function HeaderBar() {
@@ -34,7 +35,12 @@ export function HeaderBar() {
 						<MenuIcon />
 					</ActionIcon>
 				</div>
-				<div className="flex-grow" />
+				<div className="flex-grow flex flex-row items-center justify-start">
+					{/* Desktop only this round, like the right cluster; the widget gates itself on capability and session. */}
+					<div className="hidden md:flex">
+						<RuntimeResourcesWidget />
+					</div>
+				</div>
 				<div className="hidden md:flex flex-row items-center gap-2">
 					<ThemeModeToggle />
 					<ThemeConfiguratorDialogButton />

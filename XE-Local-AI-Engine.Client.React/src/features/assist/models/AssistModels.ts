@@ -33,3 +33,8 @@ export interface AssistExistingContent {
 
 /** Matches the endpoint's brief cap; enforced on the textarea so an over-long brief never reaches the 400. */
 export const ASSIST_BRIEF_MAX = 4000;
+
+/** Model-name identity for the warm-model hint: trimmed and case-insensitive, like every backend comparer on this path. */
+export function isSameModelName(left: string | null | undefined, right: string | null | undefined): boolean {
+	return (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
+}

@@ -9,4 +9,7 @@ public sealed record LocalModelSelection
 
     [JsonRequired]
     public required string ProviderName { get; init; }
+
+    /// <summary>How long a model this selection loads should stay resident; <see cref="ModelResidencyIntent.Interactive" /> by default.</summary>
+    public ModelResidencyIntent ResidencyIntent { get; init; }
 }

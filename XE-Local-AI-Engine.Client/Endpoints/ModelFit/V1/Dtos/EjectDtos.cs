@@ -5,7 +5,7 @@ public sealed class RunningModelResponse
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Lowercase role the process serves — <c>chat|embedding</c>.</summary>
+    /// <summary>Lowercase role the process serves — <c>chat|embedding|reranker</c>.</summary>
     public required string Role { get; init; }
 
     public required bool IsResponsive { get; init; }
@@ -15,6 +15,15 @@ public sealed class RunningModelResponse
 
     /// <summary>Stable code for <see cref="Detail" /> the SPA translates — <c>responsive|unresponsive|exited</c>.</summary>
     public required string DetailCode { get; init; }
+
+    /// <summary>Whether in-flight inference is running on the process right now.</summary>
+    public required bool IsBusy { get; init; }
+
+    /// <summary>When the process was last used, UTC; <see langword="null" /> when unknown.</summary>
+    public required DateTimeOffset? LastUsedUtc { get; init; }
+
+    /// <summary>Whether the process was loaded only for an AI Assist draft and is unloaded after a short idle time.</summary>
+    public required bool IsTransient { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/running</c>.</summary>
@@ -27,14 +36,14 @@ public sealed class ListRunningModelsResponse
 /// <remarks>
 ///     The eject is GRACEFUL by default: it waits a bounded window for in-flight inference to drain before teardown and
 ///     reports through <see cref="EjectRunningModelResponse.Outcome" /> when it could not complete safely, rather than
-///     killing a running turn silently. <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive); an unknown
+///     killing a running turn silently. <see cref="Role" /> is <c>chat|embedding|reranker</c> (case-insensitive); an unknown
 ///     role answers 400.
 /// </remarks>
 public sealed class EjectRunningModelRequest
 {
     public required string ModelName { get; init; }
 
-    /// <summary>Role of the process to evict — <c>chat|embedding</c>. Defaults to <c>chat</c> when omitted.</summary>
+    /// <summary>Role of the process to evict — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
 
     /// <summary>

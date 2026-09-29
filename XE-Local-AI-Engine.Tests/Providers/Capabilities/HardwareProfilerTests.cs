@@ -661,6 +661,11 @@ public sealed class HardwareProfilerTests
             return AvailableRamBytes;
         }
 
+        public (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus()
+        {
+            return null;
+        }
+
         public long GetFreeDiskBytes(string path)
         {
             return FreeDiskBytes;

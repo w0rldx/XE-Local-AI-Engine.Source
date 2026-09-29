@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -195,7 +196,11 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
-    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
+    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>
+        TryAcquireInferenceLease(modelName, role, ModelResidencyIntent.Interactive);
+
+    /// <inheritdoc />
+    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role, ModelResidencyIntent intent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
@@ -232,9 +237,9 @@ public sealed partial class LlamaServerProcessSupervisor
         }
 
         // A granted lease is real use: refresh the idle clock, since a leased caller may skip the ensure that otherwise does.
-        running.MarkUsed(_timeProvider.GetUtcNow());
+        running.MarkUsed(_timeProvider.GetUtcNow(), intent);
 #pragma warning disable CA2000 // Ownership of the lease transfers to the caller inside the returned acquisition; the interface contract obliges the caller to dispose it.
-        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running), running.Endpoint);
+        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running, _timeProvider), running.Endpoint);
 #pragma warning restore CA2000
     }
 

@@ -15,6 +15,7 @@ import {
 	type AssistExistingContent,
 	type AssistMode,
 	type AssistSurface,
+	isSameModelName,
 } from "@/features/assist/models/AssistModels";
 import { useAssistDraft } from "@/features/assist/queries/useAssistDraft";
 import { resolveLocalDefaultModelName } from "@/features/chat/pages/ChatModelOptions";
@@ -76,7 +77,7 @@ export function GenerationAssistDialog({
 	const abortRef = useRef<AbortController | null>(null);
 
 	const defaultModelName = useMemo(() => {
-		const loaded = models.find((model) => loadedModelNames.includes(model.modelName ?? ""));
+		const loaded = models.find((model) => loadedModelNames.some((name) => isSameModelName(name, model.modelName)));
 		return loaded?.modelName ?? resolveLocalDefaultModelName([...models]);
 	}, [models, loadedModelNames]);
 
@@ -88,7 +89,7 @@ export function GenerationAssistDialog({
 				.filter((option) => option.value.length > 0),
 		[models],
 	);
-	const isModelLoaded = loadedModelNames.includes(modelName);
+	const isModelLoaded = loadedModelNames.some((name) => isSameModelName(name, modelName));
 
 	// Abort any in-flight generation when the dialog unmounts so a closed dialog never holds the node's draft slot.
 	useEffect(() => () => abortRef.current?.abort(), []);

@@ -362,6 +362,22 @@ public sealed class DefaultConfigDraftServiceTests
     }
 
     [Test]
+    public async Task AllDraftKinds_AskForTransientResidency()
+    {
+        // Transient: a model loaded only for a draft gets the runtime's short idle lifetime instead of the normal one.
+        var harness = new Harness();
+
+        await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
+        await harness.Service.DraftSkillAsync(Request("Draft a skill."));
+        await harness.Service.DraftImagePromptAsync(Request("A fox in a forest."));
+
+        harness.Provider.Received(3).CreateChatClient(Arg.Is<LocalModelSelection>(selection =>
+            selection.ResidencyIntent == ModelResidencyIntent.Transient));
+        harness.Provider.DidNotReceive().CreateChatClient(Arg.Is<LocalModelSelection>(selection =>
+            selection.ResidencyIntent != ModelResidencyIntent.Transient));
+    }
+
+    [Test]
     public async Task Eligibility_InstalledGgufWithoutClassificationRow_Passes()
     {
         // A GGUF-only node never writes a row (only the Ollama probe or an override does); the name rule decides.

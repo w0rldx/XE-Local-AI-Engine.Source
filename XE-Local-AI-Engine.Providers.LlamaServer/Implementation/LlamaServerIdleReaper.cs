@@ -16,8 +16,8 @@ using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 ///     Holds the supervisor's LIVE process table, never a snapshot, so a reaper pass and a spawn admission always
 ///     decide over the same <c>RunningProcess</c> set. INVARIANT: a live process holding an active inference lease is
 ///     never torn down here, not by the idle reaper past the TTL and not as a cap-admission victim, because
-///     <c>LastUsedUtc</c> is stamped per ensure or reuse, not per token, so a long generation looks idle while a
-///     request is mid-flight. Gate scope, victim ranking and the detach invariants: wiki 03, "Eviction &amp; reaper".
+///     <c>LastUsedUtc</c> is stamped when a request starts and when its lease is released, not per token, so a long
+///     generation looks idle while a request is mid-flight. Gate scope, victim ranking and the detach invariants: wiki 03, "Eviction &amp; reaper".
 /// </remarks>
 internal sealed class LlamaServerIdleReaper : IDisposable
 {
@@ -88,11 +88,14 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         }
     }
 
-    /// <summary>Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />.</summary>
+    /// <summary>
+    ///     Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />, or
+    ///     beyond the shorter transient lifetime for a transient process.
+    /// </summary>
     internal async Task ReapIdleLoopAsync(CancellationToken ct)
     {
-        // Re-check at a fraction of the TTL so eviction latency stays bounded without busy-spinning.
-        var interval = TimeSpan.FromTicks(Math.Max(_options.IdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
+        // Re-check at a fraction of the shorter TTL so eviction latency stays bounded without busy-spinning.
+        var interval = TimeSpan.FromTicks(Math.Max(_options.EffectiveTransientIdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
         try
         {
             while (!ct.IsCancellationRequested)
@@ -119,19 +122,20 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                 continue;
             }
 
-            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL: LastUsedUtc is stamped per ensure or reuse, not per
-            // token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU box) looks idle while mid-flight.
+            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL: LastUsedUtc is stamped at request start and lease release, not
+            // per token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU box) looks idle while mid-flight.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
             }
 
-            if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
+            var ttl = IdleTimeToLiveFor(running);
+            if (running.Handle.HasExited || now - running.LastUsedUtc >= ttl)
             {
                 if (!running.Handle.HasExited)
                 {
-                    _logger.LogInformation("Evicting idle llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
-                        key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
+                    _logger.LogInformation("Evicting idle {Residency} llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
+                        running.IsTransient ? "transient" : "interactive", key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, ttl.TotalSeconds);
                 }
 
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
@@ -169,13 +173,13 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                 continue;
             }
 
-            // Victim preference, best first: rank 0 is exited or idle past the TTL in any role, rank 1 an in-window but unleased POOLED role. An in-window CHAT
-            // process is never a victim. Why the pooled roles yield and the chat role does not: wiki 03, "Eviction and reaper".
-            var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive;
-            var isPooledRole = key.Role is ModelRole.Embedding or ModelRole.Reranker;
-            if (!isIdlePastTtl && !isPooledRole)
+            // Victim preference, best first: rank 0 is exited or idle past its TTL in any role, rank 1 an in-window but unleased POOLED role or TRANSIENT
+            // process. An in-window interactive CHAT process is never a victim. Why the pooled roles yield and the chat role does not: wiki 03, "Eviction and reaper".
+            var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= IdleTimeToLiveFor(running);
+            var yieldsInWindow = key.Role is ModelRole.Embedding or ModelRole.Reranker || running.IsTransient;
+            if (!isIdlePastTtl && !yieldsInWindow)
             {
-                continue; // An in-window chat process is never a victim.
+                continue; // An in-window interactive chat process is never a victim.
             }
 
             var rank = isIdlePastTtl ? 0 : 1;
@@ -211,11 +215,14 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         }
 
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
-            _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled", victimKey.Value.ModelName, victimKey.Value.Role);
+            _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled or transient", victimKey.Value.ModelName, victimKey.Value.Role);
 
         detached.Add(evicted);
         return true;
     }
+
+    private TimeSpan IdleTimeToLiveFor(RunningProcess running) =>
+        running.IsTransient ? _options.EffectiveTransientIdleTimeToLive : _options.IdleTimeToLive;
 
     private void PruneExitedProcesses(List<RunningProcess> detached)
     {

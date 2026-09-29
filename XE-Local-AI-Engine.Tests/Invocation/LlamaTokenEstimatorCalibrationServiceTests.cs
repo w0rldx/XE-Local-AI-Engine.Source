@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -518,7 +519,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         var store = new RecordingCalibrationStore();
         var refused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<ModelResidencyIntent>())
                   .Returns(_ =>
                   {
                       refused.TrySetResult();
@@ -540,7 +541,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         }
 
         AssertEx.Equal(expected: 0, Volatile.Read(ref contacted), "No probe may be sent while profiling owns the model.");
-        _ = supervisor.Received(1).TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        _ = supervisor.Received(1).TryAcquireInferenceLease("model-a", ModelRole.Chat, ModelResidencyIntent.Transient);
     }
 
     [Test]
@@ -558,7 +559,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         using var client = new HttpClient(handler);
         var store = new RecordingCalibrationStore();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<ModelResidencyIntent>())
                   .Returns(LlamaServerLeaseAcquisition.Granted(lease));
         using var service = CreateService(client, store, supervisor: supervisor);
         await service.StartAsync(CancellationToken.None);
@@ -597,7 +598,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
     private static ILlamaServerProcessSupervisor LeasingSupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<ModelResidencyIntent>())
                   .Returns(LlamaServerLeaseAcquisition.Granted(Substitute.For<ILlamaServerInferenceLease>()));
         return supervisor;
     }

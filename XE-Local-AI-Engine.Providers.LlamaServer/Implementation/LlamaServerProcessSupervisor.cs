@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -227,7 +228,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <inheritdoc />
-    public async Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
+    public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
+        EnsureRunningAsync(modelName, role, ModelResidencyIntent.Interactive, ct);
+
+    /// <inheritdoc />
+    public async Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _runtimeMutationGate.BeginOperation();
@@ -279,7 +284,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 // but unresponsive) one is respawned. A profiling-owned process is never handed out — its teardown evicts unconditionally and would kill the reuse.
                 if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited && !existing.IsProfilingOwned)
                 {
-                    var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+                    var reused = await TryReuseAsync(key, existing, intent, ct).ConfigureAwait(false);
                     if (reused is not null)
                     {
                         return reused;
@@ -288,7 +293,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
                 // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
                 // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
-                decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
+                decision = await DecideEnsureAsync(key, intent, ct).ConfigureAwait(false);
                 if (decision.Reused is { } reusedEndpoint)
                 {
                     return reusedEndpoint;
@@ -302,6 +307,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             // DecideEnsureAsync has registered the detached task in _inflightSpawns, so the mutation ordering gate is released before readiness completes: a mutation
             // attempt observes the in-flight spawn and returns null instead of waiting, while a lease already holding the gate still keeps this ensure from here.
             var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
+
+            // Backstops the join-time clear in DecideEnsureAsync for a join that raced the spawn's registration.
+            if (intent == ModelResidencyIntent.Interactive)
+            {
+                running.ClearTransient();
+            }
+
             return running.Endpoint;
         }
         finally
@@ -366,7 +378,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     ///     gate held; because the spawn is the shared <see cref="_inflightSpawns" /> task, concurrent callers still
     ///     spawn exactly once.
     /// </remarks>
-    private async Task<EnsureDecision> DecideEnsureAsync(ProcessKey key, CancellationToken ct)
+    private async Task<EnsureDecision> DecideEnsureAsync(ProcessKey key, ModelResidencyIntent intent, CancellationToken ct)
     {
         var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
@@ -382,7 +394,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
             if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
             {
-                var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+                var reused = await TryReuseAsync(key, existing, intent, ct).ConfigureAwait(false);
                 if (reused is not null)
                 {
                     return new EnsureDecision(reused, SpawnTask: null);
@@ -400,7 +412,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             // the gate, so two callers never start two spawns for the same key.
             if (_inflightSpawns.TryGetValue(key, out var inflight))
             {
-                return new EnsureDecision(Reused: null, inflight.Task);
+                return JoinInflightSpawn(inflight, intent);
             }
 
             // Pooled roles pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once.
@@ -413,10 +425,10 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
                 }
 
-                var started = CreateDetachedSpawn(admission, launchTicket!, capacityReservation);
+                var started = CreateDetachedSpawn(admission, launchTicket!, capacityReservation, intent);
                 if (!_inflightSpawns.TryAdd(key, started))
                 {
-                    return new EnsureDecision(Reused: null, _inflightSpawns[key].Task);
+                    return JoinInflightSpawn(_inflightSpawns[key], intent);
                 }
 
                 // The published immutable in-flight record now owns the ticket and the reservation. Clear the locals before starting the
@@ -449,6 +461,17 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
     }
 
+    /// <summary>Joins a spawn another caller started; an interactive joiner takes the transient mark off the process it will register.</summary>
+    private static EnsureDecision JoinInflightSpawn(InflightSpawn inflight, ModelResidencyIntent intent)
+    {
+        if (intent == ModelResidencyIntent.Interactive)
+        {
+            inflight.ClearTransient();
+        }
+
+        return new EnsureDecision(Reused: null, inflight.Task);
+    }
+
     /// <summary>
     ///     Starts the detached spawn for <paramref name="key" /> on its OWN lifetime — the shutdown token, never a
     ///     caller's — so the load runs to completion whether or not a waiting caller cancels.
@@ -461,7 +484,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     /// </remarks>
     private static InflightSpawn CreateDetachedSpawn(ProcessLaunchAdmission? admission,
         IProcessLaunchTicket launchTicket,
-        IDisposable? capacityReservation)
+        IDisposable? capacityReservation,
+        ModelResidencyIntent intent)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
@@ -478,7 +502,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             Completion = completion,
             Admission = admission,
             LaunchTicket = launchTicket,
-            CapacityReservation = capacityReservation
+            CapacityReservation = capacityReservation,
+            IsTransient = intent == ModelResidencyIntent.Transient
         };
     }
 
@@ -596,6 +621,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     private sealed record InflightSpawn
     {
+        private int _transient;
+
         public required TaskCompletionSource<RunningProcess> Completion { get; init; }
 
         public required ProcessLaunchAdmission? Admission { get; init; }
@@ -605,7 +632,20 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         /// <summary>The pooled-role capacity reservation, released after <see cref="LaunchTicket" /> when the spawn settles.</summary>
         public required IDisposable? CapacityReservation { get; init; }
 
+        /// <summary>Whether the process this spawn registers starts transient: a transient request started it and no interactive caller joined.</summary>
+        /// <remarks>Read once, at registration, so a transient caller that cancels its wait still leaves a transient process: the spawn outlives its callers.</remarks>
+        public bool IsTransient
+        {
+            get => Volatile.Read(ref _transient) != 0;
+            init => _transient = value ? 1 : 0;
+        }
+
         public Task<RunningProcess> Task => Completion.Task;
+
+        public void ClearTransient()
+        {
+            Volatile.Write(ref _transient, value: 0);
+        }
     }
 
     /// <summary>
@@ -618,7 +658,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     ///     rate-limited to at most one per <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeInterval" /> per
     ///     process, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
     /// </remarks>
-    private async Task<LlamaServerEndpoint?> TryReuseAsync(ProcessKey key, RunningProcess existing, CancellationToken ct)
+    private async Task<LlamaServerEndpoint?> TryReuseAsync(ProcessKey key, RunningProcess existing, ModelResidencyIntent intent, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
 
@@ -626,7 +666,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         // (and every reuse inside the interval) is handed the endpoint immediately with no probe.
         if (!existing.TryClaimLivenessProbe(now, _options.ReuseLivenessProbeInterval))
         {
-            existing.MarkUsed(now);
+            existing.MarkUsed(now, intent);
             return existing.Endpoint;
         }
 
@@ -634,7 +674,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         if (responsive)
         {
             existing.ResetLivenessFailures();
-            existing.MarkUsed(_timeProvider.GetUtcNow());
+            existing.MarkUsed(_timeProvider.GetUtcNow(), intent);
             return existing.Endpoint;
         }
 
@@ -643,7 +683,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         var failures = existing.RecordLivenessFailure();
         if (failures < _options.MaxReuseLivenessFailures)
         {
-            existing.MarkUsed(_timeProvider.GetUtcNow());
+            existing.MarkUsed(_timeProvider.GetUtcNow(), intent);
             return existing.Endpoint;
         }
 
@@ -945,11 +985,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private sealed class InferenceLease : ILlamaServerInferenceLease
     {
         private readonly RunningProcess _process;
+        private readonly TimeProvider _timeProvider;
         private int _disposed;
 
-        public InferenceLease(RunningProcess process)
+        public InferenceLease(RunningProcess process, TimeProvider timeProvider)
         {
             _process = process;
+            _timeProvider = timeProvider;
         }
 
         public bool WasEjected => _process.WasEjected;
@@ -958,6 +1000,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
+                // Idle time runs from the END of the last use. Stamped before the release so the reaper never sees an unleased process with the stale start-of-request stamp.
+                _process.StampLastUsed(_timeProvider.GetUtcNow());
                 _process.ReleaseLease();
             }
         }
@@ -982,6 +1026,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         // The SIGN is the origin — negative: profiling pre-spawn eviction, positive: operator eject or cap reap — in ONE field, so a read never shows a live eject as a benchmark spawn.
         private long _evictionOwner;
         private int _ejected;
+        private int _transient;
 
         public RunningProcess(IProcessTreeHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
         {
@@ -1027,6 +1072,17 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         public bool IsProfilingOwned { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
+
+        /// <summary>
+        ///     <see langword="true" /> while this process was spawned by a transient request and has had no interactive
+        ///     touch since: the reaper applies the short transient idle lifetime and cap admission may evict it in-window.
+        /// </summary>
+        /// <remarks>Set only at registration, never on a process that already exists; any interactive touch clears it for good.</remarks>
+        public bool IsTransient
+        {
+            get => Volatile.Read(ref _transient) != 0;
+            init => _transient = value ? 1 : 0;
+        }
 
         /// <summary>
         ///     <see langword="true" /> while an operator profiling benchmark owns this process; the idle reaper and the
@@ -1153,9 +1209,24 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             Interlocked.Exchange(ref _ejected, value: 1);
         }
 
-        public void MarkUsed(DateTimeOffset now)
+        public void MarkUsed(DateTimeOffset now, ModelResidencyIntent intent = ModelResidencyIntent.Interactive)
+        {
+            StampLastUsed(now);
+            if (intent == ModelResidencyIntent.Interactive)
+            {
+                ClearTransient();
+            }
+        }
+
+        /// <summary>Refreshes the idle clock only; unlike <see cref="MarkUsed" /> it never touches the transient mark.</summary>
+        public void StampLastUsed(DateTimeOffset now)
         {
             Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        }
+
+        public void ClearTransient()
+        {
+            Volatile.Write(ref _transient, value: 0);
         }
 
         /// <summary>

@@ -4310,6 +4310,16 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResp
 	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1GpuMemoryResponse = z.object({
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalVramBytes: z.int(),
+	usedVramBytes: z.int(),
+	availableVramBytes: z.int(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
 	totalRamBytes: z.int(),
 	availableRamBytes: z.int(),
@@ -4671,6 +4681,9 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.o
 	isResponsive: z.boolean(),
 	detail: z.string(),
 	detailCode: z.string(),
+	isBusy: z.boolean(),
+	lastUsedUtc: z.iso.datetime({ offset: true }).nullable(),
+	isTransient: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({
@@ -4693,6 +4706,12 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusRe
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse = z.object({
+	totalRamBytes: z.int(),
+	availableRamBytes: z.int(),
+	gpus: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GpuMemoryResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
@@ -11055,6 +11074,11 @@ export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelF
  * Success
  */
 export const zRefreshRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
+
+/**
+ * Success
+ */
+export const zGetRuntimeResourcesResponse = zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse;
 
 /**
  * Success

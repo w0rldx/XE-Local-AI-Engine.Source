@@ -58,6 +58,25 @@
 			"confidence": "Selbsteingeschätzte Sicherheit des Modells: {{percent}} % – eine Behauptung, keine Messung."
 		}
 	},
+	"runtimeResources": {
+		"trigger": "Speicherauslastung und geladene Modelle",
+		"ram": "RAM",
+		"vram": "VRAM",
+		"gpu": "GPU {{index}} VRAM",
+		"usage": "{{used}} von {{total}} belegt, {{available}} frei",
+		"vramUnavailable": "VRAM-Auslastung nicht verfügbar",
+		"residents": "Geladene llama.cpp-Modelle",
+		"noResidents": "Keine Modelle geladen.",
+		"ejectLabel": "{{modelName}} auswerfen",
+		"openLoadedModels": "Geladene Modelle verwalten",
+		"state": {
+			"busy": "Beschäftigt",
+			"idle": "Leerlauf",
+			"transient": "Wird bald entladen",
+			"unresponsive": "Reagiert nicht",
+			"exited": "Beendet"
+		}
+	},
 	"common": {
 		"loading": "Lädt...",
 		"refresh": "Aktualisieren",

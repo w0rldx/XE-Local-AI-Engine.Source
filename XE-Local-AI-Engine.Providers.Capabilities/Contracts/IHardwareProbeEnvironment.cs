@@ -28,6 +28,9 @@ internal interface IHardwareProbeEnvironment
     /// <summary>Available (allocatable) RAM in bytes as reported by the OS (Windows fallback when meminfo is absent).</summary>
     long GetAvailableMemoryBytes();
 
+    /// <summary>A fresh Windows reading of total and available physical RAM; <see langword="null" /> elsewhere or on failure.</summary>
+    (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus();
+
     /// <summary>Free disk bytes on the volume hosting <paramref name="path" />; <c>0</c> when it cannot be resolved.</summary>
     long GetFreeDiskBytes(string path);
 }

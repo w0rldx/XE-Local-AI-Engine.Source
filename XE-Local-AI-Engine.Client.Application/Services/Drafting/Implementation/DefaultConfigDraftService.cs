@@ -175,10 +175,13 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
                     "The selected model is not an installed chat model served by a node-local runtime.");
             }
 
+            // Transient: a model loaded only for this draft is unloaded soon after, on every outcome, by the runtime's own
+            // idle reaper. A model that was already loaded keeps its normal lifetime.
             using var chatClient = provider.CreateChatClient(new LocalModelSelection
             {
                 ModelName = request.ModelName,
-                ProviderName = provider.ProviderName
+                ProviderName = provider.ProviderName,
+                ResidencyIntent = ModelResidencyIntent.Transient
             }).WithProviderTelemetry();
 
             List<ChatMessage> messages =

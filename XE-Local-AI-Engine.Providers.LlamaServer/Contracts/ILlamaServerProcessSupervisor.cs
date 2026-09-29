@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>
 ///     Owns the lifecycle of every <c>llama-server</c> child process: reuse-or-spawn per <c>(model, role)</c>, health
 ///     aggregation, eviction and reaping, restart-backoff, port allocation and tree-kill teardown.
@@ -39,6 +41,16 @@ public interface ILlamaServerProcessSupervisor
     ///     Spawn failed, the loaded-cap was reached, or the restart-backoff cap was exceeded — message is sanitized.
     /// </exception>
     Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct);
+
+    /// <summary>
+    ///     As <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" />, with the caller's residency intent:
+    ///     a process a <see cref="ModelResidencyIntent.Transient" /> call spawns gets the short transient idle lifetime,
+    ///     and any <see cref="ModelResidencyIntent.Interactive" /> touch gives it the normal one back.
+    /// </summary>
+    Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
+    {
+        return EnsureRunningAsync(modelName, role, ct);
+    }
 
     /// <summary>
     ///     Waits up to <paramref name="timeout" /> until the <c>(model, role)</c> process is observed exited. True when it
@@ -111,6 +123,15 @@ public interface ILlamaServerProcessSupervisor
     ///     leaseless and the deferred client self-heals on the resulting connection failure.
     /// </remarks>
     LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role);
+
+    /// <summary>
+    ///     As <see cref="TryAcquireInferenceLease(string, ModelRole)" />; a <see cref="ModelResidencyIntent.Transient" />
+    ///     lease leaves a transient process's short idle lifetime in place.
+    /// </summary>
+    LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role, ModelResidencyIntent intent)
+    {
+        return TryAcquireInferenceLease(modelName, role);
+    }
 
     /// <summary>The operator profiling entry point, explore and benchmark: it evicts any warm process for the key, then spawns exactly ONE process.</summary>
     /// <remarks>

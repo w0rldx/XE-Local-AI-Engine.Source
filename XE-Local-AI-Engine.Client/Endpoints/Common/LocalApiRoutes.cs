@@ -393,6 +393,9 @@ public static class LocalApiRoutes
         // IHardwareProfiler passthrough.
         public const string HardwareProfile = "model-fit/hardware-profile";
 
+        // Live whole-machine RAM and per-GPU VRAM usage for the top-bar gauge (ILiveMemorySampler), aggregates only.
+        public const string Resources = "model-fit/resources";
+
         // GGUF repo discovery (IHuggingFaceGgufDiscovery search). The literal "browse" segment keeps it distinct.
         public const string GgufBrowse = "model-fit/gguf/browse";
 

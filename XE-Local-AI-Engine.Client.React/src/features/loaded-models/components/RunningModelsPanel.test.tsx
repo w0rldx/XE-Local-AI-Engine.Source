@@ -32,13 +32,31 @@ describe("RunningModelsPanel detail", () => {
 	it("translates a known detail code instead of echoing the server's English text", async () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderPanel({ modelName: "m", role: "chat", isResponsive: true, detail: "Responsive.", detailCode: "responsive" });
+		renderPanel({
+			modelName: "m",
+			role: "chat",
+			isResponsive: true,
+			detail: "Responsive.",
+			detailCode: "responsive",
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+		});
 
 		expect(screen.getByTestId("loaded-models-llamacpp-detail-m").textContent).toBe("Antwortet auf Statusprüfungen.");
 	});
 
 	it("falls back to the raw detail for a code this build does not know", () => {
-		renderPanel({ modelName: "m", role: "chat", isResponsive: false, detail: "Something new.", detailCode: null });
+		renderPanel({
+			modelName: "m",
+			role: "chat",
+			isResponsive: false,
+			detail: "Something new.",
+			detailCode: null,
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+		});
 
 		expect(screen.getByTestId("loaded-models-llamacpp-detail-m").textContent).toBe("Something new.");
 	});

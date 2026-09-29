@@ -13,6 +13,12 @@ export interface RunningModel {
 	readonly detail: string;
 	// Stable code for `detail` the panel translates; null for a value this build does not know (render `detail` then).
 	readonly detailCode: RunningModelDetailCode | null;
+	// True while the process holds an active lease (a generation in flight); a graceful eject would wait on it.
+	readonly isBusy: boolean;
+	// ISO timestamp of the last use; null when the supervisor has not stamped one.
+	readonly lastUsedUtc: string | null;
+	// Cold-loaded only for an AI Assist draft, so it runs on the short transient idle lifetime.
+	readonly isTransient: boolean;
 }
 
 const runningModelDetailCodes = ["responsive", "unresponsive", "exited"] as const;
@@ -31,6 +37,9 @@ export function toRunningModel(dto: XeLocalAiEngineClientEndpointsModelFitV1Runn
 		isResponsive: dto.isResponsive ?? false,
 		detail: dto.detail ?? "",
 		detailCode: toDetailCode(dto.detailCode),
+		isBusy: dto.isBusy ?? false,
+		lastUsedUtc: dto.lastUsedUtc ?? null,
+		isTransient: dto.isTransient ?? false,
 	};
 }
 

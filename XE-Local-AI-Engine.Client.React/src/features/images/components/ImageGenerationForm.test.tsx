@@ -34,6 +34,7 @@ setupMswServer(
 		],
 	}),
 	jsonRoute("get", "models/running", { isAvailable: true, ollamaConfigured: false, items: [] }),
+	jsonRoute("get", "model-fit/running", { items: [] }),
 );
 
 // The sampler/seed pair is the one row whose left half carries a *name*: split two-up at 768px the Select was too

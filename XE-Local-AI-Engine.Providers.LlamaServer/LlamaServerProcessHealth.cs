@@ -29,4 +29,16 @@ public sealed class LlamaServerProcessHealth
     ///     positional, so an existing construction needs no change.
     /// </remarks>
     public bool HasExited { get; init; }
+
+    /// <summary>Whether in-flight inference holds a lease on the process right now.</summary>
+    public bool IsBusy { get; init; }
+
+    /// <summary>When the process was last ensured, reused or leased; <see langword="null" /> when the snapshot source does not track it.</summary>
+    public DateTimeOffset? LastUsedUtc { get; init; }
+
+    /// <summary>
+    ///     Whether the process was loaded only for a transient request (an AI Assist draft) and has not been used
+    ///     interactively since, so it is reaped after the short transient idle lifetime.
+    /// </summary>
+    public bool IsTransient { get; init; }
 }

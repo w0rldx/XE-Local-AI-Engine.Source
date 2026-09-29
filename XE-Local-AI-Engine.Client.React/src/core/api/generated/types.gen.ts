@@ -4279,6 +4279,13 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
 	isTrustedPublisher?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1GpuMemoryResponse = {
+	index: number;
+	totalVramBytes: number;
+	usedVramBytes: number;
+	availableVramBytes: number;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	totalRamBytes: number;
 	availableRamBytes: number;
@@ -4565,6 +4572,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
 	isResponsive: boolean;
 	detail: string;
 	detailCode: string;
+	isBusy: boolean;
+	lastUsedUtc: string | null;
+	isTransient: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse = {
@@ -4577,6 +4587,12 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResp
 	stepIndex: number;
 	stepCount: number;
 	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse = {
+	totalRamBytes: number;
+	availableRamBytes: number;
+	gpus: Array<XeLocalAiEngineClientEndpointsModelFitV1GpuMemoryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = {
@@ -16681,6 +16697,33 @@ export type RefreshRecommendationsResponses = {
 };
 
 export type RefreshRecommendationsResponse = RefreshRecommendationsResponses[keyof RefreshRecommendationsResponses];
+
+export type GetRuntimeResourcesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/resources";
+};
+
+export type GetRuntimeResourcesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetRuntimeResourcesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse;
+};
+
+export type GetRuntimeResourcesResponse = GetRuntimeResourcesResponses[keyof GetRuntimeResourcesResponses];
 
 export type ListRunningModelsData = {
 	body?: never;
