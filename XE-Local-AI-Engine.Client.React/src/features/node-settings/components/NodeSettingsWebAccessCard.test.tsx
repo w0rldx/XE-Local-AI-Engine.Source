@@ -36,7 +36,9 @@ describe("NodeSettingsWebAccessCard", () => {
 		expect(card.textContent).toContain(
 			"the model can send search queries to DuckDuckGo or SearXNG and download public web pages",
 		);
-		expect(card.textContent).toContain("You are asked before each request is sent, and retrieved content is shown to you for review before the model sees it.");
+		expect(card.textContent).toContain(
+			"You are asked before each request is sent, and retrieved content is shown to you for review before the model sees it.",
+		);
 		expect(card.textContent).toContain("Leave empty to use DuckDuckGo (best effort).");
 		expect(switchInput().checked).toBe(false);
 		const url = screen.getByLabelText("SearXNG URL") as HTMLInputElement;
