@@ -14,7 +14,6 @@ const { exploreMock, benchmarkMock, freezeMock, invalidateMock } = vi.hoisted(()
 }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	listInferenceProfilesOptions: vi.fn(() => ({ queryKey: [{ _id: "listInferenceProfiles" }], queryFn: vi.fn() })),
 	exploreInferenceProfileMutation: vi.fn(() => ({ mutationFn: exploreMock.mutationFn })),
 	benchmarkInferenceProfileMutation: vi.fn(() => ({ mutationFn: benchmarkMock.mutationFn })),

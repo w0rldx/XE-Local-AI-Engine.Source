@@ -140,3 +140,17 @@ describe("McpServerForm env row layout", () => {
 		expect(screen.getByRole("button", { name: "Remove variable 2" })).toBeTruthy();
 	});
 });
+
+describe("McpServerForm validation", () => {
+	// Custom schema issues carry an i18n key; the operator must read the bundle sentence, never the key.
+	it("renders a transport-conditional error as the translated sentence", () => {
+		const onSubmit = vi.fn();
+		renderForm(onSubmit);
+
+		fireEvent.change(screen.getByTestId("mcp-form-command"), { target: { value: "" } });
+		fireEvent.click(screen.getByTestId("mcp-form-submit"));
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(screen.getByText("Command is required for stdio transport")).toBeTruthy();
+	});
+});

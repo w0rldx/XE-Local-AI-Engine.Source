@@ -80,7 +80,7 @@ public sealed class ImageModelCatalogView
     public required IReadOnlyList<ImageModelCatalogEntryView> Entries { get; init; }
 }
 
-/// <summary>One catalog entry plus whether it is installed and how its file-set fits this box.</summary>
+/// <summary>One catalog entry plus whether it is installed and how its file-set fits this machine.</summary>
 public sealed class ImageModelCatalogEntryView
 {
     public required ImageModelCatalogEntry Entry { get; init; }

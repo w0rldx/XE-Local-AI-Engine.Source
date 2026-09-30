@@ -34,7 +34,7 @@
 #   3. Discovery      — the treenode filter matches at least one test. A filter that matched
 #                       nothing exits 8 and would otherwise read as "nothing to do".
 #   4. Suites ran     — the run reported a non-zero total, and any skip names a daemon mode or image store
-#                       this box is not. A "no usable daemon" failure from the suites themselves becomes an
+#                       this host is not. A "no usable daemon" failure from the suites themselves becomes an
 #                       INFRASTRUCTURE abort (exit 5) rather than a product failure: nothing was judged.
 #   5. Suites passed  — every executed test passed.
 #
@@ -254,7 +254,7 @@ ledger_pass "3-discovery"
 #
 # With XE_REQUIRE_DOCKER_TESTS=1 a daemon-unavailable skip is already a failure inside the tests, so nothing
 # can reach here by being unable to find Docker. What can reach here is an assertion that is only meaningful
-# against a daemon mode or an image store this box is not, and there are two shapes of that:
+# against a daemon mode or an image store this host is not, and there are two shapes of that:
 #
 #   * A PAIR, where the other half runs instead — the rootless and rootful identity-mapping tests. Exactly one
 #     applies to any daemon and the inapplicable half names its counterpart.
@@ -362,7 +362,7 @@ else
     2) step_fail "4-suites-ran" "no skip count could be read out of the run summary, so this runner cannot tell a
   clean run from one that skipped everything. Read the output above." ;;
     *) step_fail "4-suites-ran" "a suite SKIPPED itself for a reason this runner does not recognise, even under
-  XE_REQUIRE_DOCKER_TESTS=1. Recognised reasons name a daemon mode or an image store this box is not; read the
+  XE_REQUIRE_DOCKER_TESTS=1. Recognised reasons name a daemon mode or an image store this host is not; read the
   skip above. An opt-in run that skipped what it was asked to prove is not a pass." ;;
   esac
 fi

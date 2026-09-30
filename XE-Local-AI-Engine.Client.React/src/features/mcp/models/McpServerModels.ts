@@ -103,23 +103,24 @@ export const mcpServerFormSchema = z
 		url: z.string(),
 		trustTier: trustTierSchema,
 	})
+	// Custom issue messages are i18n keys; the form translates them.
 	.superRefine((value, ctx) => {
 		if (value.transportKind === "Stdio") {
 			if (value.command.trim().length === 0) {
-				ctx.addIssue({ code: "custom", message: "Command is required for stdio transport", path: ["command"] });
+				ctx.addIssue({ code: "custom", message: "pages.mcp.form.validation.commandRequired", path: ["command"] });
 			}
 		} else {
 			const trimmedUrl = value.url.trim();
 			if (trimmedUrl.length === 0) {
-				ctx.addIssue({ code: "custom", message: "URL is required for HTTP transport", path: ["url"] });
+				ctx.addIssue({ code: "custom", message: "pages.mcp.form.validation.urlRequired", path: ["url"] });
 			} else if (!isLoopbackUrl(trimmedUrl)) {
-				ctx.addIssue({ code: "custom", message: "URL must point at a loopback host", path: ["url"] });
+				ctx.addIssue({ code: "custom", message: "pages.mcp.form.validation.urlNotLoopback", path: ["url"] });
 			}
 		}
 
 		for (const [index, entry] of value.env.entries()) {
 			if (entry.value.trim().length > 0 && entry.key.trim().length === 0) {
-				ctx.addIssue({ code: "custom", message: "Environment key is required", path: ["env", index, "key"] });
+				ctx.addIssue({ code: "custom", message: "pages.mcp.form.validation.envKeyRequired", path: ["env", index, "key"] });
 			}
 		}
 	});

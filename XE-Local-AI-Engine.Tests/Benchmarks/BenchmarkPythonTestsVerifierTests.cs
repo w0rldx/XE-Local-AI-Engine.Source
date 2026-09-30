@@ -176,8 +176,8 @@ public sealed class BenchmarkPythonTestsVerifierTests
     [Test]
     public async Task PythonTests_DeadlineInsideAnExpectedFailure_StillScores0()
     {
-        // Codex round 2: unittest filed the deadline under expectedFailure, stopped the run before the failing test,
-        // and counted nothing as failed, so a timed-out criterion scored a pass.
+        // unittest files the deadline under expectedFailure, stops the run before the failing test and counts nothing
+        // as failed, so without the guard a timed-out criterion would score a pass.
         var result = await RunLocallyAsync("def solve(n):\n    return n * 2\n", ExpectedFailureDeadlineTests, timeoutSeconds: 3);
 
         AssertEx.False(result.Passed, $"detail was: {result.Detail}");

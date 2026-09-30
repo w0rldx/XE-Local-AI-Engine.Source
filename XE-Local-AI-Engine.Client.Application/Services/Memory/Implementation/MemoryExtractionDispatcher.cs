@@ -68,11 +68,3 @@ internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
         }
     }
 }
-
-/// <summary>A queued extraction job: the metadata-only exec-log telemetry plus the content-bearing run input.</summary>
-internal sealed class MemoryExtractionJob
-{
-    public required MemoryExtractionDispatchContext Telemetry { get; init; }
-
-    public required MemoryExtractionRunInput Run { get; init; }
-}

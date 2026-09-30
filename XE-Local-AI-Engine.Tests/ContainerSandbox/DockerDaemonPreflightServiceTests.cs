@@ -395,7 +395,7 @@ public sealed class DockerDaemonPreflightServiceTests
         var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(resolved),
             new SingleClientFactory(client),
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerDaemonPreflightService>.Instance);
 
         return (service, client, store);

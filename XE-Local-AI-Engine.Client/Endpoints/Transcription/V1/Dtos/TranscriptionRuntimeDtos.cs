@@ -98,9 +98,7 @@ public sealed class TranscriptionRuntimeActivityResponse
 }
 
 /// <summary>
-///     The managed source-build record, when this node has one. Present on the contract from the first slice and
-///     always <see langword="null" /> until the managed build lane lands — the field exists so the shape does not
-///     change under the generated client later.
+///     The managed source-build record, when this node has one.
 /// </summary>
 public sealed class WhisperInstalledRuntimeResponse
 {

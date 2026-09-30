@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
 ///     FastEndpoints handler that benchmarks a drafted inference profile (POST model-fit/profiles/benchmark) through
-///     <see cref="IInferenceProfileService.BenchmarkAsync" />.
+///     <see cref="IInferenceProfileService.BenchmarkAsync(Guid, CancellationToken)" />.
 /// </summary>
 /// <remarks>
 ///     The profile id rides the body, never a route param, so the POST always has a body; an empty id is a 400. A

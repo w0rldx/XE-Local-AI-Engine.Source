@@ -39,7 +39,7 @@ Stated honestly, including the ones that are costs.
 
 - **Development Mode becomes unavailable without a container runtime.** A user with no Docker daemon does not get a degraded Development Mode; they get none. This is a real reduction in reach for the affected feature, and it must fail with an actionable message rather than a generic error.
 
-- **There is no unisolated fallback, by design.** Development Mode does not silently fall back to `ProcessSandboxRuntimeProvider` when a daemon is missing. A fallback would mean the product's isolation posture depends on what happens to be installed on the box, and an operator could not tell from the outside which one ran. The cost is that **there is no rollback story**: reverting the container work leaves users without Development Mode until the revert lands. That is a release gate, not a risk to be noted and passed over.
+- **There is no unisolated fallback, by design.** Development Mode does not silently fall back to `ProcessSandboxRuntimeProvider` when a daemon is missing. A fallback would mean the product's isolation posture depends on what happens to be installed on the host, and an operator could not tell from the outside which one ran. The cost is that **there is no rollback story**: reverting the container work leaves users without Development Mode until the revert lands. That is a release gate, not a risk to be noted and passed over.
 
 - **The packaging and quality gates gain a Docker requirement.** Real-daemon integration tests are required, and *daemon unavailable* must be reported as **blocked or skipped-with-reason, never as a pass* — a suite that goes green because it silently skipped the only tests that exercise isolation is worse than a red one.
 

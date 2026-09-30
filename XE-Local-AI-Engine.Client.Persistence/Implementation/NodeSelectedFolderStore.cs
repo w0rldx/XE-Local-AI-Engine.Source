@@ -36,7 +36,15 @@ public sealed class NodeSelectedFolderStore : INodeSelectedFolderStore
         };
 
         _ = _dbContext.SelectedFolders.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+        {
+            // The unique alias index is the backstop when a concurrent registration races past the resolver's pre-check.
+            throw new SelectedFolderAliasConflictException($"A selected folder with alias '{folderAlias}' is already registered.", exception);
+        }
 
         return ToRecord(entity);
     }

@@ -356,36 +356,4 @@ public sealed class KeepModelWarmBackgroundServiceTests
             _timestamp += interval.Ticks;
         }
     }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<Entry> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            Entries.Add(new Entry
-            {
-                Level = logLevel,
-                Message = formatter(state, exception)
-            });
-        }
-
-        public sealed record Entry
-        {
-            public required LogLevel Level { get; init; }
-
-            public required string Message { get; init; }
-        }
-    }
 }

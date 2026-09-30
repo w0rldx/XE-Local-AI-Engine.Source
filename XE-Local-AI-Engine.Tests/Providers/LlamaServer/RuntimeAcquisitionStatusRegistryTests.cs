@@ -237,7 +237,7 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         // there. The hydrate endpoint remains authoritative.
         var registry = new RuntimeAcquisitionStatusRegistry(new ThrowingPublisher(),
             NullLogger<RuntimeAcquisitionStatusRegistry>.Instance,
-            new StubTimeProvider());
+            new ManualTimeProvider(DateTimeOffset.UnixEpoch));
 
         registry.Report(new RuntimeAcquisitionUpdate
         {
@@ -296,26 +296,10 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         AssertEx.NotNull(provider.GetRequiredService<ILlamaServerCapabilityManifestProbe>());
     }
 
-    private static RuntimeAcquisitionStatusRegistry Build(RecordingPublisher publisher, out StubTimeProvider time)
+    private static RuntimeAcquisitionStatusRegistry Build(RecordingPublisher publisher, out ManualTimeProvider time)
     {
-        time = new StubTimeProvider();
+        time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         return new RuntimeAcquisitionStatusRegistry(publisher, NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, time);
-    }
-
-    /// <summary>A hand-rolled fake clock — the repo does not reference <c>Microsoft.Extensions.TimeProvider.Testing</c>.</summary>
-    private sealed class StubTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            _now += delta;
-        }
     }
 
     private sealed class RecordingPublisher : IRuntimeAcquisitionEventPublisher

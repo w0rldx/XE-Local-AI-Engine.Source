@@ -176,8 +176,8 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
     [Test]
     public async Task DownloadRecommended_WhenOnlyChatModelsInstalled_StillStartsTheDownload()
     {
-        // The guard against a false "already installed": a node full of chat GGUFs still cannot embed, which is exactly
-        // the state the live evaluation hit. If the endpoint mistook a chat model for an embedder, the button would
+        // The guard against a false "already installed": a node full of chat GGUFs still cannot embed, which is a state
+        // real nodes reach. If the endpoint mistook a chat model for an embedder, the button would
         // silently do nothing and the KB would stay broken.
         var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
 

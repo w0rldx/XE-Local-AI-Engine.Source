@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// <summary>
 ///     Builds a <see cref="NodeChatInvocationPump" /> for tests that exercise persistence/streaming behaviour. The pump
 ///     no longer owns the run-envelope write (it rides into the terminalize persistence command), so it needs only the
-///     persistence service, a usage-provider resolver, and a clock. <paramref name="usageProvider" /> lets a test assert
+///     persistence service, a usage-provider resolver, and a clock. <c>usageProvider</c> lets a test assert
 ///     the resolved provider round-trips onto the envelope row; it defaults to <c>unknown</c> for tests indifferent to it.
 /// </summary>
 internal static class ChatPumpTestFactory

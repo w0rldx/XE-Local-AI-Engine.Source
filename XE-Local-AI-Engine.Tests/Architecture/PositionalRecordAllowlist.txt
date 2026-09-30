@@ -43,7 +43,7 @@ XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolic
 XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowStateMachine.cs|DevWorkflowRoute
 XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowDevTaskExecutor.cs|DevTaskBrief
 XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowMaterializer.cs|TaskPackageItem
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowToolCommands.cs|DevWorkflowValidationReport
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowValidationReport.cs|DevWorkflowValidationReport
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentCommandProfile
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfileImport.cs|DevelopmentProfileImportDocument
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewerAttemptRunnerModels.cs|DevelopmentReviewReport
@@ -73,10 +73,10 @@ XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifa
 XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifactContracts.cs|BaseArtifactLicenseView
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|ToolMockVerificationV1
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|TrainingSamplePartV1
-XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/CompleteWorkSessionToolHandler.cs|CompleteWorkSessionRequest
-XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/RecordFindingToolHandler.cs|RecordFindingRequest
-XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/SaveArtifactToolHandler.cs|SaveArtifactRequest
-XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/UpdateWorkPlanToolHandler.cs|UpdateWorkPlanRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/CompleteWorkSessionRequest.cs|CompleteWorkSessionRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/RecordFindingRequest.cs|RecordFindingRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/SaveArtifactRequest.cs|SaveArtifactRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/UpdateWorkPlanRequest.cs|UpdateWorkPlanRequest
 XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionCheckpointState.cs|WorkSessionCheckpointState
 XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionModels.cs|WorkSessionCompletionDetail
 XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionModels.cs|WorkSessionStepConsumptionDetail
@@ -85,21 +85,21 @@ XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/GoldenConversationEndpointDto
 XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs|PlaybookEvalResultResponse
 XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraph
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraph
-XE-Local-AI-Engine.Client/Hosting/DesktopPortStore.cs|ReadyInfo
+XE-Local-AI-Engine.Client/Hosting/ReadyInfo.cs|ReadyInfo
 XE-Local-AI-Engine.Providers.CodexOAuth/Auth/CodexTokens.cs|CodexTokens
 XE-Local-AI-Engine.Providers.LlamaServer/Contracts/IInstalledRuntimeStore.cs|InstalledRuntimeState
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|GitHubRelease
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppSourceBuildService.cs|SourceBuildManifest
-XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerLaunchFallbackStore.cs|LlamaServerLaunchFallbackState
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerLaunchFallbackState.cs|LlamaServerLaunchFallbackState
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.cs|EmbeddingResponse
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.cs|RerankResponse
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerRerankerClient.cs|RerankResponse
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Contracts/IStableDiffusionInstalledRuntimeStore.cs|StableDiffusionInstalledRuntimeState
-XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCppRuntimeAdoption.cs|StableDiffusionCppAdoptionJournal
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCppAdoptionJournal.cs|StableDiffusionCppAdoptionJournal
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs|DesiredRuntimeState
 XE-Local-AI-Engine.Providers.Training/Contracts/ITrainingRuntimeService.cs|InstalledTrainingRuntimeState
 XE-Local-AI-Engine.Providers.WhisperCpp/Contracts/IWhisperInstalledRuntimeStore.cs|WhisperInstalledRuntimeState
-XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperCppRuntimeAdoption.cs|WhisperCppAdoptionJournal
+XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperCppAdoptionJournal.cs|WhisperCppAdoptionJournal
 XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperInstalledRuntimeStore.cs|DesiredRuntimeState
 XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaFailureRequest.cs|FakeOllamaFailureRequest
 XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaRequest.cs|FakeOllamaRequest
@@ -165,7 +165,7 @@ XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMess
 XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMessageSource
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolEnvironmentVariable
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolHeader
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowToolCommands.cs|DevWorkflowValidationBasedOn
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowValidationBasedOn.cs|DevWorkflowValidationBasedOn
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentProfileCommand
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewFinding.cs|DevelopmentReviewFinding
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentTestResultAdapter.cs|DevelopmentTestOutcome
@@ -195,7 +195,7 @@ XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/ModelCatalogCont
 XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|ProviderMapMutationReceipt
 XE-Local-AI-Engine.Client.Application/Services/Models/InstalledModelCoordination.cs|InstalledModelSnapshot
 XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/LocalModelDeletionCoordinator.cs|DeletionAliasMapping
-XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/UpdateWorkPlanToolHandler.cs|WorkPlanOperationRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/WorkPlanOperationRequest.cs|WorkPlanOperationRequest
 XE-Local-AI-Engine.Client.Persistence/Stores/ModelProviderMapRecord.cs|ModelProviderMapRecord
 XE-Local-AI-Engine.Client.Persistence/Stores/IDevelopmentStore.cs|DevelopmentWorkflowRuleSetReference
 XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs|PlaybookEvalCaseResultResponse
@@ -224,7 +224,7 @@ XE-Local-AI-Engine.Client.Application/Services/AgentHome/Implementation/NodePatc
 XE-Local-AI-Engine.Client.Application/Services/Auth/AccessTokenResult.cs|AccessTokenResult
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/KvCacheResolution.cs|KvCacheResolution
 XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/RuntimeDeviceAuditService.cs|DeviceAuditComputation
-XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/CloudRoutingClassifier.cs|CloudRoutingClassification
+XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/CloudRoutingClassification.cs|CloudRoutingClassification
 XE-Local-AI-Engine.Client.Application/Services/Chat/ModelIdentity.cs|ModelIdentity
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/EntraDeviceCodeSignInCoordinator.cs|DeviceCodeFlowHandle
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkceGenerator.cs|PkcePair
@@ -238,7 +238,7 @@ XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/Knowledg
 XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeVectorNormalizationBackfillService.cs|EmbeddingRow
 XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|ConnectResult
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/GgufFileSelector.cs|SelectedGgufFile
-XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs|LlamaCppRuntimeRemovalOutcome
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeRemovalOutcome.cs|LlamaCppRuntimeRemovalOutcome
 XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/LocalModelCatalogService.cs|OllamaModelListing
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerDotNetRuntimeClient.cs|ExecOutput
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Fake/FakeSandboxRuntimeProvider.cs|VirtualFile
@@ -261,7 +261,7 @@ XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HuggingFaceGgufDiscovery
 XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HuggingFaceGgufStore.cs|ResolvedTarget
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|ArchiveName
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|ReleaseLookup
-XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessCaptureRunner.cs|ProcessCaptureResult
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessCaptureResult.cs|ProcessCaptureResult
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessGpuVendorProbe.cs|AdapterListCommand
 XE-Local-AI-Engine.Tests/CodexOAuth/CodexAuthServiceTests.cs|BoundLogin
 
@@ -324,8 +324,8 @@ XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppC
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/IExternalAppCatalogCacheStore.cs|StoredExternalAppCatalogCache
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|InstallCommand
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|UpdateCommand
-XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlanner.cs|DeploymentPlan
-XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlanner.cs|ServiceDeployment
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlannerModels.cs|DeploymentPlan
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlannerModels.cs|ServiceDeployment
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowGraphEdge
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowValidationException.cs|GraphWorkflowValidationError
 XE-Local-AI-Engine.Client.Persistence/Stores/IExternalAppInstanceStore.cs|ExternalAppInstanceCreate
@@ -351,7 +351,7 @@ XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContract
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowNodePosition
 
 # --- manual-hand-decision (4) -----------------------------------------------------
-# Decided by hand by the operator during the S5 series. In each of these the record body reads a positional
+# Decided by hand by the operator. In each of these the record body reads a positional
 # parameter (CS0236 as a class member initializer), re-declares one as a member, or chains a second constructor
 # to the primary one; the census entry carries the parameter name.
 XE-Local-AI-Engine.Client.Application/Services/Containers/Bridge/ContainerBridgeEndpoint.cs|ResolvedContainerBridgeEndpoint

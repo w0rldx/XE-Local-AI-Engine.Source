@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -128,8 +129,10 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
 
         _ = await store.AddAsync("repo-one", "/trusted/a", SelectedFolderMode.Copy);
 
-        _ = AssertEx.Throws<DbUpdateException>(() => store.AddAsync("repo-one", "/trusted/b", SelectedFolderMode.Copy).GetAwaiter().GetResult(),
+        var conflict = AssertEx.Throws<SelectedFolderAliasConflictException>(() => store.AddAsync("repo-one", "/trusted/b", SelectedFolderMode.Copy).GetAwaiter().GetResult(),
             "Duplicate alias should violate the unique index.");
+        AssertEx.True(conflict.InnerException is DbUpdateException { InnerException: SqliteException { SqliteErrorCode: 19 } },
+            "The conflict must carry the SQLite unique-constraint violation as its cause.");
     }
 
     [Test]

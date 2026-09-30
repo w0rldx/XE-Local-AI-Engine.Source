@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         hardening contract reads as the complete statement of what must be true.
 ///     </para>
 ///     <para>
-///         Nothing in the type system says so, which is why this file does. The banned list is fixed by ruling R1-2
+///         Nothing in the type system says so, which is why this file does. The banned list is fixed by design
 ///         and is not widened by the write-probe: that member takes no command, so a type wanting to run a command of
 ///         its own choosing still has to name <c>ExecuteAsync</c> and is still caught here.
 ///     </para>

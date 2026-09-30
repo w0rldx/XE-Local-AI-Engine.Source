@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getAppUpdateStatusOptions: vi.fn(),
-	// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 	getAppUpdateStatusQueryKey: vi.fn(() => [{ _id: "getAppUpdateStatus" }]),
 	applyAppUpdateMutation: vi.fn(),
 	setAppUpdateChannelMutation: vi.fn(),
@@ -52,7 +51,6 @@ afterEach(() => vi.clearAllMocks());
 describe("useAppUpdateStatus", () => {
 	it("returns anonymous public update status", async () => {
 		statusMock.mockReturnValue({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getAppUpdateStatus" }],
 			queryFn: async () => ({ isDesktop: true, isConfigured: true, updateAvailable: true, currentVersion: "1.0.0" }),
 		} as never);
@@ -64,7 +62,6 @@ describe("useAppUpdateStatus", () => {
 		expect(result.current.data?.isConfigured).toBe(true);
 		expect(result.current.data?.updateAvailable).toBe(true);
 		const query = queryClient.getQueryCache().find({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getAppUpdateStatus" }],
 		});
 		const observerOptions = query?.options as { refetchInterval?: number } | undefined;
@@ -78,17 +75,12 @@ describe("useRefreshAppUpdateStatus", () => {
 		statusMock.mockImplementation(
 			(opts) =>
 				({
-					// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 					queryKey: [{ _id: "getAppUpdateStatus", query: opts?.query }],
 					queryFn: async () => refreshedSnapshot,
 				}) as never,
 		);
 		vi.mocked(getAppUpdateStatusQueryKey).mockImplementation(
-			(opts) =>
-				[
-					// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
-					{ _id: "getAppUpdateStatus", query: opts?.query },
-				] as never,
+			(opts) => [{ _id: "getAppUpdateStatus", query: opts?.query }] as never,
 		);
 		const { wrapper, queryClient } = makeWrapper();
 		const { result } = renderHook(() => useRefreshAppUpdateStatus(), { wrapper });

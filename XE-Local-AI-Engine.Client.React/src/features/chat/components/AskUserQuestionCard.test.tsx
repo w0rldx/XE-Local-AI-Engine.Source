@@ -6,12 +6,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The card posts through the interim resolve mutation (the generated one does not exist until the OpenAPI regen);
-// stub its mutationFn so the wiring can be asserted without a backend. `withResponseValidation` preserves the
-// mutationFn, so the spy still receives the mutate variables. The wire module's parse helper is left intact.
+// Stub the generated resolve mutation's mutationFn so the wiring can be asserted without a backend.
+// `withResponseValidation` preserves the mutationFn, so the spy still receives the mutate variables.
 const resolveQuestionSpy = vi.fn().mockResolvedValue({});
-vi.mock("@/features/chat/api/AskUserQuestionWire", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@/features/chat/api/AskUserQuestionWire")>()),
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	resolveUserQuestionMutation: () => ({ mutationFn: resolveQuestionSpy }),
 }));
 

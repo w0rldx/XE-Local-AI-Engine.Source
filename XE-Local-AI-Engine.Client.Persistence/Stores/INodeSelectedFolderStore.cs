@@ -10,7 +10,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 public interface INodeSelectedFolderStore
 {
-    /// <summary>Persists a new selected folder and returns the stored record (host path decrypted).</summary>
+    /// <summary>
+    ///     Persists a new selected folder and returns the stored record (host path decrypted). A rejected save, in
+    ///     practice a duplicate active alias, surfaces as <see cref="SelectedFolderAliasConflictException" />.
+    /// </summary>
     Task<SelectedFolderRecord> AddAsync(string folderAlias, string hostPath, SelectedFolderMode mode, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the active record for <paramref name="id" />, or <c>null</c> when it is unknown or revoked.</summary>
@@ -27,4 +30,15 @@ public interface INodeSelectedFolderStore
     ///     distinguishing those cases.
     /// </summary>
     Task<bool> RevokeAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     The save was rejected: the unique index on the active alias is the backstop a concurrent registration of the same
+///     alias hits. Nothing was written.
+/// </summary>
+public sealed class SelectedFolderAliasConflictException : Exception
+{
+    public SelectedFolderAliasConflictException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

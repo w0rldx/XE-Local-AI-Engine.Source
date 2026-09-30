@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The session store's S0 surface, plus the invariant that makes its two missing methods missing on purpose: the
+///     The session store's surface, plus the invariant that makes its two missing methods missing on purpose: the
 ///     session watermark has exactly two writers, and neither of them is a <c>TouchAsync</c>.
 /// </summary>
 [Category(TestCategories.Integration)]

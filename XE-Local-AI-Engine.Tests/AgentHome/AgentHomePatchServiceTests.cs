@@ -105,7 +105,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_IssuesHardenedDiffCommandsInWorkspace()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
@@ -133,7 +133,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_StagesTheWorkspaceBeforeItDiffs()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("A", "repo-01/docs/notes.md"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
@@ -159,7 +159,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenStagingFails_ReportsFailureAndWritesNothing()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.StageAll("repo-01"), exitCode: 128, string.Empty, "fatal: unable to index file");
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
@@ -177,7 +177,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_BuildsChangedFilesJsonMappedToFolderIdsWithRelativePaths()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         var nameStatus = NameStatusZ("M", "repo-01/src/Program.cs",
@@ -221,7 +221,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenPatchOverBudget_BlocksPatchButKeepsMetadata()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, new string(c: 'x', count: 4096));
@@ -242,7 +242,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenNoChanges_WritesNeitherArtifact()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, string.Empty);
@@ -260,7 +260,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenDiffCommandFails_ReportsFailureAndWritesNothing()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
@@ -287,7 +287,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_ScopesStagingAndBothDiffsToTheCopiedFolders()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01", "repo-02"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01", "repo-02"), exitCode: 0, "patch-body\n");
@@ -321,7 +321,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WithNoCopiedFolder_ReportsNothingAndRunsNoGit()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -344,7 +344,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_SkipsEntriesWithUnknownAliasOrNoAliasSegment()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         var nameStatus = NameStatusZ("M", "repo-01/keep.cs", // mapped
@@ -371,7 +371,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_TotalsOnlyTheLinesInsideHunks()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         var nameStatus = NameStatusZ("M", "repo-01/src/App.cs",
@@ -392,7 +392,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenEveryWrittenPathIsInTheDiff_ReportsNoGapAndRunsNoExtraGit()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"),
             exitCode: 0,
@@ -416,7 +416,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_ClassifiesEveryWrittenPathTheDiffDoesNotCarry()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
@@ -455,7 +455,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenTheIgnoreQueryFails_CallsEveryMissingPathUnexplained()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
@@ -479,7 +479,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_KeepsChangedPathsGitWouldCQuote()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         string[] modifications =
@@ -563,7 +563,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenAQuotableWrittenPathIsInTheDiff_ReportsNoGap()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         var written = QuotablePaths[0].WorkspacePath;
@@ -586,7 +586,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     [Test]
     public async Task ExportPatchAsync_WhenTheRunWroteFilesAndTheDiffIsEmpty_StillReportsTheGap()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, string.Empty);
@@ -614,7 +614,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     /// <summary>Runs one export over a scripted name-status stream and reads back the entries it wrote.</summary>
     private async Task<ChangedFileEntry[]> ExportChangedFilesAsync(string runId, string nameStatusOutput, ResolvedSelectedFolder folder)
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus(folder.Alias), exitCode: 0, nameStatusOutput);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff(folder.Alias), exitCode: 0, "patch-body\n");
@@ -718,20 +718,5 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         Directory.CreateDirectory(dir);
         _tempDirs.Add(dir);
         return dir;
-    }
-
-    private sealed class FixedClock : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 }

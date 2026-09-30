@@ -144,7 +144,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     }
 
     // Non-NVIDIA vendor detection: Linux /sys/class/drm vendor ids, else the Windows adapter-name query. NVIDIA is
-    // handled up front by the single nvidia-smi probe, so this branch normally never runs for an NVIDIA box.
+    // handled up front by the single nvidia-smi probe, so this branch normally never runs for an NVIDIA machine.
     private async Task<GpuVendor> DetectNonNvidiaVendorAsync(CancellationToken ct)
     {
         if (_environment.IsLinux)
@@ -338,7 +338,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         if (adapterNames.Contains("nvidia", StringComparison.OrdinalIgnoreCase))
         {
             // Reachable only when nvidia-smi is absent or unusable while the adapter is genuinely NVIDIA — a
-            // driver-present/tool-missing box. Naming it is still better than Unknown.
+            // driver-present/tool-missing machine. Naming it is still better than Unknown.
             return GpuVendor.Nvidia;
         }
 

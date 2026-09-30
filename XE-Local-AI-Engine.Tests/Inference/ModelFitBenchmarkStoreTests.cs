@@ -37,7 +37,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-        var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
         var snapshots = new ModelFitSnapshotStore(dbContext, time);
         var benchmarks = new ModelFitBenchmarkStore(dbContext);
         var profileId = Guid.NewGuid();
@@ -63,7 +63,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-        var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
         var snapshots = new ModelFitSnapshotStore(dbContext, time);
         var benchmarks = new ModelFitBenchmarkStore(dbContext);
 
@@ -82,7 +82,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-        var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddSeconds(100));
         var snapshots = new ModelFitSnapshotStore(dbContext, time);
         var benchmarks = new ModelFitBenchmarkStore(dbContext);
         var profileId = Guid.NewGuid();
@@ -97,7 +97,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
 
     private static async Task<Guid> CreateBenchmarkAsync(ModelFitSnapshotStore snapshots,
         ModelFitBenchmarkStore benchmarks,
-        FakeTimeProvider time,
+        ManualTimeProvider time,
         ModelFitRunStatus terminalStatus,
         Guid? profileId,
         int ctxSize)
@@ -164,26 +164,5 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
-    }
-
-    // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public FakeTimeProvider(DateTimeOffset start)
-        {
-            _utcNow = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
-        }
     }
 }

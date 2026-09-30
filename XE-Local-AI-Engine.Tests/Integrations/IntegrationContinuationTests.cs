@@ -129,7 +129,7 @@ public sealed class IntegrationContinuationTests
     [Test]
     public async Task WhenTheAgentGainsANonReadLocalToolAfterTheTriggerWasSaved_TheRunProceeds()
     {
-        // ADR 0008 R6-1, at RUN time. Ruling R4-9(a) used to terminalize this row with `session-policy` before the
+        // ADR 0008 R6-1, at RUN time. ADR 0008 R4-9(a) used to terminalize this row with `session-policy` before the
         // runner was ever reached, because a caller-managed session persisted no tool history. It persists and replays
         // it now, so a write-capable agent is an ordinary caller-managed target and the run happens.
         using var harness = new Harness();

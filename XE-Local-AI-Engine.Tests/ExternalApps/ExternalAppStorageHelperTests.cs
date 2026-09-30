@@ -161,9 +161,8 @@ public sealed class ExternalAppStorageHelperTests
     }
 
     /// <summary>
-    ///     The ordering that the live round bought: the data goes before the row. An uninstall that deleted the row
-    ///     over data it could not remove answered a confirmation promising deletion with silence, and left nothing
-    ///     behind that could finish the job.
+    ///     The ordering: the data goes before the row. An uninstall that deleted the row over data it could not remove
+    ///     would answer a confirmation promising deletion with silence, and leave nothing behind that could finish the job.
     /// </summary>
     [Test]
     public async Task Uninstall_WhenTheWipeFails_KeepsTheRowAndTheData()
@@ -197,7 +196,7 @@ public sealed class ExternalAppStorageHelperTests
         var marker = Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt");
         await File.WriteAllTextAsync(marker, "a helper that exited 0 without deleting it");
 
-        // Exit 0 and not one entry removed: the shape of the defect the live round found.
+        // Exit 0 and not one entry removed: the shape of the defect this pins.
         harness.HelperOutcome = static _ => 0;
 
         _ = await harness.Service.UninstallAsync(row.Id, row.Version);

@@ -16,11 +16,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class SessionApprovalEligibilityTests
 {
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI.
     private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
 
     private const string ReadSkillResourceToolName = AgentSkillsProvider.ReadSkillResourceToolName;
-#pragma warning restore MAAI001
 
     [Test]
     public void IsToolEligible_AllowsTheTwoSkillTools_AndNothingElseUnprefixed()

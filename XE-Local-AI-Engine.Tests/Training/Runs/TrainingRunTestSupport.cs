@@ -3,19 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Runs;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
-
-/// <summary>Shared fakes for the run-executor suite. No GPU, no venv, no real subprocess.</summary>
-internal sealed class FixedNodeDataDirectory : INodeDataDirectory
-{
-    public FixedNodeDataDirectory(string root)
-    {
-        Root = root;
-    }
-
-    public string Root { get; }
-}
 
 /// <summary>A key holder with fixed material, so the frozen-copy round trip exercises the real AES-GCM path.</summary>
 internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
@@ -44,7 +32,7 @@ internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
 ///     A scripted trainer. Lines are handed to the reader in order; the process "exits" with the scripted status once
 ///     the caller stops reading, and a stop or kill is recorded rather than signalled.
 ///     <para>
-///         With <paramref name="exitsOnStreamClose" /> false the exit task is never settled, which models the one
+///         With <c>exitsOnStreamClose</c> false the exit task is never settled, which models the one
 ///         shape a scripted handle otherwise cannot: a trainer that closes its output and then wedges. Nothing —
 ///         not the closed stream, not a kill, not disposal — reaps it, so a caller that waits on the status without a
 ///         bound waits forever.

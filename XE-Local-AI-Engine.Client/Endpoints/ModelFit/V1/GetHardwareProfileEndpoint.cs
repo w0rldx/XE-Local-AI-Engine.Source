@@ -38,7 +38,7 @@ public sealed class GetHardwareProfileEndpoint : Endpoint<GetHardwareProfileRequ
 
     public override async Task HandleAsync(GetHardwareProfileRequest req, CancellationToken ct)
     {
-        // The response shows physical hardware (the raw profile) AND runtime truth (the audit): a GPU box whose Vulkan
+        // The response shows physical hardware (the raw profile) AND runtime truth (the audit): a GPU machine whose Vulkan
         // runtime enumerates no devices reports the GPU as present but flags cpuFallback so the UI can surface it.
         var profile = await _hardwareProfiler.GetProfileAsync(req.Refresh, ct);
         var audit = await _runtimeAudit.GetAuditAsync(req.Refresh, ct);

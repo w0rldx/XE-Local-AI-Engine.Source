@@ -17,8 +17,8 @@ export function DialogTextTitleBar({
 	const fullScreenLabel = isFullScreen ? t("components.dialogShell.exitFullscreen") : t("components.dialogShell.fullscreen");
 	const closeLabel = t("components.dialogTextTitleBar.tooltip.close", "Close");
 
-	// Title bar aligns to Modal.Body's own padding (no extra horizontal padding of its own, which previously
-	// inset the header further than the dialog content on both sides). One Group with align="center" keeps the
+	// Title bar aligns to Modal.Body's own padding (no extra horizontal padding of its own, which would inset the
+	// header further than the dialog content on both sides). One Group with align="center" keeps the
 	// title and the action icons on the same horizontal line; both icons are rendered identically (no wrapper
 	// div) so the fullscreen toggle and close button line up with each other and with the title.
 	return (

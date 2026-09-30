@@ -61,7 +61,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         bool backendCanDeny,
         SandboxNetworkPolicy expected)
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), backendCanDeny);
         using var harness = CreateHarness(clock,
             provider,
@@ -88,7 +88,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenDenialIsRequiredAndTheBackendCannotDeny_RefusesNamingTheOption()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress: false);
         using var harness = CreateHarness(clock,
             provider,
@@ -116,7 +116,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_RequestsTheNodeCeilingsTheDeclarationAndTheBackendImply()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress: true, canLimitResources: true);
         using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver());
 
@@ -132,7 +132,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenPreparedWithKnownFolder_ReturnsRunScopedResult()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -166,7 +166,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenFolderHasMixedTree_CopiesSurvivorsExcludesSecretsAndOutputs()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -202,7 +202,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenWorkspaceHasChanges_ExportsPatchUnderRunPatchesDirectory()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -246,7 +246,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenNoFolderCopied_SkipsPatchExport()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -275,7 +275,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenFolderIdUnknown_ClearsPriorWorkspaceBeforeRejecting()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -306,7 +306,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenRuntimeProfileNotAllowed_ThrowsBeforeAnyProviderCall()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -328,7 +328,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenCancelledDuringBlockingCommand_PropagatesCancellation()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         provider.RegisterBlockingCommand("dotnet --version");
         var resolver = new FakeSelectedFolderResolver();
@@ -359,7 +359,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenOwnerChanges_ReinitializesUnderNewOwner()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -386,7 +386,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunLifecycleAsync_WhenSecondConcurrentRunForSameOwnerNode_RejectsWithBusy()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -429,7 +429,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunLifecycleAsync_WhenDifferentOwnerNode_NotBlockedByConcurrentRun()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -466,7 +466,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunLifecycleAsync_WhenOwnerNodeIsPoisoned_RefusesBeforeProviderUse()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var leases = new AgentHomeExecutionLeaseManager();
@@ -481,7 +481,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunLifecycleAsync_WhenManifestInitializationFails_ClearsPriorSelection()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var stale = await SeedStaleSelectionAsync(provider);
         using var harness = CreateHarness(clock,
@@ -498,7 +498,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunLifecycleAsync_WhenCreateOrAttachFails_ClearsPriorSelection()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var inner = new FakeSandboxRuntimeProvider(clock);
         var stale = await SeedStaleSelectionAsync(inner);
         var provider = new CancelRecordingProvider(inner)
@@ -516,7 +516,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenTheGoalLoopHitsItsTimeBudget_ReturnsTimedOutResultWithoutThrowing()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -542,7 +542,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenCancelled_PropagatesAndReleasesTheLease()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -573,7 +573,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_RegistersTheRunAsExecutingWhileItRunsAndClearsItWhenItFinishes()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -603,7 +603,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenTheGoalLoopThrows_StillClearsTheExecutingRegistration()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -623,7 +623,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenCancelled_StillClearsTheExecutingRegistration()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -651,7 +651,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_HandsTheGoalLoopTheGoalActionsAndTheCopiedWorkspaceAliases()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -674,7 +674,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenNoWorkspaceCopied_HandsTheGoalLoopNoAliases()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -699,7 +699,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenExportPatchNotAllowed_SkipsPatchEvenWithBaseline()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -730,7 +730,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task RunAsync_WhenOwnerSubjectInToken_FlowsIntoAttachKey()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -751,7 +751,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenConversationHasAttachments_AppendsAttachmentsFolderAndStagesMarkdown()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -789,7 +789,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenNoConversationId_DoesNotAppendAttachmentsFolder()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -817,7 +817,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareAsync_WhenConversationHasNoFiles_DoesNotAppendAttachmentsFolder()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -844,7 +844,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareConversationAttachmentsAsync_WhenAgentModeDisabled_StagesNothing()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -866,7 +866,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareConversationAttachmentsAsync_WhenConversationHasNoFiles_ReplacesPriorSelectionWithEmpty()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var store = new FakeConversationUploadedFileStore();
@@ -909,7 +909,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareConversationAttachmentsAsync_WhenConversationHasFiles_StagesAttachmentsIntoSandbox()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -932,7 +932,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     [Test]
     public async Task PrepareConversationAttachmentsAsync_WhenRestagedForAnotherConversation_LeavesNoResidue()
     {
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
@@ -1363,21 +1363,6 @@ public sealed class AgentHomeServiceTests : IDisposable
                 HostPath = hostPath,
                 Mode = SelectedFolderMode.Copy
             };
-        }
-    }
-
-    private sealed class FixedClock : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
         }
     }
 

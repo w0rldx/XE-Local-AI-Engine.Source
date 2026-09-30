@@ -167,7 +167,7 @@ public sealed class SandboxIsolationSummaryTests
     public void ToIsolationSummary_ForMcpStdioOnAFullyContainedHost_ReportsIsolatedAndBounded()
     {
         // A Sandboxed stdio MCP server declares the same filesystem floor run_python does, so its boundary is the
-        // same — and since the 2026-08-25 ceilings ruling it is bounded too, on the HOST-TOOLCHAIN profile rather than
+        // same — and it is bounded too, on the HOST-TOOLCHAIN profile rather than
         // run_python's: it is a long-lived operator-installed program, so it needs a build-sized ceiling, not a
         // script-sized one that would strangle a language server on its first index.
         var containment = FullyContainedHost();

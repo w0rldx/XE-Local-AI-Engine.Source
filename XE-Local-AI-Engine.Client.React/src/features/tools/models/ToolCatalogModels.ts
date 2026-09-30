@@ -1,6 +1,6 @@
 // Dynamic tool-catalog entry returned by the node GetToolCatalog endpoint (dynamic tool-catalog). The catalog is the
 // single source the tool pickers consume — built-in node tools plus the tools discovered from enabled MCP
-// servers. It replaces the static localToolCatalog const that the chat/agent surfaces previously rendered.
+// servers.
 
 // Where a catalog entry originates. The backend `source` string is "builtin" for node built-ins (time/calc),
 // the qualified form "mcp:{serverSlug}" for a tool discovered from a specific MCP server (the slug lets the UI

@@ -17,7 +17,7 @@ import {
 	subscribeSnapshots,
 } from "@/features/diagnostics/SnapshotStore";
 
-export const SNAPSHOTS_QUERY_KEY = ["diagnostics", "snapshots"] as const;
+const SNAPSHOTS_QUERY_KEY = ["diagnostics", "snapshots"] as const;
 
 /** Read all snapshots (newest first), auto-invalidating when the store mutates. */
 export function useSnapshots() {

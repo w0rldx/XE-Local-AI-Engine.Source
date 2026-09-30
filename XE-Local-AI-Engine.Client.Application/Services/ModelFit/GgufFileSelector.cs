@@ -22,7 +22,7 @@ internal static class GgufFileSelector
     /// </summary>
     /// <remarks>
     ///     Only files that fit the budget, have a computable weights term and sit at or above the quality floor are
-    ///     considered. When every fitting file is higher quality than the ceiling (a roomy box with no file at or
+    ///     considered. When every fitting file is higher quality than the ceiling (a roomy machine with no file at or
     ///     below the target quant) the smallest fitting one is returned so the repo still surfaces.
     /// </remarks>
     /// <returns><see langword="null" /> when nothing at or above the floor fits.</returns>

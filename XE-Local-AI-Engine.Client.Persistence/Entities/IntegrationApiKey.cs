@@ -10,7 +10,7 @@ internal sealed record class IntegrationApiKey
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     The stable integrator identity this credential belongs to (ruling R4-6). Plaintext (structural).
+    ///     The stable integrator identity this credential belongs to (ADR 0008 R4-6). Plaintext (structural).
     /// </summary>
     /// <remarks>
     ///     Ownership of every session and execution, and request-id uniqueness, key on this and never on

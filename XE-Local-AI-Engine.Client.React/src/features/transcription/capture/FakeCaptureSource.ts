@@ -1,7 +1,7 @@
 /**
- * The hand-written capture fake the orchestration and view tests drive (S4 plan §4.2).
+ * The hand-written capture fake the orchestration and view tests drive.
  *
- * Rung 4 of the repo's mock order, and justified: no capture seam existed before this slice, jsdom has neither
+ * Rung 4 of the repo's mock order, and justified: there is no real capture seam to reuse, jsdom has neither
  * `AudioContext` nor `navigator.mediaDevices`, and `vi.fn()` cannot model "start, then emit these three frames on
  * demand". It lives beside the interface it fakes rather than in `src/test/`.
  */
@@ -18,7 +18,7 @@ export class FakeCaptureSource implements CaptureSource {
 	/** True once `start` has resolved. A source whose `start` rejected never reports started. */
 	started = false;
 	stopped = false;
-	/** Counts every `start` call, including the ones that reject — call ordering is what the R39a tests assert. */
+	/** Counts every `start` call, including the ones that reject — call ordering is what the user-activation tests assert. */
 	startCalls = 0;
 	private readonly failWith: CaptureError | undefined;
 	private onFrame: ((frame: CaptureFrame) => void) | null = null;

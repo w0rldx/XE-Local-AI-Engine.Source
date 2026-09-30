@@ -48,7 +48,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
     private readonly string _databasePath;
     private readonly INodeSqliteKeyHolder _keyHolder;
     private readonly KnowledgeBaseOptions _options;
-    private readonly IOptions<KnowledgeBaseOptions> _optionsWrapper;
     private readonly ILocalModelProvider _embeddingProvider;
     private readonly List<NodeChatDbContext> _searchContexts = [];
 
@@ -61,7 +60,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _databasePath = databasePath;
         _keyHolder = keyHolder;
         _options = options;
-        _optionsWrapper = Options.Create(options);
         _embeddingProvider = embeddingProvider;
         DocumentIdsByKey = documentIdsByKey;
     }

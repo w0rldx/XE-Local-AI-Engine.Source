@@ -64,7 +64,6 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 
 // Centralizes the `_id` discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
 function fakeQueryKey(operationId: string): unknown {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

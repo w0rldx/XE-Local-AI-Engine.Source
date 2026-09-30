@@ -418,8 +418,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     /// </summary>
     /// <remarks>
     ///     The prompt is its base Instructions, or its playbook-composed one when its own playbook is enabled. All
-    ///     three resolve during the async participant load, so the synchronous <see cref="ToSpecParticipant" /> stays
-    ///     query-free.
+    ///     three resolve during the async participant load, so <see cref="ToSpecParticipantAsync" /> reads them from this
+    ///     record instead of querying again.
     /// </remarks>
     private sealed record ResolvedParticipant
     {

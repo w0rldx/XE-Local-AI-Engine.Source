@@ -219,7 +219,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
             hardwareProfiler,
             deviceAudit,
             NewFileHashCache(),
-            new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000)),
+            new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000)),
             NullLogger<RuntimeEnvironmentFactsProvider>.Instance);
     }
 
@@ -242,18 +242,5 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
         File.WriteAllText(Path.Combine(directory, ExecutableName), "binary-revision-1");
         File.WriteAllText(Path.Combine(directory, "libggml.so"), "ggml-revision-1");
         return directory;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _utcNow;
     }
 }

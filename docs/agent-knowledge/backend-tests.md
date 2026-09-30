@@ -176,7 +176,7 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
-| Memory-safe runner defaults to `JOBS=4`; increase in-process width. | The default tracks the box — `JOBS=16` on a host with at least 32 CPUs, `JOBS=10` below that — and process batches, not in-process width, provide the useful concurrency (§1). |
+| Memory-safe runner defaults to `JOBS=4`; increase in-process width. | The default tracks the host — `JOBS=16` on a host with at least 32 CPUs, `JOBS=10` below that — and process batches, not in-process width, provide the useful concurrency (§1). |
 | `dotnet test` cannot discover MTP tests. | `global.json` pins MTP; `dotnet test` works (§1). |
 | `if (!OperatingSystem.IsX()) return;` is an acceptable platform guard. | It reports a green pass on every platform that cannot run the test; use TUnit's `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` or `Skip.Test` (§1). |
 | Green E2E proves frontend typecheck. | E2E uses Vite-only `build:e2e`; run `pnpm run lint` (§1). |

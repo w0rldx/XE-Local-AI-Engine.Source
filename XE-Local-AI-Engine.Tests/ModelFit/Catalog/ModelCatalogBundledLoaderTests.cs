@@ -49,9 +49,8 @@ public sealed class ModelCatalogBundledLoaderTests
     [Test]
     public void Load_BundledSeedCatalog_CurrentGenerationArchitecturesDeclareAFloorAboveTheOldBaseline()
     {
-        // Pins the specific correction from the 2026-07-31 live evaluation: the Gemma 4 and Qwen3.5 families were
-        // measured NOT to load on b9692 (the runtime the app's own remediation banner used to build), and to load on
-        // b10201. Their floors must stay strictly above the old baseline, or the recommendation surface will once again
+        // Measured 2026-07-31: the Gemma 4 and Qwen3.5 families do NOT load on b9692 (an older remediation-banner
+        // build), and do load on b10201. Their floors must stay strictly above the old baseline, or the recommendation surface will once again
         // offer a user a model their runtime cannot open.
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
 

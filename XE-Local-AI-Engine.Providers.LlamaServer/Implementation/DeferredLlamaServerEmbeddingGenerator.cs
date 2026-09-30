@@ -14,9 +14,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     <strong>Lexical-fallback contract:</strong> every failure this generator can produce lands in the single
 ///     <see cref="HttpRequestException" /> / <see cref="IOException" /> set callers already handle, which keeps
-///     <see cref="EmbeddingPlaybookRetrievalRanker" />'s degrade-to-lexical path intact (wiki 03). The generator is
+///     <c>EmbeddingPlaybookRetrievalRanker</c>'s degrade-to-lexical path intact (wiki 03). The generator is
 ///     <see cref="IDisposable" /> and <strong>caller-owned</strong>
-///     (<see cref="ILocalModelProvider.CreateEmbeddingGenerator" />): disposing it disposes the inner adapter, while the supervisor still owns the process.
+///     (<see cref="Abstractions.ILocalModelProvider.CreateEmbeddingGenerator" />): disposing it disposes the inner adapter, while the supervisor still owns the process.
 /// </remarks>
 internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {

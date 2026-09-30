@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Training.Implementation;
 /// <remarks>
 ///     <strong>Caller contract:</strong> the host must also register an <see cref="ITrainingRuntimeEventPublisher" />.
 ///     A no-op default is registered here so provider-only and test hosts resolve, and the Client host replaces it with
-///     the SignalR-backed publisher — <see cref="ServiceCollectionDescriptorExtensions.TryAddSingleton{TService}" />
+///     the SignalR-backed publisher — <see cref="ServiceCollectionDescriptorExtensions.TryAddSingleton{TService}(IServiceCollection)" />
 ///     means whichever the host registers first wins, so the host registers before calling this.
 /// </remarks>
 public static class TrainingServiceCollectionExtensions

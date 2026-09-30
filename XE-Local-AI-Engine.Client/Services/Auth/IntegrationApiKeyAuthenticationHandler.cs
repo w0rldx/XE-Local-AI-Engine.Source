@@ -49,7 +49,7 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
     ///     credential made a call. The trigger allowlist is deliberately NOT a claim — the accept path and the access helper re-read the key row, so
     ///     re-scoping takes effect on the next request, not at the next token mint. A missing, malformed, unknown or REVOKED key are one
     ///     <see cref="AuthenticateResult.Fail(string)" /> and one 401 with no distinguishing body: saying a key was real but revoked confirms a real
-    ///     credential. Authorisation-shaped outcomes downstream are a 404 identical to "unknown" (R1-4, R2-6).
+    ///     credential. Authorisation-shaped outcomes downstream are a 404 identical to "unknown" (ADR 0008 R1-4).
     /// </remarks>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {

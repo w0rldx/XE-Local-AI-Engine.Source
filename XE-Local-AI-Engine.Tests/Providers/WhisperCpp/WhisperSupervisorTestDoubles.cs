@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 /// </summary>
 /// <remarks>
 ///     Nothing here is copied out of the stable-diffusion.cpp doubles file — that file is read-only for this slice.
-///     The deterministic clock is the repo's own <see cref="XE_Local_AI_Engine.Tests.Testing.ManualTimeProvider" />,
+///     The deterministic clock is the repo's own <see cref="ManualTimeProvider" />,
 ///     which is the only double in this repository that also overrides timer creation; the supervisor's reaper loop is
 ///     a delay over its injected provider, so a now-only fake would leave it waiting in wall-clock time and turn the
 ///     test into a sleep in disguise.

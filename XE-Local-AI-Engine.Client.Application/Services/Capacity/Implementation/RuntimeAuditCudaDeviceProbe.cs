@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     enumerate zero devices, and otherwise defers to <see cref="DefaultCudaDeviceProbe" />.
 /// </summary>
 /// <remarks>
-///     The default probe only checks that the driver library exists, so a box whose driver enumerates no CUDA device still reads as present
+///     The default probe only checks that the driver library exists, so a machine whose driver enumerates no CUDA device still reads as present
 ///     and the whisper/sd CUDA daemon crashes on first use. The audit is only peeked, never computed: this probe runs synchronously on the
 ///     spawn path, and <c>--list-devices</c> is far too slow for it.
 /// </remarks>
@@ -49,7 +49,7 @@ public sealed class RuntimeAuditCudaDeviceProbe : ICudaDeviceProbe
     }
 
     /// <summary>
-    ///     True only when the CUDA llama.cpp build RAN and saw zero devices on a box that advertises a GPU. A CPU variant chosen on a GPU box,
+    ///     True only when the CUDA llama.cpp build RAN and saw zero devices on a machine that advertises a GPU. A CPU variant chosen on a GPU machine,
     ///     or a Vulkan build without an ICD, says nothing about the CUDA driver, so neither rules CUDA out.
     /// </summary>
     internal static bool CudaEnumeratesNoDevice(RuntimeDeviceAuditState? audit)

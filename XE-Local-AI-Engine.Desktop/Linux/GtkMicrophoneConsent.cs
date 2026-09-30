@@ -116,7 +116,7 @@ internal sealed class GtkMicrophoneConsent
             }
             catch (Exception)
             {
-                /* Never unwind a native callback. */
+                // Never unwind a native callback.
             }
         }
 

@@ -30,7 +30,7 @@ internal static class BenchmarkLaunchIdentityScheme
     public static void RequireCurrent(BenchmarkRunLaunchIntent? intent)
     {
         // No recorded intent at all (a row created before launch evidence existed) has nothing to compare, so nothing
-        // straddles. A recorded intent with a NULL scheme is a pre-slice freeze, i.e. scheme 1.
+        // straddles. A recorded intent with a NULL scheme predates the scheme column, i.e. scheme 1.
         if (intent is null)
         {
             return;

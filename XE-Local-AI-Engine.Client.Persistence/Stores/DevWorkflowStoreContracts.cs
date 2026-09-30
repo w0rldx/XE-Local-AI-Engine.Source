@@ -291,7 +291,7 @@ public sealed record DevWorkflowNodeRunSnapshot
     public required long CreatedAtUtc { get; init; }
 
     // The cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a fake
-    // store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
+    // store — keeps compiling and reads back exactly what a row written before these columns existed reads back: nulls.
     public long? InputTokens { get; init; }
 
     public long? OutputTokens { get; init; }
@@ -319,7 +319,7 @@ public sealed record DevWorkflowNodeRunSnapshot
     // Trailing: the thirteenth cost column, how much of AgentTurnMs was a local runtime warming (see the entity).
     public long? ModelReadinessMs { get; init; }
 
-    // Trailing: the fourteenth and fifteenth, what the box looked like when the serving model was last loaded. A warm
+    // Trailing: the fourteenth and fifteenth, what the host looked like when the serving model was last loaded. A warm
     // run reports the EARLIER load's figures; ModelReadinessMs tells the reader which it is (see the entity).
     public long? VramFreeAtLoadBytes { get; init; }
 
@@ -367,7 +367,7 @@ public sealed record DevWorkflowNodeTelemetry
     // turns warmed one. Trailing for the same positional-record reason as the twelve above it.
     public long? ModelReadinessMs { get; init; }
 
-    // The VRAM the box had free, and the VRAM admission reserved, at the most recent successful load of the model that
+    // The VRAM the host had free, and the VRAM admission reserved, at the most recent successful load of the model that
     // served this run. Observational only, and possibly an EARLIER load than this run (see the entity).
     public long? VramFreeAtLoadBytes { get; init; }
 

@@ -165,7 +165,7 @@ public sealed class ExternalAppStateObserverTests
         await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]);
         harness.Time.Advance(TimeSpan.FromSeconds(15));
 
-        await AssertEx.EventuallyAsync(() => harness.ReadAsync(harness.InstalledId).GetAwaiter().GetResult() is { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
+        await AssertEx.EventuallyAsync(async () => await harness.ReadAsync(harness.InstalledId) is { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
             TestBudgets.Contended,
             "One interval elapsed and the observer never noticed the missing container.");
 

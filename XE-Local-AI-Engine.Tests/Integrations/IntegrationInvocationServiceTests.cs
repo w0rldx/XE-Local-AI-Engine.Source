@@ -31,7 +31,7 @@ public sealed class IntegrationInvocationServiceTests
         AssertEx.Equal(expected: 1, harness.Executions.CreatedSessions.Count);
         AssertEx.True(harness.Queue.Reader.TryRead(out var queued) && queued == executionId, "The admitted execution must reach the coordinator's queue.");
 
-        // R4-1's order: the durable rows come first, the owned conversation and the seed afterwards, at the id the
+        // ADR 0008 R4-1's order: the durable rows come first, the owned conversation and the seed afterwards, at the id the
         // session row already recorded.
         Received.InOrder(() =>
         {
@@ -108,7 +108,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WhenTheKeyIsRevokedInsideTheAdmissionTransaction_IsStillUnauthorizedAndWritesNothing()
     {
-        // The window the round-four ruling closed: a caller holds an authenticated request open, is revoked, and would
+        // The window ADR 0008 round four closes: a caller holds an authenticated request open, is revoked, and would
         // otherwise still create durable work. The transaction re-reads the row, so it cannot.
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");

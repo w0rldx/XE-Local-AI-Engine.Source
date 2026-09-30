@@ -170,7 +170,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     [Test]
     public async Task PythonTests_HangingTestBody_IsBoundedByTheCriterionTimeout_NotTheNodeCeiling()
     {
-        // F-62: the harness's per-call deadline cannot reach a test body that hangs in the parent itself.
+        // The harness's per-call deadline cannot reach a test body that hangs in the parent itself.
         var result = await VerifyAsync("def solve(n):\n    return n * 2\n",
             "import time\ntime.sleep(120)\n",
             criterionTimeoutSeconds: 5,
@@ -185,7 +185,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     [Test]
     public async Task PythonTests_TestBodyThatOutlivesTheCriterionTimeout_FailsEvenThoughItWouldPass()
     {
-        // Codex P2: with only per-call deadlines and a sandbox grace, a 6 s body under a 5 s criterion PASSED.
+        // With only per-call deadlines and a sandbox grace, a 6 s body under a 5 s criterion would pass.
         var result = await VerifyAsync("def solve(n):\n    return n * 2\n",
             "import time\ntime.sleep(6)\nassert solve(10) == 20\n",
             criterionTimeoutSeconds: 5,
@@ -199,7 +199,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     [Test]
     public async Task PythonTests_DeadlineInsideAnExpectedFailure_StillScores0InTheRealJail()
     {
-        // Codex round 2: a deadline that unittest files as an expected failure must still fail the criterion.
+        // A deadline that unittest files as an expected failure must still fail the criterion.
         var result = await VerifyAsync("def solve(n):\n    return n * 2\n", """
                                                                             import time
                                                                             import unittest

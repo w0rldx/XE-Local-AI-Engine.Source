@@ -18,10 +18,9 @@ export interface ActiveImageModelDownloads {
 /**
  * Tracks EVERY in-flight image-model download rather than a single pending slot.
  *
- * The manager used to hold one `pendingModelName`, which meant starting one download disabled the Install button on
- * every other model — fine while the form could only describe one hand-typed model, wrong the moment a catalog offers
- * several. This mirrors the GGUF lane's `useActiveGgufDownloads`: a set of tracked names reconciled against the
- * coordinator's status list.
+ * A single pending name would disable the Install button on every other model the moment one download starts, and
+ * the catalog offers several. This mirrors the GGUF lane's `useActiveGgufDownloads`: a set of tracked names
+ * reconciled against the coordinator's status list.
  *
  * It polls instead of subscribing, because the image lane has no download hub yet (the GGUF one pushes over SignalR).
  * The poll is gated on there being something to watch, so an idle page issues no requests.

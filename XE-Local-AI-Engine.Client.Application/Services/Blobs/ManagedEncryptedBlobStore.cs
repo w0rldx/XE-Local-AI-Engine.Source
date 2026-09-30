@@ -6,31 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-internal enum ManagedBlobReadStatus
-{
-    Found,
-    Missing,
-    Tampered,
-    SizeMismatch,
-    HashMismatch
-}
-
-internal sealed class ManagedBlobWriteResult
-{
-    public required string OpaqueReference { get; init; }
-
-    public required string ContentHash { get; init; }
-
-    public required long ByteCount { get; init; }
-}
-
-internal sealed class ManagedBlobReadResult
-{
-    public required ManagedBlobReadStatus Status { get; init; }
-
-    public required ReadOnlyMemory<byte> Content { get; init; }
-}
-
 /// <summary>
 ///     The shared body behind the managed blob conventions: AES-GCM under the node key, an AAD binding scope id, blob id
 ///     and a per-convention column name, write-verify-then-atomic-rename, and immutability.

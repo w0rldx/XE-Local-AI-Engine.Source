@@ -395,7 +395,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WhenBenchmarkMatrixNamesNoModels_ReturnsBadRequestNamingTheRule()
     {
-        // F-60: accepted at create, this job failed every fire with only a generic message on the run row.
+        // Accepted at create, this job failed every fire with only a generic message on the run row.
         var payload = await PostJobExpectingBadRequestAsync(new
         {
             templateId = "run-benchmark-batch",
@@ -411,7 +411,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WhenStartTimeIsOutOfRange_ReturnsBadRequestRatherThanAServerError()
     {
-        // F-60: nanoseconds sent where Unix milliseconds belong used to reach DateTimeOffset and surface as a 500.
+        // Nanoseconds sent where Unix milliseconds belong used to reach DateTimeOffset and surface as a 500.
         var payload = await PostJobExpectingBadRequestAsync(new
         {
             templateId = "run-benchmark-batch",
@@ -538,7 +538,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WithoutMisfirePolicy_StoresTheTemplateDefault_AndUpdateDoesToo()
     {
-        // F-33: an omitted misfirePolicy resolves to the template's defaultMisfirePolicy (SkipMissed), never Smart.
+        // An omitted misfirePolicy resolves to the template's defaultMisfirePolicy (SkipMissed), never Smart.
         var factory = Factory;
         using var client = factory.CreateClient();
 
@@ -566,7 +566,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task SoftDeletedJob_ActionsReturnNotFound_AndSecondDeleteIsNoContent()
     {
-        // F-35: enable/disable/trigger on a soft-deleted job are 404 like any missing job, and a repeated DELETE stays 204.
+        // Enable/disable/trigger on a soft-deleted job are 404 like any missing job, and a repeated DELETE stays 204.
         var factory = Factory;
         using var client = factory.CreateClient();
         var jobId = await CreateManualRecommendationJobAsync(factory, client);

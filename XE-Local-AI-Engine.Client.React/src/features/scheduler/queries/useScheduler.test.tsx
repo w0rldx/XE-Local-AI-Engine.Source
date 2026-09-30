@@ -21,7 +21,6 @@ const { mutationFns } = vi.hoisted(() => ({
 // Builds the single-element generated query key shape the read-side factory mocks return. Centralizes the `_id`
 // discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
 function fakeQueryKey(operationId: string): unknown {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

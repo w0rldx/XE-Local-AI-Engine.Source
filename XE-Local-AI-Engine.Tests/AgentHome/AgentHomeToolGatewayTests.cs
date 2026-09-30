@@ -64,9 +64,9 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenTheGoalLoopNeverRan_SaysTheGoalWasNotExecuted()
     {
-        // The honesty clause, first direction. Live round 2 watched a model receive "completed (exit code 0) … no file
-        // changes" for an explicit edit goal and have to reason its way to the truth unaided. A run whose goal loop
-        // never started must SAY so, in the reason the executor gave.
+        // The honesty clause, first direction. A model handed "completed (exit code 0) … no file changes" for an
+        // explicit edit goal has to reason its way to the truth unaided, so a run whose goal loop never started must
+        // SAY so, in the reason the executor gave.
         var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
             {
                 RunId = "run-notrun",

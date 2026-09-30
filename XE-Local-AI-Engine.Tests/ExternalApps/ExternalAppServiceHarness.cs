@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     One node's worth of External Apps runtime: a real SQLite-backed instance store, the real service, the real
-///     gate and runner, and S0's lying container fake behind a resolver stand-in.
+///     gate and runner, and the <see cref="FakeDockerRuntimeClient" /> container fake behind a resolver stand-in.
 ///     <para>
 ///         The store is the real one on a real database file rather than a substitute, because half of what these
 ///         tests assert IS the compare-and-swap: a substituted store would happily accept a version no row ever had.
@@ -780,7 +780,7 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
 }
 
 /// <summary>
-///     S0's fake with one thing it cannot do on its own: hold a pull open until a test releases it. Everything else
+///     The container fake with one thing it cannot do on its own: hold a pull open until a test releases it. Everything else
 ///     delegates, so the branches under test are still the ones the repo's own container fake decides.
 /// </summary>
 internal sealed class GatedContainerRuntime : IContainerRuntime

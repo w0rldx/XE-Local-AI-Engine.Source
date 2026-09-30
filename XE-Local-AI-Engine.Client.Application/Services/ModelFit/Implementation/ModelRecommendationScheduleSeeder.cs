@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 ///     schedule so the React model-fit "Refresh now" button works without the operator hand-creating a schedule.
 /// </summary>
 /// <remarks>
-///     The seeded definition uses <see cref="Persistence.Entities.ScheduleKind.Manual" />: a durable Quartz job with
+///     The seeded definition uses <see cref="Client.Persistence.Entities.ScheduleKind.Manual" />: a durable Quartz job with
 ///     no trigger that never auto-fires, fired only on demand via <c>TriggerNowAsync</c>. It seeds only when NO
 ///     non-deleted definition already references the <c>model-recommendation-check</c> template, so re-runs never
 ///     duplicate it and a deleted seed is re-created on the next startup. Seeding is best-effort — expected failures
@@ -21,7 +21,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     private const string SeedDisplayName = "Model recommendation refresh (on demand)";
 
     private const string SeedDescription =
-        "Runs the local model advisor on demand to refresh the cached box-aware GGUF recommendation snapshot. " +
+        "Runs the local model advisor on demand to refresh the cached hardware-aware GGUF recommendation snapshot. " +
         "This is a manual, on-demand schedule (no automatic firing) — use Refresh now to run it.";
 
     private const string SeedTimeZoneId = "UTC";
@@ -33,7 +33,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     ///     top-5 limit.
     /// </summary>
     /// <remarks>
-    ///     No approved-image or provider-name fields — the advisor runs box-aware GGUF recommendation in-process.
+    ///     No approved-image or provider-name fields — the advisor runs hardware-aware GGUF recommendation in-process.
     ///     Mirrors the handler's own <c>DefaultParameters</c> so the seeded job runs the same recommendation as a
     ///     hand-created one.
     /// </remarks>

@@ -16,7 +16,7 @@ public sealed class GraphWorkflowOptions
 
     /// <summary>Whether the graph-workflow surface answers. It defaults ON.</summary>
     /// <remarks>
-    ///     On per ruling D9: the editor, the run engine and the run view are verified end to end, so a node ships
+    ///     On by default: the editor, the run engine and the run view are verified end to end, so a node ships
     ///     with them offered. The switch did not go away — an operator who sets it to <see langword="false" /> still
     ///     gets a 404 for the whole prefix from the request-path gate in <c>Program</c>, and that gate's own default
     ///     moved with this one.

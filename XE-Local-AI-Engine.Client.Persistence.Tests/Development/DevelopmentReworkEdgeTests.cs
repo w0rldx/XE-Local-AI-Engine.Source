@@ -123,7 +123,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
-    ///     Live 2026-09-04: an operator's amendment has to reach the REVIEWER, and it has to still be there several
+    ///     An operator's amendment has to reach the REVIEWER, and it has to still be there several
     ///     hops later — the round it corrects is the review, not the coder round it starts. It is also not read as the
     ///     previous round's feedback, so the prompts that rank the two can never render the same sentence twice.
     ///     <para>
@@ -359,10 +359,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
-    ///     Live 2026-09-05: the round cap is the ONE thing about a Dev Mode task an operator can change, and a
+    ///     The round cap is the ONE thing about a Dev Mode task an operator can change, and a
     ///     Retry buys exactly one round of it. The widening is also what pays for the single edge out of
-    ///     <c>Blocked</c>: without it the task would be handed a round it has no budget to finish, which is the
-    ///     two-second re-block the live round measured twice over.
+    ///     <c>Blocked</c>: without it the task would be handed a round it has no budget to finish, which would
+    ///     re-block it within seconds.
     /// </summary>
     [Test]
     public async Task AnOperatorRetryWidensTheRoundCapByOne_AndIsTheOnlyEdgeOutOfBlocked()
@@ -830,10 +830,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     /// <summary>
     ///     The FAILED deterministic gate's hop, and the livelock it exists to close.
     ///     <para>
-    ///         The gate used to return the task to <c>InProgress</c>, which is byte-for-byte the state that means
-    ///         "implemented, validate it" — a succeeded coder attempt with no current evidence — so the next action was
-    ///         the same validation again. Measured live on 2026-09-04: 289 restore/build/test runs on one task in 25
-    ///         minutes, 282 validation-report rows, zero coder rounds, ended only by cancelling the run.
+    ///         Returning the task to <c>InProgress</c> would be byte-for-byte the state that means "implemented,
+    ///         validate it" — a succeeded coder attempt with no current evidence — so the next action would be the same
+    ///         validation again, round after round, with zero coder rounds until the run is cancelled.
     ///     </para>
     /// </summary>
     [Test]

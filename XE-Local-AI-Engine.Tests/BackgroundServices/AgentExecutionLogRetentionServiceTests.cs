@@ -147,7 +147,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         // The store stamps CreatedAtUtc from its clock, so seed each row through a store wired to a fixed clock — this
         // makes the row's age controllable without touching raw SQL.
         var dbContext = scopeProvider.GetRequiredService<NodeChatDbContext>();
-        var store = new AgentExecutionLogStore(dbContext, new FixedTimeProvider(createdAtUtc));
+        var store = new AgentExecutionLogStore(dbContext, new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(createdAtUtc)));
         var added = await store.AddAsync(new AgentExecutionLogInput
         {
             AgentDefinitionId = agentId,
@@ -183,20 +183,5 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly long _milliseconds;
-
-        public FixedTimeProvider(long milliseconds)
-        {
-            _milliseconds = milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
     }
 }

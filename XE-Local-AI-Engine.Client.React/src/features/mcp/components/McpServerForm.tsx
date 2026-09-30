@@ -131,7 +131,8 @@ export function McpServerForm({
 		if (!result.success) {
 			const nextErrors: Record<string, string> = {};
 			for (const issue of result.error.issues) {
-				nextErrors[issueKey(issue.path)] = issue.message;
+				// Custom issues carry an i18n key; built-in Zod issues carry their own message.
+				nextErrors[issueKey(issue.path)] = issue.code === "custom" ? t(issue.message) : issue.message;
 			}
 			setErrors(nextErrors);
 			return;
@@ -139,7 +140,7 @@ export function McpServerForm({
 
 		setErrors({});
 		onSubmit(candidate);
-	}, [env.entries, onSubmit, values]);
+	}, [env.entries, onSubmit, t, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 

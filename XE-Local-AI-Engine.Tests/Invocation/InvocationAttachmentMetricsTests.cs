@@ -77,7 +77,7 @@ public sealed class InvocationAttachmentMetricsTests
     {
         using var capture = new NodeMeterCapture();
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(DateTimeOffset.UnixEpoch);
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var tracker = CreateTracker(out _);
         using var attachment = tracker.Attach(invocationId);
         attachment.Dispose();
@@ -99,7 +99,7 @@ public sealed class InvocationAttachmentMetricsTests
     {
         dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var captured = dispatcher;
-        return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => captured), new FakeClock(DateTimeOffset.UnixEpoch));
+        return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => captured), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
     }
 
     private static void RaiseTerminal(IWorkerEventDispatcher dispatcher, Guid invocationId)
@@ -115,27 +115,6 @@ public sealed class InvocationAttachmentMetricsTests
             LastUpdatedAt = DateTimeOffset.UnixEpoch
         };
         dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(state));
-    }
-
-    // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public FakeClock(DateTimeOffset start)
-        {
-            _utcNow = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
-        }
     }
 
     // Sums every long measurement on one instrument, which for an UpDownCounter IS its current value.

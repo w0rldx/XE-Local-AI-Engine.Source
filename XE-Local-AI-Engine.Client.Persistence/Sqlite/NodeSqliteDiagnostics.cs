@@ -92,9 +92,8 @@ public static class NodeSqliteDiagnostics
             {
                 attachment.WriteNative(resultCode, message, ref text);
             }
-#pragma warning disable CA1031 // A logging failure must not unwind into SQLite; the message is lost, the database call is not.
+            // A logging failure must not unwind into SQLite; the message is lost, the database call is not.
             catch (Exception)
-#pragma warning restore CA1031
             {
                 // Swallowed on purpose: see the comment on this method.
             }

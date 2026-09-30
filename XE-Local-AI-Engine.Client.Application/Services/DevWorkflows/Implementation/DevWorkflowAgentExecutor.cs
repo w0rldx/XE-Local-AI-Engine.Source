@@ -767,7 +767,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </remarks>
     private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        // Targeted, not the whole log: this used to read and decrypt every event the session ever wrote to keep one row.
+        // Targeted, not the whole log: reading and decrypting every event the session wrote to keep one row scales with the session.
         var completion = await _sessionStore.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, cancellationToken);
         if (completion?.DetailJson is not { Length: > 0 } detail)
         {

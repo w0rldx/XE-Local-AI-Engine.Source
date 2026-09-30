@@ -368,26 +368,13 @@ public sealed class GgufImportTransactionCoordinatorTests
             NullLogger<GgufImportTransactionCoordinator>.Instance);
     }
 
-    private static async Task WaitForPhaseAsync(GgufImportTransactionCoordinator coordinator,
+    // real-timer: the import runs detached and publishes nothing but its status, so the status is the only thing to poll.
+    private static Task WaitForPhaseAsync(GgufImportTransactionCoordinator coordinator,
         Guid operationId,
-        GgufAcquisitionPhase phase)
-    {
-        // real-timer: the import runs detached and publishes nothing but its status. A fixed attempt count made the
-        // bound a budget the box could spend on scheduling alone; this is a failure deadline sized for a contended
-        // runner, and a green run returns on the first matching read.
-        var deadline = DateTimeOffset.UtcNow + TestBudgets.Contended;
-        do
-        {
-            if (coordinator.GetStatus(operationId)?.Phase == phase)
-            {
-                return;
-            }
-
-            await Task.Delay(20);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        throw new TimeoutException($"Import operation '{operationId}' did not reach phase {phase}.");
-    }
+        GgufAcquisitionPhase phase) =>
+        AssertEx.EventuallyAsync(() => coordinator.GetStatus(operationId)?.Phase == phase,
+            TestBudgets.Contended,
+            $"Import operation '{operationId}' did not reach phase {phase}.");
 
     private static GgufImportInspection AcceptedInspection(string displayName) =>
         new()

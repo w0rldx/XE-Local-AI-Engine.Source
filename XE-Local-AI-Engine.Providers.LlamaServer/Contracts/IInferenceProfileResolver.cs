@@ -9,7 +9,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     so the supervisor depends only on its own contract and never on <c>Client.Application</c>, preserving the
 ///     one-way <c>Application → Providers</c> arrow. The real DB-backed implementation, which reads frozen and explored
 ///     profiles and runs invalidation, lives in <c>Client.Application</c> and is DI-injected over
-///     <see cref="DefaultInferenceProfileResolver" />, which always explores so the supervisor self-satisfies.
+///     <see cref="Implementation.DefaultInferenceProfileResolver" />, which always explores so the supervisor self-satisfies.
 /// </remarks>
 public interface IInferenceProfileResolver
 {

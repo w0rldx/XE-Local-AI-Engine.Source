@@ -212,8 +212,8 @@ export function useDevWorkflowRunHub(runId: string | undefined, workItemId: stri
 		};
 
 		// Polling is switched on by whatever breaks the live feed, and off ONLY by a subscribe that succeeded. A transport
-		// that drops after a good subscribe used to be invisible here: the catch above never ran again, so the page kept
-		// its "connected" state and painted frozen data — no alert, no refetch — until somebody reloaded it.
+		// that drops after a good subscribe never re-enters the catch above, so without this the page would keep its
+		// "connected" state and paint frozen data — no alert, no refetch — until somebody reloaded it.
 		const degrade = (connectionState: DevWorkflowRunLiveState["connectionState"]): void => {
 			if (!disposed) {
 				setState((current) => ({ ...current, connectionState, pollIntervalMs: DEV_WORKFLOW_POLL_INTERVAL_MS }));

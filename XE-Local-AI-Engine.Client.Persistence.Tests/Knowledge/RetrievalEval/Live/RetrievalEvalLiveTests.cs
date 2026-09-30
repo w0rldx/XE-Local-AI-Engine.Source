@@ -16,8 +16,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
-///     OPT-IN real-model retrieval eval (PLAN retrieval-eval-2026-09-27 §4): real llama-server embedder and rerankers,
-///     REAL vectors, the §4.3 configurations through the real search service and clients. Writes JSON + Markdown.
+///     OPT-IN real-model retrieval eval: real llama-server embedder and rerankers, REAL vectors, every measured
+///     configuration through the real search service and clients. Writes JSON + Markdown.
 /// </summary>
 /// <remarks>
 ///     Only the process supervisor is a stub, over servers this test owns (<see cref="KnowledgeSearchService" />,

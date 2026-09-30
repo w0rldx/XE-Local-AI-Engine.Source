@@ -163,7 +163,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 						return;
 					}
 					// A server issue can name a key the canvas no longer holds. Selecting nothing is the honest answer;
-					// `selectEdge` on a missing id used to open an empty drawer over the canvas.
+					// `selectEdge` on a missing id would open an empty drawer over the canvas.
 					if (editor.edges.some((edge) => edge.id === subject)) {
 						selectEdge(subject);
 					}

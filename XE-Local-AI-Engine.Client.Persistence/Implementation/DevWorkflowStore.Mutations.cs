@@ -267,7 +267,7 @@ public sealed partial class DevWorkflowStore
         nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
         nodeRun.ModelReadinessMs = telemetry.ModelReadinessMs ?? nodeRun.ModelReadinessMs;
 
-        // NOT the null-coalescing merge the columns above use: these two are one reading of the BOX at the run's load, so the first settle of an attempt that CARRIES
+        // NOT the null-coalescing merge the columns above use: these two are one reading of the host at the run's load, so the first settle of an attempt that CARRIES
         // a reading wins; a later one would splice in a post-work reload. A settle carrying NEITHER leaves the pair open, which a re-attempt's ClearTelemetry re-opens.
         if (nodeRun.VramFreeAtLoadBytes is null
             && nodeRun.VramAdmittedBytes is null

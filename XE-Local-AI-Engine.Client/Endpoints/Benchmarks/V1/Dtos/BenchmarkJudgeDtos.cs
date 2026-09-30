@@ -149,7 +149,3 @@ public sealed class BenchmarkRunJudgeResponse
     /// </summary>
     public IReadOnlyList<BenchmarkJudgeVerifierResponse>? Verifiers { get; init; }
 }
-
-/// <summary>
-///     A run's quant-fidelity numbers. Display only — perplexity and KL divergence are never ranking inputs.
-/// </summary>

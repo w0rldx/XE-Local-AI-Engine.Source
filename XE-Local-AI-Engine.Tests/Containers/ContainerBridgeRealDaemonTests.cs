@@ -170,7 +170,7 @@ public sealed class ContainerBridgeRealDaemonTests
         return new SkipTestException($"SKIPPED — the daemon at '{endpoint}' is ROOTFUL, and the bridge is expected to be dark there: a container's "
                                      + "traffic to one of this host's own addresses keeps the container's source address, so the same-host peer guard "
                                      + "refuses it before the token gate. That is the deferred limitation in ADR 0011 (admit the subnets of engine-owned "
-                                     + "networks), not a defect this run could find. Nothing about the bridge is proven on this box; run these against a "
+                                     + "networks), not a defect this run could find. Nothing about the bridge is proven on this host; run these against a "
                                      + "rootless daemon.");
     }
 
@@ -208,20 +208,17 @@ public sealed class ContainerBridgeRealDaemonTests
     {
         private readonly WebApplication _app;
         private readonly List<string> _containers = [];
-        private readonly ContainerRuntimeOptions _options;
         private readonly ContainerBridgeAddressWatcher _watcher;
         private string? _lastContainerId;
         private int _nameCounter;
         private string? _networkId;
 
-        private BridgeBox(ContainerRuntimeOptions options,
-            IContainerRuntime runtime,
+        private BridgeBox(IContainerRuntime runtime,
             WebApplication app,
             ContainerBridgeAddressWatcher watcher,
             string containerFacingEndpoint,
             string validToken)
         {
-            _options = options;
             _app = app;
             _watcher = watcher;
             Runtime = runtime;
@@ -321,7 +318,7 @@ public sealed class ContainerBridgeRealDaemonTests
             ContainerBridgePipeline.Map(app, endpoint);
             await app.StartAsync();
 
-            return new BridgeBox(options, CreateRuntime(options), app, watcher, endpoint.ContainerFacingEndpoint, validToken);
+            return new BridgeBox(CreateRuntime(options), app, watcher, endpoint.ContainerFacingEndpoint, validToken);
         }
 
         /// <summary>Runs one BusyBox container that wgets the bridge and exits; returns its exit code.</summary>

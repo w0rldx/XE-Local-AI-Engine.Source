@@ -47,8 +47,8 @@ public sealed class ToolRelevanceCoreSetTests
     {
         var core = BuildCoreSet().GetCoreToolNames();
 
-        AssertEx.False(core.Contains("mcp_write_file"), "An MCP tool is ranked, never core — the amended D6 ruling.");
-        AssertEx.False(core.Contains("custom__deploy"), "A custom tool is ranked, never core — the amended D6 ruling.");
+        AssertEx.False(core.Contains("mcp_write_file"), "An MCP tool is ranked, never core.");
+        AssertEx.False(core.Contains("custom__deploy"), "A custom tool is ranked, never core.");
     }
 
     private static ToolRelevanceCoreSet BuildCoreSet()

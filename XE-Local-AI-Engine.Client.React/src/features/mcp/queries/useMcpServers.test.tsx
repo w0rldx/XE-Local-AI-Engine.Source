@@ -22,7 +22,6 @@ const { mutationFns } = vi.hoisted(() => ({
 // Builds the single-element generated query key shape `listMcpServersQueryKey()` returns. Centralizes the `_id`
 // discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
 function fakeListKey(): unknown {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: "listMcpServers" }];
 }
 
@@ -35,7 +34,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	// Read-side factories are imported by the module under test but unused in these mutation tests.
 	listMcpServersOptions: vi.fn(() => ({ queryKey: fakeListKey(), queryFn: vi.fn() })),
 	getMcpServerToolsOptions: vi.fn(() => ({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getMcpServerTools" }],
 		queryFn: vi.fn(),
 	})),

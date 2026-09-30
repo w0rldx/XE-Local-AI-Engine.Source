@@ -238,7 +238,7 @@ indefinitely.
 
 A materially higher process-visible budget than global free VRAM is **WDDM
 reader divergence**, but the raw gap is not by itself proof of external
-pressure: the clean dev-box baseline is approximately 950 MiB and idle WDDM
+pressure: the clean development-machine baseline is approximately 950 MiB and idle WDDM
 samples can be higher. Benchmark admission first subtracts the configured
 ambient baseline, then applies the pre-spawn materiality thresholds; pressure
 introduced after load is judged independently as growth beyond the post-load

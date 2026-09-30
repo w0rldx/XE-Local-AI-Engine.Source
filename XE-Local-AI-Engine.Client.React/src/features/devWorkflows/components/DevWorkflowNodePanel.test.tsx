@@ -156,7 +156,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-session-purged")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-session-link")).toBeNull();
 		// And nothing mounts against the dead conversation id: an empty chat pane is indistinguishable from a session
-		// that has simply not spoken yet, which was the explicitly rejected round-1 behaviour.
+		// that has simply not spoken yet, which is explicitly rejected behaviour.
 		expect(screen.queryByTestId("embedded-chat")).toBeNull();
 		expect(hubMock.acquire).not.toHaveBeenCalled();
 	});
@@ -510,7 +510,7 @@ describe("DevWorkflowNodePanel", () => {
 		// `DevWorkflowStateMachine.EdgeState` a Failed or Cancelled source makes the edge DEAD, and that dead edge is
 		// precisely why an `All` join skips. The panel said the opposite of what was about to happen.
 		//
-		// A later ruling split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
+		// The third case is split back out: a Skipped source is WAIVED, because a skip a person chose is not a
 		// reason to throw away what its siblings carried. WHICH skip that is comes off the row as `skipWaived`, which
 		// the server computes: the ancestor that decides it need not be in this list at all.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {

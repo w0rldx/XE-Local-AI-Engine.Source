@@ -140,12 +140,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Arguments = arguments
         }, cancellation.Token);
 
-        // Poll until the task is confirmed in-flight (process started); exit early if the task
-        // completes unexpectedly (process failed to start) rather than waiting a fixed duration.
-        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
-        {
-            await Task.Delay(5);
-        }
+        // ExecuteAsync starts the child and registers it in flight before its first await, so the returned task is the
+        // gate: still incomplete here means the 30 s command is running.
+        AssertEx.False(executeTask.IsCompleted, "the command must be in flight when ExecuteAsync yields.");
 
         await cancellation.CancelAsync();
 
@@ -543,11 +540,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Executable = executable,
             Arguments = arguments
         });
-        // Poll until the task is confirmed in-flight before killing the sandbox.
-        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
-        {
-            await Task.Delay(5);
-        }
+        // ExecuteAsync starts the child and registers it in flight before its first await, so the returned task is the
+        // gate: still incomplete here means the 30 s command is running.
+        AssertEx.False(executeTask.IsCompleted, "the command must be in flight when ExecuteAsync yields.");
 
         await provider.KillAsync(handle);
 
@@ -570,11 +565,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Arguments = arguments,
             Timeout = TimeSpan.FromSeconds(30)
         });
-        // Poll until the task is confirmed in-flight before cancelling the command.
-        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
-        {
-            await Task.Delay(5);
-        }
+        // ExecuteAsync starts the child and registers it in flight before its first await, so the returned task is the
+        // gate: still incomplete here means the 30 s command is running.
+        AssertEx.False(executeTask.IsCompleted, "the command must be in flight when ExecuteAsync yields.");
 
         await provider.CancelCommandAsync(handle, "cancelcmd-1");
 
@@ -1033,7 +1026,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         var running = provider.ExecuteAsync(handle,
             JailShellCommand("disk-snapshot", "dd if=/dev/zero of=fill.bin bs=1M count=8 2>/dev/null; sleep 5"));
 
-        // Long enough for the command to be well inside its run, short enough that several watchdog ticks still follow.
+        // real-timer: puts the attach inside a real child's run (dd, then sleep 5). Launch already snapshotted the
+        // ceiling, so any landing point gives the same outcome; the delay makes the mid-write case the likely one.
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         _ = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
         {

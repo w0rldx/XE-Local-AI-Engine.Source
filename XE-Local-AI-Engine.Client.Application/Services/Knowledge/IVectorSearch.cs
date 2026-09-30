@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// <remarks>
 ///     Implementations must only ever compare vectors built by the SAME embedding model: a same-dimension,
 ///     different-model vector is incomparable and would rank as valid garbage. Scoped: an implementation reads through
-///     the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.
+///     the request-scoped <see cref="Client.Persistence.NodeChatDbContext" /> connection.
 /// </remarks>
 public interface IVectorSearch
 {

@@ -262,9 +262,8 @@ internal sealed partial class ExternalAppService
         {
             await FailAsync(services.Store, runtime, cursor, Cancelled());
         }
-#pragma warning disable CA1031 // A pipeline settles its own row; letting anything escape would strand the instance transient.
+        // A pipeline settles its own row; letting anything escape would strand the instance transient.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             await FailAsync(services.Store,
                 runtime,

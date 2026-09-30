@@ -529,7 +529,7 @@ internal sealed class DevWorkflowMaterializer
     }
 
     /// <summary>
-    ///     A decomposition that legitimately answered "there is no follow-up work" (ruling D12).
+    ///     A decomposition that legitimately answered "there is no follow-up work".
     /// </summary>
     /// <remarks>
     ///     The graph is left as it is — the join keeps its edge from this node and fires on it — and what is written is

@@ -42,11 +42,10 @@ export const transcriptionQueryIds = {
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one transcription endpoint. */
 function transcriptionInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 
-/** Invalidates every cached variant of one transcription endpoint. S3's hub pushes invalidate through this. */
+/** Invalidates every cached variant of one transcription endpoint. The hub's pushes invalidate through this. */
 export function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
 	return queryClient.invalidateQueries({ queryKey: transcriptionInvalidationKey(operationId) });
 }
@@ -195,7 +194,7 @@ export function useCaptureProcesses(enabled: boolean) {
 	});
 }
 
-// Attaches server-side per-application capture to a session that is ALREADY live (R30a): `live/start` first, this
+// Attaches server-side per-application capture to a session that is ALREADY live: `live/start` first, this
 // second, or the node answers 409 because there is no lane to push into. There is no scope argument — WASAPI captures
 // the target and its descendants, and the dialog's copy says so rather than offering a choice the platform lacks.
 export function useStartProcessCapture() {
@@ -207,7 +206,7 @@ export function useStartProcessCapture() {
 	});
 }
 
-// The transcription model catalogue with this box's installed flags and any download in flight. It polls itself while
+// The transcription model catalogue with this machine's installed flags and any download in flight. It polls itself while
 // a weight transfer is running: the poll condition lives in the data, so making it a caller parameter would have every
 // consumer mirror the same derivation.
 export function useTranscriptionModels() {
@@ -225,7 +224,7 @@ export function useTranscriptionModels() {
 	});
 }
 
-// Which model this box's hardware should run, and the footprint figures behind the answer. Separate from the model
+// Which model this machine's hardware should run, and the footprint figures behind the answer. Separate from the model
 // list — which carries only the recommended ID — because the reasoning (the backend it was sized for and the
 // resident footprint) is what turns "recommended" from an unexplained pick into an operator-readable one. The
 // answer follows the hardware, not a session, so it is cached for the page's lifetime.

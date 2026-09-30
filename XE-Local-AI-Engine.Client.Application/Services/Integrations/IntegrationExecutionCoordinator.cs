@@ -235,7 +235,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     /// <remarks>
     ///     Awaiting <see cref="ProcessOneAsync" /> here would hold the next id in the channel for the whole of the
     ///     current run, and every deadline control plus the sole writer of <c>Queued</c> lives inside that method, so
-    ///     R5-2's queue-age bound would measure the run ahead instead of the wait. The live-task count is bounded by
+    ///     ADR 0008 R5-2's queue-age bound would measure the run ahead instead of the wait. The live-task count is bounded by
     ///     the admission cap, because each task holds a non-terminal row against it. See
     ///     docs/adr/0008-external-integrations.md ("Invariants the coordinator enforces").
     /// </remarks>
@@ -346,7 +346,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
-            // R3-1: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
+            // ADR 0008 R3-1: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
             // event continues its OWN numbering; seeding below a lost-race event collides with an existing (execution_id, sequence) row on every restart.
             var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken);
             if (!_buffer.TryCreate(row.Id, seedSequence))
@@ -411,7 +411,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         var executionId = execution.Id;
 
-        // 1. Everything the run needs. A missing conversation or seed is the ONE shape R4-1's forward-running failure leaves behind — the execution row
+        // 1. Everything the run needs. A missing conversation or seed is the ONE shape ADR 0008 R4-1's forward-running failure leaves behind — the execution row
         //    commits before they are written — and it is failed, never repaired: the seed text is not recoverable, and a run against an empty seed is worse.
         var sessions = services.GetRequiredService<IIntegrationSessionStore>();
         var session = await sessions.GetByIdAsync(execution.SessionId, runToken);
@@ -546,7 +546,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             : null;
 
         //     And the session's own tool history: a caller-managed continuation replays each completed call and its result as real function content, so the
-        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (R6-1).
+        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (ADR 0008 R6-1).
         var conversationContext = ConversationContextBuilder.Build(history,
             seed,
             selectedPath: null,
@@ -557,7 +557,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             toolResultExcerptChars);
 
         // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam
-        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (R4-5): ADR 0008.
+        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (ADR 0008 R4-5).
         var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
         var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
         AllowedToolDto[] offeredTools =
@@ -705,7 +705,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // R5-2: the lease wait runs under the remaining budget — the dispatcher's first act is to await its SemaphoreSlim on this token, so the expiry
+        // ADR 0008 R5-2: the lease wait runs under the remaining budget — the dispatcher's first act is to await its SemaphoreSlim on this token, so the expiry
         // surfaces as an OperationCanceledException with no lease held. The token goes to the lease request and NOWHERE else: the run must not inherit it.
         using var queueDeadline = CancellationTokenSource.CreateLinkedTokenSource(runToken);
         queueDeadline.CancelAfter(TimeSpan.FromMilliseconds(remaining));
@@ -1072,7 +1072,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             failureSummary = "The execution's tool events could not be persisted.";
         }
 
-        // 10. ONE transaction (ruling R5-4): the status CAS, the terminal event at the reserved sequence, and both watermarks. Never Append for a terminal
+        // 10. ONE transaction (ADR 0008 R5-4): the status CAS, the terminal event at the reserved sequence, and both watermarks. Never Append for a terminal
         //     event — it publishes before the row exists — and never a CAS plus a separate insert: startup recovery scans only NON-terminal rows.
         if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary))
         {
@@ -1105,7 +1105,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 SessionId = session.Id,
                 Status = null,
                 // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
-                // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
+                // for exactly MaxPayloads would replay seven prior outputs where ADR 0008 R4-9(b) promises eight.
                 Limit = IntegrationPriorOutputsComposer.MaxPayloads + 1,
                 Offset = 0
             },

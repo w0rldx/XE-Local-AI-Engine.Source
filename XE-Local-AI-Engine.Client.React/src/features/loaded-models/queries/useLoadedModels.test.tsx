@@ -123,7 +123,6 @@ describe("useRunningModels (llama.cpp) polling", () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		const queryFn = vi.fn().mockResolvedValue({ items: [] });
 		runningModelsGenMock.listRunningModelsOptions.mockReturnValue({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "listRunningModels" }],
 			queryFn,
 		});

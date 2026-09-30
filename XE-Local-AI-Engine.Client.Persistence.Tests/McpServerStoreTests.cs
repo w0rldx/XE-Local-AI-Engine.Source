@@ -429,12 +429,12 @@ public sealed class McpServerStoreTests : IDisposable
 
         // The unique index on name uses NOCASE collation, so a case-only-different name collides with the existing
         // row and SQLite rejects the insert — matching the application service's case-insensitive name handling.
-        var exception = AssertEx.Throws<DbUpdateException>(() => store.AddAsync(CreateStdioInput() with
+        var exception = AssertEx.Throws<McpServerNameConflictException>(() => store.AddAsync(CreateStdioInput() with
             {
                 Name = "weather"
             }).GetAwaiter().GetResult(),
             "A name differing only in case must be rejected as a duplicate.");
-        AssertEx.True(exception.InnerException is SqliteException,
+        AssertEx.True(exception.InnerException is DbUpdateException { InnerException: SqliteException },
             "The duplicate should surface as a SQLite unique-constraint violation.");
     }
 

@@ -156,7 +156,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     An assigned id the store's Enabled fast path drops is logged BY ID ONLY, never the body or description, and
     ///     an empty picklist short-circuits with no store call. A skill whose stored Name no longer satisfies the
     ///     Agent Skills specification is dropped too, because constructing an <c>AgentInlineSkill</c> from one throws
-    ///     and takes down the whole turn: degrade, log, never fabricate, as <see cref="ProjectAllowedTools" /> does.
+    ///     and takes down the whole turn: degrade, log, never fabricate, as <see cref="ProjectAllowedToolsAsync" /> does.
     ///     This is the one choke point every skills consumer routes through, so <see cref="ProjectSkill" /> fences once.
     /// </remarks>
     private async Task<IReadOnlyList<ResolvedSkill>> ResolveSkillsAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
@@ -183,11 +183,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         List<Guid>? unbuildableIds = null;
         foreach (var skill in enabled)
         {
-            // MAAI001: scoped suppression, same rationale as AgentSkillService — the frontmatter validator is the code
-            // AgentInlineSkill's constructor runs, so this predicts construction exactly.
-#pragma warning disable MAAI001
+            // The frontmatter validator is the code AgentInlineSkill's constructor runs, so this predicts construction
+            // exactly.
             if (!AgentSkillFrontmatter.ValidateName(skill.Name, out _))
-#pragma warning restore MAAI001
             {
                 (unbuildableIds ??= []).Add(skill.Id);
                 continue;

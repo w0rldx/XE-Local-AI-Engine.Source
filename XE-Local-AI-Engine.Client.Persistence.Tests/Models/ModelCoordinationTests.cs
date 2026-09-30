@@ -60,8 +60,7 @@ public sealed class ModelCoordinationTests
         await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(30));
         var writerTask = AcquireAndReleaseMutationAsync(domain, "1:path:a.gguf");
 
-        await Task.Delay(50);
-        AssertEx.False(writerTask.IsCompleted, "An overlapping mutation must wait for every read lease.");
+        await AssertEx.StaysIncompleteAsync(writerTask, "An overlapping mutation must wait for every read lease.");
         releaseReaders.SetResult();
         await Task.WhenAll(first, second);
         await writerTask.WaitAsync(TimeSpan.FromSeconds(30));

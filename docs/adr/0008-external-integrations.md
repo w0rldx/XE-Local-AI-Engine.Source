@@ -437,7 +437,7 @@ current rule.
 | R3-10 | S1 mechanics: build the accepted event before `AcceptAsync`; no orphan-sweep grace window. | S1 |
 | R3-11 | S2 mechanics: one pending `MoveNextAsync` raced with a 15 s keepalive delay; stream count bounded. | S2 |
 | R3-12 | S4 sends filters and ordering server-side and never re-sorts. | S4 |
-| R3-13 | Plans close by internal closure files; no further Codex round. | all |
+| R3-13 | Process-only ruling on how the planning round closed; it sets no product rule. | all |
 | R3-14 | Seam closures: writer precheck wording, positional status record, `AppendOutputEventAsync` shape, the four session methods S3 adds, drain failure terminalises. | S0–S3 |
 
 ### Round 4

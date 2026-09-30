@@ -265,8 +265,8 @@ public sealed class StableDiffusionCppRuntimeTests
     [Test]
     public async Task Generate_DaemonAlreadyDead_FailsNamingTheExitWithoutPollingIt()
     {
-        // R8: a SIGKILLed sd-server failed the job only after the poll GET's ~8.5 s of connection-refused retries, as a
-        // bare "Image generation failed.". A daemon the supervisor already knows is dead fails the job at once, by name.
+        // A daemon the supervisor already knows is dead fails the job at once, by name, rather than after the poll GET's
+        // ~8.5 s of connection-refused retries as a bare "Image generation failed.".
         using var handler = new RuntimeHandler((_, route) => route == "img_gen"
             ? Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}""")
             : Status(HttpStatusCode.OK));

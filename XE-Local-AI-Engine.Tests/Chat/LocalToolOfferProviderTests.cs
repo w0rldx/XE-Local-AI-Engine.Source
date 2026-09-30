@@ -122,8 +122,8 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedToolsForProfile_WhenAllowlistChangesAfterConstruction_TakesEffectWithoutARestart()
     {
-        // The profile pool is the second decision point reading the same allow-list (the Coder agent's path, which is
-        // where the live evaluation actually observed the failure). Both had to be repointed; this pins the second one.
+        // The profile pool is the second decision point reading the same allow-list (the Coder agent's path). Both read
+        // it live; this pins the second one.
         var toolCapableModels = new List<string>();
         var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
         runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);

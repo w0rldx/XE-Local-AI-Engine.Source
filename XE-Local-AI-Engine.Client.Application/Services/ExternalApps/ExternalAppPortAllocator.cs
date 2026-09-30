@@ -53,7 +53,7 @@ internal static class ExternalAppPortAllocator
 
     /// <summary>
     ///     Whether a host port can be bound on loopback right now. The failure translator asks this to tell a lost
-    ///     port race apart from every other create or start failure, which is a question about the box rather than
+    ///     port race apart from every other create or start failure, which is a question about the host rather than
     ///     about the daemon's prose.
     /// </summary>
     public static bool IsBindable(int port)

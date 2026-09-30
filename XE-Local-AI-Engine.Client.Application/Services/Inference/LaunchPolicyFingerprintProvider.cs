@@ -313,7 +313,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
 
-        // D13: the node's SELECTED KV-cache type is part of a profile's identity, so a frozen profile explored under another type goes stale
+        // The node's SELECTED KV-cache type is part of a profile's identity, so a frozen profile explored under another type goes stale
         // instead of replaying a type the operator has since changed. A CPU spawn never quantizes KV, so a CPU row must not stale for a knob it cannot reach.
         var selectedKv = ResolveSelectedKvCacheIdentity();
         if (requestedVariant != GpuVariant.Cpu

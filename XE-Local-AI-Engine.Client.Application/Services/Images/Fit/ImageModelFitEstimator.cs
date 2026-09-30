@@ -5,13 +5,13 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
-/// <summary>How a diffusion file-set compares to this box's memory budget.</summary>
+/// <summary>How a diffusion file-set compares to this machine's memory budget.</summary>
 public enum ImageModelFitVerdict
 {
     /// <summary>The budget could not be measured, so no claim is made.</summary>
     /// <remarks>
     ///     A first-class outcome, NOT a soft "probably fine": <c>HardwareProfiler</c> leaves VRAM unmeasured on every
-    ///     non-NVIDIA GPU, and rendering that as "Fits" would promise a 13 GB install will run on a box nobody probed.
+    ///     non-NVIDIA GPU, and rendering that as "Fits" would promise a 13 GB install will run on a machine nobody probed.
     /// </remarks>
     Unknown = 0,
 
@@ -94,7 +94,7 @@ public static class ImageModelFitEstimator
         var fitsOnDisk = profile.FreeDiskBytes <= 0 || profile.FreeDiskBytes >= totalBytes;
 
         // A GPU is present but its VRAM was never measured (every non-NVIDIA vendor, and NVIDIA without nvidia-smi). There is no budget to score against and the
-        // CPU budget is the wrong one — the box would run on the GPU. Say so instead of guessing in either direction.
+        // CPU budget is the wrong one — the host would run on the GPU. Say so instead of guessing in either direction.
         if (profile.GpuVendor is not GpuVendor.None && !profile.VramKnown)
         {
             return new ImageModelFitEstimate

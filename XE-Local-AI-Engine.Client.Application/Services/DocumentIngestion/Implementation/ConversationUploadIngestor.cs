@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Default <see cref="IConversationUploadIngestor" />. Holds the gate/extract/persist orchestration that used to live
-///     in the upload endpoint handler. Stateless apart from its (singleton) collaborators.
+///     Default <see cref="IConversationUploadIngestor" />. Holds the gate/extract/persist orchestration for a conversation
+///     upload. Stateless apart from its (singleton) collaborators.
 /// </summary>
 public sealed class ConversationUploadIngestor : IConversationUploadIngestor
 {

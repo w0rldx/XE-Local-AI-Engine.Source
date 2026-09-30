@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-public class BenchmarkFidelityResponse
+/// <summary>
+///     A run's quant-fidelity numbers. Display only — perplexity and KL divergence are never ranking inputs.
+/// </summary>
+public sealed class BenchmarkFidelityResponse
 {
     /// <summary><c>queued</c>, <c>running</c>, <c>succeeded</c>, <c>failed</c>, <c>cancelled</c> or <c>skipped</c>.</summary>
     public required string Status { get; init; }
@@ -42,7 +45,7 @@ public class BenchmarkFidelityResponse
 }
 
 /// <summary>One immutable fidelity measurement, as the attempt history serves it.</summary>
-public class BenchmarkFidelityAttemptResponse
+public sealed class BenchmarkFidelityAttemptResponse
 {
     public Guid Id { get; init; }
     public int Sequence { get; init; }
@@ -71,22 +74,22 @@ public class BenchmarkFidelityAttemptResponse
     public long? CompletedAtUtc { get; init; }
 }
 
-public class ListBenchmarkFidelityAttemptsRequest
+public sealed class ListBenchmarkFidelityAttemptsRequest
 {
     public Guid RunId { get; init; }
 }
 
-public class ListBenchmarkFidelityAttemptsResponse
+public sealed class ListBenchmarkFidelityAttemptsResponse
 {
     public required IReadOnlyList<BenchmarkFidelityAttemptResponse> Items { get; init; }
 }
 
-public class StartRunFidelityRequest
+public sealed class StartRunFidelityRequest
 {
     public Guid RunId { get; init; }
 }
 
-public class GetKldDiskEstimateRequest
+public sealed class GetKldDiskEstimateRequest
 {
     public Guid ProjectId { get; init; }
 
@@ -97,7 +100,7 @@ public class GetKldDiskEstimateRequest
 /// <summary>
 ///     What enabling KL divergence will cost on disk, shown BEFORE the operator commits to a multi-gigabyte write.
 /// </summary>
-public class GetKldDiskEstimateResponse
+public sealed class GetKldDiskEstimateResponse
 {
     public long EstimatedBytes { get; init; }
     public long FreeDiskBytes { get; init; }

@@ -54,7 +54,7 @@ public static class NodeApplicationServiceCollectionExtensions
         // Development task and vice versa, so Development's reconciler must terminalize its orphans before this dispatcher admits runs.
         builder.AddNodeDevWorkflows(configuration);
 
-        // Immediately after: the graph-workflow runtime is the same shape one slice later, and its hosted services
+        // Immediately after: the graph-workflow runtime has the same shape, and its hosted services
         // must start behind the ones whose orphaned rows they would otherwise adopt mid-repair.
         builder.AddNodeGraphWorkflows(configuration);
 

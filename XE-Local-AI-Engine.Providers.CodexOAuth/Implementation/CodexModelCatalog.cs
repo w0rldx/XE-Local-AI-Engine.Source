@@ -15,7 +15,7 @@ public static class CodexModelCatalog
 {
     /// <summary>
     ///     The offered Codex model ids, strongest-first (<c>gpt-5.6-sol</c>, the frontier model, leads). The node
-    ///     default (<see cref="CodexOptions.DefaultModel" />) is <c>gpt-5.6-terra</c>, not necessarily the first entry.
+    ///     default (<see cref="CodexOAuth.Options.CodexOptions.DefaultModel" />) is <c>gpt-5.6-terra</c>, not necessarily the first entry.
     /// </summary>
     public static IReadOnlyList<string> ModelIds { get; } =
     [

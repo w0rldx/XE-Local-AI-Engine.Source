@@ -96,7 +96,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
         RaiseContent(harness, invocationId, "answer with a late tail", InvocationStatus.Running);
         RaiseTool(harness, invocationId, ToolCallLifecyclePhase.Requested);
 
-        AssertEx.Equal(head, harness.Buffer.LastSequence(executionId), "S2 attaches to S1's lifetime and never opens its own, so a late raise reaches nothing.");
+        AssertEx.Equal(head, harness.Buffer.LastSequence(executionId), "the stream attaches to the execution's lifetime and never opens its own, so a late raise reaches nothing.");
     }
 
     /// <summary>Test 22, at the coordinator: a drain failure is the run's failure.</summary>

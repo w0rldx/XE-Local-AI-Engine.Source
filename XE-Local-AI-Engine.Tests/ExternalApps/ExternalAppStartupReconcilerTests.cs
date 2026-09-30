@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
+using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
@@ -7,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     What the boot pass does with the three kinds of disagreement it can find: a row an interrupted operation left
@@ -85,14 +87,11 @@ public sealed class ExternalAppStartupReconcilerTests
     ///     leaves a warning, where a row nothing can act on leaves an instance stuck in the interface for good.
     /// </summary>
     [Test]
+    // The only portable way to make a directory undeletable is Unix permissions on its parent.
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task BranchA_Uninstalling_WhenTheDirectoryCannotBeDeleted_StillRemovesTheRows()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Skip.Test("The only portable way to make a directory undeletable is Unix permissions on its parent.");
-            return;
-        }
-
         await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling);
         harness.MakeUndeletable(row.StoragePath);
@@ -198,7 +197,7 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     The D9 rule, stated as a test: the verdict keys on the DESIRED state and the daemon, never on the status
+    ///     The desired-state rule, stated as a test: the verdict keys on the DESIRED state and the daemon, never on the status
     ///     the row was left with. A crash after the containers started but before the final write is exactly this.
     /// </summary>
     [Test]
@@ -411,7 +410,7 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     R2-16. "No row claims it" is decided against the list the pass opened with, and an install admitted a
+    ///     "No row claims it" is decided against the list the pass opened with, and an install admitted a
     ///     moment later is not in it — its row exists, its gate is held and its containers are being created. Branch
     ///     C used to read that as an orphan and remove the containers out from under the live install.
     /// </summary>
@@ -755,8 +754,8 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     The launch cost the tester round found: the pass ran inside <c>IHost.StartAsync</c>, so a probe taking
-    ///     its full timeout sat in front of readiness. Readiness must be reached with the probe still unanswered,
+    ///     The launch cost: a pass run inside <c>IHost.StartAsync</c> would put a probe taking its full timeout in
+    ///     front of readiness. Readiness must be reached with the probe still unanswered,
     ///     and the pass must still do its work.
     /// </summary>
     [Test]

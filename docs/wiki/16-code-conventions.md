@@ -496,7 +496,7 @@ that lives elsewhere and is fine. Every block is well-formed XML, and here the s
 `Directory.Build.props` sets `GenerateDocumentationFile` — which is what makes IDE0005 (unnecessary `using`) run at
 all — so csc parses every block and a `<remarks>` closed by `</summary>`, an orphan closer or a bare `&` is a build
 warning (`CS1570`) as well as a ratchet item. `CS1591`/`CS1573`/`CS1572` are suppressed there because they contradict
-the rules above; `CS1574`/`CS0419`/`CS1587`/`CS1734` are suppressed as a recorded backlog, with counts in that file.
+the rules above; every other XML-doc diagnostic (`CS1574`, `CS0419`, `CS1587`, `CS1734` included) is a build error.
 
 `CommentBudgetConventionTests` ratchets all five budgets and all four shapes over every solution project plus
 `tools/`, against `XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt` — one `file|rule|count` line
@@ -672,7 +672,7 @@ order of magnitude. Escalate only when they cannot express the thing:
    35 features make this the app's largest style drift.
 
 **UnoCSS utility classNames are not this app's convention.** They belong to the standalone
-`src/modules/theme-configurator/` and to the app shell's static layout classes
+`src/core/theme/theme-configurator/` and to the app shell's static layout classes
 (`core/layout/components/Layout/Layout.tsx`). Do not introduce them in a feature.
 
 ### Responsive layout: breakpoints come from `LayoutBreakpoints.ts`

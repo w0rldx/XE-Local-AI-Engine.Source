@@ -646,9 +646,9 @@ public sealed class MemoryFitEstimatorTests
         AssertEx.Equal(FitConfidence.Approximate, estimate.Confidence);
     }
 
-    // ---- S4: Multi-head Latent Attention (deepseek2), clamped conservative until measured ----
+    // ---- Multi-head Latent Attention (deepseek2), clamped conservative until measured ----
 
-    // DeepSeek-V2-Lite shape, the worked example the plan pins: 27 layers, 16 kv-heads, explicit key/value 192/128,
+    // DeepSeek-V2-Lite shape, the worked example: 27 layers, 16 kv-heads, explicit key/value 192/128,
     // key_length_mla = kv_lora_rank 512 + rope.dimension_count 64 = 576, value_length_mla = 512.
     private const long MlaBlockCount = 27L;
     private const long MlaKvHeads = 16L;

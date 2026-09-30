@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         The rule once stopped at the endpoints and hubs, on the stated ground that a background service is not a
 ///         request handler. That line did not hold: the services behind it held the llama.cpp supervisor, the binary
 ///         manager and the release catalog by constructor, and three more reached the persistence stores through an
-///         <see cref="IServiceScopeFactory" /> scope, which no constructor scan can see. They moved into
+///         <see cref="Microsoft.Extensions.DependencyInjection.IServiceScopeFactory" /> scope, which no constructor scan can see. They moved into
 ///         <c>Client.Application</c>, the fence moved with them, and
 ///         <see cref="HostServiceResolutionTests" /> closes the scope-factory hole.
 ///     </para>

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Transcription;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -221,15 +220,6 @@ public sealed class WhisperModelDownloadCoordinatorTests
             }
         }
 
-        private sealed class FakeNodeDataDirectory : INodeDataDirectory
-        {
-            public FakeNodeDataDirectory(string root)
-            {
-                Root = root;
-            }
-
-            public string Root { get; }
-        }
     }
 
     private sealed class FakeWhisperWeightFileStore : IWhisperWeightFileStore

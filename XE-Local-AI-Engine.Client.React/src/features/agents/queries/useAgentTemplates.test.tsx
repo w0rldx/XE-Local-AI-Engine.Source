@@ -21,7 +21,6 @@ import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/qu
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const DEFINITIONS_KEY = agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list);
-// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 const TEMPLATES_KEY = [{ _id: "listAgentTemplates" }];
 
 const generatedSummary = {
@@ -49,7 +48,6 @@ function makeWrapper() {
 describe("agent template reads", () => {
 	beforeEach(() => {
 		listMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: "listAgentTemplates" }],
 			queryFn: async () => ({ items: [generatedSummary] }),
 		}));
@@ -71,7 +69,6 @@ describe("agent template reads", () => {
 
 	it("returns an empty array when the response omits items", async () => {
 		listMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: "listAgentTemplates" }],
 			queryFn: async () => ({}),
 		}));

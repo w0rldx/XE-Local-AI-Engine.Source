@@ -25,7 +25,7 @@ public sealed record ExternalAppsOptions
 
     /// <summary>
     ///     Absolute directory under which instance state is written, or <see langword="null" /> to use the node data
-    ///     directory. Set on a box whose data directory is too small for application images' bind mounts.
+    ///     directory. Set on a machine whose data directory is too small for application images' bind mounts.
     /// </summary>
     public string? InstanceRoot { get; init; }
 
@@ -56,7 +56,7 @@ public sealed record ExternalAppsOptions
     ///     The digest-pinned image the short-lived helper container that deletes an instance's volume CONTENTS runs.
     /// </summary>
     /// <remarks>
-    ///     The default is the same BusyBox digest the container suites pin, so a box that has run them already holds
+    ///     The default is the same BusyBox digest the container suites pin, so a machine that has run them already holds
     ///     it; overriding it is for an air-gapped daemon mirroring a different registry. The validator refuses
     ///     anything not digest-pinned, because a tag would let a different image answer to the same name and this one
     ///     runs as in-container root over application data. Why a helper exists at all:

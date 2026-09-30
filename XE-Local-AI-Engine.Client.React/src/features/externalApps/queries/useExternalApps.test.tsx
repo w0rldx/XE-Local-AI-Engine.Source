@@ -117,13 +117,11 @@ function harness(): { queryClient: QueryClient; wrapper: ({ children }: { childr
 
 describe("externalAppInvalidationKey", () => {
 	it("matches every cached variant of an endpoint without a path", () => {
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		expect(externalAppInvalidationKey(externalAppQueryIds.instances)).toEqual([{ _id: "listExternalAppInstances" }]);
 	});
 
 	it("addresses one instance when given a path", () => {
 		expect(externalAppInvalidationKey(externalAppQueryIds.instance, { instanceId })).toEqual([
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			{ _id: "getExternalAppInstance", path: { instanceId } },
 		]);
 	});

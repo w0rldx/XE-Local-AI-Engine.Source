@@ -7,14 +7,15 @@ import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
 import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
 import { useMobileNavigationDrawer } from "@/core/layout/hooks/useMobileNavigationDrawer";
 import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
-import { languageData } from "@/data/language/LanguageMenuData";
+import { languageData } from "@/core/locales/models/LanguageMenuData";
 import type { IMobileNavigationLanguageMenuProperties } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu.types";
 
 export function MobileNavigationLanguageMenu({ menuItemStyle, setDrawerOpen, width }: IMobileNavigationLanguageMenuProperties) {
 	const { t, i18n } = useTranslation();
 	const { isDrawerOpen, setIsDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer } =
 		useMobileNavigationDrawer(setDrawerOpen);
-	const { selectedApplicationLanguage, changeLanguage } = useUserLanguageStore();
+	const selectedApplicationLanguage = useUserLanguageStore((state) => state.selectedApplicationLanguage);
+	const changeLanguage = useUserLanguageStore((state) => state.actions.changeLanguage);
 
 	const handleLanguageChange = async (language: string) => {
 		await i18n.changeLanguage(language);

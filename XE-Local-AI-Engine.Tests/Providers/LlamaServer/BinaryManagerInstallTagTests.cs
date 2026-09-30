@@ -13,9 +13,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     <see cref="LlamaCppBinaryManager.InstallTagAsync" />: a digest-matched download installs into the versioned dir,
+///     <see cref="LlamaCppBinaryManager.InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />: a digest-matched download installs into the versioned dir,
 ///     smoke-tests, and records <c>installed-runtime.json</c>; a digest mismatch retries then keeps the old binary and
-///     writes NO state; the 3-tier <see cref="LlamaCppBinaryManager.EnsureBinaryAsync" /> still bootstraps from the pins
+///     writes NO state; the 3-tier <see cref="LlamaCppBinaryManager.EnsureBinaryAsync(GpuVariant, CancellationToken)" /> still bootstraps from the pins
 ///     offline. All HTTP is faked — no network. The smoke test spawns a real executable, so these are Linux-only.
 /// </summary>
 [Category(TestCategories.Unit)]

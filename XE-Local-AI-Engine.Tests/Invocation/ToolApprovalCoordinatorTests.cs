@@ -32,9 +32,7 @@ using XE_Local_AI_Engine.Tests.WebAccess;
 [Category(TestCategories.Unit)]
 public sealed class ToolApprovalCoordinatorTests
 {
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
     private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
-#pragma warning restore MAAI001
 
     private const string SkillName = "demo";
 

@@ -2,14 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 using System.Security.Cryptography;
 using System.Threading.Channels;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>Default <see cref="IIntegrationInvocationService" />. The step order is ruling R4-1's and the comments name why each step sits where it does.</summary>
+/// <summary>Default <see cref="IIntegrationInvocationService" />. The step order is ADR 0008 R4-1's and the comments name why each step sits where it does.</summary>
 internal sealed class IntegrationInvocationService : IIntegrationInvocationService
 {
     private const string TriggerNotFoundMessage = "No such trigger.";
@@ -17,12 +15,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     /// <summary>One literal, because the row's column and the terminal frame's payload must say the same thing.</summary>
     private const string QueueFullSummary = "The execution queue refused the admitted request.";
 
-    /// <summary>SQLite's <c>SQLITE_CONSTRAINT</c>. The unique index is the only constraint this path can violate.</summary>
-    private const int SqliteConstraintErrorCode = 19;
-
     private readonly IIntegrationExecutionEventBuffer _buffer;
     private readonly IIntegrationExecutionStore _executions;
-    private readonly IIntegrationApiKeyService _keys;
     private readonly IIntegrationApiKeyStore _keyStore;
     private readonly ILogger<IntegrationInvocationService> _logger;
     private readonly IntegrationOptions _options;
@@ -35,7 +29,6 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
     public IntegrationInvocationService(IIntegrationTriggerStore triggers,
         IIntegrationApiKeyStore keyStore,
-        IIntegrationApiKeyService keys,
         IIntegrationExecutionStore executions,
         IIntegrationExecutionEventBuffer buffer,
         INodeChatPersistenceService persistence,
@@ -48,7 +41,6 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     {
         _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
         _keyStore = keyStore ?? throw new ArgumentNullException(nameof(keyStore));
-        _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
@@ -207,10 +199,10 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                 // transaction. The gate answers the precise 404/409 on every reachable path; this backstop answers the masked 404, never which of the three.
                 return Rejected(IntegrationAcceptOutcome.SessionNotFound, "No such session.");
             }
-            catch (Exception exception) when (exception is DbUpdateException or SqliteException { SqliteErrorCode: SqliteConstraintErrorCode })
+            catch (IntegrationRequestConflictException)
             {
                 // A concurrent accept from the same principal won the (PrincipalId, RequestId) race: re-read the winner and answer duplicate or conflict
-                // rather than a 500. Raw ADO surfaces the unique index as SqliteException, not DbUpdateException; the EF type stays for a future DbContext store.
+                // rather than a 500.
                 var raced = await ResolveDuplicateAsync(principalId, request.RequestId, fingerprint, cancellationToken);
                 return raced ?? Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
             }

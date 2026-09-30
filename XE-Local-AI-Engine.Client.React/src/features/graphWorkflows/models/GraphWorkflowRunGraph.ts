@@ -1,6 +1,6 @@
 // The run view's canvas: the graph the run PINNED at start, with each node run's state attached.
 //
-// `GET runs/{runId}` carries that pinned graph (F5-1), so the shape on screen is the shape this run actually routed
+// `GET runs/{runId}` carries that pinned graph, so the shape on screen is the shape this run actually routed
 // on, whatever the definition says today. The node runs stay the run's truth — every node of the pinned graph is
 // materialized at run start — and they are overlaid on it. A definition edited since is then only worth SAYING
 // (`graphNotice: "definitionChanged"`), never worth degrading the drawing for.

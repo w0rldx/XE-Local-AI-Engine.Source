@@ -26,7 +26,7 @@ public sealed class IntegrationSessionServiceTests
         var conversation = harness.CapturedConversation();
         AssertEx.Equal(NodeConversationKind.Integration, conversation.Kind);
 
-        // R4-1: the conversation is created at the id the admission transaction already recorded, AFTER that commit —
+        // ADR 0008 R4-1: the conversation is created at the id the admission transaction already recorded, AFTER that commit —
         // which is what makes an orphan conversation impossible rather than merely unlikely.
         AssertEx.Equal(expected: 1, harness.Executions.CreatedSessions.Count);
         AssertEx.True(conversation.ConversationId.HasValue, "The accept path supplies the pre-minted conversation id.");
@@ -271,7 +271,7 @@ public sealed class IntegrationSessionServiceTests
         AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(foreign.Id, harness.Caller()), "Another integrator's session.");
         AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(outsideAllowlist.Id, harness.Caller()), "A trigger this key is not scoped to.");
 
-        // The positive control, and the one R4-6 exists for: a DIFFERENT key of the same principal reads it.
+        // The positive control, and the one ADR 0008 R4-6 exists for: a DIFFERENT key of the same principal reads it.
         harness.RotateCredential();
         var read = await harness.SessionService.GetForExternalCallerAsync(mine.Id, harness.Caller(IntegrationInvokeHarness.RotatedKeyPrefix));
         AssertEx.Equal(mine.Id, AssertEx.NotNull(read).Id);

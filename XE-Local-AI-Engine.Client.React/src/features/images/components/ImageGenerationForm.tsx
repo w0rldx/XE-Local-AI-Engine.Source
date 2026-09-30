@@ -103,7 +103,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 
 	// Reconcile the selection against the models that actually exist.
 	//
-	// Two cases, and the second used to be missed. The list arrives after the first render, so an empty selection has to
+	// Two cases, and the second is easy to miss. The list arrives after the first render, so an empty selection has to
 	// adopt the first model (and its family defaults, or the pick would silently run on the generic fallback numbers).
 	// But a selection can also go stale *while* it is non-empty — deleting the selected model leaves the Select pointing
 	// at a value no longer in its options, and Generate happily submits the deleted name and creates a job that fails.

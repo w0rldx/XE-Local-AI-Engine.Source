@@ -35,7 +35,6 @@ import {
 // The partial generated-query-key that matches every cached variant of listImageJobs. Kept local so the literal
 // `_id` (which trips biome's naming-convention rule) is constructed in one place, mirroring useImageQueries.
 function jobsInvalidationKey(): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: "listImageJobs" }];
 }
 

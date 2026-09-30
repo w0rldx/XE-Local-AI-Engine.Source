@@ -87,7 +87,7 @@ internal static class CanvasGraphs
                                     """;
 
     /// <summary>
-    ///     A human wait BETWEEN two agents — the shape the S4 live round caught. The second agent has to read the
+    ///     A human wait BETWEEN two agents. The second agent has to read the
     ///     first one's answer, and a Pause's own output is only the approval.
     /// </summary>
     public const string AgentAcrossPause = """

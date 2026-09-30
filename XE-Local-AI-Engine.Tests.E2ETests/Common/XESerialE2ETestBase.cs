@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
@@ -18,8 +19,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         mechanism.
 ///     </para>
 /// </summary>
-// S101: matches the XEE2ETestBase harness naming; see that type for why the prefix is intentional.
-#pragma warning disable S101 // Types should be named in PascalCase
+[SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Shares the XE product prefix of XEE2ETestBase.")]
 [ParallelLimiter<BrowserParallelLimit>]
 [ParallelGroup("BrowserSerial", Order = 0)]
 public abstract class XESerialE2ETestBase : XEE2ETestBase
@@ -64,4 +64,3 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
         await page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase));
     }
 }
-#pragma warning restore S101

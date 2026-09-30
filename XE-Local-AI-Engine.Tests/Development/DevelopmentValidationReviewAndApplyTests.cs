@@ -91,7 +91,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     L3: a mis-spelled disposition is a correction, not the end of the attempt. Thrown, it terminalized the whole
+    ///     A mis-spelled disposition is a correction, not the end of the attempt. Thrown, it terminalized the whole
     ///     reviewer round and cost the DevTask node one of its three attempts — three times in a row on 2026-09-02,
     ///     from a model that had approved the same subject correctly minutes earlier.
     /// </summary>
@@ -963,12 +963,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     ///     THE LIVELOCK PIN. A task whose deterministic validation keeps failing must keep asking the CODER for rounds
     ///     until its review budget runs out, and must never be handed the same validation twice for one coder attempt.
     ///     <para>
-    ///         Before the failed gate routed to <c>ChangesRequested</c>, it returned the task to <c>InProgress</c> —
-    ///         which, behind a succeeded coder attempt, is exactly the state <c>StartNextActionAsync</c> reads as
-    ///         "implemented, validate it". Every tick re-ran the whole command profile against the same patch.
-    ///         Measured live on 2026-09-04: 289 validation runs in 25 minutes, 282 report rows on one task, zero coder
-    ///         rounds, ended only by cancelling the run. The loop below is bounded so that failure mode exhausts the
-    ///         ticks and fails the assertion instead of hanging.
+    ///         A failed gate routes to <c>ChangesRequested</c>. Returning the task to <c>InProgress</c> instead would,
+    ///         behind a succeeded coder attempt, be exactly the state <c>StartNextActionAsync</c> reads as "implemented,
+    ///         validate it", so every tick would re-run the whole command profile against the same patch with zero coder
+    ///         rounds. The loop below is bounded so that failure mode exhausts the ticks and fails the assertion instead
+    ///         of hanging.
     ///     </para>
     /// </summary>
     [Test]

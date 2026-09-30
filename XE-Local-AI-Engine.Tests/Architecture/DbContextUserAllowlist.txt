@@ -39,7 +39,7 @@ XE_Local_AI_Engine.Client.Services.Knowledge.Implementation.KnowledgeVectorNorma
 # accident of where the code landed. Moving the SQL into Client.Persistence would drag the chat domain
 # vocabulary down with it — the SQL binds NodeChatMessageStatusValues members as parameters and takes
 # NodeChatMessageCorrelation in every correlated write — for an import change in roughly a hundred files that
-# relocates no persistence concern. Measured in Plans/csharp-baseline-2026-09-17/progress/S7c-analysis.md.
+# relocates no persistence concern.
 #
 # Permanent covers these eight types, by name. A NEW Services/Chat type that takes a context is unlisted and
 # fails the fence, which is the half of this decision that has to keep biting.

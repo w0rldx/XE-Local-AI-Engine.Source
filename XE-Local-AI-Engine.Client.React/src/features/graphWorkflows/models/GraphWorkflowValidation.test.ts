@@ -47,7 +47,7 @@ function rulesOf(candidate: GraphWorkflowGraph | undefined): GraphWorkflowGraphR
 	return validateGraphWorkflowGraph(candidate).map((issue) => issue.rule);
 }
 
-/** `progress/S2-live/pause-tool-graph.json`: the body the backend actually accepted in the S2 live round. */
+/** A Pause + Tool graph body the backend actually accepted. */
 function liveGraph(): GraphWorkflowGraph {
 	return graph(
 		[
@@ -148,7 +148,7 @@ describe("validateGraphWorkflowGraph accepts what the server accepts", () => {
 			],
 		);
 
-		// The wire token is compared case-insensitively, as the server parses it — the S2 live graph stored `eq`.
+		// The wire token is compared case-insensitively, as the server parses it — a stored graph can carry `eq`.
 		expect(validateGraphWorkflowGraph(pause)).toEqual([]);
 	});
 });
@@ -575,7 +575,7 @@ describe("config form schemas", () => {
 		// The server's `IsDotPath` accepts any segment without whitespace or wildcard punctuation, and a JSON property
 		// really can be hyphenated — refusing one it accepts would block a save the node would have taken.
 		expect(conditionConfigSchema.safeParse({ path: "output.json.requires-review" }).success).toBe(true);
-		// F5-9: an empty segment is what `GraphWorkflowTokens.IsDotPath` refuses, and the client mirror has to refuse it
+		// An empty segment is what `GraphWorkflowTokens.IsDotPath` refuses, and the client mirror has to refuse it
 		// too — otherwise the field reads green and the save comes back 400 naming a path the drawer said was fine.
 		for (const path of ["a..b", ".a", "a.", "."]) {
 			expect(conditionConfigSchema.safeParse({ path }).success).toBe(false);

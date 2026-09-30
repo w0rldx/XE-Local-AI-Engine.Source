@@ -35,7 +35,6 @@ export const schedulerQueryIds = {
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one scheduler endpoint. */
 export function schedulerInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

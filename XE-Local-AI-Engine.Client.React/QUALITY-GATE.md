@@ -67,9 +67,8 @@ deliberately does not restate their counts.
 - **`no-cross-feature`** — one feature importing another feature's internals; shared
   code belongs in `core/`. Examples: `model-fit` <-> `models`, `agents` -> `chat`/`tools`/`skills`,
   `mcp` -> `tools`, `preview` -> `chat`/`agents`, `chat` -> `tools`/`agents`.
-- **`no-core-to-legacy`** — `core/` reaching into the legacy `data`/`components`/`modules`
-  trees. Examples: navigation/header components -> `data/navigation`, `data/language`,
-  `components/Logo`, `modules/theme-configurator`.
+- **`no-core-to-legacy`** — `core/` reaching into a top-level `pages`, `data`, `components` or
+  `modules` tree. Shared code lives under `core/`; feature-owned code under its feature.
 - **`no-core-to-features`** — `core/` depending on feature-owned UI or diagnostics.
 - **`no-orphans`** — modules imported by nothing in the current graph.
 - **`no-feature-to-routes`** — features stay route-agnostic.

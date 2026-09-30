@@ -7,6 +7,13 @@ using static XE_Local_AI_Engine.Client.Persistence.Implementation.BenchmarkRanki
 
 public sealed partial class BenchmarkStore
 {
+    /// <summary>
+    ///     A run record carrying its derived judge view.
+    /// </summary>
+    /// <remarks>
+    ///     Every path that returns a run uses this: the view is how a caller reads judge state now, and a record that
+    ///     silently omitted it would read as "no judging" to a caller that had just terminalized one.
+    /// </remarks>
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
         return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken));
@@ -577,12 +584,4 @@ public sealed partial class BenchmarkStore
 
         public required Guid? ProjectCurrentRevisionId { get; init; }
     }
-
-    /// <summary>
-    ///     Applies a project write's judge half to the tracked project: null policy disables, an unchanged hash is a
-    ///     no-op, anything else get-or-creates the revision, resets its cohort and repoints the project.
-    /// </summary>
-    /// <returns>
-    ///     The revision the project ends up on, or <see langword="null" /> when judging was turned off.
-    /// </returns>
 }

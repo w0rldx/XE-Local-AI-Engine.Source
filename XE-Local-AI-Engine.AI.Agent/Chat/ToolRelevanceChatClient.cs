@@ -24,7 +24,6 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
 {
     // The three MAF skill-discovery tools reach the model through AIContextProviders rather than the offer, so they are
     // named here the way ToolApprovalCoordinator names them; always core, or a skills agent cannot use its skills.
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
     /// <summary>
     ///     The MAF skill tools, in one place; <c>InvocationAgentFactory</c> counts them by <c>Length</c> rather than
     ///     keeping its own constant, so its threshold count cannot drift from this core list.
@@ -35,7 +34,6 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         AgentSkillsProvider.ReadSkillResourceToolName,
         AgentSkillsProvider.RunSkillScriptToolName
     ];
-#pragma warning restore MAAI001
 
     private readonly ILogger<ToolRelevanceChatClient> _logger;
     private readonly ToolRelevanceOptions _options;

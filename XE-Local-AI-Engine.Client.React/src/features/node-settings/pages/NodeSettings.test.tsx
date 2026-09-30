@@ -42,7 +42,7 @@ vi.mock("react-i18next", () => ({
 // answer every other test runs with, so the Ollama endpoint field renders exactly as it did before the probe existed.
 const { ollamaProbe } = vi.hoisted(() => ({ ollamaProbe: { data: undefined as boolean | undefined } }));
 
-vi.mock("@/core/runtime/hooks/useOllamaRuntimeConfigured", () => ({
+vi.mock("@/features/node-settings/queries/useOllamaRuntimeConfigured", () => ({
 	useOllamaRuntimeConfigured: () => ollamaProbe,
 }));
 
@@ -78,7 +78,6 @@ const { generatedMock } = vi.hoisted(() => ({
 
 // Centralizes the `_id` discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
 function fakeQueryKey(operationId: string): unknown {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 
@@ -961,8 +960,8 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(false);
 	});
 
-	// R2b lives in page state, not in the model: the model-level guard covers buildNodeSettingsRequest, this covers the
-	// handler that decides what to hand it.
+	// Clearing the pending preset lives in page state, not in the model: the model-level guard covers
+	// buildNodeSettingsRequest, this covers the handler that decides what to hand it.
 	it("clears the pending preset when a switch is edited after a preset click", async () => {
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],

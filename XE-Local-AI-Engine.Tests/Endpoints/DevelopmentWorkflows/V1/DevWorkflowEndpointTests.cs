@@ -226,7 +226,7 @@ public sealed class DevWorkflowEndpointTests
         await store.DidNotReceive().CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>An unknown project is refused at create, with a sentence, rather than stored and failing at the first run (F-46).</summary>
+    /// <summary>An unknown project is refused at create, with a sentence, rather than stored and failing at the first run.</summary>
     [Test]
     public async Task CreateWorkItem_WithAnUnknownDevelopmentProject_ReturnsBadRequestAndNeverReachesTheStore()
     {
@@ -461,7 +461,7 @@ public sealed class DevWorkflowEndpointTests
     }
 
     /// <summary>
-    ///     L2: <c>toolMode</c> is what makes a Tool node the one that APPLIES approved patches, and it was not on the
+    ///     <c>toolMode</c> is what makes a Tool node the one that APPLIES approved patches, and it was not on the
     ///     wire at all — so a copy of the seeded template answered 201 and silently came back with an ordinary
     ///     validation node where the integration step had been. Both directions are asserted on one round trip: what
     ///     the store was handed, and what the caller reads back. Sent in lower case on purpose: the stored value is
@@ -565,7 +565,7 @@ public sealed class DevWorkflowEndpointTests
 
     /// <summary>
     ///     A malformed <c>requiredCapabilities</c> is refused with the runtime parser's own sentence, naming the node,
-    ///     rather than the serializer's message about a CLR dictionary type (F-46).
+    ///     rather than the serializer's message about a CLR dictionary type.
     /// </summary>
     [Test]
     [Arguments("""["WriteExecute"]""", "shape")]

@@ -210,7 +210,7 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     (`IReasoningEffortDispatcher` declares the codes, `DefaultReasoningEffortDispatcher` grades them,
     `ReasoningEffortDispatcherTests` pins the behaviour; live-validated 7/7 on a fresh host, 2026-09-04.)
 13. **`vram_free_at_load_bytes` and `vram_admitted_bytes` describe a LOAD, not this attempt.** Every other column
-    counts what the attempt spent; these two read the box at one moment. `vram_free_at_load_bytes` is the
+    counts what the attempt spent; these two read the host at one moment. `vram_free_at_load_bytes` is the
     machine-global free VRAM the capacity gate measured immediately before it admitted the most recent SUCCESSFUL
     load of the model in `served_model_name` **that carried a capacity admission**; `vram_admitted_bytes` is the GPU
     bytes that same admission reserved for the process. An **unadmitted reload clears the reading**: a direct,

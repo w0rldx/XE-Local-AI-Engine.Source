@@ -282,7 +282,7 @@ def test_c5_refuses_a_claimed_mount_the_compose_does_not_mount(tmp_path: Path) -
 
 
 # An image VOLUME the compose does not mount is invisible to this offline converter but real on the created
-# container, where the engine refuses it as an undeclared mount. The S5 live round hit exactly that: the
+# container, where the engine refuses it as an undeclared mount. A live install hit exactly that: the
 # searxng image declares /var/cache/searxng and upstream's compose leaves it anonymous, so the install failed
 # its post-start policy check. imageVolumes[] is how an author states it; it exempts the entry from the
 # "the compose does not mount this" half of C5 and nothing else.

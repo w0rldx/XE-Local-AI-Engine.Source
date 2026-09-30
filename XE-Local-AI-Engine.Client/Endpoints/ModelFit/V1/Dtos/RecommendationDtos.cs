@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 ///     only cache-lookup key, and no raw image reference or command is accepted.
 /// </summary>
 /// <remarks>
-///     There is no approved-image or provider-name param: the advisor is the single box-aware recommendation backend.
+///     There is no approved-image or provider-name param: the advisor is the single hardware-aware recommendation backend.
 /// </remarks>
 public sealed class GetLatestRecommendationsRequest
 {

@@ -274,7 +274,7 @@ public sealed class NodeChatStreamServiceTests
     [Arguments(false, true)]
     public async Task SendMessageAsync_WhenTheTurnIsAWorkSessionStep_NeverAllowsAnAutoModelSwap(bool isWorkSessionTurn, bool expectedAllowAutoModelSwap)
     {
-        // The exact shape ruling 2 closes: a development-workflow node that authors NEITHER a model nor an effort, on
+        // The exact shape this closes: a development-workflow node that authors NEITHER a model nor an effort, on
         // an agent that pins neither, with no tools — swap-eligible on every other signal. The work-session supervisor
         // sets IsWorkSessionTurn on every step whatever the node authored, so the graph's step is never served by a
         // model its author did not choose. The same send WITHOUT the flag is an ordinary chat turn and stays eligible.

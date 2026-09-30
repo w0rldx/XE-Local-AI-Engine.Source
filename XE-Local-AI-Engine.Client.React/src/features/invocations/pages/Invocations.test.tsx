@@ -64,7 +64,6 @@ describe("Invocations (generated hey-api data layer)", () => {
 		});
 		generatedMock.monitorFn.mockResolvedValue(createMonitor());
 		generatedMock.getInvocationMonitorOptions.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getInvocationMonitor" }],
 			queryFn: generatedMock.monitorFn,
 		}));

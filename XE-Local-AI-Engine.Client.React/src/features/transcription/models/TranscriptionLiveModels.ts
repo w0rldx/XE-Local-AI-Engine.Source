@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { CaptureChannel } from "@/features/transcription/capture/CaptureSource";
 import type { TranscriptChannel } from "@/features/transcription/models/TranscriptionModels";
 
-// The wire contract of the live transcription hub, frozen by S3 (`TranscriptionHub`, `TranscriptionHubEvents`).
+// The wire contract of the live transcription hub (`TranscriptionHub`, `TranscriptionHubEvents`).
 // Everything the hook parses off the socket is validated here first: a push is attacker-adjacent input in the same
 // sense every other hub payload is (a newer or older node on the other end), and a shape the UI cannot render must
 // leave the cache untouched rather than paint half a row. This mirrors `imageJobStatusPushSchema`.
@@ -96,7 +96,7 @@ export const transcriptionStatusPushSchema = z.object({
 	errorCode: z.string().nullish(),
 });
 
-// `TranscriptionSessionSubscriptionSnapshot`. `segments` is the S2 REST DTO verbatim; the row's `id` is not read
+// `TranscriptionSessionSubscriptionSnapshot`. `segments` is the REST segment DTO verbatim; the row's `id` is not read
 // here (a committed row is identified by its sequence), so it is not required of the payload either.
 export const transcriptionSnapshotSchema = z.object({
 	sessionId: z.string(),

@@ -7,7 +7,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
-import { LogoCombined } from "@/components/Logo/LogoCombined";
+import { LogoCombined } from "@/core/layout/components/Logo/LogoCombined";
 import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
 import type { IMobileNavigationBarProperties } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar.types";
 import { MobileNavigationLanguageMenu } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu";
@@ -17,14 +17,14 @@ import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
 import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
-import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
+import type { INavigationLink } from "@/core/layout/models/NavigationMenuData";
 import {
 	filterNavigationLinksByDisabledCapabilities,
 	filterNavigationLinksByUiMode,
 	matchesNavRoute,
 	navigationLinks,
 	useServerDisabledNavigationCapabilities,
-} from "@/data/navigation/NavigationMenuData";
+} from "@/core/layout/models/NavigationMenuData";
 import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
 

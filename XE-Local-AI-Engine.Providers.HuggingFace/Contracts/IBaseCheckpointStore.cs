@@ -29,7 +29,7 @@ public sealed record BaseCheckpointFile
 
 /// <summary>
 ///     The enumerated file set of a trainable checkpoint plus the licensing facts recorded alongside it. The license is
-///     read from <b>this</b> repo — the base checkpoint — never from a GGUF quant repo derived from it (locked decision 8).
+///     read from <b>this</b> repo — the base checkpoint — never from a GGUF quant repo derived from it.
 /// </summary>
 public sealed record BaseCheckpointManifest
 {
@@ -64,7 +64,7 @@ public interface IBaseCheckpointStore
     /// </summary>
     /// <exception cref="BaseCheckpointNotTrainableException">
     ///     The repo does not exist, or ships no <c>*.safetensors</c> weights — a GGUF-only or otherwise non-trainable
-    ///     repo (locked decision 18: there is no attestation workaround).
+    ///     repo (there is no attestation workaround).
     /// </exception>
     Task<BaseCheckpointManifest> ResolveAsync(string repoId, string? revision, CancellationToken ct);
 

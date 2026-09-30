@@ -6,21 +6,21 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     An in-flight <see cref="System.Threading.CancellationTokenSource" /> registry keyed by job id, coarse throttled
 ///     progress push, and detached run tasks. Generation is serialized to at most one running job — extra jobs stay
-///     <see cref="ImageJobStatus.Queued" /> here and are NOT handed to the runtime until the slot frees — so a cancel
+///     <see cref="Client.Persistence.Entities.ImageJobStatus.Queued" /> here and are NOT handed to the runtime until the slot frees — so a cancel
 ///     that must tree-kill the daemon has a blast radius of exactly one job. Singleton: the registry outlives the
 ///     request. Job status is persisted to <c>image_jobs</c>; the image is persisted encrypted-at-rest before success.
 /// </remarks>
 public interface IImageJobCoordinator
 {
     /// <summary>
-    ///     Persists a new <see cref="ImageJobStatus.Queued" /> job, mints its cancellation token, kicks the serialized
+    ///     Persists a new <see cref="Client.Persistence.Entities.ImageJobStatus.Queued" /> job, mints its cancellation token, kicks the serialized
     ///     worker, and returns the job id. The generation runs detached after this call returns.
     /// </summary>
     Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken);
 
     /// <summary>Requests cancellation of a tracked job by signalling its token.</summary>
     /// <remarks>
-    ///     A still-queued job is dropped to <see cref="ImageJobStatus.Cancelled" /> without ever calling the runtime,
+    ///     A still-queued job is dropped to <see cref="Client.Persistence.Entities.ImageJobStatus.Cancelled" /> without ever calling the runtime,
     ///     while a generating job's token is cancelled and the runtime performs the queued-cancel or kill+restart. Returns
     ///     <see langword="false" /> when the job is unknown or already terminal.
     /// </remarks>
@@ -36,7 +36,7 @@ public interface IImageJobCoordinator
     ///     Deletes a terminal job with its generated image(s) — the rows first, then the encrypted blobs on disk.
     /// </summary>
     /// <remarks>
-    ///     A job that is still <see cref="ImageJobStatus.Queued" /> or <see cref="ImageJobStatus.Generating" /> is
+    ///     A job that is still <see cref="Client.Persistence.Entities.ImageJobStatus.Queued" /> or <see cref="Client.Persistence.Entities.ImageJobStatus.Generating" /> is
     ///     refused outright (<see cref="ImageJobDeleteOutcome.NotTerminal" />); cancel it first. Mirrors the benchmark
     ///     project delete, which refuses an active run rather than cancelling it on the operator's behalf.
     /// </remarks>

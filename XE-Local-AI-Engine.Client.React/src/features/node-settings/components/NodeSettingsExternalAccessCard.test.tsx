@@ -9,7 +9,7 @@ import { type NodeSettingsFieldsForm, toNodeSettingsFieldsForm } from "@/feature
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default so the human copy is asserted, not the raw key. This file asserts
-// CONTROL STATE and CALLBACKS, never prose — the R18/R18a copy itself is asserted against the real bundles in
+// CONTROL STATE and CALLBACKS, never prose — the copy itself is asserted against the real bundles in
 // ExternalAccessLocalization.test.ts and, rendered, in ExternalAccessSetup.test.tsx.
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({

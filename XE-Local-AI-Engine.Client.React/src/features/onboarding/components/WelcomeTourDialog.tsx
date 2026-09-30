@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
-import { languageData } from "@/data/language/LanguageMenuData";
+import { languageData } from "@/core/locales/models/LanguageMenuData";
 
 export interface WelcomeTourDialogProps {
 	opened: boolean;
@@ -18,7 +18,8 @@ export interface WelcomeTourDialogProps {
 // records a terminal outcome and the dialog never re-prompts.
 export function WelcomeTourDialog({ opened, hasProgress, onStart, onSkip }: WelcomeTourDialogProps) {
 	const { i18n, t } = useTranslation();
-	const { selectedApplicationLanguage, changeLanguage } = useUserLanguageStore();
+	const selectedApplicationLanguage = useUserLanguageStore((state) => state.selectedApplicationLanguage);
+	const changeLanguage = useUserLanguageStore((state) => state.actions.changeLanguage);
 
 	// Switch the UI language live before the tour begins so every subsequent screen (and the tour itself) renders in the
 	// chosen language. Mirrors LanguageMenu: i18next.changeLanguage drives react-i18next + persists to localStorage

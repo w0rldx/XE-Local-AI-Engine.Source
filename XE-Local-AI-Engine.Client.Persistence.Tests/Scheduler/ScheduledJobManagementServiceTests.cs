@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
-///     Integration tests for <see cref="ScheduledJobManagementService" />.
+///     Integration tests for <see cref="Client.Services.Scheduler.Implementation.ScheduledJobManagementService" />.
 ///     Uses a fully-migrated temporary SQLite database + the real Quartz ADO.NET store so both store state
 ///     and Quartz job/trigger state are observable in the same process.
 /// </summary>
@@ -718,7 +718,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     [Test]
     public async Task CreateAndUpdateJobAsync_WithoutMisfirePolicy_StoreTheTemplateDefault()
     {
-        // F-33: an API caller that omits misfirePolicy must get the template's default (SkipMissed for test.echo), not Smart,
+        // An API caller that omits misfirePolicy must get the template's default (SkipMissed for test.echo), not Smart,
         // or a one-shot due during downtime fires retroactively at startup.
         var dbPath = GetDatabasePath("misfire-default.sqlite");
         await MigrateAsync(dbPath);
@@ -739,7 +739,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     [Test]
     public async Task SoftDeletedJob_CannotBeEnabledDisabledOrUpdated_AndSecondDeleteIsANoOp()
     {
-        // F-35: a soft-deleted definition is invisible, so enable/disable/update report it absent and never re-schedule its
+        // A soft-deleted definition is invisible, so enable/disable/update report it absent and never re-schedule its
         // Quartz job, and a second delete succeeds without re-stamping DeletedAtUtc.
         var dbPath = GetDatabasePath("deleted-guards.sqlite");
         await MigrateAsync(dbPath);

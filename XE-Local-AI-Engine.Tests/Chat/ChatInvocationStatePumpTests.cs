@@ -112,7 +112,7 @@ public sealed class ChatInvocationStatePumpTests
     [Test]
     public async Task PumpAsync_EmitsReasoningDeltasWithTheirOwnOffsets()
     {
-        var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
         var correlation = new NodeChatMessageCorrelation
         {
@@ -163,7 +163,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
+        var events = await RunAsync(new RecordingInvocationPump(), new ManualTimeProvider(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -191,7 +191,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
+        var events = await RunAsync(new RecordingInvocationPump(), new ManualTimeProvider(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -217,7 +217,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
+        var events = await RunAsync(new RecordingInvocationPump(), new ManualTimeProvider(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -229,7 +229,7 @@ public sealed class ChatInvocationStatePumpTests
         IReadOnlyList<string> contentSnapshots,
         string terminalContent)
     {
-        var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
         var correlation = new NodeChatMessageCorrelation
         {
@@ -246,7 +246,7 @@ public sealed class ChatInvocationStatePumpTests
     }
 
     private static async Task<List<ChatStreamEvent>> RunAsync(RecordingInvocationPump recordingPump,
-        SteppingClock clock,
+        ManualTimeProvider clock,
         NodeChatMessageCorrelation correlation,
         IReadOnlyList<InvocationState> states,
         TimeSpan step)
@@ -328,12 +328,12 @@ public sealed class ChatInvocationStatePumpTests
     private sealed class SteppingStateReader : ChannelReader<InvocationState>
     {
         private readonly IReadOnlyList<InvocationState> _states;
-        private readonly SteppingClock _clock;
+        private readonly ManualTimeProvider _clock;
         private readonly TimeSpan _step;
         private int _index;
         private bool _available;
 
-        public SteppingStateReader(IReadOnlyList<InvocationState> states, SteppingClock clock, TimeSpan step)
+        public SteppingStateReader(IReadOnlyList<InvocationState> states, ManualTimeProvider clock, TimeSpan step)
         {
             _states = states;
             _clock = clock;
@@ -363,37 +363,6 @@ public sealed class ChatInvocationStatePumpTests
             _available = false;
             item = _states[_index++];
             return true;
-        }
-    }
-
-    // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    // Overrides the timestamp pair as well as the wall clock, because the pump gates both cadences on
-    // GetElapsedTime and stamps every event from GetUtcNow.
-    private sealed class SteppingClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public SteppingClock(DateTimeOffset start)
-        {
-            _utcNow = start;
-        }
-
-        // One timestamp unit per DateTime tick, so GetElapsedTime resolves to exact virtual time.
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public override long GetTimestamp()
-        {
-            return _utcNow.UtcTicks;
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            _utcNow = _utcNow.Add(delta);
         }
     }
 

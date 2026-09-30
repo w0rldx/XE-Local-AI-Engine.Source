@@ -12,7 +12,7 @@ public interface IAppUpdateService
 {
     /// <summary>
     ///     Runs one update check and stores the resulting snapshot. Inert when not desktop or not configured. An offline
-    ///     box records an offline status, while malformed or incompatible data records a distinct failed status.
+    ///     machine records an offline status, while malformed or incompatible data records a distinct failed status.
     /// </summary>
     Task<AppUpdateSnapshot> CheckForUpdatesAsync(CancellationToken ct);
 

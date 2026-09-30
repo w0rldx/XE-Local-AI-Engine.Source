@@ -13,7 +13,7 @@ import type {
 // Cancelled). This is the only status the REST contract carries; the finer generation timeline (see
 // imageGenerationPhases) rides the SignalR push alongside it, because the runtime reads it from the daemon's stdout
 // rather than from any HTTP field.
-export const imageJobStatuses = ["Queued", "Generating", "Succeeded", "Failed", "Cancelled"] as const;
+const imageJobStatuses = ["Queued", "Generating", "Succeeded", "Failed", "Cancelled"] as const;
 export type ImageJobStatus = (typeof imageJobStatuses)[number];
 
 // A status is terminal once the job can no longer transition. Non-terminal jobs are the ones the hub subscribes to
@@ -171,7 +171,7 @@ function toImageModelFamily(raw: string | null | undefined): ImageModelFamily {
 	return (imageModelFamilies as readonly string[]).includes(raw ?? "") ? (raw as ImageModelFamily) : "Sd15";
 }
 
-// How a catalog entry's weights compare to this box's measured memory budget. "Unknown" is a real answer, not a soft
+// How a catalog entry's weights compare to this machine's measured memory budget. "Unknown" is a real answer, not a soft
 // yes: VRAM goes unmeasured on every non-NVIDIA GPU, and a badge that read "Fits" there would be a guess.
 const imageModelFitVerdicts = ["Fits", "Tight", "WontFit", "Unknown"] as const;
 export type ImageModelFitVerdict = (typeof imageModelFitVerdicts)[number];

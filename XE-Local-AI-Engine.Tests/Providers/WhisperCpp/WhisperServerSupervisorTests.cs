@@ -119,7 +119,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task EnsureRunning_CudaBackend_ReleasesLoadAdmissionOnFailure()
     {
-        // Holding the gate after a failed spawn would wedge every other runtime's load on this box.
+        // Holding the gate after a failed spawn would wedge every other runtime's load on the host.
         var admission = new RecordingGpuLoadAdmission();
         await using var harness = new WhisperSupervisorHarness(readinessProbe: new FakeWhisperReadinessProbe(ready: false),
             binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),

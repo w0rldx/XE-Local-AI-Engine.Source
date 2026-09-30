@@ -187,7 +187,7 @@ public sealed class ModelFitRefreshServiceTests
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
 
         // Three repos with IDENTICAL fit (same headroom) so the deterministic tie-break is purely repo-id ordinal.
-        // The "first" repo by id (org/a) is made to complete LAST via a delay, proving completion order does not change ranking.
+        // real-timer: the "first" repo by id (org/a) completes LAST via a delay; ranking must not follow completion order.
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
                      Summary("org/c-GGUF"),

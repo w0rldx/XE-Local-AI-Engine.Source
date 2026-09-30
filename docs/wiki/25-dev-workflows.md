@@ -803,7 +803,7 @@ Which rule sets apply is stated once, in `DevWorkflowRulePolicyResolver`. Each o
 every match is applied, ordered by name. There are no globs, no precedence and no conflict resolution: a rule set
 either applies or it does not, and two that both apply are both injected. A scope column that cannot be read at
 all matches **nothing** — the endpoints are its only validating writer, so an unreadable one is a hand-edited row
-and "applies to every node on this box" is the dangerous reading. A read model renders the same row as empty axes
+and "applies to every node on this machine" is the dangerous reading. A read model renders the same row as empty axes
 instead, because a management page that cannot load the row is a page nobody can use to fix it.
 
 Resolution is **recorded** on every node-run type, agent or not, so `appliedRuleSets` is an honest answer whichever
@@ -1750,7 +1750,7 @@ no event type is added and the retry policy — a singleton, which cannot hold a
 all. The pre-write row is also the last place the failing attempt's work session still exists, the command clearing
 it downstream inside the store's own transition. The members merged in are the telemetry record's own, minus the
 five that cannot be added up: a route belongs to one settle, a served model is a name rather than a quantity, a set
-of tool names does not sum, and the two VRAM figures are a *reading* of the box at one load rather than a quantity
+of tool names does not sum, and the two VRAM figures are a *reading* of the host at one load rather than a quantity
 the attempt spent, so adding two attempts' free-VRAM bytes would produce a number that describes nothing. A column
 added to that record later therefore rides along automatically, or it is not additive; nothing enumerates them by
 hand.

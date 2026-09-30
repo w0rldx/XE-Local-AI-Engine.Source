@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     replaces the served catalog and persists it, and — critically — a failed fetch/validation falls back to the
 ///     persisted last-good remote catalog, else the bundled seed, WITHOUT ever throwing out of the provider. TUnit
 ///     creates a fresh instance per test and disposes it afterward, so the per-test <see cref="HttpClient" />s created
-///     by <see cref="BuildProvider" /> are tracked in <see cref="_disposables" /> and released in <see cref="Dispose" />.
+///     by <see cref="BuildProvider(HttpMessageHandler, string, out InMemoryCatalogCacheStore)" /> are tracked in <see cref="_disposables" /> and released in <see cref="Dispose" />.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelCatalogProviderTests : IDisposable

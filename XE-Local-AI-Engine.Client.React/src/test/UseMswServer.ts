@@ -1,9 +1,7 @@
 // Opt-in MSW lifecycle for the test files that actually stub HTTP routes.
 //
-// This used to be a `setupFiles` entry (src/test/MswSetup.ts), so every test file paid for starting and stopping
-// the interception server whether or not it ever called `server.use(...)`. Calling it explicitly keeps the
-// behaviour identical for the files that need it and removes it from the ones that do not; the no-network
-// invariant for everyone else is held by src/test/NoNetwork.ts instead.
+// It is deliberately not a `setupFiles` entry: only the files that call it pay for starting and stopping the
+// interception server. The no-network invariant for everyone else is held by src/test/NoNetwork.ts.
 //
 // Inside an MSW file a request the test did not declare must FAIL that test naming its URL, rather than falling
 // through to the real network or dying quietly one layer down — see the recorder below for why MSW's own

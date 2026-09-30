@@ -12,8 +12,8 @@ using OpenAIChatResponseFormat = OpenAI.Chat.ChatResponseFormat;
 
 /// <summary>
 ///     An <see cref="IChatClient" /> that defers process start to first use: the supervisor's
-///     <see cref="ILlamaServerProcessSupervisor.EnsureRunningAsync" /> is async while
-///     <see cref="ILocalModelProvider.CreateChatClient" /> is sync, so the cold-start cost is paid on the first
+///     <see cref="ILlamaServerProcessSupervisor.EnsureRunningAsync(string, ModelRole, CancellationToken)" /> is async while
+///     <see cref="Abstractions.ILocalModelProvider.CreateChatClient" /> is sync, so the cold-start cost is paid on the first
 ///     <see cref="GetResponseAsync" /> / <see cref="GetStreamingResponseAsync" /> call (a normal first-token delay)
 ///     rather than blocking the sync factory.
 /// </summary>

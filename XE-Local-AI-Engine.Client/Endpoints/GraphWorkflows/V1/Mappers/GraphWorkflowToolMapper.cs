@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     Projects the invocation service's descriptors onto the wire. A rename and nothing else.
 /// </summary>
 /// <remarks>
-///     The descriptor list is already the D6-filtered set, so filtering here would be a second implementation of the
+///     The descriptor list is already filtered to the runtime's envelope, so filtering here would be a second implementation of the
 ///     envelope, able to disagree with the one the runtime enforces.
 /// </remarks>
 internal static class GraphWorkflowToolMapper

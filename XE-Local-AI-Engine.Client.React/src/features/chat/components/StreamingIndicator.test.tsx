@@ -94,7 +94,7 @@ describe("StreamingIndicator", () => {
 		expect(screen.getByTestId("chat-stream-queued-indicator")).toBeTruthy();
 		expect(screen.queryByTestId("chat-stream-loading-model-indicator")).toBeNull();
 	});
-	// R12: a cold load shows how long it has been going, anchored on the SERVER phase timestamp so a page
+	// A cold load shows how long it has been going, anchored on the SERVER phase timestamp so a page
 	// reload mid-load resumes the count instead of restarting it. No percentage, no bar, no estimate.
 	describe("cold-load elapsed time", () => {
 		beforeEach(() => {

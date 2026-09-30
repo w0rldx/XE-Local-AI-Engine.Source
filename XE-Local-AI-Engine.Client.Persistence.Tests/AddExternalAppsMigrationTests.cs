@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// <summary>
 ///     Schema coverage for <c>AddExternalApps</c>: the two tables it creates, the column types the encrypted and the
 ///     plaintext columns must have, the two indexes, and that its <c>Down</c> takes exactly those two tables away
-///     again. Also the fence for ruling R1-23 — the catalog cache is a file, so no third table exists.
+///     again. Also the fence for the catalog cache being a file, so no third table exists.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddExternalAppsMigrationTests
@@ -22,8 +22,8 @@ public sealed class AddExternalAppsMigrationTests
         AssertEx.True(await probe.TableExistsAsync("external_app_instances"));
         AssertEx.True(await probe.TableExistsAsync("external_app_instance_events"));
 
-        // The catalog's remote copy is cached as a FILE under the node data directory (ruling R1-23). A table here
-        // would mean someone re-added the entity the ruling removed.
+        // The catalog's remote copy is cached as a FILE under the node data directory. A table here would mean
+        // someone re-added the entity that design removed.
         AssertEx.False(await probe.TableExistsAsync("external_app_catalog_cache"),
             "The catalog cache is a file, not a table; a table would be a second, diverging copy of the catalog.");
 

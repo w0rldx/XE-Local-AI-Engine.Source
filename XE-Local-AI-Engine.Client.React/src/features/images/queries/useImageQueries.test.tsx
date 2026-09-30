@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The server-side half of the job history (S9). The list is paged BY THE NODE — every row carries a decrypted
+// The server-side half of the job history. The list is paged BY THE NODE — every row carries a decrypted
 // prompt, so a bounded window is the point — and a delete must take the cached PNG with it.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

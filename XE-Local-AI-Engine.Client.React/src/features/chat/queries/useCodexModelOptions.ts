@@ -15,10 +15,10 @@ import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-que
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 
-export const CODEX_PROVIDER = "CodexOAuth";
+const CODEX_PROVIDER = "CodexOAuth";
 export const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";
 
-// Capability flags as the BACKEND reports them for a cloud entry. These used to be hard-coded `true` here, which made
+// Capability flags as the BACKEND reports them for a cloud entry. Hard-coding them `true` here would make
 // the picker advertise capabilities the runtime then denied: the Azure mapper sets IsReasoningCapable = false, yet
 // every Azure deployment still rendered the violet "Reasoning" pill AND — because isCloud is true — got the full
 // six-level Codex effort menu (none/minimal/low/medium/high/xhigh), all of it inert. The effort is not merely ignored;

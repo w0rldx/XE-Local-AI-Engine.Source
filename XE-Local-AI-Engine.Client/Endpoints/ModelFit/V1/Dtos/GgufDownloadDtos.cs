@@ -89,7 +89,7 @@ public sealed class GgufRepositoryFileResponse
     /// <summary>
     ///     How this file's size compares to the host's currently-free GPU VRAM (<c>Fits</c> / <c>Tight</c> /
     ///     <c>WontFit</c> / <c>Unknown</c>) — the <c>GgufFitVerdict</c> enum name. <c>Unknown</c> when free VRAM could
-    ///     not be probed (no GPU, CPU backend, or dev box without a real probe).
+    ///     not be probed (no GPU, CPU backend, or a host without a real probe).
     /// </summary>
     public required string FitVerdict { get; init; }
 

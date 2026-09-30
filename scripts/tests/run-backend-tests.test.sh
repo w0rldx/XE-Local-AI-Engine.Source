@@ -12,7 +12,7 @@ FAKE="$TMP/repo"
 mkdir -p "$FAKE/scripts/lib" "$FAKE/bin"
 cp "$ROOT/scripts/run-backend-tests.sh" "$FAKE/scripts/"
 cp "$ROOT"/scripts/lib/*.sh "$FAKE/scripts/lib/"
-# Pinned free RAM: the default widths asserted below must not depend on how loaded this box is.
+# Pinned free RAM: the default widths asserted below must not depend on how loaded this machine is.
 printf 'MemAvailable:   67108864 kB\n' >"$TMP/meminfo-64g"
 printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
 export XE_SIZING_MEMINFO="$TMP/meminfo-64g"

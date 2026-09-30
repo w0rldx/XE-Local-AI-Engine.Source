@@ -152,7 +152,7 @@ public sealed class DatasetGenerationExecutorTests
     [Test]
     public async Task Generation_ThatRejectsEverySample_FailsWithTheCountsAndReasons_NotReady()
     {
-        // F-57: a reasoning teacher had every sample rejected and the dataset still read Ready / Succeeded with zero samples.
+        // A reasoning teacher had every sample rejected and the dataset still read Ready / Succeeded with zero samples.
         var store = Substitute.For<ITrainingDatasetStore>();
         var runner = Substitute.For<IStructuredAgentRunner>();
         _ = runner.RunAsync(Arg.Any<IChatClient>(), Arg.Any<StructuredAgentRequest>(), Arg.Any<CancellationToken>())

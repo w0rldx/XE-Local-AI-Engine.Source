@@ -202,7 +202,7 @@ public sealed class LayerDependencyTests
             ]
         };
 
-    // The direct-re-add guard that the compile-asset wall cannot provide (slice S5). PrivateAssets="compile" on
+    // The direct-re-add guard that the compile-asset wall cannot provide. PrivateAssets="compile" on
     // Providers.Ollama's OllamaSharp reference stops that package's compile assets flowing to consumers, but a
     // developer adding <PackageReference Include="OllamaSharp"/> straight to Client.Application.csproj brings its OWN
     // compile assets and bypasses the wall entirely — a direct add compiles fine, and only this list catches it.
@@ -627,7 +627,7 @@ public sealed class LayerDependencyTests
 
         AssertEx.Equal("compile", privateAssets,
             $"{projectName}'s OllamaSharp PackageReference must keep PrivateAssets=\"compile\". Without it the package's "
-            + "compile assets flow through the ProjectReference to every consumer, and the S5 boundary — no OllamaSharp "
+            + "compile assets flow through the ProjectReference to every consumer, and the provider boundary — no OllamaSharp "
             + "type outside this provider — silently reopens with no other test noticing.");
     }
 

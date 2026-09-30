@@ -5,8 +5,8 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 // Refcounted, module-level SignalR connections — ONE shared HubConnection per hub path, reused across component mounts.
 //
-// Every feature hub hook used to build a brand-new HubConnection inside its mount effect, so each page visit paid a full
-// HTTP negotiate + WebSocket upgrade (live-confirmed connection churn on navigation). This manager keeps a single
+// A hook that built its own HubConnection inside its mount effect would pay a full HTTP negotiate + WebSocket upgrade
+// on every page visit. This manager keeps a single
 // connection alive per hub for as long as at least one subscriber is mounted: the FIRST acquire builds + starts it,
 // later acquires reuse it, and the LAST release stops (and discards) it. It mirrors the proven singleton pattern in
 // NodeChatConnection but generalizes it to any hub and to multiple concurrent subscribers.

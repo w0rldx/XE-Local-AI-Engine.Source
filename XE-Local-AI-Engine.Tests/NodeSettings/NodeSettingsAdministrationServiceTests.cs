@@ -356,7 +356,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task Save_WhenAutoEffortFastModelIsNotInstalled_IsRejected()
     {
-        // The hole the live round found: with no cloud provider configured, `ModelTrustResolver` classifies a
+        // The hole this closes: with no cloud provider configured, `ModelTrustResolver` classifies a
         // scheme-less id as Local and `LocalModelProviderResolver` routes an unmapped id to the default provider
         // (llamacpp), so the pair alone accepted ANY string — a cloud model id saved with HTTP 200. Registry
         // membership is what refuses it.

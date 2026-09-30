@@ -44,11 +44,10 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "start_runtime_acquisition")]
     [Description("Start acquiring the managed llama.cpp runtime. Omit variant to select the best local backend automatically.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpRuntimeAcquisitionStartResponse> StartRuntimeAcquisitionAsync(CancellationToken cancellationToken,
         [Description("Optional backend: cpu, cuda, or vulkan.")]
         string? variant = null)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("start_runtime_acquisition", AuditArguments(("variant", variant)), async () =>
         {

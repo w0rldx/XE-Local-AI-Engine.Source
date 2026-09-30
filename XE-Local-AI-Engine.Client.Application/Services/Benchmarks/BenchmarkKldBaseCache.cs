@@ -212,7 +212,7 @@ public sealed class BenchmarkKldBaseCache
 
     /// <summary>
     ///     Under the same machine-global base the llama.cpp binaries and the compute runtime use, so one measurement
-    ///     serves every node profile on the box and the existing uninstaller sweep already reaches it.
+    ///     serves every node profile on the host and the existing uninstaller sweep already reaches it.
     /// </summary>
     private static string DefaultRoot() =>
         Path.Combine(RuntimeCacheDirectory.Resolve(),

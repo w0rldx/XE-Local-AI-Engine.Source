@@ -71,10 +71,6 @@ public sealed class ReorderBenchmarkTaskItemsRequest
     public IReadOnlyList<Guid> ItemIds { get; init; } = [];
 }
 
-/// <param name="InputHash">
-///     What this item asks, as a value. Every run is stamped with a copy at freeze, and a run whose stamp no longer
-///     matches answered a question that no longer exists.
-/// </param>
 public sealed class BenchmarkTaskItemResponse
 {
     public Guid Id { get; init; }
@@ -88,6 +84,11 @@ public sealed class BenchmarkTaskItemResponse
 
     public required string Kind { get; init; }
     public int Revision { get; init; }
+
+    /// <summary>
+    ///     What this item asks, as a value. Every run is stamped with a copy at freeze, and a run whose stamp no longer
+    ///     matches answered a question that no longer exists.
+    /// </summary>
     public required string InputHash { get; init; }
 
     /// <summary>Whether a freeze fans out over this item, or it only generates the items that a freeze does.</summary>

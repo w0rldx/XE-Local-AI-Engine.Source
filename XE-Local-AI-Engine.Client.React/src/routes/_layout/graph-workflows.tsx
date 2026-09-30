@@ -18,8 +18,8 @@ const graphWorkflowsSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_layout/graph-workflows")({
-	// Capability gate: Graph Workflows ships ON since S4; a build that turns it off redirects here to home, matching the nav
-	// child being filtered out of NavigationMenuData. The node's own switch (`GraphWorkflows:Enabled=false`) redirects the
+	// Capability gate: Graph Workflows ships ON; a build that turns it off redirects here to home, matching the nav child
+	// being filtered out of NavigationMenuData. The node's own switch (`GraphWorkflows:Enabled=false`) redirects the
 	// same way, read from the one route that still answers with the feature off.
 	beforeLoad: async ({ context }) => {
 		if (!nodeCapabilities.graphWorkflows) {

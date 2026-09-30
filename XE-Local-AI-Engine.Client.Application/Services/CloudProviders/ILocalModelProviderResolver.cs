@@ -54,7 +54,7 @@ public interface ILocalModelProviderResolver
     ILocalModelProvider ResolveProvider(string providerName);
 
     /// <summary>
-    ///     Convenience composition of <see cref="ResolveProviderNameForModelAsync" /> + <see cref="ResolveProvider" />:
+    ///     Convenience composition of <see cref="ResolveProviderNameForModelAsync(string, CancellationToken)" /> + <see cref="ResolveProvider" />:
     ///     resolves the provider that serves <paramref name="modelName" /> in one call.
     /// </summary>
     Task<ILocalModelProvider> ResolveProviderForModelAsync(string modelName, CancellationToken cancellationToken = default);

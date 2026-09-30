@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend.
+///     The local model advisor — the hardware-aware rewrite of the Docker/llmfit recommendation backend.
 /// </summary>
 /// <remarks>
 ///     Each refresh profiles the node hardware via the device-audited effective profile from
@@ -644,8 +644,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </remarks>
     private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations, HardwareProfile profile)
     {
-        // The fit budget the score is normalized against, read from the estimator rather than re-derived here.
-        // A duplicated copy of this expression was missed when the GPU budget moved from total VRAM to free VRAM, so the score below was normalized against a budget the fit verdicts no longer used.
+        // The fit budget the score is normalized against, read from the estimator rather than re-derived here so the score
+        // and the fit verdicts can never normalize against different budgets.
         var budgetBytes = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
 
         using var buffer = new MemoryStream();

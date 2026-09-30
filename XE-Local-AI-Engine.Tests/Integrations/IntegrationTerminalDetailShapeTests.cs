@@ -15,10 +15,9 @@ using Harness = IntegrationCoordinatorHarness;
 ///     <c>{category, summary}</c>, <c>execution.completed</c> <c>{tokens?, durationMs}</c>, and
 ///     <c>execution.cancelled</c> nothing at all.
 ///     <para>
-///         The S4 live round found an older row whose <c>execution.failed</c> carried
-///         <c>{failureCategory, failureSummary}</c> — the execution store's own fallback shape, which is what every
-///         terminal wrote before the terminal payload was threaded through the command. A caller that missed the frame
-///         and replayed from the poll route was then handed different keys from the ones the stream had given it.
+///         An older row's <c>execution.failed</c> can carry <c>{failureCategory, failureSummary}</c> — the execution
+///         store's own fallback shape, written when no terminal payload is threaded through the command. A caller that
+///         missed the frame and replayed from the poll route would be handed different keys from the stream's.
 ///     </para>
 ///     <para>
 ///         This suite walks every <c>TryTerminalizeAsync</c> caller path the application can reach — the coordinator's

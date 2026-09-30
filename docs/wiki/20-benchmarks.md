@@ -312,7 +312,7 @@ KL divergence needs a base-model logit file, which is tens of gigabytes. `Benchm
 - **Leased with `FileMode.CreateNew` + `FileOptions.DeleteOnClose`.** That is what makes the *crash* case right: the OS drops the handle, so the next run takes over instead of waiting on a lock nobody will release. A bare "does the lock file exist" check gets exactly that case wrong.
 - **Published atomically** — written to `<name>.tmp.<invocationId>`, flushed, then same-directory renamed, so a partial logit file never resolves as a measurement.
 - **Reserved against `IFreeSpaceProbe`** before the base phase, refusing when free space minus the estimate leaves under the headroom, naming both numbers.
-- **A KLD measurement runs two models in sequence, so it takes two sequential capacity reservations.** One reservation sized from the quant held across the base phase — routinely the larger model — is an over-admission that OOMs on exactly the box where the base is big.
+- **A KLD measurement runs two models in sequence, so it takes two sequential capacity reservations.** One reservation sized from the quant held across the base phase — routinely the larger model — is an over-admission that OOMs on exactly the host where the base is big.
 
 Disk estimate: **measured, not derived**. A real 10-chunk base file for `Qwen3.8-27B` (`n_vocab` 151 936) was 1 266 472 900 bytes over 777 912 320 logits — **1.628 B/logit**, not the format's 2.0. `BenchmarkFidelityPolicy.KldBytesPerLogit` is 1.75; 200 chunks is ~25.3 GB actual, not the 31.1 GB an f16 assumption promises.
 

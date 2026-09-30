@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 internal sealed class ExternalAppResourceGate
 {
-    /// <summary>Headroom above the manifest's own minimum, so an install does not leave the box with nothing to spare.</summary>
+    /// <summary>Headroom above the manifest's own minimum, so an install does not leave the host with nothing to spare.</summary>
     internal const long MemoryHeadroomBytes = 512L * 1024 * 1024;
 
     /// <summary>Free disk an install requires, independent of image size: the pull figure is not knowable in advance.</summary>

@@ -13,11 +13,11 @@ internal sealed record class IntegrationSession
     /// <summary>The trigger that created the session. Loose reference with no FK. Plaintext (structural).</summary>
     public Guid TriggerId { get; set; }
 
-    /// <summary>The integrator identity that owns this session (ruling R4-6). Plaintext (structural).</summary>
+    /// <summary>The integrator identity that owns this session (ADR 0008 R4-6). Plaintext (structural).</summary>
     public Guid PrincipalId { get; set; }
 
     /// <summary>
-    ///     The owned conversation's id, pre-minted by the caller <b>before</b> the accept transaction (ruling R4-1).
+    ///     The owned conversation's id, pre-minted by the caller <b>before</b> the accept transaction (ADR 0008 R4-1).
     ///     Plaintext (structural).
     /// </summary>
     /// <remarks>

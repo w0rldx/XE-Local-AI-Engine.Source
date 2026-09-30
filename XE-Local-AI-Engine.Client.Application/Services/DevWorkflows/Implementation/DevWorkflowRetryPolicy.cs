@@ -6,22 +6,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>What a lane came back with, in the four terms the retry decision is made on.</summary>
-internal sealed class DevWorkflowFailure
-{
-    /// <summary>The closed failure-class token that says why.</summary>
-    public required string FailureClass { get; init; }
-
-    /// <summary>What an operator is shown. Already sanitized by whoever produced it.</summary>
-    public required string SanitizedReason { get; init; }
-
-    /// <summary>The node's output document, which a routed retry hands to the node it re-runs.</summary>
-    public required string OutputJson { get; init; }
-
-    /// <summary>The event outcome, for the two cases the status alone cannot express.</summary>
-    public string? Outcome { get; init; }
-}
-
 /// <summary>
 ///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it
 ///     was judging, or stand it down for a human.
@@ -299,7 +283,7 @@ internal sealed class DevWorkflowRetryPolicy
                 cancellationToken);
         }
 
-        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said; absent means no cap (ruling D9), a parse-time default silently tightening every stored definition.
+        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said; absent means no cap, a parse-time default silently tightening every stored definition.
         // Attempt is the right base and needs no column, an operator Retry is subtracted from it, and two nodes routing to one target over-attributes — which errs toward blocking.
         if (node.MaxLoopIterations is { } maxLoopIterations)
         {

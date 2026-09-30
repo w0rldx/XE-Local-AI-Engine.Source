@@ -61,15 +61,15 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.integrations).toBe(true);
 	});
 
-	// S4 flipped this on once the editor and the run view were verified end to end. The flag stays asserted rather
-	// than assumed: it is what decides whether the route and the nav entry exist at all.
+	// The flag stays asserted rather than assumed: it is what decides whether the route and the nav entry exist at
+	// all.
 	it("enables the Graph Workflows surface by default", () => {
 		expect(nodeCapabilities.graphWorkflows).toBe(true);
 	});
 
-	// S5 flips this on ahead of its live browser round. The flag is compile-time: the node's own
-	// ExternalApps:Enabled switch can neither reveal these routes nor hide them, so the default is asserted rather
-	// than assumed — it is what decides whether the nav group and the four routes exist at all.
+	// The flag is compile-time: the node's own ExternalApps:Enabled switch can neither reveal these routes nor hide
+	// them, so the default is asserted rather than assumed — it is what decides whether the nav group and the four
+	// routes exist at all.
 	it("enables the External Apps surface by default", () => {
 		expect(nodeCapabilities.externalApps).toBe(true);
 	});

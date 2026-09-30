@@ -38,7 +38,7 @@ internal static class LocalModelsMapper
 
         return new ListLocalModelsResponse
         {
-            // A no-Ollama box is still "available" when at least one node-local GGUF is installed — the operator can
+            // A no-Ollama machine is still "available" when at least one node-local GGUF is installed — the operator can
             // select and chat over it via llama.cpp without Ollama running.
             IsAvailable = true,
             SelectedModelName = selectedModelName,
@@ -265,7 +265,7 @@ internal static class LocalModelsMapper
         IReadOnlyList<LocalModelDescriptor>? ggufModels = null,
         IReadOnlyList<LocalModelResponse>? externalModels = null)
     {
-        // Ollama is unavailable, but node-local GGUFs (served by llama.cpp) do not depend on it — surface them so a no-Ollama box can still select and chat over an installed
+        // Ollama is unavailable, but node-local GGUFs (served by llama.cpp) do not depend on it — surface them so a no-Ollama machine can still select and chat over an installed
         // GGUF. A Codex session likewise offers cloud models, and an external connection is served by someone else's endpoint. Order mirrors the success path: GGUF, cloud, external.
         var ggufItems = ggufModels is { Count: > 0 }
             ? ToLlamaCppModelResponses(ggufModels, selectedModelName)

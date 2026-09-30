@@ -71,14 +71,20 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     [Test]
     public async Task RetentionOptions_ValidConfig_PassesStartupValidation()
     {
-        await StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:10:00");
+        var options = await StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:10:00");
+
+        AssertEx.True(options.Enabled, "the host started with the configured window bound, not a default.");
+        AssertEx.Equal(expected: 30, options.RetentionDays);
+        AssertEx.Equal(TimeSpan.FromMinutes(10), options.SweepInterval);
     }
 
     [Test]
     public async Task RetentionOptions_DisabledWithDefaults_PassesStartupValidation()
     {
         // The default-off configuration (no overrides) must never fail startup validation.
-        await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null);
+        var options = await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null);
+
+        AssertEx.False(options.Enabled, "the host started with retention off.");
     }
 
     [Test]
@@ -106,7 +112,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
     // Builds a host that registers ChatRetentionOptions exactly as production does (bind + ValidateDataAnnotations +
     // ValidateOnStart) and starts it, so a bad window surfaces as an OptionsValidationException during StartAsync.
-    private static async Task StartHostWithRetentionAsync(bool enabled, string? retentionDays, string? sweepInterval)
+    private static async Task<ChatRetentionOptions> StartHostWithRetentionAsync(bool enabled, string? retentionDays, string? sweepInterval)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -131,7 +137,9 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
         using var host = builder.Build();
         await host.StartAsync();
+        var options = host.Services.GetRequiredService<IOptions<ChatRetentionOptions>>().Value;
         await host.StopAsync();
+        return options;
     }
 
     [Test]
@@ -257,7 +265,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var orphanedSession = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
         var orphanedRun = SeedArtifactScope("dev-workflows", Guid.NewGuid(), AgedWriteTimeUtc());
 
-        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(orphanedSession), "A work-session artifact directory with no agent_work_sessions row must be reclaimed.");
@@ -273,7 +281,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var freshScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), FreshWriteTimeUtc());
         var agedScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
 
-        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(freshScope), "A scope written inside the grace window may still be racing its own row commit.");
@@ -289,7 +297,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
         AgeDirectory(artifactDirectory, AgedWriteTimeUtc());
 
-        using var sweeper = CreateSweeper(factory.Services, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        using var sweeper = CreateSweeper(factory.Services, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(artifactDirectory), "A live session's artifact bytes must survive the orphan resweep however old they are.");
@@ -309,7 +317,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         Directory.CreateSymbolicLink(linkPath, target);
         var agedScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
 
-        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(linkPath), "A symbolic link planted in the store is never a sweep candidate.");
@@ -327,7 +335,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var failingScope = SeedArtifactScope("work-sessions", failingSessionId, AgedWriteTimeUtc());
         var secondOrphan = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
 
-        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(failingScope), "The scope whose delete threw is left for the next start.");
@@ -426,7 +434,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         // values and asserting the boundary proves the fix. Under the old seconds cutoff the ~10-digit cutoff is always
         // smaller than any real 13-digit last_seen, so nothing would ever be deleted and this test would fail.
         const long fixedNowMs = 2_000_000_000_000; // ~2033, a realistic 13-digit millisecond clock.
-        var fixedClock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
+        var fixedClock = new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
         var cutoffMs = fixedNowMs - (long)TimeSpan.FromDays(30).TotalMilliseconds;
 
         await using var provider = await BuildProviderAsync("ms-boundary.sqlite");
@@ -448,7 +456,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     public async Task Sweep_ConversationTouchedAfterCandidateSelection_SurvivesWhilePeerIsDeleted()
     {
         const long fixedNowMs = 2_000_000_000_000;
-        var fixedClock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
+        var fixedClock = new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
         var cutoffMs = fixedNowMs - (long)TimeSpan.FromDays(30).TotalMilliseconds;
 
         var touchedId = Guid.Empty;
@@ -678,22 +686,6 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture);
-    }
-
-    // A clock frozen at a fixed instant so the retention cutoff (now - RetentionDays) is deterministic.
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
     }
 
     // Wraps the real retention store and runs a callback immediately after candidate selection, deterministically

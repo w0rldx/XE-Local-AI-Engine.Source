@@ -37,7 +37,7 @@ public sealed class ShippedCatalogSeedTests
     [Test]
     public async Task Seed_IsByteIdenticalToTheGeneratedCatalog()
     {
-        // R1-25: the embedded seed is a copy of the converter's output, never an independently edited file. Only a
+        // The embedded seed is a copy of the converter's output, never an independently edited file. Only a
         // source checkout carries the generated catalog, so a packaged run skips visibly rather than passing.
         if (ExternalAppCatalogSeed.DistPath is null)
         {

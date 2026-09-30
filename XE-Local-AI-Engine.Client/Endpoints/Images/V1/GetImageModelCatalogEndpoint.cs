@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Images.Catalog;
 /// </summary>
 /// <remarks>
 ///     Joins three things the UI would otherwise correlate itself: the bundled catalog entries, which of them are
-///     already installed, and how each one's weights compare to this box's measured memory budget. Every entry carries
+///     already installed, and how each one's weights compare to this machine's measured memory budget. Every entry carries
 ///     its whole file-set in the exact shape <c>POST images/models/downloads</c> accepts, so installing is one click.
 ///     The join lives in <see cref="ImageModelCatalogService" />.
 /// </remarks>

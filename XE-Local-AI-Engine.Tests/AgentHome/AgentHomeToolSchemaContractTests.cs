@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="AgentHomeToolDefinition.ParameterSchema" /> and the authoritative
 ///     <c>AgentHomeRunToolRequestValidator.SelectedFolderIdPattern</c> behind the handler's compiled regex — must agree,
 ///     and the values a real model can emit must validate. A drift between the two is invisible until a model sends a
-///     value one accepts and the other rejects, which is what the first AgentHome live round paid for. Whether the
+///     value one accepts and the other rejects. Whether the
 ///     shared pattern survives llama.cpp's GBNF converter is pinned separately, by
 ///     <c>LlamaGrammarPatternCompatibilityTests</c>.
 /// </summary>
@@ -49,8 +49,8 @@ public sealed class AgentHomeToolSchemaContractTests
     }
 
     [Test]
-    [Arguments("scratch$", "THE live-round regression: the trailing '$' the old GBNF grammar forced onto every value")]
-    [Arguments("05f06dd9-e81c-410b-9a1b-7ff3ae40e7da$", "the live round's correct GUID plus the grammar's literal '$'")]
+    [Arguments("scratch$", "the regression: the trailing '$' a GBNF grammar with an interior anchor forces onto every value")]
+    [Arguments("05f06dd9-e81c-410b-9a1b-7ff3ae40e7da$", "a correct GUID plus the grammar's literal '$'")]
     [Arguments("^scratch", "a leading '^' — the other half of the same grammar defect")]
     [Arguments("Scratch", "an uppercase alias is not a legal alias")]
     [Arguments("-leading-hyphen", "an alias must start with a letter or digit")]

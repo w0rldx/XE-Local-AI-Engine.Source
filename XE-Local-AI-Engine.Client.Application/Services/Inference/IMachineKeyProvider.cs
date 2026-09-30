@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
-///     Supplies a stable, local-only machine identifier used to key inference profiles to the box they were tuned on.
+///     Supplies a stable, local-only machine identifier used to key inference profiles to the host they were tuned on.
 ///     The key is generated once and persisted in the node settings file.
 /// </summary>
 /// <remarks>

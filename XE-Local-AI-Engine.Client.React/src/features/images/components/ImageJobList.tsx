@@ -24,9 +24,8 @@ interface ImageJobListProps {
 // The generation history / live queue. Server-state comes from TanStack Query (invalidated by the hub on each coarse
 // status push) — nothing is mirrored into a store. Renders newest-first cards; an empty history shows a hint.
 //
-// Paged BY THE SERVER. It used to fetch every job and paginate in the browser, which bounded what was rendered but not
-// what was sent: every row carries a decrypted prompt, so the payload grew without limit as the node was used. The
-// footer's limit/offset now ride with the request, and `totalCount` is the node's own figure.
+// Paged BY THE SERVER: every row carries a decrypted prompt, so paginating in the browser would bound what is rendered
+// but not what is sent. The footer's limit/offset ride with the request, and `totalCount` is the node's own figure.
 export function ImageJobList({
 	jobs,
 	totalCount,

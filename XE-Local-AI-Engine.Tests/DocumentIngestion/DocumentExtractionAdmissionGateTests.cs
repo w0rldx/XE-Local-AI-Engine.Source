@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// The lease handles are disposed explicitly on the paths under test; CA2000 cannot track the out-var + conditional flow.
-#pragma warning disable CA2000
 [Category(TestCategories.Unit)]
 public sealed class DocumentExtractionAdmissionGateTests
 {
@@ -13,8 +11,11 @@ public sealed class DocumentExtractionAdmissionGateTests
     {
         using var gate = new DocumentExtractionAdmissionGate(maxConcurrentExtractions: 1);
 
+        // The leases are disposed explicitly below; CA2000 cannot track an out-var through an assertion.
+#pragma warning disable CA2000
         AssertEx.True(gate.TryAcquire(out var first), "the first extraction is admitted.");
         AssertEx.False(gate.TryAcquire(out var blocked), "a second extraction is rejected while the gate is full.");
+#pragma warning restore CA2000
         AssertEx.Null(blocked);
 
         // Releasing the first lease frees the single slot for the next extraction.
@@ -49,4 +50,3 @@ public sealed class DocumentExtractionAdmissionGateTests
         });
     }
 }
-#pragma warning restore CA2000

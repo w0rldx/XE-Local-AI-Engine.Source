@@ -71,7 +71,7 @@ public sealed class IntegrationAccessResult
 
 /// <summary>
 ///     The ONE authorisation rule for every external route that addresses an execution or a session, written once so no
-///     slice re-derives half of it.
+///     caller re-derives half of it.
 /// </summary>
 /// <remarks>
 ///     The rule: the row exists, AND its <c>PrincipalId</c> is the caller's, AND the caller's CURRENT key allowlists the

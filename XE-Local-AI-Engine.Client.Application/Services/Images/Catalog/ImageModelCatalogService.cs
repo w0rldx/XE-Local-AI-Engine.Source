@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Joins the curated image-model catalog with the installed registry and this box's measured memory budget, so each
+///     Joins the curated image-model catalog with the installed registry and this machine's measured memory budget, so each
 ///     entry carries its installed state and fit verdict.
 /// </summary>
 public sealed class ImageModelCatalogService

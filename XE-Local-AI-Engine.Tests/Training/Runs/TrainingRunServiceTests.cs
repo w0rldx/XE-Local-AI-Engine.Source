@@ -268,7 +268,7 @@ public sealed class TrainingRunServiceTests : IDisposable
     }
 
     private TrainingRunWorkspace BuildWorkspace() =>
-        new(new FixedNodeDataDirectory(_root), _keyHolder);
+        new(new FakeNodeDataDirectory(_root), _keyHolder);
 
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {

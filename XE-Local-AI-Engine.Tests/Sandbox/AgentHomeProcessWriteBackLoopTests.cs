@@ -66,7 +66,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             Skip.Test("BLOCKED: real `git` is required on PATH for the process-provider write-back loop.");
         }
 
-        var clock = new FixedClock(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), clock);
 
         var resolver = new FakeSelectedFolderResolver();
@@ -349,20 +349,6 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         }
     }
 
-    private sealed class FixedClock : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-    }
 }
 
 internal static class AgentHomeProcessPhaseTestAccess

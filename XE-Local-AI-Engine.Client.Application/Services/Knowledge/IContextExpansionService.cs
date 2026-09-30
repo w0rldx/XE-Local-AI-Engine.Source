@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 ///     Expands a matched chunk into its surrounding context with neighbor chunks at a nearby <c>chunk_index</c> in the
 ///     same document, so a fact straddling a chunk boundary is returned with the passage around it.
 /// </summary>
-/// <remarks>Scoped: reads through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.</remarks>
+/// <remarks>Scoped: reads through the request-scoped <see cref="Client.Persistence.NodeChatDbContext" /> connection.</remarks>
 public interface IContextExpansionService
 {
     /// <summary>

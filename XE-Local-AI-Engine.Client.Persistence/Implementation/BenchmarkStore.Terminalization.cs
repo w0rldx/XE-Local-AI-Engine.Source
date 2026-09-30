@@ -274,12 +274,4 @@ public sealed partial class BenchmarkStore
 
         return (revision, true);
     }
-
-    /// <summary>
-    ///     A run record carrying its derived judge view.
-    /// </summary>
-    /// <remarks>
-    ///     Every path that returns a run uses this: the view is how a caller reads judge state now, and a record that
-    ///     silently omitted it would read as "no judging" to a caller that had just terminalized one.
-    /// </remarks>
 }

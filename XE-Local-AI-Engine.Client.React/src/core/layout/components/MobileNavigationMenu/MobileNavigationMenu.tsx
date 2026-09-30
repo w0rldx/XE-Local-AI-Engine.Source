@@ -20,8 +20,8 @@ function MobileNavigationDrawerLinks({ links, onLinkClick }: MobileNavigationDra
 	return links.map((link) => (
 		<div key={`item-${link.to ?? link.label}`}>
 			<div className="h-17 flex items-center">
-				{/* `to` only when the link has no onClick of its own: an onClick used to run INSTEAD of navigating,
-				    and an anchor would navigate as well. */}
+				{/* `to` only when the link has no onClick of its own: an onClick runs INSTEAD of navigating, and an
+				    anchor would navigate as well. */}
 				<SidebarMenuItem
 					icon={link.icon}
 					to={link.onClick ? undefined : link.to}
@@ -72,7 +72,7 @@ export function MobileNavigationMenu({
 		useMobileNavigationDrawer(setDrawerOpen);
 
 	// A group's root item is a disclosure for the sub-panel, so it never becomes an anchor; a flat one leads
-	// somewhere and does, unless it carries an onClick of its own (which used to run INSTEAD of navigating).
+	// somewhere and does, unless it carries an onClick of its own (which runs INSTEAD of navigating).
 	const hasLinks = (links?.length ?? 0) > 0;
 	const rootItemTo = hasLinks || menuItem.onClick ? undefined : menuItem.to;
 

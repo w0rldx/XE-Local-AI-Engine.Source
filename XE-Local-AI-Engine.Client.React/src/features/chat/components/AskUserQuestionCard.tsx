@@ -4,11 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { resolveUserQuestionMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-// SWAP POINT: when the OpenAPI regen lands the resolve endpoint, change this import to the generated
-// `resolveUserQuestionMutation` from "@/core/api/generated/@tanstack/react-query.gen" — the interim stand-in has the
-// same `{ mutationFn }` over `{ body }` shape, so nothing below changes.
-import { resolveUserQuestionMutation } from "@/features/chat/api/AskUserQuestionWire";
 import type { PendingUserQuestion, UserQuestionAnswer } from "@/features/chat/api/AskUserQuestionWire";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";

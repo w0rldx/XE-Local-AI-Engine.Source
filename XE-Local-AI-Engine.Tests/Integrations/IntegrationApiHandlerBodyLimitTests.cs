@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         The other two — the <c>IRequestSizeLimitMetadata</c> the route carries and the
 ///         <see cref="IHttpMaxRequestBodySizeFeature" /> the handler sets — are Kestrel-side, and the in-memory test
 ///         host presents no Kestrel connection, so an assertion here would neither pass nor disprove anything about
-///         them. They are proven in the live round. What IS asserted here is that a caller who lies about, or omits,
+///         them; only a real Kestrel host proves them. What IS asserted here is that a caller who lies about, or omits,
 ///         <c>Content-Length</c> gets the same 413 and never allocates more than one byte past the cap.
 ///     </para>
 ///     <para>

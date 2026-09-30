@@ -118,12 +118,10 @@ function makeWrapper() {
 describe("agent definition reads", () => {
 	beforeEach(() => {
 		listMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: agentDefinitionsQueryIds.list }],
 			queryFn: async () => ({ items: [generatedDefinition] }),
 		}));
 		toolCapableMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: "getToolCapableModels" }],
 			queryFn: async () => ({ models: ["qwen3:8b", "llama3.1:8b"] }),
 		}));

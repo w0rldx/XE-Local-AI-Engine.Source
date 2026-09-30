@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     REAL code path end-to-end rather than faking anything: it must never throw regardless of whether THIS
 ///     machine's keyring/Secret-Service/DPAPI actually works, which is exactly the contract
 ///     <see cref="EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync" /> promises. On a
-///     Secret-Service-less Linux box (e.g. this CI/dev sandbox) this genuinely exercises the persistence-unavailable
-///     branch; on a box with a working keyring it exercises the happy path — both must be silent.
+///     Secret-Service-less Linux host (e.g. a CI runner) this genuinely exercises the persistence-unavailable
+///     branch; on a host with a working keyring it exercises the happy path.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class EntraAuthCodeConfidentialClientFactoryTests : IDisposable
@@ -34,11 +34,15 @@ public sealed class EntraAuthCodeConfidentialClientFactoryTests : IDisposable
         Directory.CreateDirectory(_dataDirectoryPath);
         var app = EntraAuthCodeConfidentialClientFactory.Build("tenant-id", "client-id", "client-secret", "http://localhost:53682/signin-oidc");
 
-        // Must complete without throwing — a broken/absent OS-native persistence backend (no org.freedesktop.secrets,
-        // no Keychain, no DPAPI) is an accepted degraded mode (in-memory cache, logged), never an escaped exception.
-        await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app,
-            new FakeNodeDataDirectory(_dataDirectoryPath),
-            NullLogger.Instance);
+        var logger = new RecordingLogger<EntraAuthCodeConfidentialClientFactoryTests>();
+
+        // A broken/absent OS-native persistence backend (no org.freedesktop.secrets, no Keychain, no DPAPI) is an
+        // accepted degraded mode (in-memory cache, logged), never an escaped exception.
+        await AssertEx.CompletesAsync(EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, new FakeNodeDataDirectory(_dataDirectoryPath), logger),
+            TestBudgets.Contended,
+            "registration returns whether or not the platform can persist the cache.");
+
+        AssertRegisteredOrDegradedWithOneWarningEach(logger, calls: 1);
     }
 
     [Test]
@@ -51,7 +55,27 @@ public sealed class EntraAuthCodeConfidentialClientFactoryTests : IDisposable
         var first = EntraAuthCodeConfidentialClientFactory.Build("tenant-id", "client-id", "client-secret", "http://localhost:53682/signin-oidc");
         var second = EntraAuthCodeConfidentialClientFactory.Build("tenant-id", "client-id", "client-secret", "http://localhost:53682/signin-oidc");
 
-        await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(first, dataDirectory, NullLogger.Instance);
-        await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(second, dataDirectory, NullLogger.Instance);
+        var logger = new RecordingLogger<EntraAuthCodeConfidentialClientFactoryTests>();
+
+        await AssertEx.CompletesAsync(EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(first, dataDirectory, logger),
+            TestBudgets.Contended,
+            "the first registration returns.");
+        await AssertEx.CompletesAsync(EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(second, dataDirectory, logger),
+            TestBudgets.Contended,
+            "a second registration against the same cache file returns too.");
+
+        AssertRegisteredOrDegradedWithOneWarningEach(logger, calls: 2);
+    }
+
+    /// <summary>
+    ///     The platform decides which branch runs, so the outcome is one of exactly two shapes: every call registered
+    ///     silently, or every call logged the one in-memory fallback warning. Anything else escaped the contract.
+    /// </summary>
+    private static void AssertRegisteredOrDegradedWithOneWarningEach(RecordingLogger<EntraAuthCodeConfidentialClientFactoryTests> logger, int calls)
+    {
+        AssertEx.True(logger.Entries.Count is 0 || logger.Entries.Count == calls,
+            $"either every registration persisted or every one degraded; logged {logger.Entries.Count} entries for {calls} calls.");
+        AssertEx.True(logger.Entries.All(static entry => entry.Level == LogLevel.Warning && entry.Message.Contains("in-memory", StringComparison.Ordinal)),
+            "the only thing a registration may log is the in-memory fallback warning.");
     }
 }

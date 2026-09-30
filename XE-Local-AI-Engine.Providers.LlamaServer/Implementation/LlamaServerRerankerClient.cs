@@ -40,7 +40,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     ///     budget has to grow with the pool.
     /// </summary>
     /// <remarks>
-    ///     The caller sends <c>max(20, 4 x limit)</c> chunks of about 500 tokens, which a CPU-only box cannot finish
+    ///     The caller sends <c>max(20, 4 x limit)</c> chunks of about 500 tokens, which a CPU-only machine cannot finish
     ///     inside a flat 5 s — the reranker would then degrade to fusion order on every search while looking
     ///     configured. 500 ms per document is roughly double a measured CPU pass on a chunk that size: generous enough
     ///     to stop punishing slow hardware without being a licence to hang.
@@ -217,7 +217,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         catch (Exception exception)
         {
             // Server down, transport error, scoring timeout or malformed body. The reason separates "ran out of time on this pool" — raise the budget,
-            // shrink the pool, or the box is too slow — from "there is no reranker"; both look identical otherwise.
+            // shrink the pool, or the host is too slow — from "there is no reranker"; both look identical otherwise.
             LogDegrade(exception is OperationCanceledException ? "timeout" : "unavailable",
                 documents.Count,
                 requestTimeout,

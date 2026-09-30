@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Decides whether a persisted, frozen inference profile is STALE: the box's runtime build or hardware has
+///     Decides whether a persisted, frozen inference profile is STALE: the host's runtime build or hardware has
 ///     drifted from the freeze baseline, so the frozen launch args can no longer be trusted and a fresh explore is
 ///     required.
 /// </summary>

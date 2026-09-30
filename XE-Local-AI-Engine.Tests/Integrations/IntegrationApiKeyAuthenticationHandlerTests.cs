@@ -14,9 +14,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The <c>IntegrationApiKey</c> scheme. Two properties carry the security argument: a REVOKED key is
-///     indistinguishable from an unknown one (ruling R2-6 — no 403 exists anywhere on this family), and the identity it
+///     indistinguishable from an unknown one (ADR 0008 R2-6 — no 403 exists anywhere on this family), and the identity it
 ///     mints carries the integrator's principal as the authoritative claim with the credential prefix as attribution
-///     only (ruling R4-6).
+///     only (ADR 0008 R4-6).
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class IntegrationApiKeyAuthenticationHandlerTests
@@ -89,7 +89,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     [Test]
     public async Task Authenticate_WithTwoKeysOfOneIntegrator_YieldsOnePrincipalAndTwoPrefixes()
     {
-        // The rotation property ruling R4-6 exists for: ownership keys on the principal, so a second credential reaches
+        // The rotation property ADR 0008 R4-6 exists for: ownership keys on the principal, so a second credential reaches
         // the same sessions and executions while remaining separately attributable and separately revocable.
         var factory = Host.Factory;
 
@@ -106,7 +106,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     [Test]
     public async Task Challenge_Writes401WithABearerRealmAndTheSameBodyForRevokedAndUnknownKeys()
     {
-        // THE load-bearing assertion of ruling R2-6: a revoked credential and a never-issued one produce a
+        // THE load-bearing assertion of ADR 0008 R2-6: a revoked credential and a never-issued one produce a
         // byte-identical rejection, so a caller can never learn that the key it holds was once real.
         var factory = Host.Factory;
 

@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     command-line argument vector, the allocated localhost port and the working directory.
 /// </summary>
 /// <remarks>
-///     Produced by the supervisor for <see cref="ILlamaServerProcessLauncher" />. <see cref="Arguments" /> is the
+///     Produced by the supervisor for <see cref="Contracts.ILlamaServerProcessLauncher" />. <see cref="Arguments" /> is the
 ///     exact, ordered vector handed to the process and always binds <c>--host 127.0.0.1</c>; its per-role flags are
 ///     asserted by the spawn-args unit test and set out in docs/wiki/03-local-runtime-and-providers.md, "Per-role
 ///     launch flags and the pooled batch-size rule". <see cref="WorkingDirectory" /> is the binary's own directory, so

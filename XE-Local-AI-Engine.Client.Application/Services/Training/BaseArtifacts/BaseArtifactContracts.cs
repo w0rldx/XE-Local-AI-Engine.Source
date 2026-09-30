@@ -4,8 +4,8 @@ namespace XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 public sealed record BaseArtifactFileView(string Role, string FileName, string LocalPath, long SizeBytes, string? Sha256);
 
 /// <summary>
-///     The licensing facts fetched for the base checkpoint repository — never for a GGUF quant repo derived from it
-///     (locked decision 8). A <see langword="null" /> <paramref name="License" /> is itself the answer the license gate
+///     The licensing facts fetched for the base checkpoint repository — never for a GGUF quant repo derived from it.
+///     A <see langword="null" /> <paramref name="License" /> is itself the answer the license gate
 ///     presents: the repo declares no license tag.
 /// </summary>
 public sealed record BaseArtifactLicenseView(string RepoId, string? License, bool IsGated, DateTimeOffset FetchedAtUtc);
@@ -65,7 +65,7 @@ public enum BaseArtifactDeleteOutcome
 /// </summary>
 /// <remarks>
 ///     The repository is always operator-selected. Nothing here infers a base repo from an installed GGUF — models with
-///     no resolvable base checkpoint are simply ineligible for training (locked decision 18), and guessing would produce
+///     no resolvable base checkpoint are simply ineligible for training, and guessing would produce
 ///     a run that trains for hours against the wrong weights.
 /// </remarks>
 public interface IBaseArtifactService

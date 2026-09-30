@@ -583,7 +583,7 @@ public sealed class DevWorkflowStateMachineTests
 
     /// <summary>
     ///     A skipped branch is not an end that failed to arrive, so long as SOME end did: the approve branch shipped,
-    ///     the revise branch was skipped, and the join both feed reads Completed exactly as it did before ruling 1.
+    ///     the revise branch was skipped, and the join both feed reads Completed.
     /// </summary>
     [Test]
     public void Recompute_WithATerminalNodeSucceededBesideSkippedSiblings_IsCompleted()
@@ -602,7 +602,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     <c>Failed</c> precedence is unchanged by ruling 1, and deliberately outranks the new answer: a run with a
+    ///     <c>Failed</c> precedence deliberately outranks the new answer: a run with a
     ///     failed node has a cause worth reporting, and calling that "cancelled" would bury it.
     /// </summary>
     [Test]

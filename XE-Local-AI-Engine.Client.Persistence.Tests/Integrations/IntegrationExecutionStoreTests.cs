@@ -74,6 +74,30 @@ public sealed class IntegrationExecutionStoreTests
     }
 
     [Test]
+    public async Task AcceptAsync_WhenTheRequestIdWasAlreadyAccepted_ThrowsRequestConflictAndWritesNothing()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var winner = NewAccept(seed);
+        AssertEx.True(await store.AcceptAsync(winner, maxActive: 8, maxActivePerPrincipal: 4));
+
+        var before = await CountsAsync(fixture);
+        var conflict = await AssertEx.ThrowsAsync<IntegrationRequestConflictException>(() => store.AcceptAsync(NewAccept(seed) with
+            {
+                RequestId = winner.RequestId
+            },
+            maxActive: 8,
+            maxActivePerPrincipal: 4));
+
+        AssertEx.True(conflict.InnerException is SqliteException { SqliteErrorCode: 19 },
+            "The unique (principal_id, request_id) index is what reports the loser, as SQLITE_CONSTRAINT.");
+        AssertEx.Equal(before, await CountsAsync(fixture), "The loser's session insert must roll back with its execution.");
+    }
+
+    [Test]
     public async Task AcceptAsync_AtThePerPrincipalCap_ThrowsWhileANodeWideSlotIsStillFreeAndAdmitsASecondPrincipal()
     {
         using var fixture = new IntegrationTestFixture();
@@ -86,7 +110,7 @@ public sealed class IntegrationExecutionStoreTests
         // The fairness assertion: the node has seven slots left and the principal has none.
         _ = await AssertEx.ThrowsAsync<IntegrationQueueFullException>(() => store.AcceptAsync(NewAccept(seed), maxActive: 8, maxActivePerPrincipal: 1));
 
-        // The other half of the same ruling: a different integrator is unaffected by the first one's saturation.
+        // The other half of the same rule: a different integrator is unaffected by the first one's saturation.
         var otherPrincipal = Guid.NewGuid();
         AssertEx.True(await store.AcceptAsync(NewAccept(seed with
         {
@@ -751,8 +775,8 @@ public sealed class IntegrationExecutionStoreTests
         }));
         AssertEx.Equal(before, await fixture.RawTableCountAsync("integration_execution_events"));
 
-        // external.output is exempt: its payload is the caller-facing one, bounded at MaxOutputBytes by the append
-        // path S3 adds for it.
+        // external.output is exempt: its payload is the caller-facing one, bounded at MaxOutputBytes by its own
+        // append path.
         await store.AppendEventAsync(new IntegrationEventAppend
         {
             EventId = Guid.NewGuid(),
@@ -1110,9 +1134,9 @@ public sealed class IntegrationExecutionStoreTests
     [Test]
     public async Task TryTerminalizeAsync_WhenTheTerminalEventCannotBeWritten_RollsBackTheAuditRowToo()
     {
-        // The failure Codex named: the audit insert used to be a SEPARATE SaveChanges after the terminal committed, so
-        // a storage failure between the two lost the one-per-execution audit row forever — every later terminalization
-        // rejects an already-terminal row. Driven here from the other side: a terminal event that violates the unique
+        // The audit insert commits in the SAME transaction as the terminal: were it a separate SaveChanges, a storage
+        // failure between the two would lose the one-per-execution audit row forever, since every later terminalization
+        // rejects an already-terminal row. Driven from the other side: a terminal event that violates the unique
         // sequence index must take the audit row down with it, and leave the row non-terminal for a retry.
         using var fixture = new IntegrationTestFixture();
         var seed = await SeedAsync(fixture);

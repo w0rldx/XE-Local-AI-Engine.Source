@@ -1,5 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+/// <param name="TestOutcome">
+///     The structured test result, or null when the command produces none; a code-owned
+///     <see cref="IDevelopmentTestResultAdapter" /> reads it from the raw output before truncation
+///     (<see cref="Implementation.DevelopmentWorkspaceTools.ExecuteCatalogAsync" />).
+/// </param>
 internal sealed record DevelopmentCommandEvidence(
     string CommandId,
     int ExitCode,
@@ -8,9 +13,4 @@ internal sealed record DevelopmentCommandEvidence(
     long DurationMilliseconds,
     string StandardOutput,
     string StandardError,
-    /// <summary>
-    ///     The structured test result for this command, or null when the command produces none. Read by a code-owned
-    ///     <see cref="IDevelopmentTestResultAdapter" /> from the command's raw output before that output is truncated
-    ///     for evidence — see <see cref="DevelopmentWorkspaceTools.ExecuteCatalogAsync" />.
-    /// </summary>
     DevelopmentTestOutcome? TestOutcome = null);

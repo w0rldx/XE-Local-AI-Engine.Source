@@ -229,8 +229,8 @@ describe("useBenchmarkRunHub", () => {
 		act(() => handlers.get(benchmarkHubEvents.event)?.(JSON.parse(outputDeltaWire(1, "hello"))));
 		expect(result.current.parts).toEqual([{ kind: "output", content: "hello" }]);
 
-		// BenchmarkRunStreamEventKind.OutputDelta as its ordinal — every frame looked like this before this slice, so the
-		// whole live pane stayed empty until the terminal HTTP snapshot landed.
+		// BenchmarkRunStreamEventKind.OutputDelta as its ordinal (an older server's frame): dropping it would leave the
+		// whole live pane empty until the terminal HTTP snapshot landed.
 		act(() => handlers.get(benchmarkHubEvents.event)?.(JSON.parse(numericKindWire(2))));
 
 		expect(result.current.parts).toEqual([{ kind: "output", content: "hello" }]);

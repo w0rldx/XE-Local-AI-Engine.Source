@@ -245,6 +245,17 @@ public sealed class IntegrationSessionUnavailableException : Exception
 }
 
 /// <summary>
+///     The admission transaction hit a constraint, in practice the unique <c>(principal_id, request_id)</c> index
+///     because a concurrent accept of the same request committed first. Nothing is written.
+/// </summary>
+public sealed class IntegrationRequestConflictException : Exception
+{
+    public IntegrationRequestConflictException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+}
+
+/// <summary>
 ///     Persistence boundary for integration executions and their event feed.
 /// </summary>
 /// <remarks>

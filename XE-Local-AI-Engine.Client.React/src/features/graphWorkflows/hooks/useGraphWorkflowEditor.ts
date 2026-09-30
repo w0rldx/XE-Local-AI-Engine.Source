@@ -102,7 +102,7 @@ export interface GraphWorkflowEditorState {
  * label and the condition are what actually route the branch — and prefilling them here is what stops an operator
  * having to know the Pause pre-flight rule exists.
  *
- * A Condition handle prefills NO path: the edge inherits its source node's `config.path` (ruling C2), and the client
+ * A Condition handle prefills NO path: the edge inherits its source node's `config.path`, and the client
  * cannot invent one.
  *
  * A condition `value` is canvas text, and that text is JSON (`conditionValueText`): the boolean branch is `true` bare,

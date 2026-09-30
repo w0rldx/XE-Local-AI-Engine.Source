@@ -22,7 +22,6 @@ import { toTrainingArtifactView } from "@/features/training/models/TrainingModel
 const artifactQueryId = "listTrainingArtifacts";
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return queryClient.invalidateQueries({ queryKey: [{ _id: artifactQueryId }] });
 }
 
@@ -77,7 +76,6 @@ export function usePromoteTrainingArtifact() {
 		onSuccess: async () => {
 			await invalidate(queryClient);
 			// A promotion adds a local model; the models page is stale the moment it lands.
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			await queryClient.invalidateQueries({ queryKey: [{ _id: "listLocalModels" }] });
 		},
 	});

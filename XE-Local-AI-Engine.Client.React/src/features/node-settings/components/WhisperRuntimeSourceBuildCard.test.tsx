@@ -135,7 +135,6 @@ async function openBuildForm(): Promise<void> {
 
 /** Cache entries for the prerequisite probe, whatever backend variant they were keyed under. */
 function probeQueries(queryClient: QueryClient) {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return queryClient.getQueryCache().findAll({ queryKey: [{ _id: "getWhisperCppSourceBuildPrerequisites" }] });
 }
 

@@ -146,9 +146,8 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
             {
                 return;
             }
-#pragma warning disable CA1031 // A tick that failed must not end the watcher; the last good set stands and the next tick asks again.
+            // A tick that failed must not end the watcher; the last good set stands and the next tick asks again.
             catch (Exception exception)
-#pragma warning restore CA1031
             {
                 _logger.LogWarning(exception, "Re-reading this computer's own network addresses failed; the container bridge keeps the previous set.");
             }

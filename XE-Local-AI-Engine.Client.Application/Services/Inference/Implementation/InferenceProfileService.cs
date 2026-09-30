@@ -550,7 +550,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     }
 
     // The single "is this row still replayable under today's semantics" gate, used by BOTH profile-owned replay decisions (benchmark and freeze): versioned fingerprint identity plus placement.
-    // A row failing the placement axis is not replayable however its hash matches; serving reaches the same check via IInferenceInvalidationEvaluator.IsStaleAsync, both marking Stale on false (D13).
+    // A row failing the placement axis is not replayable however its hash matches; serving reaches the same check via IInferenceInvalidationEvaluator.IsStaleAsync, both marking Stale on false.
     private async Task<bool> IsReplayableUnderCurrentSemanticsAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
         if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))

@@ -201,12 +201,12 @@ ahead — instead of staying silent for the whole timeout.
 `kill -0`, age, worktree, cmd), stale-owner detection (record present, pid dead → lock reported free), waiters
 oldest-first, and, when the holder is running the gate or the runner, its progress — the newest
 `.tmp/backend-test-results/**/gate.log` carrying a `>> ` phase line or a batch pass/fail line — plus current
-`MemAvailable`. Sample human-format output, captured live against another session's script:
+`MemAvailable`. Sample human-format output:
 
 ```
-lock:      /home/w0rldx/projects/XE-Local-AI-Engine.Source/.tmp/build.lock
-holder:    pid=853395 alive=yes worktree=hub-push-flake age=00:00:58
-cmd:       /tmp/.../scratchpad/stress.sh
+lock:      $REPO/.tmp/build.lock
+holder:    pid=<pid> alive=yes worktree=<worktree> age=00:00:58
+cmd:       <holder command>
 waiters:   0
 memAvailable: 23.3 GB
 ```
@@ -334,7 +334,7 @@ point of the change was never the seconds — it was removing two external depen
 comments already declared that trade-off, so a registry rate-limit or outage can no longer fail the backend
 matrix.
 
-For scale only, and explicitly **not** a CI measurement: on the maintainer's development box on 2026-09-12, a
+For scale only, and explicitly **not** a CI measurement: on a development machine on 2026-09-12, a
 forced-cold pull of the pinned redis digest took 2.8 s and of the pinned busybox digest 1.6 s, over an
 already-warm path to the registry. A hosted runner's cold network is a different and unmeasured one, so treat
 these as an illustrative floor rather than as an estimate.

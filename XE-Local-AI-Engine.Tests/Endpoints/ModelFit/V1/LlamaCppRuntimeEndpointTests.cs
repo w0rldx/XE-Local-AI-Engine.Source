@@ -371,7 +371,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Brief §5 test 4 / R9: manual actions behave identically in every profile. The gate lives inside the three
+    // Manual actions behave identically in every profile. The gate lives inside the three
     // ExecuteAsync bodies and nowhere else, so a node with Offline selected and all three switches off must still get a
     // fresh catalog-backed snapshot when the operator presses Refresh. Fails the day someone wires the gate into the
     // administration service or the endpoint.
@@ -431,7 +431,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.False(doc.RootElement.GetProperty("updateAvailable").GetBoolean());
     }
 
-    // The other half: without this, S2's new "Not checked yet" state would be permanent on a gated-off node.
+    // The other half: without this, the "Not checked yet" state would be permanent on a gated-off node.
     [Test]
     public async Task RuntimeStatus_AfterAManualRefresh_ReportsACheckedAt()
     {

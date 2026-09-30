@@ -20,7 +20,6 @@ public sealed class AgentSkillsProviderContractTests
     [Test]
     public void AgentSkillsProviderOptions_GateEverySkillToolByDefault()
     {
-#pragma warning disable MAAI001 // Scoped: the experimental surface is exactly what this test pins.
         var options = new AgentSkillsProviderOptions();
 
         AssertEx.False(options.DisableLoadSkillApproval,
@@ -29,7 +28,6 @@ public sealed class AgentSkillsProviderContractTests
             "MAF must keep read_skill_resource approval-gated by default; it delivers the bulk of imported skill content.");
         AssertEx.False(options.DisableRunSkillScriptApproval,
             "MAF must keep run_skill_script approval-gated by default; this one must never be waived anywhere in this repo.");
-#pragma warning restore MAAI001
     }
 
     // The Agent Skills specification's name rule, asserted against MAF rather than restated. AgentSkillService and
@@ -45,10 +43,8 @@ public sealed class AgentSkillsProviderContractTests
     [Arguments("under_score", false)]
     public void AgentSkillFrontmatter_NameRule_MatchesTheSpecification(string candidate, bool expected)
     {
-#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         AssertEx.Equal(expected, AgentSkillFrontmatter.ValidateName(candidate, out _),
             $"The Agent Skills name rule for '{candidate}' changed; AgentSkillService and AgentDefinitionResolver both delegate to it.");
-#pragma warning restore MAAI001
     }
 
     // Guards the specific construction that took down whole turns: a name our validator once accepted but MAF did not.
@@ -58,9 +54,7 @@ public sealed class AgentSkillsProviderContractTests
         var threw = false;
         try
         {
-#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
             _ = new AgentInlineSkill("foo--bar", "desc", "body");
-#pragma warning restore MAAI001
         }
         catch (ArgumentException)
         {

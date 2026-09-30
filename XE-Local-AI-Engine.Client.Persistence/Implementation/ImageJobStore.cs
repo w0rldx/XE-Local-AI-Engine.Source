@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     EF-backed <see cref="IImageJobStore" />, scoped to the DbContext lifetime.
 /// </summary>
 /// <remarks>
-///     Writes go through <see cref="NodeChatDbContext.SaveChangesAsync" /> so the node encryption interceptor encrypts
+///     Writes go through <see cref="DbContext.SaveChangesAsync(CancellationToken)" /> so the node encryption interceptor encrypts
 ///     the prompt and negative prompt at rest on insert; a status-only update leaves the prompt property unmodified,
 ///     so the interceptor skips it and the stored ciphertext is preserved. Reads use the no-tracking path, and the
 ///     materialization interceptor decrypts the prompt columns either way.

@@ -486,7 +486,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     // THIS backend; record it, keyed on the node's CURRENT KV selection. On why, see wiki 03, section Spawn attempt sequencing, under the safe-retry verdict.
                     if (candidate.Plan is { CpuMoe: true })
                     {
-                        // An expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success without KV quantization proves nothing about KV
+                        // An expert-offload spawn is the most VRAM-marginal launch on the host, so a one-shot success without KV quantization proves nothing about KV
                         // (placement or transient pressure could have failed the primary), and recording it would disable the optimized config for EVERY model here.
                         _logger.LogInformation(
                             "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",

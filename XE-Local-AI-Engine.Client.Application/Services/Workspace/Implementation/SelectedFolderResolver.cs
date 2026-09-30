@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
@@ -57,10 +56,10 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
                 Alias = record.Alias
             };
         }
-        catch (DbUpdateException exception)
+        catch (SelectedFolderAliasConflictException exception)
         {
             // The unique alias index is the backstop when a concurrent registration races past the pre-check above.
-            // Surface it as the same typed rejection the interface contract promises rather than a raw EF exception.
+            // Surface it as the same typed rejection the interface contract promises rather than the store's own.
             throw new SelectedFolderConflictException($"A selected folder with alias '{alias}' is already registered.", exception);
         }
     }

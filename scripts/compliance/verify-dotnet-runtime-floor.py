@@ -19,7 +19,8 @@ def parse_version(value: str, label: str) -> tuple[int, int, int]:
     parts = value.strip().split(".")
     if len(parts) != 3 or any(not part.isdigit() for part in parts):
         raise ValueError(f"{label} must be a three-part numeric version, got {value!r}")
-    return tuple(int(part) for part in parts)  # type: ignore[return-value]
+    major, minor, patch = (int(part) for part in parts)
+    return major, minor, patch
 
 
 def read_floor(props_path: Path) -> str:

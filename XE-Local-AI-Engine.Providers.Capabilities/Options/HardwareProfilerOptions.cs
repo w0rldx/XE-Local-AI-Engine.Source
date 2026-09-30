@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Options;
 
 /// <summary>
-///     Caller-supplied, provider-neutral configuration for <see cref="HardwareProfiler" />. The host injects the
+///     Caller-supplied, provider-neutral configuration for <see cref="Implementation.HardwareProfiler" />. The host injects the
 ///     models/content-root path whose volume the free-disk figure is reported for, so no platform-specific default
 ///     leaks into the profiler.
 /// </summary>

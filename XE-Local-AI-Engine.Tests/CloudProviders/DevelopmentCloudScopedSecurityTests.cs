@@ -30,7 +30,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
                 Content = "sealed class Feature { }"
             }
         };
-        var builder = new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now));
+        var builder = new DevelopmentCloudContextBuilder(new ManualTimeProvider(Now));
 
         var bundle = builder.Build(CreateBuildRequest(excerpts: excerpts));
         var originalHash = bundle.ContentHash;
@@ -53,7 +53,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
     [Test]
     public async Task Build_WhenContextIsUnsafeOrUnbounded_FailsClosed()
     {
-        var builder = new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now), maximumBytes: 256, maximumEstimatedTokens: 256);
+        var builder = new DevelopmentCloudContextBuilder(new ManualTimeProvider(Now), maximumBytes: 256, maximumEstimatedTokens: 256);
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(CreateBuildRequest(excerpts:
         [
@@ -101,7 +101,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var bundle = BuildBundle();
         catalog.Register(bundle);
         var audit = new CapturingAuditSink();
-        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new FixedTimeProvider(Now));
+        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new ManualTimeProvider(Now));
         var request = CreateAuthorizationRequest(bundle, mismatch);
 
         await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(() => Task.Run(() => authorizer.Authorize(request)));
@@ -116,7 +116,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var bundle = BuildBundle();
         catalog.Register(bundle);
         var audit = new CapturingAuditSink();
-        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new FixedTimeProvider(Now));
+        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new ManualTimeProvider(Now));
 
         authorizer.Authorize(CreateAuthorizationRequest(bundle));
 
@@ -138,7 +138,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var audit = new CapturingAuditSink();
         var authorizer = new DevelopmentCloudEgressAuthorizer(catalog,
             audit,
-            new FixedTimeProvider(Now),
+            new ManualTimeProvider(Now),
             maximumBundleBytes: checked((int)bundle.ByteCount - 1));
 
         await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(() =>
@@ -157,7 +157,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var audit = new CapturingAuditSink(events);
         using var localClient = new TwoRoundChatClient(events, "local");
         using var cloudClient = new TwoRoundChatClient(events, "cloud");
-        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new FixedTimeProvider(Now));
+        var authorizer = new DevelopmentCloudEgressAuthorizer(catalog, audit, new ManualTimeProvider(Now));
         using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient, bundle.ProviderName), () => localClient, authorizer, new FakeModelTrustResolver());
         using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
 
@@ -285,7 +285,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
                 ContentHash = "BLOB-HASH",
                 ByteCount = call.ArgAt<ReadOnlyMemory<byte>>(2).Length
             });
-        var builder = new CapturingContextBuilder(new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)));
+        var builder = new CapturingContextBuilder(new DevelopmentCloudContextBuilder(new ManualTimeProvider(Now)));
         var service = new DevelopmentCloudAttemptContextService(builder,
             new DevelopmentCloudRoleRouteFactory(new DevelopmentCloudContextCatalog()),
             blob,
@@ -294,7 +294,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             {
                 MaxAttemptDurationSeconds = 120
             }),
-            new FixedTimeProvider(Now));
+            new ManualTimeProvider(Now));
 
         var context = await service.CreateAsync(snapshot,
         [
@@ -371,7 +371,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
     }
 
     private static DevelopmentCloudContextBundle BuildBundle() =>
-        new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)).Build(CreateBuildRequest());
+        new DevelopmentCloudContextBuilder(new ManualTimeProvider(Now)).Build(CreateBuildRequest());
 
     private static DevelopmentCloudContextBuildRequest CreateBuildRequest(IReadOnlyList<DevelopmentCloudContextExcerpt>? excerpts = null,
         string requirements = "Implement the bounded change") =>
@@ -423,19 +423,6 @@ public sealed class DevelopmentCloudScopedSecurityTests
             CarrierState = mismatch == "carrier" ? CloudEgressAuthorizationCarrierState.MalformedEnvelope : CloudEgressAuthorizationCarrierState.Valid,
             Envelope = envelope
         };
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
     }
 
     private sealed class CapturingAuditSink : IDevelopmentCloudEgressAuditSink

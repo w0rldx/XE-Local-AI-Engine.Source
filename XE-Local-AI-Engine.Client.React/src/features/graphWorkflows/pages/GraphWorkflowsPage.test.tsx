@@ -270,7 +270,7 @@ describe("GraphWorkflowsPage", () => {
 	});
 
 	it("keeps Save disabled while the graph has a structural problem, however dirty the canvas is", async () => {
-		// No End node, and no stored positions. The missing positions are what make it dirty on open (ruling C4), so
+		// No End node, and no stored positions. The missing positions are what make it dirty on open, so
 		// Save being disabled here can only be the structural rule — not "nothing has changed".
 		const noEndGraph: GraphWorkflowGraph = {
 			schemaVersion: 1,

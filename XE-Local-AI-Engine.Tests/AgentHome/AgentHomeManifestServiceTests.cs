@@ -47,7 +47,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_OnEmptyRoot_WritesCompleteLayout()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var layout = await service.InitializeAsync(Key());
@@ -71,7 +71,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WritesParseableManifest()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var layout = await service.InitializeAsync(Key());
@@ -85,7 +85,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WritesMinimalValidRegistries()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var layout = await service.InitializeAsync(Key());
@@ -102,7 +102,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenRerunSameOwner_IsNoOp()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var first = await service.InitializeAsync(Key());
@@ -120,7 +120,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenLayoutPartial_SelfHeals()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var first = await service.InitializeAsync(Key());
@@ -142,7 +142,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenManifestStuckInitializing_ReinitializesWhenStale()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var first = await service.InitializeAsync(Key());
@@ -160,7 +160,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenManifestStructurallyIncomplete_ReinitializesAsReady()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var first = await service.InitializeAsync(Key());
@@ -175,7 +175,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenOwnerChanges_WipesWorkspaceContents()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
         var layoutA = await service.InitializeAsync(Key());
@@ -191,7 +191,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenOwnerChanges_KillsPriorSandbox()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         using var service = CreateService(NewTempRoot(), clock, provider);
 
@@ -210,7 +210,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public async Task InitializeAsync_WhenRootPathNull_UsesContentRoot()
     {
-        var clock = new MutableTimeProvider(FixedNow);
+        var clock = new ManualTimeProvider(FixedNow);
         var contentRoot = NewTempRoot();
         Directory.CreateDirectory(contentRoot);
         using var service = new AgentHomeManifestService(new FakeNodeDataDirectory(contentRoot),
@@ -309,25 +309,5 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var path = Path.Combine(Path.GetTempPath(), "agenthome-test-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(path);
         return path;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public MutableTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            _utcNow = _utcNow.Add(delta);
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 }

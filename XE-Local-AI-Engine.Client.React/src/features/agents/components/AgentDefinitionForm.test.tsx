@@ -8,20 +8,6 @@ import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({
-		t: (_key: string, defaultValue?: string, options?: Record<string, unknown>) => {
-			let text = defaultValue ?? _key;
-			if (options) {
-				for (const [name, value] of Object.entries(options)) {
-					text = text.replace(`{{${name}}}`, String(value));
-				}
-			}
-			return text;
-		},
-	}),
-}));
-
 // The basic-fields section now embeds the AI-draft affordance, which is server-state backed (installed models +
 // running set). Stub it out: this file covers the form's own fields, and the affordance has its own test.
 vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: () => null }));

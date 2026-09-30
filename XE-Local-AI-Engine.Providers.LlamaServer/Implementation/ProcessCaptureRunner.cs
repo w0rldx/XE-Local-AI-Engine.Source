@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 
-/// <summary>The exit code and captured stdout of a short command. A timeout or a failed start reports exit code -1 and empty output.</summary>
-internal sealed record ProcessCaptureResult(int ExitCode, string Stdout);
-
 /// <summary>
 ///     Captures, rather than streams, a short command's stdout under a caller-supplied scrubbed environment, bounded by
 ///     a timeout and tree-killed on timeout or cancellation.

@@ -78,7 +78,7 @@ interface Harness {
 /**
  * A capture factory over the repo's `FakeCaptureSource`, recording the order the sources were asked for.
  *
- * The record is taken at CONSTRUCTION, which is what the R39a assertions need: the hook constructs a source and calls
+ * The record is taken at CONSTRUCTION, which is what the user-activation assertions need: the hook constructs a source and calls
  * `start` on it in the same synchronous statement pair, so the construction order is the invocation order — and it is
  * observable from the test's own frame, before any await has had the chance to run.
  */
@@ -218,7 +218,7 @@ describe("useLiveCapture", () => {
 	});
 
 	// Plan §4.2: WhenSystemAudioHasNoAudioTrack_TheSessionIsNeverStarted
-	// R19: a shared surface that came back silent is a failure, not a session that quietly records nothing. The picker
+	// A shared surface that came back silent is a failure, not a session that quietly records nothing. The picker
 	// is opened from the click (so `live/start` has already been sent by the time the stream is inspected), which is
 	// why "never started" is proved as: no frame ever reached the node, and the opened session was cancelled again.
 	it("never runs a system-audio session whose shared surface has no audio track", async () => {
@@ -250,7 +250,7 @@ describe("useLiveCapture", () => {
 	});
 
 	// Plan §4.2: BothSources_MapMicrophoneToYouAndSystemToOthers
-	// D2 / R19: the two lanes are attributed, never mixed. A swap here relabels every segment in the transcript.
+	// The two lanes are attributed, never mixed. A swap here relabels every segment in the transcript.
 	it("maps the microphone to you and the system audio to others", async () => {
 		liveStartOk();
 		const { factory, sources } = harness();
@@ -286,7 +286,7 @@ describe("useLiveCapture", () => {
 	});
 
 	// Plan §4.2: Stop_WithAPendingPush_StopsEverySourceWithoutAwaitingIt
-	// R34: the operator pressing stop must not wait behind a frame parked inside a 30 s inference.
+	// The operator pressing stop must not wait behind a frame parked inside a 30 s inference.
 	it("stops every source without awaiting a pending push", async () => {
 		liveStartOk();
 		const parked = deferred<void>();
@@ -309,7 +309,7 @@ describe("useLiveCapture", () => {
 		parked.resolve(undefined);
 	});
 
-	// Codex r2 #10: once the node closes admission (the buffered-audio cap) every later frame is discarded, so the
+	// Once the node closes admission (the buffered-audio cap) every later frame is discarded, so the
 	// browser must stop recording the way Stop does — graceful EndSession, never a REST cancel, no error.
 	it("stops the sources and ends gracefully when the node closes admission during capture", async () => {
 		liveStartOk();
@@ -663,7 +663,7 @@ describe("useLiveCapture", () => {
 	});
 
 	// Plan §4.2: DisplayPaths_ForwardNoFrameUntilLiveStartResolves
-	// R31: the picker may be open for a minute. What it captured before the node accepted the session is not this
+	// The picker may be open for a minute. What it captured before the node accepted the session is not this
 	// session's audio, and is dropped rather than sent.
 	it("forwards no frame on a display path until live/start resolves", async () => {
 		const gate = liveStartGate();
@@ -727,7 +727,7 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual(["cancel"]);
 	});
 
-	// Codex r1 #4: the microphone is acquired while the display picker may still be open. A refused `live/start` used to
+	// Regression: the microphone is acquired while the display picker may still be open. A refused `live/start` used to
 	// wait for the operator to answer the picker before stopping anything, so the microphone stayed hot all that time.
 	it("stops the microphone at once when live/start fails while the display picker is still open", async () => {
 		server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Cancelled", lastSeq: 3 }, { status: 409 })));
@@ -754,7 +754,6 @@ describe("useLiveCapture", () => {
 		expect(display.log.slice(display.log.indexOf("started"))).toEqual(["started", "stop"]);
 	});
 
-	// S4 review B1 — WhenUnmountedDuringStart_StopsEverySourceAcquiredAfterwards.
 	// The unmount teardown stops whatever `sourcesRef` holds at that instant. A start still awaiting `live/start`
 	// used to resume afterwards, acquire the microphone into an array nothing pointed at any more, and reach
 	// "capturing" on a component that was gone — leaving the microphone hot for the life of the tab.
@@ -784,7 +783,7 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual(["cancel"]);
 	});
 
-	// S5: the node records the application itself. A browser capture source here would open an AudioContext for audio
+	// The node records the application itself. A browser capture source here would open an AudioContext for audio
 	// that never enters this tab, and would push frames onto a lane the node fills from its own recorder.
 	it("opens no capture source for an application-capture session", async () => {
 		liveStartOk();
@@ -802,7 +801,7 @@ describe("useLiveCapture", () => {
 		expect(hub.pushFrame).not.toHaveBeenCalled();
 	});
 
-	// R30a: capture attaches to a session that is ALREADY live. Posting it first gives the node a recorder with no
+	// Capture attaches to a session that is ALREADY live. Posting it first gives the node a recorder with no
 	// lane to push into, which the endpoint answers with a 409 — so the order is the contract, not an optimisation.
 	it("attaches process capture only after live/start has resolved", async () => {
 		const calls: string[] = [];
@@ -882,7 +881,7 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 	});
 
-	// Codex P1: `endSession` resolves false when there is no connected hub, and that used to end the run silently —
+	// Regression: `endSession` resolves false when there is no connected hub, and that used to end the run silently —
 	// the UI went idle, the reconnect re-subscribed and disarmed the node's abandonment grace, and the node kept the
 	// session open. For an ApplicationProcess session that means the node goes on recording the operator's
 	// application. Not branched on the kind: a browser-fed session was left stuck in Transcribing by the same gap.
@@ -943,7 +942,7 @@ describe("useLiveCapture", () => {
 		expect(result.current.error).toBeNull();
 	});
 
-	// Codex r2 P1: with the hub down AND the cancel endpoint failing, the stop existed only in this browser. Going
+	// Regression: with the hub down AND the cancel endpoint failing, the stop existed only in this browser. Going
 	// idle told the operator it had worked, and the reconnect then re-subscribed and disarmed the node's abandonment
 	// grace — so the node never heard about the stop at all and kept recording.
 	it("keeps a stop neither transport acknowledged and redelivers it on reconnect", async () => {
@@ -1024,7 +1023,7 @@ describe("useLiveCapture", () => {
 		expect(hub.endSession).not.toHaveBeenCalled();
 	});
 
-	// R34a: a frame the transport refused is a visible failure. A dropped frame is a hole in the transcript that
+	// A frame the transport refused is a visible failure. A dropped frame is a hole in the transcript that
 	// nothing refetches, so capture stops instead.
 	it("stops every source and cancels the session when a push is refused", async () => {
 		liveStartOk();
@@ -1069,7 +1068,7 @@ describe("useLiveCapture", () => {
 			expect(result.current.capturedMs).toBe(500);
 		});
 
-		// R31: audio captured while the session was still opening is dropped, so it must not be counted either.
+		// Audio captured while the session was still opening is dropped, so it must not be counted either.
 		it("does not count frames dropped before the node accepted the session", async () => {
 			const gate = liveStartGate();
 			const { factory, sources } = harness();

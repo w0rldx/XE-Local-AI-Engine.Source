@@ -64,7 +64,7 @@ public sealed class InvocationAgentDefinition
     /// <summary>Optional JSON schema this turn's output is CONSTRAINED to.</summary>
     /// <remarks>
     ///     Null (the default) sets no <see cref="ChatOptions.ResponseFormat" />, so no <c>response_format</c> reaches
-    ///     the wire. When set it is mapped through <see cref="ChatResponseFormat.ForJsonSchema" />, which the MEAI
+    ///     the wire. When set it is mapped through <see cref="ChatResponseFormat.ForJsonSchema(JsonElement, string, string)" />, which the MEAI
     ///     OpenAI adapter emits at <c>response_format.json_schema.schema</c> — the only path llama-server reads before
     ///     compiling it into a GBNF grammar. The CALLER owns keeping the schema free of the repetition bounds
     ///     (<c>minLength</c>, <c>maxLength</c>, <c>pattern</c>, <c>minItems</c>, <c>maxItems</c>) that grammar rejects.

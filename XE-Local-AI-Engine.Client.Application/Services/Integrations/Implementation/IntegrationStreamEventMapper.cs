@@ -6,16 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 
-/// <summary>One mapped event before the buffer mints its sequence. Plumbing between the pure half and the appending half.</summary>
-internal sealed class IntegrationStreamEventDraft
-{
-    public required string Type { get; init; }
-
-    public required string? ContentType { get; init; }
-
-    public required JsonElement? Payload { get; init; }
-}
-
 /// <summary>
 ///     Turns the worker dispatcher's signals into integration stream events, in a pure static half and a per-run
 ///     instance half.

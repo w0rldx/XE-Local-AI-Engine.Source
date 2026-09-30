@@ -113,6 +113,22 @@ public sealed class McpServerServiceTests
     }
 
     [Test]
+    public async Task CreateAsync_WhenTheStoreReportsANameConflict_ThrowsValidationNamingTheServer()
+    {
+        // The pre-check passed, and a concurrent create won the unique Name index before this insert.
+        var service = CreateService(out var store, out _);
+        var input = CreateStdioInput();
+        var storeConflict = new McpServerNameConflictException("stored", new InvalidOperationException("unique"));
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns<McpServerRecord>(_ => throw storeConflict);
+
+        var rejection = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
+
+        AssertEx.Equal($"An MCP server named '{input.Name}' is already registered.", rejection.Message);
+        AssertEx.True(ReferenceEquals(storeConflict, rejection.InnerException), "The store's conflict must stay the cause.");
+    }
+
+    [Test]
     public async Task SetEnabledAsync_WhenEnabling_TogglesAndTriggersRefresh()
     {
         var service = CreateService(out var store, out var manager);

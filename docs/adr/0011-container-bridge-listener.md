@@ -5,14 +5,13 @@
 - **Scope:** How a curated application container installed under [ADR 0010](0010-external-apps-container-execution.md)
   calls this node's local model server. It changes nothing about how such an application is installed, hardened,
   stored or reconciled.
-- **Authority:** Operator rulings recorded with the C1 brief (`KICKOFF-FOLLOWUPS-2.md` §2) and the implementation
-  rulings that closed it.
+- **Authority:** Operator rulings on the container-bridge work item and the implementation rulings that closed it.
 - **Amends:** nothing. It closes a gap ADR 0010 disclosed rather than solved.
 
 ## Context
 
 ADR 0010 shipped applications that are told they can reach "services on this computer, including XE's own local
-model server". On the maintainer's own box that sentence was false, and the wiki said so as a caveat rather than a
+model server". On a development host that sentence was false, and the wiki said so as a caveat rather than a
 bug: under a **rootless** daemon `host.docker.internal` resolves to a gateway address on which nothing of the
 host's is listening, `llama-server` binds `127.0.0.1`, and its `--host` is deliberately not overridable. A container
 has its own network namespace; the host's loopback is not reachable from inside it on any daemon, and the alias that
@@ -165,7 +164,7 @@ daemon it does not: a container dialling one of the host's own addresses sends a
 which the kernel routes PREROUTING to INPUT without ever passing POSTROUTING, so the daemon's `MASQUERADE` rule
 never applies and the source address stays the container's own `172.x.y.z`. The peer guard sees an address no
 interface owns and answers 403 before the token gate. This is unproven on hardware in **either** direction — there
-is no rootful box here — which is why it is recorded as a limitation rather than asserted either way. The guard
+was no rootful host to test against — which is why it is recorded as a limitation rather than asserted either way. The guard
 fails closed, so the cost is a feature that does not work, not a hole. `ContainerBridgePeerGuardMiddleware` names the
 hypothesis in its warning when the refused peer is in a private or link-local range, so the next person does not
 repeat the packet capture that found it.
@@ -180,7 +179,7 @@ worse than a limitation written down.
 bridge traffic bypasses it entirely. Accepted for V1: the token is mandatory and per-instance, and the forwarder's
 inference lease and idle-read watchdog bound every request. The observable failure mode is a container driving
 repeated `EnsureRunning` calls for different installed models and thrashing the model the user is actually using. A
-container that wanted to hurt this box has cheaper ways, so this is recorded as a decision rather than closed.
+container that wanted to hurt the host has cheaper ways, so this is recorded as a decision rather than closed.
 
 **Docker Desktop is code-reviewed, not live-validated.** The `host.docker.internal` branch of both the endpoint
 resolver and the host-name allow list has unit coverage and no live round behind it. Do not read a green suite as

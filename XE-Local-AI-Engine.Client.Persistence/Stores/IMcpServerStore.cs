@@ -14,7 +14,7 @@ public interface IMcpServerStore
     /// <summary>
     ///     Persists a new registration (assigning <c>Id</c>, <c>CreatedAtUtc</c>, <c>UpdatedAtUtc</c> and
     ///     <c>Version = 1</c>, and forcing <c>Enabled = false</c> regardless of the input) and returns the stored record
-    ///     with secret columns decrypted.
+    ///     with secret columns decrypted. A rejected save surfaces as <see cref="McpServerNameConflictException" />.
     /// </summary>
     Task<McpServerRecord> AddAsync(McpServerInput input, CancellationToken cancellationToken = default);
 
@@ -24,7 +24,8 @@ public interface IMcpServerStore
     /// </summary>
     /// <remarks>
     ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a connection-affecting field changed:
-    ///     transport, command, arguments, environment, url, or the enabled toggle — never Name/Description alone.
+    ///     transport, command, arguments, environment, url, or the enabled toggle — never Name/Description alone. A
+    ///     rejected save surfaces as <see cref="McpServerNameConflictException" />.
     /// </remarks>
     Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default);
 
@@ -81,4 +82,15 @@ public sealed record McpServerInput
     public required McpTrustTier TrustTier { get; init; }
 
     public required bool Enabled { get; init; }
+}
+
+/// <summary>
+///     A create or an edit was rejected by the database: the unique <c>Name</c> index is the backstop a concurrent
+///     create or rename that raced past the service's name pre-check hits. Nothing was written.
+/// </summary>
+public sealed class McpServerNameConflictException : Exception
+{
+    public McpServerNameConflictException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

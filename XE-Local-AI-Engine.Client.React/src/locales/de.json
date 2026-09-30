@@ -3236,6 +3236,10 @@
 					"returnToPrevious": {
 						"label": "Zum vorherigen Spezialisten zurückkehren",
 						"description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
+					},
+					"validation": {
+						"participantsRequired": "Ein Orchestrator benötigt mindestens einen Spezialist-Teilnehmer.",
+						"selfHandoff": "Eine Übergabe kann einen Agenten nicht mit sich selbst verbinden."
 					}
 				},
 				"playbookEnabled": {
@@ -3652,6 +3656,12 @@
 					"label": "URL",
 					"description": "Nur Loopback (127.0.0.1 / localhost / ::1).",
 					"placeholder": "http://127.0.0.1:3001/sse"
+				},
+				"validation": {
+					"commandRequired": "Für den stdio-Transport ist ein Befehl erforderlich",
+					"urlRequired": "Für den HTTP-Transport ist eine URL erforderlich",
+					"urlNotLoopback": "Die URL muss auf einen Loopback-Host verweisen",
+					"envKeyRequired": "Der Variablenschlüssel ist erforderlich"
 				}
 			},
 			"tools": {
@@ -3777,6 +3787,16 @@
 				"parameters": {
 					"label": "Parameter (JSON)",
 					"description": "Optionale Vorlagenparameter als JSON. Verschlüsselt gespeichert und nach dem Speichern nie wieder angezeigt."
+				},
+				"validation": {
+					"cronRequired": "Ein Cron-Ausdruck ist erforderlich",
+					"intervalRequired": "Ein Intervall ist erforderlich",
+					"intervalInvalid": "Das Intervall muss eine positive ganze Zahl in Sekunden sein",
+					"startRequired": "Eine Startzeit ist erforderlich",
+					"startInvalid": "Die Startzeit ist ungültig",
+					"repeatCountInvalid": "Die Anzahl der Wiederholungen muss eine positive ganze Zahl sein",
+					"maxRuntimeInvalid": "Die maximale Laufzeit muss eine positive ganze Zahl in Sekunden sein",
+					"endInvalid": "Die Endzeit ist ungültig"
 				}
 			},
 			"runs": {

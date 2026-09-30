@@ -47,7 +47,7 @@ public static class OpenAICompatibleClientFactory
     /// <remarks>
     ///     Its gen_ai span is metadata-only, and <c>EnableSensitiveData</c> is hard-coded false, deliberately NOT
     ///     reading <c>AgentTelemetryOptions</c>: embeddings carry conversation, memory and knowledge-base text this
-    ///     node keeps on-box. Setting it explicitly also beats the ambient capture variable Aspire injects as true.
+    ///     node keeps on this machine. Setting it explicitly also beats the ambient capture variable Aspire injects as true.
     /// </remarks>
     public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(Uri baseAddress,
         string modelId,
@@ -91,7 +91,7 @@ public static class OpenAICompatibleClientFactory
 
     /// <summary>
     ///     Builds the transport-policy-pinned <see cref="OpenAIClientOptions" />: an explicit
-    ///     <see cref="OpenAIClientOptions.NetworkTimeout" /> (never the SDK's 100 s default) and a
+    ///     <see cref="System.ClientModel.Primitives.ClientPipelineOptions.NetworkTimeout" /> (never the SDK's 100 s default) and a
     ///     <c>ClientRetryPolicy(0)</c> so the SDK cannot re-issue a non-idempotent completion.
     /// </summary>
     public static OpenAIClientOptions BuildClientOptions(Uri baseAddress, TimeSpan networkTimeout, PipelineTransport? transport = null)

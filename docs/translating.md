@@ -31,7 +31,7 @@ All paths below are relative to `XE-Local-AI-Engine.Client.React/`.
   into its own chunk and fetched on demand the first time that language is selected, so users
   never download a language they won't render. This is why non-English locales must be
   registered in `src/i18n.ts` (step 2) — that map is how the loader finds the chunk.
-- **`src/data/language/LanguageMenuData.ts`** — the list that populates the in-app language
+- **`src/core/locales/models/LanguageMenuData.ts`** — the list that populates the in-app language
   picker. A locale that isn't here is unreachable from the UI even if its JSON exists.
 - The active language persists in `localStorage` under `i18nextLng`; the browser language
   detector picks the initial one, falling back to `en`.
@@ -68,7 +68,7 @@ const lazyLocales: Record<string, () => Promise<{ default: unknown }>> = {
 };
 ```
 
-### 3. Add it to the language picker — `src/data/language/LanguageMenuData.ts`
+### 3. Add it to the language picker — `src/core/locales/models/LanguageMenuData.ts`
 
 ```ts
 export const languageData: ILanguageItem[] = [

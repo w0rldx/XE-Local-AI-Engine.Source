@@ -70,7 +70,6 @@ export function devWorkflowInvalidationKey(
 	operationId: string,
 	path?: Readonly<Record<string, string>>,
 ): readonly [{ _id: string; path?: Readonly<Record<string, string>> }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return path ? [{ _id: operationId, path }] : [{ _id: operationId }];
 }
 

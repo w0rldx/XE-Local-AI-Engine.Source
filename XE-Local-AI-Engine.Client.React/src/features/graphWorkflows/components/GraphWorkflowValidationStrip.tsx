@@ -1,6 +1,6 @@
 // Everything wrong with the graph, in one strip under the canvas.
 //
-// The error shape is hybrid on purpose (S0 ⚑-3(c)): a failure the server or the validator can pin to a node or an edge
+// The error shape is hybrid on purpose: a failure the server or the validator can pin to a node or an edge
 // carries that key, while a whole-graph rule carries none. This renders the two differently, because a save refused
 // over one card must not leave the operator scanning eight of them — a KEYED issue is a button that selects its
 // subject, an UNKEYED one is a line in a single Alert above them. Client issues and server issues arrive through the

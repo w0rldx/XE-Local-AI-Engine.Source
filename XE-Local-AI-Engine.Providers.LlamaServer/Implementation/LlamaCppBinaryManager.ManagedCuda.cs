@@ -213,7 +213,7 @@ public sealed partial class LlamaCppBinaryManager
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }
 
-            // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA box without a per-call store read.
+            // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA machine without a per-call store read.
             _managedCudaSignal?.SetActive(variant);
 
             return state;

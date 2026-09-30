@@ -14,7 +14,7 @@ public sealed partial class NodeAdminMcpTools
 {
     [McpServerTool(Name = "start_model_pull")]
     [Description("Start or rejoin a background GGUF model pull from Hugging Face.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpModelPullStartResponse> StartModelPullAsync([Description("Hugging Face repository id.")] string repo_id,
         CancellationToken cancellationToken,
         [Description("Optional exact GGUF file name.")]
@@ -25,7 +25,6 @@ public sealed partial class NodeAdminMcpTools
         string? revision = null,
         [Description("Whether to also pull the repo's mmproj projector when it ships one. Defaults to true; false installs the weights only.")]
         bool include_projector = true)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("start_model_pull",
             AuditArguments(("repo_id", repo_id),
@@ -92,9 +91,7 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "get_model_pull")]
     [Description("Poll a background GGUF model pull by canonical model name.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public Task<McpModelPullResponse> GetModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name)
-#pragma warning restore IDE1006
     {
         return InvokeAuditedAsync("get_model_pull", AuditArguments(("model_name", model_name)), () =>
         {
@@ -149,7 +146,6 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "cancel_model_pull")]
     [Description("Request cooperative cancellation of a background GGUF model pull.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public Task<McpModelPullCancelResponse> CancelModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name) =>
         InvokeAuditedAsync("cancel_model_pull", AuditArguments(("model_name", model_name)), () =>
                 Task.FromResult(new McpModelPullCancelResponse
@@ -158,13 +154,10 @@ public sealed partial class NodeAdminMcpTools
                                 && _ggufDownloadCoordinator.Cancel(model_name.Trim())
                 }),
             static response => !response.Cancelled);
-#pragma warning restore IDE1006
 
     [McpServerTool(Name = "delete_model")]
     [Description("Delete a locally installed model through the node's coordinated deletion service.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpModelDeleteResponse> DeleteModelAsync(string model_name, CancellationToken cancellationToken)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("delete_model", AuditArguments(("model_name", model_name)), async () =>
         {
@@ -181,9 +174,7 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "set_default_model")]
     [Description("Select an installed local model as the node default.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpDefaultModelResponse> SetDefaultModelAsync(string model_name, CancellationToken cancellationToken)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("set_default_model", AuditArguments(("model_name", model_name)), async () =>
         {

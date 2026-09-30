@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     It mirrors <c>SubAgentSpawnService.RunSubAgentAsync</c> — a MAF <see cref="ChatClientAgent" /> run as an <see cref="AIFunction" /> inside
 ///     a child <see cref="SpawnContext" /> scope — rather than adding a fifth bespoke tool loop. Instructions and tools ride <see cref="ChatOptions" />,
 ///     not <see cref="ChatClientAgentOptions" />, because the pinned MAF version has no <c>Instructions</c> property there and
-///     <see cref="AIAgent.AsAIFunction" /> invokes with no per-run options. The tool list is BUILT here from <c>allowedActions</c>, never off the
+///     <see cref="AIAgentExtensions.AsAIFunction(AIAgent, AIFunctionFactoryOptions, AgentSession)" /> invokes with no per-run options. The tool list is BUILT here from <c>allowedActions</c>, never off the
 ///     tool offer, and holds no approval-gated tool, so the outer call's one approval covers the whole envelope. Budgets: wiki 04 §2.2.
 /// </remarks>
 internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
@@ -745,30 +745,5 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
             return (value[..lastCharIndex], true);
         }
-    }
-}
-
-/// <summary>
-///     Thrown by the goal loop's tool gateway when the inner agent asks for more tool calls than
-///     <see cref="AgentHomeOptions.MaxInnerToolCalls" /> allows.
-/// </summary>
-/// <remarks>
-///     It ends the loop rather than returning a refusal the model would keep spending turns against. The executor
-///     catches it and reports a budget-capped run whose partial work still exports.
-/// </remarks>
-internal sealed class AgentHomeToolBudgetException : InvalidOperationException
-{
-    public AgentHomeToolBudgetException(string message)
-        : base(message)
-    {
-    }
-
-    public AgentHomeToolBudgetException()
-    {
-    }
-
-    public AgentHomeToolBudgetException(string message, Exception innerException)
-        : base(message, innerException)
-    {
     }
 }

@@ -6,8 +6,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record SaveArtifactRequest(string? Name, string? MediaType, string? Kind, string? Text, string? Base64);
-
 /// <summary>
 ///     <c>save_artifact</c>: the session's durable outputs.
 /// </summary>

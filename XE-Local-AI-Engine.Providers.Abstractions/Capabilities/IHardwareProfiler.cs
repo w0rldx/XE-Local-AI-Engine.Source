@@ -5,8 +5,8 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///     Provider-neutral so callers do not depend on a runtime implementation.
 /// </summary>
 /// <remarks>
-///     Implementations cache the last <see cref="HardwareProfile" /> in memory; pass <paramref name="forceRefresh" />
-///     to re-probe. Probing never throws on a missing GPU/tool — it degrades to <see cref="HardwareProfile.VramKnown" />
+///     Implementations cache the last <see cref="HardwareProfile" /> in memory; pass <c>forceRefresh</c> to
+///     <see cref="GetProfileAsync" /> to re-probe. Probing never throws on a missing GPU/tool — it degrades to <see cref="HardwareProfile.VramKnown" />
 ///     <see langword="false" /> (the CPU-mode floor).
 /// </remarks>
 public interface IHardwareProfiler

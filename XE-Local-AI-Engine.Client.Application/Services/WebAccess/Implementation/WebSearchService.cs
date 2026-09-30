@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 /// <remarks>
 ///     The kill switch is read here, as in <see cref="WebFetchService" />. DuckDuckGo goes through the guarded
-///     <see cref="WebFetchService.HttpClientName" /> client and is best-effort (ADR 0017, D2): a bot challenge or a
+///     <see cref="WebFetchService.HttpClientName" /> client and is best-effort (ADR 0017): a bot challenge or a
 ///     refusal becomes <c>search-backend-unavailable</c>. SearXNG gets its own client WITHOUT the private-address deny
 ///     list, because the operator typed that URL and it is usually on localhost or the LAN; the model controls only
 ///     the query string, never the host or path. Queries are logged at Debug only.

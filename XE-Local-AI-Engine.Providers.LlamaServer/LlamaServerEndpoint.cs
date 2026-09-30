@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     A running llama-server process endpoint for a <c>(model, role)</c> pair, as returned by
-///     <see cref="ILlamaServerProcessSupervisor.EnsureRunningAsync" />.
+///     <see cref="Contracts.ILlamaServerProcessSupervisor.EnsureRunningAsync(string, ModelRole, CancellationToken)" />.
 /// </summary>
 public sealed record LlamaServerEndpoint
 {

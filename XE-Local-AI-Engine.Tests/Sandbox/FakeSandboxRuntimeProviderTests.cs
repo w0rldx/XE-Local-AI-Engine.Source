@@ -12,7 +12,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CreateOrAttachAsync_PopulatesHandleFromAttachKeyAndClock()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
 
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key(manifest: 3)));
 
@@ -26,7 +26,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CreateOrAttachAsync_WhenSameKey_ReusesSandbox()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
 
         var first = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var second = await provider.CreateOrAttachAsync(CreateRequest(Key()));
@@ -37,7 +37,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ConnectAsync_WhenKeyMatchesLiveSandbox_ReturnsHandle()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         var connected = await provider.ConnectAsync(Key());
@@ -48,7 +48,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ConnectAsync_WhenKeyDoesNotMatch_Throws()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key("other-owner")));
@@ -57,7 +57,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ExecuteAsync_ReturnsScriptedResultDeterministically()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.RegisterCommand("dotnet --info", exitCode: 0, "runtime: 10.0.0");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -77,7 +77,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CopyInto_Read_CopyOut_RoundTripsContent()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.WriteHostFile("/host/repo/main.cs", "class C { }");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -100,7 +100,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ResetDirectoryAsync_RemovesOnlyRequestedSubtree()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.WriteHostFile("selected", "old");
         provider.WriteHostFile("other", "keep");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
@@ -125,7 +125,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CopyIntoAsync_WhenSourceNotSeeded_FallsBackToRealDisk()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var hostFile = Path.Combine(Path.GetTempPath(), "fake-src-" + Guid.NewGuid().ToString("N") + ".txt");
         await File.WriteAllTextAsync(hostFile, "on disk");
@@ -149,7 +149,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task SnapshotSandboxPaths_ReturnsCopiedDestinationsSorted()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.WriteHostFile("/host/b", "b");
         provider.WriteHostFile("/host/a", "a");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
@@ -175,7 +175,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task Surveys_ApplyCallerSuppressionBeforeResultBudgets()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         provider.WriteHostFile("visible", "visible needle");
         await provider.CopyIntoAsync(handle, new SandboxCopyRequest
@@ -221,7 +221,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ExecutedCommands_RecordsEachExecutedCommandInOrder()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         await provider.ExecuteAsync(handle, new SandboxCommandRequest
@@ -248,7 +248,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CancelCommandAsync_CancelsInFlightCommandBestEffort()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.RegisterBlockingCommand("sleep");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -267,7 +267,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task ExecuteAsync_WhenCallerTokenCancels_Throws()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.RegisterBlockingCommand("sleep");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var cancellationTokenSource = new CancellationTokenSource();
@@ -285,7 +285,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task KillAsync_TerminatesSandboxAndInvalidatesHandle()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.WriteHostFile("/host/file", "data");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         await provider.CopyIntoAsync(handle, new SandboxCopyRequest
@@ -302,7 +302,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task KillAsync_CancelsInFlightCommands()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.RegisterBlockingCommand("sleep");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -320,7 +320,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public async Task CreateOrAttachAsync_WhenOwnerChanges_DoesNotReuseSandboxContents()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         provider.WriteHostFile("/host/secret", "owner-a secret");
         var handleA = await provider.CreateOrAttachAsync(CreateRequest(Key("owner-a")));
         await provider.CopyIntoAsync(handleA, new SandboxCopyRequest
@@ -339,7 +339,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     [Test]
     public void Capabilities_AdvertiseOnlyImplementedSurface()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
 
         var capabilities = provider.Capabilities;
 
@@ -372,20 +372,5 @@ public sealed class FakeSandboxRuntimeProviderTests
             RuntimeProfile = "dotnet-agent-home",
             ManifestVersion = manifest
         };
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 }

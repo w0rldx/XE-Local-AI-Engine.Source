@@ -122,10 +122,11 @@ public sealed class LiveTranscriptionSegmenter
         string? languageCode,
         bool translate,
         LiveSegmenterSettings settings,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(transcriber);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
         _transcriber = transcriber;
@@ -138,7 +139,7 @@ public sealed class LiveTranscriptionSegmenter
         _detectLanguage = _languageCode is null;
         _translate = translate;
         _settings = settings;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _maxWindowMs = settings.MaxWindowSeconds * 1_000;
         _nextTickMs = settings.TickMs;
     }

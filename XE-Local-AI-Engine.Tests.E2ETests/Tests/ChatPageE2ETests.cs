@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         (assistant-completed path), and cancel/dispose (stream aborted, terminal status).
 ///     </para>
 ///     <para>
-///         The test host uses <see cref="XENodeE2EWebApplicationFactory" /> which wires
+///         The test host uses <see cref="Infrastructure.XENodeE2EWebApplicationFactory" /> which wires
 ///         FakeOllama (<c>qwen3.5:0.8b</c>) as the local model provider.  No real Ollama process
 ///         is required.  The FakeOllama chat endpoint streams deterministic token chunks, so
 ///         assertions can rely on the stream completing in a bounded time.
@@ -228,9 +228,7 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
                     Timeout = 2000
                 });
             }
-#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception)
-#pragma warning restore CA1031
             {
                 // Stream finished or button not interactable before cancel — acceptable.
             }

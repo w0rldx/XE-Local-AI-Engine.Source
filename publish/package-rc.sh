@@ -183,7 +183,7 @@ assert_no_runtime_state() {
 }
 
 # Fail the build if the publish output carries runtime state the app wrote beside its own executable. Ported from
-# publish/package-tester-win.ps1 (@43b5bb08), which grew both this tripwire and the publish-dir wipe in package_rid
+# publish/package-tester-win.ps1, which grew both this tripwire and the publish-dir wipe in package_rid
 # after 0.1.0-rc.5.0 shipped a maintainer log full of source paths plus a dead-letter-queue directory. That release
 # was packed by the PowerShell path, but nothing about the mechanism is Windows-specific:
 #   - logs/               ResolveLogFileDirectory (LoggerExtensions.cs) reads NodeData:Directory, which ONLY desktop

@@ -26,7 +26,6 @@ const trainingQueryIds = {
 
 /** Builds the partial generated-query-key filter matching every cached variant of one training endpoint. */
 function trainingInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

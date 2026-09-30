@@ -49,7 +49,7 @@ public sealed class SlashCommandStore : ISlashCommandStore
                 UpdatedAtUtc = now
             };
             _ = _dbContext.SlashCommands.Add(entity);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await SaveChangesAsync(input.Name, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return ToRecord(entity);
         }
@@ -74,7 +74,7 @@ public sealed class SlashCommandStore : ISlashCommandStore
         entity.ActionType = (int)input.ActionType;
         entity.ActionConfiguration = SerializeAction(input.Prompt);
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await SaveChangesAsync(input.Name, cancellationToken);
         return ToRecord(entity);
     }
 
@@ -101,6 +101,19 @@ public sealed class SlashCommandStore : ISlashCommandStore
     {
         var entities = await _dbContext.SlashCommands.AsNoTracking().OrderBy(command => command.Name).ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
+    }
+
+    private async Task SaveChangesAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 })
+        {
+            // SQLITE_CONSTRAINT_UNIQUE: the name index is the table's only unique index besides the primary key.
+            throw new SlashCommandNameConflictException($"A command named '/{name}' already exists.", exception);
+        }
     }
 
     private static byte[]? EncodeOptional(string? value) =>

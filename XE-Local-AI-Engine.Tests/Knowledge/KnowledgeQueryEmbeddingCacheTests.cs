@@ -20,7 +20,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void Store_ThenTryGet_ReturnsTheCachedVector()
     {
-        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
 
         var expected = Entry(VectorA, "nomic-embed-text::native:v1:3");
         cache.Store("nomic-embed-text::native:v1", "what is the retention policy", expected);
@@ -34,7 +34,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void TryGet_ForADifferentModel_IsAMiss()
     {
-        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         cache.Store("model-a::native:v1", "same query text", Entry(VectorA, "model-a::native:v1:3"));
 
         var hit = cache.TryGet("model-b::native:v1", "same query text", out _);
@@ -45,7 +45,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void TryGet_ForSameModelButDifferentTransformIdentity_IsAMiss()
     {
-        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 300), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         const string nativeIdentity = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::native:v1:768";
         const string matryoshkaIdentity =
             "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
@@ -61,7 +61,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void TryGet_AfterTtlElapses_IsAMiss()
     {
-        var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 10), clock);
         cache.Store("model::native:v1", "query", Entry(VectorA, "model::native:v1:3"));
 
@@ -73,7 +73,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void Store_WhenOverCapacity_EvictsTheColdestEntry()
     {
-        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 1, ttlSeconds: 300), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 1, ttlSeconds: 300), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
 
         cache.Store("model::native:v1", "first", Entry(VectorA, "model::native:v1:3"));
         cache.Store("model::native:v1", "second", Entry(VectorB, "model::native:v1:3"));
@@ -86,7 +86,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     [Test]
     public void Store_WhenTtlIsZero_DisablesCaching()
     {
-        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 0), new MutableTimeProvider(DateTimeOffset.UnixEpoch));
+        var cache = new KnowledgeQueryEmbeddingCache(Options(maxEntries: 8, ttlSeconds: 0), new ManualTimeProvider(DateTimeOffset.UnixEpoch));
 
         cache.Store("model::native:v1", "query", Entry(VectorA, "model::native:v1:3"));
 
@@ -107,25 +107,5 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
             QueryEmbeddingCacheMaxEntries = maxEntries,
             QueryEmbeddingCacheTtlSeconds = ttlSeconds
         });
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now;
-
-        public MutableTimeProvider(DateTimeOffset start)
-        {
-            _now = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
-
-        public void Advance(TimeSpan by)
-        {
-            _now += by;
-        }
     }
 }

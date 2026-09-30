@@ -7,8 +7,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 internal sealed class ExternalAppInstanceEvent
 {
     /// <summary>
-    ///     A <c>Guid</c> rather than an autoincrement <c>long</c>, matching the sibling event tables. The brief named no
-    ///     surrogate key; this shape is the deliberate deviation ruled in R1-5.
+    ///     A <c>Guid</c> rather than an autoincrement <c>long</c>, matching the sibling event tables.
     /// </summary>
     public Guid Id { get; set; }
 

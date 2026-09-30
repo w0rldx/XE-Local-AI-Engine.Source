@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Context-length extraction from an Ollama <c>/api/show</c> model-info block. Ported from the deleted
-///     <c>OllamaModelInfoParser</c> tests when S5 collapsed the duplicate parser onto this reader, plus the null case
-///     the reader answers differently: it returns <see langword="false" /> where the parser threw.
+///     Context-length extraction from an Ollama <c>/api/show</c> model-info block, including the null case, where the
+///     reader returns <see langword="false" /> rather than throwing.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OllamaModelInfoReaderTests

@@ -116,7 +116,7 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
                 IntendedLaunchIdentity = intendedIdentity,
                 IntendedExecutableSha256 = capabilities?.ManifestSha256,
                 // Stamped once, here, at freeze. Never recomputed at execution: the snapshot carries no CPU thread
-                // inputs, so re-projecting would adopt the executing box's conditions as historical intent.
+                // inputs, so re-projecting would adopt the executing host's conditions as historical intent.
                 LaunchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion
             }
         };

@@ -53,7 +53,7 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 - `ChatClientAgentOptions` has no `Instructions`. Instructions go once via the System seed; pass null to the ctor's `instructions`, use named arguments (positional order moved once), assert containment (skill preambles).
 - Fakes inspect messages and `options.Instructions`.
-- `AgentSkillsProvider` needs scoped `MAAI001` suppression.
+- `AgentSkillsProvider` and `AgentInlineSkill` are stable at the pinned Microsoft.Agents.AI: `MAAI001` fires nowhere, so no pragma.
 - Log tool args/results as length + 12-hex SHA-256 prefix only.
 - `Executor<TInput>` yields only `YieldsOutputTypes`; `Run.NewEvents` drains on read (`WorkflowBuilderProbeTests`).
 - `FileMemoryProvider`/`file_memory_*` tools are ungated: wrap before wiring. [evidence](../agent-knowledge-evidence.md#maf-traps)

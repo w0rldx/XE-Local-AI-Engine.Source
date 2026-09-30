@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Bring-your-own override branch of <see cref="LlamaCppBinaryManager.EnsureBinaryAsync" />: an active, valid override
+///     Bring-your-own override branch of <see cref="LlamaCppBinaryManager.EnsureBinaryAsync(GpuVariant, CancellationToken)" />: an active, valid override
 ///     is validated and served WITHOUT any download; the returned variant is the override's own (not the caller's); a
 ///     missing/relative/non-regular-file/world-writable/smoke-failing/GPU-less override is rejected with a sanitized
 ///     failure and never falls through to acquisition or a silent CPU run; an unset override acquires as before. The

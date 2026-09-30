@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 /// <remarks>
 ///     It persists NO conversation and no seed: the gate returns a DECISION, and the accept path performs every write in
-///     ruling R4-1's order. There is no create path here, no compensating delete and no orphan sweep — nothing exists
+///     ADR 0008 R4-1's order. There is no create path here, no compensating delete and no orphan sweep — nothing exists
 ///     before a durable execution row, so an orphan conversation cannot. A <c>public sealed class</c> with no interface,
 ///     registered and injected as itself, because the endpoints that consume it live in another assembly; only the
 ///     invocation gate stays <c>internal</c>, its single caller being the accept path in this assembly.

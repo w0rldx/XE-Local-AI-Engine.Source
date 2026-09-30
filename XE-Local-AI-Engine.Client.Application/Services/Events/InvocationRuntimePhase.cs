@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 /// <remarks>
 ///     The cold-load phases (<see cref="PreparingRuntime" />, <see cref="LoadingModel" />) run BEFORE the stream-idle watchdog is armed —
-///     that separation is the fix for the audited "big model killed at 60 s" hang: the model becomes ready first, then generation streams
+///     so a big model's cold load is never killed as an idle stream: the model becomes ready first, then generation streams
 ///     under the watchdog.
 /// </remarks>
 public enum InvocationRuntimePhase

@@ -111,7 +111,7 @@ describe("dev-workflow narrowing", () => {
 		expect(toDevWorkflowNodeStatus("Exploded")).toBe("Pending");
 		expect(toDevWorkflowNodeStatus(undefined)).toBe("Pending");
 		expect(toDevWorkflowNodeStatus(null)).toBe("Pending");
-		// The round-1 rename traps: neither old spelling may resolve to itself.
+		// The rename traps: neither old spelling may resolve to itself.
 		expect(toDevWorkflowNodeStatus("WaitingForHuman")).toBe("Pending");
 		expect(toDevWorkflowNodeStatus("Completed")).toBe("Pending");
 	});

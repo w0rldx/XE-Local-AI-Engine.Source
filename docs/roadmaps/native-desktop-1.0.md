@@ -116,10 +116,8 @@ The probe is implemented; **Phase 0 acceptance remains open**.
   endpoint. Later runs disabled `ContainerBridge` and `ExternalApps` only in the scratch
   environment. Container functionality was not validated; no engine bind policy was changed.
 
-Raw local evidence is under `.tmp/phase0-backend-gate-final.log`,
-`.tmp/backend-test-results/`, `.tmp/phase0-frontend-*.log` and `.tmp/native-probe/` in the
-implementation worktree. Runtime data and browser profiles are private, ignored artifacts,
-not commit inputs.
+Raw logs were not retained. Runtime data and browser profiles are private artifacts, not
+commit inputs.
 
 ### Functional follow-up — supplemental WSLg evidence
 
@@ -148,9 +146,8 @@ not commit inputs.
   were empty afterwards. This round is not evidence of a manual-close/graceful-window-exit
   pass; only the individually confirmed functional checks above are recorded as passes.
 
-Raw local logs: `.tmp/native-probe/engine-functional.log` and
-`.tmp/native-probe/desktop-functional.log`. These are isolated WSLg observations, not passes
-for the supported Windows and Ubuntu desktop/session matrix.
+Raw logs were not retained. These are isolated WSLg observations, not passes for the
+supported Windows and Ubuntu desktop/session matrix.
 
 ### Diagnostic follow-up — supplemental WSLg evidence
 
@@ -197,9 +194,8 @@ running it. No production implementation fix was made.
   and the desktop process group were empty afterwards. Test-key revocation remains
   unconfirmed.
 
-Raw local evidence: `.tmp/native-probe/functional-domki8wp/`. The disposable diagnostic
-source and binary remain under the probe worktree's ignored `.tmp/download-diagnostic/`;
-neither is part of the production diff.
+Raw logs were not retained. The disposable diagnostic source and binary are not part of the
+production diff.
 
 ### Media diagnostic follow-up — supplemental WSLg evidence
 
@@ -226,9 +222,8 @@ neither is part of the production diff.
   reported empty desktop/engine process groups; a separate process check also confirmed
   the Whisper child's group was empty. This is not a manual-close acceptance pass.
 
-Raw local evidence: `.tmp/native-probe/functional-px32raw_/`; disposable diagnostic
-source is in the probe worktree's `.tmp/download-media-diagnostic/`. Its fresh Release
-build passed with zero warnings and errors. Product source was unchanged in this round.
+Raw logs were not retained; the disposable diagnostic source is not part of the production
+diff. Its fresh Release build passed with zero warnings and errors. Product source was unchanged in this round.
 
 ### Source-level capture tracing — supplemental WSLg evidence
 
@@ -262,8 +257,8 @@ transcription asset byte-for-byte with the diagnostic build. Both matched.
   The supervisor then stopped the engine (exit 0), and both process groups were empty.
   No Whisper process was spawned during this round.
 
-Raw local evidence: `.tmp/native-probe/functional-bl1zzav4/`; disposable frontend transform,
-webroot and shell are in the probe worktree's `.tmp/microphone-phase-diagnostic/`.
+Raw logs were not retained; the disposable frontend transform, webroot and shell are not part
+of the production diff.
 
 **Permission implementation checkpoint:** the pinned GTK adapter has no managed permission
 event and does not connect WebKit's `permission-request` signal. Installed native APIs
@@ -321,8 +316,7 @@ The isolated data/profile and diagnostic frontend are unchanged; no production p
   The supervisor then stopped the engine (exit 0); desktop, engine and the separate
   Whisper process group were all empty. No production policy or capture code changed.
 
-Disposable sources: integration worktree `.tmp/native-probe/restricted-host/` and probe
-worktree `.tmp/microphone-consent-diagnostic/`. The prototype is not part of the shipped
+The disposable prototype sources were not retained. The prototype is not part of the shipped
 source diff and must not be treated as Windows or real Ubuntu acceptance.
 
 ### Fresh-process Deny check — supplemental WSLg evidence
@@ -377,17 +371,16 @@ not proof of the contents of the operator's audio. HTTP 200 on silence is not re
 accuracy evidence, nor proof that warm-state language metadata is valid.
 
 Both bounded runs exited normally after supervisor SIGTERM, with empty process groups.
-Evidence: `.tmp/native-probe/synthetic-whisper-xiaz1m15/` and
-`.tmp/native-probe/synthetic-whisper-pijmly7t/`; ignored harnesses are `synthetic-whisper.py`
-and `synthetic-whisper-order.py`. Only counters, fixed error classification and synthetic
-runtime diagnostics were retained; successful recognition response text was not printed.
+The synthetic harnesses and their logs were not retained. The runs recorded only counters,
+fixed error classification and synthetic runtime diagnostics; successful recognition
+response text was not printed.
 Do not disable VAD/probabilities globally or retry all HTTP 500 responses as a speculative
 fix. Choosing a runtime fix or a narrowly justified compatibility change is a separate step.
 
 ### Capture error visibility fix — isolated frontend branch
 
-The approved production fix is isolated in `.tmp/worktrees/capture-error-visibility`,
-branch `fix/transcription-capture-error`, based on `develop` at `b5eccedd7`.
+The approved production fix was built on branch `fix/transcription-capture-error`, based on
+`develop` at `b5eccedd7`.
 Only `TranscriptionSessionPage.tsx` and its test file changed. `TranscriptionSessionContent`
 keeps the existing localized capture alert visible after a live session becomes terminal,
 without offering Start/Stop on a terminal session; a session key resets capture state on
@@ -431,8 +424,8 @@ The operator approved downloading/building the pinned source and testing a scrat
 no production pin, installed binary, application source or permission setting was changed.
 The shallow b5130 checkout resolved to commit
 `927cfce34f31707e17f2bff35c349632fb9e2c3a`. Both unmodified and patched CPU Release builds
-completed without compiler warnings. Build directories and `server-silence.patch` are under
-probe worktree `.tmp/whisper-silence-proof/`; only upstream `examples/server/server.cpp`
+completed without compiler warnings. The build directories and `server-silence.patch` were not
+retained; only upstream `examples/server/server.cpp`
 was edited. The baseline executable hash was rechecked unchanged after the patched build.
 
 The patch reads current segment count before constructing verbose JSON, emits unknown
@@ -460,9 +453,7 @@ recognition-accuracy claim follows. Both daemons exited 0 after supervised shutd
 process-group checks were empty. No source-level exception guard for an invalid ID with
 nonempty segments was deliberately fault-injected.
 
-Evidence: integration worktree `.tmp/native-probe/patched-whisper-bl5gbl5i/` (baseline)
-and `patched-whisper-7rmvx0ne/` (patched); reusable ignored harness
-`patched-whisper-check.py`. Executable SHA256:
+Raw logs and the comparison harness were not retained. Executable SHA256:
 - Baseline: `7a63617f815c0e51237ec13c151e64f263ebac5e40eae67b9172155174a41f8d`.
 - Patched: `ebf71c2166850f2de069da8f09977cb021315bee8e460ef67d96a165e0fa7373`.
 - Speech fixture: `59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e`.
@@ -518,8 +509,7 @@ client. Harness syntax checks and coordinator review passed; docs inventory and 
 checks passed. No .NET or frontend production code changed in this round, so their full
 gates were not rerun.
 
-Ignored harnesses: probe worktree `.tmp/whisper-engine-check/client.mjs` and integration
-worktree `.tmp/native-probe/patched-whisper-engine-round.py`. This proves the provider,
+The round's harnesses were not retained. This proves the provider,
 segmenter, real hub ingress and persistence path for the CPU fixture cases; patched-runtime
 microphone/WebView capture, normal-rate load, supported-platform coverage and production
 runtime delivery remain separate acceptance work.
@@ -543,7 +533,7 @@ no new claim relies on it. Transcript/audio content was not extracted into diagn
 
 The window closed normally (exit 0), leaving the attached engine alive. The supervisor
 stopped the engine (exit 0), and desktop, engine and Whisper process groups were all empty.
-The launcher is `.tmp/native-probe/patched-microphone-round.py`; no product source, installed
+The round's launcher was not retained; no product source, installed
 runtime or production setting changed in this round. Documentation inventory and whitespace
 checks passed. This is a short supplemental WSLg native capture-to-transcript pass, not a
 sustained-load, Windows, real Ubuntu X11/Wayland or production-packaging acceptance pass.
@@ -582,9 +572,8 @@ dialog and was canceled; native cancellation recorded `saved=False`, with no sec
 successful save. The operator confirmed XE remained usable. The window exited 0, leaving
 its attached engine alive; supervised engine shutdown exited 0, with both groups empty.
 
-Implementation and runnable checks remain ignored scratch artifacts:
-probe worktree `.tmp/download-save-prototype/` and integration worktree
-`.tmp/native-probe/download-bridge-check.mjs`. Existing frontend download helpers and
+The prototype implementation and its runnable checks were scratch artifacts and were not
+retained. Existing frontend download helpers and
 production shell code were not changed. This deliberately refuses overwrite, limits the
 declared blob size to 50 MiB and admits at most 128 request IDs per loaded document.
 It relies on a trusted, frame-restricted diagnostic document, not adversarial origin
@@ -709,9 +698,8 @@ identities; an independent Windows process check found no remaining owned proces
 The attached WSL engine stayed alive until supervised shutdown, then exited 0, with
 both owned WSL process groups empty. Documentation inventory and whitespace checks passed.
 
-Evidence remains in ignored `.tmp/windows-shell-probe/publish-manifest` in the probe
-worktree and `.tmp/native-probe/windows-dimrjk8q` in the integration worktree, plus the
-isolated Windows Temp profile/logs. The portable app was not installed, committed or
+Raw logs, the publish manifest and the isolated Windows Temp profile were not retained. The
+portable app was not installed, committed or
 integrated into develop. Windows authentication persistence, upload/clipboard, microphone
 permissions/capture, SignalR/reconnect, download cancellation and the full Windows engine,
 runtime and packaging path remain separate checks. Real Ubuntu testing remains explicitly
@@ -991,8 +979,7 @@ self-checks passed. Authenticated retrieval of the saved result through the norm
 confirmed 15 segments, all five expected head/tail phrase pairs and final-tail coverage;
 four overlaps were 20 ms. No new inference was run for that revalidation and no production
 thread default or queue limit changed. Both owned processes exited, and no Whisper launch
-was observed. Evidence: ignored `saved-result-check-7xeulfhm` under the original desktop
-worktree's scratch probe directory. This is not indefinite realtime or packaged Windows
+was observed. Raw logs were not retained. This is not indefinite realtime or packaged Windows
 acceptance, and the historical benchmark failure is not rewritten as an original pass.
 
 ### Integrated acceptance continuation — 2026-09-22

@@ -125,7 +125,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<InvocationRunner> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
         _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
@@ -158,7 +158,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(knowledgeOptions);
         _knowledgeToolsEnabled = knowledgeOptions.Value.AgentToolsEnabled;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // Read once at singleton construction from INodeRuntimeSettings (stored > appsettings seed > default) into plain fields the hot
         // streaming/cleanup loops read, so an operator edit applies on the next restart. The out-of-band Ollama:ChatModel override still wins, as in the chat-connection fallback.
@@ -777,9 +777,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 return StreamIdleWatchdog.WithIdleTimeout(innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
                     streamIdleTimeout,
                     streamIdleTimeoutMessage,
+                    _timeProvider,
                     sendToken,
-                    isSuspended: () => openToolCalls.Any,
-                    timeProvider: _timeProvider);
+                    isSuspended: () => openToolCalls.Any);
             }
 
             var segmentStream = isFirstSegment

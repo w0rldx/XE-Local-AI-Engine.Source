@@ -291,7 +291,7 @@ public sealed class GraphWorkflowPauseTests
     }
 
     /// <summary>
-    ///     The producer guard. S0's pre-flight decides whether a graph may be saved by evaluating each out-edge against
+    ///     The producer guard. The save pre-flight decides whether a graph may be saved by evaluating each out-edge against
     ///     <c>PauseOutputJson</c>; the run routes on the document a real answer stores. Both read
     ///     <c>output.decision</c>, and if the two spellings ever parted a graph that pre-flighted clean would route
     ///     nowhere.

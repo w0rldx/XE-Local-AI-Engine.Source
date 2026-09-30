@@ -100,7 +100,7 @@ public sealed class GraphWorkflowToolsEndpointTests
             var name = tool.GetProperty("name").GetString();
             AssertEx.NotNullOrEmpty(tool.GetProperty("description").GetString(), $"{name} must carry a description for the picker.");
 
-            // The raw schema TEXT, not a nested object: S3 parses this string to draw the argument form, so what has
+            // The raw schema TEXT, not a nested object: the editor parses this string to draw the argument form, so what has
             // to hold is that the string it receives is itself a JSON object.
             var schema = tool.GetProperty("parameterSchema").GetString();
             AssertEx.NotNullOrEmpty(schema, $"{name} must carry the schema the runtime validates its arguments against.");

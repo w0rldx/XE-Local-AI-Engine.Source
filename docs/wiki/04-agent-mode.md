@@ -574,9 +574,8 @@ requests recorded in an `AgentSession`, so every sessionless resume would fail; 
 enforces that binding instead. With one or more skills the factory builds a MAF `AgentSkillsProvider` over
 `AgentInlineSkill` records and passes it on `AIContextProviders`, so the experimental surface is reached only when
 an agent actually has skills. That surface (the full-frontmatter
-`AgentInlineSkill` constructor plus the `AgentSkill[]` provider constructor) shipped `[Experimental]` in
-Microsoft.Agents.AI 1.8.0; the scoped `MAAI001` suppression stays at the pinned version until there is
-explicit graduation evidence. Ownership of the provider transfers to the agent, which disposes its context
+`AgentInlineSkill` constructor plus the `AgentSkill[]` provider constructor) is stable at the pinned
+Microsoft.Agents.AI version, so it carries no `MAAI001` suppression. Ownership of the provider transfers to the agent, which disposes its context
 providers with itself — the reason for the scoped `CA2000` suppression. On the skills path only the agent's
 own tools ride the agent-level `ChatOptions`; the per-turn `RunOptions.ChatOptions` still carries model id,
 `think` and sampling.
@@ -700,8 +699,8 @@ override.
 builds **one `ChatClientAgent` per participant** over the shared decorated `IChatClient` and the same
 tool registries, then assembles a MAF handoff `Workflow`:
 
-- `AgentWorkflowBuilder.CreateHandoffBuilderWith(triageAgent)` (a deliberately-adopted `[Experimental]`
-  API, `#pragma warning disable MAAIW001`);
+- `AgentWorkflowBuilder.CreateHandoffBuilderWith(triageAgent)` (a deliberately-adopted API that is stable at
+  the pinned version; `MAAIW001` no longer fires);
 - **no explicit `OrchestrationEdge`s ⇒ fully-connected mesh** (every agent can hand off to every other);
   explicit edges constrain routing. An agent's `Name`/`Description` drive routing — the target's
   Description is the routing reason.
@@ -1414,7 +1413,7 @@ prompt. Their promotion is governed so that nothing reaches the live prompt with
 - **P2 Feedback** — `FeedbackInsightsService` aggregates 👍/👎 per agent (read-only, n≥3 threshold).
 - **P3 Analysis** — `PlaybookAnalysisService` + `DefaultPlaybookAnalysisAgent` stage **Suggested**
   actions. **Privacy invariant: this runs on a node-local model only** (no cloud), so user
-  conversation content never leaves the box for analysis.
+  conversation content never leaves the host for analysis.
 - **P4 Eval gate** — golden conversations are **re-run through the real MAF loop** node-local
   (`MafPlaybookEvalAgentRunner`) to gate **Suggested → Enabled**; golden conversations are stored
   encrypted.
@@ -1534,8 +1533,7 @@ resolves executable tools, then attaches skills) and `SubAgentSpawnService`'s ch
 a MAF `AgentSkillsProvider` from the resolved skills as `AgentInlineSkill`s through the one
 `InvocationSkillsProvider` helper in `AI.Agent` and attach it via
 `ChatClientAgentOptions.AIContextProviders`, not through the ordinary tool registries. `AgentSkillsProvider`
-/ `AgentInlineSkill` ship `[Experimental]` in this MAF version (`MAAI001`), so that helper carries the
-scoped pragma suppression.
+/ `AgentInlineSkill` are stable at the pinned MAF version, so that helper carries no `MAAI001` suppression.
 
 The provider injects three tools, MAF-named and not present in this repo's own tool catalog:
 

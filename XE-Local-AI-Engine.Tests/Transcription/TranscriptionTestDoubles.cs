@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
-using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Hand-written seams for the batch transcription path.

@@ -302,7 +302,6 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				// a turn reaches a terminal state the model is warm, so invalidate the details query to re-read the
 				// real window. Partial-object match on the hey-api single-element key so it invalidates every model
 				// path (never `.slice()` a hey-api key).
-				// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 				queryClient.invalidateQueries({ queryKey: [{ _id: "getLocalModelDetails" }] }),
 			]);
 		},
@@ -316,9 +315,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 
 	// Send, regenerate, cold-load resume and cancel, plus the mutable cluster those four share: the `activeStream`
 	// mutual-exclusion token every loop parks its AbortController in, the deleted-conversation guard set, and the
-	// per-frame commit scheduler. Declared exactly where `handleSend` used to be — everything between here and the old
-	// cancel callback WAS that cluster, so the hook's layout effect and re-attach effect keep their position relative
-	// to every other hook on this page.
+	// per-frame commit scheduler. Declared at this exact position so the hook's layout effect and re-attach effect keep
+	// their order relative to every other hook on this page.
 	const {
 		streamingMessage,
 		timelineEntries,

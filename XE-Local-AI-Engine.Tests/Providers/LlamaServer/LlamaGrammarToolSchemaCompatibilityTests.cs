@@ -350,7 +350,7 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         AssertEx.Contains(names, WebFetchToolDefinition.ToolName);
         AssertEx.Contains(names, WebSearchToolDefinition.ToolName);
 
-        // F-12: emit_output is the one offer an EXTERNAL caller can reach, and the profile offer excludes it by design
+        // Emit_output is the one offer an EXTERNAL caller can reach, and the profile offer excludes it by design
         // (IntegrationExecutionCoordinator unions it in at run time). Pinned by name here so the union in
         // LlamaGrammarToolOffer cannot be dropped without this gate — and the live smoke — going quietly vacuous for it.
         AssertEx.Contains(names, "emit_output");

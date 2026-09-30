@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     It NEVER runs the advisor — fresh runs come only from the scheduler's <c>model-recommendation-check</c>
 ///     handler — and it deliberately takes no dependency on <c>IModelFitRefreshService</c>, so a query can never
-///     trigger an execution path. There is no approved-image listing: the advisor does in-process, box-aware GGUF
+///     trigger an execution path. There is no approved-image listing: the advisor does in-process, hardware-aware GGUF
 ///     recommendation.
 /// </remarks>
 public interface IModelFitQueryService

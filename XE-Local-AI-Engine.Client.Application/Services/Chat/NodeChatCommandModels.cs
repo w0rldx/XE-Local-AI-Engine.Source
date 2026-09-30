@@ -370,8 +370,8 @@ public sealed class NodeChatBranchConversationRequest
 ///     Assistant revision: records a regenerated turn as a SIBLING VARIANT, never an in-place overwrite.
 /// </summary>
 /// <remarks>
-///     Every variant of one logical turn shares a <c>variant_group_id</c>, and <see cref="ParentMessageId" /> is the
-///     user turn they answer. A null <see cref="VariantGroupId" /> mints a fresh group and back-stamps the original.
+///     Every variant of one logical turn shares a <c>variant_group_id</c>, and <see cref="Client.Persistence.Entities.NodeMessage.ParentMessageId" /> is the
+///     user turn they answer. A null <see cref="Client.Persistence.Entities.NodeMessage.VariantGroupId" /> mints a fresh group and back-stamps the original.
 /// </remarks>
 public sealed class NodeChatCreateMessageVariantRequest
 {

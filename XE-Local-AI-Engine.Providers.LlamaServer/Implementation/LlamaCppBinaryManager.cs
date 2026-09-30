@@ -35,7 +35,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// </summary>
     /// <remarks>
     ///     A prebuilt llama.cpp asset is well under this. Enforced on every download path; the size-aware
-    ///     <see cref="InstallTagAsync" /> path tightens it further with the catalog-reported size.
+    ///     <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" /> path tightens it further with the catalog-reported size.
     /// </remarks>
     private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
 
@@ -67,7 +67,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     <paramref name="activeTag" /> selects the recommended-pinned release by default; a different tag models a
     ///     user-selected upgrade, and the pinned tag's cache is never touched. <paramref name="catalog" /> and
     ///     <paramref name="installedRuntimeStore" /> drive the 3-tier resolve; omitted (the test seam), only the pinned
-    ///     floor is used. An active <paramref name="overrideOptions" /> makes <see cref="EnsureBinaryAsync" /> validate
+    ///     floor is used. An active <paramref name="overrideOptions" /> makes <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> validate
     ///     and serve the operator's own binary. <paramref name="acquisitionStatus" /> is the optional TRAILING progress side-channel; without it acquisition is identical and silent.
     /// </remarks>
     public LlamaCppBinaryManager(HttpClient httpClient,
@@ -310,15 +310,15 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         ?? throw new LlamaRuntimeException(LlamaCppReleasePins.MissingPrebuiltMessage(_os, _arch, variant));
 
     /// <summary>
-    ///     Records the runtime <see cref="EnsureBinaryAsync" /> actually resolved on disk into
+    ///     Records the runtime <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> actually resolved on disk into
     ///     <see cref="IInstalledRuntimeStore" />, so a pin-bootstrapped or cached binary surfaces as "Installed" on
-    ///     first load without ever having gone through an explicit <see cref="InstallTagAsync" />.
+    ///     first load without ever having gone through an explicit <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />.
     /// </summary>
     /// <remarks>
     ///     <b>Record-integrity invariant:</b> the asset name and SHA256 written here come from <paramref name="pin" />,
     ///     resolved purely by OS, arch and <paramref name="variant" />, so they carry the PINNED-floor asset and digest
     ///     and are truthful ONLY when the resolve landed on that floor — hence the write happens exclusively for the
-    ///     pinned tag, the one bootstrap case where the binary is on disk yet no <see cref="InstallTagAsync" /> ever ran.
+    ///     pinned tag, the one bootstrap case where the binary is on disk yet no <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" /> ever ran.
     ///     A non-pinned tag came from an existing install record, the only writer of one, whose values the pin would corrupt.
     /// </remarks>
     private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, CancellationToken ct)
@@ -536,7 +536,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     llama.cpp ships these in a SEPARATE archive from the main CUDA build; without them the ggml-cuda backend
     ///     fails to load and the server silently runs CPU-only. <paramref name="cudartAsset" /> selects the digest
     ///     source: <see langword="null" /> (the pinned or cached path) uses the pin's companion name and sha, a non-null
-    ///     value (the live <see cref="InstallTagAsync" /> path) is the resolved MAIN asset name the cudart name derives
+    ///     value (the live <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" /> path) is the resolved MAIN asset name the cudart name derives
     ///     from, whose digest resolves live the SAME way; an unresolvable live digest throws rather than reproduce the silent-CPU bug.
     /// </remarks>
     private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, AcquisitionReporter? reporter,
@@ -828,8 +828,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     discarded and retried exactly once.
     /// </summary>
     /// <remarks>
-    ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync" />) or the
-    ///     live publisher digest (<see cref="InstallTagAsync" />) — so both acquisition paths run identical
+    ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />) or the
+    ///     live publisher digest (<see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />) — so both acquisition paths run identical
     ///     verification logic.
     /// </remarks>
     private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
@@ -1094,7 +1094,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     /// <summary>
     ///     The directory every acquired llama.cpp runtime is cached under for the default app-data root
-    ///     (<c>{cacheRoot}/llama.cpp</c>, the layout <see cref="EnsureBinaryAsync" /> writes its variant dirs into).
+    ///     (<c>{cacheRoot}/llama.cpp</c>, the layout <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> writes its variant dirs into).
     /// </summary>
     /// <remarks>
     ///     Exposed so the startup orphan reaper matches ONLY <c>llama-server</c> binaries this app acquired, never an

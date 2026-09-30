@@ -35,6 +35,7 @@ internal sealed class MsalDelegatedTokenCredential : TokenCredential
 
     public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
+        // Sync by contract: TokenCredential.GetToken is the SDK's synchronous overload, and MSAL acquires only asynchronously.
         return GetTokenAsync(requestContext, cancellationToken).AsTask().GetAwaiter().GetResult();
     }
 

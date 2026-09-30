@@ -1,4 +1,4 @@
-import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
+import type { INavigationLink } from "@/core/layout/models/NavigationMenuData";
 
 export interface IDesktopNavigationBarProperties {
 	sideBarCollapsed: boolean;

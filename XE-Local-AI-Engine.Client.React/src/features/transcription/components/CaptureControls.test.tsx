@@ -92,7 +92,7 @@ describe("CaptureControls", () => {
 		expect(screen.getByText("System audio")).toBeDefined();
 	});
 
-	// R19: a shared surface with no audio is the failure an operator can actually act on, so the alert says what to do
+	// A shared surface with no audio is the failure an operator can actually act on, so the alert says what to do
 	// rather than naming the browser's own untranslated error.
 	it("explains a shared surface that came back without audio", () => {
 		renderControls({ error: "no-audio-track" });

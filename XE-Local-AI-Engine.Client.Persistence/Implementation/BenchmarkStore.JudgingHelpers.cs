@@ -6,6 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class BenchmarkStore
 {
+    /// <summary>
+    ///     Applies a project write's judge half to the tracked project: null policy disables, an unchanged hash is a
+    ///     no-op, anything else get-or-creates the revision, resets its cohort and repoints the project.
+    /// </summary>
+    /// <returns>
+    ///     The revision the project ends up on, or <see langword="null" /> when judging was turned off.
+    /// </returns>
     private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)?> ApplyJudgePolicyChangeAsync(BenchmarkProject project,
         BenchmarkJudgePolicyChangeInput change,
         long now,

@@ -114,7 +114,7 @@ function isAllowedKvCacheType(type: string): boolean {
 	return (kvCacheTypeSelectValues as readonly string[]).includes(type.trim());
 }
 
-export function isAllowedSpeculativeMode(mode: string): boolean {
+function isAllowedSpeculativeMode(mode: string): boolean {
 	return speculativeModeClasses.has(mode.trim());
 }
 
@@ -133,7 +133,7 @@ export function usesDraftTokensPerStep(mode: string): boolean {
 
 // Resolves a controlled numeric input (number or string) to a valid integer within [min, max], or undefined when the
 // value is empty / fractional / out of range. Mirrors `toValidNodeSettingsTimeoutSeconds`.
-export function toValidBoundedInt(value: number | string, bounds: NumericBounds): number | undefined {
+function toValidBoundedInt(value: number | string, bounds: NumericBounds): number | undefined {
 	const numeric = typeof value === "number" ? value : Number(value);
 	if (!Number.isInteger(numeric) || numeric < bounds.min || numeric > bounds.max) {
 		return undefined;

@@ -51,7 +51,7 @@ public sealed class IntegrationStreamEventMapperTests
     }
 
     /// <summary>
-    ///     F-05 — <c>emit_output</c> refuses by RETURNING a sentence, never by throwing, so the pipeline's
+    ///     <c>emit_output</c> refuses by RETURNING a sentence, never by throwing, so the pipeline's
     ///     exception-only <c>IsError</c> reports every refusal as a successful call. Before this, an external caller
     ///     could tell a refused emit from a delivered one only by the ABSENCE of an <c>external.output</c> frame; the
     ///     acknowledgement's opening words are what makes the outcome machine-readable on <c>tool.completed</c>.
@@ -79,7 +79,7 @@ public sealed class IntegrationStreamEventMapperTests
     }
 
     /// <summary>
-    ///     F-05 — the result grading is scoped to <c>emit_output</c> BY NAME. Every other tool keeps the
+    ///     The result grading is scoped to <c>emit_output</c> BY NAME. Every other tool keeps the
     ///     exception-only meaning of <c>ok</c>, so a tool that legitimately answers with refusal-shaped prose is still
     ///     a successful call.
     /// </summary>
@@ -99,7 +99,7 @@ public sealed class IntegrationStreamEventMapperTests
     }
 
     /// <summary>
-    ///     F-05 — a throw on the handler's one deliberate throwing path (a persistence failure) still reports
+    ///     A throw on the handler's one deliberate throwing path (a persistence failure) still reports
     ///     <c>ok:false</c>, so the exception signal is not lost by the result grading sitting beside it.
     /// </summary>
     [Test]

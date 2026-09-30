@@ -127,9 +127,8 @@ internal sealed class ExternalAppOperationRunner
             await using var scope = _scopeFactory.CreateAsyncScope();
             await pipeline(scope.ServiceProvider, entry.Source.Token);
         }
-#pragma warning disable CA1031 // The pipeline is the last frame that can act; anything escaping it must not tear the process down.
+        // The pipeline is the last frame that can act; anything escaping it must not tear the process down.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             // A pipeline settles its own row, so reaching here means the settling itself failed. Nothing above can
             // act on it, and letting it escape an unobserved Task.Run would be a process-level fault.

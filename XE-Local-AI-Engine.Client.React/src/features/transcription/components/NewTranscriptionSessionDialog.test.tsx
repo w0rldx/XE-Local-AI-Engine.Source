@@ -149,7 +149,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(screen.queryByTestId("new-transcription-session-share-hint")).toBeNull();
 	});
 
-	// R19: the browser re-prompts for a surface on every session and the app cannot engineer that away, so the dialog
+	// The browser re-prompts for a surface on every session and the app cannot engineer that away, so the dialog
 	// says so up front — including that the picture is never recorded, which the picker itself does not say.
 	it("warns that the browser asks for a surface on every system-audio session", () => {
 		renderDialog();
@@ -219,7 +219,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(useTranscriptionCaptureStore.getState().lastSourceKind).toBe("SystemAudio");
 	});
 
-	// R15: the switch translates INTO English specifically — whisper has no other translation target — so the label
+	// The switch translates INTO English specifically — whisper has no other translation target — so the label
 	// has to say so rather than offering a generic "translate".
 	it("names English as the translation target", () => {
 		renderDialog();
@@ -333,7 +333,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(await screen.findByRole("radio", { name: applicationSource })).toHaveProperty("disabled", false);
 	});
 
-	// R21a: WASAPI captures the target process AND its descendants — there is no "only this application" mode — so the
+	// WASAPI captures the target process AND its descendants — there is no "only this application" mode — so the
 	// copy states the one behaviour instead of the dialog offering a scope the platform does not have.
 	it("says the application's child processes are captured too", async () => {
 		server.use(runtimeRoute(true));

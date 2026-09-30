@@ -17,7 +17,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>The three types that make an entry evictable once PUBLISHED. Reserving one is not enough (ruling R4-2).</summary>
+    /// <summary>The three types that make an entry evictable once PUBLISHED. Reserving one is not enough (ADR 0008 R4-2).</summary>
     private static readonly IReadOnlySet<string> TerminalTypes = new HashSet<string>(StringComparer.Ordinal)
     {
         IntegrationStreamEventTypes.ExecutionCompleted,
@@ -273,7 +273,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                     throw new IntegrationEventGapException(executionId, cursor);
                 }
 
-                // The R5-3 barrier: yielding above a reserved-but-unresolved sequence would advance the cursor PAST it, and the late publish would then fall
+                // The ADR 0008 R5-3 barrier: yielding above a reserved-but-unresolved sequence would advance the cursor PAST it, and the late publish would then fall
                 // below the cursor and be lost to this reader forever with no gap to report it. Both Publish and Abandon complete the source captured below.
                 var barrier = entry.Pending.Count > 0 ? entry.Pending.Min : long.MaxValue;
                 // The list is kept in sequence order, so skip-then-take is the whole selection: no index arithmetic, no
@@ -318,6 +318,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         _sweepCancellation.Cancel();
         _sweepTimer.Dispose();
 
+        // Sync by contract: IDisposable.Dispose cannot await, and the loop was cancelled above, so the drain is short.
         try
         {
             _sweepLoop.GetAwaiter().GetResult();
@@ -513,7 +514,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
     private long NowUnixMilliseconds() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-    /// <summary>The wakeup source a reader awaits. Test-only seam; S2's reader reads the field directly under the lock.</summary>
+    /// <summary>The wakeup source a reader awaits. Test-only seam; the production reader reads the field directly under the lock.</summary>
     internal Task AppendedTask(Guid executionId)
     {
         lock (_gate)

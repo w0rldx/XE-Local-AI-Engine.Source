@@ -10,12 +10,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     <list type="bullet">
 ///         <item>
 ///             Register a NEW, uniquely-named model directly in <c>FakeOllamaState.Models</c> → the
-///             installed-models table shows the new row after the list query runs. The browser-driven
-///             pull that used to seed this row is gone: the Ollama model-pull UI and its endpoints were
-///             removed in f38ce95a ("remove legacy Ollama model-pull path from Model Management"), so
-///             there is no shipped surface left to drive. Seeding the provider's model set reproduces
-///             exactly the post-pull state the rest of the test needs, and the kind-change + delete
-///             paths this test actually guards are untouched by that removal.
+///             installed-models table shows the new row after the list query runs. The product ships no
+///             Ollama model-pull surface to drive, so seeding the provider's model set reproduces the
+///             post-pull state the kind-change + delete paths under test need.
 ///         </item>
 ///         <item>
 ///             Open its details → change the ModelKind override (PUT <c>models/{name}/kind</c>) → the

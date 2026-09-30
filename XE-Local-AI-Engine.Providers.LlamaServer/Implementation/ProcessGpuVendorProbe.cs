@@ -181,8 +181,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     /// </summary>
     /// <remarks>
     ///     <c>wmic</c> alone is not enough — it is a deprecated Feature-on-Demand absent by default on current Windows
-    ///     11, and swallowing that absence made a Vulkan-capable AMD or Intel box run on the CPU silently. NVIDIA never
-    ///     reaches here, NVML and <c>nvidia-smi</c> answering first, so nothing on this path changes what an NVIDIA box
+    ///     11, and swallowing that absence made a Vulkan-capable AMD or Intel machine run on the CPU silently. NVIDIA never
+    ///     reaches here, NVML and <c>nvidia-smi</c> answering first, so nothing on this path changes what an NVIDIA machine
     ///     selects. Why each candidate sits where it does, and why the worst case is one timeout rather than one per
     ///     candidate: docs/wiki/03-local-runtime-and-providers.md, "Vendor detection: probe order, the Windows adapter list and the single timeout model".
     /// </remarks>

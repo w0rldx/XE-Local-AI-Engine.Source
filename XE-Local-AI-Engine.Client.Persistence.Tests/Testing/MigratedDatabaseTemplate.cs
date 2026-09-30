@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 ///         A template outlives the process — the next test run reuses it — so the file name carries the migrations
 ///         assembly's module version id and a rebuild of that assembly yields a new name. A stale template can never be
 ///         picked up; delete the files to force a rebuild. The key covers the migrations assembly only, not the builder
-///         seams it migrates through (<see cref="MigrationSchemaProbe.ApplyChatAsync" />,
+///         seams it migrates through (<see cref="MigrationSchemaProbe.ApplyChatAsync(string, string)" />,
 ///         <see cref="MigrationSchemaProbe.ApplyIdentityAsync" />, <c>AgentDefinitionTestContextFactory.CreateForMigration</c>):
 ///         a change in one of those that altered the produced bytes would reuse a stale template, so bump the key by hand
 ///         if that ever happens.

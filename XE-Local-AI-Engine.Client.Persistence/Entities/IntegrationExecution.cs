@@ -18,7 +18,7 @@ internal sealed record class IntegrationExecution
     /// <summary>The session this execution belongs to. Plaintext (structural).</summary>
     public Guid SessionId { get; set; }
 
-    /// <summary>The integrator identity that owns this execution (ruling R4-6). Plaintext (structural).</summary>
+    /// <summary>The integrator identity that owns this execution (ADR 0008 R4-6). Plaintext (structural).</summary>
     public Guid PrincipalId { get; set; }
 
     /// <summary>
@@ -35,7 +35,7 @@ internal sealed record class IntegrationExecution
     public byte[] RequestFingerprint { get; set; } = [];
 
     /// <summary>
-    ///     Which of the principal's credentials sent the request. <b>Audit metadata only</b> (ruling R4-6): nothing is
+    ///     Which of the principal's credentials sent the request. <b>Audit metadata only</b> (ADR 0008 R4-6): nothing is
     ///     looked up by it and it answers no ownership question. Plaintext (structural).
     /// </summary>
     public string KeyPrefix { get; set; } = string.Empty;
@@ -56,7 +56,7 @@ internal sealed record class IntegrationExecution
     public long? EndedAtUtc { get; set; }
 
     /// <summary>
-    ///     Durable cancel marker (ruling R2-3): stamped when a cancel is requested so a restart cannot resurrect a
+    ///     Durable cancel marker (ADR 0008 R2-3): stamped when a cancel is requested so a restart cannot resurrect a
     ///     stopped run. Shaped on <see cref="McpAgentRun.StopRequestedAtUtc" />. Plaintext (structural).
     /// </summary>
     public long? StopRequestedAtUtc { get; set; }
@@ -74,7 +74,7 @@ internal sealed record class IntegrationExecution
     public int OutputCount { get; set; }
 
     /// <summary>
-    ///     Running total of <b>plaintext UTF-8 bytes</b> of the persisted <c>external.output</c> payloads (ruling
+    ///     Running total of <b>plaintext UTF-8 bytes</b> of the persisted <c>external.output</c> payloads (ADR 0008
     ///     R3-5) — never the encrypted column length. Plaintext (structural).
     /// </summary>
     /// <remarks>

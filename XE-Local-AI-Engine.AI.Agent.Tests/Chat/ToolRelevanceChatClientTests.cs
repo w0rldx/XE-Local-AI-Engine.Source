@@ -223,7 +223,7 @@ public sealed class ToolRelevanceChatClientTests
         var (tools, _) = BuildArray([.. FillerNames(20), "mcp_deploy_release"]);
 
         var hidden = await SendAsync(tools, query: "zzzz");
-        AssertEx.False(hidden.Names.Contains("mcp_deploy_release", StringComparer.Ordinal), "An MCP tool is hideable — the amended D6 ruling is the whole point of the slice.");
+        AssertEx.False(hidden.Names.Contains("mcp_deploy_release", StringComparer.Ordinal), "An MCP tool is hideable; that is the whole point of relevance selection.");
 
         var (again, _) = BuildArray([.. FillerNames(20), "mcp_deploy_release"]);
         var offered = await SendAsync(again, query: "deploy the release now");
@@ -246,9 +246,7 @@ public sealed class ToolRelevanceChatClientTests
     [Test]
     public async Task GetResponseAsync_AlwaysIncludesTheMafSkillTools()
     {
-#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         string[] skills = [AgentSkillsProvider.LoadSkillToolName, AgentSkillsProvider.ReadSkillResourceToolName, AgentSkillsProvider.RunSkillScriptToolName];
-#pragma warning restore MAAI001
         var (tools, _) = BuildArray([.. FillerNames(20), .. skills]);
 
         var sent = await SendAsync(tools, query: "zzzz");
@@ -460,9 +458,7 @@ public sealed class ToolRelevanceChatClientTests
         // Built the way MAF composes it: the factory's own tools PLUS the AgentSkillsProvider context tools, in a new
         // list object holding the SAME ListToolsFunction. The binding must land on that object — the one the
         // function-invoking layer resolves against — and not on a substitute in the hop's clone.
-#pragma warning disable MAAI001
         string[] skills = [AgentSkillsProvider.LoadSkillToolName, AgentSkillsProvider.ReadSkillResourceToolName, AgentSkillsProvider.RunSkillScriptToolName];
-#pragma warning restore MAAI001
         var (factoryTools, listTools) = BuildArray(FillerNames(20));
         List<AITool> composed = [.. factoryTools, .. skills.Select(Tool)];
 

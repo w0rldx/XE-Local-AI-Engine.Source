@@ -85,7 +85,7 @@ public sealed class WhisperModelCatalogTests
     [Test]
     public void VadRow_MatchesTheRecordedDigest()
     {
-        // Deliberately v6.2.0: a box may already carry v5.1.2 from an unrelated build, and a live round or a recorded
+        // Deliberately v6.2.0: a host may already carry v5.1.2 from an unrelated build, and a live run or a recorded
         // fixture taken under a different VAD model is not comparable with one taken under this one.
         AssertEx.Equal("ggml-org/whisper-vad", WhisperModelCatalog.VadRepoId);
         AssertEx.Equal("ggml-silero-v6.2.0.bin", WhisperModelCatalog.VadFileName);

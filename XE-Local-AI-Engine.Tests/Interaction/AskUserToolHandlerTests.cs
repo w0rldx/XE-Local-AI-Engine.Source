@@ -114,7 +114,7 @@ public sealed class AskUserToolHandlerTests
     {
         // The entry only survives when a turn dies between the runner's stash and the tool's pop (cancel, shutdown).
         // The write-time sweep is what keeps that from accumulating in a long-lived desktop process.
-        var timeProvider = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var stash = new UserQuestionAnswerStash(timeProvider);
         stash.Stash("abandoned", "orphan");
 
@@ -167,21 +167,5 @@ public sealed class AskUserToolHandlerTests
 
         public static void Set(FunctionInvocationContext? context) =>
             CurrentContext = context;
-    }
-
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public FakeTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _utcNow;
-
-        public void Advance(TimeSpan delta) =>
-            _utcNow += delta;
     }
 }

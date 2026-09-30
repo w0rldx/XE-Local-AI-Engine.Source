@@ -80,7 +80,7 @@ internal sealed class WebFetchService
 
     /// <summary>
     ///     Whether <paramref name="url" /> matches an allow-list entry: same scheme, host and port, and a path under the
-    ///     entry's path on a segment boundary (ADR 0017, D7). An unparseable entry matches nothing, so junk denies all.
+    ///     entry's path on a segment boundary (ADR 0017). An unparseable entry matches nothing, so junk denies all.
     /// </summary>
     internal static bool IsAllowed(Uri url, IReadOnlyList<string> allowedUrls)
     {

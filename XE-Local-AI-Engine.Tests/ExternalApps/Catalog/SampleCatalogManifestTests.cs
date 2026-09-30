@@ -161,7 +161,7 @@ public sealed partial class SampleCatalogManifestTests
     [Test]
     public void Fixture_DeclaresNoUserField()
     {
-        // R1-14/R1-26: application containers start as the image's default user and the engine never passes --user.
+        // Application containers start as the image's default user and the engine never passes --user.
         // The contract carries no such member, so a 'user' key in an authored document round-trips away unnoticed
         // instead of failing validation — the JSON has to be walked, not the deserialized graph. The shipped seed
         // declares no application, so this fixture is the only authored document the walk can find one in.

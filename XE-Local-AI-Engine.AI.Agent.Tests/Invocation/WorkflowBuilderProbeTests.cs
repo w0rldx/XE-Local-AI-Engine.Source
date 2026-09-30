@@ -1,12 +1,7 @@
 // The WorkflowBuilder probe: the raw Microsoft.Agents.AI.Workflows WorkflowBuilder API, at the pinned version
-// (Directory.Packages.props). PreviewWorkflows was the only production caller of the raw builder and has been
-// deleted; one builder-shaped test is kept deliberately so the API stays exercised across MAF bumps. Fully deterministic: plain code executors, NO IChatClient, no model, no
-// network — this probe deliberately has nothing to do with agents.
-//
-// This probe intentionally uses underscore-rich test names (CA1707), direct awaits in test code (CA2007), and
-// MAF's experimental workflow API (MAAIW001).
+// (Directory.Packages.props). No production code calls the raw builder; this builder-shaped test keeps the API
+// exercised across MAF bumps. Fully deterministic: plain code executors, no IChatClient, no model, no network.
 
-#pragma warning disable CA1707, CA2007, MAAIW001
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.Collections.Concurrent;
@@ -14,7 +9,7 @@ using Microsoft.Agents.AI.Workflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     D8 builder-API probe. Pins the raw <see cref="WorkflowBuilder" /> surface that no production code calls
+///     Builder-API probe. Pins the raw <see cref="WorkflowBuilder" /> surface that no production code calls
 ///     any more, so a MAF version bump that changes it fails here instead of silently rotting.
 ///     <para>
 ///         A future MAF bump MUST keep all of the following compiling and behaving as asserted:
@@ -284,4 +279,3 @@ public sealed class WorkflowBuilderProbeTests
         }
     }
 }
-#pragma warning restore CA1707, CA2007, MAAIW001

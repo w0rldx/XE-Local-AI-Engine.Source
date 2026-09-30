@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Proxy;
 ///     Generation, retrieval for display, revocation, and the constant-time comparison the authentication handler performs.
 ///     Because the proxy is gated purely on key presence (a node with no key authenticates nobody), generating a key IS how an operator turns the proxy
 ///     on and revoking it is how they turn it off — there is no separate enabled flag to keep in sync. This mirrors
-///     <see cref="IMcpServerApiKeyService" />, which guards the MCP tool surface on the same terms and shares nothing else with this one.
+///     <see cref="Mcp.IMcpServerApiKeyService" />, which guards the MCP tool surface on the same terms and shares nothing else with this one.
 /// </remarks>
 public interface ILocalModelProxyApiKeyService
 {

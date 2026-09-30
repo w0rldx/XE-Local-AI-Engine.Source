@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -19,14 +18,12 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         "Orchestrator agents cannot be integration trigger targets; external integrations run a single saved agent.";
 
     private readonly IAgentDefinitionStore _agents;
-    private readonly TimeProvider _timeProvider;
     private readonly IIntegrationTriggerStore _triggers;
 
-    public IntegrationTriggerService(IIntegrationTriggerStore triggers, IAgentDefinitionStore agents, TimeProvider timeProvider)
+    public IntegrationTriggerService(IIntegrationTriggerStore triggers, IAgentDefinitionStore agents)
     {
         _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public Task<IReadOnlyList<IntegrationTriggerSnapshot>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -79,7 +76,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                 Message = null
             };
         }
-        catch (DbUpdateException)
+        catch (IntegrationTriggerNameConflictException)
         {
             // The read above is not atomic with the insert. The unique index on the name is what actually decides the
             // race, and the loser must learn it lost as a 409 rather than as a 500.

@@ -74,7 +74,7 @@ public sealed class ProcessGpuVendorProbeTests
             TimeSpan.FromSeconds(8),
             ScriptedProcess.Factory(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
-                ["nvidia-smi"] = null, // no NVIDIA driver tooling on this box
+                ["nvidia-smi"] = null, // no NVIDIA driver tooling on this host
                 ["powershell"] = "AMD Radeon RX 7800 XT\n",
                 ["wmic"] = null // the Feature-on-Demand is not installed
             }),

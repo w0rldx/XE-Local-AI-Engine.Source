@@ -339,7 +339,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         AssertEx.Null(settingsStore.Saved);
     }
 
-    // Brief §5 test 1 for provisioning. Both halves of the observable effect are asserted: no download STARTED and no
+    // Disabled provisioning. Both halves of the observable effect are asserted: no download STARTED and no
     // llama.cpp binary acquired — a gate that only stopped the download would still pull a multi-GB runtime.
     [Test]
     public async Task Execute_WhenFirstRunProvisioningIsDisabled_StartsNoDownload()
@@ -364,7 +364,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         AssertEx.False(binaryManager.EnsureCalled, "A disabled first-run provisioning must not acquire a runtime either.");
     }
 
-    // Brief §5 test 2 for provisioning, on the fake clock.
+    // Undecided profile, on the fake clock: no provisioning until the operator decides.
     [Test]
     public async Task Execute_WhileTheProfileIsUndecided_Waits_ThenProvisionsOnceItIsDecided()
     {

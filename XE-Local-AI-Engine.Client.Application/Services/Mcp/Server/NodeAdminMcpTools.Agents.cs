@@ -11,9 +11,8 @@ public sealed partial class NodeAdminMcpTools
 {
     [McpServerTool(Name = "get_agent")]
     [Description("Get one saved agent by id or exact name.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpAgentResponse> GetAgentAsync(string agent_id, CancellationToken cancellationToken)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("get_agent", AuditArguments(("agent_id", agent_id)), async () =>
         {
@@ -30,7 +29,6 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "create_agent")]
     [Description("Validate and create a saved agent through the same application service used by the operator API.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentResponse> CreateAgentAsync(string name,
         string instructions,
         CancellationToken cancellationToken,
@@ -81,11 +79,9 @@ public sealed partial class NodeAdminMcpTools
                 generation_metadata,
                 cancellationToken),
             static response => response.FailureCode is not null);
-#pragma warning restore IDE1006
 
     [McpServerTool(Name = "update_agent")]
     [Description("Fully replace an existing saved agent by id or exact name through the shared validation service.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentResponse> UpdateAgentAsync(string agent_id,
         string name,
         string instructions,
@@ -147,13 +143,10 @@ public sealed partial class NodeAdminMcpTools
                 cancellationToken);
         }, static response => response.FailureCode is not null);
     }
-#pragma warning restore IDE1006
 
     [McpServerTool(Name = "delete_agent")]
     [Description("Delete a saved agent by id or exact name.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentDeleteResponse> DeleteAgentAsync(string agent_id, CancellationToken cancellationToken)
-#pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("delete_agent", AuditArguments(("agent_id", agent_id)), async () =>
         {

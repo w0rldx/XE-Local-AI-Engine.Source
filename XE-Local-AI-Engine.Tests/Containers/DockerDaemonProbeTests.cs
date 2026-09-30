@@ -335,7 +335,7 @@ public sealed class DockerDaemonProbeTests
                 return client;
             },
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger.Instance);
 
         AssertEx.Equal(expected: 1, seen.Count);
@@ -439,7 +439,7 @@ public sealed class DockerDaemonProbeTests
         var parked = Task.Run(() => DockerDaemonProbe.RunAsync(Request(),
             _ => parkedClient,
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger.Instance));
 
         await entered.Task;
@@ -486,7 +486,7 @@ public sealed class DockerDaemonProbeTests
         var parked = Task.Run(() => DockerDaemonProbe.RunAsync(Request(),
             _ => parkedClient,
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger.Instance));
 
         // The gate is the test's clock: the confirmation runs only once the first probe is provably inside its
@@ -625,7 +625,7 @@ public sealed class DockerDaemonProbeTests
         return new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(options),
             new SingleClientFactory(client),
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerDaemonPreflightService>.Instance);
     }
 
@@ -638,7 +638,7 @@ public sealed class DockerDaemonProbeTests
         return DockerDaemonProbe.RunAsync(Request(requireSeccompSupport, confirmingDaemonId, resolvedEndpoint),
             _ => client,
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger.Instance);
     }
 

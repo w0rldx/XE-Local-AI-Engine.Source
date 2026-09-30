@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Cheap, host-local probe answering a single question: does an enumerable Vulkan device actually exist on this box?
+///     Cheap, host-local probe answering a single question: does an enumerable Vulkan device actually exist on this machine?
 /// </summary>
 /// <remarks>
 ///     A GPU vendor being present does NOT imply Vulkan can enumerate it — most notably under WSL2, where an NVIDIA GPU is exposed via

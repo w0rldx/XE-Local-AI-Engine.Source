@@ -376,7 +376,7 @@ public sealed class GraphWorkflowCancelTests
         };
 
     /// <summary>
-    ///     S2's Codex finding, pinned: a pause ANSWERED between the drain tick's snapshot and its cancel write. The
+    ///     A pause ANSWERED between the drain tick's snapshot and its cancel write. The
     ///     gate holds the drain in exactly that window while a real decide is attempted through the real command
     ///     surface.
     ///     <para>
@@ -442,7 +442,7 @@ public sealed class GraphWorkflowCancelTests
 
 /// <summary>
 ///     A gate the test opens, shared across DI scopes because the dispatcher ticks in one of its own. It holds the
-///     drain at the exact instant S2's Codex finding named — after the tick has read the node runs and decided this one
+///     drain at the exact instant the race lives in — after the tick has read the node runs and decided this one
 ///     is live, before it writes <c>Cancelled</c> over it.
 /// </summary>
 internal sealed class GraphWorkflowDrainGate

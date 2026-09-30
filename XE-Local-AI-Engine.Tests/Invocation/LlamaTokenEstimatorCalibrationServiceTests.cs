@@ -654,33 +654,6 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         }
     }
 
-    private sealed class ManualTimeProvider : TimeProvider
-    {
-        private readonly Lock _sync = new();
-        private DateTimeOffset _utcNow;
-
-        public ManualTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            lock (_sync)
-            {
-                return _utcNow;
-            }
-        }
-
-        public void Advance(TimeSpan elapsed)
-        {
-            lock (_sync)
-            {
-                _utcNow += elapsed;
-            }
-        }
-    }
-
     private sealed class RecordingCalibrationStore : ITokenEstimatorCalibrationStore
     {
         private readonly ConcurrentDictionary<string, int> _divisors = new(StringComparer.Ordinal);

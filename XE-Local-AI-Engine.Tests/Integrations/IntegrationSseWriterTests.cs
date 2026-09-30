@@ -37,7 +37,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Equal(IntegrationSseWriteOutcome.Streamed, outcome);
         var expected = $"event: {IntegrationStreamEventTypes.ExecutionCompleted}\ndata: {JsonSerializer.Serialize(streamEvent, Web)}\nid: {streamEvent.Sequence}\n\n";
         AssertEx.Equal(expected, Encoding.UTF8.GetString(body.ToArray()),
-            "The brief's id/event/data ordering is not achievable through the BCL formatter; R1-8 amends it to this order, which SSE treats as equivalent.");
+            "The brief's id/event/data ordering is not achievable through the BCL formatter; ADR 0008 R1-8 amends it to this order, which SSE treats as equivalent.");
     }
 
     /// <summary>Test 24 — the headers, and the buffering the proxy path also has to turn off.</summary>

@@ -144,7 +144,7 @@ describe("BenchmarksPage project delete", () => {
 		).toBeTruthy();
 	});
 
-	// A live round read "with its 1 task items". The sentence is pluralised through the bundle's `_one`/`_other`
+	// Regression: never "with its 1 task items". The sentence is pluralised through the bundle's `_one`/`_other`
 	// siblings, and the singular form drops the possessive plural in its middle clause too.
 	it("uses the singular sentence for a project with one task item", async () => {
 		pageRoutes([projectRow(projectId, "Summarisation")], [projectDetail(projectId, "Summarisation")], 1);

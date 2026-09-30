@@ -11,7 +11,7 @@
 #                        (scripts/run-tests-memory-safe.sh header, 2026-09-14 table)
 #   SIBLING_RESERVE 5    the concurrent sibling lanes: Client.Persistence.Tests 3.2 GB at its pinned
 #                        width, plus AI.Agent.Tests
-#   HEADROOM 4           the OS, the IDE and whatever else the box runs
+#   HEADROOM 4           the OS, the IDE and whatever else the host runs
 # ponytail: fixed per-batch GB, re-measure with scripts/test-durations.py if batches change
 #
 # Test seam: XE_SIZING_MEMINFO names the meminfo file (default /proc/meminfo); a missing file reads

@@ -4,8 +4,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record RecordFindingRequest(string? Kind, string? Text, string? SourceRef, string? TaskId, string? SupersedesId);
-
 /// <summary>
 ///     <c>record_finding</c>: the session's durable memory of what it learned.
 /// </summary>

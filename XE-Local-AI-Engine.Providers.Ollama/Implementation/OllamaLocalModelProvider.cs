@@ -213,7 +213,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     ///     source name the agent pipeline pins, because MEAI's own default is never exported by the ServiceDefaults
     ///     wildcard. <c>EnableSensitiveData</c> is hard-coded false and deliberately does NOT read
     ///     <c>AgentTelemetryOptions</c> — embeddings carry conversation, memory and knowledge-base text this node keeps
-    ///     on-box — which also beats the ambient capture variable Aspire injects as true.
+    ///     on this machine — which also beats the ambient capture variable Aspire injects as true.
     /// </remarks>
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {

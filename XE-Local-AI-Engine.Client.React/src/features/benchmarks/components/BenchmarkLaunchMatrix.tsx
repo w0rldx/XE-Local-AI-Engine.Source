@@ -40,7 +40,7 @@ interface BenchmarkLaunchMatrixProps {
 /**
  * The launch matrix: pick several models and several KV-cache types, and every combination is enqueued as its own run
  * group. It exists because the single-run control makes an operator start twelve runs by hand to answer one question
- * ("which quant of this model, at which KV type, on this box"), and each of those twelve is a separate chance to pick
+ * ("which quant of this model, at which KV type, on this machine"), and each of those twelve is a separate chance to pick
  * the wrong project version.
  *
  * The submit is ONE request, and the node answers per cell — so a model that turns out to be ineligible is reported

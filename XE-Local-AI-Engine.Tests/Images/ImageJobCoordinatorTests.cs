@@ -178,8 +178,8 @@ public sealed class ImageJobCoordinatorTests
     [Test]
     public async Task RunJob_RuntimeReportsItsOwnQueueAfterLoading_NeverRewindsTheJobToQueued()
     {
-        // R8: on a cold spawn the hub stream went Generating, Loading, Queued, Encoding: the daemon's queue after its
-        // submit rewound a job that already held the generation slot. Once Generating, a job only moves forward.
+        // On a cold spawn the daemon reports its own queue after Loading; a job that already holds the generation slot
+        // must not rewind to Queued. Once Generating, a job only moves forward.
         using var harness = Harness.Create(blockRuntime: false,
             reportedPhases: [ImageGenPhase.Loading, ImageGenPhase.Queued, ImageGenPhase.Encoding, ImageGenPhase.Sampling]);
 

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Python;
 /// </summary>
 /// <remarks>
 ///     The venv root is machine-global (under <c>LocalApplicationData/XE-Local-AI-Engine</c>), the same base the
-///     llama.cpp binaries and source builds use, so one provision serves every node profile on the box and the existing
+///     llama.cpp binaries and source builds use, so one provision serves every node profile on the host and the existing
 ///     uninstaller sweep already reaches it.
 /// </remarks>
 internal static class TrainingRuntimeLayout

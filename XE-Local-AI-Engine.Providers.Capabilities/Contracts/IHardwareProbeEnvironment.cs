@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
 /// <summary>
-///     OS/filesystem facts the <see cref="HardwareProfiler" /> needs but that cannot be faked through
+///     OS/filesystem facts the <see cref="Implementation.HardwareProfiler" /> needs but that cannot be faked through
 ///     <see cref="IProcessProbe" /> alone (the platform switch, raw <c>/proc</c> and <c>/sys</c> reads, RAM/disk
 ///     queries). Split out so every OS branch is unit-testable with canned values and no real hardware.
 /// </summary>

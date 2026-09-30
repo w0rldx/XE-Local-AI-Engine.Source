@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     counterpart and unrecognised <see cref="ChatOptions.AdditionalProperties" /> are dropped — so
 ///     <see cref="DeferredLlamaServerChatClient.ApplySamplingPassthrough" /> patches the four missing knobs onto the body
 ///     via <c>ChatCompletionOptions.Patch</c>. These tests run the REAL MEAI OpenAI pipeline over a request-capturing
-///     transport (<see cref="LlamaGrammarToolOffer.CaptureWireBodyAsync" />) and grade the serialized bytes, not a
+///     transport (<see cref="LlamaGrammarToolOffer.CaptureWireBodyAsync(ChatOptions, CancellationToken)" />) and grade the serialized bytes, not a
 ///     reimplementation of the adapter.
 /// </summary>
 [Category(TestCategories.Unit)]

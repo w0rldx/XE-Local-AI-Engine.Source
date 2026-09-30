@@ -32,7 +32,7 @@ export function generateTraceparent(): Traceparent {
 }
 
 /** Build a `traceparent` header from a known trace id (reuse path). */
-export function traceparentFromTraceId(traceId: string): string {
+function traceparentFromTraceId(traceId: string): string {
 	return `${TRACE_VERSION}-${traceId}-${randomHex(SPAN_ID_HEX)}-${TRACE_FLAGS}`;
 }
 

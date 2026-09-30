@@ -33,7 +33,7 @@ public sealed record ContainerRunState
     /// <summary>The exit code of the last run.</summary>
     public required long ExitCode { get; init; }
 
-    /// <summary>Whether the kernel's OOM killer ended the last run — the difference between "the app crashed" and "the box ran out".</summary>
+    /// <summary>Whether the kernel's OOM killer ended the last run — the difference between "the app crashed" and "the host ran out".</summary>
     public required bool OutOfMemoryKilled { get; init; }
 
     /// <summary>The health verdict.</summary>

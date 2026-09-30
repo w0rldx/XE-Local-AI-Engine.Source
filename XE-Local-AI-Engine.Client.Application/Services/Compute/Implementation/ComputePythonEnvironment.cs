@@ -660,7 +660,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     /// <summary>
-    ///     Removes the pre-jail scratch directory if this box still has one.
+    ///     Removes the pre-jail scratch directory if this machine still has one.
     /// </summary>
     /// <remarks>
     ///     Logged at Information because it is a one-off migration an operator may want to see explained, and

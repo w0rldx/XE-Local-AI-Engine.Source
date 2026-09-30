@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Validators;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>Maps normalized V1 download values to the transport-independent image-model request.</summary>

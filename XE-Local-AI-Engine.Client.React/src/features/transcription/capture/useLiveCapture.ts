@@ -73,7 +73,7 @@ export interface LiveCaptureHandle {
 	 */
 	readonly capturedMs: number;
 	/**
-	 * MUST be invoked directly from the click handler, with nothing awaited between the user gesture and it (R39a).
+	 * MUST be invoked directly from the click handler, with nothing awaited between the user gesture and it.
 	 * Every display path calls `getDisplayMedia` synchronously inside this call, and the Screen Capture specification
 	 * requires the browser to reject a picker opened outside the transient-activation window — so routing this through
 	 * a confirmation dialog, an async guard or an `await` first silently breaks system-audio capture, with no error the
@@ -88,7 +88,7 @@ const defaultCaptureSourceFactory: CaptureSourceFactory = (kind, channel, device
 	kind === "microphone" ? new MicrophoneCaptureSource(channel, deviceId) : new SystemAudioCaptureSource(channel);
 
 /**
- * D2 / R19: nothing is ever mixed. The lanes are the node's (`TranscriptionService.LiveChannelsFor`): a microphone
+ * Nothing is ever mixed. The lanes are the node's (`TranscriptionService.LiveChannelsFor`): a microphone
  * alone is `Mono`, system audio alone is `Others` (the same lane a Windows per-process capture feeds), and the pair
  * is `You` + `Others`. A frame on a lane the session did not register is refused as `transcription-unknown-channel`.
  */
@@ -105,7 +105,7 @@ function toErrorCode(error: unknown): LiveCaptureErrorCode {
 		return error.code;
 	}
 	// The capture/process endpoint answers its refusals with a typed reason, and the three mean different things:
-	// this box cannot capture an application at all, the session is not live, or something is already capturing it.
+	// this machine cannot capture an application at all, the session is not live, or something is already capturing it.
 	// Reporting all three as "the node refused to open this live session. It may already have finished." is wrong in
 	// every direction, so the reason wins where there is one.
 	return processCaptureBlockedReason(error) ?? "start-failed";
@@ -255,7 +255,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 		retry().catch(() => undefined);
 	}, [cancelLiveSession, connected, endLiveSession]);
 
-	// R34: sources and the audio graph go down FIRST, then the session is ended. `EndSession` is awaited but a pending
+	// Sources and the audio graph go down FIRST, then the session is ended. `EndSession` is awaited but a pending
 	// `PushAudioFrame` never is — the node returns as soon as the frame is queued, so one still pending is a slow
 	// transport, and the microphone must not stay hot for it.
 	const stopSources = useCallback(async (): Promise<void> => {
@@ -318,7 +318,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 			capturedSamplesRef.current = {};
 			setCapturedMs(0);
 
-			// R31: a frame produced before the node accepted the session is dropped on the floor rather than sent. The
+			// A frame produced before the node accepted the session is dropped on the floor rather than sent. The
 			// picker may be open for a minute; what it captured in that minute is not this session's audio.
 			const onFrame = (frame: CaptureFrame): void => {
 				if (!forwardingRef.current) {
@@ -329,14 +329,14 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				if (mountedRef.current) {
 					setCapturedMs(Math.round((Math.max(...Object.values(captured)) * 1000) / TARGET_SAMPLE_RATE));
 				}
-				// R34a: a refused frame is never swallowed. A dead transport rejects, which means speech the node did not
+				// A refused frame is never swallowed. A dead transport rejects, which means speech the node did not
 				// receive — so capture stops loudly instead of leaving a hole in the transcript.
 				pushFrame(frame.channel, frame.pcm).catch((pushError: unknown) => {
 					abort(toErrorCode(pushError)).catch(() => undefined);
 				});
 			};
 
-			// R39a: the display picker is invoked HERE, synchronously, before this function's first await. Everything
+			// The display picker is invoked HERE, synchronously, before this function's first await. Everything
 			// else — the endpoint, the microphone prompt, `addModule` — can outlive the transient user activation the
 			// Screen Capture specification requires at the moment `getDisplayMedia` is called.
 			let display: CaptureSource | null = null;
@@ -374,7 +374,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 			try {
 				// A3: the microphone (and its permission prompt) comes BEFORE `live/start`, so the operator answers the
 				// prompt while the node spends its first-use minute on the runtime download and model load, not after.
-				// Its frames are dropped until `forwardingRef` is set below (R31): audio captured while the session was
+				// Its frames are dropped until `forwardingRef` is set below: audio captured while the session was
 				// still opening is discarded on purpose. No session is open yet, so a stale generation cancels nothing.
 				if (request.kind === "microphone" || request.kind === "both") {
 					const microphone = createSource("microphone", microphoneChannel(request), request.deviceId);
@@ -396,7 +396,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				}
 				sessionOpenRef.current = true;
 
-				// R30a: the session is live, so the node has a lane to push into — only now may capture attach. No source
+				// The session is live, so the node has a lane to push into — only now may capture attach. No source
 				// is acquired for this kind: the audio never enters this browser, and `teardown` ends the session over the
 				// hub, which is the same path that stops the node's recorder.
 				if (request.kind === "process") {

@@ -46,7 +46,6 @@ const imageQueryIds = {
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one image endpoint. */
 function imageInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 
@@ -99,7 +98,7 @@ export function useImageModels(pollWhilePending = false) {
 	});
 }
 
-// The curated image-model catalog: the one-click install list, annotated by the backend with this box's hardware fit
+// The curated image-model catalog: the one-click install list, annotated by the backend with this machine's hardware fit
 // and an installed flag. Both annotations are derived server-side from the registry and the hardware probe.
 //
 // `pollWhilePending` exists because the start mutation's invalidation fires on the 202 — at which point the model is

@@ -95,7 +95,7 @@ public sealed class ProcessSandboxFilesystemReachTests : IDisposable
         AssertEx.True(File.Exists(marker),
             "the process jail does not confine a child's filesystem writes under SandboxIsolationMode.None. "
             + "If this went RED, the product gained a boundary here and every claim about run_command's reach "
-            + "(docs/wiki/12-security-and-privacy.md §7, AgentHomeGitHardening's remarks, the S12B report) must be revisited.");
+            + "(docs/wiki/12-security-and-privacy.md §7, AgentHomeGitHardening's remarks) must be revisited.");
         AssertEx.Equal("escaped\n", await File.ReadAllTextAsync(marker));
     }
 

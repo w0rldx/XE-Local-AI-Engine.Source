@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
@@ -27,8 +28,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         harness's shared <c>Page</c> and <c>Context</c> are left untouched and unused here.
 ///     </para>
 /// </summary>
-// S101: matches the XEE2ETestBase harness naming; see that type for why the prefix is intentional.
-#pragma warning disable S101 // Types should be named in PascalCase
+[SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Shares the XE product prefix of XEE2ETestBase.")]
 public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
 {
     /// <summary>
@@ -223,4 +223,3 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
         await FakeAudioPage.GetByTestId("transcription-capture-start").ClickAsync();
     }
 }
-#pragma warning restore S101

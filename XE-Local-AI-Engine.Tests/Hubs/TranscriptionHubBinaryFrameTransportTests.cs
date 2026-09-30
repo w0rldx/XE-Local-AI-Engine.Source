@@ -93,7 +93,7 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
     /// </summary>
     /// <remarks>
     ///     Read as <see cref="JsonElement" /> on purpose: deserializing into the server's own record would agree with
-    ///     itself whatever the wire said. The rows are the S2 REST DTO, so the generated client covers their spelling
+    ///     itself whatever the wire said. The rows are the REST DTO, so the generated client covers their spelling
     ///     — but nothing covered the envelope, and a drifted name there is silent: <c>safeParse</c> fails, the
     ///     subscription never resolves and every live push is buffered behind a transcript that renders empty.
     /// </remarks>

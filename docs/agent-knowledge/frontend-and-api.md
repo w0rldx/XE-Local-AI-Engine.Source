@@ -53,8 +53,7 @@ scrollbar fix that skips every autosize site and dialog body. **Authority:** `co
 ### A gated-off Ollama runtime is a UI state, not an empty list
 
 **Rule:** with `XE_OLLAMA_RUNTIME_ENABLED=false` the no-op runtime answers available-and-empty, which looks idle, so
-node settings branches on `ollamaConfigured` via `useOllamaRuntimeConfigured` (in `src/core/runtime/hooks/`, because
-`no-cross-feature` forbids the edge), called at the page and passed down as `ollamaRuntimeDisabled`. It fails OPEN:
+node settings branches on `ollamaConfigured` via `useOllamaRuntimeConfigured` (in `src/features/node-settings/queries/`), called at the page and passed down as `ollamaRuntimeDisabled`. It fails OPEN:
 only a definite `false` hides the endpoint input, never the form model, so the stored value round-trips.
 **Authority:** `NodeSettings.tsx`; `NodeSettingsOllamaCard.test.tsx`; `NodeSettings.test.tsx`.
 

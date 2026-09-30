@@ -86,11 +86,7 @@ export interface CloudSettingsFormValues {
 
 // Built-in Azure host suffixes that are always allowed for a managed-identity connection. A host that
 // matches none of these but matches an operator-added suffix triggers the Entra-token egress warning.
-export const AZURE_BUILTIN_HOST_SUFFIXES = [
-	".openai.azure.com",
-	".services.ai.azure.com",
-	".cognitiveservices.azure.com",
-] as const;
+const AZURE_BUILTIN_HOST_SUFFIXES = [".openai.azure.com", ".services.ai.azure.com", ".cognitiveservices.azure.com"] as const;
 
 // Reserved header names (lower-cased for case-insensitive compare) that must never be operator-set —
 // they would override credentials or transport framing. Mirrors the backend reserved set.
@@ -226,7 +222,7 @@ const CLIENT_CREDENTIALS_SCOPE_SUFFIX = "/.default";
 
 // Mirrors the backend's EntraAuthCodeDefaults.TryValidateRedirectUri: absolute http(s) on a loopback host. A blank
 // value is valid (it resolves to the default redirect URI server-side).
-export function isValidLoopbackRedirectUri(value: string): boolean {
+function isValidLoopbackRedirectUri(value: string): boolean {
 	const trimmed = value.trim();
 	if (trimmed.length === 0) {
 		return true;
@@ -312,7 +308,7 @@ function validateHostSuffixes(hostSuffixes: string[]): string | undefined {
 }
 
 // Resolves the endpoint hostname (lower-cased) or null when the endpoint is not a valid URL.
-export function endpointHost(endpoint: string): string | null {
+function endpointHost(endpoint: string): string | null {
 	try {
 		return new URL(endpoint).hostname.toLowerCase();
 	} catch {

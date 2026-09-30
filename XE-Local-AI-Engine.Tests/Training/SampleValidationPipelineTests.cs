@@ -167,7 +167,7 @@ public sealed class SampleValidationPipelineTests
     [Test]
     public async Task ReasoningStyleCompletion_ThinkBlockProseAndFence_YieldsTheRecord()
     {
-        // F-57: a reasoning teacher's answer can carry an inline think block and prose, both with braces of their own.
+        // A reasoning teacher's answer can carry an inline think block and prose, both with braces of their own.
         const string completion = """
                                   <think>The user wants a {kind} example. Draft: {"userMessage": "draft"} no, better one below.</think>
                                   Here is the record you asked for (format: {json}):
@@ -201,7 +201,7 @@ public sealed class SampleValidationPipelineTests
     [Arguments("  produce training example 15 of kind 'rivers'. It must demonstrate correct behaviour.")]
     public async Task UserTurnThatEchoesTheGenerationInstruction_IsRejected(string userMessage)
     {
-        // F-58: a 7B teacher copied its own instruction in as the user turn and every layer reported passed.
+        // A 7B teacher copied its own instruction in as the user turn and every layer reported passed.
         var pipeline = Create(out _);
 
         var outcome = await pipeline.ValidateAsync(Record(userMessage), Context());
@@ -224,7 +224,7 @@ public sealed class SampleValidationPipelineTests
     [Test]
     public async Task DuplicateUserTurnWithinOneGeneration_IsRejected_AfterNormalisation()
     {
-        // F-58: the same teacher produced "What is the capital of France?" seven times out of eight.
+        // The same teacher produced "What is the capital of France?" seven times out of eight.
         var pipeline = Create(out _);
         var context = Context();
 

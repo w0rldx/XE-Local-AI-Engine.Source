@@ -183,7 +183,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
         AssertEx.Equal("GraphWorkflowGateAlreadyDecided", document.RootElement.GetProperty("conflictType").GetString());
     }
 
-    /// <summary>An answer the pinned graph never offered. The graph is wrong, so it reaches the client as S1's run conflict.</summary>
+    /// <summary>An answer the pinned graph never offered. The graph is wrong, so it reaches the client as the run conflict.</summary>
     [Test]
     public async Task Decide_WithAnAnswerThePauseDoesNotOffer_Answers409WithTheRunConflictDiscriminator()
     {

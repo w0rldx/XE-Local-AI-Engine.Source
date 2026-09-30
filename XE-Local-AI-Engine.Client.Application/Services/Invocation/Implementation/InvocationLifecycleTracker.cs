@@ -69,9 +69,9 @@ public sealed class InvocationLifecycleTracker
     public InvocationLifecycleTracker(IInvocationAttachmentTracker attachmentTracker,
         PendingToolCallRegistry pendingToolCallRegistry,
         INodeRuntimeSettings runtimeSettings,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
         ArgumentNullException.ThrowIfNull(runtimeSettings);

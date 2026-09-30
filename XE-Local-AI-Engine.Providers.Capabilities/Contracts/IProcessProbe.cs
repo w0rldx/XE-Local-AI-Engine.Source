@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
 /// <summary>
 ///     Minimal process-shell seam owned by this project. Runs a command and returns its exit code plus stdout so
-///     <see cref="HardwareProfiler" /> is unit-testable with canned probe output and no real GPU.
+///     <see cref="Implementation.HardwareProfiler" /> is unit-testable with canned probe output and no real GPU.
 /// </summary>
 internal interface IProcessProbe
 {

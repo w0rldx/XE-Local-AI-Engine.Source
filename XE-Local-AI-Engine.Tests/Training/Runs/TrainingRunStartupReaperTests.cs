@@ -394,7 +394,7 @@ public sealed class TrainingRunStartupReaperTests
 
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         using var keyHolder = new FixedNodeSqliteKeyHolder(new byte[32]);
-        var workspace = new TrainingRunWorkspace(new FixedNodeDataDirectory(root), keyHolder);
+        var workspace = new TrainingRunWorkspace(new FakeNodeDataDirectory(root), keyHolder);
         return new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System,
             logger ?? NullLogger<TrainingRunStartupReaper>.Instance);
     }

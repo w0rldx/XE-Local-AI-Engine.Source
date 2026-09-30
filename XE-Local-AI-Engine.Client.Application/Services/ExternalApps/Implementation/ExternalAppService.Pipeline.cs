@@ -570,9 +570,8 @@ internal sealed partial class ExternalAppService
 
             return false;
         }
-#pragma warning disable CA1031 // A teardown is best-effort by contract; its failure must not replace the failure that caused it.
+        // A teardown is best-effort by contract; its failure must not replace the failure that caused it.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception,
                 "Removing the containers and networks of external application instance {InstanceId} did not complete; the next teardown lists what is left.",
@@ -816,9 +815,8 @@ internal sealed partial class ExternalAppService
         {
             await runtime.RemoveContainerAsync(containerId, CancellationToken.None);
         }
-#pragma warning disable CA1031 // As above: a cleanup failure must not replace the failure that caused it.
+        // As above: a cleanup failure must not replace the failure that caused it.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception,
                 "The storage helper container of external application instance {InstanceId} could not be removed; the next teardown removes it by label.",
@@ -971,9 +969,8 @@ internal sealed partial class ExternalAppService
         {
             await _publisher.PublishAsync(instanceId, sequence, kind, status, CancellationToken.None);
         }
-#pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the operation whose result it describes.
+        // A subscriber that cannot be reached must not fail the operation whose result it describes.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogDebug(exception, "Publishing the {Kind} event for external application instance {InstanceId} failed.", kind, instanceId);
         }
@@ -990,9 +987,8 @@ internal sealed partial class ExternalAppService
                 report.CurrentBytes,
                 CancellationToken.None);
         }
-#pragma warning disable CA1031 // Progress is worthless after the fact; a dropped report degrades to a stale bar.
+        // Progress is worthless after the fact; a dropped report degrades to a stale bar.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogDebug(exception, "Publishing pull progress for external application instance {InstanceId} failed.", instanceId);
         }

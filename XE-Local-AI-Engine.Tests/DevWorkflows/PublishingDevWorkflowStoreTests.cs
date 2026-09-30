@@ -25,7 +25,7 @@ public sealed class PublishingDevWorkflowStoreTests
 
     /// <summary>
     ///     The bound the wall-clock tests measure "did not hang" against. Deliberately far wider than the collection
-    ///     budget they set: this box runs several suites at once, and the claim under test is that the settle returns
+    ///     budget they set: a shared runner runs several suites at once, and the claim under test is that the settle returns
     ///     at all — without the fix it waits on the collector until the test framework kills it, not until this passes.
     /// </summary>
     private static readonly TimeSpan Hang = TimeSpan.FromSeconds(20);
@@ -358,17 +358,14 @@ public sealed class PublishingDevWorkflowStoreTests
         // after the scope it disposes, so the slot comes back a moment after the gate opens rather than with it.
         gate.SetResult();
         telemetry.IgnoresCancellationUntil = null;
-        var giveUpAt = DateTimeOffset.UtcNow + Hang;
-        while (telemetry.Calls < 2 && DateTimeOffset.UtcNow < giveUpAt)
-        {
-            _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
-            if (telemetry.Calls < 2)
+        // real-timer: the pool slot returns from a background finally, after the gate opens rather than with it.
+        await AssertEx.EventuallyAsync(async () =>
             {
-                // real-timer: the pool slot returns from a background finally, after the gate opens rather than with it.
-                await Task.Delay(25);
-            }
-        }
-
+                _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
+                return telemetry.Calls >= 2;
+            },
+            Hang,
+            "The stuck collector's slot never came back.");
         AssertEx.Equal(expected: 2, telemetry.Calls, "The stuck collector's slot comes back when it finally returns, and the next settle is measured again.");
     }
 

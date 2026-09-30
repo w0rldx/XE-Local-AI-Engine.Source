@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 /// <remarks>
 ///     Both <see cref="LlamaListDevicesProcessVramBudgetProbe" /> and <see cref="LlamaDeviceInventoryProbe" /> ask
 ///     llama.cpp the same question — what devices does THIS binary enumerate? Unlike the supervised server this is a
-///     run-to-exit probe, so a plain <see cref="Process" /> with both pipes drained and a bounded wait suffices, with
+///     run-to-exit probe, so a plain <see cref="System.Diagnostics.Process" /> with both pipes drained and a bounded wait suffices, with
 ///     no Job Object or setsid containment. The working directory is co-located with the binary so its bundled runtime
 ///     libraries (cudart, vulkan, ggml) resolve, mirroring the launcher.
 /// </remarks>

@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Capabilities;
 
-/// <summary>One installed-model inventory entry resolved by <see cref="ModelCapabilityProber" />.</summary>
+/// <summary>One installed-model inventory entry resolved by <see cref="Implementation.ModelCapabilityProber" />.</summary>
 internal sealed class InstalledModelInfo
 {
     /// <summary>Normalized model name/tag.</summary>

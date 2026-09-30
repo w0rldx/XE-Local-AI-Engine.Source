@@ -43,12 +43,12 @@ public sealed class DockerSandboxFakeServerTests
         // The real attestation store, but rooted in a directory this test owns. The production one is a single
         // unkeyed file under the node data directory, and a test that wrote to it would pin the developer's own node
         // to a daemon that exists only while this test runs.
-        using var store = new DockerDaemonAttestationStore(new FixedNodeDataDirectory(attestationRoot.Path),
+        using var store = new DockerDaemonAttestationStore(new FakeNodeDataDirectory(attestationRoot.Path),
             NullLogger<DockerDaemonAttestationStore>.Instance);
         var service = new DockerDaemonPreflightService(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             store,
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerDaemonPreflightService>.Instance);
 
         var preflight = await service.InspectAsync();
@@ -107,8 +107,8 @@ public sealed class DockerSandboxFakeServerTests
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(new ContainerSandboxOptions());
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(workspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(workspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         AssertEx.True(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy),
@@ -242,8 +242,8 @@ public sealed class DockerSandboxFakeServerTests
                 var factory = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System);
                 var provider = new DockerSandboxRuntimeProvider(monitor,
                     factory,
-                    new FixedNodeDataDirectory(workspace.Path),
-                    new FixedTimeProvider(FixedNow),
+                    new FakeNodeDataDirectory(workspace.Path),
+                    new ManualTimeProvider(FixedNow),
                     NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
                 var handle = await provider.CreateOrAttachAsync(new SandboxCreateRequest

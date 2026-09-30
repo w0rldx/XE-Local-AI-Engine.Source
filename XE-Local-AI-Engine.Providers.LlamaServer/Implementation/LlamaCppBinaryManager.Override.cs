@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Operator bring-your-own llama-server override branch of <see cref="LlamaCppBinaryManager" />: when the override is
-///     active <see cref="EnsureBinaryAsync" /> delegates here and the supplied binary is validated and served as-is,
+///     active <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> delegates here and the supplied binary is validated and served as-is,
 ///     never downloaded, hash-verified or cached.
 /// </summary>
 /// <remarks>

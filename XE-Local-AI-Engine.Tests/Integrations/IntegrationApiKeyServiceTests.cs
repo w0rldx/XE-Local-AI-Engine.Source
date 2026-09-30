@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The <c>xeint_</c> credential lifecycle. Two properties are load-bearing: the plaintext is shown exactly once and
 ///     is unrecoverable afterwards, and every rejection — malformed, unknown prefix, wrong digest, revoked — is the
-///     same <see langword="null" />, because a caller must never learn which of the four it hit (ruling R2-6).
+///     same <see langword="null" />, because a caller must never learn which of the four it hit (ADR 0008 R2-6).
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationApiKeyServiceTests
@@ -73,7 +73,7 @@ public sealed class IntegrationApiKeyServiceTests
     [Test]
     public async Task GenerateAsync_WithAnExistingPrincipal_RotatesTheCredentialWithoutChangingTheIdentity()
     {
-        // The rotation case ruling R4-6 exists for: a second credential for the same integrator inherits every session
+        // The rotation case ADR 0008 R4-6 exists for: a second credential for the same integrator inherits every session
         // and in-flight execution the first one owns, because ownership keys on the principal and not on the prefix.
         var service = CreateService(out _);
         var original = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);

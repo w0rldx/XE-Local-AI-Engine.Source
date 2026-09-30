@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 /// </summary>
 /// <remarks>
 ///     Both runners clear the inherited environment before applying the result. The training
-///     runtime layers its probe, train and export environments on <see cref="BuildAllowlisted" />. See
+///     runtime layers its probe, train and export environments on <see cref="BuildAllowlisted()" />. See
 ///     docs/wiki/18-training.md ("The scrubbed environments, and the uv pipeline the compute tool shares").
 /// </remarks>
 public static class ManagedPythonEnvironment
@@ -50,7 +50,7 @@ public static class ManagedPythonEnvironment
         scrubbed["UV_CACHE_DIR"] = uvCacheDirectory;
         scrubbed["UV_PYTHON_INSTALL_DIR"] = pythonInstallDirectory;
 
-        // Ignore any uv.toml / user configuration on the box: the committed pyproject.toml is the only configuration
+        // Ignore any uv.toml / user configuration on the host: the committed pyproject.toml is the only configuration
         // this install is allowed to obey, and a stray index override would silently change what gets installed.
         scrubbed["UV_NO_CONFIG"] = "1";
 

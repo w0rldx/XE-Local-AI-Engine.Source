@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     subset. This is a SILENT-corruption gate, not a crash gate: an oversized repetition bound fails the request
 ///     loudly (that is <see cref="LlamaGrammarToolSchemaCompatibilityTests" />'s subject and the sanitizer's job), but
 ///     an unsupported regex construct compiles into a grammar that is merely WRONG — and grammar-constrained decoding
-///     then forces every model on that node to emit values the tool's own validator rejects. A live round is currently
-///     the only other way to notice.
+///     then forces every model on that node to emit values the tool's own validator rejects. A live model run is the only
+///     other way to notice.
 ///     <para>
 ///         <b>Ground truth.</b> The rules below come from llama.cpp <c>common/json-schema-to-grammar.cpp</c>
 ///         <c>_visit_pattern</c> at the pinned build (b10201, commit <c>8f4646a</c>), read and then exercised by
@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///                     Its <c>NON_LITERAL_SET</c> is <c>{'|', '.', '(', ')', '[', ']', '{', '}', '*', '+', '?'}</c> —
 ///                     <c>^</c> and <c>$</c> are ABSENT, so an interior anchor falls through to the literal branch and
 ///                     is emitted as a character the model must produce. <c>^a$|^b$</c> compiles to
-///                     <c>("a$" | "^b")</c>. This is the defect that blocked the first AgentHome live round.
+///                     <c>("a$" | "^b")</c>.
 ///                 </description>
 ///             </item>
 ///             <item>
@@ -74,7 +74,7 @@ public sealed class LlamaGrammarPatternCompatibilityTests
             + string.Join(" | ", offenders));
 
         // An all-clear is only worth something if the walk actually reached a pattern. run_in_agent_home's
-        // selectedFolderIds is the one the offer carries today and the one the live round broke on, so name it: a
+        // selectedFolderIds is the one the offer carries today and the one the anchor defect breaks, so name it: a
         // refactor that stopped descending into tool schemas would otherwise leave this gate green and empty forever.
         AssertEx.Contains(scanned, AgentHomeRunToolRequestValidator.SelectedFolderIdPattern);
     }

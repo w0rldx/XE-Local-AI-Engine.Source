@@ -4,20 +4,6 @@ using System.Collections;
 using System.Globalization;
 using System.Text.Json;
 
-/// <summary>Outcome of validating (and coercing) a model's tool arguments against the tool's JSON schema.</summary>
-internal readonly record struct ToolArgumentValidation(bool IsValid, bool WasCoerced, string? Reason)
-{
-    public static ToolArgumentValidation Valid(bool wasCoerced = false)
-    {
-        return new ToolArgumentValidation(true, wasCoerced, null);
-    }
-
-    public static ToolArgumentValidation Invalid(string reason)
-    {
-        return new ToolArgumentValidation(false, false, reason);
-    }
-}
-
 /// <summary>
 ///     Applies tolerant coercion and then structural validation to the arguments a model supplied for a tool call,
 ///     using the tool's own model-visible JSON schema.

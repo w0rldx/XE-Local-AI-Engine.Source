@@ -15,13 +15,12 @@ public sealed partial class NodeAdminMcpTools
     [McpServerTool(Name = "list_workflow_runs")]
     [Description(
         "List development workflow runs as bounded lifecycle metadata — one row per work item's LATEST run, matching the operator's own list. Each row carries the run status, node tallies and pending-decision count. An optional case-insensitive run status filter may be supplied. Graphs, artifact contents, work-session transcripts and host paths are never returned, and nothing here starts, cancels or otherwise moves a run.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public Task<McpWorkflowRunListResponse> ListWorkflowRunsAsync(CancellationToken cancellationToken,
         [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")]
         int? limit = null,
         [Description("Optional run status: pending, running, pausing, paused, waitingForApproval, cancelling, completed, failed, or cancelled.")]
         string? status = null)
-#pragma warning restore CA1707, IDE1006
         =>
             InvokeAuditedAsync("list_workflow_runs", AuditArguments(("limit", limit), ("status", status)), async () =>
             {
@@ -88,10 +87,8 @@ public sealed partial class NodeAdminMcpTools
     [McpServerTool(Name = "get_workflow_run")]
     [Description(
         "Get one development workflow run by id: its status, node tallies, pending-decision count, failure class, sanitized terminal reason, start and end timestamps, and one bounded row per node run (key, type, status, attempt, max attempts). The pinned graph, artifact contents, work-session transcripts and host paths are never returned, and nothing here moves the run.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public Task<McpWorkflowRunGetResponse> GetWorkflowRunAsync([Description("The canonical hyphenated UUID of the run, as returned by list_workflow_runs.")] string run_id,
         CancellationToken cancellationToken)
-#pragma warning restore CA1707, IDE1006
         =>
             InvokeAuditedAsync("get_workflow_run", AuditArguments(("run_id", run_id)), async () =>
             {

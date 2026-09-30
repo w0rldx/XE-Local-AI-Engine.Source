@@ -50,8 +50,8 @@ export function ModelSelectorCard({
 	const placeholder = t("pages.chat.modelPlaceholder", "Select model");
 	const selectedDisplay = deriveModelDisplay(selected, placeholder);
 	// Below the theme's `sm` the composer's control row has no width to spare, so the trigger keeps only the line that
-	// identifies the model. It stays a NAMED control rather than the bare icon it used to collapse to — an icon alone
-	// left the operator with no way to tell which model a phone was about to send to.
+	// identifies the model. It stays a NAMED control rather than a bare icon — an icon alone
+	// leaves the operator with no way to tell which model a phone was about to send to.
 	const { width } = useWindowDimensions();
 	const isCompactViewport = width < COMPACT_CONTROLS_BREAKPOINT;
 	const hasOptions = allOptions.length > 0;

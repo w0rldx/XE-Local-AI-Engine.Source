@@ -47,7 +47,7 @@ internal sealed class HfHubClient
     ///     the listing.
     /// </summary>
     /// <remarks>
-    ///     Per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync" />. Cached for
+    ///     Per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync(string, CancellationToken)" />. Cached for
     ///     <see cref="HuggingFaceOptions.HubMetadataCacheTtl" />, keyed by the fully-built listing URL (sort/limit/search
     ///     all included), so repeated advisor refreshes with the same query reuse one fetch.
     /// </remarks>

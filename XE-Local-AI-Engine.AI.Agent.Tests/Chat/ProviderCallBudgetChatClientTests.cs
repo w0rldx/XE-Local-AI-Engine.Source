@@ -438,8 +438,8 @@ public sealed class ProviderCallBudgetChatClientTests
                 updateCount++;
                 if (updateCount == 1)
                 {
-                    // The provider response remains open until the next pull. The round-elapsed metric intentionally
-                    // includes this backpressure rather than reporting only active MoveNextAsync wait time.
+                    // real-timer: the pause is the backpressure the round-elapsed metric must include; the response
+                    // stays open until the next pull, so this delay is the subject's own input.
                     await Task.Delay(TimeSpan.FromMilliseconds(40));
                 }
             }

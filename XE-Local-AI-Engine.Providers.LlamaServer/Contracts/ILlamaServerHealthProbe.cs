@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     Separated from the supervisor so unit tests can drive readiness deterministically without a real HTTP server;
-///     <see cref="LlamaServerHealthProbe" /> polls the server's <c>/health</c> endpoint until it reports ready.
+///     <see cref="Implementation.LlamaServerHealthProbe" /> polls the server's <c>/health</c> endpoint until it reports ready.
 /// </remarks>
 internal interface ILlamaServerHealthProbe
 {

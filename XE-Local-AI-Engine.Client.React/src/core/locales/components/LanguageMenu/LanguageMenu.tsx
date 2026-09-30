@@ -3,11 +3,12 @@ import { IconCheck, IconLanguage } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
-import { languageData } from "@/data/language/LanguageMenuData";
+import { languageData } from "@/core/locales/models/LanguageMenuData";
 
 export function LanguageMenu() {
 	const { i18n, t } = useTranslation();
-	const { selectedApplicationLanguage, changeLanguage } = useUserLanguageStore();
+	const selectedApplicationLanguage = useUserLanguageStore((state) => state.selectedApplicationLanguage);
+	const changeLanguage = useUserLanguageStore((state) => state.actions.changeLanguage);
 
 	const handleLanguageChange = async (language: string) => {
 		await i18n.changeLanguage(language);

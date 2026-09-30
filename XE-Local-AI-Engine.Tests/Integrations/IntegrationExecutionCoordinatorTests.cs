@@ -580,7 +580,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         foreach (var category in harness.Executions.Rows.Select(static row => row.FailureCategory).Where(static value => value is not null))
         {
             AssertEx.True(IntegrationFailureCategories.All.Contains(category!),
-                $"'{category}' is outside the closed failure vocabulary S2's stream contract and S4's chips are written against.");
+                $"'{category}' is outside the closed failure vocabulary the stream contract and the UI chips are written against.");
         }
     }
 
@@ -739,7 +739,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_TimesTheSecondExecutionOutOnItsOwnDeadline()
     {
         // The second execution must WAIT on the lease and time out there — not sit in the channel and get failed by
-        // the pre-check the moment the run ahead of it finishes, which is what the live round recorded at 227 s.
+        // the pre-check the moment the run ahead of it finishes.
         using var harness = new Harness(maxQueueAgeSeconds: 1);
         harness.HoldLeaseSlot();
         var first = harness.SeedLive();

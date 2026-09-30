@@ -50,7 +50,7 @@ internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Statu
 ///     satisfied, NOT that the successor ran: admission is a question about a TARGET's inbound edges. There is no
 ///     <c>Pending</c> bucket, which is proven rather than omitted —
 ///     <see cref="DevWorkflowStateMachine.RouteTaken" /> refuses a non-terminal source, the only state
-///     <see cref="DevWorkflowStateMachine.EdgeState" /> answers <c>Pending</c> for.
+///     <see cref="DevWorkflowStateMachine.EdgeState(DevWorkflowGraphEdge, DevWorkflowGraph, IReadOnlyDictionary{string, DevWorkflowNodeRunSnapshot})" /> answers <c>Pending</c> for.
 /// </remarks>
 /// <param name="GateAnswer">The decision token a human gate settled on; null on every other node type.</param>
 /// <param name="Truncated">Whether keys were dropped to keep the serialized document inside the column's bound.</param>
@@ -125,7 +125,7 @@ internal static class DevWorkflowStateMachine
     /// <summary>Whether an out-edge of a human gate fires for one answer, asked of the gate's own output document.</summary>
     /// <remarks>
     ///     A document rather than a row, which is what a check made BEFORE the run has instead. Composed from this
-    ///     class's own <see cref="GateOutputJson" /> and read by the pair <see cref="EdgeState" /> reads a landed row
+    ///     class's own <see cref="GateOutputJson" /> and read by the pair <see cref="EdgeState(DevWorkflowGraphEdge, DevWorkflowGraph, IReadOnlyDictionary{string, DevWorkflowNodeRunSnapshot})" /> reads a landed row
     ///     with, so a definition-time rule about where an answer goes and the routing that takes it there cannot
     ///     differ. The parse rule refusing an apply a rejection could reach, the dispatcher and the API all ask.
     /// </remarks>
@@ -173,7 +173,7 @@ internal static class DevWorkflowStateMachine
 
     /// <summary>Which of a run's SKIPPED node runs the state machine WAIVES, asked for a whole run at once.</summary>
     /// <remarks>
-    ///     Exactly the question <see cref="EdgeState" /> asks before answering <c>Waived</c> rather than <c>Dead</c>.
+    ///     Exactly the question <see cref="EdgeState(DevWorkflowGraphEdge, DevWorkflowGraph, IReadOnlyDictionary{string, DevWorkflowNodeRunSnapshot})" /> asks before answering <c>Waived</c> rather than <c>Dead</c>.
     ///     Exposed because the answer is NOT readable from a skipped row alone, and a read model guessing from status
     ///     gets it backwards on a failed node, a skip cascaded off it and a join beside a succeeded sibling — so the
     ///     API sends the verdict. ONE memo across every skipped row: per-skip walks make a wide fan-out quadratic.
@@ -213,7 +213,7 @@ internal static class DevWorkflowStateMachine
             : DevWorkflowEdgeState.Dead;
     }
 
-    /// <summary>Where a settled node run's out-edges went, judged edge by edge by <see cref="EdgeState" /> itself.</summary>
+    /// <summary>Where a settled node run's out-edges went, judged edge by edge by <see cref="EdgeState(DevWorkflowGraphEdge, DevWorkflowGraph, IReadOnlyDictionary{string, DevWorkflowNodeRunSnapshot})" /> itself.</summary>
     /// <remarks>
     ///     Not by a second copy of the rule, so the recorded route and the routing that happened cannot differ, and the
     ///     gate verdicts agree with <see cref="GateEdgeFires" />. A source that settled anything but <c>Succeeded</c>

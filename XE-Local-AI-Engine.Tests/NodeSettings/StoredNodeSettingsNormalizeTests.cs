@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The store's <c>Normalize</c> step must clamp every new field independently (an out-of-range value falls back to
@@ -809,15 +811,11 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    // Unix file modes do not exist on Windows; the per-user data-directory ACL governs access there.
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Save_KeepsTheOwnerOnlyFileModeAcrossTheAtomicMove()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            // A visible skip with a reason, never a silent return; the return keeps the platform analyzer happy.
-            Skip.Test("Unix file modes do not exist on Windows; the per-user data-directory ACL governs access there.");
-            return;
-        }
-
         // The rename replaces the target with the TEMP file's inode, so the temp must be created 0600 as well. A temp
         // created without UnixCreateMode would silently downgrade the permissions of a file holding the Ollama endpoint
         // and the machine key.

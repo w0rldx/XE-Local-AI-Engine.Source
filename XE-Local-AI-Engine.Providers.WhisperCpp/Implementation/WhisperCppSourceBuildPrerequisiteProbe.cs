@@ -115,7 +115,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         return ProbeToolAsync(fileName, arguments, displayName, isolationRoot, ct);
     }
 
-    // Either build driver satisfies the same requirement, so they share one row: reporting "ninja missing" on a box
+    // Either build driver satisfies the same requirement, so they share one row: reporting "ninja missing" on a machine
     // that builds fine with make would be a false blocker.
     private async Task<WhisperCppSourceBuildPrerequisiteItem> ProbeEitherToolAsync(CancellationToken ct)
     {

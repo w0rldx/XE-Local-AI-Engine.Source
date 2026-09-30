@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
-#pragma warning disable CA1812 // Instantiated by DI container.
 internal sealed class InvocationHistory : IInvocationHistory
-#pragma warning restore CA1812
 {
     private const int DefaultCapacity = 50;
 

@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         vacuous.</b> That is what Aspire's <c>AddServiceDefaults</c> does to every client through
 ///         <c>ConfigureHttpClientDefaults</c>; a test that omits it passes whether or not
 ///         <c>RemoveAllResilienceHandlers</c> was ever called. Mirrors <c>LocalModelProxyResilienceTests</c>, which
-///         records the live round that lesson came from.
+///         records the failure that lesson prevents.
 ///     </para>
 /// </remarks>
 [Category(TestCategories.Unit)]

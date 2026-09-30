@@ -115,7 +115,7 @@ public sealed record NodeChatStreamRequest(
     // Sent WITHOUT the tools that park on an operator (ask_user, web_fetch, web_search), for a workflow-owned work session,
     // which has no operator. See docs/wiki/05-chat.md, "Withdrawing operator tools from a workflow-owned session".
     bool SuppressOperatorTools = false,
-    // The conversation's web result review mode: true skips the review card (PLAN web-access §1.6). Absent means review.
+    // The conversation's web result review mode: true skips the review card (ADR 0017). Absent means review.
     bool AutoAcceptWebContent = false);
 
 public sealed record ChatStreamEvent

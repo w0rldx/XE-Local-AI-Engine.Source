@@ -14,7 +14,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     pinned catalogue is reused without touching the network.
 /// </summary>
 /// <remarks>
-///     This is the regression suite for the defect the S1a live round found. Every transcription model download
+///     This is the regression suite for a shared-file download defect. Every transcription model download
 ///     fetches the SHARED voice-activity-detection file as its first part, so on a node that already installed one
 ///     model that file exists when the next download starts. The store called the download client unconditionally;
 ///     the client re-fetched the bytes, verified them, and then refused to publish them onto the existing destination
@@ -54,7 +54,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     [Test]
     public async Task EnsureFile_DestinationAlreadyMatches_RemovesTheResidueOfAnEarlierFailedCommit()
     {
-        // Exactly what the live round left on disk: a complete .part and its range sidecar beside a published file,
+        // What an attempt that died at the commit step leaves on disk: a complete .part and its range sidecar beside a published file,
         // orphaned by an attempt that died at the commit step. The destination is already published, so those bytes
         // are dead weight rather than resume state, and leaving them means every later run carries the wreckage.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

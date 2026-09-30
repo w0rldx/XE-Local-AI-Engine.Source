@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///     detect a silent CPU fallback.
 /// </summary>
 /// <remarks>
-///     A silent CPU fallback is a GPU box whose inference runs on the CPU — a CPU variant selected, or a GPU variant that sees zero devices,
+///     A silent CPU fallback is a GPU machine whose inference runs on the CPU — a CPU variant selected, or a GPU variant that sees zero devices,
 ///     such as the Vulkan build under WSL2 with no ICD. The audit is a pure function of the selected binary, so it is computed on first
 ///     demand and cached: the cheapest correct point, because recomputing per spawn would cost something for no new information, and this way
 ///     it adds ZERO latency to a warm (reused) inference path.

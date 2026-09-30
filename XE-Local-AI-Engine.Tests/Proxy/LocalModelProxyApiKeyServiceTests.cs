@@ -185,23 +185,7 @@ public sealed class LocalModelProxyApiKeyServiceTests
     private static ILocalModelProxyApiKeyService CreateService(out InMemoryLocalModelProxyApiKeyStore store)
     {
         store = new InMemoryLocalModelProxyApiKeyStore();
-        return new LocalModelProxyApiKeyService(store, new FixedTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1)));
-    }
-
-    /// <summary>Deterministic clock so the last-used assertions do not depend on wall time.</summary>
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
+        return new LocalModelProxyApiKeyService(store, new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1)));
     }
 
     /// <summary>

@@ -419,7 +419,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Start_PublishesTheRunningStatusChange_SoTheDetailPageAttaches()
     {
-        // The Running transition is the detail page's cue to attach to the conversation (live QA F-30/F-31); before this
+        // The Running transition is the detail page's cue to attach to the conversation; before this
         // only the supervisor's later statuses were announced, so a page open at start never re-armed.
         var publisher = new RecordingWorkSessionEventPublisher();
         var sessionId = Guid.NewGuid();

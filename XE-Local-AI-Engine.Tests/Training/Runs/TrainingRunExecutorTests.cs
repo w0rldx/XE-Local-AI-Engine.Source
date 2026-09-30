@@ -323,7 +323,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
             var runId = Guid.NewGuid();
             var datasetId = Guid.NewGuid();
             var freezeId = Guid.NewGuid();
-            var workspace = new TrainingRunWorkspace(new FixedNodeDataDirectory(owner._root), owner._keyHolder);
+            var workspace = new TrainingRunWorkspace(new FakeNodeDataDirectory(owner._root), owner._keyHolder);
             await workspace.WriteFrozenDatasetAsync(datasetId, freezeId, Encoding.UTF8.GetBytes("{\"sequence\":0}\n"), CancellationToken.None);
 
             var staged = workspace.StagedDirectory(runId);
@@ -417,7 +417,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 spawner,
                 workspace,
                 cancellations,
-                new FixedNodeDataDirectory(owner._root),
+                new FakeNodeDataDirectory(owner._root),
                 // Short bounds so the watchdog's real behaviour is exercised in milliseconds rather than minutes.
                 // Short bounds, but they are measured on `clock` — a manual clock only a test moves. A watchdog on the
                 // system clock raced every OTHER test in this file on the box's scheduling jitter: a consume starved

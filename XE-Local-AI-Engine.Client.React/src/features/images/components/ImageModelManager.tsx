@@ -115,7 +115,7 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 
 	// Resolve each tracked download the moment the backend reports a terminal phase. A failure raises a toast AND leaves
 	// an inline reason on the card; a success/cancel just drops the row. Without this the UI could only ever observe
-	// success (the model appearing), which is precisely why a typo used to hang forever.
+	// success (the model appearing), so a typo would hang forever.
 	//
 	// `untrack` only queues a state update, so a poll landing before it flushes would re-deliver the same terminal
 	// status and raise a duplicate toast. The handled set makes each terminal phase fire exactly once per model.

@@ -73,20 +73,19 @@ export interface NodeCapabilityConfig {
 	// integration-api family is authenticated by its own xeint_ key scheme regardless of this flag.
 	readonly integrations: boolean;
 	// Graph Workflows: operator-authored DAGs of the eight v1 node kinds (Start, Agent, Tool, Condition, Parallel,
-	// Join, Pause, End) with a canvas editor and a live run view. Ships ON since S4 verified the editor, the run
-	// engine and the run view end to end. Its nav entry is a top-level link (promoted out of the Preview group when
-	// Open Canvas was removed). The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this
-	// flag only decides whether the surface is offered.
+	// Join, Pause, End) with a canvas editor and a live run view. Ships ON. Its nav entry is a top-level link, not a
+	// Preview child. The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this flag only
+	// decides whether the surface is offered.
 	readonly graphWorkflows: boolean;
 	// External Apps: a curated catalog of applications XE installs and supervises on this computer, their installed
 	// instances and one detail page per instance. Gates the nav group and all four /external-apps routes. The node
 	// ALSO has its own `ExternalApps:Enabled` switch, which 404s the API and the hub negotiate — this flag only
 	// decides whether the surface is OFFERED, and it is compile-time: the backend switch can neither reveal these
-	// routes nor hide them. On since S5 flipped it ahead of its live browser round.
+	// routes nor hide them. Ships ON.
 	readonly externalApps: boolean;
 	// Local audio transcription (whisper.cpp): upload a recording, get a timestamped transcript. Gates the nav child
 	// and the two /transcription routes. Shipped under the PREVIEW nav group next to Image Generation — the runtime is
-	// a child process that is not yet verified end-to-end, and live capture only arrives in a later slice. The node
+	// a child process that is not yet verified end-to-end. The node
 	// ALSO has its own `Transcription:Enabled` switch, which 404s the API — this flag only decides whether the surface
 	// is offered, and it is compile-time.
 	readonly transcription: boolean;
@@ -165,11 +164,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	workSessions: true,
 	devWorkflows: true,
 	integrations: true,
-	// On since S4: the editor and the run view are verified end to end, so the surface is offered by default.
+	// On: the editor and the run view are verified end to end, so the surface is offered by default.
 	graphWorkflows: true,
-	// On since S5: the capability is compile-time, so the live browser round cannot reach the catalog, the installed
-	// list or a detail page until it is true. Flipped BEFORE the round; the backend `ExternalApps:Enabled` default
-	// follows it, after the round has passed on this tree.
+	// On: the capability is compile-time, so nothing can reach the catalog, the installed list or a detail page until
+	// it is true.
 	externalApps: true,
 	// On by default so the Preview group offers it; the backend `Transcription:Enabled` switch remains the operational
 	// kill switch.

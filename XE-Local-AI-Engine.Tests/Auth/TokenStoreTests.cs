@@ -56,7 +56,7 @@ public sealed class TokenStoreTests : IDisposable
         var now = new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
         WriteCredentials(clientNodeId, "stale-access-token", now.AddMinutes(-1));
 
-        var tokenStore = CreateTokenStore(new FixedTimeProvider(now));
+        var tokenStore = CreateTokenStore(new ManualTimeProvider(now));
 
         AssertEx.Null(await tokenStore.GetAccessTokenAsync());
         // The identity outlives the token: AgentHomeIdentityProvider keys on the node id, not on a live session.
@@ -110,20 +110,5 @@ public sealed class TokenStoreTests : IDisposable
     private string GetCredentialsPath()
     {
         return Path.Combine(_contentRootPath, "worker-credentials.enc");
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 }

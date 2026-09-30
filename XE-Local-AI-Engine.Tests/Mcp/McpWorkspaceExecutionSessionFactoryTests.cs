@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -81,11 +80,12 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         AssertEx.Null(result.Session);
         AssertEx.False(result.DisplayMessage.Contains(harness.Workspace.HostPath, StringComparison.Ordinal),
             "preparation failure must not expose the resolved host path.");
-        AssertEx.True(harness.Logger.AllText.Contains(nameof(IOException), StringComparison.Ordinal),
+        var logText = string.Join(Environment.NewLine, harness.Logger.Entries.Select(entry => entry.Message));
+        AssertEx.True(logText.Contains(nameof(IOException), StringComparison.Ordinal),
             "preparation diagnostics must retain the opaque exception type.");
-        AssertEx.True(harness.Logger.AllText.Contains(harness.Workspace.Id.ToString("D"), StringComparison.Ordinal),
+        AssertEx.True(logText.Contains(harness.Workspace.Id.ToString("D"), StringComparison.Ordinal),
             "preparation diagnostics must identify the opaque workspace id.");
-        AssertEx.False(harness.Logger.AllText.Contains(harness.Workspace.HostPath, StringComparison.Ordinal),
+        AssertEx.False(logText.Contains(harness.Workspace.HostPath, StringComparison.Ordinal),
             "preparation diagnostics must not expose the resolved host path.");
         AssertEx.Equal(1, lease.DisposeCallCount);
         AssertEx.Equal(1, harness.Isolation.RecoverCallCount);
@@ -295,7 +295,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
 
         public FakeLeaseManager LeaseManager { get; } = new();
 
-        public CapturingLogger<McpWorkspaceExecutionSessionFactory> Logger { get; } = new();
+        public RecordingLogger<McpWorkspaceExecutionSessionFactory> Logger { get; } = new();
 
         public FakeManifestService Manifest { get; } = new();
 
@@ -506,29 +506,6 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         public void Dispose()
         {
             DisposeCallCount++;
-        }
-    }
-
-    private sealed class CapturingLogger<T> : ILogger<T>
-    {
-        private readonly List<string> _entries = [];
-
-        public string AllText => string.Join(Environment.NewLine, _entries);
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            _entries.Add(formatter(state, exception));
         }
     }
 }

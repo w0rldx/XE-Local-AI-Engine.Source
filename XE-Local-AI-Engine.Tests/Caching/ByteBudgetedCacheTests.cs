@@ -51,7 +51,7 @@ public sealed class ByteBudgetedCacheTests
     [Test]
     public void TryGet_AfterTtlElapses_IsAMiss()
     {
-        var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = Cache(maxBytes: 1024, maxEntries: 100, ttl: TimeSpan.FromSeconds(10), timeProvider: clock);
         cache.Set("a", 10);
 
@@ -191,25 +191,5 @@ public sealed class ByteBudgetedCacheTests
             static (_, value) => value,
             timeProvider ?? TimeProvider.System,
             ttl);
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now;
-
-        public MutableTimeProvider(DateTimeOffset start)
-        {
-            _now = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
-
-        public void Advance(TimeSpan by)
-        {
-            _now += by;
-        }
     }
 }

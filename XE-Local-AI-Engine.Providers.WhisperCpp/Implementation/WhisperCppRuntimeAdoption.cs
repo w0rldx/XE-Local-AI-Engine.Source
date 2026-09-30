@@ -618,12 +618,3 @@ internal sealed class WhisperCppRuntimeAdoption
         public required string? RetiredPrevious { get; init; }
     }
 }
-
-/// <summary>The intent record written before an adoption touches a directory, and the input to its recovery.</summary>
-internal sealed record WhisperCppAdoptionJournal(
-    Guid BuildId,
-    WhisperBackend NewBackend,
-    string NewCommit,
-    bool HadPreviousDestination,
-    WhisperInstalledRuntimeState? PreviousState,
-    WhisperInstalledRuntimeState NewState);

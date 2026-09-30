@@ -142,7 +142,7 @@ internal sealed class GtkDownload
             try { _api.WebKit<GtkNativeApi.Command>("webkit_download_cancel")(download); }
             catch (Exception)
             {
-                /* Never unwind a native callback. */
+                // Never unwind a native callback.
             }
         }
     }
@@ -182,7 +182,7 @@ internal sealed class GtkDownload
         try { _completion?.TrySetResult(download == _download && _gate.IsCurrent(_generation)); }
         catch (Exception)
         {
-            /* Never unwind a native callback. */
+            // Never unwind a native callback.
         }
     }
 
@@ -195,7 +195,7 @@ internal sealed class GtkDownload
         }
         catch (Exception)
         {
-            /* Cancellation must not unwind a native callback. */
+            // Cancellation must not unwind a native callback.
         }
     }
 

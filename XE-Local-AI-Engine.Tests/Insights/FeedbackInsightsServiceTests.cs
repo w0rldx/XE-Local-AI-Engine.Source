@@ -201,21 +201,6 @@ public sealed class FeedbackInsightsServiceTests
     private static FeedbackInsightsService CreateService(out IFeedbackInsightsStore store, long nowUtcMs)
     {
         store = Substitute.For<IFeedbackInsightsStore>();
-        return new FeedbackInsightsService(store, new FixedTimeProvider(nowUtcMs));
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly long _unixMilliseconds;
-
-        public FixedTimeProvider(long unixMilliseconds)
-        {
-            _unixMilliseconds = unixMilliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_unixMilliseconds);
-        }
+        return new FeedbackInsightsService(store, new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(nowUtcMs)));
     }
 }

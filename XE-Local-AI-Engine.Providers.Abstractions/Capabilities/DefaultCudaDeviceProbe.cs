@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// <remarks>
 ///     Windows is the only OS with prebuilt CUDA <c>sd-server</c>/<c>whisper-server</c> binaries and so the only one inspected: present iff <c>nvcuda.dll</c> exists
 ///     in the system directory, where the NVIDIA display driver installs the CUDA driver API. Elsewhere, and on any IO/permission
-///     error, the verdict is present, because a false "absent" drops a healthy box off its GPU. <strong>Ceiling:</strong> it catches a
+///     error, the verdict is present, because a false "absent" drops a healthy machine off its GPU. <strong>Ceiling:</strong> it catches a
 ///     missing driver, not one too old for the binary's CUDA runtime — that still reaches the supervisor, which reports the child's
 ///     exit code and stderr tail. The verdict is cached for the process lifetime via a thread-safe <see cref="Lazy{T}" />.
 /// </remarks>
@@ -55,7 +55,7 @@ public sealed class DefaultCudaDeviceProbe : ICudaDeviceProbe
         }
         catch (IOException)
         {
-            // Unknown → present: a false "absent" would strand a healthy NVIDIA box off CUDA.
+            // Unknown → present: a false "absent" would strand a healthy NVIDIA machine off CUDA.
             return true;
         }
         catch (UnauthorizedAccessException)

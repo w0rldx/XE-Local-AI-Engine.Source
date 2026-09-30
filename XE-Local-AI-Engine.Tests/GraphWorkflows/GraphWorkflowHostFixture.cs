@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     <para>
 ///         The host is shared, so its SQLite database is too: scope every read to your own run id and assert on no
 ///         absolute row count. A test that needs host-level state of its own — a different option value — builds its
-///         own factory with <see cref="NewFactory" /> and says why at the construction site.
+///         own factory with <see cref="NewFactory(ValueTuple{string, string}[])" /> and says why at the construction site.
 ///     </para>
 /// </summary>
 public sealed class GraphWorkflowHostFixture : IAsyncInitializer, IAsyncDisposable

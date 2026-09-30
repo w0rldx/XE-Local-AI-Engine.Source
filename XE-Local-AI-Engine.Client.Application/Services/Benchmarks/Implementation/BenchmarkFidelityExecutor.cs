@@ -42,7 +42,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     /// <summary>The measurement watchdog, generous next to the real cost.</summary>
     /// <remarks>
     ///     200 chunks of a 27B is about a minute of prompt evaluation on a 5090, and a base-logit pass over a
-    ///     large-vocabulary model on a slower box is a multiple of that. The alternative to waiting is killing a
+    ///     large-vocabulary model on a slower machine is a multiple of that. The alternative to waiting is killing a
     ///     measurement that was going to succeed.
     /// </remarks>
     private static readonly TimeSpan DefaultMeasurementTimeout = TimeSpan.FromHours(2);
@@ -174,7 +174,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
 
         // The base-logit phase runs the BASE model, routinely larger than the quant this run measures, so it reserves for ITSELF and releases before the quant is admitted. One reservation sized
-        // on the quant and held across both phases over-admits the base and OOMs on the box where the base is the big one; the phases never overlap, so two sequential reservations cost nothing.
+        // on the quant and held across both phases over-admits the base and OOMs on the host where the base is the big one; the phases never overlap, so two sequential reservations cost nothing.
         var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
             ? await PrepareKldAsync(work.RunId, project, corpus, chunks, executable, snapshot, token)
             : null;
@@ -506,7 +506,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         try
         {
             // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it
-            // would turn recorded evidence into a failure. Matches the pre-S4 synchronous read.
+            // would turn recorded evidence into a failure.
             await using var stream = File.OpenRead(path);
             return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None));
         }

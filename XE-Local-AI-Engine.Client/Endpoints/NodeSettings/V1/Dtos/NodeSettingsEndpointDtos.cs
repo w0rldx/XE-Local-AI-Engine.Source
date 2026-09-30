@@ -396,7 +396,7 @@ public sealed record NodeSettingsResponse
 /// <remarks>
 ///     A <see langword="null" /> request field keeps the current stored value — the mapper merges into the loaded
 ///     <see cref="StoredNodeSettings" />. Provided values are validated at the boundary by
-///     <see cref="NodeSettingsEndpointValidators" /> (ranges, URL format, tag format, array element constraints).
+///     <see cref="Validators.SaveNodeSettingsRequestValidator" /> (ranges, URL format, tag format, array element constraints).
 /// </remarks>
 public sealed record SaveNodeSettingsRequest
 {

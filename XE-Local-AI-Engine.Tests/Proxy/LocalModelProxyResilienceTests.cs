@@ -16,8 +16,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <b>The container under test must have the standard resilience handler installed, or every assertion here is
 ///         vacuous.</b> That is what Aspire's <c>AddServiceDefaults</c> does to every named client through
 ///         <c>ConfigureHttpClientDefaults</c>, and a test that omits it passes whether or not
-///         <c>RemoveAllResilienceHandlers</c> was ever called — the exact shape of test that let the inherited
-///         attempt timeout reach a live round, where a non-streaming completion answered 500
+///         <c>RemoveAllResilienceHandlers</c> was ever called — the exact shape of test that lets the inherited
+///         attempt timeout reach a real model, where a non-streaming completion answers 500
 ///         "The operation didn't complete within the allowed timeout" instead of streaming to the end.
 ///     </para>
 ///     <para>

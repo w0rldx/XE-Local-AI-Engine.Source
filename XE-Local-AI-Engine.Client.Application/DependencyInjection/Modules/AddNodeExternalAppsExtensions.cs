@@ -58,7 +58,7 @@ internal static class AddNodeExternalAppsExtensions
         builder.Services.AddSingleton<ExternalAppService>();
         builder.Services.AddSingleton<IExternalAppService>(static services => services.GetRequiredService<ExternalAppService>());
 
-        // TryAdd: S3's hub-backed publisher supersedes this wherever the hub is mapped, and a host that composes the
+        // TryAdd: the host's hub-backed publisher supersedes this wherever the hub is mapped, and a host that composes the
         // services without the API surface still gets a publisher rather than a missing dependency.
         builder.Services.TryAddSingleton<IExternalAppEventPublisher, NoOpExternalAppEventPublisher>();
 

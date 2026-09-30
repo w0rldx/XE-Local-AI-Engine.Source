@@ -22,7 +22,7 @@ public interface IPendingFootprintLedger
     ResourceFootprint Reserved { get; }
 
     /// <summary>
-    ///     Reserves <paramref name="bytes" /> against the ledger and returns a handle that releases the reservation on
+    ///     Reserves <paramref name="footprint" /> against the ledger and returns a handle that releases the reservation on
     ///     dispose (idempotent). Call only while holding the decision gate, after deciding the model fits.
     /// </summary>
     IDisposable Reserve(ResourceFootprint footprint);

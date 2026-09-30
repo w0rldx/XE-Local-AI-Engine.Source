@@ -87,7 +87,7 @@ public interface ITranscriptionSessionStore
 
     /// <summary>
     ///     Marks a session <see cref="TranscriptionSessionStatus.Failed" /> with an encrypted code/message pair. The code
-    ///     is encrypted with the message on purpose (R11), so it is deliberately not SQL-queryable. False when the
+    ///     is encrypted with the message on purpose, so it is deliberately not SQL-queryable. False when the
     ///     session did not exist.
     /// </summary>
     Task<bool> FailAsync(Guid sessionId, string errorCode, string errorMessage, long updatedAtUtc, CancellationToken cancellationToken);

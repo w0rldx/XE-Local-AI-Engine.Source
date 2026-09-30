@@ -70,10 +70,3 @@ internal sealed class DefaultModelSelectionPolicy
         }
     }
 }
-
-internal sealed class DefaultModelSelectionValidation
-{
-    public required string FailureCode { get; init; }
-
-    public required string DisplayMessage { get; init; }
-}

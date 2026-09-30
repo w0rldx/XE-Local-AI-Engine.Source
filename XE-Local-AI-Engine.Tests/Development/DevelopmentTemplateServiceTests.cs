@@ -4,7 +4,6 @@ using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -166,7 +165,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         Directory.CreateDirectory(NodeDataRoot());
         return new DevelopmentTemplateService(new FakeTemplateStore(TemplateId, "fixture-template", templateRoot),
             bindings,
-            new FixedNodeDataDirectory(NodeDataRoot()),
+            new FakeNodeDataDirectory(NodeDataRoot()),
             Options.Create(new DevelopmentOptions()),
             TimeProvider.System);
     }
@@ -222,16 +221,6 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         return process.ExitCode == 0
             ? output
             : throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error}");
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 
     private sealed class FakeTemplateStore : IDevelopmentTemplateStore

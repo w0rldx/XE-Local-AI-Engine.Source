@@ -12,7 +12,6 @@ import type { ExternalProviderConnectionDto } from "@/features/external-provider
 const { generatedMock, confirmMock } = vi.hoisted(() => ({
 	generatedMock: {
 		listOptions: vi.fn(),
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		listQueryKey: vi.fn(() => [{ _id: "listExternalProviderConnections" }]),
 		saveMutation: vi.fn(),
 		deleteMutation: vi.fn(),
@@ -88,7 +87,6 @@ describe("ExternalProviders page", () => {
 		generatedMock.deleteFn.mockResolvedValue({ revision: "rev-2", connections: [] });
 		generatedMock.probeFn.mockResolvedValue({ reachable: true, models: [] });
 		generatedMock.listOptions.mockReturnValue({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "listExternalProviderConnections" }],
 			queryFn: generatedMock.listFn,
 		});

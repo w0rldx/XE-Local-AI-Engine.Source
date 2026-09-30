@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>Create request for an agent definition. The editable fields mirror <see cref="AgentDefinitionInput" />.</summary>
+/// <summary>Create request for an agent definition. The editable fields mirror <see cref="Persistence.Stores.AgentDefinitionInput" />.</summary>
 public sealed class CreateAgentDefinitionRequest
 {
     public string? Name { get; init; }

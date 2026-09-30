@@ -40,7 +40,16 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
         };
 
         _ = _dbContext.IntegrationTriggers.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+        {
+            // The service's name pre-check is not atomic with this insert; the unique index on the name decides the race.
+            throw new IntegrationTriggerNameConflictException($"Another trigger already uses the name '{command.Name}'.", exception);
+        }
+
         return ToSnapshot(entity);
     }
 

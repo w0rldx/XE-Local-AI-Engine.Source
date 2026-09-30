@@ -61,7 +61,7 @@ A **template** is a server-defined job type. Each is an `IScheduledJobHandler` e
 
 ### Shipped templates
 
-`ModelRecommendationCheckHandler` (`Handlers/ModelRecommendationCheckHandler.cs`), template id `model-recommendation-check`, runs the box-aware GGUF Model Advisor and refreshes the cached recommendation snapshot. See [Model Fit](07-model-fit.md) for what it computes. Maintainer-relevant details:
+`ModelRecommendationCheckHandler` (`Handlers/ModelRecommendationCheckHandler.cs`), template id `model-recommendation-check`, runs the hardware-aware GGUF Model Advisor and refreshes the cached recommendation snapshot. See [Model Fit](07-model-fit.md) for what it computes. Maintainer-relevant details:
 
 - **It is a singleton** (the registry captures handlers in a `FrozenDictionary`), so it **cannot inject scoped services**. It injects `IServiceScopeFactory` and resolves the scoped `IModelFitRefreshService` inside a per-fire scope (the scoped-resolution block in `ModelRecommendationCheckHandler.HandleAsync`).
 - It owns **no scheduler state**: it never touches run rows or SignalR — the dispatcher does. It forwards `context.ReportProgressAsync`, lets `OperationCanceledException` propagate (→ dispatcher records *Cancelled*), and throws a `ScheduledJobExecutionException` carrying the refresh result's contractually-sanitized `SanitizedError` on failure (→ dispatcher records *Failed* with that exact reason).

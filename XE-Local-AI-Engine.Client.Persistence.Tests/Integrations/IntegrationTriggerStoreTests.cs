@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -46,6 +48,25 @@ public sealed class IntegrationTriggerStoreTests
         AssertEx.Equal(agentId, byId.TargetAgentDefinitionId);
 
         AssertEx.Null(await readStore.GetByNameAsync("no-such-trigger"));
+    }
+
+    [Test]
+    public async Task CreateAsync_WithATakenName_ThrowsNameConflictFromTheUniqueIndex()
+    {
+        using var fixture = new IntegrationTestFixture();
+        await using (var context = await fixture.CreateSchemaAsync())
+        {
+            _ = await CreateAsync(new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow)), "sensor-ingest");
+        }
+
+        await using var raceContext = fixture.CreateContext();
+        var conflict = await AssertEx.ThrowsAsync<IntegrationTriggerNameConflictException>(() =>
+            CreateAsync(new IntegrationTriggerStore(raceContext, new FixedTimeProvider(FixedNow)), "sensor-ingest"));
+
+        AssertEx.True(conflict.InnerException is DbUpdateException { InnerException: SqliteException { SqliteErrorCode: 19 } },
+            "The conflict must carry the SQLite unique-constraint violation as its cause.");
+        await using var readContext = fixture.CreateContext();
+        AssertEx.Equal(expected: 1, (await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).ListAsync()).Count);
     }
 
     [Test]

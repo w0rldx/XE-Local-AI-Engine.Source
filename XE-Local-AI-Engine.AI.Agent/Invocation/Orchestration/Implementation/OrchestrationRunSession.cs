@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 ///     <see cref="OrchestrationUpdate" />s, confining all <c>Microsoft.Agents.AI.Workflows</c> types to this assembly.
 /// </summary>
 /// <remarks>
-///     A single continuous <see cref="StreamingRun.WatchStreamAsync" /> enumeration carries the whole run, including a
+///     A single continuous <see cref="StreamingRun.WatchStreamAsync(CancellationToken)" /> enumeration carries the whole run, including a
 ///     tool-approval pause and resume: the consumer answers a surfaced
 ///     <see cref="OrchestrationUpdateKind.ApprovalRequest" /> via <see cref="RespondToApprovalAsync" /> between
 ///     <c>MoveNext</c> calls, which queues the response on the held run, and keeps enumerating, so the tool executes in

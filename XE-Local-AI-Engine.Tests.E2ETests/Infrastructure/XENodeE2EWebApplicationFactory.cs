@@ -412,7 +412,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 ["KnowledgeBase:EmbeddingModelName"] = "qwen3-embedding:0.6b",
                 ["NodeData:Directory"] = Path.Combine(_fixtureDataRoot, "node-data"),
                 ["Development:Enabled"] = "true",
-                // Stated rather than inherited: the shipped default is ON since S4 (ruling D9), and a fixture that
+                // Stated rather than inherited: the shipped default is ON, and a fixture that
                 // relied on that default would go quietly dark the day an operator-facing default moved again.
                 ["GraphWorkflows:Enabled"] = "true"
             });

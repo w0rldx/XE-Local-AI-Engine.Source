@@ -19,7 +19,6 @@ const { mutationFns, listFn, getFn } = vi.hoisted(() => ({
 
 // Builds the single-element generated list query key shape `listSkillsQueryKey()` returns.
 function fakeListKey(): unknown {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: "listSkills" }];
 }
 
@@ -30,7 +29,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listSkillsQueryKey: () => fakeListKey(),
 	listSkillsOptions: () => ({ queryKey: fakeListKey(), queryFn: listFn }),
 	getSkillOptions: (options: { path: { skillId: string } }) => ({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getSkill", path: options.path }],
 		queryFn: getFn,
 	}),
@@ -174,7 +172,6 @@ describe("useSkills mutations", () => {
 		expect(mutationFns.updateSkill.mock.calls[0]?.[0]).toEqual({ path: { skillId: "skill-1" }, body: updateBody });
 		expect(invalidatedKeys).toContainEqual(listKey);
 		// The single-skill cache is invalidated by the `_id: "getSkill"` partial key so a re-open shows the fresh body.
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		expect(invalidatedKeys).toContainEqual([{ _id: "getSkill" }]);
 	});
 

@@ -27,7 +27,7 @@ public sealed class InvocationLifecycleTrackerTests
     {
         // A deliberate cancel is recorded synchronously by its own requester, so it outranks every derived signal —
         // including a host token that fires immediately afterwards and would otherwise read as a shutdown.
-        var tracker = CreateTracker();
+        var tracker = CreateTracker(new ManualTimeProvider());
         var invocationId = Guid.NewGuid();
         using var hostCancellation = new CancellationTokenSource();
         tracker.RegisterActiveInvocation(invocationId, TimeSpan.FromMinutes(5), hostCancellation.Token);
@@ -44,7 +44,7 @@ public sealed class InvocationLifecycleTrackerTests
     {
         // Cancelling the caller's token also cancels the linked invocation source, so this pins the ORDER: the captured
         // host token is consulted before the invocation source, otherwise a plain disconnect reads as a timeout.
-        var tracker = CreateTracker();
+        var tracker = CreateTracker(new ManualTimeProvider());
         using var hostCancellation = new CancellationTokenSource();
         tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromMinutes(5), hostCancellation.Token);
 
@@ -56,8 +56,10 @@ public sealed class InvocationLifecycleTrackerTests
     [Test]
     public async Task ResolveCancellationOrigin_WhenOnlyTheTurnWatchdogFired_ReportsWatchdog()
     {
-        var tracker = CreateTracker();
+        var time = new ManualTimeProvider();
+        var tracker = CreateTracker(time);
         tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromMilliseconds(1), CancellationToken.None);
+        time.Advance(TimeSpan.FromMilliseconds(1));
 
         await AssertEx.EventuallyAsync(() => tracker.ResolveCancellationOrigin() == InvocationLifecycleTracker.CancellationOrigin.Watchdog,
             TimeSpan.FromSeconds(5),
@@ -71,7 +73,7 @@ public sealed class InvocationLifecycleTrackerTests
     {
         // By elimination: the OperationCanceledException came from below the node (a provider HTTP timeout on a token
         // this node does not own). Calling that an external stop hid a real timeout behind the Cancelled category.
-        var tracker = CreateTracker();
+        var tracker = CreateTracker(new ManualTimeProvider());
         tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromMinutes(5), CancellationToken.None);
 
         AssertEx.Equal(InvocationLifecycleTracker.CancellationOrigin.ProviderTimeout, tracker.ResolveCancellationOrigin());
@@ -80,7 +82,7 @@ public sealed class InvocationLifecycleTrackerTests
     [Test]
     public void RegisterActiveInvocation_WhileATurnIsActive_RefusesTheSecondTurnUntilTheFirstIsCleared()
     {
-        var tracker = CreateTracker();
+        var tracker = CreateTracker(new ManualTimeProvider());
         var firstInvocationId = Guid.NewGuid();
         tracker.RegisterActiveInvocation(firstInvocationId, TimeSpan.FromMinutes(5), CancellationToken.None);
 
@@ -100,7 +102,7 @@ public sealed class InvocationLifecycleTrackerTests
     [Test]
     public async Task DrainActiveInvocationsAsync_FencesLaterAdmission_AndWaitsForTheActiveCompletion()
     {
-        var tracker = CreateTracker();
+        var tracker = CreateTracker(new ManualTimeProvider());
         var activeInvocationId = Guid.NewGuid();
         var activeCompletion = AssertEx.NotNull(tracker.RegisterActiveInvocationCompletion(activeInvocationId));
         AssertEx.Equal(expected: 1, tracker.ActiveInvocationCount);
@@ -116,10 +118,11 @@ public sealed class InvocationLifecycleTrackerTests
         AssertEx.True(await drainTask);
     }
 
-    private static InvocationLifecycleTracker CreateTracker()
+    private static InvocationLifecycleTracker CreateTracker(TimeProvider timeProvider)
     {
         return new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),
             new PendingToolCallRegistry(),
-            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build());
+            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
+            timeProvider);
     }
 }

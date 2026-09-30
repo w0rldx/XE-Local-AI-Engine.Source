@@ -17,7 +17,7 @@ public sealed class InvocationAttachmentTrackerTests
     [Test]
     public void Attach_ThenDispose_MarksDetachedAndStampsTheInstant()
     {
-        var time = new FakeClock(DateTimeOffset.UnixEpoch);
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var tracker = CreateTracker(out _, time);
         var invocationId = Guid.NewGuid();
 
@@ -39,7 +39,7 @@ public sealed class InvocationAttachmentTrackerTests
     {
         // The load-bearing asymmetry. A scheduled agent run, a platform-hub run, or an MCP agent run never streams
         // through LocalChatHub, so it has no entry here — and must NOT be treated as an abandoned turn.
-        var tracker = CreateTracker(out _, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out _, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
 
         AssertEx.False(tracker.IsDetached(Guid.NewGuid()));
         AssertEx.Empty(tracker.ListDetached());
@@ -50,7 +50,7 @@ public sealed class InvocationAttachmentTrackerTests
     {
         // A reconnect racing the original stream holds two handles at once; the first one going away must not make the
         // run look abandoned while the second is still rendering it.
-        var tracker = CreateTracker(out _, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out _, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
 
         var first = tracker.Attach(invocationId);
@@ -68,7 +68,7 @@ public sealed class InvocationAttachmentTrackerTests
     {
         // The hub disposes in a finally a faulted enumerator can reach more than once; a double release would drop the
         // count below the number of live consumers and report an attached run as abandoned.
-        var tracker = CreateTracker(out _, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out _, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
 
         var first = tracker.Attach(invocationId);
@@ -85,7 +85,7 @@ public sealed class InvocationAttachmentTrackerTests
     [Test]
     public void ReAttach_ClearsTheDetachedStamp()
     {
-        var time = new FakeClock(DateTimeOffset.UnixEpoch);
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var tracker = CreateTracker(out _, time);
         var invocationId = Guid.NewGuid();
 
@@ -107,7 +107,7 @@ public sealed class InvocationAttachmentTrackerTests
     [Test]
     public void AttachmentChanged_FiresOnlyOnTheZeroBoundaries()
     {
-        var tracker = CreateTracker(out _, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out _, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
         var changes = new List<bool>();
         tracker.AttachmentChanged += (_, args) =>
@@ -131,7 +131,7 @@ public sealed class InvocationAttachmentTrackerTests
     {
         // Otherwise every completed turn that was ever watched lingers in ListDetached for the process lifetime, and the
         // reaper keeps re-examining runs that can no longer be cancelled.
-        var tracker = CreateTracker(out var dispatcher, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out var dispatcher, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
         tracker.Attach(invocationId).Dispose();
         AssertEx.True(tracker.IsDetached(invocationId));
@@ -145,7 +145,7 @@ public sealed class InvocationAttachmentTrackerTests
     [Test]
     public void NonTerminalInvocationState_KeepsTheEntry()
     {
-        var tracker = CreateTracker(out var dispatcher, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out var dispatcher, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
         tracker.Attach(invocationId).Dispose();
 
@@ -157,7 +157,7 @@ public sealed class InvocationAttachmentTrackerTests
     [Test]
     public async Task Attach_UnderConcurrency_CountsEveryConsumer()
     {
-        var tracker = CreateTracker(out _, new FakeClock(DateTimeOffset.UnixEpoch));
+        var tracker = CreateTracker(out _, new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var invocationId = Guid.NewGuid();
 
         var handles = await Task.WhenAll(Enumerable.Range(start: 0, count: 64)
@@ -190,26 +190,5 @@ public sealed class InvocationAttachmentTrackerTests
             LastUpdatedAt = DateTimeOffset.UnixEpoch
         };
         dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(state));
-    }
-
-    // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public FakeClock(DateTimeOffset start)
-        {
-            _utcNow = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
-        }
     }
 }

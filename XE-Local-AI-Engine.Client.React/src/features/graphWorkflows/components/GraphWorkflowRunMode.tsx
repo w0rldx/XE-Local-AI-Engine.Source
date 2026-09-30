@@ -42,7 +42,7 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 	const runsQuery = useGraphWorkflowRuns(definitionId);
 	const definition = definitionQuery.data;
 
-	// The graph this run PINNED at start (F5-1). It is the shape the run routed on, so it wins over the definition,
+	// The graph this run PINNED at start. It is the shape the run routed on, so it wins over the definition,
 	// which may have been edited since; a response older than F5-1 carries none and the canvas falls back.
 	const runGraph = runQuery.data?.graph;
 

@@ -369,38 +369,6 @@ public sealed class RunningLocalModelEndpointTests
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
-    private sealed class StubNodeSettingsStore : INodeSettingsStore
-    {
-        public StubNodeSettingsStore(StoredNodeSettings settings)
-        {
-            Settings = settings;
-        }
-
-        public StoredNodeSettings Settings { get; set; }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(Settings);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return Settings;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            Settings = settings;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            Settings = mutate(Settings);
-            return Task.FromResult(Settings);
-        }
-    }
-
     private sealed class RunningModelEndpointTestContext : IAsyncDisposable
     {
         private readonly OllamaApiClient? _ollamaClient;
@@ -461,7 +429,7 @@ public sealed class RunningLocalModelEndpointTests
                     services.RemoveAll<ILlamaServerProcessSupervisor>();
                     services.AddSingleton(supervisor);
                     services.RemoveAll<INodeSettingsStore>();
-                    services.AddSingleton<INodeSettingsStore>(new StubNodeSettingsStore(new StoredNodeSettings()));
+                    services.AddSingleton<INodeSettingsStore>(new FakeNodeSettingsStore(new StoredNodeSettings()));
                 }
             };
         }

@@ -597,7 +597,7 @@ public sealed class ContainerRuntimeResolverTests
                 }),
                 Factory,
                 AttestationStore,
-                new FixedTimeProvider(FixedNow),
+                new ManualTimeProvider(FixedNow),
                 Logger,
                 _ => Endpoint);
         }

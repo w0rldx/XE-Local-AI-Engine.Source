@@ -9,8 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The reaper is the trigger that ends an abandoned turn. These drive <c>ReapAsync</c> — one tick's work — directly
-///     rather than through the <see cref="PeriodicTimer" />, because the repo's fake clocks override only
-///     <c>GetUtcNow</c>, so the timer would still run on real time and each assertion would cost five seconds.
+///     rather than through the <see cref="PeriodicTimer" />.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DetachedInvocationReaperTests
@@ -21,7 +20,7 @@ public sealed class DetachedInvocationReaperTests
     public async Task Reap_PastTheGrace_CancelsTheRunExactlyOnce()
     {
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -43,7 +42,7 @@ public sealed class DetachedInvocationReaperTests
     public async Task Reap_BeforeTheGraceElapses_DoesNotCancel()
     {
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -65,7 +64,7 @@ public sealed class DetachedInvocationReaperTests
     {
         // Covers both the attached run and the run that never attached: neither appears in ListDetached, and the reaper
         // has no other source of candidates.
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var runner = Substitute.For<IInvocationRunner>();
         using var reaper = CreateReaper(new StubTracker([]), runner, time, graceSeconds: 300);
 
@@ -81,7 +80,7 @@ public sealed class DetachedInvocationReaperTests
         // 0 means "never cancel" — today's behavior, where a detached run is bounded only by the whole-invocation
         // watchdog. It must hold no matter how long the run has been abandoned.
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -104,7 +103,7 @@ public sealed class DetachedInvocationReaperTests
         // The direct regression test. Capturing a stored node setting in a singleton field is what silently
         // required a node restart before an operator edit applied; the reaper must re-read the grace on EVERY tick.
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -134,7 +133,7 @@ public sealed class DetachedInvocationReaperTests
         // The once-only latch is keyed on the detach INSTANT, not just the id, so a reload that comes back and is
         // abandoned a second time is still reapable rather than permanently immune.
         var invocationId = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -172,7 +171,7 @@ public sealed class DetachedInvocationReaperTests
     {
         var expired = Guid.NewGuid();
         var fresh = Guid.NewGuid();
-        var time = new FakeClock(Start);
+        var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
             new DetachedInvocation
             {
@@ -239,27 +238,6 @@ public sealed class DetachedInvocationReaperTests
             public void Dispose()
             {
             }
-        }
-    }
-
-    // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public FakeClock(DateTimeOffset start)
-        {
-            _utcNow = start;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
         }
     }
 }

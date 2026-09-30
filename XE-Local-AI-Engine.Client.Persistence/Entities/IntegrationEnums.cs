@@ -47,8 +47,8 @@ public enum IntegrationSessionStatus
 }
 
 /// <summary>
-///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these and nothing else (ruling
-///     R3-2, reproduced verbatim in ADR 0008); <see cref="Running" /> is never re-entered, and there is no move out
+///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these and nothing else (ADR 0008
+///     R3-2); <see cref="Running" /> is never re-entered, and there is no move out
 ///     of a terminal status.
 /// </summary>
 /// <remarks>

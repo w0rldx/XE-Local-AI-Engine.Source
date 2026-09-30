@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <remarks>
 ///     <c>chunk_fts</c> is the external-content index mirroring <c>knowledge_document_chunks.content</c>. Scoped: reads
-///     through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection. The untrusted query is always
+///     through the request-scoped <see cref="Client.Persistence.NodeChatDbContext" /> connection. The untrusted query is always
 ///     escaped before it reaches <c>MATCH</c>, so operator characters can never inject FTS query syntax.
 /// </remarks>
 public interface IFtsSearch

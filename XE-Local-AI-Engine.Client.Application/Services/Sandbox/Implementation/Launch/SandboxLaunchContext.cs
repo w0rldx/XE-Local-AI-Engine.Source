@@ -16,7 +16,7 @@ public sealed record SandboxLaunchContext
     /// <summary>The command's own timeout, from which the scope's <c>RuntimeMaxSec</c> is derived.</summary>
     /// <remarks>
     ///     That ceiling is enforced by the USER MANAGER rather than by the engine, so it is what bounds a jail whose supervising engine was
-    ///     hard-killed: the scope stops on its own instead of running until the box reboots.
+    ///     hard-killed: the scope stops on its own instead of running until the host reboots.
     /// </remarks>
     public TimeSpan? CommandTimeout { get; init; }
 

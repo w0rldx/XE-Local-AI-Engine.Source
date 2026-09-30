@@ -134,7 +134,7 @@ public sealed class CodexAuthHandlerTests
         // A multiline body must be logged as ONE sanitized line (no CR/LF), and the buffered content must still be
         // fully re-readable by the OpenAI SDK afterwards (the diagnostic read rewinds the stream).
         const string body = "first-line\r\nsecond-line\ninjected-forged-log-entry";
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<CodexAuthHandler>();
 
         using var response = await SendFailureAndCapture(HttpStatusCode.BadRequest, body, logger);
 
@@ -156,7 +156,7 @@ public sealed class CodexAuthHandlerTests
         // A hostile/large body must be truncated: the total length is reported but the logged excerpt is capped.
         const int cap = 2048;
         var body = new string('a', 5000);
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<CodexAuthHandler>();
 
         using var response = await SendFailureAndCapture(HttpStatusCode.BadGateway, body, logger);
 
@@ -175,7 +175,7 @@ public sealed class CodexAuthHandlerTests
         // A token-like secret placed entirely beyond the byte cap must never reach the log.
         const string tokenLike = "SECRET-TOKEN-0123456789abcdef";
         var body = new string('x', 2048) + tokenLike;
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<CodexAuthHandler>();
 
         using var response = await SendFailureAndCapture(HttpStatusCode.BadRequest, body, logger);
 
@@ -192,7 +192,7 @@ public sealed class CodexAuthHandlerTests
         // in the excerpt before it reaches the log, while the surrounding error text stays readable.
         const string jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N";
         const string body = "{\"error\":{\"message\":\"auth failed for user alice@example.com with token " + jwt + "\"}}";
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<CodexAuthHandler>();
 
         using var response = await SendFailureAndCapture(HttpStatusCode.Forbidden, body, logger);
 
@@ -212,7 +212,7 @@ public sealed class CodexAuthHandlerTests
         // A normal error body carrying no secrets must pass through the redactor unchanged — including identifiers like
         // "invalid_request_error" that are long but not high-entropy tokens.
         const string body = "{\"error\":{\"message\":\"System messages are not allowed\",\"type\":\"invalid_request_error\",\"param\":\"model\"}}";
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<CodexAuthHandler>();
 
         using var response = await SendFailureAndCapture(HttpStatusCode.BadRequest, body, logger);
 
@@ -246,7 +246,7 @@ public sealed class CodexAuthHandlerTests
         return await client.SendAsync(request);
     }
 
-    private static string AssertSingleWarning(CapturingLogger logger)
+    private static string AssertSingleWarning(RecordingLogger<CodexAuthHandler> logger)
     {
         AssertEx.ContainsSingle(logger.Entries, entry => entry.Level == LogLevel.Warning);
         return logger.Entries.Single(entry => entry.Level == LogLevel.Warning).Message;
@@ -295,37 +295,6 @@ public sealed class CodexAuthHandlerTests
                 Content = new StringContent(_body, Encoding.UTF8, "application/json")
             };
             return Task.FromResult(response);
-        }
-    }
-
-    /// <summary>Captures every logged entry (level + rendered message) so the diagnostic log path can be asserted.</summary>
-    private sealed class CapturingLogger : ILogger<CodexAuthHandler>
-    {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
-
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull
-        {
-            return NullScope.Instance;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-            Entries.Add((logLevel, formatter(state, exception)));
-        }
-
-        private sealed class NullScope : IDisposable
-        {
-            public static readonly NullScope Instance = new();
-
-            public void Dispose()
-            {
-            }
         }
     }
 

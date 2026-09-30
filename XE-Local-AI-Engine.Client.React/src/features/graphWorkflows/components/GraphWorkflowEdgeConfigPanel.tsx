@@ -1,7 +1,7 @@
 // The selected edge's label and its optional condition. Same shape as the node panel: a prop-driven `Stack`, no query,
 // no graph state — the page hands it the edge and forwards its patches to the editor hook.
 //
-// The one thing this panel exists to make visible is INHERITANCE (ruling C2): an edge with no path of its own resolves
+// The one thing this panel exists to make visible is INHERITANCE: an edge with no path of its own resolves
 // the path of its source `Condition` node, so an edge that looks pathless still validates. Showing the inherited path
 // greyed out, with the node it came from, is what stops that reading as a bug.
 

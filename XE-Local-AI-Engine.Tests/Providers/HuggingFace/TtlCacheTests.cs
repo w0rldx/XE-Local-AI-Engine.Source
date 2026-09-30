@@ -15,7 +15,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenCachedWithinTtl_InvokesFactoryOnce()
     {
-        var clock = new AdvanceableClock();
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = new TtlCache<int>(clock);
         var calls = 0;
 
@@ -30,7 +30,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenEntryExpired_RecomputesValue()
     {
-        var clock = new AdvanceableClock();
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = new TtlCache<int>(clock);
         var calls = 0;
 
@@ -45,7 +45,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenTtlNonPositive_AlwaysInvokesFactory()
     {
-        var cache = new TtlCache<int>(new AdvanceableClock());
+        var cache = new TtlCache<int>(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var calls = 0;
 
         await cache.GetOrAddAsync("k", TimeSpan.Zero, _ => Task.FromResult(Interlocked.Increment(ref calls)), CancellationToken.None);
@@ -57,7 +57,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenOverCapacity_EvictsLeastRecentlyUsedNotMostRecent()
     {
-        var cache = new TtlCache<string>(new AdvanceableClock(), maxEntries: 3);
+        var cache = new TtlCache<string>(new ManualTimeProvider(DateTimeOffset.UnixEpoch), maxEntries: 3);
 
         await Insert(cache, "a");
         await Insert(cache, "b");
@@ -75,7 +75,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenKeyReadBeforeEviction_KeepsWarmKeyAndEvictsColderOne()
     {
-        var cache = new TtlCache<string>(new AdvanceableClock(), maxEntries: 3);
+        var cache = new TtlCache<string>(new ManualTimeProvider(DateTimeOffset.UnixEpoch), maxEntries: 3);
 
         await Insert(cache, "a");
         await Insert(cache, "b");
@@ -95,7 +95,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenOverCapacity_PrefersExpiredEntriesOverColderLiveOnes()
     {
-        var clock = new AdvanceableClock();
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = new TtlCache<string>(clock, maxEntries: 2);
 
         await Insert(cache, "live", TimeSpan.FromHours(1)); // older but long-lived.
@@ -112,7 +112,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenExistingKeyReAddedAfterExpiry_ReplacesValueWithoutGrowing()
     {
-        var clock = new AdvanceableClock();
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var cache = new TtlCache<string>(clock, maxEntries: 3);
 
         await cache.GetOrAddAsync("k", Ttl, _ => Task.FromResult("v1"), CancellationToken.None);
@@ -127,7 +127,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenConcurrentMissesForSameKey_InvokesFactoryOnce()
     {
-        var cache = new TtlCache<int>(new AdvanceableClock());
+        var cache = new TtlCache<int>(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var calls = 0;
         var release = new TaskCompletionSource();
 
@@ -153,7 +153,7 @@ public sealed class TtlCacheTests
     [Test]
     public async Task GetOrAddAsync_WhenFactoryThrows_CachesNothing()
     {
-        var cache = new TtlCache<int>(new AdvanceableClock());
+        var cache = new TtlCache<int>(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
         var calls = 0;
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
@@ -182,19 +182,4 @@ public sealed class TtlCacheTests
     }
 
     private const string Miss = "\0__miss__";
-
-    private sealed class AdvanceableClock : TimeProvider
-    {
-        private long _utcTicks = DateTimeOffset.UnixEpoch.UtcTicks;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return new DateTimeOffset(Interlocked.Read(ref _utcTicks), TimeSpan.Zero);
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            Interlocked.Add(ref _utcTicks, delta.Ticks);
-        }
-    }
 }

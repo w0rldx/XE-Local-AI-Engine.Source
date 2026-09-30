@@ -62,13 +62,14 @@ export const orchestrationTopologyShapeSchema = z.object({
 	returnToPrevious: z.boolean(),
 });
 
+// Rule messages are i18n keys; the agent form translates them.
 export const orchestrationTopologySchema = orchestrationTopologyShapeSchema
 	.refine((value) => value.participantAgentDefinitionIds.length > 0, {
-		message: "An orchestrator needs at least one specialist participant.",
+		message: "pages.agents.form.orchestration.validation.participantsRequired",
 		path: ["participantAgentDefinitionIds"],
 	})
 	.refine((value) => value.handoffs.every((edge) => edge.fromAgentDefinitionId !== edge.toAgentDefinitionId), {
-		message: "A handoff cannot connect an agent to itself.",
+		message: "pages.agents.form.orchestration.validation.selfHandoff",
 		path: ["handoffs"],
 	});
 

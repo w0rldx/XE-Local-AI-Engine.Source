@@ -17,7 +17,7 @@ public interface ILlamaServerProcessSupervisor
 {
     /// <summary>
     ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
-    ///     held, new <see cref="EnsureRunningAsync" /> calls wait. Returns null when a process already owns the runtime.
+    ///     held, new <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls wait. Returns null when a process already owns the runtime.
     /// </summary>
     Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
     {
@@ -26,7 +26,7 @@ public interface ILlamaServerProcessSupervisor
 
     /// <summary>
     ///     Whether automatic keep-warm starts must yield to a pending or in-flight runtime mutation. Interactive model
-    ///     requests remain governed by <see cref="EnsureRunningAsync" /> and are not suppressed by this signal.
+    ///     requests remain governed by <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> and are not suppressed by this signal.
     /// </summary>
     bool IsKeepWarmSuppressed()
     {
@@ -54,7 +54,7 @@ public interface ILlamaServerProcessSupervisor
 
     /// <summary>
     ///     Waits up to <paramref name="timeout" /> until the <c>(model, role)</c> process is observed exited. True when it
-    ///     exited or none is registered, so the next <see cref="EnsureRunningAsync" /> respawns instead of reusing it.
+    ///     exited or none is registered, so the next <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> respawns instead of reusing it.
     /// </summary>
     /// <remarks>
     ///     A caller whose socket to the process was refused calls this before re-ensuring: the kernel closes a killed
@@ -99,7 +99,7 @@ public interface ILlamaServerProcessSupervisor
     ///     leases, then waits out the bounded drain window before tearing it down.
     /// </summary>
     /// <remarks>
-    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease" />, and an idle process is torn
+    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease(string, ModelRole)" />, and an idle process is torn
     ///     down immediately. When the window elapses with work still in flight the process is left RUNNING and the
     ///     outcome reports that it could not complete safely — unless <paramref name="force" /> is set, in which case
     ///     it is torn down anyway and the interrupted run is marked operator-ejected rather than a generic failure.
@@ -136,7 +136,7 @@ public interface ILlamaServerProcessSupervisor
     /// <summary>The operator profiling entry point, explore and benchmark: it evicts any warm process for the key, then spawns exactly ONE process.</summary>
     /// <remarks>
     ///     It bypasses the profile resolver and takes the SAME single-flight gate the ensure-running path uses, so
-    ///     concurrent <see cref="EnsureRunningAsync" /> calls for this <c>(model, role)</c> queue behind it, and the
+    ///     concurrent <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls for this <c>(model, role)</c> queue behind it, and the
     ///     token flows through spawn, body and teardown. Explore applies the production launch policy to
     ///     <see cref="ResolvedLaunchArguments.Explore" /> so fitted evidence reflects normal serving, benchmark the
     ///     drafted <see cref="ResolvedLaunchArguments.Replay" /> verbatim. On return, throw or cancellation alike the spawn is tree-killed and the gate released.

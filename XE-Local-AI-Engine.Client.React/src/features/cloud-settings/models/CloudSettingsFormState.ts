@@ -104,8 +104,7 @@ export function createFormRowIds(values: CloudSettingsFormValues): FormRowIds {
 
 // The form values, the per-field "touched" map, and the submit flag always reset together when the
 // stored settings load or a save/clear completes. Grouping them under one reducer lets a single
-// dispatch reset all three at once, replacing the cascading set-state calls that previously fired
-// three separate updates from one effect.
+// dispatch reset all three at once instead of cascading three set-state calls from one effect.
 export interface CloudSettingsFormState {
 	values: CloudSettingsFormValues;
 	touched: Partial<Record<keyof CloudSettingsFormValues, true>>;

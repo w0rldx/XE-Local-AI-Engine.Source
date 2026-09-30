@@ -1,6 +1,6 @@
 // Verifies that the transcription i18n keys stay in parity between en.json and every other locale. Parity is opt-in
 // per feature, so this area owns its own file the way work sessions does. It is load-bearing rather than decorative
-// because no t() call in this feature passes a defaultValue (R25a): a key missing from a locale renders as the raw
+// because no t() call in this feature passes a defaultValue: a key missing from a locale renders as the raw
 // key on screen instead of silently falling back to English. The live-capture and dictation slices add their keys
 // under the same subtree, so this one file covers them too.
 

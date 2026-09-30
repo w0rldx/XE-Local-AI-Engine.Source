@@ -51,7 +51,6 @@ export function workSessionInvalidationKey(
 	operationId: string,
 	sessionId?: string,
 ): readonly [{ _id: string; path?: { sessionId: string } }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return sessionId ? [{ _id: operationId, path: { sessionId } }] : [{ _id: operationId }];
 }
 

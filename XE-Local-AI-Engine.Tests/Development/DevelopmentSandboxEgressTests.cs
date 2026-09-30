@@ -18,7 +18,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 /// <summary>
 ///     The agent-facing Development sandbox asks for <see cref="SandboxNetworkPolicy.None" />.
 ///     <para>
-///         The request is capability-gated (the operator's 2026-08-25 Option B ruling), so BOTH directions are asserted
+///         The request is capability-gated, so BOTH directions are asserted
 ///         here. A test that only pinned the denial would pass on this Linux host and say nothing about the Windows
 ///         node where the process backend cannot confine networking and Development Mode must keep running — and the
 ///         fallback is the honest limitation of this design, not an accident to be left undocumented.
@@ -159,7 +159,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         if (!await NuGetIsReachableAsync())
         {
-            Skip("this box cannot reach api.nuget.org, so a warm restore has nothing to warm FROM and the comparison is vacuous.");
+            Skip("this host cannot reach api.nuget.org, so a warm restore has nothing to warm FROM and the comparison is vacuous.");
             return;
         }
 
@@ -238,7 +238,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     }
 
     /// <summary>
-    ///     Whether a warm restore could actually fetch anything from this box. Without it the cold/warm comparison
+    ///     Whether a warm restore could actually fetch anything from this host. Without it the cold/warm comparison
     ///     below compares two failures and asserts nothing.
     /// </summary>
     private static async Task<bool> NuGetIsReachableAsync()
@@ -294,7 +294,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             NetworkPolicy = networkPolicy,
 
             // The node's ceilings, through the same derivation DevelopmentWorkspaceProvider uses, so the live run
-            // below exercises the production create-request SHAPE rather than a weaker one. It matters: on this box
+            // below exercises the production create-request SHAPE rather than a weaker one. It matters: on a systemd host
             // the process backend really does wrap the child in a systemd scope carrying MemoryMax + MemorySwapMax=0
             // and TasksMax, and those numbers are sized for a two-second run_python call. The synthetic solution fits
             // inside them; a large repository's Release build does not — see SandboxResourceCeilings for the

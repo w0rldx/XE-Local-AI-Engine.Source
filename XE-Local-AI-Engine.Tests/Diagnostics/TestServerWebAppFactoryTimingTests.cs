@@ -81,9 +81,9 @@ public sealed class TestServerWebAppFactoryTimingTests
     ///     host on a genuinely empty database (<see cref="PhaseHostBuildFreshControl" />). The delta between them IS the
     ///     migration cost the template avoids.
     ///     <para>
-    ///         The two are INTERLEAVED, never run as two consecutive blocks: this box is shared with other test runs and
+    ///         The two are INTERLEAVED, never run as two consecutive blocks: the runner is shared with other test runs and
     ///         the first hosts of a process are still JIT-warming, so a block layout charges whichever leg goes first for
-    ///         both — an earlier version of this profiler did exactly that and overstated the delta.
+    ///         both and overstates the delta.
     ///     </para>
     /// </summary>
     private static async Task MeasureHostsAsync(List<Sample> samples)

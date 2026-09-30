@@ -35,12 +35,10 @@ function arrange(modelNames: string[], toolCapable: string[]): void {
 	generatedMock.listFn.mockResolvedValue({ items: modelNames.map((modelName) => ({ modelName })) });
 	generatedMock.toolCapableFn.mockResolvedValue({ models: toolCapable });
 	generatedMock.listLocalModelsOptions.mockReturnValue({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "listLocalModels" }],
 		queryFn: generatedMock.listFn,
 	});
 	generatedMock.getToolCapableModelsOptions.mockReturnValue({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getToolCapableModels" }],
 		queryFn: generatedMock.toolCapableFn,
 	});

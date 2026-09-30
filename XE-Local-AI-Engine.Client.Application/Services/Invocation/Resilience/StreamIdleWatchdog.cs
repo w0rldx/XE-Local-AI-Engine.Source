@@ -43,21 +43,22 @@ internal static class StreamIdleWatchdog
     public static IAsyncEnumerable<T> WithIdleTimeout<T>(Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
         TimeSpan idleTimeout,
         string timeoutMessage,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken,
         TimeSpan? abandonmentGrace = null,
-        Func<bool>? isSuspended = null,
-        TimeProvider? timeProvider = null)
+        Func<bool>? isSuspended = null)
     {
-        // The deadline runs on timeProvider (the system clock when null), so a test drives it without real waits.
+        // The deadline runs on timeProvider, so a test drives it without real waits.
         ArgumentNullException.ThrowIfNull(streamFactory);
         ArgumentNullException.ThrowIfNull(timeoutMessage);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         var grace = abandonmentGrace is { } value && value > TimeSpan.Zero ? value : DefaultAbandonmentGrace;
         var deadline = new IdleDeadline
         {
             Timeout = idleTimeout,
             IsSuspended = isSuspended ?? (static () => false),
-            Clock = timeProvider ?? TimeProvider.System
+            Clock = timeProvider
         };
         return IterateAsync(streamFactory, deadline, timeoutMessage, grace, cancellationToken);
     }

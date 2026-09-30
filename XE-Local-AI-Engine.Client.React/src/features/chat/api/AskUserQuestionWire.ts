@@ -1,19 +1,10 @@
-import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 /**
- * THE single place the `ask_user` wire contract lives: the stream-event field names, the question JSON shape the
- * model emits, and the resolve POST. Nothing else in the client reads those field names — a backend rename is a
- * one-line fix here, not a sweep.
- *
- * The resolve endpoint has no generated client yet (the OpenAPI regen happens at integration). {@link
- * resolveUserQuestionMutation} is deliberately shaped exactly like the generated `resolveToolApprovalMutation()` —
- * a zero-arg factory returning `{ mutationFn }` over `{ body }` — so swapping it for the generated one is a single
- * import-line change in `AskUserQuestionCard.tsx`.
+ * THE single place the `ask_user` stream-event contract is read: the stream-event field names and the question JSON
+ * shape the model emits. Nothing else in the client reads those field names — a backend rename is a one-line fix
+ * here, not a sweep. The answers are posted through the generated `resolveUserQuestionMutation`.
  */
-
-/** Route the browser POSTs the answers to. Mirrors `/api/local/v1/chat/approvals/resolve`. */
-const RESOLVE_USER_QUESTION_URL = "/api/local/v1/chat/questions/resolve";
 
 /** One selectable option. `recommended` is advisory only — the card badges it but never pre-selects it. */
 export interface UserQuestionOption {
@@ -44,11 +35,6 @@ export interface UserQuestionAnswer {
 	question: string;
 	selected: string[];
 	other?: string;
-}
-
-export interface ResolveUserQuestionBody {
-	requestId: string;
-	answers: UserQuestionAnswer[];
 }
 
 function toOption(value: unknown): UserQuestionOption | undefined {
@@ -127,16 +113,4 @@ export function parsePendingUserQuestion(event: NodeChatStreamEventDto): Pending
 
 	const questions = rawQuestions.map(toQuestion).filter((question): question is UserQuestion => question !== undefined);
 	return questions.length > 0 ? { requestId, questions } : undefined;
-}
-
-/**
- * Posts the operator's answers to the loopback resolve endpoint, releasing the parked turn. Interim stand-in for the
- * not-yet-generated mutation; same `{ mutationFn }` shape, so the swap is one import line.
- */
-export function resolveUserQuestionMutation(): {
-	mutationFn: (options: { body: ResolveUserQuestionBody }) => Promise<unknown>;
-} {
-	return {
-		mutationFn: async ({ body }) => (await axiosInstance.post(RESOLVE_USER_QUESTION_URL, body)).data,
-	};
 }

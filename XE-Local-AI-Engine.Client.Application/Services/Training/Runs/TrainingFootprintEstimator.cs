@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
-///     Sizes one QLoRA run against the box: constants up front, one pure computation, mirroring
+///     Sizes one QLoRA run against the host: constants up front, one pure computation, mirroring
 ///     <c>MemoryFitEstimator</c>'s shape but sizing against parameter count and the activation levers rather than
 ///     GGUF quant bytes, because nothing here is a GGUF.
 /// </summary>

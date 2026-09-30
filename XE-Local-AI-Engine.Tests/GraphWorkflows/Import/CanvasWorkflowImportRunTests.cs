@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The mapper's answer, actually RUN. The mapper tests pin the wiring and the parser accepts it, but neither of
-///     them can say what the second agent reads — and that is the whole defect the S4 live round found.
+///     them can say what the second agent reads — and that is the whole defect this pins.
 ///     <para>
 ///         A private agent host: the graph here is the mapper's own output rather than a hand-authored one, and its
 ///         scripted prompt must not be shared with another class's runs.

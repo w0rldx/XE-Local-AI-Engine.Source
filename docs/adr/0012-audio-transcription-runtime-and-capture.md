@@ -80,27 +80,26 @@ answer is to not store it at all.
 
 ## Evidence
 
-- **The runtime was proven live before it was planned** (`spike/whisper-cpp-spike-report.md`, 2026-09-11, on this
-  maintainer's box): whisper.cpp `v1.9.4` built with CUDA in about three minutes; `whisper-server` served multipart
-  inference requests returning timed segments, a detected language and language probabilities; `POST /load` swapped
-  models in place; SIGTERM left no orphan. Round trips were 0.09–0.13 s for 2–10 s chunks on `large-v3-turbo-q8_0`,
-  which is what makes the batch path feel synchronous. Server-side voice activity detection with the Silero model cut
-  55.8 % of samples from a silence-padded clip.
-- **Readiness, corrected.** The spike's §2/§6 claim that the server has no `/health` route is **wrong**, and its §8
-  erratum records the correction: at the pinned commit `927cfce34f31707e17f2bff35c349632fb9e2c3a` (the peeled commit
-  behind the annotated `v1.9.4` tag, and the revision the managed build checks out) the server registers `GET /health`,
-  returning 503 while a model loads and 200 once it is ready. Readiness polls that route; the stdout "listening" line
-  is fully buffered off a TTY and was observed absent while the port was already live.
+- **The runtime was proven live before it was planned** (a spike on 2026-09-11 on a CUDA development machine; the
+  spike report was not committed): whisper.cpp `v1.9.4` built with CUDA in about three minutes; `whisper-server`
+  served multipart inference requests returning timed segments, a detected language and language probabilities;
+  `POST /load` swapped models in place; SIGTERM left no orphan. Round trips were 0.09–0.13 s for 2–10 s chunks on
+  `large-v3-turbo-q8_0`, which is what makes the batch path feel synchronous. Server-side voice activity detection
+  with the Silero model cut 55.8 % of samples from a silence-padded clip.
+- **Readiness, corrected.** The spike's claim that the server has no `/health` route was **wrong**: at the pinned
+  commit `927cfce34f31707e17f2bff35c349632fb9e2c3a` (the peeled commit behind the annotated `v1.9.4` tag, and the
+  revision the managed build checks out) the server registers `GET /health`, returning 503 while a model loads and
+  200 once it is ready. Readiness polls that route; the stdout "listening" line is fully buffered off a TTY and was
+  observed absent while the port was already live.
 - **The live-window failure is quoted, not inferred.** A 2 s no-overlap chunk loop produced
   `"What you're coming to do is not what you're coming to do."` from a mid-word cut; 0.5 s of overlap repeated one to
   three words at every boundary, because the server holds no state between requests.
 - **Diarization.** Read from the upstream server source and its documentation: `--diarize` splits stereo channels and
   `-tdrz` is an English-only experimental marker with a separate model. Neither is speaker clustering.
-- **Licences** (`spike/audio-capture-research.md` §6, `spike/whisper-cpp-spike-report.md` §2 row 5b): whisper.cpp MIT
-  (`LICENSE` in the cloned repository), Whisper weights MIT upstream with the ggml conversion inheriting it, Silero
-  VAD MIT, NAudio MIT. Registered in `NOTICE` §3 and §5.
+- **Licences:** whisper.cpp MIT (`LICENSE` in the cloned repository), Whisper weights MIT upstream with the ggml
+  conversion inheriting it, Silero VAD MIT, NAudio MIT. Registered in `NOTICE` §3 and §5.
 - **Delivered and gated.** The runtime slice landed as `f3ee1689d` with the supervisor, catalogue, managed CUDA lane
-  and its own live round (`progress/S1a-live-round.md`, `progress/S1b-live-round.md`). The session slice's persistence
+  and its own live rounds (raw logs were not retained). The session slice's persistence
   and service commits are covered by `AddTranscriptionSessionsMigrationTests`, `TranscriptionSessionStoreTests`,
   `TranscriptionNoAudioPersistenceTests` (the no-audio fence), `TranscriptionServiceTests`,
   `TranscriptionUploadSlotTests`, `AudioContainerSnifferTests` and `FfmpegAudioTranscoderTests`. The upload-slot

@@ -569,7 +569,7 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
         }
     }
 
-    // ---- S1 / D13: the node's SELECTED KV-cache type is part of a frozen profile's identity ----
+    // ---- the node's SELECTED KV-cache type is part of a frozen profile's identity ----
 
     [Test]
     public async Task Fingerprint_WithTheDefaultKvCacheType_IsByteIdenticalToTheUnseededOptions()

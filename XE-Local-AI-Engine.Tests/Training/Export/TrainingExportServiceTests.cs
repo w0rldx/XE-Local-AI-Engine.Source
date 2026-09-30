@@ -383,7 +383,7 @@ public sealed class TrainingExportServiceTests : IDisposable
             GgufImportInspection? inspection = null)
         {
             var runId = Guid.NewGuid();
-            var dataDirectory = new FixedNodeDataDirectory(owner._root);
+            var dataDirectory = new FakeNodeDataDirectory(owner._root);
             // Owned by the test class so the harness never has to: nothing here encrypts anything, but the workspace
             // takes a real holder.
             var keyHolder = new FixedNodeSqliteKeyHolder(new byte[32]);

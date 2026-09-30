@@ -122,14 +122,15 @@ public sealed class SlashCommandServiceTests
     }
 
     [Test]
-    public async Task CreateAsync_WhenSqliteUniqueNameConstraintFails_TranslatesConflict()
+    public async Task CreateAsync_WhenTheStoreReportsANameConflict_TranslatesConflict()
     {
         var store = Substitute.For<ISlashCommandStore>();
-        store.AddAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>())
-             .Returns<SlashCommandRecord>(_ => throw new DbUpdateException("write", new SqliteException("unique", errorCode: 19, extendedErrorCode: 2067)));
+        var storeConflict = new SlashCommandNameConflictException("A command named '/review' already exists.",
+            new DbUpdateException("write", new SqliteException("unique", errorCode: 19, extendedErrorCode: 2067)));
+        store.AddAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>()).Returns<SlashCommandRecord>(_ => throw storeConflict);
         var service = new SlashCommandService(store);
 
-        _ = await AssertEx.ThrowsAsync<SlashCommandConflictException>(() =>
+        var conflict = await AssertEx.ThrowsAsync<SlashCommandConflictException>(() =>
             service.CreateAsync(new SlashCommandInput
             {
                 Name = "review",
@@ -137,6 +138,8 @@ public sealed class SlashCommandServiceTests
                 ActionType = SlashCommandActionType.SendPrompt,
                 Prompt = "prompt"
             }));
+        AssertEx.Equal("A command named '/review' already exists.", conflict.Message);
+        AssertEx.True(ReferenceEquals(storeConflict, conflict.InnerException), "The store's conflict must stay the cause.");
     }
 
     [Test]

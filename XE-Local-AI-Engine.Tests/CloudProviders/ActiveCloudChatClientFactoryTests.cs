@@ -668,7 +668,7 @@ public sealed class ActiveCloudChatClientFactoryTests
 
         public CodexOptions CodexOptions { get; } = new();
 
-        public AdvanceableTimeProvider Time { get; } = new();
+        public ManualTimeProvider Time { get; } = new();
 
         public ActiveCloudChatClientFactory Factory =>
             new(CodexTokenStore,
@@ -678,28 +678,5 @@ public sealed class ActiveCloudChatClientFactoryTests
                 Options.Create(CodexOptions),
                 NodeSettingsStore,
                 Time);
-    }
-
-    /// <summary>A <see cref="TimeProvider" /> whose clock the test advances to lapse the selection-snapshot TTL.</summary>
-    private sealed class AdvanceableTimeProvider : TimeProvider
-    {
-        private readonly Lock _gate = new();
-        private DateTimeOffset _now = new(year: 2030, month: 1, day: 1, hour: 0, minute: 0, second: 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            lock (_gate)
-            {
-                return _now;
-            }
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            lock (_gate)
-            {
-                _now += delta;
-            }
-        }
     }
 }

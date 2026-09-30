@@ -425,7 +425,7 @@ function graphSettingsFromWire(graph: GraphWorkflowGraph | undefined): GraphWork
  * The quotes are what keep the operand's TYPE through an open-and-save. `conditionValueToWire` parses this text as
  * JSON, so rendering a string raw handed back the stored strings `"true"`, `"123"` and `"null"` as a boolean, a number
  * and null — a different branch than the one the author stored, on an edit that touched nothing. Writing is still
- * lenient (ruling F5-3): text that is not JSON saves as the string it is, so typing `Approve` still works.
+ * lenient: text that is not JSON saves as the string it is, so typing `Approve` still works.
  */
 function conditionValueText(value: unknown): string {
 	return value === undefined ? "" : (JSON.stringify(value) ?? "");
@@ -451,7 +451,7 @@ function conditionFromWire(edge: GraphWorkflowGraphEdge): GraphWorkflowCanvasEdg
 
 /**
  * Which source handle this edge left from. `sourceHandle` is authoring metadata the runtime ignores, so an older graph
- * (or S4's importer) carries none — belt and braces, it is re-derived from the label, then from the condition value,
+ * (or the Preview importer) carries none — belt and braces, it is re-derived from the label, then from the condition value,
  * and only then falls back to the default handle.
  */
 function sourceHandleFor(
@@ -487,8 +487,8 @@ function sourceHandleFor(
 }
 
 /**
- * The wire graph as React Flow nodes and edges. A node WITHOUT a position is laid out (ruling C4: `position` is
- * optional, and a laid-out node is dirty by construction, so the first save persists what the layout computed); a node
+ * The wire graph as React Flow nodes and edges. A node WITHOUT a position is laid out (`position` is optional, and a
+ * laid-out node is dirty by construction, so the first save persists what the layout computed); a node
  * with one keeps it verbatim. `relayout` is the "Auto-arrange" path: every position recomputed, nothing kept.
  */
 export function graphToCanvas(
@@ -670,7 +670,7 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 
 /**
  * A canvas condition value back to JSON, falling back to the raw string — so `"Approve"` and `Approve` both stay the
- * string `Approve`, and `true` a boolean. Deliberately LENIENT (ruling F5-3) while `conditionValueText` writes strict
+ * string `Approve`, and `true` a boolean. Deliberately LENIENT while `conditionValueText` writes strict
  * JSON: the field reads back what it rendered, and an operator who types an unquoted word still gets a string.
  */
 function conditionValueToWire(value: string): unknown {
@@ -884,8 +884,8 @@ function successorsThroughPauses(pause: string, pauseKeys: ReadonlySet<string>, 
 }
 
 /**
- * The `context` edges this graph is missing around its Pause nodes — the authoring half of the affordance S4 gave the
- * importer (`CanvasWorkflowImport.AddPauseContextEdges`, wiki page 21 §5).
+ * The `context` edges this graph is missing around its Pause nodes — the authoring half of the affordance the importer
+ * has (`CanvasWorkflowImport.AddPauseContextEdges`, wiki page 21 §5).
  *
  * A Pause writes `{decision, comment, payload}` and a node's `input` is its ONE satisfied predecessor's output, so an
  * authored `X → Pause → Y` hands Y the approval and never X's answer. One unconditional edge from the Pause's nearest

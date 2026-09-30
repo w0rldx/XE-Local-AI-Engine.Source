@@ -443,7 +443,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenStdoutFillsTheCapAndTheScriptFails_KeepsTheTracebackTailWithinTheWholeBudget()
     {
-        // F-61: stdout at the cap pushed the rendering past the same-sized tool-result budget, which clipped the END —
+        // Stdout at the cap pushed the rendering past the same-sized tool-result budget, which clipped the END —
         // the stderr section and its traceback.
         var stderr = "Traceback (most recent call last):\n" + new string('w', 50_000) + "\nValueError: boom\n";
         var provider = new RecordingSandboxProvider(Contained)
@@ -515,7 +515,7 @@ public sealed class ComputeToolGatewayTests
     [Arguments(null, 30)]
     public async Task ExecuteDetailedAsync_ACallerTimeoutCanOnlyTightenTheNodeCeiling(int? requested, int expectedSeconds)
     {
-        // F-62: a pythonTests criterion's timeout must bound the sandbox itself; it may never buy more than the node grants.
+        // A pythonTests criterion's timeout must bound the sandbox itself; it may never buy more than the node grants.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider, new ComputeOptions
         {

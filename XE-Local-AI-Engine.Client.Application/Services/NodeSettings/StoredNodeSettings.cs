@@ -163,8 +163,8 @@ public sealed partial record StoredNodeSettings
     /// <summary>Upper guard for draft-model GPU layers (well above any real model's layer count).</summary>
     public const int MaxSpeculativeDraftGpuLayers = 1000;
 
-    // Curated runtime tunables (Plans/node-settings-regroup-2026-09-27). Each Default equals the constant it replaced, so an
-    // absent value keeps today's behaviour; each Min/Max pair is what Normalize and the boundary validator enforce.
+    // Curated runtime tunables. Each Default is the value an absent setting runs with; each Min/Max pair is what Normalize
+    // and the boundary validator enforce.
 
     /// <summary>Default llama-server readiness deadline cap, in seconds; mirrors <c>LlamaServerSupervisorOptions.ReadinessTimeoutCap</c>.</summary>
     public const int DefaultLlamaReadinessTimeoutCapSeconds = 600;
@@ -863,7 +863,7 @@ public sealed partial record StoredNodeSettings
     public string? ContainerRuntimeSelection { get; init; }
 
     /// <summary>
-    ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on.
+    ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the host they were tuned on.
     /// </summary>
     /// <remarks>
     ///     Generated once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first

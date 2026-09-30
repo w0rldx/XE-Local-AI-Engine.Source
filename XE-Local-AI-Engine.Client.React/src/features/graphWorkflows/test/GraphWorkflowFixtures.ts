@@ -403,7 +403,7 @@ export function graphWorkflowRunEvent(overrides: Partial<GraphWorkflowRunEventRe
 	};
 }
 
-/** A trail covering the run above, including the two S2 event types and a `node.retried` with its detail document. */
+/** A trail covering the run above, including the gate/waiting event types and a `node.retried` with its detail document. */
 export function graphWorkflowEvents(
 	overrides: Partial<ListGraphWorkflowRunEventsResponse> = {},
 ): ListGraphWorkflowRunEventsResponse {

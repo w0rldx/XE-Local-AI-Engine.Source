@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Testing.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     R3-23: the three catalog records that can carry a whole manifest — <see cref="ApplicationManifest" />,
+///     The three catalog records that can carry a whole manifest — <see cref="ApplicationManifest" />,
 ///     <see cref="ExternalAppCatalogSnapshot" /> and <see cref="StoredExternalAppCatalogCache" /> — suppress the
 ///     record printer, so one <c>LogDebug("{Snapshot}", snapshot)</c> downstream cannot write the catalog (inlined
 ///     file bodies, variable defaults, the raw fetched document) into the node log. Mirrors

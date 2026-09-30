@@ -1,6 +1,6 @@
 // The wire ↔ canvas mapping, which is where a definition quietly loses an edge, a branch or an operator's formatting.
-// The anchor case is the round trip over the brief's own eight-node graph — the body the S2 live round actually sent —
-// because a mapping that only agrees with itself proves nothing about what the server stores.
+// The anchor case is the round trip over an eight-node graph the backend actually accepted, because a mapping that
+// only agrees with itself proves nothing about what the server stores.
 
 import { describe, expect, it } from "vitest";
 
@@ -401,7 +401,7 @@ describe("node config conversion", () => {
 	});
 
 	it("round-trips a string-valued defaultInput unchanged", () => {
-		// F5-3: the wire member is a JSON STRING. Rendered verbatim it read as `abc`, which does not parse, so a
+		// The wire member is a JSON STRING. Rendered verbatim it read as `abc`, which does not parse, so a
 		// definition the server accepts carried a permanent invalidJson issue and a save rewrote the member to null.
 		const canvas = graphToCanvas(graph([{ key: "start", kind: "Start", config: { defaultInput: "abc" } }], []));
 
@@ -475,7 +475,7 @@ describe("edge conditions", () => {
 		expect((result.edges ?? []).map((edge) => edge.condition?.value)).toEqual(operands);
 	});
 
-	// The other half of ruling F5-3: reading is strict JSON, writing stays lenient, so an operator who types a bare
+	// The other half of the rule: reading is strict JSON, writing stays lenient, so an operator who types a bare
 	// word still gets a string and one who types a number still gets a number.
 	it("saves unquoted text as a string and an unquoted number as a number", () => {
 		const canvas = graphToCanvas(

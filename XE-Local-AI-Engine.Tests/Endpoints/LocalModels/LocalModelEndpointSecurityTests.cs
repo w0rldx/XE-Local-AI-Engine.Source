@@ -59,31 +59,8 @@ public sealed class LocalModelEndpointSecurityTests
                 services.RemoveAll<IOllamaModelService>();
                 services.AddSingleton(modelService);
                 services.RemoveAll<INodeSettingsStore>();
-                services.AddSingleton<INodeSettingsStore>(new StubNodeSettingsStore());
+                services.AddSingleton<INodeSettingsStore>(new FakeNodeSettingsStore(new StoredNodeSettings()));
             }
         };
-    }
-
-    private sealed class StubNodeSettingsStore : INodeSettingsStore
-    {
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new StoredNodeSettings());
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return new StoredNodeSettings();
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(mutate(new StoredNodeSettings()));
-        }
     }
 }

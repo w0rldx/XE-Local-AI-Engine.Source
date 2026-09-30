@@ -30,7 +30,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
     ///     JSON-Schema (draft-07) for the decrypted <c>model-recommendation-check</c> parameters.
     /// </summary>
     /// <remarks>
-    ///     The advisor runs box-aware GGUF recommendation in-process, so the schema carries no approved-image or
+    ///     The advisor runs hardware-aware GGUF recommendation in-process, so the schema carries no approved-image or
     ///     provider name. The optional <c>quantOverride</c> replaces the default <c>Q4_K_M</c>, and <c>ctxTarget</c>
     ///     overrides the fit context window.
     /// </remarks>

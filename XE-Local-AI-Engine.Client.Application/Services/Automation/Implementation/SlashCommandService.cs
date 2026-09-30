@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Automation.Implementation;
 
 using System.Text;
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed partial class SlashCommandService : ISlashCommandService
@@ -43,7 +41,7 @@ internal sealed partial class SlashCommandService : ISlashCommandService
         var normalized = Normalize(input);
         try { return ToCatalogItem(await _store.AddAsync(normalized, cancellationToken)); }
         catch (SlashCommandCapacityException exception) { throw new SlashCommandConflictException(exception.Message, exception); }
-        catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))
+        catch (SlashCommandNameConflictException exception)
         {
             throw new SlashCommandConflictException($"A command named '/{normalized.Name}' already exists.", exception);
         }
@@ -57,7 +55,7 @@ internal sealed partial class SlashCommandService : ISlashCommandService
             var record = await _store.UpdateAsync(id, normalized, cancellationToken);
             return record is null ? null : ToCatalogItem(record);
         }
-        catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))
+        catch (SlashCommandNameConflictException exception)
         {
             throw new SlashCommandConflictException($"A command named '/{normalized.Name}' already exists.", exception);
         }
@@ -121,9 +119,6 @@ internal sealed partial class SlashCommandService : ISlashCommandService
             ActionType = record.ActionType,
             Prompt = record.Prompt
         };
-
-    private static bool IsUniqueNameViolation(DbUpdateException exception) =>
-        exception.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 };
 
     [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, matchTimeoutMilliseconds: 2000)]
     private static partial Regex NamePattern();

@@ -6,10 +6,6 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
-/// <summary>Process-group id and start time as read from <c>/proc/[pid]/stat</c>.</summary>
-[StructLayout(LayoutKind.Auto)]
-internal readonly record struct TrainingProcessStat(int Pgid, long StartTicks);
-
 /// <summary>Reads trainer-process identity out of <c>/proc</c> and signals process groups.</summary>
 /// <remarks>
 ///     The receipt-validation half of the <c>SandboxOrphanReaper</c> model: identity is proven from several

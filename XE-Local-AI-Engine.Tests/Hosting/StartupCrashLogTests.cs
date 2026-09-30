@@ -71,7 +71,14 @@ public sealed class StartupCrashLogTests
         await File.WriteAllTextAsync(file, "not a directory");
         try
         {
-            await StartupCrashLog.RecordToAsync(Path.Combine(file, "logs"), "ignored");
+            var unusable = Path.Combine(file, "logs");
+
+            await AssertEx.CompletesAsync(StartupCrashLog.RecordToAsync(unusable, "ignored"),
+                TestBudgets.Contended,
+                "a crash log that cannot be written must not add a second failure to the one being reported.");
+
+            AssertEx.False(Directory.Exists(unusable), "nothing was created under a path whose parent is a file.");
+            AssertEx.Equal("not a directory", await File.ReadAllTextAsync(file), "the file standing in the way is left untouched.");
         }
         finally
         {

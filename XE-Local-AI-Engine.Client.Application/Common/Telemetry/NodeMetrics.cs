@@ -299,7 +299,7 @@ public static class NodeMetrics
     ///     SELECTED llama.cpp runtime cannot use it.
     /// </summary>
     /// <remarks>
-    ///     Either a CPU variant was chosen on a GPU box, or a GPU variant enumerated zero devices (e.g. the shipped Vulkan build under WSL2
+    ///     Either a CPU variant was chosen on a GPU machine, or a GPU variant enumerated zero devices (e.g. the shipped Vulkan build under WSL2
     ///     with no Vulkan ICD). Fires once per detection (the audit is cached per binary), so a non-zero value flags inference silently
     ///     running on the CPU while the UI/advisor sized models to VRAM. Labels: reason (cpu_variant | zero_devices).
     /// </remarks>

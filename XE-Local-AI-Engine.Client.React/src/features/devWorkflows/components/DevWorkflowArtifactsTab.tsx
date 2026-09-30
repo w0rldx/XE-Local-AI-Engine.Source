@@ -21,9 +21,9 @@ export interface DevWorkflowArtifactsTabProps {
 }
 
 /**
- * The run's artifacts, ONE ROW PER LINEAGE. Every version of a document used to own a permanent row, so a
- * node that re-attempted three times buried the rest of the run under its own history; the row now shows the lineage's
- * latest version and the body header offers the older ones.
+ * The run's artifacts, ONE ROW PER LINEAGE, so a node that re-attempted three times does not bury the
+ * rest of the run under its own history: the row shows the lineage's latest version and the body header offers the
+ * older ones.
  *
  * Which version a lineage shows is PER-LINEAGE state, so moving one document back a version leaves the others where
  * they were — and a `staleBecauseArtifactId` link can select a version inside a different lineage without disturbing

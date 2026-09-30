@@ -21,7 +21,7 @@ internal static class UsageProviderClassifier
     /// <summary>The usage-provider label prefix for an external connection: <c>external:{connectionId}</c>.</summary>
     /// <remarks>
     ///     One label per CONNECTION rather than one for all external turns, because the ledger's provider column is
-    ///     what the usage view groups and rates by, and a single "external" bucket would merge a free self-hosted box
+    ///     what the usage view groups and rates by, and a single "external" bucket would merge a free self-hosted machine
     ///     with a metered hosted API. It rides the existing one-string <c>IUsageProviderResolver</c> contract, so the
     ///     ledger schema is unchanged; the UI maps it back to a display name through the registry, falling back to a
     ///     plain "External" for a connection that has since been deleted.

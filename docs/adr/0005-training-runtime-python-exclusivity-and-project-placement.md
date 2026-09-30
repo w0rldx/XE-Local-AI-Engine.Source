@@ -13,7 +13,7 @@ Fine-tuning is a Python problem. The tooling that performs it — Unsloth, PEFT,
 
 Three facts about this repository constrain the answer.
 
-**The box is not a training box that happens to serve inference.** It is an inference node. A single GPU carries chat, embeddings, image generation, benchmarks and model-fit probing, and every one of those paths already contends for it. The supervisor's runtime-mutation lease (`ILlamaServerProcessSupervisor.TryAcquireRuntimeMutationLeaseAsync`) and the GPU load admission semaphore (`IGpuModelLoadAdmission`) exist because that contention is real and was paid for. A training run is not another consumer of that budget — it is a multi-hour, whole-GPU tenant, which is a different kind of thing.
+**The host is not a training machine that happens to serve inference.** It is an inference node. A single GPU carries chat, embeddings, image generation, benchmarks and model-fit probing, and every one of those paths already contends for it. The supervisor's runtime-mutation lease (`ILlamaServerProcessSupervisor.TryAcquireRuntimeMutationLeaseAsync`) and the GPU load admission semaphore (`IGpuModelLoadAdmission`) exist because that contention is real and was paid for. A training run is not another consumer of that budget — it is a multi-hour, whole-GPU tenant, which is a different kind of thing.
 
 **The host's Python is not usable.** The host's system Python is newer than Unsloth's supported floor at the pin (3.13), and the torch wheels the Blackwell (sm_120) path needs come from the cu128/cu129 index. Depending on whatever interpreter the operator happens to have installed reproduces the toolchain problem ADR 0004 solved for Development Mode, in a feature where the failure mode is a run that trains for two hours and then cannot export.
 
@@ -56,11 +56,11 @@ Registering the new project in both `LayerDependencyTests` exact-match lists is 
 
 Stated honestly, including the ones that are costs.
 
-- **Training is unavailable without a successful uv provision, and there is no fallback.** No degraded CPU path, no "use whatever Python is on the box". A failed environment install means no Training feature, and it must fail with an actionable message naming the failing step rather than a generic error. This is the same posture ADR 0004 took for Development Mode, for the same reason: an isolation-or-toolchain guarantee that silently degrades is one nobody can reason about from the outside.
+- **Training is unavailable without a successful uv provision, and there is no fallback.** No degraded CPU path, no "use whatever Python is on the host". A failed environment install means no Training feature, and it must fail with an actionable message naming the failing step rather than a generic error. This is the same posture ADR 0004 took for Development Mode, for the same reason: an isolation-or-toolchain guarantee that silently degrades is one nobody can reason about from the outside.
 
 - **First use is a large, slow, network-dependent download.** The torch/CUDA wheel closure is multi-gigabyte. It is one explicit, user-initiated step — the only network step in the feature besides the base-checkpoint download — and it must be resumable and honestly reported, not hidden behind a spinner.
 
-- **The lockfile is a maintenance obligation with a hardware coupling.** Pinning torch to the cu128/cu129 index ties the feature to a CUDA generation. When the box or the driver moves, the pin is a deliberate bump with a live re-verification, not a resolver's choice. Excluding cu130 for a bitsandbytes ABI reason is exactly the kind of fact that is invisible in the diff and expensive to rediscover.
+- **The lockfile is a maintenance obligation with a hardware coupling.** Pinning torch to the cu128/cu129 index ties the feature to a CUDA generation. When the host's GPU or driver moves, the pin is a deliberate bump with a live re-verification, not a resolver's choice. Excluding cu130 for a bitsandbytes ABI reason is exactly the kind of fact that is invisible in the diff and expensive to rediscover.
 
 - **Exclusivity is a real product limitation, not an implementation detail.** While a run is active the node does no chat, no embeddings, no image generation, no benchmarks. Runs are hours long. This must be visible in the UI before the run starts, and the refusals in both directions must say which activity is holding the node.
 

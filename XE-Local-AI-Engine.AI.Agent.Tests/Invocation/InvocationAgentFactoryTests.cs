@@ -1098,11 +1098,6 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal(expected: -1L, chatOptions.Seed);
     }
 
-    // MAAI001: AgentSkillsProvider/AgentInlineSkill are [Experimental] in Microsoft.Agents.AI. The scoped
-    // suppression remains at the pinned version (Directory.Packages.props) until explicit graduation evidence is
-    // available; the factory adopts them deliberately for progressive disclosure of agent skills, so
-    // this test references them under the same scoped suppression the production code uses.
-#pragma warning disable MAAI001
     [Test]
     public async Task Factory_WithSkills_AttachesSkillsProvider_EmptyKeepsPositionalCtor()
     {
@@ -1230,7 +1225,6 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Null(built.Frontmatter.License);
         AssertEx.Null(built.Frontmatter.AllowedTools);
     }
-#pragma warning restore MAAI001
 
     [Test]
     public async Task RunStreamingAsync_NoSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
@@ -1282,8 +1276,8 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.True(string.IsNullOrEmpty(chatClient.CapturedOptions?.Instructions));
     }
 
-    // MAAI001: the skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion
-    // below is provider-boundary only, so this test does not reference the experimental types directly.
+    // The skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion below is
+    // provider-boundary only.
     [Test]
     public async Task RunStreamingAsync_WithSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
     {

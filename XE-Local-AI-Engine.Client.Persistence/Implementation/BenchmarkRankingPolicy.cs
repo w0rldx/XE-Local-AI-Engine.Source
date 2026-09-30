@@ -21,11 +21,11 @@ internal static class BenchmarkRankingPolicy
     ///     the first-launch cost it controls for. TRUNCATION and the SILENT-INCOMPLETE beside it follow, before every judge-derived reason and after the override —
     ///     their score stays visible but never ranks, read off the persisted stop reason, not the status.
     /// </remarks>
-    /// <param name="Rankable">Whether a score could ever rank this run, returned rather than re-derived so the ranking's denominator cannot drift.</param>
     /// <param name="pairwise">
     ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when judging is pointwise;
     ///     there no judge attempt exists and the fit alone decides the exclusion.
     /// </param>
+    /// <returns><c>Rankable</c> says whether a score could ever rank this run, so the ranking's denominator cannot drift.</returns>
     public static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
         int? userScore,
         bool isWarmup,

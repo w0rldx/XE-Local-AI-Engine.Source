@@ -31,7 +31,6 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 // result so the hook's success-path invalidation + toast fire.
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentTemplatesOptions: vi.fn(() => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listAgentTemplates" }],
 		queryFn: async () => ({
 			items: [
@@ -71,10 +70,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 			return { imported: ["engineering-backend-architect"], skippedExisting: [], unknown: [] };
 		},
 	})),
-	listAgentTemplatesQueryKey: vi.fn(() => [
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
-		{ _id: "listAgentTemplates" },
-	]),
+	listAgentTemplatesQueryKey: vi.fn(() => [{ _id: "listAgentTemplates" }]),
 }));
 
 import { listAgentTemplatesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";

@@ -93,7 +93,7 @@ public sealed class GgufDiscoveryPerfTests
     public async Task HeaderCache_ExpiresAfterTtl_ReReadsRangeOnNextInspection()
     {
         var detail = BuildRepoDetailJson(count: 1);
-        var timeProvider = new FakeTimeProvider();
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.UtcNow);
         using var harness = new PerfHarness(repoDetail: detail, headerCacheTtl: TimeSpan.FromMinutes(1), timeProvider: timeProvider);
         var fileName = FileNameFor(QuantTokens[0]);
 
@@ -297,21 +297,6 @@ public sealed class GgufDiscoveryPerfTests
             {
                 Content = new ByteArrayContent(slice)
             };
-        }
-    }
-
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow = DateTimeOffset.UtcNow;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
         }
     }
 }

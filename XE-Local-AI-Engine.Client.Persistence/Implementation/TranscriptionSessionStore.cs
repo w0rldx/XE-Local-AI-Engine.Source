@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     EF-backed <see cref="ITranscriptionSessionStore" />, scoped to the DbContext lifetime.
 /// </summary>
 /// <remarks>
-///     Every write goes through <see cref="NodeChatDbContext.SaveChangesAsync" /> so the node encryption interceptor
+///     Every write goes through <see cref="DbContext.SaveChangesAsync(CancellationToken)" /> so the node encryption interceptor
 ///     encrypts the title, config, error pair and segment text at rest; the status transitions load the row tracked
 ///     and touch only plaintext columns, so the interceptor skips the encrypted ones and their ciphertext is preserved.
 /// </remarks>

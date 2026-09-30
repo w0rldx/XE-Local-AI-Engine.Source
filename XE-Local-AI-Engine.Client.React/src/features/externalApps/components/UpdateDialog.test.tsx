@@ -254,7 +254,7 @@ describe("UpdateDialog", () => {
 		expect(screen.getByTestId("external-app-update-blocked").textContent).toContain("no longer offered in the catalog");
 		expect((screen.getByTestId("external-app-update-confirm") as HTMLButtonElement).disabled).toBe(true);
 	});
-	// R3-14. The acceptance is bound on LEAVING the settings step, on both branches: an update that asks for nothing
+	// The acceptance is bound on LEAVING the settings step, on both branches: an update that asks for nothing
 	// more never renders the permission step, and binding the fingerprint only there left this effect inert — a
 	// preview that moved under the open dialog was then confirmed with `acceptPermissions: true` against a manifest
 	// nobody had been shown.
@@ -376,7 +376,7 @@ describe("UpdateDialog", () => {
 		await waitFor(() => expect([instanceReads, listReads]).toEqual([2, 2]));
 	});
 
-	// C19. A variable the target newly requires has nothing to seed it, so it renders empty and blocks Continue for a
+	// A variable the target newly requires has nothing to seed it, so it renders empty and blocks Continue for a
 	// reason that is otherwise invisible: the field says the new version needs it.
 	it("flags a newly required target variable and leaves the settings the installed version already had alone", async () => {
 		server.use(

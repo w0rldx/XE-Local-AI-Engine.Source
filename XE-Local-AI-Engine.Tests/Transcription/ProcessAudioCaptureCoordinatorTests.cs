@@ -49,7 +49,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     [Test]
     public async Task Start_RefusesWhenTheSessionIsNotLive()
     {
-        // The live start (S3) has to have run: a recorder with nowhere to push is worse than a typed refusal.
+        // The live start has to have run: a recorder with nowhere to push is worse than a typed refusal.
         await using var harness = Harness.Create();
         harness.Registry.Live = false;
         var sessionId = Guid.NewGuid();

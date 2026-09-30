@@ -131,7 +131,8 @@ public sealed class WhisperGoldenFixtureRecorder
                 MaxWindowSeconds = MaxWindowSeconds,
                 TailGuardMs = TailGuardMs,
                 TickMs = TickMs
-            });
+            },
+            TimeProvider.System);
         recorder.WindowStartMs = () => segmenter.CommittedEndMs;
 
         var frameBytes = PushMs * WavPcm16.BytesPerMillisecond;

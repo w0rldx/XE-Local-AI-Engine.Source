@@ -135,7 +135,7 @@ export function groupExternalModelOptions(options: ModelOption[]): ExternalModel
 // else the fallback `OrderByDescending(modifiedAtUtc).ThenBy(modelName)` pick (newest modified first, then name
 // ascending). `modifiedAtUtc` is an epoch number on the DTO, so it is compared numerically (a missing value sorts
 // oldest). Returns undefined when no installed chat-capable local model exists.
-export function resolveLocalDefaultModel(models: LocalModelDto[]): LocalModelDto | undefined {
+function resolveLocalDefaultModel(models: LocalModelDto[]): LocalModelDto | undefined {
 	const chatModels = models.filter(isLocalChatModel);
 	return (
 		chatModels.find((model) => model.isSelected) ??

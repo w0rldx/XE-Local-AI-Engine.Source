@@ -3236,6 +3236,10 @@
 					"returnToPrevious": {
 						"label": "Return to previous specialist",
 						"description": "Route the next user turn back to the specialist that handled the last turn, instead of through triage."
+					},
+					"validation": {
+						"participantsRequired": "An orchestrator needs at least one specialist participant.",
+						"selfHandoff": "A handoff cannot connect an agent to itself."
 					}
 				},
 				"playbookEnabled": {
@@ -3652,6 +3656,12 @@
 					"label": "URL",
 					"description": "Loopback only (127.0.0.1 / localhost / ::1).",
 					"placeholder": "http://127.0.0.1:3001/sse"
+				},
+				"validation": {
+					"commandRequired": "Command is required for stdio transport",
+					"urlRequired": "URL is required for HTTP transport",
+					"urlNotLoopback": "URL must point at a loopback host",
+					"envKeyRequired": "Environment key is required"
 				}
 			},
 			"tools": {
@@ -3777,6 +3787,16 @@
 				"parameters": {
 					"label": "Parameters (JSON)",
 					"description": "Optional template parameters as JSON. Stored encrypted and never shown again after saving."
+				},
+				"validation": {
+					"cronRequired": "A cron expression is required",
+					"intervalRequired": "An interval is required",
+					"intervalInvalid": "Interval must be a positive whole number of seconds",
+					"startRequired": "A start time is required",
+					"startInvalid": "Start time is invalid",
+					"repeatCountInvalid": "Repeat count must be a positive whole number",
+					"maxRuntimeInvalid": "Max runtime must be a positive whole number of seconds",
+					"endInvalid": "End time is invalid"
 				}
 			},
 			"runs": {

@@ -400,20 +400,15 @@ internal static class WorkSessionTestSupport
         TimeSpan? timeout = null)
     {
         // real-timer: the session is advanced by loops the test does not own, and the store row is the only thing
-        // they publish. The deadline is a failure bound sized for a contended runner, not a sleep.
-        var deadline = DateTimeOffset.UtcNow + (timeout ?? TestBudgets.Contended);
-        AgentWorkSessionSnapshot session;
-        do
-        {
-            session = await ReadSessionAsync(services, sessionId);
-            if (session.Status == expected)
+        // they publish.
+        AgentWorkSessionSnapshot? session = null;
+        await AssertEx.EventuallyAsync(async () =>
             {
-                return session;
-            }
-
-            await Task.Delay(25);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        throw new AssertionException($"Work session {sessionId} was {session.Status}, not {expected}, before the timeout.");
+                session = await ReadSessionAsync(services, sessionId);
+                return session.Status == expected;
+            },
+            timeout ?? TestBudgets.Contended,
+            $"Work session {sessionId} did not reach {expected} before the timeout.");
+        return session!;
     }
 }

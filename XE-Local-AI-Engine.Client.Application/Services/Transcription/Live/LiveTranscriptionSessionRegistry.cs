@@ -403,9 +403,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // Outside Gate: cancellation callbacks may re-enter the registry.
             await cancellation.CancelAsync();
         }
-#pragma warning disable CA1031 // A producer callback cannot prevent the already selected abort from terminalizing.
+        // A producer callback cannot prevent the already selected abort from terminalizing.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "Cancelling live transcription resources failed.");
         }
@@ -459,9 +458,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             await _publisher.PublishStatusAsync(session.Id, outcome, CancellationToken.None);
             LogEnded(session, outcome);
         }
-#pragma warning disable CA1031 // Ending a session is the last chance to release it; nothing above may escape.
+        // Ending a session is the last chance to release it; nothing above may escape.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogError(exception, "Ending live transcription session {SessionId} failed.", session.Id);
         }
@@ -515,9 +513,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
             await _publisher.PublishCatchUpAsync(session.Id, bufferedMs, CancellationToken.None);
         }
-#pragma warning disable CA1031 // Progress is advisory; failing to announce it must not stop the graceful end.
+        // Progress is advisory; failing to announce it must not stop the graceful end.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "Announcing the graceful end of transcription session {SessionId} failed.", session.Id);
         }
@@ -560,9 +557,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             using var bound = new CancellationTokenSource(ProducerStopTimeout, _timeProvider);
             await producer.StopAsync(bound.Token).AsTask().WaitAsync(bound.Token);
         }
-#pragma warning disable CA1031 // A producer that fails or hangs is abandoned, never allowed to hold the session.
+        // A producer that fails or hangs is abandoned, never allowed to hold the session.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "The audio producer for transcription session {SessionId} did not stop cleanly.", session.Id);
         }
@@ -613,9 +609,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
             return true;
         }
-#pragma warning disable CA1031 // A timed-out or faulted lane must not stop siblings finalizing or the terminal status.
+        // A timed-out or faulted lane must not stop siblings finalizing or the terminal status.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _ = RequestCancellationAsync(lane.Abort);
             _logger.LogWarning(exception, "Finalizing the {Channel} lane of transcription session {SessionId} did not finish cleanly.", lane.Channel, session.Id);
@@ -689,9 +684,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // Ordering, not a result: the previous frame's own handler already dealt with however it ended.
             await previous;
         }
-#pragma warning disable CA1031 // See above: this await exists only to keep frames in arrival order.
+        // See above: this await exists only to keep frames in arrival order.
         catch (Exception)
-#pragma warning restore CA1031
         {
             // Intentionally ignored.
         }
@@ -716,9 +710,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         {
             // The session is already ending; the retained audio is deliberately not re-submitted.
         }
-#pragma warning disable CA1031 // A lane failure terminalizes the session instead of unwinding into a capture callback.
+        // A lane failure terminalizes the session instead of unwinding into a capture callback.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogError(exception, "The {Channel} lane of transcription session {SessionId} failed.", lane.Channel, session.Id);
 
@@ -799,9 +792,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 await publish();
             }
         }
-#pragma warning disable CA1031 // Progress is advisory; failing to report it must not fail the lane that consumed the audio.
+        // Progress is advisory; failing to report it must not fail the lane that consumed the audio.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "Publishing {Event} for transcription session {SessionId} failed.", what, session.Id);
         }

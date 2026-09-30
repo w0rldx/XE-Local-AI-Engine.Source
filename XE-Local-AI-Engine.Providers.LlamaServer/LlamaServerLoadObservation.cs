@@ -82,7 +82,7 @@ public sealed class LlamaServerLoadObservation
     /// </summary>
     /// <remarks>
     ///     It is that gate's forced hardware re-probe under the decision gate. Null when the load carried no capacity
-    ///     admission (a direct, profiling or test spawn), when the box has no readable global-free figure (a non-NVIDIA
+    ///     admission (a direct, profiling or test spawn), when the host has no readable global-free figure (a non-NVIDIA
     ///     or CPU-only host), or when the selected runtime variant moved off the one the admission was granted against.
     /// </remarks>
     public long? GlobalFreeVramBytesAtLoad { get; init; }

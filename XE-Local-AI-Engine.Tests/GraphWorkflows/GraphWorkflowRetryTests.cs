@@ -186,7 +186,7 @@ public sealed class GraphWorkflowRetryTests
     /// </summary>
     private static Task<int> ExpireAsync(GraphWorkflowHarness harness, Guid runId)
     {
-        var expired = harness.CreateReplacementDispatcher(clock: new GraphWorkflowFixedClock(DateTimeOffset.UtcNow.AddHours(1)));
+        var expired = harness.CreateReplacementDispatcher(clock: new ManualTimeProvider(DateTimeOffset.UtcNow.AddHours(1)));
         return expired.AdvanceOnceAsync(runId, CancellationToken.None);
     }
 }

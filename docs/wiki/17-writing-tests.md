@@ -39,7 +39,7 @@ A test must not depend on another test having run, on execution order, or on sta
   Library's `cleanup` after each test — a Zustand store, a `localStorage` key or a module-level `let` is still
   yours to reset in `beforeEach`.
 - A loopback port obtained by binding `:0` and releasing it is a **candidate**, not a reservation — another
-  process on the box can take it before your child process or server binds it. Hold the listener when the port
+  process on the host can take it before your child process or server binds it. Hold the listener when the port
   is the test's target, and go through `Testing/LoopbackPort.cs` (`Reserve` + `BindWithRetryAsync`) when
   something else must bind it, retrying on the product's own in-use signal.
 
@@ -94,7 +94,7 @@ Every test class carries **exactly one** class-level `[Category(...)]`, from thr
 |---|---|
 | `Unit` | Pure logic against in-memory collaborators: no host, no real database, no socket, no child process. A hand-written fake or an NSubstitute double is still `Unit`. |
 | `Integration` | Deterministic, but boots something real in-process: a `TestServerWebAppFactory` host, a real SQLite file (including a `MigratedDatabaseTemplate` copy), a `FakeOllama`/`FakeDocker` server on a loopback socket, or a real child process. |
-| `ExternalInfra` | Needs infrastructure the box may not have: a container daemon, a model runtime or live server, a GPU, a privileged sandbox binary. Opt-in through an environment variable, and **every** test in the class skips visibly when that gate is unset. Never part of the default gate. |
+| `ExternalInfra` | Needs infrastructure the host may not have: a container daemon, a model runtime or live server, a GPU, a privileged sandbox binary. Opt-in through an environment variable, and **every** test in the class skips visibly when that gate is unset. Never part of the default gate. |
 
 The line between `Unit` and `Integration` is **mechanism, not speed**: what the test starts decides its category,
 not how long it takes. The gate runs `Unit` and `Integration`; the split exists so a failure's *class* is readable
@@ -409,7 +409,7 @@ scripts/run-e2e-local.sh --filter '/*/*/AgentsPageE2ETests/*'      # --list enum
 - `--treenode-filter`, **never** VSTest's `--filter`. Wildcards and `(A|B)` alternation both work.
   A filter that matches nothing exits **8**; a zero-test run is not a pass.
 - Wrap every build and every test run in `scripts/with-build-lock.sh`, and **never** build while a test run is in
-  flight — the box is shared. Exit `75` means the result is void; rerun.
+  flight — the host is shared. Exit `75` means the result is void; rerun.
 - Iterate in Debug if you like, but **finish with a Release build** of the solution. Debug skips the analyzers
   entirely, so a green Debug build has verified none of the static-analysis wall.
 - A bare `TODO`/`FIXME` in a C# comment **fails the Release build** (Sonar S1135 + warnings-as-errors). Describe

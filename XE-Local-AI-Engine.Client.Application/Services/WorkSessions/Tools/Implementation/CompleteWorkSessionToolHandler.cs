@@ -4,8 +4,6 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record CompleteWorkSessionRequest(string? Summary, bool? ObjectiveMet = null);
-
 /// <summary>
 ///     <c>complete_work_session</c>: the model closing the session, met or not.
 /// </summary>

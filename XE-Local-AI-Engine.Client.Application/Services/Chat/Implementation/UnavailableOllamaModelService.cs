@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// <remarks>
 ///     It exists because <c>OllamaModelService</c> takes an <c>IOllamaApiClient</c> whose only registration lives
 ///     inside the gated <c>AddOllamaLocalModelProvider</c>, so registering the real service unconditionally breaks a
-///     gate-off node. Its behaviour mirrors a box with no daemon, which every consumer already handles: list probes
+///     gate-off node. Its behaviour mirrors a machine with no daemon, which every consumer already handles: list probes
 ///     answer empty, availability is false, and anything needing a daemon throws <see cref="HttpRequestException" />
 ///     with no <see cref="HttpRequestException.StatusCode" />, which consumers map to "Ollama not reachable".
 /// </remarks>

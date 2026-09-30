@@ -168,9 +168,7 @@ public sealed class DefaultConfigDraftServiceTests
 
         var draft = AssertEx.NotNull(result.Draft, "The skill draft must survive an invalid model-asserted name.");
         AssertEx.Equal("my-awesome-skill", draft.Name);
-#pragma warning disable MAAI001 // The same experimental validator the skill service validates against.
         AssertEx.True(AgentSkillFrontmatter.ValidateName(draft.Name, out _), "The normalized name must pass MAF validation.");
-#pragma warning restore MAAI001
     }
 
     [Test]
@@ -676,24 +674,9 @@ public sealed class DefaultConfigDraftServiceTests
                 Gate,
                 Microsoft.Extensions.Options.Options.Create(Options),
                 nodeSettings,
-                new FixedTimeProvider(DraftedAt),
+                new ManualTimeProvider(DraftedAt),
                 NullLogger<DefaultConfigDraftService>.Instance,
                 OllamaModelService);
-        }
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
         }
     }
 

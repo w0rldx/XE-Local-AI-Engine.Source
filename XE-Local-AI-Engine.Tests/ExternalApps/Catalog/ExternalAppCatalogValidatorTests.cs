@@ -6,10 +6,10 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ExternalAppCatalogValidator" /> rule coverage: one test per rule id in the S1 rule table, each
+///     <see cref="ExternalAppCatalogValidator" /> rule coverage: one test per rule id in the validator's rule table, each
 ///     mutating a single field of one canonical valid document and asserting the specific error text. The catalog is
 ///     the only thing standing between an authored manifest and a container the engine creates, so every rule needs a
-///     negative case — a rule that is never exercised is a rule the next slice silently relies on.
+///     negative case — a rule that is never exercised is a rule the next change silently relies on.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogValidatorTests
@@ -849,7 +849,7 @@ public sealed class ExternalAppCatalogValidatorTests
         AssertError(result, "applications[0].variables[1].name must not start with the reserved prefix XE_.");
     }
 
-    // ---------------------------------------------------------------- Codex round 2
+    // ---------------------------------------------------------------- file-path nesting and escapes
 
     [Test]
     [Arguments("files/sidecar/settings.yml/nested.yml", "must not nest inside 'files/sidecar/settings.yml'")]

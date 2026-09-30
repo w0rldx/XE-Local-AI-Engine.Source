@@ -4,8 +4,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>The <c>allowedActions</c> values the AgentHome tool schema offers, as the one place the node spells them.</summary>
 /// <remarks>
-///     Every value here gates something real. <c>propose_memory</c> used to be a fifth value; it was removed rather
-///     than left advertised, because the node collected the sandbox's proposals and then discarded them.
+///     Every value here gates something real: an action whose output the node would discard is not advertised.
 /// </remarks>
 internal static class AgentHomeAllowedActions
 {

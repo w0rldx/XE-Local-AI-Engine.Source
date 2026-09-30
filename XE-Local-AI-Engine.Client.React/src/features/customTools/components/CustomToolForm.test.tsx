@@ -160,7 +160,7 @@ describe("CustomToolForm", () => {
 		expect(screen.queryByTestId("custom-tool-form-http")).toBeNull();
 	});
 
-	// C3: the secret rows share the explicit keep/clear mechanic with the External Apps variables form. What matters
+	// The secret rows share the explicit keep/clear mechanic with the External Apps variables form. What matters
 	// here is that a header's stored secret reaches the submitted definition as the sentinel unless it is cleared on
 	// purpose — an emptied box used to send "", which the service writes over the stored value.
 	it("keeps a header's stored secret when its box is typed into and emptied, and clears it only on the explicit action", () => {

@@ -26,6 +26,7 @@ public sealed class StreamIdleWatchdogTests
             await foreach (var item in StreamIdleWatchdog.WithIdleTimeout<int>(_ => provider,
                                TimeSpan.FromMilliseconds(100),
                                "stream stalled",
+                               TimeProvider.System,
                                CancellationToken.None,
                                abandonmentGrace: TimeSpan.FromMilliseconds(100)))
             {
@@ -64,6 +65,7 @@ public sealed class StreamIdleWatchdogTests
             await foreach (var item in StreamIdleWatchdog.WithIdleTimeout<int>(_ => provider,
                                TimeSpan.FromSeconds(30),
                                "should not fire",
+                               TimeProvider.System,
                                CancellationToken.None,
                                abandonmentGrace: TimeSpan.FromMilliseconds(100)))
             {
@@ -91,6 +93,7 @@ public sealed class StreamIdleWatchdogTests
             await foreach (var item in StreamIdleWatchdog.WithIdleTimeout<int>(_ => new SynchronousBufferedStream(500),
                                TimeSpan.FromSeconds(30),
                                "should not fire",
+                               TimeProvider.System,
                                cancellationTokenSource.Token))
             {
                 collected.Add(item);
@@ -110,7 +113,7 @@ public sealed class StreamIdleWatchdogTests
     [Test]
     public async Task WithIdleTimeout_WhenChunksArriveWithinBudget_YieldsAll()
     {
-        var items = await CollectAsync(StreamIdleWatchdog.WithIdleTimeout(Fast, TimeSpan.FromSeconds(2), "should not fire", CancellationToken.None));
+        var items = await CollectAsync(StreamIdleWatchdog.WithIdleTimeout(Fast, TimeSpan.FromSeconds(2), "should not fire", TimeProvider.System, CancellationToken.None));
 
         AssertEx.Equal(expected: 3, items.Count);
         AssertEx.Equal(expected: 1, items[0]);
@@ -121,7 +124,7 @@ public sealed class StreamIdleWatchdogTests
     public async Task WithIdleTimeout_WhenProviderStallsBetweenChunks_ThrowsStreamIdleTimeout()
     {
         var exception = await AssertEx.ThrowsAsync<StreamIdleTimeoutException>(() =>
-            CollectAsync(StreamIdleWatchdog.WithIdleTimeout(OneThenStall, TimeSpan.FromMilliseconds(100), "stream idle fired here", CancellationToken.None)));
+            CollectAsync(StreamIdleWatchdog.WithIdleTimeout(OneThenStall, TimeSpan.FromMilliseconds(100), "stream idle fired here", TimeProvider.System, CancellationToken.None)));
 
         AssertEx.Contains(exception.Message, "stream idle fired here");
     }
@@ -134,7 +137,7 @@ public sealed class StreamIdleWatchdogTests
         // classifies the two to different messages (StreamIdleTimeoutException is forwarded verbatim, a bare
         // TimeoutException is collapsed to the generic constant).
         var exception = await AssertEx.ThrowsAsync<TimeoutException>(() =>
-            CollectAsync(StreamIdleWatchdog.WithIdleTimeout(OneThenFaultWithTimeout, TimeSpan.FromSeconds(30), "should not fire", CancellationToken.None)));
+            CollectAsync(StreamIdleWatchdog.WithIdleTimeout(OneThenFaultWithTimeout, TimeSpan.FromSeconds(30), "should not fire", TimeProvider.System, CancellationToken.None)));
 
         AssertEx.False(exception is StreamIdleTimeoutException, "the provider's own TimeoutException must not be reported as an idle timeout");
         AssertEx.Contains(exception.Message, "provider gave up");
@@ -144,7 +147,7 @@ public sealed class StreamIdleWatchdogTests
     public async Task WithIdleTimeout_WhenOuterTokenCancelled_ThrowsOperationCanceledNotIdleTimeout()
     {
         using var cancellationTokenSource = new CancellationTokenSource();
-        var stream = StreamIdleWatchdog.WithIdleTimeout(OneThenStall, TimeSpan.FromSeconds(30), "should not fire", cancellationTokenSource.Token);
+        var stream = StreamIdleWatchdog.WithIdleTimeout(OneThenStall, TimeSpan.FromSeconds(30), "should not fire", TimeProvider.System, cancellationTokenSource.Token);
 
         await using var enumerator = stream.GetAsyncEnumerator();
         AssertEx.True(await enumerator.MoveNextAsync());
@@ -161,7 +164,7 @@ public sealed class StreamIdleWatchdogTests
     [Test]
     public async Task WithIdleTimeout_WhenIdleTimeoutNonPositive_IsDisabledPassthrough()
     {
-        var items = await CollectAsync(StreamIdleWatchdog.WithIdleTimeout(Fast, TimeSpan.Zero, "disabled", CancellationToken.None));
+        var items = await CollectAsync(StreamIdleWatchdog.WithIdleTimeout(Fast, TimeSpan.Zero, "disabled", TimeProvider.System, CancellationToken.None));
 
         AssertEx.Equal(expected: 3, items.Count);
     }

@@ -342,7 +342,8 @@ public sealed class SelectedFolderResolverTests : IDisposable
     {
         public Task<SelectedFolderRecord> AddAsync(string folderAlias, string hostPath, SelectedFolderMode mode, CancellationToken cancellationToken = default)
         {
-            throw new DbUpdateException("SQLite Error 19: 'UNIQUE constraint failed: selected_folders.alias'.");
+            throw new SelectedFolderAliasConflictException($"A selected folder with alias '{folderAlias}' is already registered.",
+                new DbUpdateException("SQLite Error 19: 'UNIQUE constraint failed: selected_folders.alias'."));
         }
 
         public Task<SelectedFolderRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

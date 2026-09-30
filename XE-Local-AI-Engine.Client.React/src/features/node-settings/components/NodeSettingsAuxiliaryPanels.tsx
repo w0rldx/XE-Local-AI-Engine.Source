@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { languageData } from "@/data/language/LanguageMenuData";
+import { languageData } from "@/core/locales/models/LanguageMenuData";
 import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
 import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
 import { McpWorkspaceAllowlistPanel } from "@/features/node-settings/components/McpWorkspaceAllowlistPanel";
@@ -62,7 +62,7 @@ interface NodeSettingsBrowserPreferencesCardProps {
 export function NodeSettingsBrowserPreferencesCard(props: NodeSettingsBrowserPreferencesCardProps) {
 	const { t, i18n } = useTranslation();
 	const selectedLanguage = useUserLanguageStore((state) => state.selectedApplicationLanguage);
-	const changeLanguage = useUserLanguageStore((state) => state.changeLanguage);
+	const changeLanguage = useUserLanguageStore((state) => state.actions.changeLanguage);
 
 	const handleLanguageChange = async (language: string | null): Promise<void> => {
 		if (language === null) {

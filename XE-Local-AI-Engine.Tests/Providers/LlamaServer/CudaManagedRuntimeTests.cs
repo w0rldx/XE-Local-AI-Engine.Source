@@ -13,7 +13,7 @@ using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Managed source-built CUDA runtime: the <see cref="LlamaCppBinaryManager" /> serve-time short-circuit
-///     (path-chain + SHA re-validation), the <see cref="RecordResolvedRuntimeAsync" /> source-build guard, the
+///     (path-chain + SHA re-validation), the <c>LlamaCppBinaryManager.RecordResolvedRuntimeAsync</c> source-build guard, the
 ///     <see cref="GpuVariantSelector" /> cached-signal rule, and the additive <see cref="InstalledRuntimeState" /> field.
 ///     POSIX-only (the validation spawns a real stub executable + uses Unix file modes).
 /// </summary>

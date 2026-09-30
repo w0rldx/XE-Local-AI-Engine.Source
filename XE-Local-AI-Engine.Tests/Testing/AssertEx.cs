@@ -278,7 +278,18 @@ internal static class AssertEx
         }
     }
 
-    public static async Task EventuallyAsync(Func<bool> condition, TimeSpan timeout, string? message = null)
+    public static Task EventuallyAsync(Func<bool> condition, TimeSpan timeout, string? message = null)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+
+        return EventuallyAsync(() => Task.FromResult(condition()), timeout, message);
+    }
+
+    /// <summary>
+    ///     The same failure deadline for a condition that has to read something asynchronously — a store row, or a
+    ///     re-offered call whose effect is the thing being waited for.
+    /// </summary>
+    public static async Task EventuallyAsync(Func<Task<bool>> condition, TimeSpan timeout, string? message = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
 
@@ -287,7 +298,7 @@ internal static class AssertEx
 
         while (DateTimeOffset.UtcNow < deadline)
         {
-            if (condition())
+            if (await condition())
             {
                 return;
             }
@@ -295,7 +306,7 @@ internal static class AssertEx
             await Task.Delay(pollInterval);
         }
 
-        if (!condition())
+        if (!await condition())
         {
             throw new AssertionException(message ?? $"Condition was not satisfied within {timeout}.");
         }

@@ -11,7 +11,7 @@ using System.Text;
 /// <remarks>
 ///     The fenced text is data to be reasoned over, NOT instructions to be followed, and the BaseScaffold tells the
 ///     model so. Callers MUST place every attacker-controlled field, body AND metadata, inside ONE fence via
-///     <see cref="WrapDocument" />; nothing attacker-controlled is emitted outside it. The markers carry a per-wrap
+///     <see cref="WrapDocument(string, IReadOnlyList{KeyValuePair{string, string}})" />; nothing attacker-controlled is emitted outside it. The markers carry a per-wrap
 ///     nonce no document author can forge. See docs/wiki/12-security-and-privacy.md ("Untrusted content is fenced with
 ///     an unforgeable marker").
 /// </remarks>

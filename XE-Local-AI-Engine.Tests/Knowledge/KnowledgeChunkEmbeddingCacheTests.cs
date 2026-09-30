@@ -92,7 +92,7 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
     [Test]
     public async Task GetOrCreateManyAsync_AfterTtl_ResolvesAgain()
     {
-        var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var key = Key('d');
         var store = new StubReuseStore();
         var cache = CreateCache(store, maxEntries: 8, ttlSeconds: 10, clock);
@@ -192,21 +192,5 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
                                                                                      .ToDictionary(key => key, key => _entries[key]);
             return Task.FromResult(found);
         }
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now;
-
-        public MutableTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
-
-        public void Advance(TimeSpan value) =>
-            _now += value;
     }
 }

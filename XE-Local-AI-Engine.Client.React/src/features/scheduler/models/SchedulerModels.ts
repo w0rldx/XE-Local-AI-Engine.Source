@@ -165,7 +165,8 @@ export function parseDateTimeLocal(value: string): number | null | undefined {
 // Zod schema validating the form before submit. The form is a convenience — the backend re-validates and is
 // authoritative — so this guards only the obvious shape errors per schedule kind: Cron needs a cron expression;
 // SimpleInterval needs intervalSeconds > 0; OneShot needs a valid startAtUtc; Manual needs no schedule fields.
-// maxRuntimeSeconds (when present) and repeatCount (when present) must be positive integers.
+// maxRuntimeSeconds (when present) and repeatCount (when present) must be positive integers. Custom issue messages
+// are i18n keys; the form translates them.
 export const scheduledJobFormSchema = z
 	.object({
 		templateId: z.string().trim().min(1),
@@ -186,25 +187,25 @@ export const scheduledJobFormSchema = z
 	.superRefine((value, ctx) => {
 		if (value.scheduleKind === "Cron") {
 			if (value.cronExpression.trim().length === 0) {
-				ctx.addIssue({ code: "custom", message: "A cron expression is required", path: ["cronExpression"] });
+				ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.cronRequired", path: ["cronExpression"] });
 			}
 		} else if (value.scheduleKind === "SimpleInterval") {
 			const interval = parsePositiveInteger(value.intervalSeconds);
 			if (interval === undefined) {
-				ctx.addIssue({ code: "custom", message: "An interval is required", path: ["intervalSeconds"] });
+				ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.intervalRequired", path: ["intervalSeconds"] });
 			} else if (interval === null) {
 				ctx.addIssue({
 					code: "custom",
-					message: "Interval must be a positive whole number of seconds",
+					message: "pages.scheduler.form.validation.intervalInvalid",
 					path: ["intervalSeconds"],
 				});
 			}
 		} else if (value.scheduleKind === "OneShot") {
 			const start = parseDateTimeLocal(value.startAtUtc);
 			if (start === undefined) {
-				ctx.addIssue({ code: "custom", message: "A start time is required", path: ["startAtUtc"] });
+				ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.startRequired", path: ["startAtUtc"] });
 			} else if (start === null) {
-				ctx.addIssue({ code: "custom", message: "Start time is invalid", path: ["startAtUtc"] });
+				ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.startInvalid", path: ["startAtUtc"] });
 			}
 		}
 		// Manual: a durable on-demand job has no cron/interval/start-at fields, so there is nothing to validate.
@@ -212,7 +213,7 @@ export const scheduledJobFormSchema = z
 		if (parsePositiveInteger(value.repeatCount) === null) {
 			ctx.addIssue({
 				code: "custom",
-				message: "Repeat count must be a positive whole number",
+				message: "pages.scheduler.form.validation.repeatCountInvalid",
 				path: ["repeatCount"],
 			});
 		}
@@ -220,13 +221,13 @@ export const scheduledJobFormSchema = z
 		if (parsePositiveInteger(value.maxRuntimeSeconds) === null) {
 			ctx.addIssue({
 				code: "custom",
-				message: "Max runtime must be a positive whole number of seconds",
+				message: "pages.scheduler.form.validation.maxRuntimeInvalid",
 				path: ["maxRuntimeSeconds"],
 			});
 		}
 
 		if (value.endAtUtc.trim().length > 0 && parseDateTimeLocal(value.endAtUtc) === null) {
-			ctx.addIssue({ code: "custom", message: "End time is invalid", path: ["endAtUtc"] });
+			ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.endInvalid", path: ["endAtUtc"] });
 		}
 	});
 

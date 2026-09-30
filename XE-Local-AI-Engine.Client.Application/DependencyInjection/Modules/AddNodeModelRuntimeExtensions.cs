@@ -197,8 +197,8 @@ internal static class AddNodeModelRuntimeExtensions
             return new RuntimeChatClient(activeCloudFactory,
                 sp.GetRequiredService<ModelRoutingLocalChatClient>,
                 sp.GetRequiredService<ICloudEgressAuthorizer>(),
-                // The local branch can now egress: an ext: id routes there by design, so the Development authorization
-                // that previously lived only on the cloud branch needs a backstop on this one too.
+                // The local branch can egress too: an ext: id routes there by design, so it needs the same Development
+                // authorization backstop as the cloud branch.
                 sp.GetRequiredService<IModelTrustResolver>());
         });
 
@@ -270,7 +270,7 @@ internal static class AddNodeModelRuntimeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Capability gate: enabled unless explicitly disabled, so an un-flagged box keeps today's behavior exactly.
+        // Capability gate: enabled unless explicitly disabled, so an un-flagged machine keeps today's behavior exactly.
         if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
         {
             // Opting out of a SECONDARY runtime must not make the host unbuildable: ModelCapabilityProber and the model service are

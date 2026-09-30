@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
+using OS = TUnit.Core.Enums.OS;
 
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
@@ -126,14 +127,10 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     }
 
     [Test]
+    // Creating symbolic links is privilege-dependent on Windows.
+    [ExcludeOn(OS.Windows)]
     public async Task ResolveFolderAsync_WhenRegisteredPathTraversesSymlink_ThrowsSecurityException()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Skip.Test("Creating symbolic links is privilege-dependent on Windows.");
-            return;
-        }
-
         var repository = await CreateRepositoryAsync();
         var linkedRepository = Path.Combine(_root, "repository-link");
         _ = Directory.CreateSymbolicLink(linkedRepository, repository);

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <remarks>
 ///     The image bytes are encrypted on disk by <see cref="ImageBlobProtector" /> under
 ///     <c>INodeDataDirectory.Root/generated-images/{jobId}/{imageId}.png</c>; the <c>generated_images</c> metadata row
-///     lives behind <see cref="IGeneratedImageRowStore" /> (operator decision D5: no DbContext above the persistence
+///     lives behind <see cref="IGeneratedImageRowStore" /> (no DbContext above the persistence
 ///     layer). Singleton: it opens a fresh scope per row operation and depends only on singletons (data directory,
 ///     sqlite key holder, time provider).
 /// </remarks>

@@ -4,7 +4,7 @@ import { renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { VoiceRuntime } from "@/core/runtime/VoiceRuntime";
+import type { VoiceRuntime } from "@/features/voice/VoiceRuntime";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";

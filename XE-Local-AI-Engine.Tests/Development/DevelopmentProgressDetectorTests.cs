@@ -91,14 +91,14 @@ public sealed class DevelopmentProgressDetectorTests
         AssertEx.Equal(2, warning.Count);
     }
 
-    private static DevelopmentProgressDetector CreateDetector(out AdjustableTimeProvider time,
+    private static DevelopmentProgressDetector CreateDetector(out ManualTimeProvider time,
         int repeatedToolThreshold = 3,
         int commandFailureThreshold = 3,
         int noProgressSeconds = 120,
         int planningThreshold = 3,
         int reviewFindingThreshold = 2)
     {
-        time = new AdjustableTimeProvider(DateTimeOffset.UnixEpoch);
+        time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         return new DevelopmentProgressDetector(Options.Create(new DevelopmentOptions
         {
             RepeatedToolWarningThreshold = repeatedToolThreshold,
@@ -110,21 +110,5 @@ public sealed class DevelopmentProgressDetectorTests
             PlanningWithoutProgressWarningThreshold = planningThreshold,
             RepeatedReviewFindingWarningThreshold = reviewFindingThreshold
         }), time);
-    }
-
-    private sealed class AdjustableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _current;
-
-        public AdjustableTimeProvider(DateTimeOffset current)
-        {
-            _current = current;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _current;
-
-        public void Advance(TimeSpan duration) =>
-            _current += duration;
     }
 }

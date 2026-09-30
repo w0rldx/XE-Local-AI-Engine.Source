@@ -18,7 +18,7 @@ public sealed class SupervisorCrashAndSurfaceTests
     [Test]
     public async Task EnsureRunning_KilledButExitNotYetObserved_ReusesTheDeadEndpoint_UntilWaitForProcessExitSeesTheExit()
     {
-        // REGRESSION (live QA F-18): a SIGKILLed server's sockets close before the parent reaps it, so an immediate
+        // REGRESSION: a SIGKILLed server's sockets close before the parent reaps it, so an immediate
         // re-ensure reuses the dead endpoint. WaitForProcessExitAsync is the barrier that lets the retry respawn.
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
@@ -42,8 +42,8 @@ public sealed class SupervisorCrashAndSurfaceTests
     [Test]
     public async Task Admission_TrackedProcessExitedOutsideTheSupervisor_PrunesIt_AndLogsAWarningNamingTheModel()
     {
-        // REGRESSION (tester round 3): a child killed from outside the node (another checkout's stale reaper) was pruned
-        // at the next admission with no log line, so the model vanished from "loaded models" without a trace.
+        // REGRESSION: a child killed from outside the node (another checkout's stale reaper) must not be pruned at the
+        // next admission without a log line, or the model vanishes from "loaded models" without a trace.
         var launcher = new FakeProcessLauncher();
         var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
         await using var supervisor = SupervisorFactory.Create(launcher, logger: logger);

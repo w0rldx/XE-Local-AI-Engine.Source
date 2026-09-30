@@ -61,8 +61,8 @@ public static class WhisperModelCatalog
     public const string VadRepoId = "ggml-org/whisper-vad";
 
     /// <summary>
-    ///     The pinned Silero VAD file. Deliberately v6.2.0: a box may already carry v5.1.2 from an unrelated build, and
-    ///     a live round or a recorded fixture taken under a different VAD model is not comparable with one taken under
+    ///     The pinned Silero VAD file. Deliberately v6.2.0: a host may already carry v5.1.2 from an unrelated build, and
+    ///     a measurement or a recorded fixture taken under a different VAD model is not comparable with one taken under
     ///     this one.
     /// </summary>
     public const string VadFileName = "ggml-silero-v6.2.0.bin";
@@ -88,7 +88,7 @@ public static class WhisperModelCatalog
     /// <remarks>
     ///     simplified: only <c>base</c> — an upper bound measured with a second server resident — and
     ///     <c>large-v3-turbo-q8_0</c> are measured figures; the rest are interpolated from file size. Re-measure both in
-    ///     isolation during a live round and correct the table from that run, not from a second guess.
+    ///     isolation on real hardware and correct the table from that run, not from a second guess.
     /// </remarks>
     public static IReadOnlyList<WhisperModelEntry> Models { get; } =
     [

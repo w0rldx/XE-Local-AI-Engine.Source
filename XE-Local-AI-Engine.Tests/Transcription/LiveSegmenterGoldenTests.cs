@@ -129,7 +129,8 @@ public sealed class LiveSegmenterGoldenTests
                 MaxWindowSeconds = fixture.MaxWindowSeconds,
                 TailGuardMs = fixture.TailGuardMs,
                 TickMs = fixture.TickMs
-            });
+            },
+            new ManualTimeProvider());
 
         var commits = new List<LiveCommit>();
         var frameBytes = fixture.PushMs * WavPcm16.BytesPerMillisecond;

@@ -154,7 +154,7 @@ export type GraphWorkflowFailureClass = (typeof graphWorkflowFailureClasses)[num
 
 /**
  * Edge condition operators. Canonical spelling is PascalCase and that is what the editor WRITES, but the server parses
- * them case-insensitively, so a graph stored by an older client (or hand-authored, as the S2 live graph was) may carry
+ * them case-insensitively, so a graph stored by an older client (or a hand-authored one) may carry
  * `eq`. Reads go through `normalizeGraphWorkflowConditionOperator`.
  */
 export const graphWorkflowConditionOperators = ["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"] as const;
@@ -236,7 +236,7 @@ export function narrowGraphWorkflowNodeRunStatus(value: string | undefined | nul
 	return narrow(graphWorkflowNodeRunStatuses, value, "Pending");
 }
 
-/** A failure always has to render SOMETHING, so this narrows rather than dropping (round-2 ruling C5). */
+/** A failure always has to render SOMETHING, so this narrows rather than dropping. */
 export function narrowGraphWorkflowFailureClass(value: string | undefined | null): GraphWorkflowFailureClass {
 	return narrow(graphWorkflowFailureClasses, value, "NodeFailed");
 }
@@ -305,7 +305,7 @@ export const GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES = 65_536;
 export const GRAPH_WORKFLOW_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
- * The `maxAttempts` a new node starts on (F-1 ruling): 3 for the kinds that call something fallible, 1 for the
+ * The `maxAttempts` a new node starts on: 3 for the kinds that call something fallible, 1 for the
  * structural kinds and ChatInput, where a retry would re-evaluate the same inputs to the same answer.
  */
 export function graphWorkflowDefaultMaxAttempts(kind: GraphWorkflowNodeKind): number {

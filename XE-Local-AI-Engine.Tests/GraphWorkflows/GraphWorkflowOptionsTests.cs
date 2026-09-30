@@ -79,8 +79,7 @@ public sealed class GraphWorkflowOptionsTests
     ///     <para>
     ///         The switch is the one member the row cannot read that way: a section has to name at least one key to
     ///         bind at all, and naming <c>Enabled</c> is what makes the section exist. So the binder row pins that an
-    ///         explicit <see langword="false" /> still wins — S4 (ruling D9) moved the default, it did not remove the
-    ///         gate — and the shipped default is asserted off the constructor beside it.
+    ///         explicit <see langword="false" /> still wins — the default is ON, but the gate remains — and the shipped default is asserted off the constructor beside it.
     ///     </para>
     /// </summary>
     [Test]
@@ -98,7 +97,7 @@ public sealed class GraphWorkflowOptionsTests
             "the section must bind.");
 
         AssertEx.Equal("GraphWorkflows", GraphWorkflowOptions.Section);
-        AssertEx.True(new GraphWorkflowOptions().Enabled, "the feature ships ON since S4.");
+        AssertEx.True(new GraphWorkflowOptions().Enabled, "the feature ships ON.");
         AssertEx.False(options.Enabled, "an operator's explicit false still turns it off.");
         AssertEx.Equal(expected: 200, options.MaxNodesPerDefinition);
         AssertEx.Equal(expected: 200, options.MaxNodeRunsPerRun);

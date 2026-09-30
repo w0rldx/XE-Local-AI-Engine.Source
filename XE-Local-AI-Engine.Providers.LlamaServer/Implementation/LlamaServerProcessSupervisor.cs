@@ -473,7 +473,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     Starts the detached spawn for <paramref name="key" /> on its OWN lifetime — the shutdown token, never a
+    ///     Starts the detached spawn for <paramref name="launchTicket" /> on its OWN lifetime — the shutdown token, never a
     ///     caller's — so the load runs to completion whether or not a waiting caller cancels.
     /// </summary>
     /// <remarks>
@@ -772,7 +772,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _runtimeMutationGate.BeginOperation();
         try
         {
-            // EXCLUSIVE: a profiling spawn must be the only model loading on the box for its measurement to mean
+            // EXCLUSIVE: a profiling spawn must be the only model loading on the host for its measurement to mean
             // anything, so it excludes every ensure for its whole eviction + spawn window.
             await _runtimeMutationGate.EnterExclusiveAsync(ct).ConfigureAwait(false);
             var runtimeGateHeld = true;
@@ -1141,7 +1141,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ///     Atomically claims this process as a cap-admission eviction victim.
         /// </summary>
         /// <remarks>
-        ///     Sets the evicting mark (so <see cref="LlamaServerProcessSupervisor.TryAcquireInferenceLease" />'s
+        ///     Sets the evicting mark (so <see cref="LlamaServerProcessSupervisor.TryAcquireInferenceLease(string, ModelRole)" />'s
         ///     post-acquire re-check refuses any racing lease), then re-checks that no lease slipped in first. Returns
         ///     <see langword="false" />, releasing the claim, when a lease won the race, so a process is never torn down
         ///     under in-flight inference. <paramref name="claim" /> is the token to pass to

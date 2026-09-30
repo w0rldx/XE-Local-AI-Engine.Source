@@ -216,7 +216,7 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task GpuExplore_NonExpertOffloadAllocation_PlanCarriesNoCpuMoe()
     {
-        // Byte-identical default for S2: --cpu-moe follows the ADMITTED placement, so every dense model and every MoE
+        // Byte-identical default: --cpu-moe follows the ADMITTED placement, so every dense model and every MoE
         // model that fits resident keeps exactly today's argv.
         var policy = NewPolicy(new LlamaServerLaunchPolicyOptions());
 

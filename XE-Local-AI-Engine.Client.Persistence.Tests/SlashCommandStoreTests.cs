@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -93,6 +94,53 @@ public sealed class SlashCommandStoreTests : IDisposable
                 Prompt = "prompt"
             }));
         AssertEx.Equal(expected: 100, (await store.ListAsync()).Count);
+    }
+
+    [Test]
+    public async Task AddAndUpdateAsync_WithATakenName_ThrowNameConflictFromTheUniqueIndex()
+    {
+        var path = GetPath("name-conflict.sqlite");
+        using var key = new FixedKeyHolder();
+        Guid otherId;
+        await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var store = new SlashCommandStore(context, TimeProvider.System);
+            _ = await store.AddAsync(Input("review"));
+            otherId = (await store.AddAsync(Input("other"))).Id;
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
+        {
+            var added = await AssertEx.ThrowsAsync<SlashCommandNameConflictException>(() => new SlashCommandStore(context, TimeProvider.System).AddAsync(Input("review")));
+            AssertUniqueIndexCause(added);
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
+        {
+            var store = new SlashCommandStore(context, TimeProvider.System);
+            var renamed = await AssertEx.ThrowsAsync<SlashCommandNameConflictException>(() => store.UpdateAsync(otherId, Input("review")));
+            AssertUniqueIndexCause(renamed);
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
+        {
+            var names = (await new SlashCommandStore(context, TimeProvider.System).ListAsync()).Select(static command => command.Name).ToArray();
+            AssertEx.Equal("other,review", string.Join(',', names), "Neither rejected write may land.");
+        }
+
+        static SlashCommandInput Input(string name) =>
+            new()
+            {
+                Name = name,
+                Description = null,
+                ActionType = SlashCommandActionType.SendPrompt,
+                Prompt = "prompt"
+            };
+
+        static void AssertUniqueIndexCause(SlashCommandNameConflictException conflict) =>
+            AssertEx.True(conflict.InnerException is DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } },
+                "The conflict must carry the SQLite unique-constraint violation as its cause.");
     }
 
     [Test]

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///     caller supplying the <see cref="HardwareProfile" /> the shared profiler already produced.
 /// </summary>
 /// <remarks>
-///     That is what keeps the rule a table test rather than something only a live box can exercise. <b>It selects a ROW, not a tier:</b>
+///     That is what keeps the rule a table test rather than something only a live machine can exercise. <b>It selects a ROW, not a tier:</b>
 ///     three catalogue rows share <see cref="WhisperModelTier.LargeTurbo" />, so "the largest tier that fits" names no single row. The
 ///     walk keeps the LAST entry in <see cref="WhisperModelCatalog.Models" /> whose approximate footprint times
 ///     <see cref="HeadroomFactor" /> fits the budget, and <see cref="WhisperModelEntry.Tier" /> is consulted for exactly one thing, the
@@ -27,7 +27,7 @@ public static class WhisperModelRecommendation
     /// <param name="backend">
     ///     The backend the runtime will actually serve. On <see cref="WhisperBackend.Cpu" /> no row above
     ///     <see cref="WhisperModelTier.Small" /> is ever returned — a large model on CPU is slower than real time
-    ///     however much memory the box has.
+    ///     however much memory the host has.
     /// </param>
     public static WhisperModelEntry Recommend(HardwareProfile profile, WhisperBackend backend)
     {
@@ -46,7 +46,7 @@ public static class WhisperModelRecommendation
         WhisperModelEntry? best = null;
         foreach (var entry in models)
         {
-            // The CPU ceiling is a TIER check, not a budget check: a 64 GB box must not be handed a turbo row.
+            // The CPU ceiling is a TIER check, not a budget check: a 64 GB machine must not be handed a turbo row.
             if (isCpuBackend && entry.Tier > WhisperModelTier.Small)
             {
                 continue;

@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         A constructor scan cannot see this. A hosted service that takes an <see cref="IServiceScopeFactory" /> and
+///         A constructor scan cannot see this. A hosted service that takes an <see cref="Microsoft.Extensions.DependencyInjection.IServiceScopeFactory" /> and
 ///         calls <c>scope.ServiceProvider.GetRequiredService&lt;INodeRetentionStore&gt;()</c> has exactly the
 ///         dependency the rule forbids, expressed as a generic argument in a method body instead of a parameter — and
 ///         that is not a corner case: it is how three of the host's retention sweepers reached the persistence stores

@@ -83,7 +83,6 @@ internal sealed class IntegrationInvokeHarness
 
         Service = new IntegrationInvocationService(Triggers,
             _keyStore,
-            Substitute.For<IIntegrationApiKeyService>(),
             Executions,
             Buffer,
             Persistence,

@@ -83,7 +83,7 @@ function execution(overrides: Partial<IntegrationExecution> & { id: string }): I
 	};
 }
 
-// One row per state the cancel action has to distinguish, plus the two R3-2 edges that terminalise a run which never
+// One row per state the cancel action has to distinguish, plus the two edges that terminalise a run which never
 // started (Cancelled and Failed with no startedAtUtc). The order is deliberately NOT sorted by any visible column:
 // the table must render the response as it arrived.
 const executions: IntegrationExecution[] = [
@@ -408,7 +408,7 @@ describe("IntegrationExecutionsPage", () => {
 		});
 	});
 
-	// R1-11: the list poll is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to
+	// The list poll is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to
 	// fetch, so a fresh node with an empty or all-terminal window would never discover a run started elsewhere.
 	it("polls the executions list even when the window is empty, which is where gating it would break", () => {
 		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery([]));
@@ -489,7 +489,7 @@ describe("IntegrationExecutionsPage", () => {
 		expect(group.getAttribute("aria-label")).toBe("Filter executions by status");
 	});
 
-	// F5: the session dropdown is a SELECTOR, not a paged table. Reading it at the executions page size hid every
+	// The session dropdown is a SELECTOR, not a paged table. Reading it at the executions page size hid every
 	// session past the 50th from the filter, so a run could not be narrowed to it at all.
 	it("reads the whole session list for the filter selector, not one table page", () => {
 		renderPage();

@@ -474,3 +474,7 @@ XE-Local-AI-Engine.Client/training/
 /.opencode/
 /opencode.jsonc
 unsloth_compiled_cache/
+
+# Per-user agent/editor configuration (kept locally, never tracked)
+CLAUDE.md
+repomix.config.json

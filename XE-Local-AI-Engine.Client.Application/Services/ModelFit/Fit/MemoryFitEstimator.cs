@@ -197,9 +197,8 @@ public sealed class MemoryFitEstimator
     /// </summary>
     /// <remarks>
     ///     Exposed so a caller that presents or normalizes a fit figure uses the IDENTICAL number this estimator
-    ///     scored against. Re-deriving the expression inline is how the advisor's score came to disagree with its own
-    ///     fit verdicts: one of two inline copies was missed when the GPU budget moved from total to free VRAM. There
-    ///     is one definition and no way to drift.
+    ///     scored against: an inline copy of the expression lets the advisor's score disagree with its own fit
+    ///     verdicts. There is one definition and no way to drift.
     /// </remarks>
     public static long ResolveFitBudgetBytes(HardwareProfile profile)
     {

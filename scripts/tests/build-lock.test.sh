@@ -28,7 +28,7 @@ status() { "$STATUS" --lock-file "$LOCK" "$@"; }
 wait_for() {
   local what="$1"; shift
   # 60 s bound: a waiter has to start bash, resolve its worktree and prune before it registers, and
-  # the contract runner shares the box with whatever gate is holding the real lock.
+  # the contract runner shares the host with whatever gate is holding the real lock.
   for _ in $(seq 1 600); do "$@" && return 0; sleep 0.1; done
   fail "timed out waiting for: $what"
 }

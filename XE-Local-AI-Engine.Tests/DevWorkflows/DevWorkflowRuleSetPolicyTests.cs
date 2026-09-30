@@ -112,7 +112,7 @@ public sealed class DevWorkflowRuleSetPolicyTests
         AssertEx.False(objective.Contains("Deploy on Fridays.", StringComparison.Ordinal), "another project's rule set must not reach this agent.");
         AssertEx.False(objective.Contains("Ignore the tests.", StringComparison.Ordinal), "and neither must a disabled one.");
         AssertEx.True(objective.IndexOf("## Policy:", StringComparison.Ordinal) < objective.IndexOf("## What was asked", StringComparison.Ordinal),
-            "policy sits between the node's instructions and what was asked, per §5.6.1a.");
+            "policy sits between the node's instructions and what was asked.");
     }
 
     /// <summary>

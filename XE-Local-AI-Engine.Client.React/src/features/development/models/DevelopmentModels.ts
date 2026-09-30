@@ -25,7 +25,7 @@ export type DevelopmentRepositoryFromTemplate =
  * The code-owned command profiles. These ids are a backend contract — the server rejects anything else — so they are
  * literals here rather than something derived from a response.
  */
-export const developmentCommandProfileIds = {
+const developmentCommandProfileIds = {
 	dotnetSlnx: "dotnet-slnx",
 	dotnetCsproj: "dotnet-csproj",
 	genericGit: "generic-git",
@@ -148,7 +148,7 @@ export interface DevelopmentAttemptSubscriptionSnapshot {
 	readonly latest?: DevelopmentAttemptLiveUpdate | null;
 }
 
-export const activeAttemptStatuses = new Set(["Pending", "Running"]);
+const activeAttemptStatuses = new Set(["Pending", "Running"]);
 
 export function isActiveAttempt(attempt: DevelopmentAttempt): boolean {
 	return activeAttemptStatuses.has(attempt.status ?? "");

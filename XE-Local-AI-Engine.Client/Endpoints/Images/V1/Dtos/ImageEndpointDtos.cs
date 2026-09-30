@@ -340,7 +340,7 @@ public sealed class ImageModelCatalogPartResponse
 }
 
 /// <summary>
-///     One curated image model the operator can install with a single click, annotated for THIS box: whether it is
+///     One curated image model the operator can install with a single click, annotated for THIS machine: whether it is
 ///     already installed and how its weights compare to the measured memory budget.
 /// </summary>
 public sealed class ImageModelCatalogEntryResponse
@@ -376,7 +376,7 @@ public sealed class ImageModelCatalogEntryResponse
     public required bool IsInstalled { get; init; }
 
     /// <summary>
-    ///     Hardware verdict for this box: <c>Fits</c> / <c>Tight</c> / <c>WontFit</c> / <c>Unknown</c>. <c>Unknown</c>
+    ///     Hardware verdict for this machine: <c>Fits</c> / <c>Tight</c> / <c>WontFit</c> / <c>Unknown</c>. <c>Unknown</c>
     ///     is a real answer, not a soft yes — VRAM is unmeasured on every non-NVIDIA GPU, and claiming a fit there
     ///     would be a guess.
     /// </summary>

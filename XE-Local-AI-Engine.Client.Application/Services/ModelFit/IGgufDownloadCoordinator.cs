@@ -44,7 +44,7 @@ public interface IGgufDownloadCoordinator
     IReadOnlyList<GgufDownloadStatus> ListStatuses();
 }
 
-/// <summary>The accepted-download identity returned by <see cref="IGgufDownloadCoordinator.Start" />.</summary>
+/// <summary>The accepted-download identity returned by <see cref="IGgufDownloadCoordinator.StartAsync" />.</summary>
 public sealed class GgufDownloadTicket
 {
     /// <summary>Canonical <c>{repoId}[:{quant}]</c> model name the download is keyed by (track/cancel by this).</summary>

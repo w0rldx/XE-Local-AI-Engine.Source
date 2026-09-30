@@ -36,10 +36,10 @@ public sealed class LocalModelEndpointTests
     public async Task ListLocalModels_WhenAvailable_ReturnsModelsAndSelection()
     {
         await using var context = await CreateContextAsync("llama3:8b");
-        context.SettingsStore.Settings = new StoredNodeSettings
+        await context.SettingsStore.SaveAsync(new StoredNodeSettings
         {
             DefaultModelName = "llama3:8b"
-        };
+        });
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
@@ -166,7 +166,7 @@ public sealed class LocalModelEndpointTests
     public async Task SetModelKind_WhenModelNameIsUnsafe_ReturnsValidationProblem()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
         // %2E%2E decodes to ".." in the bound route value, which ModelNameValidator rejects as path traversal.
@@ -186,7 +186,7 @@ public sealed class LocalModelEndpointTests
     {
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<OllamaModelSummary>>>(_ => throw new InvalidOperationException("provider offline"));
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
@@ -250,7 +250,7 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
         cloudModelResolver.IsAzureFoundryDeploymentAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(true);
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
@@ -268,7 +268,7 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns<Task<OllamaModelDetails>>(_ => throw new HttpRequestException("Connection refused"));
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
@@ -282,7 +282,7 @@ public sealed class LocalModelEndpointTests
     public async Task SelectLocalModel_WhenValid_PersistsDefaultModelWithoutProviderSwitching()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        var settingsStore = new StubNodeSettingsStore(new StoredNodeSettings
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             MaxMessageRequestTimeoutSeconds = 120
         });
@@ -299,8 +299,8 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", selection.SelectedModelName);
-        AssertEx.Equal("llama3:8b", settingsStore.Settings.DefaultModelName);
-        AssertEx.Equal(expected: 120, settingsStore.Settings.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal("llama3:8b", settingsStore.Current.DefaultModelName);
+        AssertEx.Equal(expected: 120, settingsStore.Current.MaxMessageRequestTimeoutSeconds);
         await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
     }
 
@@ -313,7 +313,7 @@ public sealed class LocalModelEndpointTests
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("orca-mini:latest");
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             ggufModelStore,
             deletionCoordinator);
@@ -344,7 +344,7 @@ public sealed class LocalModelEndpointTests
         deletionCoordinator.CommitDeleteAsync("ghost:model", Arg.Any<CancellationToken>())
                            .Returns<Task<CommittedModelDeletion>>(_ => throw new KeyNotFoundException("The installed model was not found."));
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             ggufModelStore,
             deletionCoordinator);
@@ -371,7 +371,7 @@ public sealed class LocalModelEndpointTests
         deletionCoordinator.CommitDeleteAsync("base:model", Arg.Any<CancellationToken>())
                            .Returns<Task<CommittedModelDeletion>>(_ => throw new InstalledModelDependentAdaptersException());
         await using var context = CreateContext(Substitute.For<IOllamaModelService>(),
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             Substitute.For<IGgufModelStore>(),
             deletionCoordinator);
@@ -400,7 +400,7 @@ public sealed class LocalModelEndpointTests
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL");
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             ggufModelStore,
             deletionCoordinator);
@@ -426,7 +426,7 @@ public sealed class LocalModelEndpointTests
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("llama3:8b");
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             ggufModelStore,
             deletionCoordinator);
@@ -450,7 +450,7 @@ public sealed class LocalModelEndpointTests
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("unused");
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             LlamaCppProviderName,
             ggufModelStore,
             deletionCoordinator);
@@ -473,7 +473,7 @@ public sealed class LocalModelEndpointTests
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(OllamaProviderName);
         await using var context = CreateContext(modelService,
-            new StubNodeSettingsStore(new StoredNodeSettings()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
             OllamaProviderName,
             ggufModelStore,
             deletionCoordinator,
@@ -499,7 +499,7 @@ public sealed class LocalModelEndpointTests
                         MaxContextTokens = 4096,
                         Capabilities = []
                     });
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory,
@@ -537,7 +537,7 @@ public sealed class LocalModelEndpointTests
                               ModelContentFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                           }
                       ]);
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M/details");
@@ -562,7 +562,7 @@ public sealed class LocalModelEndpointTests
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                       .Returns(_ => []);
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/ghost-gguf:Q4_K_M/details");
@@ -592,7 +592,7 @@ public sealed class LocalModelEndpointTests
                               MaxContextTokens = 8192
                           }
                       ]);
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory,
@@ -681,7 +681,7 @@ public sealed class LocalModelEndpointTests
     }
 
     private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
-        StubNodeSettingsStore settingsStore,
+        FakeNodeSettingsStore settingsStore,
         ICloudModelResolver? cloudModelResolver = null)
     {
         return new LocalModelEndpointTestContext(modelService, settingsStore, cloudModelResolver);
@@ -690,7 +690,7 @@ public sealed class LocalModelEndpointTests
     // Overload for the GGUF (llamacpp) details branch: routes every model to the given provider and supplies the
     // installed-GGUF store the branch reads. Used to assert the no-Ollama GGUF path.
     private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
-        StubNodeSettingsStore settingsStore,
+        FakeNodeSettingsStore settingsStore,
         string providerName,
         IGgufModelStore ggufModelStore,
         ILocalModelDeletionCoordinator? deletionCoordinator = null,
@@ -749,38 +749,6 @@ public sealed class LocalModelEndpointTests
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
-    private sealed class StubNodeSettingsStore : INodeSettingsStore
-    {
-        public StubNodeSettingsStore(StoredNodeSettings settings)
-        {
-            Settings = settings;
-        }
-
-        public StoredNodeSettings Settings { get; set; }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(Settings);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return Settings;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            Settings = settings;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            Settings = mutate(Settings);
-            return Task.FromResult(Settings);
-        }
-    }
-
     private sealed class LocalModelEndpointTestContext : IAsyncDisposable
     {
         private readonly OllamaApiClient? _ollamaClient;
@@ -791,12 +759,12 @@ public sealed class LocalModelEndpointTests
             Server = server ?? throw new ArgumentNullException(nameof(server));
             _ollamaClient = new OllamaApiClient(Server.BaseAddress);
             _ownedModelService = new OllamaModelService(_ollamaClient);
-            SettingsStore = new StubNodeSettingsStore(new StoredNodeSettings());
+            SettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
             Factory = CreateFactory(_ownedModelService, SettingsStore);
         }
 
         public LocalModelEndpointTestContext(IOllamaModelService modelService,
-            StubNodeSettingsStore settingsStore,
+            FakeNodeSettingsStore settingsStore,
             ICloudModelResolver? cloudModelResolver = null)
         {
             SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -804,7 +772,7 @@ public sealed class LocalModelEndpointTests
         }
 
         public LocalModelEndpointTestContext(IOllamaModelService modelService,
-            StubNodeSettingsStore settingsStore,
+            FakeNodeSettingsStore settingsStore,
             string providerName,
             IGgufModelStore ggufModelStore,
             ILocalModelDeletionCoordinator? deletionCoordinator,
@@ -823,13 +791,13 @@ public sealed class LocalModelEndpointTests
         public LocalModelEndpointTestContext(IModelClassificationService classificationService)
         {
             ArgumentNullException.ThrowIfNull(classificationService);
-            SettingsStore = new StubNodeSettingsStore(new StoredNodeSettings());
+            SettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
             Factory = CreateFactory(classificationService, SettingsStore);
         }
 
         public TestServerWebAppFactory Factory { get; }
 
-        public StubNodeSettingsStore SettingsStore { get; }
+        public FakeNodeSettingsStore SettingsStore { get; }
 
         public FakeOllamaServer? Server { get; }
 
@@ -847,7 +815,7 @@ public sealed class LocalModelEndpointTests
         }
 
         private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
-            StubNodeSettingsStore settingsStore,
+            FakeNodeSettingsStore settingsStore,
             ICloudModelResolver? cloudModelResolver = null)
         {
             return new TestServerWebAppFactory
@@ -870,7 +838,7 @@ public sealed class LocalModelEndpointTests
         }
 
         private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
-            StubNodeSettingsStore settingsStore,
+            FakeNodeSettingsStore settingsStore,
             string providerName,
             IGgufModelStore ggufModelStore,
             ILocalModelDeletionCoordinator? deletionCoordinator,
@@ -900,7 +868,7 @@ public sealed class LocalModelEndpointTests
             };
         }
 
-        private static TestServerWebAppFactory CreateFactory(IModelClassificationService classificationService, StubNodeSettingsStore settingsStore)
+        private static TestServerWebAppFactory CreateFactory(IModelClassificationService classificationService, FakeNodeSettingsStore settingsStore)
         {
             return new TestServerWebAppFactory
             {

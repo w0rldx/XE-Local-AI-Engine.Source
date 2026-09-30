@@ -39,8 +39,8 @@ import {
 } from "@/features/invocations/models/InvocationMonitorModel";
 
 // Routed through the canonical helper rather than reading `error.message` directly: a request that never reached the
-// node arrives as a NetworkError whose message is deliberately empty, so the raw read rendered a BLANK alert where it
-// used to at least say something. apiErrorMessage answers that case with the localized "can't reach the node"
+// node arrives as a NetworkError whose message is deliberately empty, so the raw read would render a BLANK alert.
+// apiErrorMessage answers that case with the localized "can't reach the node"
 // sentence and keeps the server's own text for every other failure.
 function errorMessage(error: unknown, t: TFunction): string {
 	return apiErrorMessage(error, t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded."));

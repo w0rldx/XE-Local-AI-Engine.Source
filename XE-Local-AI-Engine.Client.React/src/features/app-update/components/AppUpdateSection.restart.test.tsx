@@ -19,10 +19,8 @@ const baseStatus = {
 const statusQuery = vi.hoisted(() => vi.fn());
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
-	// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 	getAppUpdateStatusQueryKey: vi.fn((options) => [{ _id: "getAppUpdateStatus", query: options?.query }]),
 	getAppUpdateStatusOptions: vi.fn((options) => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getAppUpdateStatus", query: options?.query }],
 		queryFn: statusQuery,
 	})),
@@ -98,7 +96,6 @@ describe("AppUpdateSection restart polling", () => {
 		expect(screen.getByText(/restarting/i)).toBeTruthy();
 		const statusKey = [
 			{
-				// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 				_id: "getAppUpdateStatus",
 				query: { refresh: null },
 			},

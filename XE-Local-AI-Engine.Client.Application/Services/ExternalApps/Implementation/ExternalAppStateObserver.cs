@@ -171,9 +171,8 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
             {
                 return;
             }
-#pragma warning disable CA1031 // A tick that failed must not end the observer; the next one asks the daemon again.
+            // A tick that failed must not end the observer; the next one asks the daemon again.
             catch (Exception exception)
-#pragma warning restore CA1031
             {
                 _logger.LogWarning(exception, "Observing external application containers failed; retrying on the next tick.");
             }
@@ -267,9 +266,8 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
             await _publisher.PublishAsync(row.Id, result.Sequence, ExternalAppInstanceEventKind.StoppedUnexpectedly, ExternalAppInstanceStatus.StoppedUnexpectedly,
                 CancellationToken.None);
         }
-#pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the observation it describes.
+        // A subscriber that cannot be reached must not fail the observation it describes.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogDebug(exception, "Publishing the stopped-unexpectedly event for external application instance {InstanceId} failed.", row.Id);
         }

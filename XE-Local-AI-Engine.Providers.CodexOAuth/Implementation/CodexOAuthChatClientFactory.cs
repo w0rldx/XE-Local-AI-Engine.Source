@@ -52,7 +52,8 @@ public sealed class CodexOAuthChatClientFactory : ICodexOAuthChatClientFactory, 
     /// <inheritdoc />
     public IChatClient Create(string? modelId = null)
     {
-        // Mirror AzureFoundryChatClientFactory's credential check: require a session before building.
+        // Mirror AzureFoundryChatClientFactory's credential check: require a session before building. Sync by contract:
+        // Create is synchronous, and the store reads one small local file.
         var tokens = _tokenStore.LoadAsync().GetAwaiter().GetResult();
         if (tokens is null)
         {

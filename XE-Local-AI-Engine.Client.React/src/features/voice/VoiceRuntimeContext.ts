@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-import type { VoiceRuntime } from "@/core/runtime/VoiceRuntime";
+import type { VoiceRuntime } from "@/features/voice/VoiceRuntime";
 
 export interface VoiceRuntimeContextValue {
 	readonly enabled: boolean;

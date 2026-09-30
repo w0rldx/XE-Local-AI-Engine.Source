@@ -112,9 +112,8 @@ export function DevelopmentContainerRuntimePanel({
 				) : null}
 
 				{/*
-				 * Read from the resolved provider, not asserted. This sentence used to say container execution was off
-				 * regardless — which was measured false with the container provider live and a container demonstrably
-				 * running, on a screen whose own banner said the runtime was ready.
+				 * Read from the resolved provider, not asserted: a fixed sentence would contradict a live container
+				 * provider and this screen's own runtime banner.
 				 */}
 				<Text size="xs" c="dimmed" data-testid="development-container-runtime-not-yet-in-use">
 					{containerProvider

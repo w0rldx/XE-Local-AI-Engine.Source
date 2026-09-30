@@ -30,7 +30,7 @@ public interface IModelFitRefreshService
 
 /// <summary>
 ///     Intent-level request for one model-fit refresh. It carries no command, argv, image name or provider: the local
-///     advisor runs box-aware GGUF recommendation entirely in-process, its only egress the Hugging Face discovery
+///     advisor runs hardware-aware GGUF recommendation entirely in-process, its only egress the Hugging Face discovery
 ///     call.
 /// </summary>
 /// <remarks>

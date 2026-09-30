@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The outcome of <see cref="ILlamaServerProcessSupervisor.TryAcquireInferenceLease" />, sampled atomically at
+///     The outcome of <see cref="ILlamaServerProcessSupervisor.TryAcquireInferenceLease(string, ModelRole)" />, sampled atomically at
 ///     acquire time so the caller can distinguish WHY no lease was granted.
 /// </summary>
 /// <remarks>

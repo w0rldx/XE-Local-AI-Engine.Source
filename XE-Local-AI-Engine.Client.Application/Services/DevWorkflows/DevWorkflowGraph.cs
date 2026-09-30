@@ -222,7 +222,7 @@ internal sealed class DevWorkflowGraph
     /// <summary>How far a node's write reaches.</summary>
     /// <remarks>
     ///     The one derived bit separating work done inside the node's own sandbox from work done to the operator's
-    ///     repository (ruling D8): a <c>DevTask</c> runs against a worktree under this node's data root and its patch
+    ///     repository: a <c>DevTask</c> runs against a worktree under this node's data root and its patch
     ///     reaches a real repository only through an apply node, while an apply node — and an Agent that declares a
     ///     write — reaches the repository itself.
     /// </remarks>
@@ -426,7 +426,7 @@ internal sealed class DevWorkflowGraph
     /// <remarks>
     ///     Refused on a node that names no <c>retryTarget</c>, the way <see cref="ParseToolMode" /> refuses a mode on
     ///     a node that runs none: a field that does nothing where it is written is a definition saying something the
-    ///     runtime will not do. Absent means NO per-loop cap (ruling D9) — a parse-time default would silently tighten
+    ///     runtime will not do. Absent means NO per-loop cap — a parse-time default would silently tighten
     ///     routing on every stored definition, and cap human retries, which raise the same counter, on nodes without one.
     /// </remarks>
     private static int? ParseMaxLoopIterations(JsonElement element, string nodeKey, string? retryTarget)

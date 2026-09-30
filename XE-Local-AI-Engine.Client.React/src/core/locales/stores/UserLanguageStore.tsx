@@ -12,7 +12,9 @@ const getInitialLanguage = () => {
 
 export const useUserLanguageStore = create<HeaderBarTitleState>()((set) => ({
 	selectedApplicationLanguage: getInitialLanguage(),
-	changeLanguage: (language: string): void => {
-		set(() => ({ selectedApplicationLanguage: language }));
+	actions: {
+		changeLanguage: (language: string): void => {
+			set(() => ({ selectedApplicationLanguage: language }));
+		},
 	},
 }));

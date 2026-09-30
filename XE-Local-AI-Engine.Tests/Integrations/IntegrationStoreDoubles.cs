@@ -111,8 +111,9 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
 
         if (_rows.Any(row => string.Equals(row.Name, command.Name, StringComparison.Ordinal)))
         {
-            // The real schema answers a duplicate name with a unique-index violation, which surfaces as this type.
-            throw new DbUpdateException($"Duplicate trigger name '{command.Name}'.");
+            // The real store translates the unique-index violation on the name into this type.
+            throw new IntegrationTriggerNameConflictException($"Another trigger already uses the name '{command.Name}'.",
+                new DbUpdateException($"Duplicate trigger name '{command.Name}'."));
         }
 
         var snapshot = new IntegrationTriggerSnapshot
@@ -217,7 +218,7 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         return snapshot;
     }
 
-    /// <summary>Repoints a seeded trigger's session policy, which is what decides whether R4-9(a) judges its agent.</summary>
+    /// <summary>Repoints a seeded trigger's session policy, which is what decides whether ADR 0008 R4-9(a) judges its agent.</summary>
     public void SetSessionPolicy(Guid triggerId, IntegrationSessionPolicy sessionPolicy)
     {
         var index = _rows.FindIndex(row => row.Id == triggerId);
@@ -310,10 +311,11 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             {
                 FailNextAcceptWithUniqueViolation = false;
 
-                // The real AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
-                // surfaces as SqliteException with SQLITE_CONSTRAINT — never as the EF-only DbUpdateException.
-                throw new SqliteException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id",
-                    errorCode: 19);
+                // The real AcceptAsync is raw ADO, so the unique index surfaces as SqliteException with SQLITE_CONSTRAINT,
+                // which the store translates into this type.
+                throw new IntegrationRequestConflictException("A concurrent accept of the same request committed first.",
+                    new SqliteException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id",
+                        errorCode: 19));
             }
 
             var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted
@@ -332,7 +334,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             else
             {
                 // A continuation. The real store's session bump is scoped to the caller's own ACTIVE session and
-                // abandons the transaction when it matches no row, which is the race-free backstop behind S3's gate.
+                // abandons the transaction when it matches no row, which is the race-free backstop behind the session gate.
                 Sessions?.BumpForAccept(command.SessionId, command.PrincipalId, command.ReceivedAtUtc);
             }
 

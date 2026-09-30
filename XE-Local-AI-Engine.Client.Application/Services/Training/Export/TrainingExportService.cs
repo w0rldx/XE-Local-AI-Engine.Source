@@ -142,7 +142,7 @@ public sealed class TrainingExportService : ITrainingExportService
             return refusal;
         }
 
-        // Acquired in the queue's order and BEFORE anything is written, so a busy box costs a refused request rather
+        // Acquired in the queue's order and BEFORE anything is written, so a busy machine costs a refused request rather
         // than a half-written staged file.
         var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export);
         if (activity is null)
@@ -434,7 +434,7 @@ public sealed class TrainingExportService : ITrainingExportService
     /// <remarks>
     ///     Contained by construction: only a path inside the run's OWN staged directory is touched, and never the
     ///     directory itself — an artifact row is operator-facing state, and a path that somehow escaped must cost a
-    ///     log line rather than a recursive delete somewhere else on the box. A failure is logged for the same
+    ///     log line rather than a recursive delete somewhere else on the host. A failure is logged for the same
     ///     reason: the row is gone either way, so leaked bytes must at least be visible.
     /// </remarks>
     private bool DeleteStagedBytes(TrainingArtifactRecord artifact)

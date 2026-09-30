@@ -258,7 +258,7 @@ export function NewTranscriptionSessionDialog({
 						value={sourceKind}
 						onChange={(value) => setSourceKind(value as TranscriptionSourceKind)}
 						// The fifth option is absent, never disabled: per-application capture exists only on a recent
-						// Windows build, and an option that can never be chosen on this box explains nothing.
+						// Windows build, and an option that can never be chosen on this machine explains nothing.
 						data={[...transcriptionDialogSourceKinds, ...(processCaptureSupported ? (["ApplicationProcess"] as const) : [])].map(
 							(value) => ({
 								value,

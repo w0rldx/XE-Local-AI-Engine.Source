@@ -246,7 +246,7 @@ public sealed class IntegrationPriorOutputsTests
     [Test]
     public async Task EightPriorExecutionsWithOneOutputEach_ReplayAllEight()
     {
-        // R4-9(b) promises the last 8. The CURRENT execution occupies one row of the page, so a page of exactly
+        // ADR 0008 R4-9(b) promises the last 8. The CURRENT execution occupies one row of the page, so a page of exactly
         // MaxPayloads returns seven prior ones and the eighth is lost.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);

@@ -116,7 +116,7 @@ public sealed class LlamaServerPortAllocatorTests
     }
 
     /// <summary>
-    ///     Finds the start of a contiguous block of loopback ports nothing else on this box holds, so the allocator's own
+    ///     Finds the start of a contiguous block of loopback ports nothing else on the host holds, so the allocator's own
     ///     bind probe is exercised against a range whose occupancy the test controls.
     /// </summary>
     private static int FindFreeRangeStart(int count)

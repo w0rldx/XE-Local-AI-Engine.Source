@@ -495,7 +495,7 @@ public sealed class AgentDefinitionResolverTests
     }
 
     /// <summary>
-    ///     F-44: inside a work-session step, an agent whose allowed names omit the four state tools still gets them — a
+    ///     Inside a work-session step, an agent whose allowed names omit the four state tools still gets them — a
     ///     custom agent driving a session, or bound to a development-workflow node, otherwise runs tool-less to its step cap.
     /// </summary>
     [Test]

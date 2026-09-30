@@ -848,7 +848,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     <see cref="SandboxCreateRequest.MaxJailDiskBytes" />.
     /// </summary>
     /// <remarks>
-    ///     TIGHTEN-ONLY, deliberately: the node-wide value is the operator's ceiling on what any sandbox on this box
+    ///     TIGHTEN-ONLY, deliberately: the node-wide value is the operator's ceiling on what any sandbox on this machine
     ///     may write, so a create request may ask for less than it but never for more. The same asymmetry keeps a
     ///     request from re-enabling a watchdog the operator disabled with a non-positive node-wide value — a bigger
     ///     number never wins, so a disabled ceiling stays disabled.

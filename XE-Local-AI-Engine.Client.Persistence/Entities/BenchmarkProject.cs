@@ -28,7 +28,7 @@ internal sealed record class BenchmarkProject
 
     /// <summary>
     ///     How long one run's generation may take before the node cancels it, or <see langword="null" /> for the
-    ///     frozen default (<see cref="Services.Benchmarks.BenchmarkFrozenPolicies" />). Plaintext, not sensitive.
+    ///     frozen default (<c>BenchmarkFrozenPolicies</c>). Plaintext, not sensitive.
     /// </summary>
     public int? InvocationTimeoutSeconds { get; set; }
 

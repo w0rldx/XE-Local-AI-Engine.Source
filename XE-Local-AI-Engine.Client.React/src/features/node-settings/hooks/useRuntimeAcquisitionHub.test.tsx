@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeAcquisitionStatus } from "@/features/node-settings/queries/useLocalRuntime";
 
 const { acquisitionQueryKey, hubMock, hydrateMock } = vi.hoisted(() => ({
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	acquisitionQueryKey: [{ _id: "getRuntimeAcquisitionStatus" }] as const,
 	hubMock: {
 		handler: undefined as ((payload: unknown) => void) | undefined,

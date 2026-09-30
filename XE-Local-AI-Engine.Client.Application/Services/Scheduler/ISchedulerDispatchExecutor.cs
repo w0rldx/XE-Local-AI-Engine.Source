@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 /// <remarks>
 ///     It owns the guard rails — missing, disabled or soft-deleted definition, unknown template — so the thin
-///     <see cref="IJob" /> wrappers stay free of business logic. Implementations reject an unsafe fire by logging a
+///     <see cref="Quartz.IJob" /> wrappers stay free of business logic. Implementations reject an unsafe fire by logging a
 ///     sanitized skip and returning, never by throwing for an expected guard miss, but let
 ///     <see cref="OperationCanceledException" /> from the handler propagate.
 /// </remarks>

@@ -286,7 +286,11 @@ public sealed class GraphWorkflowRestartTests
     [NotInParallel(RecoveryKey)]
     public async Task ADisabledNode_OpensNoScopeAndReadsNoRowAtStartup()
     {
-        await NewReconciler(enabled: false).StartAsync(CancellationToken.None);
+        var scopes = new ThrowingServiceScopeFactory();
+
+        await NewReconciler(enabled: false, scopes).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, scopes.ScopeRequests, "a disabled node opens no scope, so no store is resolved and no row is read.");
     }
 
     /// <summary>
@@ -359,8 +363,8 @@ public sealed class GraphWorkflowRestartTests
         ]));
     }
 
-    private static GraphWorkflowStartupReconciler NewReconciler(bool enabled) =>
-        new(new ThrowingServiceScopeFactory(),
+    private static GraphWorkflowStartupReconciler NewReconciler(bool enabled, IServiceScopeFactory? scopes = null) =>
+        new(scopes ?? new ThrowingServiceScopeFactory(),
             Options.Create(new GraphWorkflowOptions
             {
                 Enabled = enabled
@@ -531,6 +535,11 @@ internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
 /// <summary>A scope factory that fails the test if anything asks it for a scope. The disabled node's guard is that nothing does.</summary>
 internal sealed class ThrowingServiceScopeFactory : IServiceScopeFactory
 {
-    public IServiceScope CreateScope() =>
+    public int ScopeRequests { get; private set; }
+
+    public IServiceScope CreateScope()
+    {
+        ScopeRequests++;
         throw new AssertionException("Startup recovery opened a service scope on a node whose feature is disabled.");
+    }
 }

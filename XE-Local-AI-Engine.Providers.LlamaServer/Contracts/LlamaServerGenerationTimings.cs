@@ -83,7 +83,7 @@ public sealed class LlamaServerGenerationTimings
             _ => null
         };
 
-#pragma warning disable SCME0001
+#pragma warning disable SCME0001 // The readers take the experimental JsonPatch the timings live in.
     /// <summary>Reads one integer timing field, or <see langword="null" /> when the chunk does not carry it.</summary>
     /// <remarks>
     ///     Catch-based on purpose and NOT interchangeable with the obvious alternative: verified against the pinned

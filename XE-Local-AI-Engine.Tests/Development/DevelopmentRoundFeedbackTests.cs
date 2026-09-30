@@ -223,9 +223,9 @@ public sealed class DevelopmentRoundFeedbackTests
     }
 
     /// <summary>
-    ///     Live 2026-09-04: the reviewer judged a coder round against requirements the operator had already
-    ///     amended, because the operator's Retry reason reached the coder alone. It rejected work that passed
-    ///     validation 4 of 4 and demanded an edit the test-write policy forbids, and the loop could not be broken.
+    ///     The operator's Retry reason reaches the REVIEWER too. A reviewer that judges a coder round against
+    ///     requirements the operator already amended rejects work that passed validation and demands an edit the
+    ///     test-write policy forbids, and the loop cannot be broken.
     /// </summary>
     [Test]
     public void TheReviewerIsToldWhatTheOperatorAmendedTheRequirementsWith()
@@ -272,9 +272,9 @@ public sealed class DevelopmentRoundFeedbackTests
     }
 
     /// <summary>
-    ///     The coder's side of that same 2026-09-04 live round. Retry 3 said "this outranks the reviewer" in as many words and the coder still did
-    ///     what the reviewer had asked, because the operator's sentence arrived under "Feedback from the previous
-    ///     round" — a heading that reads as one round's note next to the task's own requirements.
+    ///     The coder's side of the same rule. An operator sentence that arrives under "Feedback from the previous round"
+    ///     reads as one round's note next to the task's own requirements, so the coder follows the reviewer even when
+    ///     the operator said in as many words that they outrank it.
     /// </summary>
     [Test]
     public void TheCoderIsToldTheOperatorOutranksTheReviewerAndTheRequirements()
@@ -323,7 +323,7 @@ public sealed class DevelopmentRoundFeedbackTests
             "an ordinary rework round has a reviewer behind it, not a person, and must not be told a person outranks one.");
     }
 
-    /// <summary>What the operator said on the live round this fix comes from, shortened to its operative half.</summary>
+    /// <summary>A real operator Retry reason, shortened to its operative half.</summary>
     private const string OperatorSaid =
         "An operator retried the 'implement' step of the workflow driving this task, and said: tests/Calc.Tests/CalculatorTests.cs is "
         + "base-committed and the test-write policy forbids editing it, so keep the Square test in tests/Calc.Tests/SquareTests.cs.";

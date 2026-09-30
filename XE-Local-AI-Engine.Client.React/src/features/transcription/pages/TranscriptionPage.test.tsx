@@ -132,7 +132,7 @@ describe("TranscriptionPage", () => {
 		cleanup();
 	});
 
-	// With R25a there is no defaultValue to fall back on, so a missing bundle entry would surface here as the raw key.
+	// This feature passes no defaultValue to fall back on, so a missing bundle entry would surface here as the raw key.
 	it("introduces itself with the English page header, not a translation key", async () => {
 		server.use(jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }), ...runtimeRoutes());
 		renderPage();

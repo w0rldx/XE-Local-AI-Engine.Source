@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         This repository has already paid for that class of bug once (<c>docs/agent-knowledge.md</c> §2).
 ///     </para>
 ///     <para>
-///         The heartbeat is a file the child appends to, polled through <see cref="AssertEx.EventuallyAsync" /> — no
+///         The heartbeat is a file the child appends to, polled through <see cref="AssertEx.EventuallyAsync(Func{bool}, TimeSpan, string)" /> — no
 ///         sleep decides anything. Every test kills whatever it started from a <c>finally</c>, and the class disposes
 ///         the provider, so a failure cannot leave a spinner behind.
 ///     </para>

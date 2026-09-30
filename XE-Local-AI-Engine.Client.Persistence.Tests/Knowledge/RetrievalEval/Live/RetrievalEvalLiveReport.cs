@@ -200,7 +200,7 @@ internal sealed record LiveAbstainThreshold
     }
 }
 
-/// <summary>One measured configuration (a row of the plan's §4.3 table).</summary>
+/// <summary>One measured configuration of the eval.</summary>
 internal sealed record LiveConfigResult
 {
     public required string Id { get; init; }

@@ -33,7 +33,7 @@ public sealed class NodeTokenServiceTests
                     AccessTokenMinutes = 15
                 }
             }),
-            new FixedTimeProvider(issuedAt));
+            new ManualTimeProvider(issuedAt));
 
         var user = new NodeUser
         {
@@ -155,21 +155,6 @@ public sealed class NodeTokenServiceTests
 
         public void Dispose()
         {
-        }
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedTimeProvider(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
         }
     }
 }

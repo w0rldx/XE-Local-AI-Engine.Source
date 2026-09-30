@@ -72,8 +72,8 @@ describe("DialogShell", () => {
 		expect(target.getAttribute("role")).toBe("dialog");
 	});
 
-	// REGRESSION (S4, `3236991c8`): the benchmark re-judge confirmation rendered UNDER the editor that opened it, and
-	// the fix was a raw `zIndex={400}` at the call site — a trap every future stacked dialog would have to know about.
+	// Regression: a stacked confirmation (the benchmark re-judge one) must render ABOVE the editor that opened it
+	// without a raw `zIndex` at the call site — a trap every future stacked dialog would have to know about.
 	it("raises a stacked dialog above the default modal layer only when it opts in", () => {
 		const { container } = renderWithProviders(
 			<>

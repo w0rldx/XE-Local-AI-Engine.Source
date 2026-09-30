@@ -100,9 +100,7 @@ public sealed class AgentSkillServiceTests
         var store = CreateEmptyStore();
         var service = new AgentSkillService(store);
 
-#pragma warning disable MAAI001 // Scoped: the shipped validator is the authority under test.
         var mafAccepts = AgentSkillFrontmatter.ValidateName(candidate, out _);
-#pragma warning restore MAAI001
 
         var serviceAccepted = true;
         try
@@ -126,9 +124,7 @@ public sealed class AgentSkillServiceTests
         // sub-agent spawn path both perform. Anything else is the same defect wearing a different hat.
         if (serviceAccepted)
         {
-#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
             _ = new AgentInlineSkill(candidate, "desc", "body");
-#pragma warning restore MAAI001
         }
     }
 
@@ -204,12 +200,10 @@ public sealed class AgentSkillServiceTests
     [Test]
     public void AgentSkillService_CompatibilityCap_DoesNotExceedWhatMafAccepts()
     {
-#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         AssertEx.True(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 500), out _),
             "A compatibility value at our cap must still satisfy MAF's own validator.");
         AssertEx.False(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 501), out _),
             "One character past our cap must be where MAF's own limit starts; if this passes, MAF's limit moved and ours should follow.");
-#pragma warning restore MAAI001
     }
 
     [Test]

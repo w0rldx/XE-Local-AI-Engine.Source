@@ -51,9 +51,6 @@ const SENSITIVE_QUERY_PARAMS: ReadonlySet<string> = new Set([
 	"secret",
 ]);
 
-/** URL fragments that mark a request body as PII-bearing (chat/message/agent surfaces). */
-const SENSITIVE_BODY_URL_FRAGMENTS: readonly string[] = ["chat", "message", "agent"];
-
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
 function isSensitiveKey(key: string): boolean {
@@ -97,12 +94,6 @@ export function redactUrl(url: string): string {
 		// Fall back to the Bearer-string scrub if the URL is unparseable.
 		return redactString(url);
 	}
-}
-
-/** True when a URL's request/response body must be dropped (chat/message/agent endpoints). */
-export function isSensitiveBodyUrl(url: string): boolean {
-	const lower = url.toLowerCase();
-	return SENSITIVE_BODY_URL_FRAGMENTS.some((fragment) => lower.includes(fragment));
 }
 
 /** Deep-redact an arbitrary value: mask sensitive keys, scrub Bearer strings, guard cycles. */

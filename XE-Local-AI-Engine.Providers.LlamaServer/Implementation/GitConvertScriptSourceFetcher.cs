@@ -69,7 +69,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
     }
 
     // Mirrors the source build's git hardening: no system/global config, no credential helper, no interactive or
-    // askpass prompt, and an isolated HOME so nothing on the box can redirect the fetch.
+    // askpass prompt, and an isolated HOME so nothing on the host can redirect the fetch.
     private static Dictionary<string, string> BuildScrubbedGitEnvironment(string isolatedHome)
     {
         var scrubbed = new Dictionary<string, string>(StringComparer.Ordinal);

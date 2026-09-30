@@ -266,9 +266,8 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
 #pragma warning restore MA0045
                 _detach?.Dispose();
             }
-#pragma warning disable CA1031 // A producer that throws during EndAsync would strand the flush; nothing may escape.
+            // A producer that throws during EndAsync would strand the flush; nothing may escape.
             catch (Exception exception)
-#pragma warning restore CA1031
             {
                 _owner._logger.LogWarning(exception, "Stopping per-application capture for transcription session {SessionId} was not clean.", _sessionId);
             }
@@ -292,9 +291,8 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             {
                 // The stop signal, not a failure.
             }
-#pragma warning disable CA1031 // The loop is detached: an escaping exception would be an unobserved task fault.
+            // The loop is detached: an escaping exception would be an unobserved task fault.
             catch (Exception exception)
-#pragma warning restore CA1031
             {
                 // The target process exited, or CoreAudio failed. The registry must tell the browser capture ended.
                 _owner._logger.LogError(exception, "Per-application capture for transcription session {SessionId} ended unexpectedly.", _sessionId);

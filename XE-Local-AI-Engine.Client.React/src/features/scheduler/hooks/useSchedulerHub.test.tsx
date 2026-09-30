@@ -176,7 +176,6 @@ describe("useSchedulerHub", () => {
 	it("marks a seeded jobs query stale via the partial `_id` match (the invalidation bridge end-to-end)", () => {
 		// A real query keyed off the FULL generated options shape `[{ _id, ..., query }]` — the partial `_id`
 		// invalidation must still reach it.
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		const fullJobsKey = [{ _id: "listScheduledJobs", query: { includeDeleted: false } }];
 		const queryClient = renderHubWithSeededQuery(fullJobsKey);
 
@@ -186,7 +185,6 @@ describe("useSchedulerHub", () => {
 	});
 
 	it("marks a seeded run query stale via the partial `_id` match (the invalidation bridge end-to-end)", () => {
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		const fullRunsKey = [{ _id: "listScheduledJobRuns", query: { status: "Running" } }];
 		const queryClient = renderHubWithSeededQuery(fullRunsKey);
 

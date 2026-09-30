@@ -678,7 +678,7 @@ public sealed class IntegrationSseRoutesHostFixture : IAsyncInitializer, IAsyncD
 
 /// <summary>
 ///     A host whose stream cap is one, so the open-stream gate is reachable at the route. The cap is
-///     <c>MaxTrackedExecutions</c> by design (R3-11 adds no twelfth knob), which is why lowering it needs its own host
+///     <c>MaxTrackedExecutions</c> by design (ADR 0008 R3-11 adds no twelfth knob), which is why lowering it needs its own host
 ///     rather than a per-test knob.
 /// </summary>
 public sealed class IntegrationOneStreamHostFixture : IAsyncInitializer, IAsyncDisposable

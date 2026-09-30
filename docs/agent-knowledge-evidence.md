@@ -11,7 +11,7 @@ Use this file when:
 
 ## Provenance and scope
 
-The original knowledge base grew from roughly 135 session-memory notes (June–July 2026), a partial review of about 30 recent commits on 2026-08-01, an August-note pass on 2026-08-07, and a freshness pass on 2026-08-17. It was never a systematic history review. Absence from either document is not evidence that no invariant exists.
+The original knowledge base grew from roughly 135 session-memory notes (June–July 2026), a partial review of about 30 recent commits on 2026-08-01, an August-note pass on 2026-08-07, and a freshness pass on 2026-08-17. It was never a systematic history review. Entries summarise local work rounds whose raw logs and reports were not retained; the summary here is the surviving record. Absence from either document is not evidence that no invariant exists.
 
 The 2026-08-25 compaction retained the actionable rule in the main file and moved these categories here:
 
@@ -56,7 +56,7 @@ The smoke's refuse-to-pass logic is tested without a GPU by `scripts/tests/gpu-s
 
 The Tests module is unusually sensitive to how coverage is parallelized:
 
-| Shape | Approximate result on the measured box |
+| Shape | Approximate result on the measured machine |
 |---|---:|
 | one process, eight-wide | 11:00 wall, ~10 GB |
 | `JOBS=4` batches | 6:02 wall |
@@ -105,7 +105,7 @@ Two assembly MVIDs in the filename prevent reuse after migrations or identity se
 
 ### Transcription framework-temp flake (2026-09-13/14)
 
-`TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp` failed 2 of 4 full local runs of the module through `scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, costing 33 seconds in each failing run — the class's own 30-second budget expiring plus host overhead. Two causes were addressed in one commit: the fixed `ASPNETCORE_TEMP` directory was made per-process, and the budget moved to `TestBudgets.Contended`. A negative control on 2026-09-14 (the shared path restored, the two spill-producing tests looped against each other in two processes for 14 rounds, plus a full-namespace pass with four concurrent `LocalChat` sessions) stayed green throughout, so the cross-process hazard is established by inspection rather than by reproduction and CPU starvation under `JOBS=10` remains the surviving suspect for the observed failures. Trace and hypotheses: `Plans/test-perf-2026-09-13/research/08-transcription-flake-trace.md`.
+`TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp` failed 2 of 4 full local runs of the module through `scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, costing 33 seconds in each failing run — the class's own 30-second budget expiring plus host overhead. Two causes were addressed in one commit: the fixed `ASPNETCORE_TEMP` directory was made per-process, and the budget moved to `TestBudgets.Contended`. A negative control on 2026-09-14 (the shared path restored, the two spill-producing tests looped against each other in two processes for 14 rounds, plus a full-namespace pass with four concurrent `LocalChat` sessions) stayed green throughout, so the cross-process hazard is established by inspection rather than by reproduction and CPU starvation under `JOBS=10` remains the surviving suspect for the observed failures.
 
 ### Timing-test and build-daemon incidents
 
@@ -195,7 +195,6 @@ lock, `MSBUILDDISABLENODEREUSE=1` and `NUGET_PACKAGES` exported, in the same she
 `0 Error(s)` twice after a shutdown. The cause was not isolated: a stale build server is the suspect because the
 shutdown is what changed, but the red was not reproduced, no second variable was held, and the failing log was
 overwritten before it was kept. It may equally have been analyzer nondeterminism. One round was discarded.
-Source: `Plans/static-quality-enforcement-2026-09-15/progress/S6i-report.md` §8 and §10.
 
 ### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
 
@@ -209,20 +208,19 @@ each build naming a `/tmp/xe-…/nuget` directory nothing had asked for. The wri
 The static-quality S3 migration hit both blind spots: a "no callers outside the plan" census was disproved by the
 first Release build (`SourceBuildRecoveryTests`, `DevelopmentWorkspaceAndCoderTests`, `LlamaGrammarToolOffer`,
 `EmbeddingToolRelevanceSelectorTests`). Two test files carry a literal NUL byte inside a string literal, which plain GNU
-grep classifies as binary. Source: `Plans/static-quality-enforcement-2026-09-15/progress/S3-report.md`.
+grep classifies as binary.
 
 ### `.Result` false-positives are why MA0042/MA0045 replace a `BannedSymbols` line
 
 A "23 known sites" sync-over-async census was mistaken for the population; the Release measurement found 26 MA0042 and
 150 MA0045 sites. A text ban would also red dozens of DTO properties named `Result` and four zero-timeout `Wait(0)`
-admission polls. Source: `Plans/static-quality-enforcement-2026-09-15/S4-blocking-and-cancellation-rules-plan.md`
-§3a/§4 and `progress/S4-report.md`.
+admission polls.
 
 ### the `Architecture` guards are a NAMESPACE, so a class-name treenode filter never reaches them
 
 In the 2026-09-23 transcription-open-sessions BE-1 and BE-2 runs, a scoped run reported as "including the
 Architecture namespace" used a class-name pattern and never executed the shrink-only comment-budget guard; only the
-namespace filter ran the guards. Source: `Plans/transcription-open-sessions-2026-09-23/progress/`.
+namespace filter ran the guards.
 
 ### Verify against the whole module, not just the class you touched
 
@@ -233,7 +231,7 @@ Every host-based test failed at startup while narrow changed-class runs stayed g
 
 Paid for in static-quality S6b (2026-09-16): a one-test `System.Net.Sockets` red in `XE_Local_AI_Engine.Tests.Hosting`
 kept its stack frame but not the `SocketError` value or the port, because the message line was line 4 of a `head -3`.
-A second gate run recovers nothing. Source: `Plans/static-quality-enforcement-2026-09-15/progress/S6b-report.md` §6a.
+A second gate run recovers nothing.
 
 ### Re-measure a TRX set with the script, never quote a class or namespace count from a document
 
@@ -451,8 +449,7 @@ Operator ruling 2026-09-05 on explicit review bases.
 
 ### a path-scoped `git commit -- <paths>` silently skips an UNTRACKED file among those paths
 
-Tester round 3 (2026-09-25) paid two fix-up commits for workstream commits that lacked a new test or source file
-(`Plans/tester-round3-2026-09-25/progress/REPORT.md`, a local, git-ignored plan folder).
+Tester round 3 (2026-09-25) paid two fix-up commits for workstream commits that lacked a new test or source file.
 
 ## 2. Local runtime evidence
 
@@ -600,8 +597,8 @@ S5 live step 36 failed then passed across `e8c5e64eb`: an image running as its o
 an `XE_`-named probe was refused and the catalog path swallowed the validation error into a cache fallback, caught only by
 asserting off the engine. The `\A…\z` rule came from review of the S1 catalog validator (five regexes); the
 `image@sha256:<64 hex>\n` case passed `^…$`. The raw-text architecture guard is why `ExternalAppStateObserver` is an
-`IHostedService` with its own loop rather than a `BackgroundService`, whose entry point carries a banned name. S5's
-evidence commit was never made because `Plans/` is ignored; `docs/roadmaps/external-apps-status.md` replaced it.
+`IHostedService` with its own loop rather than a `BackgroundService`, whose entry point carries a banned name. The raw S5
+evidence was not retained; `docs/roadmaps/external-apps-status.md` records the verified state.
 
 ### llama.cpp binaries
 
@@ -674,7 +671,7 @@ on a 27B Q4 model on a high-end GPU; longer on weaker hardware.
 ### Measure free disk through `IFreeSpaceProbe`, never on `Path.GetPathRoot` of a path
 
 Six hand-written free-disk copies existed before they were folded into the one probe; the root-based ones were invisible
-on a single-volume dev box.
+on a single-volume development machine.
 
 ## 3. Model, inference, retrieval, and training evidence
 

@@ -20,16 +20,3 @@ export function diagnosticsSignalrHeaders(url: string): Record<string, string> {
 	});
 	return { traceparent: header };
 }
-
-/** Record a SignalR hub error breadcrumb (e.g. from `onclose`). */
-export function recordSignalrError(url: string, status?: number): void {
-	push({
-		category: "network",
-		entry: toNetworkEntry({
-			transport: "signalr",
-			method: "HUB",
-			url,
-			...(status === undefined ? {} : { status }),
-		}),
-	});
-}

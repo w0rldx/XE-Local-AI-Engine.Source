@@ -541,7 +541,7 @@ public sealed class SupervisorSpawnArgsTests
         // llama.cpp defaults n_ubatch to 512, so the real usable input was 512 tokens, NOT the -c we ask for (2048) and
         // not the window the model advertises. The knowledge-base chunker sizes chunks against the model's CONTEXT
         // window, so ordinary 2000-char markdown chunks (~520-680 real tokens) blew straight past the silent ceiling and
-        // EVERY knowledge-base document failed to index on a default node. Measured live against
+        // EVERY knowledge-base document failed to index on a default node. Measured against
         // nomic-embed-text-v1.5.Q4_K_M: 11 of 12 consecutive real markdown chunks rejected at the default, 0 of 12 with
         // these flags. Pinning -b/-ub to the context is what makes the advertised window actually usable.
         var launcher = new FakeProcessLauncher();

@@ -374,7 +374,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     <para>
     ///         This asserts the wiring end to end through a prepared workspace, which is why it needs the process
     ///         sandbox provider and therefore Linux. The survey behaviour itself is OS-independent and covered on every
-    ///         host by <see cref="DevelopmentWorkspaceFileScannerTests" />.
+    ///         host by <see cref="Workspace.WorkspaceFileScannerTests" />.
     ///     </para>
     /// </summary>
     [Test]
@@ -518,13 +518,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     L1: the round is budgeted against the window the model is REALLY serving, and reserves a quarter of it.
+    ///     The round is budgeted against the window the model is REALLY serving, and reserves a quarter of it.
     ///     <para>
-    ///         The window used to be invented as <c>2 × maxOutputTokens</c> with <c>maxOutputTokens</c> reserved out of
-    ///         it, which left exactly <c>0.7 × maxOutputTokens</c> of input budget for every model alive. Measured live
-    ///         on 2026-09-02 against <c>unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL</c> served with <c>-c 65536</c>: a routed
-    ///         rework round of ~24,267 estimated input tokens was refused before the provider was called, against an
-    ///         "effective window" of 22,937. Nothing in that number came from the running server.
+    ///         A window invented as <c>2 × maxOutputTokens</c> with <c>maxOutputTokens</c> reserved out of it leaves
+    ///         exactly <c>0.7 × maxOutputTokens</c> of input budget for every model alive. Measured 2026-09-02 against
+    ///         <c>unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL</c> served with <c>-c 65536</c>: a routed rework round of ~24,267
+    ///         estimated input tokens is refused against that "effective window" of 22,937 before the provider is called.
     ///     </para>
     /// </summary>
     [Test]
@@ -554,9 +553,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal<int?>(Served / 4, options.MaxOutputTokens, "the reserve and the round's own output ceiling are the same number by construction.");
 
         // What the fix is FOR, in the terms the budgeter computes: window x 0.85 (the estimator's safety factor,
-        // uncalibrated) less the reserve. 39,321 tokens of input budget against the 22,937 that refused the live round.
+        // uncalibrated) less the reserve. 39,321 tokens of input budget against the 22,937 that refused the measured round.
         AssertEx.True((int)(Served * 0.85) - budget.ReservedOutputTokenFloor > 24_267,
-            "the live rework round that was refused must now fit: brief + policy + routed feedback + tool schemas.");
+            "the measured rework round must fit: brief + policy + routed feedback + tool schemas.");
     }
 
     /// <summary>
@@ -1229,7 +1228,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     L5: a test-write refusal reaches the operator in the POLICY's own words. It used to be replaced by "violated
+    ///     A test-write refusal reaches the operator in the POLICY's own words. It used to be replaced by "violated
     ///     a workspace security policy", so a workflow node spent its whole retry budget — roughly ten minutes of real
     ///     model time, live — without ever telling anyone which rule it broke or what to change. The failure-code prefix
     ///     rides along so the workflow lane can class it as a policy refusal rather than as a provider error.

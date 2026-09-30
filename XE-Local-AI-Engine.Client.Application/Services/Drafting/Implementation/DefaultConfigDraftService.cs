@@ -358,9 +358,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
             return false;
         }
 
-#pragma warning disable MAAI001 // AgentSkillFrontmatter is [Experimental]; AgentSkillService suppresses the same way.
         return AgentSkillFrontmatter.ValidateName(name, out _);
-#pragma warning restore MAAI001
     }
 
     /// <summary>

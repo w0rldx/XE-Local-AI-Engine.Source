@@ -46,7 +46,7 @@ public sealed class AppUpdateCheckServiceTests
                                Arg.Any<CancellationToken>());
     }
 
-    // Brief §5 test 1: the observable effect is that nothing is refreshed, not that a line was logged. An offline node's
+    // Disabled: the observable effect is that nothing is refreshed, not that a line was logged. An offline node's
     // update snapshot must stay empty rather than reading as "checked, none found".
     [Test]
     public async Task Execute_WhenApplicationUpdateChecksAreDisabled_NeverRefreshes()
@@ -63,7 +63,7 @@ public sealed class AppUpdateCheckServiceTests
         await updateService.DidNotReceiveWithAnyArgs().RefreshIfStaleAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
     }
 
-    // Brief §5 test 2, on the fake clock: nothing may be fetched while the operator has not chosen, and the check must
+    // Undecided, on the fake clock: nothing may be fetched while the operator has not chosen, and the check must
     // start on its own once they do.
     [Test]
     public async Task Execute_WhileTheProfileIsUndecided_Waits_ThenChecksOnceItIsDecided()

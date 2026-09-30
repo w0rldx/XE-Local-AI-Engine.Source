@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
@@ -17,8 +18,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         here may assume the serial group has or has not already run.
 ///     </para>
 /// </summary>
-// S101: matches the XEE2ETestBase harness naming; see that type for why the prefix is intentional.
-#pragma warning disable S101 // Types should be named in PascalCase
+[SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Shares the XE product prefix of XEE2ETestBase.")]
 [ParallelLimiter<PooledBrowserParallelLimit>]
 [ParallelGroup("BrowserPooled", Order = 1)]
 public abstract class XEPooledE2ETestBase : XEE2ETestBase
@@ -105,4 +105,3 @@ public abstract class XEPooledE2ETestBase : XEE2ETestBase
         return channel;
     }
 }
-#pragma warning restore S101

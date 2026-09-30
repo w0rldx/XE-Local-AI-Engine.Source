@@ -163,7 +163,7 @@ public sealed record BaseCheckpointConfigV1
     public string? TorchDtype { get; init; }
 }
 
-/// <summary>What one run is expected to cost, and whether the box can pay it.</summary>
+/// <summary>What one run is expected to cost, and whether the host can pay it.</summary>
 /// <remarks>
 ///     Fails toward rejection by construction: the activation term is inherently fuzzy, so the estimate carries
 ///     headroom and a floor rather than pretending to predict VRAM to the megabyte.

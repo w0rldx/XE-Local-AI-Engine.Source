@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The response-schema warning is about the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, and since
-///     S7 the llama.cpp lane does not suffer it — <c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c>
+///     The response-schema warning is about the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, and the
+///     llama.cpp lane does not suffer it — <c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c>
 ///     writes the authored schema onto the request body, which the adapter then leaves alone. So a node pinned to a
 ///     model llama-server serves must stop being told its bounds are dropped, while every other node must keep hearing
 ///     it. The parser cannot make that call — it has no route to the model-to-provider map — so the definition service

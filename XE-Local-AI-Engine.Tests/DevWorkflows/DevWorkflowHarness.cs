@@ -646,22 +646,16 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     public async Task<DevWorkflowRunSnapshot> WaitForRunStatusAsync(Guid runId, DevWorkflowRunStatus expected, TimeSpan? timeout = null)
     {
         // real-timer: the subject is the REAL background pump, a hosted service this test starts itself. There is no
-        // in-process signal to gate on — the run's status in the store is the only thing it publishes. The deadline is
-        // a failure bound sized for a contended runner, not a sleep: a green run returns on the first matching read.
-        var deadline = DateTimeOffset.UtcNow + (timeout ?? TestBudgets.Contended);
-        DevWorkflowRunSnapshot run;
-        do
-        {
-            run = await ReadRunAsync(runId);
-            if (run.Status == expected)
+        // in-process signal to gate on — the run's status in the store is the only thing it publishes.
+        DevWorkflowRunSnapshot? run = null;
+        await AssertEx.EventuallyAsync(async () =>
             {
-                return run;
-            }
-
-            await Task.Delay(25);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        throw new AssertionException($"Run {runId} was {run.Status}, not {expected}, before the timeout.");
+                run = await ReadRunAsync(runId);
+                return run.Status == expected;
+            },
+            timeout ?? TestBudgets.Contended,
+            $"Run {runId} did not reach {expected} before the timeout.");
+        return run!;
     }
 
     /// <summary>The work session the node run's current attempt owns.</summary>

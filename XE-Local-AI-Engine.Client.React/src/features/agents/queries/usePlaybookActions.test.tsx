@@ -90,7 +90,6 @@ function makeWrapper() {
 describe("usePlaybookActions read hook", () => {
 	beforeEach(() => {
 		listOptionsMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: playbookQueryIds.listActions }],
 			queryFn: async () => ({ items: [generatedAction] }),
 		}));

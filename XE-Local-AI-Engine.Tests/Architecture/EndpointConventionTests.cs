@@ -55,8 +55,8 @@ public sealed class EndpointConventionTests
 
     /// <summary>Files that group several endpoints under one plural name. Empty: R1/R2 hold with no exception.</summary>
     /// <remarks>
-    ///     The thirty-four files that predated R1/R2 were split one file per endpoint class in S7f-1, so the rule
-    ///     no longer has an allowlist to outlive it. The list stays as the mechanism because it is also what refuses
+    ///     Every endpoint class has its own file, so the rule has no allowlist to outlive. The list stays as the
+    ///     mechanism because it is also what refuses
     ///     a NEW plural file; anything added to it is a grouping somebody chose to keep, and needs a reason.
     /// </remarks>
     private static readonly string[] PluralEndpointFiles = [];

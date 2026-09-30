@@ -5,14 +5,14 @@ import { m } from "framer-motion";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { LogoMark } from "@/components/Logo/LogoMark";
-import { LogoText } from "@/components/Logo/LogoText";
+import { LogoMark } from "@/core/layout/components/Logo/LogoMark";
+import { LogoText } from "@/core/layout/components/Logo/LogoText";
 import type {
 	IDesktopNavigationBarProperties,
 	IViewableNavigationLink,
 } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.types";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
-import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
+import type { INavigationLink } from "@/core/layout/models/NavigationMenuData";
 import {
 	filterNavigationLinksByDisabledCapabilities,
 	filterNavigationLinksByUiMode,
@@ -20,7 +20,7 @@ import {
 	navigationLinks,
 	navLinkActiveOptions,
 	useServerDisabledNavigationCapabilities,
-} from "@/data/navigation/NavigationMenuData";
+} from "@/core/layout/models/NavigationMenuData";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
 import classes from "./DesktopNavigationBar.module.css";

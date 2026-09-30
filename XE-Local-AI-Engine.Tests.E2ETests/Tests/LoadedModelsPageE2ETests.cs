@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
 ///     Browser-driven E2E for the loaded-models page (<c>/loaded-models</c>). The page lists the llama.cpp running
-///     models the process supervisor reports; the Ollama in-memory section was removed on 2026-09-23 by operator
-///     decision, so this suite also pins that it stays gone. No llama-server runs in this host, and the running-models
+///     models the process supervisor reports; the page has no Ollama in-memory section, and this suite pins that it
+///     stays gone. No llama-server runs in this host, and the running-models
 ///     endpoint is defined to degrade to an OK-empty list rather than error, so the panel's empty state is the
 ///     deterministic expectation.
 ///     <para>

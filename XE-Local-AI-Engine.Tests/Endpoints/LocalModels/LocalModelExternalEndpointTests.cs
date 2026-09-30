@@ -139,7 +139,7 @@ public sealed class LocalModelExternalEndpointTests
         // make every chat turn fail to route with no explanation of why.
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
-        var settingsStore = new RecordingNodeSettingsStore();
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(trustResolver: trustResolver, settingsStore: settingsStore);
         using var client = factory.CreateClient();
 
@@ -151,7 +151,7 @@ public sealed class LocalModelExternalEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Equal(expected: 0, settingsStore.SaveCount);
+        AssertEx.Equal(expected: 0, settingsStore.WriteCount);
     }
 
     [Test]
@@ -159,7 +159,7 @@ public sealed class LocalModelExternalEndpointTests
     {
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Registration());
-        var settingsStore = new RecordingNodeSettingsStore();
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(trustResolver: trustResolver, settingsStore: settingsStore);
         using var client = factory.CreateClient();
 
@@ -173,7 +173,7 @@ public sealed class LocalModelExternalEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(ModelId, selection.SelectedModelName);
-        AssertEx.Equal(ModelId, settingsStore.LastSavedDefaultModelName);
+        AssertEx.Equal(ModelId, settingsStore.Saved?.DefaultModelName);
     }
 
     [Test]
@@ -220,7 +220,7 @@ public sealed class LocalModelExternalEndpointTests
     }
 
     private static TestServerWebAppFactory CreateFactory(IModelTrustResolver? trustResolver = null,
-        RecordingNodeSettingsStore? settingsStore = null,
+        FakeNodeSettingsStore? settingsStore = null,
         ILocalModelProvider? externalProvider = null)
     {
         return new TestServerWebAppFactory
@@ -230,7 +230,7 @@ public sealed class LocalModelExternalEndpointTests
                 services.RemoveAll<IModelTrustResolver>();
                 services.AddSingleton(trustResolver ?? Substitute.For<IModelTrustResolver>());
                 services.RemoveAll<INodeSettingsStore>();
-                services.AddSingleton<INodeSettingsStore>(settingsStore ?? new RecordingNodeSettingsStore());
+                services.AddSingleton<INodeSettingsStore>(settingsStore ?? new FakeNodeSettingsStore(new StoredNodeSettings()));
 
                 if (externalProvider is null)
                 {
@@ -262,39 +262,5 @@ public sealed class LocalModelExternalEndpointTests
     {
         await using var stream = await response.Content.ReadAsStreamAsync();
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
-    }
-
-    /// <summary>An in-memory node-settings store that records whether a selection was actually written.</summary>
-    private sealed class RecordingNodeSettingsStore : INodeSettingsStore
-    {
-        private StoredNodeSettings _settings = new();
-
-        public int SaveCount { get; private set; }
-
-        public string? LastSavedDefaultModelName { get; private set; }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_settings);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return _settings;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            _settings = settings;
-            SaveCount++;
-            LastSavedDefaultModelName = settings.DefaultModelName;
-            return Task.CompletedTask;
-        }
-
-        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            await SaveAsync(mutate(_settings), cancellationToken);
-            return _settings;
-        }
     }
 }

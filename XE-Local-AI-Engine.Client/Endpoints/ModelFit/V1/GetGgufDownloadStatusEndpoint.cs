@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     FastEndpoints handler retrieving one tracked GGUF download by model name (GET
-///     model-fit/gguf/downloads/{modelName}), a thin transport over <see cref="IGgufDownloadCoordinator.GetStatus" />.
+///     model-fit/gguf/downloads/{modelName}), a thin transport over <see cref="IGgufDownloadCoordinator.GetStatus(string)" />.
 /// </summary>
 /// <remarks>
 ///     A name the coordinator has no entry for answers 404 — it was never started, or the process restarted. No path,

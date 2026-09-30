@@ -136,8 +136,8 @@ internal static class DevWorkflowNodeInputs
             return null;
         }
 
-        // The attempt is what makes it THIS try's reason. A member without one is from a payload written before it
-        // existed and is read as it used to be, which is as a reason for whatever attempt is carrying it.
+        // The attempt is what makes it THIS try's reason. A member without one comes from a payload written before the
+        // attempt was recorded, and is read as a reason for whatever attempt is carrying it.
         return !document.RootElement.TryGetProperty(OperatorRetryAttempt, out var carried)
                || carried.ValueKind != JsonValueKind.Number
                || !carried.TryGetInt32(out var number)

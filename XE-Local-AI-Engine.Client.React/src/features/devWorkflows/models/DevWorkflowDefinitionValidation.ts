@@ -535,7 +535,7 @@ function capabilityInvariants(
 		issues.push({ rule: "templateValidationLeaf", subject: templateLeaf.nodeKey ?? "" });
 	}
 
-	// GRAPH-C4-2: a node that writes outside its sandbox is reached through a human gate, unless the template says
+	// A node that writes outside its sandbox is reached through a human gate, unless the template says
 	// once and in writing that it need not be.
 	if (graph.allowUngatedWrites !== true) {
 		const gated = assured(nodes, augmented, (node) => nodeTypeOf(node) === "humangate");

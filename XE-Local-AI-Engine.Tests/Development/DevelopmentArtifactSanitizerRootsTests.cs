@@ -200,11 +200,10 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     }
 
     /// <summary>
-    ///     The 2026-09-05 live round read every coder and reviewer prompt artifact and found exactly one redaction in
-    ///     each: the whole "Protected test patterns" line. The generic Unix pattern was firing on the '/' inside
-    ///     <c>**/*Tests.cs</c> — glob syntax, preceded by '*' rather than by a host name — so all nine of
-    ///     <see cref="DevelopmentCommandProfileCatalog.DefaultProtectedPaths" /> collapsed into markers, and the one
-    ///     line of the prompt that says which files the coder may not touch was the one line an operator could not read.
+    ///     The "Protected test patterns" line survives the sanitizer. A generic Unix path pattern firing on the '/' inside
+    ///     <c>**/*Tests.cs</c> — glob syntax, preceded by '*' rather than by a host name — would collapse all nine of
+    ///     <see cref="DevelopmentCommandProfileCatalog.DefaultProtectedPaths" /> into markers, and the one line of the
+    ///     prompt that says which files the coder may not touch would be the one line an operator could not read.
     ///     <para>
     ///         The line is taken from <see cref="DevelopmentTestWritePolicy.Prompt" /> rather than transcribed, so a
     ///         future pattern added to the catalog is covered here the day it ships.

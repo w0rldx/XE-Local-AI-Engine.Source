@@ -89,7 +89,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
 #pragma warning restore EXTEXP0001
         builder.Services.AddSingleton<WebSearchService>();
         builder.Services.AddSingleton<IClientLocalToolHandler, WebSearchToolHandler>();
-        // The review gate's retriever (PLAN §1.6): the ONLY chat path to the two services. Internal constructor, hence the factory.
+        // The review gate's retriever (ADR 0017): the ONLY chat path to the two services. Internal constructor, hence the factory.
         builder.Services.AddSingleton(static services => new WebReviewRetriever(services.GetRequiredService<WebFetchService>(),
             services.GetRequiredService<WebSearchService>(), services.GetRequiredService<ILogger<WebReviewRetriever>>()));
         builder.Services.AddSingleton(static _ => new CustomToolConcurrencyLimiter());

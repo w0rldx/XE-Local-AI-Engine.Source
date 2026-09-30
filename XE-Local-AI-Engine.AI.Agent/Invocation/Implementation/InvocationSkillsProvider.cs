@@ -31,9 +31,6 @@ public static class InvocationSkillsProvider
     {
         ArgumentNullException.ThrowIfNull(skills);
 
-        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0; the scoped suppression stays at the pinned version until there is explicit graduation evidence.
-#pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[skills.Count];
         for (var index = 0; index < skills.Count; index++)
         {
@@ -48,7 +45,6 @@ public static class InvocationSkillsProvider
                     DisableReadSkillResourceApproval = true
                 })
             : new AgentSkillsProvider(inlineSkills);
-#pragma warning restore MAAI001
     }
 
     /// <summary>
@@ -60,8 +56,6 @@ public static class InvocationSkillsProvider
     ///     resolves a skill's content once, and a resource added afterwards would exist but never be advertised.
     ///     <c>allowedTools</c> is frontmatter only and grants nothing; scripts are never registered.
     /// </remarks>
-    // MAAI001: scoped to the experimental Agent Skills surface, same rationale as the block in Create that calls this.
-#pragma warning disable MAAI001
     internal static AgentInlineSkill BuildInlineSkill(InvocationSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
@@ -84,7 +78,6 @@ public static class InvocationSkillsProvider
 
         return inlineSkill;
     }
-#pragma warning restore MAAI001
 
     /// <summary>Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes.</summary>
     /// <remarks>Null for an absent or empty map, so a skill without metadata keeps the constructor's own default.</remarks>

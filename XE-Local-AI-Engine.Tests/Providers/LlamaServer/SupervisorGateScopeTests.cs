@@ -240,7 +240,7 @@ public sealed class SupervisorGateScopeTests
         }
     }
 
-    /// <summary>Hands the FIRST launch a handle whose tree-kill blocks on <paramref name="firstKill" />; the rest are ordinary.</summary>
+    /// <summary>Hands the FIRST launch a handle whose tree-kill blocks on <c>firstKill</c>; the rest are ordinary.</summary>
     private sealed class SwitchableLauncher : ILlamaServerProcessLauncher
     {
         private readonly KillLatch _firstKill;

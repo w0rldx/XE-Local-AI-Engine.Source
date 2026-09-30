@@ -26,7 +26,6 @@ export const agentDefinitionsQueryIds = {
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one agent-definition endpoint. */
 export function agentDefinitionsInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

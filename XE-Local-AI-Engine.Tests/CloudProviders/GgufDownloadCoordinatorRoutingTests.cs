@@ -400,24 +400,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             TimeProvider.System);
     }
 
-    private static async Task WaitForPhaseAsync(IGgufDownloadCoordinator coordinator, string modelName, GgufDownloadPhase phase)
-    {
-        // real-timer: the download runs detached and publishes nothing but its status, so the status is the only
-        // thing to poll. A fixed attempt count made the bound a budget the box could spend on scheduling alone; this
-        // is a failure deadline sized for a contended runner, and a green run returns on the first matching read.
-        var deadline = DateTimeOffset.UtcNow + TestBudgets.Contended;
-        do
-        {
-            if (coordinator.GetStatus(modelName)?.Phase == phase)
-            {
-                return;
-            }
-
-            await Task.Delay(20);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        throw new TimeoutException($"Download for '{modelName}' did not reach phase {phase}.");
-    }
+    // real-timer: the download runs detached and publishes nothing but its status, so the status is the only thing to poll.
+    private static Task WaitForPhaseAsync(IGgufDownloadCoordinator coordinator, string modelName, GgufDownloadPhase phase) =>
+        AssertEx.EventuallyAsync(() => coordinator.GetStatus(modelName)?.Phase == phase,
+            TestBudgets.Contended,
+            $"Download for '{modelName}' did not reach phase {phase}.");
 
     private sealed class ProvisioningDownloadTransaction : IGgufDownloadTransaction
     {

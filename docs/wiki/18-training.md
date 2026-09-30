@@ -2,7 +2,7 @@
 
 > Reviewed: 2026-09-15 · Code-grounded.
 
-The Training group lets an operator turn the node's own tool-calling behaviour into a **fine-tuned local model**, entirely on the box: a teacher model generates a supervised dataset, a QLoRA run trains an adapter against a downloaded Hugging Face base checkpoint, and the result is exported to GGUF, smoke-loaded, evaluated from staging, compared against its installed base, quality-decided, and only then explicitly promoted into the local model registry. Nothing leaves the node except the two explicit downloads (the Python wheel closure and the base checkpoint).
+The Training group lets an operator turn the node's own tool-calling behaviour into a **fine-tuned local model**, entirely on the host: a teacher model generates a supervised dataset, a QLoRA run trains an adapter against a downloaded Hugging Face base checkpoint, and the result is exported to GGUF, smoke-loaded, evaluated from staging, compared against its installed base, quality-decided, and only then explicitly promoted into the local model registry. Nothing leaves the node except the two explicit downloads (the Python wheel closure and the base checkpoint).
 
 Two decisions shape everything on this page, both recorded in [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md):
 
@@ -188,7 +188,7 @@ GGUF files are **not trainable** — a run needs a Hugging Face checkpoint. `Bas
 - The **launch receipt is persisted immediately after spawn, before any output is read** — that is the only window in which a host crash could otherwise strand a trainer holding the whole GPU with nothing on disk to identify it by. Only `TrainingRunStartupReaper` clears a receipt, and only after a successful kill or a proven non-match; a receipt whose inspect or kill threw is left in place and retried next startup.
 - Two independent bounds sit over the stream: an **inactivity watchdog** driven by the protocol's `heartbeat` event (a trainer wedged on a CUDA call prints nothing at all), and a max-duration backstop.
 - **Cancellation is cooperative.** The operator's cancel signals the process *group* with SIGTERM, `train.py` latches `should_training_stop`, finishes its step and exits with a distinct status, and the run records `Cancelled`. Only the watchdog escalates to SIGKILL.
-- `TrainingFootprintEstimator` sizes one QLoRA run against the box (4-bit frozen base ≈0.6 bytes/param, bf16 LoRA weights + two 8-bit Adam moment buffers ≈4 bytes per *trainable* param, activations as a headroom term), with `TrainingOptionDefaultsCalculator` computing the wizard's hyper-parameters. `GET training/runs/defaults` returns both plus the licensing text.
+- `TrainingFootprintEstimator` sizes one QLoRA run against the host (4-bit frozen base ≈0.6 bytes/param, bf16 LoRA weights + two 8-bit Adam moment buffers ≈4 bytes per *trainable* param, activations as a headroom term), with `TrainingOptionDefaultsCalculator` computing the wizard's hyper-parameters. `GET training/runs/defaults` returns both plus the licensing text.
 
 ### The stdio protocol (contract version 1)
 

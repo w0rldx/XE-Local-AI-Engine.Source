@@ -62,6 +62,11 @@ public sealed class ToolCallCleanupServiceTests
 
         await service.StartAsync(CancellationToken.None);
         await service.StopAsync(CancellationToken.None);
+
+        // BackgroundService starts ExecuteAsync on the pool, so a stop can land before the loop runs (Canceled) or
+        // inside its delay (RanToCompletion). Either is graceful; a fault is not.
+        var loop = AssertEx.NotNull(service.ExecuteTask, "StartAsync launched the cleanup loop.");
+        AssertEx.True(loop.IsCompleted && !loop.IsFaulted, $"the loop has stopped without faulting (status {loop.Status}).");
     }
 
     private static ToolCallCleanupService CreateService(IInvocationRunner runner, int maxAgeMinutes, int cleanupIntervalSeconds)

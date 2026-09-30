@@ -79,7 +79,7 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         var vendor = profile.GpuVendor;
 
         // Each device probe is consulted only where it can change the decision. Linux GPU vendors: Vulkan is their sole GPU backend, and a Vulkan pick with no enumerable device hard-fails sd-server
-        // (e.g. WSL2), whereas CPU always works. Windows NVIDIA: CUDA is the prebuilt, and a CUDA pick on a box whose driver enumerates no device exits the child within a second of every spawn.
+        // (e.g. WSL2), whereas CPU always works. Windows NVIDIA: CUDA is the prebuilt, and a CUDA pick on a machine whose driver enumerates no device exits the child within a second of every spawn.
         var vulkanDeviceAvailable = !_isWindows
                                     && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel
                                     && _vulkanDeviceProbe.HasEnumerableVulkanDevice();

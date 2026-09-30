@@ -78,7 +78,7 @@ public sealed class WorkSessionStepLoopTests
 
     /// <summary>
     ///     The send runs inside the work-session turn scope, which is what makes the agent resolver offer the four state
-    ///     tools to WHATEVER agent drives the session, not only to one whose allowed names list them (F-44).
+    ///     tools to WHATEVER agent drives the session, not only to one whose allowed names list them.
     /// </summary>
     [Test]
     public async Task Loop_SendsEveryStepInsideTheWorkSessionTurnScope()
@@ -116,7 +116,7 @@ public sealed class WorkSessionStepLoopTests
     [Test]
     public async Task Loop_PublishesTheStepOnlyOnceTheTurnIsLive_SoAClientResumingOnThePushAttaches()
     {
-        // F-30. The page re-attaches on this push, and the resume registry holds the turn only from AssistantStreaming
+        // The page re-attaches on this push, and the resume registry holds the turn only from AssistantStreaming
         // on; an earlier push sends the client to an empty stream, so the turn never appears live.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
@@ -163,7 +163,7 @@ public sealed class WorkSessionStepLoopTests
     [Test]
     public async Task Loop_WhenTheFirstAttemptRecordedACompletionBeforeParking_TheReRunStillCloses()
     {
-        // F-38 regression pin (Codex review of batch 3): the completion tool dedups per step NUMBER, so a re-run attempt
+        // Regression pin: the completion tool dedups per step NUMBER, so a re-run attempt
         // cannot record it again; the settle must honour the completion the first attempt recorded before it parked.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
@@ -209,7 +209,7 @@ public sealed class WorkSessionStepLoopTests
     [Test]
     public async Task Loop_WhenAStepIsReRunAfterAParkTimeout_RecordsItsOwnStepStartedAndParkTimedOut()
     {
-        // F-31. A park timeout keeps StepCount, so the re-run reuses the step index. Its rows must not dedup onto the
+        // A park timeout keeps StepCount, so the re-run reuses the step index. Its rows must not dedup onto the
         // first attempt's, and its Step push must carry the fresh sequence, or the client drops it as already seen.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();

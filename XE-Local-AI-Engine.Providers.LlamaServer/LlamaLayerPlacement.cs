@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 /// <remarks>
 ///     This is a per-MODEL fact and is deliberately distinct from the node-level device audit. The device audit answers
 ///     "can the selected binary see a GPU at all"; this answers "did THIS model's weights fit on it". Both can be
-///     healthy-looking while the second is partial: on a box whose VRAM cannot hold the whole model, llama.cpp's
+///     healthy-looking while the second is partial: on a machine whose VRAM cannot hold the whole model, llama.cpp's
 ///     auto-fit spills the remaining layers to system RAM and serves correctly, just several times slower.
 /// </remarks>
 public sealed record LlamaLayerPlacement

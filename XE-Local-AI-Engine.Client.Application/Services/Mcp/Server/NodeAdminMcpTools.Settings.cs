@@ -18,7 +18,7 @@ public sealed partial class NodeAdminMcpTools
 
     [McpServerTool(Name = "update_node_settings")]
     [Description("Apply a partial update to the exact restricted 18-field agentic node-settings whitelist.")]
-#pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,
         string? default_model_name = null,
         bool? enable_tools = null,
@@ -38,7 +38,6 @@ public sealed partial class NodeAdminMcpTools
         string? kv_cache_type = null,
         string? reranker_model_name = null,
         string? auto_effort_fast_model_name = null)
-#pragma warning restore IDE1006
     {
         var arguments = AuditArguments(("default_model_name", default_model_name),
             ("enable_tools", enable_tools),

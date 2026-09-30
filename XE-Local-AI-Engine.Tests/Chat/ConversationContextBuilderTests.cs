@@ -98,7 +98,7 @@ public sealed class ConversationContextBuilderTests
             attachmentContext: null);
 
         AssertEx.Equal(expected: 2, context.Count);
-        // Its answer failed, so the request is sent marked as unanswered (F-16).
+        // Its answer failed, so the request is sent marked as unanswered.
         AssertEx.Equal($"kept\n\n{ConversationContextBuilder.UnansweredNotice}", context[0].Content);
         AssertEx.Equal("now", context[1].Content);
     }
@@ -342,7 +342,7 @@ public sealed class ConversationContextBuilderTests
     [Test]
     public void Build_AfterAFailedTurn_MarksTheRequestUnansweredAndDropsThePartialAnswer()
     {
-        // F-16: unmarked, the failed request reads as still open and the model answers it instead of the next message.
+        // Unmarked, the failed request reads as still open and the model answers it instead of the next message.
         var conversationId = Guid.NewGuid();
         var history = new[]
         {

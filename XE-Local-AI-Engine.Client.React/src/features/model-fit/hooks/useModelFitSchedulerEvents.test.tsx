@@ -201,7 +201,6 @@ describe("useModelFitSchedulerEvents", () => {
 		// the pinned baseURL: "" too) — the partial `_id` invalidation must still reach it.
 		const fullLatestKey = [
 			{
-				// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 				_id: "getLatestRecommendations",
 				baseURL: "",
 				query: { useCase: "coding", providerName: "ollama" },

@@ -86,7 +86,7 @@ describe("SystemAudioCaptureSource", () => {
 		});
 	});
 
-	// R39a: `getDisplayMedia` needs transient user activation at the moment it is invoked, so the picker promise
+	// `getDisplayMedia` needs transient user activation at the moment it is invoked, so the picker promise
 	// must be created before `start` yields. Awaiting anything first — the live/start endpoint, `addModule` — can
 	// outlive the activation window and the picker never appears.
 	it("invokes the picker synchronously, before start's first await", () => {

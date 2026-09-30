@@ -12,9 +12,8 @@ export interface DevelopmentTaskSwitcherProps {
 /**
  * Which of a project's tasks the page is showing.
  *
- * A project used to carry exactly one task, so there was nothing to switch between and the page simply took the first
- * row. Phase W dropped that unique index: a workflow can decompose one request into a task per child, and the ordinary
- * decomposed case is three tasks in one project — two of which had no way to be reached from this page at all.
+ * A project can carry several tasks: a workflow can decompose one request into a task per child, and the ordinary
+ * decomposed case is three tasks in one project. Taking the first row would leave the other two unreachable.
  *
  * Rendered only when there IS a choice. A single-task project gets no control, because a picker with one entry is a
  * question with one answer.

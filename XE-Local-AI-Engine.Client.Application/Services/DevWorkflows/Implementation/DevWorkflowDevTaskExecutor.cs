@@ -677,7 +677,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 cancellationToken);
 
             // The one task status hop nothing else records: DevelopmentManagementService logs the hops IT decides, and this edge is bought by an operator's Retry in the workflow lane,
-            // so a live round could otherwise see the cap widen and the task move unlogged. Same literal "task status" phrase, so the one grep that finds every hop still finds this one.
+            // so the cap could otherwise widen and the task move unlogged. Same literal "task status" phrase, so the one grep that finds every hop still finds this one.
             if (atTheRoundCap)
             {
                 _logger.LogInformation(
@@ -1046,7 +1046,7 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         var report = JsonSerializer.Deserialize<DevWorkflowValidationReport>(read.Content.Span, JsonOptions);
 
-        // A route from before the attempt travelled on the payload names no attempt, and is answered as it used to be.
+        // A route written before the attempt travelled on the payload names no attempt, and accepts the report as it stands.
         return routed.Attempt is not { } attempt || report?.Attempt == attempt ? report : null;
     }
 

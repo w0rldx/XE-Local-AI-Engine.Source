@@ -73,7 +73,7 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
 
         var vendor = await _vendorProbe.DetectVendorAsync(ct).ConfigureAwait(false);
 
-        // Managed source-built CUDA: a Linux NVIDIA box with a recorded build serves CUDA instead of the Vulkan fallback.
+        // Managed source-built CUDA: a Linux NVIDIA machine with a recorded build serves CUDA instead of the Vulkan fallback.
         // Reads the cached signal only (no per-call store read). [archHIGH-2]
         return SelectForVendor(vendor, _isWindows);
     }

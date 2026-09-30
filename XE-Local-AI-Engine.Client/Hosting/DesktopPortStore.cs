@@ -299,19 +299,3 @@ internal static class DesktopPortStore
         }
     }
 }
-
-internal sealed record ReadyInfo(string Version, string Url, string McpUrl, string DataDir, int Pid, DateTimeOffset StartedAtUtc);
-
-internal enum ReadyEvidenceState
-{
-    Absent,
-    Valid,
-    Invalid
-}
-
-internal sealed class ReadyEvidence
-{
-    public required ReadyEvidenceState State { get; init; }
-
-    public required ReadyInfo? Info { get; init; }
-}

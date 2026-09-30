@@ -1,18 +1,11 @@
 // Handoff + workflow-approval probe for Microsoft.Agents.AI.Workflows at the pinned version
-// (Directory.Packages.props). Fully deterministic — a scripted IChatClient stands in for the model (NO Ollama, NO
-// network). Proves the exact API shapes the production handoff orchestration +
-// IOrchestrationRunSession.RespondToApprovalAsync will copy:
+// (Directory.Packages.props). It runs in the normal suite and is fully deterministic: a scripted IChatClient stands
+// in for the model (no Ollama, no network). It pins the API shapes the production handoff orchestration and
+// IOrchestrationRunSession.RespondToApprovalAsync depend on:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).
-//
-// All findings are emitted to Console for the report; the test asserts the load-bearing facts.
+// Console lines are diagnostics only; the assertions carry the result.
 
-// This probe intentionally uses underscore-rich test names (CA1707), instance helpers discovered by the test/runtime
-// infrastructure (CA1822), direct awaits in test code (CA2007), explicit workflow-drain loops (S3267), broad catches
-// that record unexpected workflow events before failing the assertion (CA1031), and MAF's experimental workflow API
-// (MAAIW001). The file is compile-gated behind P0_SPIKE and each shape is part of the probe rather than production code.
-
-#pragma warning disable CA1707, CA1822, CA2007, S3267, CA1031, MAAIW001
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.Reflection;
@@ -29,23 +22,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         This class was once quarantined as "flaky under parallel load". That diagnosis was wrong, and so was the
-///         global <c>[NotInParallel]</c> that followed it. The real cause was a MAF 1.8.0 → 1.13.0 shape change:
-///         <c>WorkflowOutputEvent.Data</c> stopped being a <c>List&lt;ChatMessage&gt;</c> (1.13.0 yields an
-///         <c>AgentResponseUpdate</c>, or an <c>ExternalResponse</c> when the run resumed from an approval port), so
-///         the old drain loop — which only read the workflow output — accumulated nothing and hit its break condition
-///         before the specialist's streamed text ever arrived. The captured failure showed exactly that:
-///         <c>WorkflowOutputEvent data type=AgentResponseUpdate</c> with an empty aggregated output. Nothing about it
-///         was process-wide static-state pollution, and none of these probes touch shared mutable state — the chat
-///         client is a per-test scripted fake and the workflow runtime is in-process and per-run.
+///         The drain loops accumulate <c>AgentResponseUpdateEvent</c> / <c>AgentResponseEvent</c> text, not only
+///         <c>WorkflowOutputEvent.Data</c>: at the pinned MAF version that data is an <c>AgentResponseUpdate</c> (or an
+///         <c>ExternalResponse</c> after an approval resume), so a loop that read only the workflow output would see
+///         nothing and stop before the specialist's streamed text arrived. None of these probes touch shared mutable
+///         state; the chat client is a per-test scripted fake and the workflow runtime is in-process and per-run.
 ///     </para>
 ///     <para>
-///         Accumulating <c>AgentResponseUpdateEvent</c> / <c>AgentResponseEvent</c> text is therefore the entire fix.
-///         An ablation over 5 runs per variant confirms it: new logic passes 5/5 with EITHER a keyed or a global
-///         constraint, while the old logic fails with either. The constraint below is kept only to stop these
-///         30s-bounded streaming drains from competing with each other for the test host, and it is KEYED
-///         deliberately — TUnit's docs call the parameterless form "the most restrictive option" and recommend
-///         constraint keys, because the keyless form serialises the whole assembly for no benefit here.
+///         The KEYED constraint only stops these 30 s-bounded streaming drains from competing with each other for the
+///         test host; the keyless form would serialise the whole assembly for no benefit.
 ///     </para>
 /// </remarks>
 [NotInParallel(nameof(HandoffWorkflowSpikeTests))]
@@ -864,4 +849,3 @@ public sealed class HandoffWorkflowSpikeTests
         }
     }
 }
-#pragma warning restore CA1707, CA1822, CA2007, S3267, CA1031, MAAIW001

@@ -88,5 +88,5 @@ public sealed class TrainingRunWorkspaceTests : IDisposable
     }
 
     private TrainingRunWorkspace Create() =>
-        new(new FixedNodeDataDirectory(_root), _keyHolder);
+        new(new FakeNodeDataDirectory(_root), _keyHolder);
 }

@@ -37,7 +37,6 @@ function makeWrapper() {
 describe("usePlaybookMonitor", () => {
 	beforeEach(() => {
 		optionsMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: "getAgentPlaybookMonitor" }],
 			queryFn: async () => generatedResponse,
 		}));

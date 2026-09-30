@@ -23,9 +23,8 @@ public enum TranscriptionSessionStatus
 }
 
 /// <summary>
-///     Where a session's audio comes from. The full set exists from day one because adding a member later would be a
-///     schema change; only <see cref="File" /> is reachable in the batch slice. Persisted as an <see langword="int" />:
-///     append only.
+///     Where a session's audio comes from. Persisted as an <see langword="int" />: append only, because reordering or
+///     reusing a member would be a schema change.
 /// </summary>
 public enum TranscriptionSourceKind
 {

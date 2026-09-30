@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     a hub would have failed that requirement before the capture slice started.
 ///     <para>
 ///         Every timer is <see cref="ManualTimeProvider" />, every blocked inference is a gate the test releases, and
-///         every asynchronous effect is awaited through <see cref="AssertEx.EventuallyAsync" /> — there is no sleep in
+///         every asynchronous effect is awaited through <see cref="AssertEx.EventuallyAsync(Func{bool}, TimeSpan, string)" /> — there is no sleep in
 ///         this file, because the frame queue makes a push's effect arrive after the push returns.
 ///     </para>
 /// </remarks>
@@ -696,8 +696,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
     [Test]
     public async Task CatchUpProgress_AfterACancelWithABacklog_ReportsNothing()
     {
-        // The live round: Cancel with a backlog published a countdown burst to zero in milliseconds, for audio that
-        // was thrown away rather than transcribed.
+        // Cancel with a backlog must not publish a countdown burst to zero in milliseconds, for audio that is thrown
+        // away rather than transcribed.
         var transcriber = new GatedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();

@@ -33,7 +33,7 @@ internal static class EntraAuthCodeConfidentialClientFactory
     ///     token cache.
     /// </summary>
     /// <remarks>
-    ///     Where that persistence is unavailable (no libsecret on a headless Linux box) MSAL keeps its own default
+    ///     Where that persistence is unavailable (no libsecret on a headless Linux machine) MSAL keeps its own default
     ///     in-process cache — logged once, never thrown, and never falling back to an unencrypted cache on disk.
     ///     Mirrors <c>EntraPersistenceFallbackCredential</c>'s philosophy for the device-code / interactive-browser
     ///     credentials.

@@ -1,5 +1,5 @@
 /**
- * The Web Audio graph both browser capture sources share (S4 plan §2.3): one `AudioContext` per stream, the
+ * The Web Audio graph both browser capture sources share: one `AudioContext` per stream, the
  * `Pcm16DownsamplerWorklet` on it, and a disposer that takes the whole thing down.
  */
 

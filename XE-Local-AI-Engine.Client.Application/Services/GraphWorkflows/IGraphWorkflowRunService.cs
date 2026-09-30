@@ -84,7 +84,7 @@ public sealed class GraphWorkflowRunBinding
 ///     <b>The commands are fire-and-forget.</b> Each validates, commits a durable intent, signals the dispatcher and
 ///     returns the CURRENT state — which legitimately reads <c>Pending</c> or <c>Cancelling</c>. Nothing here waits
 ///     for the runtime to act, which is what keeps the HTTP path off the node's one invocation slot.
-///     <see cref="StartAsync" /> is idempotent on a caller-minted request id: the same id always answers with the
+///     <see cref="StartAsync(Guid, Guid, string, int?, CancellationToken)" /> is idempotent on a caller-minted request id: the same id always answers with the
 ///     same run, so an integration that never saw the first answer retries without risking a second run.
 /// </remarks>
 public interface IGraphWorkflowRunService

@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 /// </remarks>
 public sealed class GetLatestRecommendationsEndpoint : Endpoint<GetLatestRecommendationsRequest, GetLatestRecommendationsResponse>
 {
-    /// <summary>The advisor's fixed provider sentinel — the snapshot key the box-aware recommendation is cached under.</summary>
+    /// <summary>The advisor's fixed provider sentinel — the snapshot key the hardware-aware recommendation is cached under.</summary>
     private const string AdvisorProviderName = "llama.cpp";
 
     private readonly IModelFitQueryService _modelFitQueryService;

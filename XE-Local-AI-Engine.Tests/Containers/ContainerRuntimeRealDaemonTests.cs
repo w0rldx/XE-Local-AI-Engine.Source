@@ -754,7 +754,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         }
 
         /// <summary>
-        ///     Build the volume-declaring fixture image on this box's daemon. Through the RAW client on purpose:
+        ///     Build the volume-declaring fixture image on this host's daemon. Through the RAW client on purpose:
         ///     the product never builds an image, so <c>IContainerRuntime</c> has no build member and must not
         ///     grow one to make a test shorter.
         /// </summary>

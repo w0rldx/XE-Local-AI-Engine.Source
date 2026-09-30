@@ -88,6 +88,32 @@ internal static class AssertEx
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
     }
 
+    /// <summary>
+    ///     Drains the thread-pool scheduler, as <c>AssertEx.SettleAsync</c> does in XE-Local-AI-Engine.Tests; deterministic
+    ///     only when everything in flight is a thread-pool continuation.
+    /// </summary>
+    public static async Task SettleAsync(int rounds = 16)
+    {
+        for (var round = 0; round < rounds; round++)
+        {
+            await Task.Yield();
+            await Task.Run(static () => { });
+        }
+    }
+
+    /// <summary>Asserts <paramref name="task" /> is still parked once the scheduler has settled: the negative half of a gate assertion.</summary>
+    public static async Task StaysIncompleteAsync(Task task, string message)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        await SettleAsync();
+
+        if (task.IsCompleted)
+        {
+            throw new AssertionException(message);
+        }
+    }
+
     private static string FormatValue(object? value)
     {
         return value switch

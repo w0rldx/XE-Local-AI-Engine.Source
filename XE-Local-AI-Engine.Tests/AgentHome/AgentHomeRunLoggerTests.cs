@@ -41,7 +41,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         }
     }
 
-
     [Test]
     public async Task OpenAsync_CreatesEventsJsonlWithStartedRecord()
     {
@@ -68,7 +67,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         var ts = record.GetProperty("timestampUtc").GetDateTimeOffset();
         AssertEx.Equal(FixedNow, ts);
     }
-
 
     [Test]
     public async Task AppendEventAsync_AppendsToEventsJsonlWithCorrelation()
@@ -100,7 +98,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         var lines = NonEmptyLines(await File.ReadAllLinesAsync(Path.Combine(ctx.HostLogDirectory, "events.jsonl")));
         AssertEx.Equal(expected: 4, lines.Count); // started + 3 more
     }
-
 
     [Test]
     public async Task AppendCommandAsync_CreatesCommandsJsonlWithRecord()
@@ -260,7 +257,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             "commands.jsonl must not contain the raw host log directory path");
     }
 
-
     [Test]
     public async Task AppendToolCallAsync_CreatesToolCallsJsonlWithRecord()
     {
@@ -356,7 +352,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         AssertEx.Equal(ctx.RunId, record.GetProperty("runId").GetString());
     }
 
-
     [Test]
     public async Task AllLogFiles_ContainFullCorrelationEnvelope()
     {
@@ -402,16 +397,14 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         }
     }
 
-
     [Test]
     public async Task AppendEventAsync_BeforeOpen_Throws()
     {
-        var logger = new AgentHomeRunLogger(new FixedClock(FixedNow));
+        var logger = new AgentHomeRunLogger(new ManualTimeProvider(FixedNow));
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
             logger.AppendEventAsync("run_completed"));
     }
-
 
     private (AgentHomeRunLogger Logger, AgentHomeRunLogContext Context) CreateLogger()
     {
@@ -424,7 +417,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             OwnerUserId = "owner-xyz",
             ProviderName = "fake"
         };
-        return (new AgentHomeRunLogger(new FixedClock(FixedNow)), ctx);
+        return (new AgentHomeRunLogger(new ManualTimeProvider(FixedNow)), ctx);
     }
 
     private static JsonElement ReadFirstRecord(string filePath)
@@ -484,20 +477,5 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         Directory.CreateDirectory(dir);
         _tempDirs.Add(dir);
         return dir;
-    }
-
-    private sealed class FixedClock : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 }

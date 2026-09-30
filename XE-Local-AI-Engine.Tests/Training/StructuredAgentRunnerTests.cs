@@ -63,7 +63,7 @@ public sealed class StructuredAgentRunnerTests
     [Test]
     public async Task ValidateAfter_ShowsTheTeacherTheRecordSchema_ConstrainedLeavesItToTheGrammar()
     {
-        // Live-found (F-57): unconstrained, a reasoning teacher never saw the property names and invented its own, so
+        // Unconstrained, a reasoning teacher never saw the property names and invented its own, so
         // every record failed "Required property 'userMessage' is missing."
         using var validateAfter = new RecordingChatClient(SampleJson);
         _ = await CreateRunner(supportsThinking: true).RunAsync(validateAfter, Request(TeacherOutputMode.ValidateAfter));

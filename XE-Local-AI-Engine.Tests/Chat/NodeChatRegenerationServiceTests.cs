@@ -1688,7 +1688,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_MarksAnEarlierFailedRequestButNeverTheOneItAnswers()
     {
-        // F-16: a failed turn's user request stays in the history, and unmarked the model answers IT instead of the
+        // A failed turn's user request stays in the history, and unmarked the model answers IT instead of the
         // message after it. Marked in every rerun that sits after it; never in the rerun OF that failed turn.
         await using var provider = await BuildProviderAsync("regeneration-failed-turn-context.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());

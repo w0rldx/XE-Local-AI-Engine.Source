@@ -12,7 +12,6 @@ const { listLocalModelsSpy, runningModelsState } = vi.hoisted(() => ({
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	listLocalModelsOptions: () => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listLocalModels" }],
 		queryFn: listLocalModelsSpy,
 	}),

@@ -13,7 +13,7 @@ import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeMo
 import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { RuntimeResourcesWidget } from "@/features/runtime-resources/components/RuntimeResourcesWidget";
-import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
+import { ThemeConfiguratorDialogButton } from "@/core/theme/theme-configurator/Index";
 
 export function HeaderBar() {
 	const { t } = useTranslation();

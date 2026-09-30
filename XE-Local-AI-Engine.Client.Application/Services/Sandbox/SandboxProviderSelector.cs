@@ -63,8 +63,7 @@ internal static class SandboxProviderSelector
     ///     them.
     /// </summary>
     /// <remarks>
-    ///     Exposed because the guarantee that used to be an absent <c>implements</c> clause is now an enumeration, and an enumeration the
-    ///     test cannot read is not a guarantee.
+    ///     Exposed because the guarantee is an enumeration, and an enumeration the test cannot read is not a guarantee.
     /// </remarks>
     internal static IReadOnlyList<(string Name, SandboxToolchainSource Toolchain)> BackendRanking { get; } =
         [.. ByAscendingPrivilege.Select(static backend => (backend.Name, backend.Toolchain))];

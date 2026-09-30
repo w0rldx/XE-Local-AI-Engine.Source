@@ -1,5 +1,6 @@
 import { Stack } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AgentDefinitionBasicFields } from "@/features/agents/components/AgentDefinitionBasicFields";
 import { AgentDefinitionModelFields } from "@/features/agents/components/AgentDefinitionModelFields";
@@ -66,6 +67,7 @@ export function AgentDefinitionForm({
 	webAccessEnabled,
 	ref,
 }: AgentDefinitionFormProps) {
+	const { t } = useTranslation();
 	const [values, setValues] = useState<AgentDefinitionFormValues>(initialValues);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AgentDefinitionFormValues, string>>>({});
 	// Error specific to the orchestration participants field, derived from the Zod result on submit.
@@ -151,12 +153,14 @@ export function AgentDefinitionForm({
 			let nextParticipantsError: string | undefined;
 			for (const issue of result.error.issues) {
 				const key = issue.path[0];
+				// A custom rule carries an i18n key; a per-element issue carries Zod's own message.
+				const message = issue.code === "custom" ? t(issue.message) : issue.message;
 				if (typeof key === "string") {
-					nextErrors[key as keyof AgentDefinitionFormValues] = issue.message;
+					nextErrors[key as keyof AgentDefinitionFormValues] = message;
 				}
 				// Surface the orchestration participants error inline on the participant multi-select.
 				if (key === "orchestration" && issue.path[1] === "participantAgentDefinitionIds") {
-					nextParticipantsError = issue.message;
+					nextParticipantsError = message;
 				}
 			}
 			setFieldErrors(nextErrors);
@@ -172,7 +176,7 @@ export function AgentDefinitionForm({
 		const sanitized: AgentDefinitionFormValues =
 			toolCapable && !isDefaultAssistant ? values : { ...values, allowedToolNames: [], toolApprovals: {} };
 		onSubmit(sanitized);
-	}, [isDefaultAssistant, onSubmit, toolCapable, values]);
+	}, [isDefaultAssistant, onSubmit, t, toolCapable, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 

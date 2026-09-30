@@ -81,7 +81,7 @@ public sealed class CanvasWorkflowImportMapperTests
     /// <summary>
     ///     The graph-level seed text has exactly one destination: the Start node's default input, as a JSON OBJECT under
     ///     <c>text</c>. A bare string is a legal JSON value the parser accepts, but the editor renders a stored default
-    ///     as JSON text and would show unquoted prose it can never re-parse (S4 live round, canvas B).
+    ///     as JSON text and would show unquoted prose it can never re-parse.
     /// </summary>
     [Test]
     public void MapGraph_CarriesTheCanvasStartTextOntoTheStartNodesDefaultInput()
@@ -184,7 +184,7 @@ public sealed class CanvasWorkflowImportMapperTests
     }
 
     /// <summary>
-    ///     The defect the S4 live round found. Open Canvas's Pause forwarded the answer it was waiting on; a Graph
+    ///     The pause-forwarding mismatch. Open Canvas's Pause forwards the answer it was waiting on; a Graph
     ///     Workflow Pause's output is <c>{decision, comment, payload}</c>, and a node's <c>input</c> is its ONE
     ///     satisfied predecessor's output — so <c>Agent -> Pause -> Agent</c> mapped one-for-one hands the second
     ///     agent the approval and never the first agent's answer.

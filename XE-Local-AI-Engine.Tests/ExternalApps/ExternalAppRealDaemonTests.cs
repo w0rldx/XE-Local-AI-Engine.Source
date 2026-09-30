@@ -64,8 +64,7 @@ public sealed class ExternalAppRealDaemonTests
     private const string PrivateDirectoryName = "config";
 
     /// <summary>
-    ///     An in-container uid that is neither root nor the engine's. 977 is the uid the live round's SearXNG image
-    ///     used, which is how the defect was found.
+    ///     An in-container uid that is neither root nor the engine's. 977 is the uid a real SearXNG image runs as.
     /// </summary>
     private const int PrivateUid = 977;
 
@@ -175,7 +174,7 @@ public sealed class ExternalAppRealDaemonTests
     }
 
     /// <summary>
-    ///     The defect the first live round found, and the only test that can find it again: an application whose own
+    ///     The only test that can find this defect: an application whose own
     ///     non-root user creates <c>0700</c> directories under its bind mount.
     ///     <para>
     ///         Under a rootless daemon that in-container uid maps into the operator's subuid range and under a
@@ -210,7 +209,7 @@ public sealed class ExternalAppRealDaemonTests
         // The premise, asserted rather than assumed: this process cannot remove it, so an engine that only deleted
         // host-side would fail here. Without this the rest proves only that a deletable directory gets deleted.
         AssertEx.Throws<UnauthorizedAccessException>(() => Directory.Delete(privateDirectory, recursive: true),
-            "The application's directory is removable by this process, so this box cannot reproduce the defect.");
+            "The application's directory is removable by this process, so this host cannot reproduce the defect.");
 
         // A marker BESIDE the unreadable directory, in the part of the tree the engine does own. The helper removes
         // the contents of volumes/ wholesale, so this going away is the wipe having run; and the reset reaching
@@ -596,7 +595,7 @@ public sealed class ExternalAppRealDaemonTests
 
         public async Task SettleUninstalledAsync(Guid instanceId)
         {
-            await AssertEx.EventuallyAsync(() => ReadAsync(instanceId).GetAwaiter().GetResult() is null,
+            await AssertEx.EventuallyAsync(async () => await ReadAsync(instanceId) is null,
                 TimeSpan.FromMinutes(3),
                 $"Instance {instanceId:N} was never removed.");
         }

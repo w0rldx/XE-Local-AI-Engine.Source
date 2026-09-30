@@ -464,7 +464,7 @@ public sealed class ReasoningEffortDispatcherTests
     [Test]
     public async Task Fast_WhenFastModelIsNotInstalled_NeverSwaps()
     {
-        // The gate the live round found inert. `ModelTrustResolver` classifies a scheme-less id as Local whenever no
+        // Why trust + routing alone are no gate: `ModelTrustResolver` classifies a scheme-less id as Local whenever no
         // cloud provider is selected for it, and `LocalModelProviderResolver` routes an unmapped id to the default
         // provider, which is llamacpp — so on a node with no cloud provider configured that pair admits EVERY string.
         // Registry membership is what refuses one, and it refuses it HERE, by name, instead of at warm time under

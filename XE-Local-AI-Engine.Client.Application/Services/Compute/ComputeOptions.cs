@@ -43,7 +43,7 @@ public sealed class ComputeOptions
     ///     Pinned rather than left to the libraries, which size their pools from the HOST's core count read out of
     ///     <c>/proc</c> — not what <see cref="CpuCount" /> allows, so an unpinned BLAS starts a thread per host core and
     ///     then thrashes inside a fraction of one. The cap at four is the other half: a linear-algebra call on the array
-    ///     sizes this tool sees stops scaling long before a many-core box's core count, and the threads it would start
+    ///     sizes this tool sees stops scaling long before a many-core machine's core count, and the threads it would start
     ///     still cost against <see cref="PidsLimit" />.
     /// </remarks>
     public int ThreadLimit { get; set; } = Math.Min(val1: 4, Environment.ProcessorCount);

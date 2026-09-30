@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Drives a FIXED golden transcript against a transient profiling llama-server process and captures the
 ///     comparable throughput/latency/cache/VRAM metrics for one inference profile.
 /// </summary>
-/// <remarks>The transcript and sampling are fixed, so two profiles benchmarked on the same box are directly comparable.</remarks>
+/// <remarks>The transcript and sampling are fixed, so two profiles benchmarked on the same machine are directly comparable.</remarks>
 public interface IInferenceBenchmarkHarness
 {
     /// <summary>Runs the golden transcript against the <paramref name="context" /> endpoint and returns its measured metrics.</summary>
@@ -117,7 +117,7 @@ public sealed record InferenceBenchmarkSpec
     public double DeterminismTolerance { get; init; } = 1e-5;
 
     /// <summary>
-    ///     Expected idle process-budget/global-free offset on WDDM. The dev-box clean baseline is approximately 950 MiB;
+    ///     Expected idle process-budget/global-free offset on WDDM. The development-machine clean baseline is approximately 950 MiB;
     ///     rounding the allowance to 1 GiB keeps that platform offset separate from external-pressure growth.
     /// </summary>
     public long PreSpawnVramAmbientBaselineBytes { get; init; } = 1024L * 1024 * 1024;

@@ -265,7 +265,7 @@ public sealed class ExternalProviderReconcilerTests
             IExternalProviderStore? store = null,
             ILogger<ExternalProviderReconciler>? logger = null)
         {
-            SettingsStore = new RecordingNodeSettingsStore(new StoredNodeSettings
+            SettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
             {
                 ToolCapableModels = existingAllowList,
                 DefaultModelName = defaultModelName
@@ -285,7 +285,7 @@ public sealed class ExternalProviderReconcilerTests
         public InMemoryCoordinatedModelProviderMapStore MapStore { get; } = new();
         public ILocalModelProviderResolver ProviderResolver { get; } = Substitute.For<ILocalModelProviderResolver>();
         public ILocalChatClientCacheInvalidator ChatClientCache { get; } = Substitute.For<ILocalChatClientCacheInvalidator>();
-        public RecordingNodeSettingsStore SettingsStore { get; }
+        public FakeNodeSettingsStore SettingsStore { get; }
         public ExternalProviderReconciler Reconciler { get; }
 
         /// <summary>
@@ -299,7 +299,7 @@ public sealed class ExternalProviderReconcilerTests
 
         public StoredNodeSettings CapturedSettings()
         {
-            return SettingsStore.LastWritten ?? throw new InvalidOperationException("The reconciliation pass wrote no settings.");
+            return SettingsStore.Saved ?? throw new InvalidOperationException("The reconciliation pass wrote no settings.");
         }
     }
 
@@ -370,49 +370,6 @@ public sealed class ExternalProviderReconcilerTests
         public Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
-        }
-    }
-
-    /// <summary>
-    ///     A real in-memory node-settings store rather than a substitute, because the pass now writes through the
-    ///     COORDINATED update — a substitute would return a default from the mutation and never apply it, and the
-    ///     lost-update behaviour this replaced is exactly what the assertions here have to be able to see.
-    /// </summary>
-    private sealed class RecordingNodeSettingsStore : INodeSettingsStore
-    {
-        private StoredNodeSettings _current;
-
-        public RecordingNodeSettingsStore(StoredNodeSettings initial)
-        {
-            _current = initial;
-        }
-
-        public StoredNodeSettings? LastWritten { get; private set; }
-
-        public int WriteCount { get; private set; }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_current);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return _current;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            _current = settings;
-            LastWritten = settings;
-            WriteCount++;
-            return Task.CompletedTask;
-        }
-
-        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            await SaveAsync(mutate(_current), cancellationToken);
-            return _current;
         }
     }
 }

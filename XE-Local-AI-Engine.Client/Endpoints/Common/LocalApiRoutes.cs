@@ -372,7 +372,7 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/development/hub";
     }
 
-    /// <summary>Local API contract type for model-fit, the box-aware local model advisor.</summary>
+    /// <summary>Local API contract type for model-fit, the hardware-aware local model advisor.</summary>
     /// <remarks>
     ///     Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor, and the
     ///     refresh endpoint delegates to the scheduler trigger rather than executing the advisor directly. The advisor
@@ -510,7 +510,7 @@ public static class LocalApiRoutes
         // could not be stopped would hold the node's bandwidth and disk until it finished.
         public const string ModelDownloadCancel = "images/models/downloads/cancel";
 
-        // Curated image-model catalog: the one-click install list, annotated with this box's hardware fit and whether each entry is already installed. The literal "catalog"
+        // Curated image-model catalog: the one-click install list, annotated with this machine's hardware fit and whether each entry is already installed. The literal "catalog"
         // segment precedes nothing, so it cannot be captured by ModelByName's {modelName} route (that one is DELETE-only in any case).
         public const string ModelCatalog = "images/models/catalog";
 

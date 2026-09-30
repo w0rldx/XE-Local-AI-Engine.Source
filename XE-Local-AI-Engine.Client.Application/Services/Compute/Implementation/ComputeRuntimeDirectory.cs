@@ -27,7 +27,7 @@ internal sealed class ComputeRuntimeDirectory
     /// <remarks>
     ///     It sat beside the venv under the compute cache root, which is space the jail-occupancy watchdog never walked
     ///     and which one call could read out of the next. Both holes are closed — the scratch is inside the
-    ///     per-invocation jail — but a box that ran an older build still has the directory, with whatever those calls
+    ///     per-invocation jail — but a machine that ran an older build still has the directory, with whatever those calls
     ///     left in it, so it is swept once before the tool can run.
     /// </remarks>
     private const string LegacyScratchDirectoryName = "scratch";
@@ -319,7 +319,7 @@ internal sealed class ComputeRuntimeDirectory
 
     /// <summary>
     ///     The machine-global compute cache root, under the same base the llama.cpp binaries and the training runtime
-    ///     use so one provision serves every node profile on the box and the existing uninstaller sweep already reaches it.
+    ///     use so one provision serves every node profile on the host and the existing uninstaller sweep already reaches it.
     /// </summary>
     public static string DefaultCacheRoot()
     {

@@ -1,24 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
-
-internal static class WorkSessionToolSerialization
-{
-    /// <summary>
-    ///     Shared by every work-session handler, and non-generic on purpose: one copy of the options rather than one per
-    ///     closed generic type.
-    /// </summary>
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
-    };
-}
 
 /// <summary>
 ///     The shared shape of the four work-session state tools: bounded JSON in, one sentence out, never a throw.

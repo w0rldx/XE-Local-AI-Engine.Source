@@ -146,7 +146,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
 }
 
 /// <summary>
-///     What the box looked like when a model was last loaded successfully: the machine-global free VRAM the capacity gate measured just
+///     What the host looked like when a model was last loaded successfully: the machine-global free VRAM the capacity gate measured just
 ///     before admitting the load, and the GPU bytes it reserved for that process.
 /// </summary>
 /// <remarks>

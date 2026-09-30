@@ -1,4 +1,6 @@
 export interface HeaderBarTitleState {
 	selectedApplicationLanguage: string;
-	changeLanguage: (language: string) => void;
+	actions: {
+		changeLanguage: (language: string) => void;
+	};
 }

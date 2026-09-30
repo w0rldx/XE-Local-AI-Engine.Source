@@ -376,7 +376,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		expect(hooksMock.ensureMutate.mock.calls[0]?.[0]).toBe("cpu");
 	});
 
-	// R8a: before the first check the snapshot is empty (updateAvailable and isOffline both false), which used to render
+	// Regression: before the first check the snapshot is empty (updateAvailable and isOffline both false), which used to render
 	// a green "Up to date". Switching the automatic check off makes that lie permanent.
 	it("says not checked yet when the runtime has never been checked", () => {
 		hooksMock.statusData = {

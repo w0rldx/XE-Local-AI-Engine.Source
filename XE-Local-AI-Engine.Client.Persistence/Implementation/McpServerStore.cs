@@ -49,7 +49,7 @@ public sealed class McpServerStore : IMcpServerStore
         };
 
         _ = _dbContext.McpServers.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await SaveRegistrationAsync(input.Name, cancellationToken);
 
         return ToRecord(entity);
     }
@@ -101,7 +101,7 @@ public sealed class McpServerStore : IMcpServerStore
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await SaveRegistrationAsync(input.Name, cancellationToken);
 
         return ToRecord(entity);
     }
@@ -176,6 +176,19 @@ public sealed class McpServerStore : IMcpServerStore
                                        .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
+    }
+
+    private async Task SaveRegistrationAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+        {
+            // The unique Name index is the backstop when a concurrent create or rename races past the service's pre-check.
+            throw new McpServerNameConflictException($"An MCP server named '{name}' is already registered.", exception);
+        }
     }
 
     private static McpServerRecord ToRecord(McpServerRegistration entity)

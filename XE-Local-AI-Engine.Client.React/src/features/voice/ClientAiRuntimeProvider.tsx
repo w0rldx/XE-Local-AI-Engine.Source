@@ -4,9 +4,9 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { detectVoiceCapabilities } from "@/core/runtime/CapabilityDetector";
-import { sanitizeForSpeech } from "@/core/runtime/SentenceBuffer";
-import { VoiceRuntime } from "@/core/runtime/VoiceRuntime";
+import { detectVoiceCapabilities } from "@/features/voice/CapabilityDetector";
+import { sanitizeForSpeech } from "@/features/voice/SentenceBuffer";
+import { VoiceRuntime } from "@/features/voice/VoiceRuntime";
 import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { toSpeakableText } from "@/features/voice/SpeakableText";
 import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";

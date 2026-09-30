@@ -74,7 +74,7 @@ public sealed record StoredAzureFoundryConnection
     /// <summary>
     ///     The loopback redirect URI for <see cref="CloudProviders.EntraSignInMethod.AuthorizationCode" /> sign-in
     ///     (e.g. <c>http://localhost:53682/signin-oidc</c>). Not secret — round-trips to the UI. Null or blank
-    ///     selects the default <see cref="EntraAuthCodeDefaults.RedirectUri" />. Ignored for every other sign-in
+    ///     selects the default <see cref="Auth.EntraAuthCodeDefaults.RedirectUri" />. Ignored for every other sign-in
     ///     method.
     /// </summary>
     public string? EntraAuthCodeRedirectUri { get; init; }

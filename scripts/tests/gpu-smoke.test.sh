@@ -142,7 +142,7 @@ echo "== gpu actually used =="
 # Read by assert_gpu_was_used, which lives in the sourced script the linter is told not to follow.
 # shellcheck disable=SC2034
 MIN_UTIL_PERCENT=15
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # read by assert_gpu_was_used in the sourced script
 MIN_VRAM_RISE_MIB=150
 
 out="$(assert_gpu_was_used 3 3400 3300 3310 2>&1)"; status=$?
@@ -233,11 +233,11 @@ check "a legitimate below-baseline reading still passes" "0" "$?"
 gpu_sample_once() { return 1; }
 gpu_vram_now >/dev/null 2>&1
 check "gpu_vram_now fails when nvidia-smi produces nothing" "1" "$?"
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # test double, called indirectly by gpu_vram_now
 gpu_sample_once() { printf '%s\n' "7, [N/A]"; }
 gpu_vram_now >/dev/null 2>&1
 check "gpu_vram_now fails on a non-numeric memory field" "1" "$?"
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # test double, called indirectly by gpu_vram_now
 gpu_sample_once() { printf '%s\n' "7, 4552"; }
 check "gpu_vram_now returns the reading when valid" "4552" "$(gpu_vram_now)"
 gpu_vram_now >/dev/null 2>&1
@@ -385,14 +385,14 @@ smoke_source="$(cat "${SMOKE}")"
 check_contains "the exact configured AppHost is selected" \
   'ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"' \
   "${smoke_source}"
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # literal source fragment, must not expand
 check_contains "the exact AppHost is built in Debug" \
   'dotnet build "${ASPIRE_APPHOST}" --configuration Debug' "${smoke_source}"
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # literal source fragment, must not expand
 check_contains "dev-start cannot rebuild after the guard snapshot" \
   '"${GPU_SMOKE_SCRIPT_DIR}/dev-start.sh" --no-build' "${smoke_source}"
 
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # literal source fragment, must not expand
 build_match="$(grep -nF 'dotnet build "${ASPIRE_APPHOST}" --configuration Debug' "${SMOKE}")"
 snapshot_match="$(grep -nF 'assembly-guard.sh" snapshot' "${SMOKE}")"
 start_match="$(grep -nF 'dev-start.sh" --no-build' "${SMOKE}")"

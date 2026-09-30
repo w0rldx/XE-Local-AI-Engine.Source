@@ -331,14 +331,20 @@ public sealed class SourceBuildRecoveryTests
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         using var buildService = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+        var logger = new RecordingLogger<CudaBuildStartupService>();
         var startup = new CudaBuildStartupService(buildService,
             store,
             new CudaManagedBuildSignal(),
-            NullLogger<CudaBuildStartupService>.Instance);
+            logger);
         using var expired = new CancellationTokenSource();
         await expired.CancelAsync();
 
-        await startup.StopAsync(expired.Token);
+        await AssertEx.CompletesAsync(startup.StopAsync(expired.Token),
+            TestBudgets.Contended,
+            "an over-budget shutdown returns instead of rethrowing the host's cancellation.");
+
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "cut short by the host shutdown budget"),
+            "the abandoned drain is absorbed at the hosted-service boundary and reported, not thrown.");
     }
 
     [Test]

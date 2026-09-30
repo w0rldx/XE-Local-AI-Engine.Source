@@ -4,6 +4,5 @@
 // `_id` key — which trips biome's naming-convention rule — is constructed; it is reused by the MCP-server management
 // hooks (useMcpServers) to refresh the catalog when the enabled server set changes.
 export const toolCatalogQueryKeys = {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	all: () => [{ _id: "getToolCatalog" }] as const,
 };

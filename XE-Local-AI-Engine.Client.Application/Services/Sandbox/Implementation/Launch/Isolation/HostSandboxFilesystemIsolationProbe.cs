@@ -8,14 +8,6 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 
-/// <summary>The outcome of one filesystem-isolation measurement: the ingredients, or the reason there are none.</summary>
-internal sealed class SandboxFilesystemIsolationProbeResult
-{
-    public required SandboxFilesystemIsolation? Isolation { get; init; }
-
-    public required string? Reason { get; init; }
-}
-
 /// <summary>
 ///     Measures whether this host can really run a command with the host filesystem absent from its mount namespace, by RUNNING the
 ///     production chain once against a throwaway jail and checking its positive controls.

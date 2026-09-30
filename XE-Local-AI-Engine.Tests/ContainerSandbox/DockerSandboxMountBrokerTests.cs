@@ -301,7 +301,7 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new SingleClientFactory(client),
             new FakeNodeDataDirectory(workspace),
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         return (provider, client, workspace);

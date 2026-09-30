@@ -49,7 +49,7 @@ public sealed class CustomToolServiceTests
         var service = BuildService(out _, out var offerProvider);
         // CustomToolService validates built-in/MCP collisions against the SYNC known-names view by design (the async view
         // also lists custom tools, which would self-collide on update), so the mock configures the sync method.
-#pragma warning disable CA1849, S6966
+#pragma warning disable CA1849, S6966 // configures the sync overload on purpose; it is the view under test
         offerProvider.GetKnownToolNames().Returns(["custom__weather"]);
 #pragma warning restore CA1849, S6966
 

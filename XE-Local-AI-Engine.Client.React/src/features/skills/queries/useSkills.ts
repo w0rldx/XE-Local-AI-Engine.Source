@@ -46,7 +46,6 @@ function invalidateSkillsList(queryClient: ReturnType<typeof useQueryClient>): P
 // editor shows the freshly edited body.
 function invalidateAllSingleSkills(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	return queryClient.invalidateQueries({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getSkill" }],
 	});
 }

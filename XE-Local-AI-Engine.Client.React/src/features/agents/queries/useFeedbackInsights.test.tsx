@@ -41,7 +41,6 @@ function makeWrapper() {
 describe("useFeedbackInsights", () => {
 	beforeEach(() => {
 		optionsMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: "getAgentFeedbackInsights" }],
 			queryFn: async () => generatedResponse,
 		}));

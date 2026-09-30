@@ -67,11 +67,9 @@ public sealed class ToolApprovalCoordinator
     // so ResolveApprovalToolCategory cannot see them and they would audit as Unknown. Cataloguing them instead would move every skill-bearing agent's config hash.
     private static readonly Dictionary<string, ToolCategory> SkillToolCategories = new(StringComparer.Ordinal)
     {
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
         [AgentSkillsProvider.LoadSkillToolName] = ToolCategory.ReadLocal,
         [AgentSkillsProvider.ReadSkillResourceToolName] = ToolCategory.ReadLocal,
         [AgentSkillsProvider.RunSkillScriptToolName] = ToolCategory.WriteExecute
-#pragma warning restore MAAI001
     };
 
     // Questions parked on the operator, keyed by the opaque request id the browser echoes back. Separate from _pendingToolCalls: an approval resolves
@@ -311,7 +309,7 @@ public sealed class ToolApprovalCoordinator
     /// <remarks>
     ///     Stashes what the handler returns: the fenced result on accept or auto, the decline text on reject, the host's
     ///     refusal when there is nothing to review. It parks on the same approval events as any tool, never offers session
-    ///     scope, and never fails the turn; the unattended guard runs FIRST. See PLAN web-access §1.6.
+    ///     scope, and never fails the turn; the unattended guard runs FIRST. See ADR 0017.
     /// </remarks>
     internal async Task<string> RequestWebReviewAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
@@ -698,9 +696,7 @@ public sealed class ToolApprovalCoordinator
             return null;
         }
 
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
         var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
-#pragma warning restore MAAI001
 
         var call = approvalRequest.ToolCall as FunctionCallContent;
         if (ReadStringArgument(call, SkillNameArgument) is not { } skillName)

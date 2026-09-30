@@ -90,10 +90,10 @@
 #     JOBS=16 PAR=1   7:02 wall   1369 MB per batch      JOBS=16 PAR=2   6:52   2951 MB
 #   All four green at 12132/0. Two things follow. Width 2 buys 2 % of wall for 2.2x the memory, so
 #   PAR stays 1 — and the DevWorkflows width-2 exception that used to live here was REMOVED on the
-#   same evidence: with JOBS=16 the box is saturated, so the family finishing ~20 % sooner only hands
+#   same evidence: with JOBS=16 the host is saturated, so the family finishing ~20 % sooner only hands
 #   its cores to another namespace (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not
 #   move (7:02 without it, 7:08 with it) while peak RSS per batch rose from 1369 MB to 2064 MB.
-#   Second, JOBS is the lever, and its best value tracks the box — hence the two measured defaults
+#   Second, JOBS is the lever, and its best value tracks the host — hence the two measured defaults
 #   below rather than one number. Free RAM caps them: with no profile and no explicit JOBS,
 #   JOBS = clamp(1, default, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a ">> Sizing:"
 #   line (constants and their evidence: scripts/lib/test-sizing.sh).
@@ -347,7 +347,7 @@ fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
 # namespace that took >= 10s is listed, descending; the trailing comment is that measurement.
-# Weights come from ONE CI run: 36079796542 (green, develop @e591c01b3, 2026-09-25; coverage ON, JOBS=4,
+# Weights come from ONE green CI run on develop (2026-09-25; coverage ON, JOBS=4,
 # in-process width 1, the TEST_GROUPS=16 pack split across four shards), the first green run after the
 # change that gives each test host one internal EF service provider. That change moved namespace costs
 # unevenly (DevWorkflows.Materialization 828s -> 156s, GraphWorkflows 925s -> 187s, Auth
@@ -356,8 +356,8 @@ fi
 # with `--runs 2` and score it on a run that did not build it.
 # Weight from a mean of runs, not one, because the mean is the lowest-variance estimate of a
 # namespace's expected seconds — NOT because it balances the legs better. A single run's weights
-# overfit its own noise (the table from 34861036286 alone scored a 1.05 shard max/min on the run it
-# came from and 1.43 on the next), but on the held-out run 34882013960 the single-run table scored
+# overfit its own noise (one run's table alone scored a 1.05 shard max/min on the run it
+# came from and 1.43 on the next), but on a held-out run the single-run table scored
 # 1.14 and the two-run mean 1.53, versus that mean's own 1.14 and 1.12 in sample. Realised balance is dominated by per-leg RUNNER
 # SPEED, which varied 0.77-1.17x within that one run and which no table can compensate. So this is
 # not a balance-tuning knob: re-weight when the namespace set changes (one added, split or gone) or
@@ -366,7 +366,7 @@ fi
 # the noise level.
 # NOT harmless if stale: an older table carried DevWorkflows at a local 196s while CI spent 1651s on
 # it, the packer gave that one unsplittable namespace a bin to itself, and shard 0 hit the 45-minute
-# job timeout (run 34730991540) — an 8x error, far past the 2x bar above.
+# job timeout — an 8x error, far past the 2x bar above.
 # The recipe is `scripts/test-durations.py --heavy --runs N` over the tests-{0..3} TRX artifacts of N
 # green runs — never the siblings artifact, which is a different set of projects. Those artifacts are
 # the only source that reflects coverage on and width 1, and they work under the sharded TEST_GROUPS
@@ -377,10 +377,10 @@ fi
 # to be split into sub-namespaces in the test project (see DevWorkflows.{Execution,Materialization,
 # Dispatch}, which is why those four entries exist rather than one).
 # The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost.
-# Measured once, on run 34515666107 under TEST_GROUPS=4: a 15s cut-off left 71 namespaces hiding
+# Measured once, on one CI run under TEST_GROUPS=4: a 15s cut-off left 71 namespaces hiding
 # 248s from the packer and packed worse than the stale table it replaced (486s vs 479s of true load
 # on the fullest bin); 10s brought that to 439s, and below 10s bought ~13s for 11 more entries.
-# The seconds move with every re-measure — on run 36079796542 the 67 unlisted namespaces total
+# The seconds move with every re-measure — on the 2026-09-25 run the 67 unlisted namespaces total
 # ~114s of real work, ~47s more than the 67s their weight-1 stubs give the packer — the cut-off
 # does not.
 HEAVY=(

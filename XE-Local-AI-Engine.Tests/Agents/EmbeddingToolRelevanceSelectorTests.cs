@@ -187,10 +187,8 @@ public sealed class EmbeddingToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_WhenTheEmbeddingTimeoutExpires_FallsBackToLexicalInsteadOfThrowing()
     {
-        // The ⚑ of the plan: the relevance hop calls this under CancellationToken.None, so the ONLY cancellation that
-        // can arrive is this selector's own EmbeddingTimeout — the thing that must degrade. Copying the playbook
-        // ranker's "rethrow a cancellation" clause verbatim would fail the send instead, which is the H5 bound
-        // inverted.
+        // The relevance hop calls this under CancellationToken.None, so the ONLY cancellation that can arrive is this
+        // selector's own EmbeddingTimeout, which must degrade to lexical rather than fail the send.
         var provider = new FakeEmbeddingProvider
         {
             GenerateDelay = TimeSpan.FromMinutes(5)
@@ -381,6 +379,8 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         string embeddingProviderName = FakeEmbeddingProvider.ProviderKey,
         TimeSpan? embeddingTimeout = null)
     {
+        // real-timer: the embedding timeout is the selector's own input on a real clock; the timeout tests pass 20 ms
+        // against a five-minute generation, so no scheduling delay can flip the outcome.
         var options = Options.Create(new ToolRelevanceOptions
         {
             EmbeddingModelName = embeddingModel,

@@ -60,7 +60,7 @@ public sealed class LiveTranscriptionE2ETests : XEFakeAudioE2ETestBase
             Timeout = FirstCommitBudgetMs
         });
 
-        // The reload is the persistence assertion: transcript-segment-list is S2's REST-fed list, fed by the stored
+        // The reload is the persistence assertion: transcript-segment-list is the REST-fed list, fed by the stored
         // rows, not by anything this page kept in memory.
         await FakeAudioPage.ReloadAsync(new()
         {

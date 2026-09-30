@@ -31,22 +31,17 @@ internal sealed record DevelopmentProfileCommand(
 ///     <c>true</c>. No solution or repository is named in code: a hardcoded one binds Dev Mode to exactly one
 ///     repository while advertising that it can bind any.
 /// </remarks>
+/// <param name="ImportDigest">
+///     SHA-256 of the imported <c>.xe-dev/profile.json</c> bytes, or null when none shipped. Part of the canonical
+///     digest, so a changed declaration yields a new profile.
+/// </param>
 internal sealed record DevelopmentCommandProfile(
     string ProfileId,
     string ProfileVersion,
     string? TemplateId,
     string? BuildTarget,
-    /// <summary>
-    ///     SHA-256 of the raw <c>.xe-dev/profile.json</c> bytes this profile was imported from, or null when the
-    ///     repository shipped no such file.
-    /// </summary>
-    /// <remarks>
-    ///     Provenance: it records which declaration the operator confirmed and participates in the canonical digest,
-    ///     so re-importing a changed declaration yields a different profile. It is deliberately not what the
-    ///     per-attempt tamper check compares against — this value comes from the operator's live working tree at
-    ///     project creation while the managed worktree sits at the attempt's base commit, so an uncommitted edit
-    ///     legitimately differs; that check captures its own baseline from the worktree at attempt start.
-    /// </remarks>
+    // Not the per-attempt tamper baseline: this hashes the operator's live tree at project creation, while the managed
+    // worktree sits at the attempt's base commit, so that check captures its own baseline at attempt start.
     string? ImportDigest,
     IReadOnlyList<DevelopmentProfileCommand> Commands,
     IReadOnlyList<string> ValidationCommandIds,

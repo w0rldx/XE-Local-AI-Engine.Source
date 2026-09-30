@@ -532,11 +532,3 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         public required string? RetiredPrevious { get; init; }
     }
 }
-
-internal sealed record StableDiffusionCppAdoptionJournal(
-    Guid BuildId,
-    SdGpuBackend NewBackend,
-    string NewCommit,
-    bool HadPreviousDestination,
-    StableDiffusionInstalledRuntimeState? PreviousState,
-    StableDiffusionInstalledRuntimeState NewState);

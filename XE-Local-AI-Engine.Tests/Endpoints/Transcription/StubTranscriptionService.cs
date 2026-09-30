@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 /// <remarks>
 ///     Hand-written rather than a <c>Substitute.For</c> because it is stateful — a created session has to read back
 ///     through <see cref="GetSessionAsync" />, and the streaming tests need <see cref="TranscribeFileAsync" /> to park
-///     on a gate the test controls. It is the same posture the S1 endpoint tests take with their runtime-service stub.
+///     on a gate the test controls. It is the same posture the runtime endpoint tests take with their runtime-service stub.
 ///     <see cref="BeginUploadAsync" /> hands out a REAL <see cref="TranscriptionUploadSlot" />, because the slot's
 ///     disposal is exactly what the streaming tests are there to prove.
 /// </remarks>

@@ -212,7 +212,7 @@ public sealed class IntegrationTriggerServiceTests
     [Test]
     public async Task UpdateAsync_SwitchingToCallerManagedAgainstAWriteAgent_IsSaved()
     {
-        // The update half of R6-1: switching a live trigger onto a caller-managed session is an ordinary edit now.
+        // The update half of ADR 0008 R6-1: switching a live trigger onto a caller-managed session is an ordinary edit now.
         var harness = new Harness();
         var agentId = harness.SeedAgent(ToolCategory.WriteExecute);
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
@@ -271,7 +271,7 @@ public sealed class IntegrationTriggerServiceTests
             Agents = Substitute.For<IAgentDefinitionStore>();
             AgentResolver = Substitute.For<IAgentDefinitionResolver>();
 
-            Service = new IntegrationTriggerService(Triggers, Agents, new ManualTimeProvider());
+            Service = new IntegrationTriggerService(Triggers, Agents);
         }
 
         /// <summary>

@@ -285,7 +285,7 @@ describe("useTranscriptionHub", () => {
 		expect(subscribeInvokes()[1]?.[2]).toBe(7);
 	});
 
-	// R32: `SubscribeSession` is awaited, so a live push can arrive before its snapshot lands. Applying it there would
+	// `SubscribeSession` is awaited, so a live push can arrive before its snapshot lands. Applying it there would
 	// advance the cursor past rows the snapshot is still carrying — the client's half of the join-before-replay race.
 	it("PushDuringSnapshotLoading_IsBufferedAndMergedBySeq", async () => {
 		const gate = deferred<unknown>();
@@ -308,7 +308,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.view?.lastSeq).toBe(2);
 	});
 
-	// R32: merging is by exact sequence identity. The old `<= lastSeq` drop discarded a row for good whenever one
+	// Merging is by exact sequence identity. A `<= lastSeq` drop would discard a row for good whenever one
 	// lane's persistence stalled behind the other's.
 	it("AnOutOfOrderLowerSeq_IsStillRendered", async () => {
 		subscribeHandler = () => Promise.resolve(snapshot({ lastSeq: 5, segments: [row(5)] }));
@@ -388,7 +388,7 @@ describe("useTranscriptionHub", () => {
 		await waitFor(() => expect(result.current.view?.bufferedMs).toBe(0));
 	});
 
-	// Codex r2 #10: the node announces it stopped accepting audio so the capture can stop instead of recording into a
+	// The node announces it stopped accepting audio so the capture can stop instead of recording into a
 	// drain that discards every frame. Only this session's well-formed push counts; a resubscribe clears it.
 	it("AdmissionClosed_IsSetForThisSessionOnlyAndClearedByAResubscribe", async () => {
 		const { result } = renderHub();
@@ -424,7 +424,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.hub.terminal).toEqual({ status: "Abandoned", errorCode: "live-never-attached" });
 	});
 
-	// R32a: no page cap. An earlier draft stopped at 20, which leaves a session past 10 000 rows permanently
+	// No page cap. Stopping at 20 would leave a session past 10 000 rows permanently
 	// half-replayed, and the buffered newer pushes then move the reconnect cursor past rows nobody ever saw.
 	it("ReplayTruncated_DrainsMoreThanTwentyPagesWhileANewerPushArrives", async () => {
 		const pageCount = 25;
@@ -482,7 +482,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.view?.committed.map((segment) => segment.seq)).toEqual([5, 9]);
 	});
 
-	// R40a: S6 gates its dictation button on this one flag, so it must mean "what the view renders is complete".
+	// The dictation button gates on this one flag, so it must mean "what the view renders is complete".
 	it("Connected_IsFalseUntilTheSnapshotResolvesAndEveryPageIsDrained", async () => {
 		const firstPage = deferred<unknown>();
 		const secondPage = deferred<unknown>();
@@ -558,7 +558,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.hub.subscribeFailed).toEqual({ code: "transcription-subscribe-failed" });
 	});
 
-	// Codex r1 #5: a transport that stays Connected but stops completing invokes is not a slow node — the node returns
+	// A transport that stays Connected but stops completing invokes is not a slow node — the node returns
 	// as soon as it has copied the frame — so a frame still open after the stall timeout stops capture as disconnected.
 	it("PushFrame_WhenTheInvokeNeverCompletes_RejectsAsDisconnectedAfterThirtySeconds", async () => {
 		pushHandler = () => new Promise<unknown>(() => undefined);

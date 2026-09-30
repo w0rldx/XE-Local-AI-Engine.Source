@@ -62,7 +62,7 @@ test("Vite dev server traverses Mantine through the light Chroma facade without 
 		const baseUrl = server.resolvedUrls?.local[0];
 		assert.ok(baseUrl, "Vite did not publish a local development URL");
 
-		const colorUtils = await request(new URL("/src/modules/theme-configurator/components/ColorUtils.ts", baseUrl));
+		const colorUtils = await request(new URL("/src/core/theme/theme-configurator/components/ColorUtils.ts", baseUrl));
 		assert.equal(colorUtils.statusCode, 200, colorUtils.body);
 		const mantineSpecifier = requiredImport(colorUtils.body, "the optimized @mantine/colors-generator dependency", (specifier) =>
 			specifier.includes("@mantine_colors-generator"),

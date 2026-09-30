@@ -38,7 +38,7 @@ function parseDetail(detailJson: string | null): EventDetail | null {
 
 /**
  * The viewer language for one output, from the `contentType` the integrator sent. Only a JSON media type gets `json`:
- * S3 stores the payload verbatim, so a `text/plain` body is not JSON and must not be shown as if it were.
+ * the node stores the payload verbatim, so a `text/plain` body is not JSON and must not be shown as if it were.
  */
 function outputLanguage(contentType: string | undefined): string {
 	const mediaType = (contentType ?? "").split(";", 1).join("").trim().toLowerCase();

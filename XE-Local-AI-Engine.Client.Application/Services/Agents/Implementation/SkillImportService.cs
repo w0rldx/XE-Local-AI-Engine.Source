@@ -291,9 +291,8 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     private static void ValidateFrontmatter(string name, SkillFrontmatterDocument frontmatter, List<string> problems)
     {
-        // MAAI001: Agent Skills ship [Experimental]; the scoped suppression matches AgentSkillService. These are the
-        // same validators the AgentInlineSkill constructor runs, and their messages echo no caller content.
-#pragma warning disable MAAI001
+        // These are the same validators the AgentInlineSkill constructor runs, and their messages echo no caller
+        // content.
         if (!AgentSkillFrontmatter.ValidateName(name, out var nameError))
         {
             problems.Add(nameError);
@@ -313,7 +312,6 @@ internal sealed partial class SkillImportService : ISkillImportService
         {
             problems.Add(descriptionError);
         }
-#pragma warning restore MAAI001
 
         if (!IsSafeText(frontmatter.License, MaxOptionalFieldLength)
             || !IsSafeText(frontmatter.Compatibility, MaxOptionalFieldLength)

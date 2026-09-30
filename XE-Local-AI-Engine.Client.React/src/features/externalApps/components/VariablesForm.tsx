@@ -38,7 +38,7 @@ const keyPrefix = "pages.externalApps.variables";
  * sentinel, its box renders EMPTY with a "stored — leave empty to keep" placeholder, an untouched save sends the
  * sentinel straight back, and clearing it is an explicit action rather than an emptied box. It is rendered `masked`
  * so the value the operator TYPES is hidden — an install dialog asking for an admin password must not print it on
- * screen, and the live round screenshots these dialogs. The reveal control that comes with it is harmless on a stored
+ * screen, and these dialogs get screenshotted. The reveal control that comes with it is harmless on a stored
  * secret: the box is empty, so revealing it shows the empty box, never a value the server did not return.
  */
 export function VariablesForm({

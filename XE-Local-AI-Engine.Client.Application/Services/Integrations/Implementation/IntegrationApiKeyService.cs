@@ -95,7 +95,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         var snapshot = await _store.GetByPrefixAsync(presented[..PrefixLength], cancellationToken);
         if (snapshot is null || snapshot.RevokedAtUtc is not null)
         {
-            // Uniform: "no such prefix" and "revoked" read exactly like "wrong key" to the caller (ruling R2-6). The lookup itself is not constant-time across
+            // Uniform: "no such prefix" and "revoked" read exactly like "wrong key" to the caller. The lookup itself is not constant-time across
             // prefixes — an unknown one skips the store read and the hash — which is acceptable: the prefix is a public display value carrying no authority.
             return null;
         }

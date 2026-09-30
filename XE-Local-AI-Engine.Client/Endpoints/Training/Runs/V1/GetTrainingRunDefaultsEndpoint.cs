@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
-///     The wizard's computed starting point: options sized to this box, the VRAM estimate behind them, and the exact
+///     The wizard's computed starting point: options sized to this machine, the VRAM estimate behind them, and the exact
 ///     licensing text the operator has to confirm. Read-only — it creates nothing.
 /// </summary>
 public sealed class GetTrainingRunDefaultsEndpoint : Endpoint<TrainingRunDefaultsRequest, TrainingRunDefaultsResponse>

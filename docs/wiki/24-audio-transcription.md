@@ -65,7 +65,7 @@ stderr tail on the process handle. The supervisor logs one Warning with model, p
 dead daemon down so the next request respawns, and the request fails with "the transcription runtime process exited
 (exit code N)" instead of "could not be reached"; a live window retries that death once
 ([the segmenter](#the-segmenter)). The stderr tail stays in the log and never reaches the exception message. The
-driver-library check only catches a missing driver, and the audit only knows better once llama.cpp has run on the box,
+driver-library check only catches a missing driver, and the audit only knows better once llama.cpp has run on the host,
 so when the pinned CUDA daemon dies anyway (at load or after readiness) the supervisor latches
 `WhisperCudaFailureSignal` and every later selection serves CPU until the node restarts, with one Warning; a
 bring-your-own or managed build is the operator's choice and never latches it. Full
@@ -663,7 +663,7 @@ comparing `IsSupported` against its own predicate would be a tautology that cann
 | `ExcludeTargetProcessTree` | **everything on the endpoint except** the target and its descendants |
 
 Read quickly, `ExcludeTargetProcessTree` looks like "just this application". It is the opposite: offering it as a
-"this application only" scope would record every other application on the box while the interface claimed one — a
+"this application only" scope would record every other application on the host while the interface claimed one — a
 privacy inversion. `WindowsProcessAudioCaptureSource.CaptureMode` is `IncludeTargetProcessTree` and is the only mode
 this product has: there is no scope enum, no scope field on `StartProcessCaptureRequest`, and
 `ExcludeTargetProcessTree` appears nowhere in product code.
@@ -916,10 +916,9 @@ coordinator lifecycle (`ProcessAudioCaptureCoordinatorTests`, including the
 buffered-audio cap and blocked-push cases) and the endpoint policy, shapes and reason codes
 (`TranscriptionCaptureEndpointTests`).
 
-**The WASAPI process-loopback path itself was not executed.** The development box is WSL2 with no Windows audio stack,
-so the three `[RunOn(OS.Windows)]` tests in `WindowsProcessLoopbackTests` report **skipped** — the honest result, and
-not evidence that the feature works. What a real Windows box still has to establish is recorded in the slice plan's
-live-validation section: that the picker lists only the process actually playing, that committed segments arrive on
+**The WASAPI process-loopback path itself was not executed.** A Linux or WSL2 host has no Windows audio stack,
+so the three `[RunOn(OS.Windows)]` tests in `WindowsProcessLoopbackTests` report **skipped** there — the honest result,
+and not evidence that the feature works. What a real Windows machine still has to establish: that the picker lists only the process actually playing, that committed segments arrive on
 `Others`, that a **second application's audio does not appear** (the negative control, and the whole point of the
 single scope), that a multi-process application's child audio does appear, the observed OS build, the observed
 `WaveFormat`, and that closing the target mid-capture ends the session through the registry with no recorder left

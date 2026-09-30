@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive scripts/generate-release-notes.sh against PATH shims for `git` and `git-cliff`.
 
-git-cliff is not installed on a developer box and `release-contracts` does not install it either, so the
+git-cliff is not installed on a developer machine and `release-contracts` does not install it either, so the
 only way to assert what the script *asks* git-cliff for is to record the argv. The shims also keep the run
 inside a scratch directory: the `git rev-parse --show-toplevel` the script `cd`s into is the scratch root,
 so nothing is written to the repository.
@@ -158,7 +158,7 @@ class CliffTagBoundaryTests(unittest.TestCase):
     """`cliff.toml`'s tag regexes decide where an official release's commit range starts.
 
     Asserted with `re` against the real config rather than by running git-cliff, which is not installed on a
-    developer box. git-cliff matches both patterns UNANCHORED with the Rust `regex` crate, and Python's
+    developer machine. git-cliff matches both patterns UNANCHORED with the Rust `regex` crate, and Python's
     `re.search` has the same semantics for these patterns.
     """
 

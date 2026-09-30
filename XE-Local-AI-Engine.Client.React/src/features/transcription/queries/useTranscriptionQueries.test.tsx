@@ -18,7 +18,7 @@ import { setupMswServer } from "@/test/UseMswServer";
 setupMswServer();
 
 const sessionId = "11111111-0000-4000-8000-000000000001";
-// The interval this query used to run on, before the transcription hub existed (K-16). Kept as the window the
+// The interval this query used to run on, before the transcription hub existed. Kept as the window the
 // negative assertions below wait out: if a poll ever comes back, this is the length it would have.
 const formerPollMs = 2_000;
 
@@ -239,7 +239,7 @@ describe("useUpdateTranscriptSegment", () => {
 		expect(reads).toBe(1);
 	});
 
-	// Codex r1 #8: the detail query is `staleTime: 0`, so a refetch can be in flight when the save lands. Its response
+	// Regression: the detail query is `staleTime: 0`, so a refetch can be in flight when the save lands. Its response
 	// carries the pre-edit text and used to overwrite the patch; it is cancelled before the patch is written.
 	it("keeps the patched row when a refetch holding the old text is still in flight", async () => {
 		const row = (seq: number, text: string) => ({

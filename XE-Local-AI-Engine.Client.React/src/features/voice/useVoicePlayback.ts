@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 
-import { SentenceBuffer } from "@/core/runtime/SentenceBuffer";
+import { SentenceBuffer } from "@/features/voice/SentenceBuffer";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { toSpeakableText } from "@/features/voice/SpeakableText";

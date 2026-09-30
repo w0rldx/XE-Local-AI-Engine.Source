@@ -68,13 +68,11 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 		});
 		generatedMock.summaryFn.mockResolvedValue(createSummary());
 		generatedMock.getAgentUsageSummaryOptions.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getAgentUsageSummary" }],
 			queryFn: generatedMock.summaryFn,
 		}));
 		generatedMock.connectionsFn.mockResolvedValue({ revision: "rev-1", connections: [] });
 		generatedMock.listExternalProviderConnectionsOptions.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "listExternalProviderConnections" }],
 			queryFn: generatedMock.connectionsFn,
 		}));

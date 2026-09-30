@@ -67,7 +67,7 @@ public interface IInferenceProfileService
 
 /// <summary>
 ///     A node-local inference profile projected for transport. The local-only machine key is deliberately OMITTED (it
-///     must never leave the box); <see cref="Status" /> is surfaced as its name rather than a raw enum value.
+///     must never leave the host); <see cref="Status" /> is surfaced as its name rather than a raw enum value.
 /// </summary>
 public sealed class InferenceProfileView
 {

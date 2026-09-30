@@ -46,7 +46,7 @@ export function toRunningModel(dto: XeLocalAiEngineClientEndpointsModelFitV1Runn
 // What a graceful eject actually did. Mirrors the backend LlamaServerEjectOutcome wire values: "ejected"
 // (idle/drained cleanly), "timed_out_still_busy" (in-flight work did not drain and no force was set — left running),
 // "forced" (torn down despite in-flight work), "not_running" (nothing loaded — idempotent no-op).
-export const ejectRunningModelOutcomes = ["ejected", "timed_out_still_busy", "forced", "not_running"] as const;
+const ejectRunningModelOutcomes = ["ejected", "timed_out_still_busy", "forced", "not_running"] as const;
 export type EjectRunningModelOutcome = (typeof ejectRunningModelOutcomes)[number];
 
 export interface EjectRunningModelResult {

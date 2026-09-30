@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
-///     Create request for an MCP server registration. The editable fields mirror <see cref="McpServerInput" /> minus
+///     Create request for an MCP server registration. The editable fields mirror <see cref="Persistence.Stores.McpServerInput" /> minus
 ///     <c>Enabled</c>: a registration is always persisted disabled (enabling is the dedicated PATCH below), so the create
 ///     body carries no enabled flag.
 /// </summary>

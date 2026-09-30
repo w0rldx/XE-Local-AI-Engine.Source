@@ -139,8 +139,8 @@ public sealed class CapabilityReporterTests
         var chatClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(chatClient);
 
-        var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
-        var timeProvider = new FakeTimeProvider();
+        var nodeSettingsStore = new FakeNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.UtcNow);
         var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
         // The REAL NodeRuntimeSettings over the same store, so the reporter resolves its default model through the
         // stored > seed precedence exactly as it does in production. LocalChatAgentOptions.DefaultModel defaults to
@@ -163,7 +163,7 @@ public sealed class CapabilityReporterTests
         public CapabilityReporterTestContext(FakeOllamaServer server,
             OllamaApiClient chatClient,
             CapabilityReporter reporter,
-            FakeTimeProvider timeProvider)
+            ManualTimeProvider timeProvider)
         {
             Server = server;
             ChatClient = chatClient;
@@ -179,7 +179,7 @@ public sealed class CapabilityReporterTests
 
         public CapabilityReporter Reporter { get; }
 
-        public FakeTimeProvider TimeProvider { get; }
+        public ManualTimeProvider TimeProvider { get; }
 
         public async ValueTask DisposeAsync()
         {
@@ -200,51 +200,6 @@ public sealed class CapabilityReporterTests
         public void EnqueueFailure(FakeOllamaFailure failure)
         {
             Server.State.EnqueueFailure(failure);
-        }
-    }
-
-    private sealed class StubNodeSettingsStore : INodeSettingsStore
-    {
-        private readonly StoredNodeSettings _settings;
-
-        public StubNodeSettingsStore(StoredNodeSettings settings)
-        {
-            _settings = settings;
-        }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_settings);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return _settings;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(mutate(_settings));
-        }
-    }
-
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow = DateTimeOffset.UtcNow;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan timeSpan)
-        {
-            _utcNow = _utcNow.Add(timeSpan);
         }
     }
 }

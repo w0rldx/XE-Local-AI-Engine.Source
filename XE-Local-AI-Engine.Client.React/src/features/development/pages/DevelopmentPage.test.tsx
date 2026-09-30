@@ -66,7 +66,7 @@ function mutation(data?: Record<string, unknown>): MutationMock {
 	return { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null, data };
 }
 
-/** A project holding several tasks, which is what a workflow decomposition leaves behind (Phase W dropped the index). */
+/** A project holding several tasks, which is what a workflow decomposition leaves behind. */
 function decomposedDetail(...titles: readonly string[]) {
 	const base = detail("Planned");
 	return {

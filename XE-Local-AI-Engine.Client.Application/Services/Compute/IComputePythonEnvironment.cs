@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Compute;
 ///     Resolves the interpreter the compute tool executes scripts with, provisioning it on first use.
 /// </summary>
 /// <remarks>
-///     There is exactly one such interpreter per box and it is never the host's Python (ADR 0005): it is a uv-managed,
+///     There is exactly one such interpreter per machine and it is never the host's Python (ADR 0005): it is a uv-managed,
 ///     digest-pinned, lockfile-driven venv the engine owns, so what <c>import numpy</c> resolves to does not depend on
 ///     whatever the operator happens to have installed.
 /// </remarks>

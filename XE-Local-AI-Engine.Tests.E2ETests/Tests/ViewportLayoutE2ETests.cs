@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 ///     <para>
 ///         All pages are unpaired-safe (no Central Platform connection needed). The mobile tests
-///         use <see cref="PageSetViewportSizeAsync" /> before navigation so responsive CSS is
+///         use <see cref="Microsoft.Playwright.IPage.SetViewportSizeAsync(int, int)" /> before navigation so responsive CSS is
 ///         already in effect when the React tree mounts.
 ///     </para>
 /// </summary>

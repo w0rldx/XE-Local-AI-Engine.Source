@@ -8,15 +8,6 @@
   "[\"no-core-to-features\",\"src/core/layout/components/Layout/Layout.tsx\",\"src/features/node-settings/components/RuntimeAcquisitionBanner.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\"]",
   "[\"no-core-to-features\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/features/diagnostics/hooks/useReportProblem.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.tsx\",\"src/components/Logo/LogoMark.tsx\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.tsx\",\"src/components/Logo/LogoText.tsx\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.tsx\",\"src/data/navigation/NavigationMenuData.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.types.ts\",\"src/data/navigation/NavigationMenuData.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/HeaderBar/HeaderBar.tsx\",\"src/modules/theme-configurator/Index.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/components/Logo/LogoCombined.tsx\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/MobileNavigationBar/MobileNavigationBar.tsx\",\"src/data/navigation/NavigationMenuData.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu.tsx\",\"src/data/language/LanguageMenuData.ts\"]",
-  "[\"no-core-to-legacy\",\"src/core/locales/components/LanguageMenu/LanguageMenu.tsx\",\"src/data/language/LanguageMenuData.ts\"]",
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/app-update/components/AppUpdateSection.tsx\"]",
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/onboarding/context/OnboardingContext.ts\"]",
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/onboarding/data/TutorialRegistry.ts\"]",
@@ -77,7 +68,6 @@
   "[\"no-cross-feature\",\"src/features/knowledge/components/KnowledgeRepositoryImportPanel.tsx\",\"src/features/development/models/DevelopmentModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/knowledge/pages/KnowledgeBase.tsx\",\"src/features/development/queries/useDevelopment.ts\"]",
   "[\"no-cross-feature\",\"src/features/knowledge/pages/KnowledgeBase.tsx\",\"src/features/onboarding/components/TutorialInvitation.tsx\"]",
-  "[\"no-cross-feature\",\"src/features/loaded-models/components/LoadedModelsFormatters.ts\",\"src/features/models/models/LocalModelModel.ts\"]",
   "[\"no-cross-feature\",\"src/features/mcp/components/McpServerToolsPanel.tsx\",\"src/features/tools/models/ToolCatalogModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/mcp/queries/useMcpServers.ts\",\"src/features/tools/queries/ToolCatalogQueryKeys.ts\"]",
   "[\"no-cross-feature\",\"src/features/model-fit/hooks/useModelFitSchedulerEvents.ts\",\"src/features/scheduler/queries/useScheduler.ts\"]",
@@ -120,6 +110,5 @@
   "[\"no-cross-feature\",\"src/features/workSessions/hooks/useWorkSessionAgentOptions.ts\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/workSessions/hooks/useWorkSessionHub.ts\",\"src/features/chat/queries/NodeChatQueryKeys.ts\"]",
   "[\"no-cross-feature\",\"src/features/workSessions/pages/WorkSessionDetailPage.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
-  "[\"no-cross-feature\",\"src/features/workSessions/pages/WorkSessionDetailPage.tsx\",\"src/features/chat/pages/Chat.tsx\"]",
-  "[\"no-orphans\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\"]"
+  "[\"no-cross-feature\",\"src/features/workSessions/pages/WorkSessionDetailPage.tsx\",\"src/features/chat/pages/Chat.tsx\"]"
 ]

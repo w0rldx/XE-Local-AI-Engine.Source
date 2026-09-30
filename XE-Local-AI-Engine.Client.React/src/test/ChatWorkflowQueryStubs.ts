@@ -9,17 +9,14 @@
 
 export const chatWorkflowQueryStubs = {
 	getGraphWorkflowCapabilityOptions: () => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "getGraphWorkflowCapability" }],
 		queryFn: async () => ({ enabled: true }),
 	}),
 	listGraphWorkflowDefinitionsOptions: () => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listGraphWorkflowDefinitions" }],
 		queryFn: async () => ({ definitions: [] }),
 	}),
 	listGraphWorkflowConversationRunsOptions: (options: { path: { conversationId: string } }) => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listGraphWorkflowConversationRuns", path: options.path }],
 		queryFn: async () => ({ runs: [] }),
 	}),

@@ -84,7 +84,10 @@ public sealed record IntegrationTriggerUpdateCommand
 /// </summary>
 public interface IIntegrationTriggerStore
 {
-    /// <summary>Inserts a trigger and returns it as stored. A duplicate <c>Name</c> surfaces as <c>DbUpdateException</c>.</summary>
+    /// <summary>
+    ///     Inserts a trigger and returns it as stored. A rejected insert, in practice a duplicate <c>Name</c>, surfaces as
+    ///     <see cref="IntegrationTriggerNameConflictException" />.
+    /// </summary>
     Task<IntegrationTriggerSnapshot> CreateAsync(IntegrationTriggerCreateCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -103,4 +106,15 @@ public interface IIntegrationTriggerStore
 
     /// <summary>Deletes a trigger. Returns <see langword="false" /> when no row matched.</summary>
     Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     The insert was rejected: the unique index on <c>Name</c> is what decides two creates that both passed the
+///     name pre-check. Nothing was written.
+/// </summary>
+public sealed class IntegrationTriggerNameConflictException : Exception
+{
+    public IntegrationTriggerNameConflictException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

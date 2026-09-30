@@ -26,8 +26,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     A host that actually runs the integration coordinator AND the real <c>emit_output</c> handler.
 ///     <para>
-///         The model seams are substituted for the reason S2's fixture records: this host resolves no local chat model,
-///         so there is no runner to reach. What is NOT substituted is everything this slice owns — the accept path, the
+///         The model seams are substituted because this host resolves no local chat model, so there is no runner
+///         to reach. What is NOT substituted is everything the integration surface owns — the accept path, the
 ///         session gate, the context builder, the prior-outputs replay, the tool handler, the stores, the ring and the
 ///         SSE writer. The substituted runner does the two things a real one does that they depend on: it seeds the
 ///         ambient conversation scope, and it invokes the registered tool.

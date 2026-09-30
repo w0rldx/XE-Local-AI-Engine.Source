@@ -4,7 +4,7 @@ This matrix is intentionally conservative. “Unsupported here” means that the
 current development machine cannot produce transferable evidence; it does not mean
 the product backend is unsupported.
 
-| Target | Status on current box | Evidence that can be captured | Required follow-up |
+| Target | Status on current host | Evidence that can be captured | Required follow-up |
 |---|---|---|---|
 | WSL2 + managed source-build CUDA | Supported for baseline/rebaseline and fit/replay; **not sufficient for the corrected Lane 4 memory gate** | Runtime/helper hashes, tag, device list, baseline/rebaseline, fit/replay vectors, global VRAM | Reject samples with WDDM paging or global/process divergence; use another host for Lane 4 because WSL exposes no PID-scoped CUDA residency rows |
 | WSL2 CPU-only spawn | Supported | Baseline/rebaseline and fit/helper availability without GPU placement claims | Keep CPU evidence separate from GPU claims |

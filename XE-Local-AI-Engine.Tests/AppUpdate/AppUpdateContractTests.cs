@@ -78,7 +78,7 @@ public sealed class AppUpdateContractTests
     public async Task AppUpdateNeverEnablesAVersionDowngrade()
     {
         // UpdateOptions.AllowVersionDowngrade defaults to false, and that default is the ONLY thing making a channel
-        // switch forward-only. D6 says "never true anywhere", so every project that can reach Velopack is scanned.
+        // switch forward-only. ADR 0014 D6 says "never true anywhere", so every project that can reach Velopack is scanned.
         var sources = VelopackFacingProjects
                       .Select(project => RepositoryPaths.Combine(project))
                       .SelectMany(project => Directory.GetFiles(project, "*.cs", SearchOption.AllDirectories))

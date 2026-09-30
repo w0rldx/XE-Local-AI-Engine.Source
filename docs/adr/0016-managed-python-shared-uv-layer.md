@@ -124,7 +124,7 @@ contributes only `TrainingRuntimeStatus.ShippedLockfileSha256`. Compute persists
 revision that is not recorded there and so is `1` on both sides until its profile changes shape. The lockfile digest
 never reaches the wire; a differing lockfile is reported as the mismatch `lockfile`.
 
-**Deviations from PLAN §3.3.** The status carries no uv "source" field: uv has exactly one source, the pinned
+**Deviations from the original design.** The status carries no uv "source" field: uv has exactly one source, the pinned
 download. CPython installs come from a listing of `python/pythons` (alias symlinks and uv's dot-entries skipped), not
 `uv python list --only-installed`, because reading status must never spawn uv. A build whose shipped lockfile is
 missing reports Training as not comparable (`Ready`, the installed runtime keeps working) but Compute as `Failed`,

@@ -86,8 +86,8 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	}, [projects, selectedProjectId]);
 
 	const detail = projectQuery.data;
-	// A project carries MANY tasks. Phase W dropped the unique index on the task table's project id so a workflow can
-	// decompose one request into a task per child, and the ordinary decomposed case is three of them in one project.
+	// A project carries MANY tasks: a workflow can decompose one request into a task per child, and the ordinary
+	// decomposed case is three of them in one project.
 	// `?task=` therefore picks a real row out of several rather than restating the only one there is, and the choice is
 	// state so the switcher can move it without a navigation.
 	//

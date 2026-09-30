@@ -147,7 +147,7 @@ public static class DevWorkflowGraphContract
 
     /// <summary>Whether a node run's output says it validated nothing because there was nothing to validate.</summary>
     /// <remarks>
-    ///     The verdict the zero-task decomposition seeds onto its template's checks (ruling D12). Asked here so the API and
+    ///     The verdict the zero-task decomposition seeds onto its template's checks. Asked here so the API and
     ///     the runtime read ONE spelling of the token. The row is a real <c>Succeeded</c> row and has to be, or the
     ///     join behind it would never let the apply through — but it stands for work that did not happen, so every
     ///     count and badge that says "done" must tell the two apart. An unreadable document is not this verdict.

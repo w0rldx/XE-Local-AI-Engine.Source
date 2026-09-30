@@ -10,7 +10,7 @@
 // orderInRank = ONE barycenter pass over predecessor orders, ties broken by key
 // x = rank * 280, y = indexInRank * 130                            — TOP-ALIGNED
 //
-// Used for three things: a node that arrives without a `position` (an older graph, or S4's Preview importer, which
+// Used for three things: a node that arrives without a `position` (an older graph, or the Preview importer, which
 // emits none), the editor's "Auto-arrange", and the run view's nodes-only fallback when the run's graph hash no longer
 // matches the definition's.
 //

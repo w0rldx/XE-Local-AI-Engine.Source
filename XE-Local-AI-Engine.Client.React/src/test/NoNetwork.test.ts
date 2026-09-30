@@ -31,8 +31,8 @@ describe("no-network guard", () => {
 		expect(() => new XMLHttpRequest().open("GET", undeclared)).toThrow(guardError);
 	});
 
-	// SignalR is the reason this one matters: MSW's node server installed a WebSocketInterceptor, so an
-	// undeclared hub connection used to be rejected too. Without a stub here it would reach the real network.
+	// SignalR is the reason this one matters: an undeclared hub connection must be rejected too. Without a stub here
+	// it would reach the real network.
 	it("refuses a WebSocket connection", () => {
 		expect(() => new WebSocket("ws://127.0.0.1:9/hubs/undeclared")).toThrow(guardError);
 	});

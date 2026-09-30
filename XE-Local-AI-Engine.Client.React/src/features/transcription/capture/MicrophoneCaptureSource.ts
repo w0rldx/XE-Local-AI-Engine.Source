@@ -1,5 +1,5 @@
 /**
- * The microphone capture source (S4 plan §2.2): `getUserMedia` plus the shared PCM graph.
+ * The microphone capture source: `getUserMedia` plus the shared PCM graph.
  */
 
 import {

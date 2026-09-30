@@ -50,10 +50,8 @@ public static class SessionApprovalEligibility
             return false;
         }
 
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
         return string.Equals(toolName, AgentSkillsProvider.LoadSkillToolName, StringComparison.Ordinal)
                || string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
-#pragma warning restore MAAI001
     }
 
     /// <summary>

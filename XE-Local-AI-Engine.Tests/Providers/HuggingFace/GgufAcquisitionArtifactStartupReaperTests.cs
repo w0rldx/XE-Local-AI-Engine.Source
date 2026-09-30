@@ -131,9 +131,14 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_MissingModelsDirectory_NoThrow()
     {
-        var options = Infra.Options(Path.Combine(Path.GetTempPath(), "xe-hf-reaper-missing-" + Guid.NewGuid().ToString("N")));
+        var missing = Path.Combine(Path.GetTempPath(), "xe-hf-reaper-missing-" + Guid.NewGuid().ToString("N"));
+        var options = Infra.Options(missing);
 
-        await RunReaperAsync(options);
+        var start = RunReaperAsync(options);
+
+        AssertEx.True(start.IsCompletedSuccessfully, "a node with no models directory yet starts without a sweep fault.");
+        await start;
+        AssertEx.False(Directory.Exists(missing), "the sweep reads the models directory; it never creates it.");
     }
 
     private static Task RunReaperAsync(HuggingFaceOptions options)

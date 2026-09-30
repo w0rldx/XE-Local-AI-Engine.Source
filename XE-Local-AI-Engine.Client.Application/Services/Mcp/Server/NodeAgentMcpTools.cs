@@ -139,7 +139,7 @@ public sealed class NodeAgentMcpTools
     [McpServerTool(Name = "start_agent_run")]
     [Description(
         "Accept a durable background agent run and return immediately. Supply a globally unique UUID request_id plus exactly one of agent or model. The run continues across MCP disconnects and can be polled from a later connection. Delegate callers remain tool-less except for the seeded read-only Coder; agentic callers may use the saved agent's full allowed-tool set with strict audited auto-approval.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
+    // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpAgentRunStartResponse> StartAgentRunAsync(
         [Description(
             "A globally unique UUID in canonical lowercase-or-uppercase hyphenated form. Reusing it with the same request returns the existing run; reusing it for a different request is rejected.")]
@@ -158,7 +158,6 @@ public sealed class NodeAgentMcpTools
         string? instructions = null,
         [Description("Optional opaque id from list_workspaces. Required for the seeded read-only Coder and never a host path.")]
         string? workspace_id = null)
-#pragma warning restore CA1707, IDE1006
     {
         var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (!TryParseRequestId(request_id, out var requestId) || string.IsNullOrWhiteSpace(task))
@@ -206,10 +205,8 @@ public sealed class NodeAgentMcpTools
     [McpServerTool(Name = "get_agent_run")]
     [Description(
         "Poll a durable background run by its globally unique request UUID, including from a later MCP connection. Returns bounded lifecycle metadata and at most 24,000 result characters with an explicit result_truncated flag. Expired or compacted payloads are reported truthfully; task, instructions, and host paths are never returned.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentRunGetResponse> GetAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
         CancellationToken cancellationToken)
-#pragma warning restore CA1707, IDE1006
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
@@ -265,10 +262,8 @@ public sealed class NodeAgentMcpTools
     [McpServerTool(Name = "cancel_agent_run")]
     [Description(
         "Durably request cancellation of a background run by UUID. The cancellation marker survives MCP disconnects and process restart. Expected races such as an already-terminal or already-requested run are returned as structured results, and no write-capable workspace access is introduced.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentRunCancelResponse> CancelAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
         CancellationToken cancellationToken)
-#pragma warning restore CA1707, IDE1006
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
@@ -294,13 +289,11 @@ public sealed class NodeAgentMcpTools
     [McpServerTool(Name = "list_agent_runs")]
     [Description(
         "List bounded content-free lifecycle metadata for durable background runs, including runs started by earlier MCP connections. An optional case-insensitive status filter may be supplied. Results never contain task text, instructions, model output, or host paths, and all workspace execution remains read-only.")]
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentRunListResponse> ListAgentRunsAsync(CancellationToken cancellationToken,
         [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")]
         int? limit = null,
         [Description("Optional lifecycle status: queued, running, succeeded, failed, cancelled, or interrupted.")]
         string? status = null)
-#pragma warning restore CA1707, IDE1006
     {
         McpAgentRunStatus? parsedStatus = null;
         if (!string.IsNullOrWhiteSpace(status))
@@ -339,7 +332,6 @@ public sealed class NodeAgentMcpTools
         "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name) or model (a local model id) — exactly one. Delegate saved agents and bare models are tool-less; the seeded read-only Coder may use only its three workspace-read tools. Agentic saved-agent runs may use the definition's full allowed-tool set with strict audited auto-approval. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
     // Parameter order is dictated by C#: the SDK-injected `progress` and `cancellationToken` carry no default, so they precede the
     // optional arguments, whose defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability, so a defaultless parameter is advertised REQUIRED.
-#pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<string> RunAgentAsync([Description("The task for the local agent to carry out.")] string task,
         IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
@@ -354,7 +346,6 @@ public sealed class NodeAgentMcpTools
         string? instructions = null,
         [Description("Optional opaque workspace id from list_workspaces. Required by the seeded read-only Coder and never a host path.")]
         string? workspace_id = null)
-#pragma warning restore CA1707, IDE1006
     {
         var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (string.IsNullOrWhiteSpace(task))

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     feedback) and conversation management (rename / pin / archive / show-archived / search /
 ///     delete-with-confirm-skip). These capabilities otherwise have only unit/component coverage.
 ///     <para>
-///         Same host as <see cref="ChatPageE2ETests" /> — <see cref="XENodeE2EWebApplicationFactory" />
+///         Same host as <see cref="ChatPageE2ETests" /> — <see cref="Infrastructure.XENodeE2EWebApplicationFactory" />
 ///         wires FakeOllama as the local provider, so a reply echoing the sent text streams deterministically
 ///         in bounded time once the FakeOllama model is picked explicitly in the composer (see
 ///         <see cref="FakeOllamaChatModel" />).  Locators prefer <c>data-testid</c>; per-message and

@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>The assistant text reply completes (send button reverts to "Send").</item>
 ///     </list>
 ///     <para>
-///         The test mutates <see cref="XENodeE2EWebApplicationFactory.FakeOllamaState" /> before
+///         The test mutates <see cref="Infrastructure.XENodeE2EWebApplicationFactory.FakeOllamaState" /> before
 ///         sending and resets it in a <c>[After(Test)]</c> hook so the shared
 ///         <see cref="SharedType.PerTestSession" /> factory is left clean for other tests.
 ///     </para>

@@ -7,7 +7,7 @@ export interface GraphWorkflowEditorToolbarProps {
 	/** No definition open: everything but the list is inert. */
 	readonly hasDefinition: boolean;
 	readonly isDirty: boolean;
-	/** A stored graph that had no layout was laid out on open, so it opens dirty (ruling C4) — different words, same state. */
+	/** A stored graph that had no layout was laid out on open, so it opens dirty — different words, same state. */
 	readonly layoutIsUnsaved: boolean;
 	readonly isValidating: boolean;
 	readonly isSaving: boolean;

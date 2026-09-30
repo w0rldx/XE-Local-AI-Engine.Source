@@ -18,10 +18,16 @@ public sealed class AsyncSharedExclusiveGateTests
         await gate.EnterSharedAsync(CancellationToken.None);
 
         // The point of the whole type: the first holder's (arbitrarily long) work does not gate the second.
-        await gate.EnterSharedAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
+        await AssertEx.CompletesAsync(gate.EnterSharedAsync(CancellationToken.None),
+            TimeSpan.FromSeconds(3),
+            "a second shared holder is admitted while the first is still inside.");
 
         gate.ExitShared();
         gate.ExitShared();
+        await AssertEx.CompletesAsync(gate.EnterExclusiveAsync(CancellationToken.None),
+            TimeSpan.FromSeconds(3),
+            "both shared holders counted as inside and both released.");
+        gate.ExitExclusive();
     }
 
     [Test]

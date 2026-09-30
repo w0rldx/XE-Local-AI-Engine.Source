@@ -567,11 +567,11 @@ public sealed class LiveTranscriptionSegmenterTests
     [Test]
     public async Task ExplicitLanguage_NeverAsksForDetection()
     {
-        // The live round's session 979d7368: English forced, yet the first window asked for language probabilities and
-        // whisper-server answered 500 because VAD found no speech in it.
+        // English forced must never ask for language probabilities: whisper-server answers that request with 500 when
+        // VAD finds no speech in the window.
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = new LiveTranscriptionSegmenter(transcriber, TranscriptChannel.Mono, ModelId, languageCode: "en", translate: false,
-            Settings(maxWindowSeconds: 5));
+            Settings(maxWindowSeconds: 5), new ManualTimeProvider());
 
         _ = await PushAsync(segmenter, 0, 3_000, 500);
 
@@ -722,7 +722,7 @@ public sealed class LiveTranscriptionSegmenterTests
         };
 
     private static LiveTranscriptionSegmenter Create(IWhisperTranscriber transcriber, LiveSegmenterSettings settings, TimeProvider? timeProvider = null) =>
-        new(transcriber, TranscriptChannel.Mono, ModelId, languageCode: null, translate: false, settings, timeProvider);
+        new(transcriber, TranscriptChannel.Mono, ModelId, languageCode: null, translate: false, settings, timeProvider ?? new ManualTimeProvider());
 
     /// <summary>One segment covering the whole submitted window, which is what a speaker talking without pause gives.</summary>
     private static IReadOnlyList<WhisperTranscriptSegment> ContinuousSpeech(SubmittedWindow window) =>

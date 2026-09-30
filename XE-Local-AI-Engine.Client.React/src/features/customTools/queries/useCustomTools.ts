@@ -44,7 +44,6 @@ function invalidateCustomToolsList(queryClient: ReturnType<typeof useQueryClient
 // partial deep match) refreshes all open single-tool caches so a re-opened editor shows the freshly edited values.
 function invalidateAllSingleCustomTools(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	return queryClient.invalidateQueries({
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		queryKey: [{ _id: "getCustomTool" }],
 	});
 }

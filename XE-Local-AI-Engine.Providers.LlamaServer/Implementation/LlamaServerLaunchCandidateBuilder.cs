@@ -129,19 +129,3 @@ internal sealed class LlamaServerLaunchCandidateBuilder
         };
     }
 }
-
-internal sealed record LlamaServerLaunchCandidate
-{
-    public required ResolvedLaunchArguments Resolved { get; init; }
-
-    public required LlamaServerLaunchPlan? Plan { get; init; }
-
-    public required LlamaServerLoadAttemptKind AttemptKind { get; init; }
-}
-
-internal sealed record LlamaServerLaunchPlanSet
-{
-    public required ProcessContextAllocation? Allocation { get; init; }
-
-    public required List<LlamaServerLaunchCandidate> Candidates { get; init; }
-}

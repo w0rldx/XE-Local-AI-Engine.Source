@@ -9,6 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class IntegrationExecutionStore
 {
+    /// <summary>SQLite's <c>SQLITE_CONSTRAINT</c>. The unique index is the only constraint the accept path can violate.</summary>
+    private const int SqliteConstraintErrorCode = 19;
+
     /// <summary>
     ///     The status literals the count predicates use, derived from the enum so a renamed member breaks the build
     ///     rather than the query. They match the string conversion the entity configuration declares.
@@ -66,6 +69,22 @@ public sealed partial class IntegrationExecutionStore
             throw new ArgumentException("The accepted event's execution id must equal the command's execution id.", nameof(command));
         }
 
+        try
+        {
+            return await AcceptInTransactionAsync(command, maxActive, maxActivePerPrincipal, cancellationToken);
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == SqliteConstraintErrorCode)
+        {
+            // A concurrent accept of the same (PrincipalId, RequestId) committed first; the transaction is already rolled back.
+            throw new IntegrationRequestConflictException("A concurrent accept of the same request committed first.", exception);
+        }
+    }
+
+    private async Task<bool> AcceptInTransactionAsync(IntegrationAcceptCommand command,
+        int maxActive,
+        int maxActivePerPrincipal,
+        CancellationToken cancellationToken)
+    {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
 

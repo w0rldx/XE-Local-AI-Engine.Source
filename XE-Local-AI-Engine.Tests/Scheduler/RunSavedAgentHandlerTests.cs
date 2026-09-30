@@ -160,7 +160,7 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.False(harness.ReservationDisposed, "a reject carries no reservation to dispose.");
     }
 
-    // F-32: capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold
+    // Capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold
     // model see the first fire's footprint reservation and be refused; now it queues on the slot and reuses the resident model.
     [Test]
     public async Task ExecuteAsync_TwoConcurrentFiresForTheSameColdModel_BothCompleteAndTheSecondQueues()

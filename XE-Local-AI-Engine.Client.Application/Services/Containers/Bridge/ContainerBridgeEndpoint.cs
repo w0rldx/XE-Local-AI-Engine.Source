@@ -50,7 +50,7 @@ public sealed record ResolvedContainerBridgeEndpoint(IPAddress BindAddress, int 
     ///     listener was given the bridge's port (a desktop launch with <c>--port 18790</c>), and every ordinary SPA
     ///     and API request would then route into the bridge branch. An IPv4-mapped IPv6 local address is folded back
     ///     to IPv4 first, because a dual-stack socket reports the bound IPv4 address in its mapped form and
-    ///     <see cref="IPAddress.Equals(IPAddress)" /> does not treat the two spellings as equal.
+    ///     <see cref="IPAddress.Equals(object)" /> does not treat the two spellings as equal.
     /// </remarks>
     public bool Matches(IPAddress? localAddress, int localPort)
     {

@@ -317,7 +317,7 @@ public sealed class BenchmarkCatalogServiceTests
 
     /// <summary>
     ///     Serves recorded facts cheaply and fails any verification the caller did not have to do — the model must be in
-    ///     <paramref name="snapshots" /> to be verifiable at all.
+    ///     <c>snapshots</c> to be verifiable at all.
     /// </summary>
     private sealed class FactsProvider : IBenchmarkInstalledModelLeaseProvider
     {

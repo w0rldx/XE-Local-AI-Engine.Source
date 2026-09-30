@@ -96,15 +96,14 @@ public sealed class DevelopmentAttemptFailureReportingTests
 
     /// <summary>
     ///     A reasoning model between two tool calls emits <see cref="TextReasoningContent" />, which
-    ///     <c>ChatResponseUpdate.Text</c> does not concatenate — so the live panel published nothing and froze on the
-    ///     previous tool call's values while generation ran on. Measured live: 32,106 tokens decoded in one round with
-    ///     the UI static for over three minutes.
+    ///     <c>ChatResponseUpdate.Text</c> does not concatenate — so a panel fed only by text would publish nothing and
+    ///     freeze on the previous tool call's values while generation runs on, for minutes on a long reasoning round.
     /// </summary>
     [Test]
     public void LiveProgress_PublishesAHeartbeatWhileTheModelIsReasoningOnly()
     {
         var broker = new RecordingLiveBroker();
-        var time = new AdjustableTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var progress = new DevelopmentAttemptLiveProgress(Snapshot(),
             broker,
             Options.Create(new DevelopmentOptions()),
@@ -161,22 +160,6 @@ public sealed class DevelopmentAttemptFailureReportingTests
             AttemptVersion = 1,
             CommandProfileJson = null
         };
-
-    private sealed class AdjustableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _current;
-
-        public AdjustableTimeProvider(DateTimeOffset current)
-        {
-            _current = current;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _current;
-
-        public void Advance(TimeSpan duration) =>
-            _current = _current.Add(duration);
-    }
 
     private sealed class RecordingLiveBroker : IDevelopmentAttemptLiveBroker
     {

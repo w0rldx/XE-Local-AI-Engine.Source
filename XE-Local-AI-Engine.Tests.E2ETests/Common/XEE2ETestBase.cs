@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using TUnit.Playwright;
@@ -23,9 +24,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         <c>[ParallelLimiter]</c> or <c>[ParallelGroup]</c> here, or every derived test would carry two.
 ///     </para>
 /// </summary>
-// S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
-// capitals are the intentional harness name, not a casing mistake.
-#pragma warning disable S101 // Types should be named in PascalCase
+[SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "The XE product prefix on E2ETestBase; the consecutive capitals are the harness name.")]
 public abstract class XEE2ETestBase : PageTest
 {
     private bool _tracingStarted;
@@ -156,4 +155,3 @@ public abstract class XEE2ETestBase : PageTest
             };
     }
 }
-#pragma warning restore S101

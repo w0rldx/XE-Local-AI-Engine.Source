@@ -8,7 +8,7 @@
 // WebSpeechVoiceCatalog), previewing an arbitrary system voice needs a matching sample; unrecognized languages still
 // fall back to the English sample rather than speaking English text through an unrelated locale tag.
 
-import type { VoiceLanguageCode } from "@/core/runtime/TtsProvider";
+import type { VoiceLanguageCode } from "@/features/voice/TtsProvider";
 
 const FALLBACK_PREVIEW_SAMPLE = "Hi! This is a preview of how this voice sounds.";
 

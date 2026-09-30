@@ -330,8 +330,8 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task JobLease_DaemonKilledUnderIt_ReportsTheExitCodeAndLogsItOnce()
     {
-        // R8: a SIGKILLed sd-server left no log line naming the death. The lease that notices it and the respawn that
-        // later detaches the corpse must produce exactly one Warning between them, carrying the exit code.
+        // A SIGKILLed sd-server's death is logged: the lease that notices it and the respawn that later detaches the
+        // corpse must produce exactly one Warning between them, carrying the exit code.
         var launcher = new FakeImageProcessLauncher();
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
@@ -478,7 +478,7 @@ public sealed class ImageServerSupervisorTests
     }
 
     /// <summary>
-    ///     Hands the FIRST launch a handle whose tree-kill blocks on <paramref name="firstKill" />; the rest are
+    ///     Hands the FIRST launch a handle whose tree-kill blocks on <c>firstKill</c>; the rest are
     ///     ordinary. The shared <see cref="FakeImageProcessHandle" /> kills instantly and so cannot express a slow kill.
     /// </summary>
     private sealed class LatchingImageLauncher : IImageServerProcessLauncher

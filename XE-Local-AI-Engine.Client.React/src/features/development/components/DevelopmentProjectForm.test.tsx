@@ -320,7 +320,7 @@ describe("DevelopmentProjectForm", () => {
 	});
 
 	it("tells its owner about the repository it auto-selects after creating from a template", async () => {
-		// Regression for the a5028849 class of defect, on the template path this time. Creating from a template
+		// Regression, on the template path. Creating from a template
 		// auto-selects the new repository, and the owner drives command-profile detection off that id. If only
 		// setValues runs, DevelopmentPage.profileFolderId stays null, detection never runs, the confirmation panel
 		// never renders, and Create silently takes its "no detection" branch — on the first-run path, where the

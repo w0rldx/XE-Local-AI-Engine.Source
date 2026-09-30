@@ -4,8 +4,6 @@
     <AssemblyName>XE_Local_AI_Engine.AI.Agent.Tests</AssemblyName>
     <OutputType>Exe</OutputType>
     <RootNamespace>XE_Local_AI_Engine.AI.Agent.Tests</RootNamespace>
-    <!-- ApprovalRequiredAIFunction / FunctionApproval*Content are [Experimental] (MEAI001); adopted deliberately. -->
-    <NoWarn>$(NoWarn);MEAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,11 +28,12 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertionException.cs" Link="Testing\AssertionException.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
-    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="XE_Local_AI_Engine.AI.Agent.Tests.Categories"/>
+    <Using Include="XE_Local_AI_Engine.Client.Testing.Fakes"/>
   </ItemGroup>
 
 </Project>

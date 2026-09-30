@@ -209,6 +209,7 @@
 			"!**/*.d.ts",
 			"!**/*.gen.ts",
 			"!src/core/api/generated/**",
+			"!openapi/**",
 			"!**/uno.config.ts",
 			"!**/playwright-report/**",
 			"!**/test-results/**",
@@ -856,6 +857,7 @@
 										"selector": {
 											"kind": "objectLiteralProperty"
 										},
+										"match": "_(id)|(.+)",
 										"formats": ["camelCase", "snake_case", "PascalCase"]
 									}
 								]

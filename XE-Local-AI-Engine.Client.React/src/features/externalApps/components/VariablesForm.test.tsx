@@ -122,8 +122,8 @@ describe("VariablesForm", () => {
 		expect(values["token"]).toBe(EXTERNAL_APP_SECRET_SENTINEL);
 	});
 
-	// The S5 live round found every `secret` variable rendering as a plain text box: the Odysseus install dialog
-	// printed the admin password in clear as it was typed. The type is what has to drive the masking, so it is
+	// Regression: a `secret` variable must not render as a plain text box that prints the password in clear as it is
+	// typed. The type is what has to drive the masking, so it is
 	// asserted on the element rather than assumed from the control the component happens to pick.
 	it("masks a secret as it is typed and leaves a string in the clear", () => {
 		const definitions = [
@@ -149,7 +149,7 @@ describe("VariablesForm", () => {
 		expect(onChange).toHaveBeenCalledWith("token", "hunter2");
 	});
 
-	// C3: keep and clear used to differ only by an invisible sentinel, so typing into a stored secret and deleting it
+	// Keep and clear used to differ only by an invisible sentinel, so typing into a stored secret and deleting it
 	// again destroyed the stored password with nothing on screen saying so, and there was no deliberate way to clear
 	// one. Both cases need the real host loop — `SettingsTab` and both dialogs hold the values in state — because a
 	// controlled box only round-trips an edit once the parent has echoed it back.
@@ -182,7 +182,7 @@ describe("VariablesForm", () => {
 		expect(screen.queryByTestId("external-app-variable-token-cleared")).toBeNull();
 	});
 
-	// Codex r2: the pending clear used to be remembered INSIDE the secret box, so collapsing the Advanced section
+	// Regression: the pending clear used to be remembered INSIDE the secret box, so collapsing the Advanced section
 	// (`keepMounted={false}`, the box is unmounted) and reopening it dropped the warning and the Undo while the
 	// parent still held "" — the next save deleted the credential with nothing on screen saying it would.
 	it("keeps a cleared advanced secret marked as cleared after the section is collapsed and reopened", async () => {

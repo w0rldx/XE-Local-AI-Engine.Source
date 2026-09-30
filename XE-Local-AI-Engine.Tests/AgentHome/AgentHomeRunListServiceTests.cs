@@ -310,9 +310,8 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         WriteEvent(healthy, "run_completed", "status=Completed");
 
         var list = Service().ListAsync(limit: 10, offset: 0);
-        // A deadline the test owns, not a sleep: the list either answers inside it or the guard is not there.
-        var finished = await Task.WhenAny(list, Task.Delay(TestBudgets.Contended));
-        AssertEx.True(ReferenceEquals(finished, list),
+        await AssertEx.CompletesAsync(list,
+            TestBudgets.Contended,
             "the list opened a FIFO and blocked; the refusal must happen from the stat, before any open.");
 
         var page = await list;
@@ -469,9 +468,8 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         }
 
         var read = Service().ReadPatchAsync(Path.GetFileName(run));
-        var finished = await Task.WhenAny(read, Task.Delay(TestBudgets.Contended));
-
-        AssertEx.True(ReferenceEquals(finished, read),
+        await AssertEx.CompletesAsync(read,
+            TestBudgets.Contended,
             "the read opened a FIFO and blocked; the refusal must happen from the stat, before any open.");
         AssertEx.Equal(string.Empty, AssertEx.NotNull(await read).Text);
     }

@@ -465,8 +465,8 @@ public sealed class DockerSandboxRealDaemonTests
         // Deliberately NOT disposed: disposing is the graceful teardown whose absence creates the leak.
         var crashed = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(workspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(workspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         var handle = await crashed.CreateOrAttachAsync(request);
@@ -477,8 +477,8 @@ public sealed class DockerSandboxRealDaemonTests
 
         await using var restarted = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(workspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(workspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         try
@@ -512,8 +512,8 @@ public sealed class DockerSandboxRealDaemonTests
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
         await using var theirs = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(theirWorkspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(theirWorkspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         var handle = await theirs.CreateOrAttachAsync(new SandboxCreateRequest
@@ -536,8 +536,8 @@ public sealed class DockerSandboxRealDaemonTests
 
         await using var ours = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(ourWorkspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(ourWorkspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         AssertEx.Equal(expected: 0, await ours.SweepOrphanedContainersAsync());
@@ -579,8 +579,8 @@ public sealed class DockerSandboxRealDaemonTests
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(mismatched);
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
-            new FixedNodeDataDirectory(workspace.Path),
-            new FixedTimeProvider(FixedNow),
+            new FakeNodeDataDirectory(workspace.Path),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         var request = new SandboxCreateRequest
@@ -752,7 +752,7 @@ public sealed class DockerSandboxRealDaemonTests
             if (!identity.OperatingSystem.Equals("linux", StringComparison.OrdinalIgnoreCase))
             {
                 throw Unavailable($"the reachable Docker daemon at '{endpoint.Display}' runs '{identity.OperatingSystem}' containers, not Linux. "
-                                  + "The §3.8 contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be "
+                                  + "The hardening contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be "
                                   + "verified here.");
             }
 
@@ -880,7 +880,7 @@ public sealed class DockerSandboxRealDaemonTests
     /// </summary>
     private static Exception Unavailable(string reason)
     {
-        var message = reason + " These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; "
+        var message = reason + " These are the ONLY tests that prove the container hardening contract holds against a real daemon; "
                              + "a green run without them is not evidence of isolation.";
 
         return new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}");
@@ -1030,8 +1030,8 @@ public sealed class DockerSandboxRealDaemonTests
             var factory = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System);
             var provider = new DockerSandboxRuntimeProvider(monitor,
                 factory,
-                new FixedNodeDataDirectory(workspace.Path),
-                new FixedTimeProvider(FixedNow),
+                new FakeNodeDataDirectory(workspace.Path),
+                new ManualTimeProvider(FixedNow),
                 NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
             var request = new SandboxCreateRequest

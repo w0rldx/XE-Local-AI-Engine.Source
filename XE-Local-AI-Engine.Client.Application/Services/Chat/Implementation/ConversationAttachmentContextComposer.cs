@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
-/// <summary>One uploaded file's extracted text, ready to inline into a plain-chat turn.</summary>
-internal readonly record struct AttachmentTextPart(string FileName, string Markdown);
-
 /// <summary>
 ///     Assembles the synthetic plain-chat context block from a conversation's uploaded-file text.
 /// </summary>

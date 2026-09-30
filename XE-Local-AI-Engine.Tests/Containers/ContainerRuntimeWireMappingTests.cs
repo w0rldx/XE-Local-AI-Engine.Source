@@ -67,27 +67,27 @@ public sealed class ContainerRuntimeWireMappingTests
     [Arguments("unhealthy", ContainerHealthState.Unhealthy)]
     public async Task ToHealthState_MapsTheDaemonsWordsOrdinalIgnoreCase(string status, ContainerHealthState expected)
     {
-        var recorder = new RecordingLogger();
+        var recorder = new RecordingLogger<ContainerRuntimeWireMappingTests>();
         await using var client = ClientWith(recorder);
 
         AssertEx.Equal(expected, client.ToHealthState(status));
-        AssertEx.Empty(recorder.Warnings);
+        AssertEx.Empty(recorder.Entries.Where(entry => entry.Level == LogLevel.Warning));
     }
 
     [Test]
     public async Task ToHealthState_OnNoHealthcheck_IsNoneAndSilent()
     {
-        var recorder = new RecordingLogger();
+        var recorder = new RecordingLogger<ContainerRuntimeWireMappingTests>();
         await using var client = ClientWith(recorder);
 
         AssertEx.Equal(ContainerHealthState.None, client.ToHealthState(status: null));
-        AssertEx.Empty(recorder.Warnings);
+        AssertEx.Empty(recorder.Entries.Where(entry => entry.Level == LogLevel.Warning));
     }
 
     [Test]
     public async Task ToHealthState_OnAnUnrecognisedString_IsNoneAndWarnsOncePerClient()
     {
-        var recorder = new RecordingLogger();
+        var recorder = new RecordingLogger<ContainerRuntimeWireMappingTests>();
         await using var client = ClientWith(recorder);
 
         AssertEx.Equal(ContainerHealthState.None, client.ToHealthState("degraded"));
@@ -98,8 +98,9 @@ public sealed class ContainerRuntimeWireMappingTests
         // second would otherwise fill the node log with the same line. The caller reads None from a service that
         // declared a healthcheck as "not yet healthy", so an unrecognised word delays to the deadline rather than
         // passing as healthy.
-        AssertEx.Equal(expected: 1, recorder.Warnings.Count);
-        AssertEx.Contains(recorder.Warnings[0], "degraded");
+        var warnings = recorder.Entries.Where(entry => entry.Level == LogLevel.Warning).ToList();
+        AssertEx.Equal(expected: 1, warnings.Count);
+        AssertEx.Contains(warnings[0].Message, "degraded");
     }
 
     /// <summary>
@@ -108,7 +109,7 @@ public sealed class ContainerRuntimeWireMappingTests
     [Test]
     public void PullProgress_SumsLayersAndCountsTheCompleteOnes()
     {
-        var time = new AdvanceableTimeProvider();
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
         var aggregator = new PullProgressAggregator("image@sha256:abc", time);
 
         aggregator.Report(Layer("a", "Downloading", current: 50, total: 100));
@@ -132,7 +133,7 @@ public sealed class ContainerRuntimeWireMappingTests
         // digest that was asked for — so an aggregator that treats every id-carrying message as a layer gains one
         // that never completes. A finished pull would then report n of n+1 layers forever. Found against a real
         // daemon by ContainerRuntimeRealDaemonTests; pinned here so it stays fixed without one.
-        var time = new AdvanceableTimeProvider();
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
         var aggregator = new PullProgressAggregator("image@sha256:abc", time);
 
         aggregator.Report(Layer("1.37", "Pulling from library/busybox", current: null, total: null));
@@ -147,7 +148,7 @@ public sealed class ContainerRuntimeWireMappingTests
     [Test]
     public void PullProgress_ALayerWithNoReportedTotal_ContributesZeroRatherThanBeingDropped()
     {
-        var time = new AdvanceableTimeProvider();
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
         var aggregator = new PullProgressAggregator("image@sha256:abc", time);
 
         aggregator.Report(Layer("a", "Downloading", current: null, total: null));
@@ -160,7 +161,7 @@ public sealed class ContainerRuntimeWireMappingTests
     [Test]
     public void PullProgress_EmitsAtMostOneReportPerInterval()
     {
-        var time = new AdvanceableTimeProvider();
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
         var aggregator = new PullProgressAggregator("image@sha256:abc", time);
 
         var first = aggregator.Report(Layer("a", "Downloading", current: 1, total: 100));
@@ -178,7 +179,7 @@ public sealed class ContainerRuntimeWireMappingTests
     [Test]
     public void PullProgress_CapturesTheStreamsErrorObjectsMessage()
     {
-        var time = new AdvanceableTimeProvider();
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
         var aggregator = new PullProgressAggregator("image@sha256:abc", time);
 
         aggregator.Report(new JSONMessage
@@ -193,25 +194,6 @@ public sealed class ContainerRuntimeWireMappingTests
         // into an operator-facing failure. A pull that fails part-way still completes the HTTP call normally, which
         // is why this is captured at all rather than surfacing as an exception.
         AssertEx.Equal("manifest unknown", aggregator.Error);
-    }
-
-    /// <summary>
-    ///     A clock the test moves, so the throttle is asserted by advancing time rather than by waiting for it: a
-    ///     sleeping test would be slow when it passed and flaky when it did not.
-    /// </summary>
-    private sealed class AdvanceableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now = new(2026, 9, 6, 12, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
-
-        public void Advance(TimeSpan amount)
-        {
-            _now += amount;
-        }
     }
 
     [Test]
@@ -264,7 +246,6 @@ public sealed class ContainerRuntimeWireMappingTests
 
         return buffer.ToArray();
     }
-
 
     private static JSONMessage Layer(string id, string status, long? current, long? total)
     {
@@ -340,34 +321,5 @@ public sealed class ContainerRuntimeWireMappingTests
             requestTimeout: null,
             pullTimeout: null,
             logger);
-    }
-
-    private sealed class RecordingLogger : ILogger
-    {
-        public List<string> Warnings { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        {
-            return null;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
-        public void Log<TState>(LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-
-            if (logLevel == LogLevel.Warning)
-            {
-                Warnings.Add(formatter(state, exception));
-            }
-        }
     }
 }

@@ -77,7 +77,7 @@ public sealed class GraphWorkflowValidateEndpointTests
     }
 
     /// <summary>
-    ///     The response-schema warning on the wire (S6-9). The schema an Agent node declares does not reach the grammar
+    ///     The response-schema warning on the wire. The schema an Agent node declares does not reach the grammar
     ///     as written — the adapter's strict transform drops the value keywords and makes every property required — so
     ///     the report says so while the graph stays valid, saveable and runnable.
     /// </summary>

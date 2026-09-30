@@ -20,7 +20,6 @@ const runQueryIds = {
 } as const;
 
 function runInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 
@@ -39,7 +38,7 @@ export function useTrainingRuns(pollWhileActive = false) {
 }
 
 /**
- * The wizard's computed defaults for one base checkpoint: options sized to this box, the VRAM estimate behind them,
+ * The wizard's computed defaults for one base checkpoint: options sized to this machine, the VRAM estimate behind them,
  * and the licensing text to confirm. Read-only, so it is safe to fetch as soon as a checkpoint is picked.
  */
 export function useTrainingRunDefaults(baseArtifactId: string | null) {

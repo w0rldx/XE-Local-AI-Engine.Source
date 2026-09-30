@@ -29,7 +29,7 @@ const runId = "11111111-1111-4111-8111-111111111111";
 
 // One real server frame, verbatim. `kind` is the enum's declared NAME and every nullable payload member is present.
 const progressFrame = `{"runId":"${runId}","sequence":1,"kind":"Progress","payload":{"state":null,"phase":"training","step":7,"totalSteps":40,"epoch":1.5,"loss":1.25,"learningRate":0.0002,"vramBytes":null,"message":null,"runVersion":3}}`;
-// The same frame as it left the server BEFORE this slice: the enum as its ordinal.
+// The same frame as an older server sends it: the enum as its ordinal.
 const numericKindFrame = `{"runId":"${runId}","sequence":1,"kind":2,"payload":{"state":null,"phase":"training","step":7,"totalSteps":40,"epoch":1.5,"loss":1.25,"learningRate":0.0002,"vramBytes":null,"message":null,"runVersion":3}}`;
 // An evaluation riding the run's own group: `state` is the EVALUATION's status and step/totalSteps are samples scored.
 const evaluationStateFrame = `{"runId":"${runId}","sequence":2,"kind":"EvaluationState","payload":{"state":"Succeeded","phase":null,"step":12,"totalSteps":12,"epoch":null,"loss":null,"learningRate":null,"vramBytes":null,"message":null,"runVersion":null,"evaluationId":"22222222-2222-4222-8222-222222222222","passedCount":9}}`;

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// </summary>
 /// <remarks>
 ///     Faked in unit tests so the supervisor's logic is exercised with no real child processes;
-///     <see cref="LlamaServerProcessLauncher" /> starts a real <c>llama-server</c> contained by a Windows Job Object or
+///     <see cref="Implementation.LlamaServerProcessLauncher" /> starts a real <c>llama-server</c> contained by a Windows Job Object or
 ///     a Linux process group.
 /// </remarks>
 internal interface ILlamaServerProcessLauncher

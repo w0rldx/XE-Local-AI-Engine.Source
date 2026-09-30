@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     The seams are <see cref="IActiveCloudChatClientFactory.ResolveActiveCloudProviderName" /> (codex/azure) and
-///     <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync" /> (llamacpp/ollama). Correctness of
+///     <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync(string, CancellationToken)" /> (llamacpp/ollama). Correctness of
 ///     terminalization outranks attribution accuracy, so every failure path swallows to
 ///     <see cref="AgentUsageProviders.Unknown" /> and the local lookup is bounded by a short timeout: a dead runtime
 ///     probe can never stall the write.

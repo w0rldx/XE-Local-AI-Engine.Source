@@ -190,7 +190,7 @@ public sealed class DockerSandboxOrphanSweepTests
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new SweepClientFactory(client),
             new FakeNodeDataDirectory(nodeRoot),
-            new FixedTimeProvider(FixedNow),
+            new ManualTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         return (provider, client, nodeRoot);

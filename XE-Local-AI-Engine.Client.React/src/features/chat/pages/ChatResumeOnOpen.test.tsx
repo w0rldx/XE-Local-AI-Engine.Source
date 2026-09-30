@@ -56,12 +56,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	...(await import("@/test/ChatWorkflowQueryStubs")).chatWorkflowQueryStubs,
 	listLocalModelsOptions: vi.fn(() => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listLocalModels" }],
 		queryFn: () => listLocalModelsQueryFn(),
 	})),
 	getLocalModelDetailsOptions: vi.fn(() => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "getLocalModelDetails" }],
 		queryFn: async () => ({}),
 	})),

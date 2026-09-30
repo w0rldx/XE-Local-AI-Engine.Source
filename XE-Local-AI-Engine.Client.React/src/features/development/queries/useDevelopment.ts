@@ -38,7 +38,6 @@ export const developmentQueryIds = {
 } as const;
 
 export function developmentInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

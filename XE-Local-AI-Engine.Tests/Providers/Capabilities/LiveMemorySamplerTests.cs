@@ -108,7 +108,7 @@ public sealed class LiveMemorySamplerTests
     public async Task Sample_WithinTheCacheWindow_ReusesTheReading_ThenReprobesAfterIt()
     {
         var probe = new ScriptedProbe("24564, 4000, 20000\n");
-        var clock = new MutableTimeProvider();
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var sampler = CreateSampler(probe, clock: clock);
 
         var first = await sampler.SampleAsync(CancellationToken.None);
@@ -182,9 +182,9 @@ public sealed class LiveMemorySamplerTests
 
     private static LiveMemorySampler CreateSampler(ScriptedProbe probe,
         FakeEnvironment? environment = null,
-        MutableTimeProvider? clock = null)
+        ManualTimeProvider? clock = null)
     {
-        return new LiveMemorySampler(probe, environment ?? new FakeEnvironment(), new HardwareProfilerOptions(), clock ?? new MutableTimeProvider());
+        return new LiveMemorySampler(probe, environment ?? new FakeEnvironment(), new HardwareProfilerOptions(), clock ?? new ManualTimeProvider(DateTimeOffset.UnixEpoch));
     }
 
     /// <summary>Answers every nvidia-smi call with one scripted result, optionally held behind a test-controlled gate.</summary>
@@ -280,21 +280,6 @@ public sealed class LiveMemorySamplerTests
         public long GetFreeDiskBytes(string path)
         {
             return 0;
-        }
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow = DateTimeOffset.UnixEpoch;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan delta)
-        {
-            _utcNow += delta;
         }
     }
 }

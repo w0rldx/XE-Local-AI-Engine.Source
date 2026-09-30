@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 export interface DevelopmentWorkflowTaskBannerProps {
 	/** The task's `workflowRunId`. Null for a task an operator created directly, which is most of them. */
 	readonly workflowRunId: string | null | undefined;
-	/** The run's work item, which the controller resolves through R6. Null until it lands, or where the route is off. */
+	/** The run's work item, which the controller resolves. Null until it lands, or where the route is off. */
 	readonly workItemId: string | null;
 	/** The run reached a terminal status, so it will answer no further gate and this page is the authority again. */
 	readonly runEnded: boolean;

@@ -1,5 +1,5 @@
 /**
- * The system-audio capture source (S4 plan §2.2, ruling R19): `getDisplayMedia` with the video thrown away, and a
+ * The system-audio capture source: `getDisplayMedia` with the video thrown away, and a
  * loud failure when the picked surface came back without an audio track.
  */
 
@@ -37,7 +37,7 @@ export class SystemAudioCaptureSource implements CaptureSource {
 			throw new CaptureError("unsupported", "navigator.mediaDevices is unavailable — the page is not in a secure context.");
 		}
 
-		// R39a: `getDisplayMedia` requires transient user activation AT THE MOMENT IT IS INVOKED, and the Screen
+		// `getDisplayMedia` requires transient user activation AT THE MOMENT IT IS INVOKED, and the Screen
 		// Capture specification requires rejection when that activation is absent. The picker promise is therefore
 		// created here, synchronously, before this method's first `await` — anything awaited first (the live/start
 		// endpoint, a permission prompt, `addModule`) can outlive the activation window and the picker never
@@ -65,7 +65,7 @@ export class SystemAudioCaptureSource implements CaptureSource {
 		}
 
 		if (stream.getAudioTracks().length === 0) {
-			// R19's safety net. Every track goes, or the screen-share indicator stays lit over a session that
+			// The silent-surface safety net. Every track goes, or the screen-share indicator stays lit over a session that
 			// never started.
 			for (const track of stream.getTracks()) {
 				track.stop();

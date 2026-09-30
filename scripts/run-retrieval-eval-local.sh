@@ -50,7 +50,7 @@
 #
 # The build lock:
 #   The whole run (download, build and the live test) holds the cross-process build lock, so every
-#   other gate on this box waits for it: up to the 90 min timeout, longer if it first queues behind
+#   other gate on this machine waits for it: up to the 90 min timeout, longer if it first queues behind
 #   another holder. Check scripts/build-lock-status.sh before starting it.
 #
 # Env knobs:
@@ -435,7 +435,7 @@ if [[ "${TEST_STATUS}" -ne 0 ]]; then
   STATUS=1
 fi
 
-# A requested contention round the box had no headroom for is a visible infra skip (PLAN §4.4): the
+# A requested contention round the host had no headroom for is a visible infra skip: the
 # quality numbers stand, but the round the operator asked for did not run.
 CONTENTION_SKIP="$(jq -r '.Contention.SkippedReason // empty' "${REPORT_JSON}")"
 if [[ "${STATUS}" -eq 0 && -n "${CHAT_PATH}" && -n "${CONTENTION_SKIP}" ]]; then

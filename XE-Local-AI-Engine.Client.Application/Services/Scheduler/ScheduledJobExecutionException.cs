@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Thrown by a <see cref="IScheduledJobHandler" /> to declare an <b>already-operator-safe</b> failure reason
-///     <see cref="SchedulerDispatchExecutor" /> may surface verbatim on the run row, the run event and the UI.
+///     <see cref="Implementation.SchedulerDispatchExecutor" /> may surface verbatim on the run row, the run event and the UI.
 /// </summary>
 /// <remarks>
 ///     It replaces the generic "The scheduled job failed during execution." message for this one path. <b>Security

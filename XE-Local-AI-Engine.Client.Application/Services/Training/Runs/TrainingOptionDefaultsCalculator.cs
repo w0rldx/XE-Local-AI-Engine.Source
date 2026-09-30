@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Computes the run wizard's starting options from the base checkpoint and the box, and validates an operator's
+///     Computes the run wizard's starting options from the base checkpoint and the host, and validates an operator's
 ///     overrides against the same estimate.
 /// </summary>
 /// <remarks>
@@ -26,7 +26,7 @@ public interface ITrainingOptionDefaultsCalculator
     /// <summary>
     ///     Re-estimates against operator-supplied options and hard-rejects a configuration that does not fit.
     /// </summary>
-    /// <exception cref="TrainingRunRejectedException">The options do not fit the box, or the checkpoint is unreadable.</exception>
+    /// <exception cref="TrainingRunRejectedException">The options do not fit the host, or the checkpoint is unreadable.</exception>
     Task<TrainingRunDefaults> ResolveAsync(Guid baseArtifactId, TrainingRunOptionsV1? requested, CancellationToken cancellationToken = default);
 
     /// <summary>Re-estimates a run's footprint at launch time.</summary>

@@ -136,7 +136,7 @@ public sealed class LlamaCppUpdateCheckServiceTests
         AssertEx.Null(snapshot.InstalledTag);
     }
 
-    // Brief §5 test 1 for the runtime check. Asserting the SNAPSHOT (still empty) as well as the catalog (never called)
+    // Disabled runtime check. Asserting the SNAPSHOT (still empty) as well as the catalog (never called)
     // is the point: a gated-off node must not report as "checked, nothing found", which is what the panel renders green.
     [Test]
     public async Task Execute_WhenRuntimeUpdateChecksAreDisabled_StoresNoSnapshot()
@@ -156,7 +156,7 @@ public sealed class LlamaCppUpdateCheckServiceTests
         AssertEx.False(state.Current.UpdateAvailable);
     }
 
-    // Brief §5 test 2 for the runtime check, on the fake clock: no catalog call while undecided, one once decided.
+    // Undecided profile, on the fake clock: no catalog call while undecided, one once decided.
     [Test]
     public async Task Execute_WhileTheProfileIsUndecided_Waits_ThenChecksOnceItIsDecided()
     {

@@ -132,13 +132,13 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 		};
 
 		// The sequence is the dedupe — a separate seen-set would only grow for the hook's life. The gate is
-		// `seq < watermark`, NOT `<=`, and it stays that way as DEFENCE rather than as a requirement: the store now
+		// `seq < watermark`, NOT `<=`, and it stays that way as DEFENCE rather than as a requirement: the store
 		// allocates a sequence per COMMIT, so an event-less transition carries a fresh, increasing number of its own
 		// (`GraphWorkflowStore.TryExecuteMutationAsync` bumps `run.Seq` when the mutation records no event row).
-		// `Cancelling → Cancelled` is that transition — `run.cancelled` is written when the cancel is requested — and
-		// it used to repeat the watermark, which left the run badge on `Cancelling` while the REST read already said
-		// `Cancelled`. The ping is content-free, so admitting one that repeats the watermark costs an invalidation and
-		// can never paint anything wrong.
+		// `Cancelling → Cancelled` is that transition — `run.cancelled` is written when the cancel is requested. The `<`
+		// gate is a defence: a server that repeated the watermark for it would otherwise leave the run badge on
+		// `Cancelling` while the REST read already said `Cancelled`. The ping is content-free, so admitting one that
+		// repeats the watermark costs an invalidation and can never paint anything wrong.
 		const apply = (change: GraphWorkflowChanged): void => {
 			if (change.runId !== runId || change.seq < watermark) {
 				return;

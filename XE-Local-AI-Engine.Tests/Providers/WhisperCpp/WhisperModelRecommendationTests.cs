@@ -25,7 +25,7 @@ public sealed class WhisperModelRecommendationTests
     [Arguments(3L, "large-v3-turbo-q8_0")]
     // 4 GiB: the full turbo's 3.25 GiB fits.
     [Arguments(4L, "large-v3-turbo")]
-    // This box (a 32 GiB card): still the full turbo, because nothing larger exists in the catalogue.
+    // A machine with a 32 GiB card: still the full turbo, because nothing larger exists in the catalogue.
     [Arguments(28L, "large-v3-turbo")]
     public void Recommend_GpuBudgets_ReturnExpectedRow(long vramGigabytes, string expectedModelId)
     {

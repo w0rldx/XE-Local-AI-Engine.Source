@@ -68,7 +68,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     ///     <see cref="BootPass" /> is how anything that must not run before it waits.
     /// </summary>
     /// <remarks>
-    ///     Awaiting it here cost every launch the daemon probe's timeout — ten seconds on a Windows box with no
+    ///     Awaiting it here cost every launch the daemon probe's timeout — ten seconds on a Windows machine with no
     ///     Docker Desktop, in front of the desktop shell's "Starting XE…" window, for a pass that then judged
     ///     nothing because no runtime was ready.
     /// </remarks>
@@ -122,9 +122,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             // The node is shutting down inside the pass. Nothing was written and nothing failed, so this is not the
             // warning below.
         }
-#pragma warning disable CA1031 // Startup must not fail because a container daemon did; the next refresh re-runs this.
+        // Startup must not fail because a container daemon did; the next refresh re-runs this.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "Reconciling external applications at startup failed; the node is starting anyway.");
         }
@@ -551,8 +550,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     /// <remarks>
     ///     The install-id filter is the security property: a container wearing the owner label under a different
     ///     install id belongs to another installation of this engine and is counted, never removed. "No row claims
-    ///     it" is decided against the list this pass opened with, which an install admitted a moment later is not in
-    ///     (R2-16), so an unclaimed instance is removed only once it is neither running an operation, nor holding
+    ///     it" is decided against the list this pass opened with, which an install admitted a moment later is not in,
+    ///     so an unclaimed instance is removed only once it is neither running an operation, nor holding
     ///     its gate, nor — re-read NOW rather than then — in the store.
     /// </remarks>
     private async Task<int> RemoveOrphansAsync(IExternalAppInstanceStore store,
@@ -752,9 +751,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         {
             await _publisher.PublishAsync(instanceId, sequence, kind, status, CancellationToken.None);
         }
-#pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the pass whose result it describes.
+        // A subscriber that cannot be reached must not fail the pass whose result it describes.
         catch (Exception exception)
-#pragma warning restore CA1031
         {
             _logger.LogDebug(exception, "Publishing the {Kind} event for external application instance {InstanceId} failed.", kind, instanceId);
         }

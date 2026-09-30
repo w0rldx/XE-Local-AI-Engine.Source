@@ -154,7 +154,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     [Test]
     public async Task EmbedAsync_WhenInstalledModelProcessStaysUnreachable_ReportsDeadProcess_NotMissingModel()
     {
-        // REGRESSION (live QA F-18): a killed embedding llama-server mid-document reported "No embedding model is installed"
+        // REGRESSION: a killed embedding llama-server mid-document reported "No embedding model is installed"
         // although it was installed and respawned. A confidently-resolved model gets one retry, then a reason naming the process.
         var provider = new CapturingProvider(Descriptor(ConfiguredName))
         {

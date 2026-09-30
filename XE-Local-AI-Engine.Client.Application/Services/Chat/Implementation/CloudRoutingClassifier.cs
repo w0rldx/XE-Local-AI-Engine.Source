@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-/// <summary>Whether a model routes to a cloud provider, and whether that answer had to be assumed.</summary>
-internal sealed record CloudRoutingClassification(bool RoutesToCloud, bool Faulted);
-
 /// <summary>
 ///     The single cloud-routing classification the per-turn chat path (<see cref="ChatTurnResolver" />) and the
 ///     per-participant path (<see cref="ModelCapabilityResolver" />) share.

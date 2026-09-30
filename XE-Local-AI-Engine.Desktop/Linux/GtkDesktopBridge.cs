@@ -175,7 +175,7 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
         {
-            /* Reject malformed native-only messages. */
+            // Reject malformed native-only messages.
         }
     }
 
@@ -199,7 +199,7 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            /* Navigation, timeout and window close revoke the save. */
+            // Navigation, timeout and window close revoke the save.
         }
         catch (Exception)
         {
@@ -216,7 +216,7 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
                 }
                 catch (Exception)
                 {
-                    /* Navigation can remove the bridge before acknowledgment. */
+                    // Navigation can remove the bridge before acknowledgment.
                 }
             }
 

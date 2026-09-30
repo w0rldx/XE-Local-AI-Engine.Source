@@ -117,7 +117,7 @@ export function useGraphWorkflowEditorPage(
 		reset(loadedGraph);
 	}, [definitionId, loadedGraph, loadedKey, reset]);
 
-	// A stored node with no `position` is laid out on open, and that layout IS an edit (ruling C4) — so a graph nobody
+	// A stored node with no `position` is laid out on open, and that layout IS an edit — so a graph nobody
 	// has touched opens dirty. Not an error and never auto-saved: the hint just says which kind of unsaved this is.
 	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
 

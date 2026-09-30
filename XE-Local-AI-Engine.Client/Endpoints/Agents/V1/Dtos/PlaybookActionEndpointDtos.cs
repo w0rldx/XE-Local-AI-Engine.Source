@@ -17,7 +17,7 @@ public sealed class ListAgentPlaybookActionsRequest
 
 /// <summary>
 ///     Create request for a playbook action. The owning agent id travels in the route; the body carries the editable
-///     fields, mirroring <see cref="PlaybookActionInput" /> (minus the route-bound agent id).
+///     fields, mirroring <see cref="Persistence.Stores.PlaybookActionInput" /> (minus the route-bound agent id).
 /// </summary>
 public sealed class CreatePlaybookActionRequest
 {

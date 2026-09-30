@@ -38,7 +38,6 @@ export const playbookQueryIds = {
 
 /** Builds the partial generated-query-key filter that matches every cached variant of the playbook-action list. */
 export function playbookInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
 

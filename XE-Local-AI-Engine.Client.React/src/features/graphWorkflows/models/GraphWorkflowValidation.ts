@@ -8,7 +8,7 @@
 // Deliberately NOT mirrored, because the client cannot answer them honestly:
 //   - whether a Tool node's `toolName` resolves to a `ReadLocal`, no-approval tool (D6). `GET graph-workflows/tools`
 //     is already filtered server-side; re-deriving eligibility in TypeScript would be a second, drifting rule.
-//   - whether an Agent node's effective model is a cloud model (refused at run start, ruling R1) — that is a
+//   - whether an Agent node's effective model is a cloud model (refused at run start) — that is a
 //     resolution over agent definitions and installed runtimes, not over the graph.
 //   - `responseJsonSchema` being a valid JSON *schema*. "Parses as an object" is checked; the rest is the server's.
 //
@@ -376,7 +376,7 @@ function edgeIssues(
 		const sourceKind = source.kind ?? "";
 		const inheritedPath = sourceKind === "Condition" ? text(configRecord(source.config)["path"]) : "";
 		if (text(condition.path).trim().length === 0 && inheritedPath.trim().length === 0) {
-			// An edge with no path of its own inherits its source Condition node's `config.path` (ruling C2); every
+			// An edge with no path of its own inherits its source Condition node's `config.path`; every
 			// conditional edge must resolve a path from one of the two, `Exists`/`NotExists` included.
 			issues.push({ rule: "conditionEdgeHasNoPath", subject: edgeSubject(edge) });
 		}
@@ -546,7 +546,7 @@ export function loadedGraphIssues(graph: GraphWorkflowGraph | undefined): readon
 }
 
 /**
- * The server's `errors[]` in the client's shape (S0 ruled it hybrid: keyed failures accumulate, a malformed document
+ * The server's `errors[]` in the client's shape (hybrid: keyed failures accumulate, a malformed document
  * throws first as one unkeyed message). A keyed error attaches to its node or edge; an unkeyed one renders once above
  * the canvas. Same component, same path.
  */

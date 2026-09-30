@@ -38,7 +38,7 @@ public sealed class GeneratedIntegrationApiKey
 
 /// <summary>
 ///     Trusted metadata from a successful validation. <see cref="PrincipalId" /> comes FIRST because it is the
-///     identity every ownership, uniqueness and fingerprint decision keys on (ruling R4-6);
+///     identity every ownership, uniqueness and fingerprint decision keys on (ADR 0008 R4-6);
 ///     <see cref="KeyPrefix" /> only names which credential was used and carries no authority.
 /// </summary>
 public sealed class IntegrationApiKeyValidation
@@ -87,7 +87,7 @@ public interface IIntegrationApiKeyService
     /// <summary>
     ///     Returns trusted metadata when <paramref name="presented" /> matches a live credential, otherwise
     ///     <see langword="null" />. A malformed value, an unknown prefix, a digest mismatch and a REVOKED key are all
-    ///     the same <see langword="null" />, so the caller can never tell them apart (ruling R2-6).
+    ///     the same <see langword="null" />, so the caller can never tell them apart.
     /// </summary>
     Task<IntegrationApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default);
 }

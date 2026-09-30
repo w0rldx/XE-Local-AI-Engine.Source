@@ -4,7 +4,6 @@ using System.Buffers;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Net.Http.Headers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
@@ -652,15 +651,4 @@ internal sealed class IntegrationApiHandler
                 code
             }, context.RequestAborted);
     }
-}
-
-/// <summary>Endpoint metadata carrying the integration family's request-body cap, resolved once at composition.</summary>
-internal sealed class IntegrationRequestSizeLimit : IRequestSizeLimitMetadata
-{
-    public IntegrationRequestSizeLimit(long maxRequestBodySize)
-    {
-        MaxRequestBodySize = maxRequestBodySize;
-    }
-
-    public long? MaxRequestBodySize { get; }
 }

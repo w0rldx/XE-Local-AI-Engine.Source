@@ -374,8 +374,3 @@ internal static class LlamaServerLaunchArgumentComposer
             SpeculativeDecodingSettings.Disabled);
     }
 }
-
-internal readonly record struct LlamaServerChatLaunchTuning(
-    int ChatCacheReuse,
-    int ChatCacheRamMiB,
-    SpeculativeDecodingSettings Speculative);

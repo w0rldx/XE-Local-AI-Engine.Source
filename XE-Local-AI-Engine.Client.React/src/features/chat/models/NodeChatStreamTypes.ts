@@ -44,7 +44,7 @@ export interface NodeChatStreamRequestDto {
 		stop?: string[];
 		numCtx?: number;
 	};
-	// The conversation's web result review mode (PLAN web-access §1.6): true lets retrieved web content reach the model
+	// The conversation's web result review mode: true lets retrieved web content reach the model
 	// without a review card. Absent/false = review. Hand-typed SignalR stream DTO field (not generated).
 	autoAcceptWebContent?: boolean;
 }

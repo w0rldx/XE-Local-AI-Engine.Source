@@ -1,12 +1,12 @@
 /**
- * The browser-side capture seam for live transcription (S4 plan §2.1).
+ * The browser-side capture seam for live transcription.
  *
  * A `CaptureSource` turns one browser media stream into 16 kHz mono int16 frames and hands them to a callback;
  * `useLiveCapture` forwards those frames to the transcription hub. The seam exists so the view can be driven by
  * a hand-written fake under jsdom, which has neither `AudioContext` nor `navigator.mediaDevices`.
  */
 
-/** The lane a frame belongs to. `mono` for a single source; `you`/`others` when microphone and system audio run side by side (D2). */
+/** The lane a frame belongs to. `mono` for a single source; `you`/`others` when microphone and system audio run side by side. */
 export type CaptureChannel = "mono" | "you" | "others";
 
 export interface CaptureFrame {
@@ -26,14 +26,14 @@ export type CaptureErrorCode =
 	| "permission-denied"
 	/** `NotFoundError` / `OverconstrainedError`, or an empty audio-input list. */
 	| "no-device"
-	/** R19: `getDisplayMedia` returned a stream with no audio track. */
+	/** `getDisplayMedia` returned a stream with no audio track. */
 	| "no-audio-track"
 	/** `AudioContext` construction or `audioWorklet.addModule` failed. */
 	| "worklet-failed"
 	/** The microphone (permission prompt, `getUserMedia`, the audio graph) did not start within its bound. */
 	| "start-timeout"
 	/**
-	 * R34a: the hub transport is not connected, so the frame could not be sent at all. Capture stops rather than
+	 * The hub transport is not connected, so the frame could not be sent at all. Capture stops rather than
 	 * dropping frames silently. It is the only send failure: a node that falls behind buffers and catches up.
 	 */
 	| "disconnected";

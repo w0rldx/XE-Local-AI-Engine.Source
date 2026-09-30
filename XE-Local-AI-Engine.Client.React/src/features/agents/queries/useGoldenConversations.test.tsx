@@ -69,7 +69,6 @@ function makeWrapper() {
 describe("useGoldenConversations (read)", () => {
 	beforeEach(() => {
 		listMock.mockImplementation(() => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 			queryKey: [{ _id: goldenConversationsQueryIds.list }],
 			queryFn: async () => generatedListResponse,
 		}));

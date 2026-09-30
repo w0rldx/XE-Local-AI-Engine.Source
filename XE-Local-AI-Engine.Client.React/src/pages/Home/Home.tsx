@@ -13,7 +13,7 @@ import { isInstalledLocalModel } from "@/features/models/models/LocalModelMapper
 /**
  * The post-setup landing page.
  *
- * It used to be a single centred word. That is the first screen a tester sees after declining the onboarding tour, on
+ * This is the first screen a tester sees after declining the onboarding tour, on
  * a node that at that moment has no models installed and therefore cannot do anything yet — so the one thing the page
  * has to carry is the next action. Which next action depends on what this node can actually send to, so the page asks.
  * A failed or in-flight query is not a reason to show nothing: the model-acquisition route is offered either way,

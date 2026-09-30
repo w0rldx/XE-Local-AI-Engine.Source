@@ -32,7 +32,7 @@ public sealed record ExternalAppInstanceSnapshot(
     long Version,
     string? BridgeToken = null)
 {
-#pragma warning disable CA1822, S2325, S1172, IDE0060
+#pragma warning disable CA1822, S2325, S1172, IDE0060 // The compiler recognises only this printer shape; see remarks.
     /// <summary>
     ///     Suppresses the record's generated <c>ToString()</c>, so formatting a snapshot can never print a secret.
     /// </summary>

@@ -38,7 +38,7 @@ export function benchmarkRunEstimate(input: BenchmarkRunEstimateInput, medianRun
 }
 
 /**
- * The project's own median completed run, which is the only honest basis for "how long will this take on this box".
+ * The project's own median completed run, which is the only honest basis for "how long will this take on this machine".
  * Warm-ups are excluded: they are the slow launch the repeats after them are measured without.
  */
 export function medianBenchmarkRunDurationMs(runs: readonly BenchmarkRunSummary[]): number | null {

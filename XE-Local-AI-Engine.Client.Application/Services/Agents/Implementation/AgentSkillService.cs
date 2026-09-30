@@ -79,26 +79,22 @@ internal sealed class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException("Name is required.");
         }
 
-        // MAAI001: Agent Skills stay [Experimental] at the version pinned in Directory.Packages.props. These validators
-        // are the ones the AgentInlineSkill constructor runs, and their messages name the rule, echoing no content.
-#pragma warning disable MAAI001
+        // These validators are the ones the AgentInlineSkill constructor runs, and their messages name the rule,
+        // echoing no content.
         if (!AgentSkillFrontmatter.ValidateName(name, out var nameError))
         {
             throw new AgentSkillValidationException(nameError);
         }
-#pragma warning restore MAAI001
 
         if (string.IsNullOrWhiteSpace(input.Description))
         {
             throw new AgentSkillValidationException("Description is required.");
         }
 
-#pragma warning disable MAAI001 // Same [Experimental] Agent Skills validators as the scoped block above.
         if (!AgentSkillFrontmatter.ValidateDescription(input.Description, out var descriptionError))
         {
             throw new AgentSkillValidationException(descriptionError);
         }
-#pragma warning restore MAAI001
 
         if (string.IsNullOrWhiteSpace(input.Body))
         {

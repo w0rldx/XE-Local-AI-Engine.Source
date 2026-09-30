@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The server-side half of the sessions filters (ruling R3-12). Both the trigger and the status filter must reach the
+// The server-side half of the sessions filters. Both the trigger and the status filter must reach the
 // request: a status narrowed in the browser would hide sessions that match it but fall outside the bounded window.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

@@ -11,7 +11,7 @@ using System.Collections.ObjectModel;
 ///     the quant knowledge is defined once: the advisor walks the fine <see cref="QualityRank" /> and <see cref="DefaultFloorQuant" /> to
 ///     step down to the highest quant that fits; the picker's <see cref="GgufQuantQuality" /> reads <see cref="TierOf" /> for the coarse
 ///     badge. Quality is NOT a strict function of bytes-per-weight across families (an I-quant beats a same-bit K-quant, a native FP4
-///     beats a wider requant), so the order is the curated quality ranking and <see cref="MemoryFitEstimator" /> supplies the size term.
+///     beats a wider requant), so the order is the curated quality ranking and <c>MemoryFitEstimator</c> supplies the size term.
 /// </remarks>
 public static class QuantLadder
 {

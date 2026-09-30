@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the single admission rule that used to live in
-///     the upload endpoint handler and, duplicated, in the repository importer's per-file loop.
+///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the single admission rule the upload endpoint and the
+///     repository importer's per-file loop both apply.
 /// </summary>
 public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmissionService
 {

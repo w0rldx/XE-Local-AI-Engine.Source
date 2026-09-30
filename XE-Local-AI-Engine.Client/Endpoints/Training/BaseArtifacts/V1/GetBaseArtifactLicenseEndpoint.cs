@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
 /// <summary>
 ///     The licensing metadata the run wizard's confirmation step reads. Always keyed on the base checkpoint repository
-///     recorded on the artifact — never on a GGUF quant repository derived from it (locked decision 8).
+///     recorded on the artifact — never on a GGUF quant repository derived from it.
 /// </summary>
 public sealed class GetBaseArtifactLicenseEndpoint : Endpoint<BaseArtifactByIdRequest, BaseArtifactLicenseResponse>
 {

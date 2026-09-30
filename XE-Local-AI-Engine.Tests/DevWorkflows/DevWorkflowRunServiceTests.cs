@@ -104,7 +104,7 @@ public sealed class DevWorkflowRunServiceTests
 
     /// <summary>
     ///     The same refusal over HTTP, against the real store: the 409's detail is the domain sentence and never the
-    ///     provider's constraint text (F-46).
+    ///     provider's constraint text.
     /// </summary>
     [Test]
     public async Task StartingASecondLiveRunOverHttp_AnswersTheDomainSentenceWithoutProviderText()

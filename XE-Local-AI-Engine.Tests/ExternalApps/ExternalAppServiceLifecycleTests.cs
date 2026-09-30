@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
+using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
@@ -7,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Start, stop, restart, reset and uninstall: the state machine's refusals, the reuse-or-rebuild decision, and
@@ -241,7 +243,7 @@ public sealed class ExternalAppServiceLifecycleTests
         var installed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         _ = await harness.Service.UninstallAsync(installed.Id, installed.Version);
-        await AssertEx.EventuallyAsync(() => harness.ReadAsync(installed.Id).GetAwaiter().GetResult() is null,
+        await AssertEx.EventuallyAsync(async () => await harness.ReadAsync(installed.Id) is null,
             TestBudgets.Contended,
             "The uninstall never deleted the instance row.");
 
@@ -267,14 +269,11 @@ public sealed class ExternalAppServiceLifecycleTests
     }
 
     [Test]
+    // Making a directory undeletable needs Unix permissions on its parent.
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Uninstall_WhenTheDirectoryCannotBeDeleted_StillRemovesTheRows()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Skip.Test("Making a directory undeletable needs Unix permissions on its parent.");
-            return;
-        }
-
         await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         var installed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
@@ -284,7 +283,7 @@ public sealed class ExternalAppServiceLifecycleTests
         harness.MakeUndeletable(installed.StoragePath);
 
         _ = await harness.Service.UninstallAsync(installed.Id, installed.Version);
-        await AssertEx.EventuallyAsync(() => harness.ReadAsync(installed.Id).GetAwaiter().GetResult() is null,
+        await AssertEx.EventuallyAsync(async () => await harness.ReadAsync(installed.Id) is null,
             TestBudgets.Contended,
             "The rows must go even when the directory cannot.");
         await AssertEx.EventuallyAsync(() => !harness.Runner.IsRunning(installed.Id),

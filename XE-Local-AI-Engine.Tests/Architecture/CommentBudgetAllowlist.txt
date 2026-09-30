@@ -36,9 +36,9 @@ XE-Local-AI-Engine.AI.Agent.Tests/Invocation/ClientLocalToolCancellationTests.cs
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/FrameworkApprovalGateTests.cs|summary|2
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|block|2
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|remarks|1
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|run|11
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|run|10
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|summary|5
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs|run|16
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs|run|15
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs|summary|3
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/Orchestration/IdleStreamGuardTests.cs|run|1
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/Orchestration/IdleStreamGuardTests.cs|summary|1
@@ -318,7 +318,7 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|summary|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|run|6
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|summary|1
-XE-Local-AI-Engine.Tests.E2ETests/Tests/CloudSettingsPageE2ETests.cs|run|2
+XE-Local-AI-Engine.Tests.E2ETests/Tests/CloudSettingsPageE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/CloudSettingsPageE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/CustomToolsPageE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/CustomToolsPageE2ETests.cs|summary|1
@@ -343,7 +343,7 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/LocalImportAndBenchmarksE2ETests.cs|summ
 XE-Local-AI-Engine.Tests.E2ETests/Tests/McpServersPageE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/McpServersPageE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelRecommendationsPageE2ETests.cs|block|1
-XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelRecommendationsPageE2ETests.cs|run|2
+XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelRecommendationsPageE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelRecommendationsPageE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelsManagementE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ModelsManagementE2ETests.cs|run|1
@@ -396,7 +396,7 @@ XE-Local-AI-Engine.Tests/Agents/AgentSkillsProviderContractTests.cs|run|1
 XE-Local-AI-Engine.Tests/Agents/AgentSkillsProviderContractTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/AgentTemplateImportServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/EmbeddingPlaybookRetrievalRankerTests.cs|run|3
-XE-Local-AI-Engine.Tests/Agents/EmbeddingToolRelevanceSelectorTests.cs|run|5
+XE-Local-AI-Engine.Tests/Agents/EmbeddingToolRelevanceSelectorTests.cs|run|4
 XE-Local-AI-Engine.Tests/Agents/EmbeddingToolRelevanceSelectorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/MathematicianAgentSeederTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/NodeToolApprovalPolicyTests.cs|run|1
@@ -416,6 +416,8 @@ XE-Local-AI-Engine.Tests/Agents/SkillImportArchiveGuardTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/SkillImportFixtures.cs|run|1
 XE-Local-AI-Engine.Tests/Agents/SkillImportFixtures.cs|summary|3
 XE-Local-AI-Engine.Tests/Agents/SkillImportServiceTests.cs|summary|1
+XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|run|20
+XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/ToolApprovalAuditRecorderTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/ToolRelevanceCoreSetTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Agents/UntrustedContentFramingTests.cs|run|1
@@ -520,8 +522,6 @@ XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairedBootstrapTests.cs|run|2
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairwiseTests.cs|run|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPairwiseTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPerplexityOutputParserTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|run|1
-XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkPhaseLaunchResolverTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkProjectServiceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkProjectServiceTests.cs|summary|1
@@ -532,6 +532,8 @@ XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkRunFreezeServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkRuntimeSnapshotV1CompatibilityTests.cs|run|3
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkRuntimeSnapshotV1CompatibilityTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkTaskItemServiceTests.cs|summary|3
+XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|run|1
+XE-Local-AI-Engine.Tests/Benchmarks/LlamaPerplexityRunnerLiveTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Caching/ByteBudgetedCacheTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Capabilities/CapabilityReporterTests.cs|run|3
 XE-Local-AI-Engine.Tests/Capacity/CapacityServiceTests.cs|run|8
@@ -544,12 +546,10 @@ XE-Local-AI-Engine.Tests/Capacity/RuntimeDeviceAuditServiceTests.cs|run|6
 XE-Local-AI-Engine.Tests/Capacity/RuntimeDeviceAuditServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Capacity/SpawnContextTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Capacity/SpawnSerializerTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|run|20
-XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/AskUserColdLoadResumeTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/AskUserToolOfferTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/ChatInvocationStatePumpFaultTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Chat/ChatInvocationStatePumpTests.cs|run|3
+XE-Local-AI-Engine.Tests/Chat/ChatInvocationStatePumpTests.cs|run|2
 XE-Local-AI-Engine.Tests/Chat/ChatInvocationStatePumpTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Chat/ChatStreamEventMapperTests.cs|run|6
 XE-Local-AI-Engine.Tests/Chat/ChatStreamEventSinkTests.cs|run|1
@@ -611,9 +611,8 @@ XE-Local-AI-Engine.Tests/CloudProviders/EntraBearerTokenPipelinePolicyTests.cs|s
 XE-Local-AI-Engine.Tests/CloudProviders/EntraCachePersistenceFailureTests.cs|run|1
 XE-Local-AI-Engine.Tests/CloudProviders/EntraCachePersistenceFailureTests.cs|summary|1
 XE-Local-AI-Engine.Tests/CloudProviders/EntraPersistenceFallbackCredentialTests.cs|summary|1
-XE-Local-AI-Engine.Tests/CloudProviders/GgufDownloadCoordinatorRoutingTests.cs|run|1
 XE-Local-AI-Engine.Tests/CloudProviders/GgufDownloadCoordinatorRoutingTests.cs|summary|1
-XE-Local-AI-Engine.Tests/CloudProviders/GgufImportTransactionCoordinatorTests.cs|run|3
+XE-Local-AI-Engine.Tests/CloudProviders/GgufImportTransactionCoordinatorTests.cs|run|2
 XE-Local-AI-Engine.Tests/CloudProviders/LocalModelProviderResolverDefaultTests.cs|summary|1
 XE-Local-AI-Engine.Tests/CloudProviders/ModelRoutingLocalChatClientTests.cs|summary|1
 XE-Local-AI-Engine.Tests/CloudProviders/RuntimeChatClientTests.cs|summary|1
@@ -740,7 +739,7 @@ XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowGraphTests.cs|summary|33
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowGraphs.cs|block|1
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowGraphs.cs|summary|15
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowHarness.cs|block|1
-XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowHarness.cs|run|3
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowHarness.cs|run|2
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowHarness.cs|summary|14
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowNodeRunTelemetryTests.cs|run|1
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowNodeRunTelemetryTests.cs|summary|13
@@ -1008,7 +1007,7 @@ XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStartupReconcilerTests.cs|run|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStartupReconcilerTests.cs|summary|7
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStateObserverTests.cs|run|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStateObserverTests.cs|summary|2
-XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStorageHelperTests.cs|summary|3
+XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStorageHelperTests.cs|summary|2
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStorageLayoutTests.cs|run|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStorageLayoutTests.cs|summary|5
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppTestManifests.cs|summary|1
@@ -1021,7 +1020,6 @@ XE-Local-AI-Engine.Tests/ExternalProviders/ExternalModelContextBudgetTests.cs|bl
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalModelContextBudgetTests.cs|remarks|1
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderAdministrationServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderReconcilerTests.cs|run|2
-XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderReconcilerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderRegistryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderStoreTests.cs|run|3
 XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderStoreTests.cs|summary|1
@@ -1200,7 +1198,6 @@ XE-Local-AI-Engine.Tests/Invocation/BudgetedApprovalReplayTests.cs|run|2
 XE-Local-AI-Engine.Tests/Invocation/BudgetedApprovalReplayTests.cs|summary|5
 XE-Local-AI-Engine.Tests/Invocation/ConversationContextBudgeterTests.cs|run|15
 XE-Local-AI-Engine.Tests/Invocation/ConversationContextBudgeterTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Invocation/DetachedInvocationReaperTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Invocation/HeuristicTokenEstimatorTests.cs|run|3
 XE-Local-AI-Engine.Tests/Invocation/InvocationAttachmentMetricsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Invocation/InvocationAttachmentTrackerTests.cs|summary|1
@@ -1298,6 +1295,7 @@ XE-Local-AI-Engine.Tests/Models/LocalModelCatalogServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Models/SeedValueTests.cs|summary|1
 XE-Local-AI-Engine.Tests/NodeSettings/CachedNodeSettingsStoreTests.cs|run|1
 XE-Local-AI-Engine.Tests/NodeSettings/CachedNodeSettingsStoreTests.cs|summary|1
+XE-Local-AI-Engine.Tests/NodeSettings/NodeDataDirectoryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/NodeSettings/NodeRuntimeSettingsTests.cs|run|1
 XE-Local-AI-Engine.Tests/NodeSettings/NodeRuntimeSettingsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/NodeSettings/NodeSettingsAdministrationServiceTests.cs|run|13
@@ -1311,7 +1309,6 @@ XE-Local-AI-Engine.Tests/NodeSettings/ToolCapableModelRegistrarTests.cs|run|3
 XE-Local-AI-Engine.Tests/NodeSettings/UsageRateResolverTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|run|2
 XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|summary|1
-XE-Local-AI-Engine.Tests/NodeSettings/NodeDataDirectoryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqliteContentionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqlitePragmasTests.cs|run|4
 XE-Local-AI-Engine.Tests/Providers/Abstractions/CudaToolkitLocatorTests.cs|summary|2
@@ -1470,7 +1467,6 @@ XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaConnectFailureHandlerTests.cs|su
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaExceptionTranslatingEmbeddingGeneratorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaLocalModelProviderTests.cs|run|4
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelInfoReaderTests.cs|run|1
-XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelInfoReaderTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Ollama/OllamaModelServiceTests.cs|run|3
 XE-Local-AI-Engine.Tests/Providers/Ollama/RunningModelSnapshotMappingTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/OpenAICompat/ExternalEndpointGuardHandlerTests.cs|summary|1
@@ -1596,12 +1592,10 @@ XE-Local-AI-Engine.Tests/Testing/Builders/RuntimePackageBuilder.cs|run|1
 XE-Local-AI-Engine.Tests/Testing/Builders/StubNodeRuntimeSettings.cs|run|1
 XE-Local-AI-Engine.Tests/Testing/Builders/StubNodeRuntimeSettings.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/ChatPumpTestFactory.cs|summary|1
-XE-Local-AI-Engine.Tests/Testing/FakeNodeSettingsStore.cs|remarks|1
 XE-Local-AI-Engine.Tests/Testing/FastEndpointsProblemBody.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/JunctionSupport.cs|block|1
 XE-Local-AI-Engine.Tests/Testing/JunctionSupport.cs|summary|2
 XE-Local-AI-Engine.Tests/Testing/LoopbackPort.cs|summary|2
-XE-Local-AI-Engine.Tests/Testing/ManualTimeProvider.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/Mocks/EmptyClientLocalToolRegistry.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/Mocks/FakeAgentInstructionProvider.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/Mocks/FakeConversationUploadedFileStore.cs|summary|1
@@ -1611,7 +1605,6 @@ XE-Local-AI-Engine.Tests/Testing/Mocks/StubAgentHomeGoalExecutor.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/NullCustomToolScopeFactory.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs|block|1
 XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Testing/RecordingLogger.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/RepositoryPaths.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/RequestBodyTooLargeAssert.cs|summary|1
 XE-Local-AI-Engine.Tests/Testing/SeparateMountScratch.cs|block|1

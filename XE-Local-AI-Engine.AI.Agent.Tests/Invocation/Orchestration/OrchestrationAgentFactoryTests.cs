@@ -3,7 +3,6 @@
 // (IOrchestrationAgentFactory.CreateAsync + IOrchestrationRunSession.WatchAsync / RespondToApprovalAsync), not the
 // raw workflow. Evolves the framework-handoff probe shapes into regression guards.
 
-#pragma warning disable MEAI001 // ApprovalRequiredAIFunction is [Experimental]; adopted deliberately for the tool approval gate.
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
 using System.Collections.ObjectModel;
@@ -1036,4 +1035,3 @@ public sealed class OrchestrationAgentFactoryTests
         }
     }
 }
-#pragma warning restore MEAI001

@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
-using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -98,7 +97,7 @@ public sealed class ProviderProcessSupervisionWiringTests
         var root = Path.Combine(Path.GetTempPath(), $"xe-receipt-wiring-{Guid.NewGuid():N}");
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<INodeDataDirectory>(new FixedNodeDataDirectory(root));
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(root));
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ILlamaCppBinaryManager>(new FakeBinaryManager());
         services.AddSingleton<IGpuVariantSelector>(new FakeVariantSelector());

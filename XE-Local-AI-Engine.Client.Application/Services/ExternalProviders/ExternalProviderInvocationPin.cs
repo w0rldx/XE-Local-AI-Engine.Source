@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     A turn decides ONCE, before its first send, which tools the model may be offered, from the connection's declared locality; a tool
 ///     loop then sends many times, so the pins are read here and verified in the transport on every send. This only RESOLVES them: an
 ///     <see cref="AsyncLocal{T}" /> written inside an <c>async</c> method is invisible to its caller, so the caller opens
-///     <see cref="ExternalProviderBindingPinScope.Begin" /> SYNCHRONOUSLY, in the frame the pinned sends run in. Failing to read a
+///     <see cref="ExternalProviderBindingPinScope.Begin(ExternalProviderBindingPin)" /> SYNCHRONOUSLY, in the frame the pinned sends run in. Failing to read a
 ///     binding is NOT an error: an unresolved <c>ext:</c> id is fail-closed twice already — the tool gate withholds, the transport refuses.
 /// </remarks>
 public static class ExternalProviderInvocationPin

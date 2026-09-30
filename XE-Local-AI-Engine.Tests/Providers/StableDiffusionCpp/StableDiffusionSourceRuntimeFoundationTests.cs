@@ -741,7 +741,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => lifecycle.StartAsync(CancellationToken.None));
 
-        AssertEx.Equal(expected: 1, logger.ErrorCount);
+        AssertEx.Equal(expected: 1, logger.Entries.Count(entry => entry.Level == LogLevel.Error));
     }
 
     [Test]
@@ -757,7 +757,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => lifecycle.StartAsync(cancellation.Token));
 
-        AssertEx.Equal(expected: 0, logger.ErrorCount);
+        AssertEx.Equal(expected: 0, logger.Entries.Count(entry => entry.Level == LogLevel.Error));
     }
 
     /// <summary>
@@ -779,7 +779,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         await lifecycle.StopAsync(cancellation.Token);
 
-        AssertEx.Equal(expected: 0, logger.ErrorCount);
+        AssertEx.Equal(expected: 0, logger.Entries.Count(entry => entry.Level == LogLevel.Error));
     }
 
     [Test]
@@ -794,12 +794,8 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             "test probe",
             cancellation.Token,
             temp.Path);
-        using var waitForPid = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        while (!File.Exists(pidPath))
-        {
-            // real-timer: waits for a real child process to write its pid file; bounded by the 2s token above.
-            await Task.Delay(10, waitForPid.Token);
-        }
+        // real-timer: waits for a real child process to write its pid file.
+        await AssertEx.EventuallyAsync(() => File.Exists(pidPath), TimeSpan.FromSeconds(2), "the probe child never wrote its pid file.");
 
         await cancellation.CancelAsync();
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe);
@@ -912,14 +908,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             isLinux: true);
     }
 
-    private static async Task WaitForTerminalAsync(IStableDiffusionCppSourceBuildService service)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while (!service.GetStatus().Terminal)
-        {
-            await Task.Delay(10, timeout.Token);
-        }
-    }
+    // real-timer: the build runs detached and publishes nothing but its status.
+    private static Task WaitForTerminalAsync(IStableDiffusionCppSourceBuildService service) =>
+        AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(5), "the source build never reached a terminal status.");
 
     private static StableDiffusionInstalledRuntimeState State(string cacheRoot)
     {
@@ -1002,33 +993,6 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         public Task PublishStatusAsync(StableDiffusionCppSourceBuildStatusEvent statusEvent, CancellationToken ct = default)
         {
             return Task.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public int ErrorCount { get; private set; }
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        {
-            return null;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
-        public void Log<TState>(LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == LogLevel.Error)
-            {
-                ErrorCount++;
-            }
         }
     }
 

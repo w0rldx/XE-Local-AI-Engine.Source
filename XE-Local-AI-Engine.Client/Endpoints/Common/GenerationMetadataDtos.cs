@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 /// <remarks>
 ///     <b>Informational, not an attestation.</b> Every field is client-supplied on the save path on a single-operator
 ///     local node, so an operator can trivially forge it against themselves. It records what a draft claimed; nothing
-///     downstream grants trust or capability based on it (locked decision 9: no signed receipts). The two fields a
+///     downstream grants trust or capability based on it (there are no signed receipts). The two fields a
 ///     reader can rely on are the server-stamped <c>acceptedAtUtc</c> and <c>wasEdited</c> on
 ///     <see cref="GenerationMetadataResponse" />.
 /// </remarks>

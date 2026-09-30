@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The attach/detach seam, which unit tests of the tracker and the reaper structurally cannot see: they drive
 ///     Attach and Dispose directly, so they pass no matter when the hub actually releases.
 ///     <para>
-///         The regression these pin cost a full live-validation cycle. <c>NodeChatStreamService.SendMessageCoreAsync</c>
+///         <c>NodeChatStreamService.SendMessageCoreAsync</c>
 ///         awaits its pump and runner tasks in the <c>finally</c> AFTER its SSE loop exits, so the enumerable the hub
 ///         wraps does not complete until the whole run is over — often minutes after the browser has gone. Releasing the
 ///         attachment from the wrapper's own <c>finally</c> therefore recorded the detach only once the run had already

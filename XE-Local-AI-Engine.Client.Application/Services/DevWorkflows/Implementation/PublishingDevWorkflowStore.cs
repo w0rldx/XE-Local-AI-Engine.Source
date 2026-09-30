@@ -30,7 +30,7 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
     /// <summary>The telemetry members that are NOT additive across attempts.</summary>
     /// <remarks>
     ///     A route belongs to one settle, a served model is a name rather than a quantity, tool names do not sum, and
-    ///     the VRAM figures are a READING of the box at one load. The retry snapshot carries everything else.
+    ///     the VRAM figures are a READING of the host at one load. The retry snapshot carries everything else.
     ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
     /// </remarks>
     private static readonly HashSet<string> NonAdditiveTelemetryMembers = new(StringComparer.Ordinal)

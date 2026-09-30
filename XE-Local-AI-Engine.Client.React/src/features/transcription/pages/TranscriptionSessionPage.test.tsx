@@ -236,7 +236,7 @@ describe("TranscriptionSessionPage", () => {
 		expect(screen.queryByTestId("transcript-segment-list")).toBeNull();
 	});
 
-	// C2: text is corrected only on a finished transcript; a transcribing file session offers no edit control.
+	// Text is corrected only on a finished transcript; a transcribing file session offers no edit control.
 	it.each([
 		{ status: "Completed", editable: true },
 		{ status: "Failed", editable: true },
@@ -338,7 +338,7 @@ describe("TranscriptionSessionPage", () => {
 		expect(liveCapture.start).toHaveBeenCalledWith({ kind: "microphone", deviceId: undefined });
 	});
 
-	// S5 / the bug this file would have caught: `isLive` used to be derived from the capture REQUEST, and an
+	// Regression: `isLive` used to be derived from the capture REQUEST, and an
 	// application-capture session has none — the node records the application. The session rendered as if it had
 	// finished, with the persisted rows and no controls, while it was still transcribing.
 	it("renders the live panel and the capture controls for an application-capture session", async () => {

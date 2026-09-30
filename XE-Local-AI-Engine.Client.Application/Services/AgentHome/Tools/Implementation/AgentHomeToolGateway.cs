@@ -236,7 +236,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     /// <remarks>
     ///     <c>fake</c> answers every command it was not scripted for with exit 0 and empty output, so a run it served renders as
     ///     "completed" with no file changes, indistinguishable from a real run whose goal produced nothing. It is also what a
-    ///     Development node resolves when <c>AgentHome:Sandbox:Provider</c> is unset, the default a first live round hits. Saying so
+    ///     Development node resolves when <c>AgentHome:Sandbox:Provider</c> is unset, the default a fresh node starts with. Saying so
     ///     in the model-facing result stops the model reporting work it never did, and it must be said whether or not the goal loop
     ///     ran: on this backend a loop that "ran" still executed nothing.
     /// </remarks>

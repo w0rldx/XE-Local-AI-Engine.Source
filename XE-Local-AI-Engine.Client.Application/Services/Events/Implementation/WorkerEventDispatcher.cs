@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
-[SuppressMessage("Design",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Registered for the application lifetime; disposing the service provider owns singleton cleanup.")]
 /// <summary>
 ///     Represents worker event dispatcher.
 /// </summary>
+[SuppressMessage("Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "Registered for the application lifetime; disposing the service provider owns singleton cleanup.")]
 public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 {
     private readonly IInvocationHistory _invocationHistory;

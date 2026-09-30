@@ -33,14 +33,14 @@ public sealed class LlamaCppAssetPin
 
 /// <summary>
 ///     Verified, pinned llama.cpp prebuilt-release table — the recommended-pinned acquisition source for
-///     <see cref="LlamaCppBinaryManager" />. No source-build, ever.
+///     <see cref="Implementation.LlamaCppBinaryManager" />. No source-build, ever.
 /// </summary>
 /// <remarks>
 ///     SHA256 digests come from the GitHub release-assets API <c>digest</c> field, because llama.cpp publishes NO
 ///     <c>.sha256</c> sidecar files; re-pin <see cref="PinnedTag" /> and every hash together when bumping the
 ///     recommended version. Assets are named <c>llama-{tag}-bin-{os}-{variant}-{arch}.{ext}</c> and downloaded from
 ///     <c>https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}</c>. Upstream ships NO prebuilt Linux
-///     CUDA asset, so a Linux NVIDIA box selects Vulkan — enforced by <see cref="GpuVariantSelector" />.
+///     CUDA asset, so a Linux NVIDIA machine selects Vulkan — enforced by <see cref="Implementation.GpuVariantSelector" />.
 /// </remarks>
 public static class LlamaCppReleasePins
 {

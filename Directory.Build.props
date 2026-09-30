@@ -11,10 +11,10 @@
     <AnalysisMode>All</AnalysisMode>
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- D8: NuGetAudit is on by default in the .NET 10 SDK (NuGetAuditMode=all for net10.0+ targets);
+    <!-- NuGetAudit is on by default in the .NET 10 SDK (NuGetAuditMode=all for net10.0+ targets);
          made explicit so the policy is visible in this file rather than an invisible SDK default.
          TreatWarningsAsErrors above means a newly-disclosed advisory at NuGetAuditLevel or above fails
-         the build the day it is disclosed - deliberate, see docs/agent-knowledge.md section 1. -->
+         the build the day it is disclosed - deliberate, see docs/agent-knowledge/build-and-analyzers.md. -->
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
@@ -27,13 +27,11 @@
          PublishDocumentationFile excludes only the ENTRY project's file, and the 16 project references would each
          still copy theirs into the publish folder, which is 16 files the package never carried before.
 
-         The suppressions below are two different decisions. CS1591/CS1573/CS1572 are POLICY: a <param> is written
-         only when it adds information the name does not, and an undocumented public member is the norm outside the
-         seams that earn a doc, so these three would fire on most of the tree by design (16-code-conventions.md).
-         CS1574/CS0419/CS1587/CS1734 are a MEASURED BACKLOG this property newly revealed, silenced so enabling
-         IDE0005 does not require the same commit to rewrite ~95 files: 62 unresolved crefs, 33 ambiguous crefs,
-         11 doc blocks on a non-documentable element and 10 paramrefs naming no parameter. Delete an ID here as its
-         family is cleaned; none of them was ever enforced before, so nothing regressed by listing them. -->
+         The suppressions below are POLICY: a <param> is written only when it adds information the name does not,
+         and an undocumented public member is the norm outside the seams that earn a doc, so CS1591/CS1573/CS1572
+         would fire on most of the tree by design (16-code-conventions.md). Every other XML-doc diagnostic is
+         enforced: an unresolved cref (CS1574), an ambiguous one (CS0419), a doc block on a non-documentable element
+         (CS1587) and a paramref naming no parameter (CS1734) fail the build like any other warning. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishDocumentationFiles>false</PublishDocumentationFiles>
     <!-- And out of bin/ as well, not only the publish folder: FastEndpoints and NJsonSchema read an .xml that sits next
@@ -41,7 +39,7 @@
          /// blocks into the live OpenAPI document and openapi:check:live went red against the committed contract. The
          compiler still writes the file under obj/, which is all IDE0005 and the /// shape rules need. -->
     <CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
-    <NoWarn>$(NoWarn);CS1591;CS1573;CS1572;CS1574;CS0419;CS1587;CS1734</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1572</NoWarn>
   </PropertyGroup>
 
   <!-- Test/tooling projects are exempt from the extra banned-API + Meziantou guardrails: they

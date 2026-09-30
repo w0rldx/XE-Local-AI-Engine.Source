@@ -96,7 +96,7 @@ public sealed class CreateDevWorkflowRuleSetRequest
     /// <summary>The markdown injected verbatim into a matching node's context.</summary>
     public string Body { get; init; } = string.Empty;
 
-    /// <summary>Omitted means both axes empty, which applies the rule set to every node on this box.</summary>
+    /// <summary>Omitted means both axes empty, which applies the rule set to every node on this machine.</summary>
     public DevWorkflowRuleScope? Scope { get; init; }
 
     public bool Enabled { get; init; } = true;
@@ -217,29 +217,34 @@ public sealed class DevWorkflowArtifactRequest
 // The wire graph: a field-for-field mirror of the stored graph document rather than a projection, so the mapper is a deserialize and nothing else, and a definition read
 // back, edited and saved keeps every field it arrived with. There is no edge table — the shape is composed from the encrypted graph blob, the single source of routing truth.
 
+/// <param name="AllowUngatedWrites">
+///     The template's waiver of the human-gate rule for a node writing outside its sandbox. Absent means
+///     <c>false</c>, so a definition written without it keeps every byte.
+/// </param>
 public sealed record DevWorkflowGraph(
     int SchemaVersion,
     IReadOnlyList<DevWorkflowGraphNode> Nodes,
     IReadOnlyList<DevWorkflowGraphEdge> Edges,
-    /// <summary>
-    ///     The template's own waiver of the rule that a node writing outside its sandbox is reached through a human
-    ///     gate. Absent means <c>false</c> — nothing stored can rely on the waiver — so a definition written without
-    ///     the field keeps every byte it had.
-    /// </summary>
     bool? AllowUngatedWrites = null)
 {
     public static DevWorkflowGraph Empty { get; } = new(1, [], []);
 }
 
-/// <summary>
-///     <c>ToolMode</c> is what a Tool node does with the repository it names — <c>Validate</c> or <c>Apply</c>.
-/// </summary>
+/// <summary><c>ToolMode</c> is what a Tool node does with the repository it names — <c>Validate</c> or <c>Apply</c>.</summary>
 /// <remarks>
 ///     It rides the wire because a definition that loses it loses its apply node: copying the seeded template through
 ///     a contract without it turns an "apply the approved patches" node into an ordinary validation one. Absent means
 ///     <c>Validate</c>, exactly as the runtime's parser reads it, so a definition written WITHOUT this field keeps
 ///     every byte it had.
 /// </remarks>
+/// <param name="MaxLoopIterations">
+///     How often this node's fix loop may re-run before the run asks a human; refused without a <c>RetryTarget</c>.
+///     Absent means no per-loop cap, only the run-wide budget.
+/// </param>
+/// <param name="IsTemplate">
+///     Whether this node is a materialization template clone with no node run. Derived by the parser, never
+///     authored or stored, so a PUT round-trip keeps its bytes.
+/// </param>
 public sealed record DevWorkflowGraphNode(
     string NodeKey,
     string NodeType,
@@ -259,17 +264,7 @@ public sealed record DevWorkflowGraphNode(
     [property: JsonConverter(typeof(DevWorkflowRequiredCapabilitiesJsonConverter))]
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
-    /// <summary>
-    ///     How many times this node's fix loop may re-run before the run stops and asks a human. Only meaningful beside
-    ///     a <c>RetryTarget</c>, and refused without one. Absent means NO per-loop cap: the run-wide attempt budget is
-    ///     what bounds it then.
-    /// </summary>
     int? MaxLoopIterations,
-    /// <summary>
-    ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting with no node run.
-    ///     DERIVED from the parser on the way out, never authored or stored, so a graph round-tripping a PUT keeps the
-    ///     bytes it arrived with.
-    /// </summary>
     bool? IsTemplate = null);
 
 public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string ArtifactKind, string JoinNodeKey, int MaxChildren);

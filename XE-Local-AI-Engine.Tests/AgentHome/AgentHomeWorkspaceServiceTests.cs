@@ -57,7 +57,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(source, ".env"), "SECRET=1");
         await File.WriteAllTextAsync(Path.Combine(source, "node_modules", "lib.js"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -88,7 +88,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(outside, "secret.txt"), "leak");
         Directory.CreateSymbolicLink(Path.Combine(source, "escape"), outside);
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -107,7 +107,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(source, "real.txt"), "x");
         File.CreateSymbolicLink(Path.Combine(source, "link.txt"), Path.Combine(source, "real.txt"));
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -141,7 +141,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "escape"), outside),
             "the fixture must be able to plant a junction once EnsureSupported has passed");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -175,7 +175,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "link"), real),
             "the fixture must be able to plant a junction once EnsureSupported has passed");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -191,7 +191,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenHostPathMissingOrExtended_FailsClosed()
     {
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -209,7 +209,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "big.bin"), new string(c: 'a', count: 4096));
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider, maxBytes: 100);
 
@@ -224,7 +224,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -265,7 +265,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         // Scripted output the collector must NOT pick up: the record is argv, exit code and duration, never bytes.
         provider.RegisterCommand(BaselineCommandKey("init"), exitCode: 0, "Initialized empty Git repository");
@@ -291,7 +291,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -307,7 +307,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         // git init returns a non-zero exit code; the baseline must fail the prepare rather than continue.
         provider.RegisterCommand(BaselineCommandKey("init"), exitCode: 1, string.Empty, "fatal: cannot init");
@@ -325,7 +325,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var sourceB = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(sourceA, "alpha.txt"), "a");
         await File.WriteAllTextAsync(Path.Combine(sourceB, "bravo.txt"), "b");
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -342,7 +342,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     {
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "alpha.txt"), "a");
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -356,7 +356,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenResetCannotProveEmpty_KillsPoisonedSandbox()
     {
-        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var inner = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await inner.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(new ResetFailingProvider(inner));
 
@@ -367,7 +367,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenResetAndKillFail_MarksOwnerNodePoisoned()
     {
-        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var inner = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await inner.CreateOrAttachAsync(CreateRequest());
         var leases = new AgentHomeExecutionLeaseManager();
         var service = CreateService(new ResetFailingProvider(inner, failKill: true), leaseManager: leases);
@@ -409,7 +409,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
 
-        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
@@ -471,21 +471,6 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         Directory.CreateDirectory(dir);
         _tempDirs.Add(dir);
         return dir;
-    }
-
-    private sealed class FixedClock : TimeProvider
-    {
-        private readonly DateTimeOffset _utcNow;
-
-        public FixedClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
     }
 
     private sealed class ResetFailingProvider : IAgentSandboxRuntimeProvider

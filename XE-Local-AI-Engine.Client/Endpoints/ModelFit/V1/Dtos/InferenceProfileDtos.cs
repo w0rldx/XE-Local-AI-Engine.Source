@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations;
 ///     A node-local inference profile projected for transport — shared by the list, explore, freeze and invalidate
 ///     responses — carrying only the launch-arg facts and lifecycle metadata.
 /// </summary>
-/// <remarks>The local-only machine key is deliberately OMITTED: it must never leave the box.</remarks>
+/// <remarks>The local-only machine key is deliberately OMITTED: it must never leave the host.</remarks>
 public sealed class InferenceProfileViewDto
 {
     public required Guid Id { get; init; }

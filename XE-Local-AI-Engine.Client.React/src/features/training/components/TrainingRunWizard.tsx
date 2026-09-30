@@ -12,7 +12,7 @@ import { useCreateTrainingRun, useTrainingRunDefaults } from "@/features/trainin
 
 /**
  * The run wizard: dataset, base checkpoint, an explicit licensing acknowledgement, and the hyper-parameters the
- * backend computed for this box.
+ * backend computed for this machine.
  *
  * The options are pre-filled from the defaults route rather than from constants, because what fits depends on the
  * card in the machine. A configuration the backend refuses is surfaced as its refusal — never silently shrunk, which

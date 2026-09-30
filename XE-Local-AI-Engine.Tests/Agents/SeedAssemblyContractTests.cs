@@ -78,7 +78,7 @@ public sealed class SeedAssemblyContractTests
         _ = await runner.RunAsync(chatClient, TeacherRequest(FirstTurn));
         _ = await runner.RunAsync(chatClient, TeacherRequest(SecondTurn));
 
-        // ValidateAfter has no grammar, so the runner appends the record schema after the instructions (F-57).
+        // ValidateAfter has no grammar, so the runner appends the record schema after the instructions.
         AssertSeedContract(chatClient, TeacherSchema.GetRawText());
     }
 

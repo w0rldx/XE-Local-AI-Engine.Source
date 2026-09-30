@@ -68,14 +68,12 @@ using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerTests
 {
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
     private const string ReadSkillResourceToolName = AgentSkillsProvider.ReadSkillResourceToolName;
-#pragma warning restore MAAI001
 
     private const string SkillName = "demo";
 
-    // One stubbed local warm, and the floor a turn that summed TWO of them must clear. The floor sits well under the
-    // pair and well over a single warm, so neither a fast machine nor a loaded one changes the verdict.
+    // real-timer: one stubbed local warm, and the floor a turn that summed TWO of them must clear. The floor sits
+    // well under the pair and well over a single warm, so neither a fast machine nor a loaded one changes the verdict.
     private static readonly TimeSpan WarmDelay = TimeSpan.FromMilliseconds(40);
 
     private const long TwoWarmFloorMs = 60L;
@@ -83,13 +81,10 @@ public sealed class InvocationRunnerTests
     // A running turn on the manual clock holds two timers: the stream-idle deadline of the current pull and the whole-turn deadline.
     private const int IdleAndTurnDeadline = 2;
 
-    // MAF's skill-tool names, aliased once so the scoped MAAI001 suppression the [Experimental] Agent Skills surface
-    // needs is not repeated at every use site below.
-#pragma warning disable MAAI001
+    // MAF's skill-tool names, aliased once for the use sites below.
     private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
 
     private const string RunSkillScriptToolName = AgentSkillsProvider.RunSkillScriptToolName;
-#pragma warning restore MAAI001
 
     private static readonly JsonSerializerOptions AskUserArgumentOptions = new(JsonSerializerDefaults.Web);
 
@@ -818,6 +813,7 @@ public sealed class InvocationRunnerTests
         var runTask = RunAsync(runner, package);
         await started.Task;
 
+        // real-timer: the drain deadline is the subject's own input; the invocation is parked on a gate, so it expires.
         var drained = await runner.DrainActiveInvocationsAsync(TimeSpan.FromMilliseconds(10));
 
         AssertEx.False(drained);
@@ -1442,8 +1438,8 @@ public sealed class InvocationRunnerTests
                   .Returns(Task.CompletedTask);
         var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), eventDispatcher: dispatcher);
 
-        // The runner's pending-approval window is FIVE MINUTES in this fixture (see CreateRunner). Completing at all is
-        // the evidence that the unattended run never entered that wait; the elapsed assertion states the bound.
+        // real-timer: the pending-approval window is FIVE MINUTES in this fixture (see CreateRunner); the elapsed
+        // ceiling is the fail-fast behaviour under test, far below that window and far above any scheduling delay.
         var elapsed = Stopwatch.StartNew();
         await RunAsync(runner, SkillPackage(Guid.NewGuid()).AsUnattended().Build());
         elapsed.Stop();
@@ -1469,6 +1465,7 @@ public sealed class InvocationRunnerTests
         });
         var runner = CreateRunner(factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
 
+        // real-timer: skipping the five-minute question park is the behaviour; the 30 s ceiling cannot be met by waiting.
         var elapsed = Stopwatch.StartNew();
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).AsUnattended().Build());
         elapsed.Stop();
@@ -3059,8 +3056,8 @@ public sealed class InvocationRunnerTests
     public async Task Dispatch_WhenSwappedSendFailsAfterFirstToken_StillEmitsExactlyOneEffortDispatchedNotice()
     {
         // A swapped turn withholds its notice until the send resolves, precisely so a fallback cannot leave the reader
-        // with two contradictory rows. When the send streams and THEN fails there is no fallback to announce — and the
-        // turn used to end with no effort notice at all, which is the one outcome the ruling forbids. The notice names
+        // with two contradictory rows. When the send streams and THEN fails there is no fallback to announce — and a
+        // turn that ends with no effort notice at all is the one outcome that must not happen. The notice names
         // the model that actually served; the failure itself is reported as on any other turn.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
@@ -5131,6 +5128,7 @@ public sealed class InvocationRunnerTests
         // would let a call be registered in one dictionary and resolved against another. A test that has to observe
         // the registry directly (the stale sweep) passes its own and holds that same reference.
         var resolvedPendingToolCallRegistry = pendingToolCallRegistry ?? new PendingToolCallRegistry();
+        var resolvedTimeProvider = timeProvider ?? TimeProvider.System;
 
         return new InvocationRunner(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
@@ -5159,7 +5157,7 @@ public sealed class InvocationRunnerTests
                 NullLogger<ToolApprovalCoordinator>.Instance,
                 TimeProvider.System),
             new ApiToolCallBridge(resolvedPendingToolCallRegistry, TimeProvider.System),
-            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings, timeProvider),
+            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings, resolvedTimeProvider),
             externalProviderRegistry ?? new FakeExternalProviderRegistry(),
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
@@ -5170,7 +5168,7 @@ public sealed class InvocationRunnerTests
                 AgentToolsEnabled = knowledgeToolsEnabled
             }),
             NullLogger<InvocationRunner>.Instance,
-            timeProvider);
+            resolvedTimeProvider);
     }
 
     /// <summary>

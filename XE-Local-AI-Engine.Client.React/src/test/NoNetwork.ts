@@ -1,9 +1,9 @@
 // Vitest setup: fail fast on any network call from a test file that did not install MSW.
 //
-// This replaces the suite-wide MSW server that used to run for all 338 files (see src/test/UseMswServer.ts,
-// which now installs it per consumer file). What has to survive that move is the load-bearing half of the old
-// `onUnhandledRequest: "error"`: a request nobody stubbed must fail loudly instead of reaching the machine's
-// real network, where it passes for the wrong reason on a developer box and hangs in CI.
+// MSW is installed per consumer file (src/test/UseMswServer.ts), not suite-wide. This guard holds the
+// load-bearing half of MSW's `onUnhandledRequest: "error"` for every other file: a request nobody stubbed must
+// fail loudly instead of reaching the machine's real network, where it passes for the wrong reason on a developer
+// machine and hangs in CI.
 //
 // The guard must be transport-COMPLETE, not fetch-only. MSW intercepted Fetch, XMLHttpRequest, Node's
 // ClientRequest and WebSocket; the generated SDK goes over axios, which selects its XHR adapter under jsdom,

@@ -69,7 +69,7 @@ public sealed class KnowledgeUploadEndpointTests
     [Test]
     public async Task Upload_InvalidCollectionIdOnDedupeHit_Returns400AndNeverReachesTheStore()
     {
-        // REGRESSION (live QA F-19): "bad collection!" answered 200 deduplicated:true because the bytes already existed in
+        // REGRESSION: "bad collection!" answered 200 deduplicated:true because the bytes already existed in
         // DEFAULT. The blob store answers a dedupe hit here, so a 200 would prove the id bypassed validation.
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         await using var factory = CreateFactory(dispatcher, wasInserted: false, status: KnowledgeDocumentStatus.Indexed, Guid.NewGuid());

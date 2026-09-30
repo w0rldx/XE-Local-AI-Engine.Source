@@ -32,7 +32,7 @@ Note `llama-server` — the OS process table carries no extension on Windows, ev
 Checks **4, 5 and 9** describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
 this RC" note saying what was proven on Linux and what only you can prove.
 
-**A 2026-08-02 session ran on a real Windows 11 host (RTX 5090, .NET 10.0.302) and closed
+**A 2026-08-02 session ran on a real Windows 11 host (RTX 5090) and closed
 several of the questions this runbook was written to ask.** Where that happened the check now says so, and says
 what is left for you:
 
@@ -852,7 +852,7 @@ Windows box, because `cpuFallback` requires `gpuExpected`, which is `vendor ∈ 
 (`RuntimeDeviceAuditService.BuildState`) — and there is still no Windows VRAM-bytes source for a non-NVIDIA
 adapter. `ProbeWindowsNonNvidiaVramAsync` is deliberately still the deferred DXGI seam: `Win32_VideoController.AdapterRAM`
 is a uint32 that misreports any adapter above 4 GB, and a wrong positive number would feed model-fit sizing, which
-is worse than `null`. So the vendor is now named truthfully and the Vulkan binary is selected again, but the box
+is worse than `null`. So the vendor is now named truthfully and the Vulkan binary is selected again, but the machine
 still shows CPU mode and still raises no alert.
 
 **Do this.**
@@ -949,7 +949,7 @@ Linux-proven only; nothing below has run on Windows. Each item is pass/fail.
 
 ### What a 32 GB box measures, and why none of it is a consumer figure
 
-Everything in this block was measured on an **RTX 5090 32 GB**, on a host with much more RAM and CPU than the
+Everything in this block was measured in the 2026-08-03 session on an **RTX 5090 32 GB**, on a host with much more RAM and CPU than the
 consumer target. That card is roughly **2× the ≈16 GB VRAM consumer target**. Every number here
 **over-reports** and must never be quoted as a consumer figure.
 It is recorded so a future session does not re-derive the *shape* of the difference.

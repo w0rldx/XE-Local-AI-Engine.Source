@@ -505,35 +505,3 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
     }
 }
-
-/// <summary>The report a Tool node-run leaves: what ran, against which commit and profile, and the gate's verdict.</summary>
-/// <remarks>
-///     Deliberately NOT <c>DevelopmentValidationReport</c>: that record's subject, manifest and expected-result
-///     hashes describe a coder attempt's patch, and filling three hash fields with placeholders would be a report
-///     claiming evidence it does not have.
-/// </remarks>
-internal sealed record DevWorkflowValidationReport(
-    bool Passed,
-    string NodeKey,
-    int Attempt,
-    string BaseCommit,
-    string CommandProfileId,
-    string CommandProfileDigest,
-    string? FailureCode,
-    string? FailureDetail,
-    IReadOnlyList<DevelopmentCommandEvidence> Commands,
-    long CompletedAtUtc,
-    DevWorkflowValidationBasedOn? BasedOn = null);
-
-/// <summary>
-///     What <see cref="DevWorkflowToolCommands.OverlayAsync" /> did: what the report should say it judged, or the
-///     sanitized sentence that refuses the node because the child's work could not be put in front of it honestly.
-/// </summary>
-internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn? BasedOn, string? Refusal);
-
-/// <summary>What the commands ran against when the base commit alone would not say it.</summary>
-/// <remarks>
-///     The upstream implementation task whose approved patch was overlaid onto the workspace first. Absent means
-///     nothing was overlaid: either this node has no upstream implementation to judge, or the pass was refused.
-/// </remarks>
-internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);

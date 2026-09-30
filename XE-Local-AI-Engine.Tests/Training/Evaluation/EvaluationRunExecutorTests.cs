@@ -472,7 +472,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         string? installedFingerprint = null,
         string? installedModelSha256 = null)
     {
-        var workspace = new TrainingRunWorkspace(new FixedNodeDataDirectory(_root), _keyHolder);
+        var workspace = new TrainingRunWorkspace(new FakeNodeDataDirectory(_root), _keyHolder);
         var membership = JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(evaluation.MembershipJson.Span, TrainingJson.Options)!;
         var freeze = new TrainingRunFreezeV1
         {

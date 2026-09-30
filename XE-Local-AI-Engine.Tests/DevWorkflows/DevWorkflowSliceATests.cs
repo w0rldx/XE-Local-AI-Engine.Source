@@ -233,24 +233,16 @@ public sealed class DevWorkflowSliceATests
         throw new AssertionException($"Run {runId} was {ReadRun(factory, runId).Status} after {maxTicks} ticks.");
     }
 
-    private static async Task WaitForSessionsToSettleAsync(TestServerWebAppFactory factory)
-    {
-        var deadline = DateTimeOffset.UtcNow + SessionGrace;
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            await using var scope = factory.Services.CreateAsyncScope();
-            var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync();
-            if (!sessions.Any(static session => session is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Running }))
+    // real-timer: polls the real store while a background service drains; no gate the test can hold.
+    private static Task WaitForSessionsToSettleAsync(TestServerWebAppFactory factory) =>
+        AssertEx.EventuallyAsync(async () =>
             {
-                return;
-            }
-
-            // real-timer: polls the real store while a background service drains; no gate the test can hold.
-            await Task.Delay(25);
-        }
-
-        throw new AssertionException("A workflow work session was still running after the grace period.");
-    }
+                await using var scope = factory.Services.CreateAsyncScope();
+                var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync();
+                return !sessions.Any(static session => session is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Running });
+            },
+            SessionGrace,
+            "A workflow work session was still running after the grace period.");
 
     /// <summary>What a turn's tools would have written: one artifact, then the request to complete the session.</summary>
     private static async Task FinishTheWorkflowSessionAsync(IServiceProvider services)

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (<see cref="XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetGgufDownloadOperationStatusEndpoint" />), which
 ///     sits alongside the older <c>GET model-fit/gguf/downloads/{modelName}</c> route on the same path prefix. Both
 ///     endpoints share the singleton <see cref="IGgufAcquisitionOperationRegistry" /> that the download AND import
-///     coordinators both write into — <see cref="GetGgufDownloadOperationStatusEndpoint" /> filters to
+///     coordinators both write into — <see cref="XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetGgufDownloadOperationStatusEndpoint" /> filters to
 ///     <see cref="GgufAcquisitionOperationKind.Download" /> the same way
 ///     <c>GgufDownloadCoordinator.GetStatus(Guid)</c> does, so an import operation id is a genuine 404, not merely an
 ///     unknown guid. Tests seed operations directly through the shared registry (a production DI singleton) rather than

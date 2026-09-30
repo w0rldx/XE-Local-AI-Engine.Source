@@ -11,6 +11,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     <see cref="CommandProfileDigest" /> are an independent dimension recording which commands the gate ran.
 ///     Adding them does not weaken the protocol check; replacing the protocol check with them would.
 /// </remarks>
+/// <param name="FailureCode">
+///     A stable <see cref="DevelopmentValidationFailureCodes" /> value when the gate failed, else null.
+/// </param>
+/// <param name="FailureDetail">
+///     Operator-facing detail for <paramref name="FailureCode" />, or null when the gate passed.
+/// </param>
 internal sealed record DevelopmentValidationReport(
     bool Passed,
     string BaseCommit,
@@ -20,9 +26,7 @@ internal sealed record DevelopmentValidationReport(
     string CommandProfileVersion,
     string CommandProfileId,
     string CommandProfileDigest,
-    /// <summary>A stable <see cref="DevelopmentValidationFailureCodes" /> value when the gate failed, else null.</summary>
     string? FailureCode,
-    /// <summary>Operator-facing detail for <see cref="FailureCode" />, or null when the gate passed.</summary>
     string? FailureDetail,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,
     long CompletedAtUtc);

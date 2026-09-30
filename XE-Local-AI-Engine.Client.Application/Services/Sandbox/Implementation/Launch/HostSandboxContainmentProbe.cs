@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 /// </remarks>
 public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 {
-    // Each probe starts a trivial child (`true`) under the mechanism being measured. Generous enough for a loaded box,
+    // Each probe starts a trivial child (`true`) under the mechanism being measured. Generous enough for a loaded machine,
     // short enough that startup is never visibly delayed even when every probe fails.
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
 

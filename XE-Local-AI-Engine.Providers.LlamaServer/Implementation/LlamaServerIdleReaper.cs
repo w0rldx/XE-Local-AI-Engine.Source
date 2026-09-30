@@ -123,7 +123,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             }
 
             // A live process with in-flight inference (an active lease) is never reaped, even past the TTL: LastUsedUtc is stamped at request start and lease release, not
-            // per token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU box) looks idle while mid-flight.
+            // per token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU machine) looks idle while mid-flight.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;

@@ -52,20 +52,20 @@ public static class GraphWorkflowEventTypes
     public const string GateDecided = "gate.decided";
 
     /// <summary>
-    ///     A succeeded node's result became a chat message in the run's bound conversation. Amendment 2026-09-23 (Chat
-    ///     Workflows S1): written by the dispatcher's publish outbox pass, detail <c>{ messageId }</c>.
+    ///     A succeeded node's result became a chat message in the run's bound conversation. Written by the dispatcher's
+    ///     publish outbox pass, detail <c>{ messageId }</c>.
     /// </summary>
     public const string NodePublished = "node.published";
 
     /// <summary>
     ///     An operator steer reset a queued or running Agent/LLM call row to <c>Pending</c> on the same attempt.
-    ///     Amendment 2026-09-23 (Chat Workflows S3): detail <c>{ operationIds, attempt }</c>.
+    ///     Detail <c>{ operationIds, attempt }</c>.
     /// </summary>
     public const string NodeSteered = "node.steered";
 
     /// <summary>
-    ///     A steer reached the tick after its row had settled or moved on, so nothing was reset. Amendment 2026-09-23
-    ///     (Chat Workflows S3): detail <c>{ operationId, attempt }</c>.
+    ///     A steer reached the tick after its row had settled or moved on, so nothing was reset. Detail
+    ///     <c>{ operationId, attempt }</c>.
     /// </summary>
     public const string NodeSteerIgnored = "node.steer-ignored";
 }

@@ -18,8 +18,8 @@ public sealed record SandboxRequirements
     ///     carries.
     /// </summary>
     /// <remarks>
-    ///     Selection replaced naming, so diagnosis moved from "read the injected type" to "read the resolved backend from the log line";
-    ///     the log line therefore has to say whose resolution it is.
+    ///     The backend is selected rather than injected, so diagnosis reads the resolved backend from the log line; the log line
+    ///     therefore has to say whose resolution it is.
     /// </remarks>
     public required string Workload { get; init; }
 

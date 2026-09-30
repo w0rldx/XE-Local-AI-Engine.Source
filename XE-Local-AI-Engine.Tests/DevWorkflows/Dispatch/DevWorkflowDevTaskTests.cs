@@ -217,7 +217,7 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     L5: a workspace policy refusing the attempt's own diff is not the provider failing. Classed as
+    ///     A workspace policy refusing the attempt's own diff is not the provider failing. Classed as
     ///     <c>ProviderError</c> it was retried until the budget ran out — live, four attempts and about ten minutes of
     ///     real model time — and the operator was then handed a generic sentence naming no rule. Classed as a policy
     ///     refusal it goes to a human on the first answer, carrying the sentence that says what to change.
@@ -423,9 +423,8 @@ public sealed class DevWorkflowDevTaskTests
     ///     to <c>AwaitingApply</c> asks Dev Mode for a new coder round — with the routed node's own validation report as
     ///     the review evidence — instead of re-succeeding in the same tick against work nothing asked to be changed.
     ///     <para>
-    ///         Measured live on 2026-09-01 as the opposite: both routed re-attempts of the implementation node emitted
-    ///         <c>node.started</c> and <c>node.completed</c> in the same second, and all three validation reports
-    ///         carried the identical patch hash.
+    ///         The failure it pins: routed re-attempts of the implementation node that emit <c>node.started</c> and
+    ///         <c>node.completed</c> in the same second, with every validation report carrying the identical patch hash.
     ///     </para>
     /// </summary>
     [Test]
@@ -481,14 +480,13 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     L8: a node's OWN transient failure must not read as a downstream node rejecting the work.
+    ///     A node's OWN transient failure must not read as a downstream node rejecting the work.
     ///     <para>
-    ///         A same-node retry used to write <c>priorFailureNode = &lt;itself&gt;</c> onto the next attempt's input —
-    ///         the identical carrier the cross-node fix loop uses for a real validation verdict — so the executor met an
-    ///         approved, <c>AwaitingApply</c> task carrying what looked like a rejection and asked Dev Mode to implement
-    ///         it again. Measured live on 2026-09-02: three transient reviewer failures on <c>add-negate-method</c> spent
-    ///         the task's last review round that way, and the node ended <c>Blocked / BudgetExhausted</c> while a coder
-    ///         attempt that had SUCCEEDED and a reviewer attempt that had APPROVED it sat unapplied.
+    ///         A same-node retry that wrote <c>priorFailureNode = &lt;itself&gt;</c> onto the next attempt's input — the
+    ///         identical carrier the cross-node fix loop uses for a real validation verdict — would meet an approved,
+    ///         <c>AwaitingApply</c> task carrying what looks like a rejection and ask Dev Mode to implement it again.
+    ///         A few transient reviewer failures would then spend the task's last review round and end the node
+    ///         <c>Blocked / BudgetExhausted</c> while an approved, succeeded attempt sits unapplied.
     ///     </para>
     /// </summary>
     [Test]
@@ -517,7 +515,7 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     L4: a rework reason has to be backed by something that actually ran. A routed failure carrying no readable
+    ///     A rework reason has to be backed by something that actually ran. A routed failure carrying no readable
     ///     validation report and no command or test counts produced the sentence "0 of 0 commands failed, 0 tests
     ///     failed" — a measurement of nothing — and spent a coder round on it.
     ///     <para>
@@ -1235,11 +1233,10 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     Live 2026-09-05. A Retry on a node whose task is Blocked at its ROUND cap buys the task a round, not
-    ///     just the node an attempt. Observed as the opposite: two Retries on a node blocked at "all 3 rounds used"
-    ///     re-dispatched it, re-read a task still at 3 of 3, and stood the node down again about two seconds later
-    ///     each time — spending one of the node's own attempts per Retry and never building a coder prompt, so the
-    ///     operator's sentence was stored, rendered in the panel, and unreachable by any model.
+    ///     A Retry on a node whose task is Blocked at its ROUND cap buys the task a round, not just the node an
+    ///     attempt. Otherwise each Retry re-dispatches the node, re-reads a task still at 3 of 3 and stands the node
+    ///     down again seconds later — spending one of the node's own attempts per Retry and never building a coder
+    ///     prompt, so the operator's sentence is stored, rendered in the panel, and unreachable by any model.
     ///     <para>
     ///         And bought ONCE. The retry's marker stays on the node run's inputs for the life of the attempt, so
     ///         without the ledger operation id behind it every poll tick would widen the cap again.
@@ -1347,11 +1344,9 @@ public sealed class DevWorkflowDevTaskTests
     ///     A <c>DevTask</c> node whose deterministic gate FAILS asks for a coder round, and does not re-run the gate
     ///     against the attempt it has just judged.
     ///     <para>
-    ///         The failed gate used to return the task to <c>InProgress</c> — behind a succeeded coder attempt, the
-    ///         exact state the next-action decision reads as "implemented, validate it" — so every tick of this loop
-    ///         re-ran the whole command profile against the same patch. Measured live on 2026-09-04: 289 validation
-    ///         runs in 25 minutes and 282 report rows on one task, zero coder rounds, ended only by cancelling the run.
-    ///         The negative control is three symbols together, not one: <c>TargetFor</c> back to <c>InProgress</c>,
+    ///         A failed gate that returned the task to <c>InProgress</c> — behind a succeeded coder attempt, the exact
+    ///         state the next-action decision reads as "implemented, validate it" — would make every tick of this loop
+    ///         re-run the whole command profile against the same patch, with zero coder rounds. The negative control is three symbols together, not one: <c>TargetFor</c> back to <c>InProgress</c>,
     ///         <c>FinalizeValidationAsync</c>'s argument guard re-widened to admit it, and its bounded
     ///         <c>CurrentReviewRound++</c> removed. That makes the loop below run the gate once per tick and this
     ///         assertion count them. Reverting <c>TargetFor</c> ALONE fails differently and uninterestingly — the

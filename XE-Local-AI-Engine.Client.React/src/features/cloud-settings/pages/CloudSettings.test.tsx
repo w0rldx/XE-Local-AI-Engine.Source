@@ -12,7 +12,6 @@ const { generatedMock } = vi.hoisted(() => ({
 		getCloudSettingsOptions: vi.fn(),
 		saveCloudSettingsMutation: vi.fn(),
 		clearCloudSettingsMutation: vi.fn(),
-		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		getCloudSettingsQueryKey: vi.fn(() => [{ _id: "getCloudSettings" }]),
 		getFn: vi.fn(),
 		saveFn: vi.fn(),
@@ -57,7 +56,6 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 		generatedMock.saveFn.mockResolvedValue(makeSettings());
 		generatedMock.clearFn.mockResolvedValue(makeSettings());
 		generatedMock.getCloudSettingsOptions.mockReturnValue({
-			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getCloudSettings" }],
 			queryFn: generatedMock.getFn,
 		});

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -40,7 +39,7 @@ internal sealed class McpServerService : IMcpServerService
             // The store forces Enabled = false on create, so the enabled set is unchanged and no refresh is needed.
             return await _store.AddAsync(input, cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (McpServerNameConflictException exception)
         {
             // The unique Name index is the backstop when a concurrent create races past the pre-check above.
             throw new McpServerValidationException($"An MCP server named '{input.Name}' is already registered.", exception);
@@ -75,7 +74,7 @@ internal sealed class McpServerService : IMcpServerService
         {
             updated = await _store.UpdateAsync(id, edit, cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (McpServerNameConflictException exception)
         {
             // The unique Name index is the backstop when a concurrent rename races past the pre-check above.
             throw new McpServerValidationException($"An MCP server named '{input.Name}' is already registered.", exception);

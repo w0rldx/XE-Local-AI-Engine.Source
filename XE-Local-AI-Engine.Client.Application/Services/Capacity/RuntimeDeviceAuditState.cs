@@ -29,7 +29,7 @@ public sealed record RuntimeDeviceAuditState
     public required string InferenceBackend { get; init; }
 
     /// <summary>The llama.cpp variant the audit ran against, or <see langword="null" /> when a caller built the state without one.</summary>
-    /// <remarks>Lets a reader tell "the CUDA build enumerated zero devices" from a CPU variant chosen on a GPU box; both read as backend <c>cpu</c>.</remarks>
+    /// <remarks>Lets a reader tell "the CUDA build enumerated zero devices" from a CPU variant chosen on a GPU machine; both read as backend <c>cpu</c>.</remarks>
     public GpuVariant? SelectedVariant { get; init; }
 
     /// <summary><see langword="true" /> when the host advertises a usable GPU (a vendor GPU with known VRAM &gt; 0).</summary>
@@ -37,7 +37,7 @@ public sealed record RuntimeDeviceAuditState
 
     /// <summary>
     ///     <see langword="true" /> when a GPU is expected but the selected runtime runs on the CPU — a CPU variant chosen
-    ///     on a GPU box, or a GPU variant that enumerated zero devices. Never set from an indeterminate probe (no false alarm).
+    ///     on a GPU machine, or a GPU variant that enumerated zero devices. Never set from an indeterminate probe (no false alarm).
     /// </summary>
     public required bool CpuFallback { get; init; }
 

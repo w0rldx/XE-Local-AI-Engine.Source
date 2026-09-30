@@ -71,7 +71,7 @@ public sealed class RunBenchmarkBatchHandlerTests
     [Test]
     public void ValidateParameters_WhenModelsAreEmpty_RejectsAtCreateTimeWithTheFireTimeText()
     {
-        // F-60: the create path calls this through the interface, so an empty matrix is a 400 instead of a job that fails every fire.
+        // The create path calls this through the interface, so an empty matrix is a 400 instead of a job that fails every fire.
         IScheduledJobHandler handler = new Harness().Handler;
 
         var exception = AssertEx.Throws<ScheduledJobValidationException>(() =>

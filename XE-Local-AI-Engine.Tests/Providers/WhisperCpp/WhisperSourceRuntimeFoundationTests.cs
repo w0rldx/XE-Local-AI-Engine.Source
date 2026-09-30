@@ -86,7 +86,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
     public async Task PrerequisiteProbe_CudaBackend_IncludesNvccAndNvidiaSmi()
     {
         // The CUDA rows are what make a refusal actionable: without them the operator is told only that "one or more
-        // prerequisites are missing". Satisfaction depends on this box's toolchain, so only the checklist SHAPE is
+        // prerequisites are missing". Satisfaction depends on the host's toolchain, so only the checklist SHAPE is
         // asserted — the rows must be present and the CPU backend must not carry them.
         using var temp = new TempDirectory();
         var probe = new WhisperCppSourceBuildPrerequisiteProbe(temp.Path);

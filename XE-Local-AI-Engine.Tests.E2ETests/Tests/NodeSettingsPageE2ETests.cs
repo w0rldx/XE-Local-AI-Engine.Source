@@ -17,7 +17,7 @@ public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
     [Test]
     public async Task NodeSettings_Page_Renders_Heading_And_Card()
     {
-        await Page.GotoAsync($"{NodeAppUrl}/node-settings", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}/node-settings?section=chat", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
@@ -40,7 +40,7 @@ public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
     [Test]
     public async Task NodeSettings_Page_Timeout_Input_Populates_From_Backend()
     {
-        await Page.GotoAsync($"{NodeAppUrl}/node-settings", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}/node-settings?section=chat", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
@@ -61,7 +61,7 @@ public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
     [Test]
     public async Task NodeSettings_Page_Save_Settings_Shows_Success_Notification()
     {
-        await Page.GotoAsync($"{NodeAppUrl}/node-settings", new PageGotoOptions
+        await Page.GotoAsync($"{NodeAppUrl}/node-settings?section=chat", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
@@ -73,10 +73,10 @@ public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
         // Change the value to a known-valid number (300 seconds is within any reasonable range).
         await timeoutInput.FillAsync("300");
 
-        // Save settings — button must be enabled after a valid change.
+        // The save bar enables its button after a valid change.
         var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "Save settings"
+            Name = "Save changes"
         });
         await Expect(saveButton).ToBeEnabledAsync();
         await saveButton.ClickAsync();
@@ -95,7 +95,7 @@ public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
 
         try
         {
-            await Page.GotoAsync($"{NodeAppUrl}/node-settings", new PageGotoOptions
+            await Page.GotoAsync($"{NodeAppUrl}/node-settings?section=integrations", new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.NetworkIdle
             });

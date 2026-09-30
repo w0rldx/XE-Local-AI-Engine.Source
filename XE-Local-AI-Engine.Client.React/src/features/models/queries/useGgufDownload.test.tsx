@@ -40,7 +40,6 @@ vi.mock("@microsoft/signalr", () => ({
 
 // The hydrate query returns an empty list by default so the test isolates the live-push path.
 const getGgufDownloadsOptionsMock = vi.fn(() => ({
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	queryKey: [{ _id: "getGgufDownloads" }],
 	queryFn: () => Promise.resolve({ items: [] }),
 }));
@@ -54,7 +53,6 @@ interface ImportStatusFixture {
 }
 
 const getGgufImportsOptionsMock = vi.fn(() => ({
-	// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
 	queryKey: [{ _id: "getGgufImports" }],
 	queryFn: (): Promise<{ items: ImportStatusFixture[] }> => Promise.resolve({ items: [] }),
 }));
@@ -64,10 +62,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	cancelGgufDownloadMutation: vi.fn(),
 	getGgufDownloadsOptions: () => getGgufDownloadsOptionsMock(),
 	getGgufImportsOptions: () => getGgufImportsOptionsMock(),
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	getGgufDownloadsQueryKey: () => [{ _id: "getGgufDownloads" }],
 	inspectGgufRepositoryOptions: vi.fn(),
-	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	listLocalModelsQueryKey: () => [{ _id: "listLocalModels" }],
 	startGgufDownloadMutation: vi.fn(),
 }));
@@ -308,7 +304,6 @@ describe("useActiveGgufDownloads", () => {
 
 	it("hydrates acquisition-neutral imports by operation id and keeps them out of the download-only wrapper", async () => {
 		getGgufImportsOptionsMock.mockReturnValueOnce({
-			// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
 			queryKey: [{ _id: "getGgufImports" }],
 			queryFn: () =>
 				Promise.resolve({

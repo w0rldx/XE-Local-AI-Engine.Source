@@ -153,7 +153,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     [Test]
     public async Task DispatchAsync_WhenHandlerRejectsItsParameters_RecordsTheValidationMessageVerbatim()
     {
-        // F-60: a fire-time parameter rejection names the fix on the run row instead of the generic constant.
+        // A fire-time parameter rejection names the fix on the run row instead of the generic constant.
         const string reason = "The scheduled matrix must name between 1 and 10 models.";
         var handler = new ConfigurableHandler((_, _) => throw new ScheduledJobValidationException(reason));
         var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);

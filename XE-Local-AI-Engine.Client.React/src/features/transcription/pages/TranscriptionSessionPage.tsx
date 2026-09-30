@@ -239,7 +239,7 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 							)}
 							bufferedMs={liveView?.bufferedMs ?? null}
 							runtimeState={runtimeQuery.data?.state ?? null}
-							// R39a: start is called straight out of the click, with nothing awaited in between, or the browser
+							// Start is called straight out of the click, with nothing awaited in between, or the browser
 							// refuses to open the screen-share picker.
 							onStart={() => {
 								// An ApplicationProcess session has no browser-side request: the node is told which process to

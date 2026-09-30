@@ -149,9 +149,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         AIAgent triageAgent,
         IReadOnlyDictionary<string, AIAgent> agentsByKey)
     {
-#pragma warning disable MAAIW001 // CreateHandoffBuilderWith is [Experimental]; adopted deliberately for handoff orchestration.
         var builder = AgentWorkflowBuilder.CreateHandoffBuilderWith(triageAgent);
-#pragma warning restore MAAIW001
 
         if (definition.Edges.Count == 0)
         {

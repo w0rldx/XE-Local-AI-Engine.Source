@@ -364,7 +364,7 @@ run_batched_module() {
 
 # Sized here — inside the lock and after the build — so the reading is the RAM free when the lanes
 # start. JOBS is exported so the runner takes it as-is instead of re-reading a changed MemAvailable.
-# At JOBS=1 the box cannot spare the siblings' default widths either; the lanes stay concurrent.
+# At JOBS=1 the host cannot spare the siblings' default widths either; the lanes stay concurrent.
 if [[ -z "$LOW_MEMORY" && -z "${JOBS:-}" ]]; then
   # shellcheck source=scripts/lib/test-sizing.sh
   source "$REPO/scripts/lib/test-sizing.sh"

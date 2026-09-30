@@ -88,7 +88,7 @@ internal static class DisclosingEndpointRefusal
             new StaticOptionsMonitor<ContainerRuntimeOptions>(new ContainerRuntimeOptions()),
             new UnusableContainerRuntimeFactory(),
             new InMemoryDaemonAttestationStore(),
-            new FixedTimeProvider(Now),
+            new ManualTimeProvider(Now),
             NullLogger<ContainerRuntimeResolver>.Instance,
             _ => endpoint);
 
