@@ -17,7 +17,9 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
 {
     private readonly NodeChatConversationCommands _conversations;
     private readonly NodeChatFeedbackStore _feedback;
+
     private readonly NodeChatMessageCommands _messages;
+
     // Run first by every operator mutation, so no caller skips it; the turn pipeline's writes are guarded where a turn starts.
     private readonly INodeChatMutationGuard _mutationGuard;
     private readonly NodeChatReadModel _readModel;

@@ -17,7 +17,8 @@ public sealed class SelectedFolderResolverTests : IDisposable
 
     private string TrustedHostPath => HostPath("trusted", "host", "projects", "repo-one");
 
-    public void Dispose() => _root.Dispose();
+    public void Dispose() =>
+        _root.Dispose();
 
     [Test]
     public async Task RegisterAsync_NormalizesAliasAndPersists()

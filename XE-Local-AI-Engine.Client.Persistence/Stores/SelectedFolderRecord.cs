@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-
 /// <summary>
 ///     Trusted worker-side projection of a persisted selected folder, carrying the resolved <see cref="HostPath" />.
 /// </summary>

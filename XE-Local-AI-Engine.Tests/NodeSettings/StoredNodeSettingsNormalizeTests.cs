@@ -1015,7 +1015,8 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
 
     private static StoredNodeSettings TunablesAt(Func<(int Min, int Max), int> pick)
     {
-        int Value(int index) => pick(Tunables[index].Bounds);
+        int Value(int index) =>
+            pick(Tunables[index].Bounds);
 
         return new StoredNodeSettings
         {

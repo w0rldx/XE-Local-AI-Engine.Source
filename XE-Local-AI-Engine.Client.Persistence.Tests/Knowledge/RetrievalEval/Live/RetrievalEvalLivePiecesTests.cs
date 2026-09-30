@@ -100,13 +100,25 @@ public sealed class RetrievalEvalLivePiecesTests
                 }
             }
 
-            return new KnowledgeSearchResult { Results = [] };
+            return new KnowledgeSearchResult
+            {
+                Results = []
+            };
         });
         var recording = new RecordingSearchService(inner, timing);
 
-        foreach (var query in new[] { "q0", "q1", "q2" })
+        foreach (var query in new[]
+                 {
+                     "q0",
+                     "q1",
+                     "q2"
+                 })
         {
-            _ = await recording.SearchAsync(new KnowledgeSearchRequest { Query = query, Limit = 5 }, CancellationToken.None);
+            _ = await recording.SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = query,
+                Limit = 5
+            }, CancellationToken.None);
         }
 
         await timing.DrainAsync();
@@ -132,10 +144,28 @@ public sealed class RetrievalEvalLivePiecesTests
         var parsed = RetrievalEvalLiveSettings.ParseRerankers(" bge=/x.gguf ; qwen3=/m@2/y.gguf;jina=/z.gguf@en;multi=/w.gguf@en,de");
 
         AssertEx.True(parsed.SequenceEqual([
-            new LiveRerankerModel { Id = "bge", ModelPath = "/x.gguf" },
-            new LiveRerankerModel { Id = "qwen3", ModelPath = "/m@2/y.gguf" },
-            new LiveRerankerModel { Id = "jina", ModelPath = "/z.gguf", Languages = "en" },
-            new LiveRerankerModel { Id = "multi", ModelPath = "/w.gguf", Languages = "en,de" }
+            new LiveRerankerModel
+            {
+                Id = "bge",
+                ModelPath = "/x.gguf"
+            },
+            new LiveRerankerModel
+            {
+                Id = "qwen3",
+                ModelPath = "/m@2/y.gguf"
+            },
+            new LiveRerankerModel
+            {
+                Id = "jina",
+                ModelPath = "/z.gguf",
+                Languages = "en"
+            },
+            new LiveRerankerModel
+            {
+                Id = "multi",
+                ModelPath = "/w.gguf",
+                Languages = "en,de"
+            }
         ]));
         AssertEx.Empty(RetrievalEvalLiveSettings.ParseRerankers(null));
     }
@@ -146,7 +176,12 @@ public sealed class RetrievalEvalLivePiecesTests
     [Arguments("en", "de", false)]
     [Arguments("en,de", "DE", true)]
     public void LiveRerankerModel_Supports_EveryLanguageWithoutASuffix_ElseOnlyTheDeclaredOnes(string? languages, string language, bool expected) =>
-        AssertEx.Equal(expected, new LiveRerankerModel { Id = "r", ModelPath = "/r.gguf", Languages = languages }.Supports(language));
+        AssertEx.Equal(expected, new LiveRerankerModel
+        {
+            Id = "r",
+            ModelPath = "/r.gguf",
+            Languages = languages
+        }.Supports(language));
 
     [Test]
     [Arguments("bge")]
@@ -201,7 +236,13 @@ public sealed class RetrievalEvalLivePiecesTests
     {
         var latency = LiveLatency.From([5d, 1d, 3d, 2d, 4d]);
 
-        AssertEx.Equal(new LiveLatency { Count = 5, P50 = 3d, P95 = 5d, Max = 5d }, latency);
+        AssertEx.Equal(new LiveLatency
+        {
+            Count = 5,
+            P50 = 3d,
+            P95 = 5d,
+            Max = 5d
+        }, latency);
     }
 
     private sealed class RecordingReranker : IRerankerClient

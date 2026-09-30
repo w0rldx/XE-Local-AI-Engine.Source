@@ -104,7 +104,8 @@ public sealed class GetRuntimeResidentsEndpointTests
 
     private static string Row(JsonElement item)
     {
-        static string Text(JsonElement value) => value.ValueKind == JsonValueKind.Null ? "null" : value.ToString();
+        static string Text(JsonElement value) =>
+            value.ValueKind == JsonValueKind.Null ? "null" : value.ToString();
 
         return string.Join('|',
             Text(item.GetProperty("runtime")),

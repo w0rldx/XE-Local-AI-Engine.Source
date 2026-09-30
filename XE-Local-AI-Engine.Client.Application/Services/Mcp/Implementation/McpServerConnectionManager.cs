@@ -732,7 +732,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         return details switch
         {
             StdioClientCompletionDetails stdio => (McpConnectionFailureReason.ServerExited,
-                AppendStderrTail(string.Create(CultureInfo.InvariantCulture, $"{SafeMessage(McpConnectionFailureReason.ServerExited)} Exit code {stdio.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}."),
+                AppendStderrTail(
+                    string.Create(CultureInfo.InvariantCulture,
+                        $"{SafeMessage(McpConnectionFailureReason.ServerExited)} Exit code {stdio.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}."),
                     JoinTail(stdio.StandardErrorTail), record)),
             HttpClientCompletionDetails { HttpStatusCode: HttpStatusCode.NotFound } => (McpConnectionFailureReason.SessionLost, SafeMessage(McpConnectionFailureReason.SessionLost)),
             HttpClientCompletionDetails => (McpConnectionFailureReason.Transport, SafeMessage(McpConnectionFailureReason.Transport)),
@@ -1050,8 +1052,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         // never reaches the UI: each reason has one fixed wording, and the real exception is logged server-side.
         return reason switch
         {
-            McpConnectionFailureReason.SandboxUnavailable => "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
-            McpConnectionFailureReason.SandboxRefused => "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
+            McpConnectionFailureReason.SandboxUnavailable =>
+                "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
+            McpConnectionFailureReason.SandboxRefused =>
+                "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
             McpConnectionFailureReason.ServerNotFound => "The MCP server's command was not found or could not be started.",
             McpConnectionFailureReason.Authentication => "The MCP server rejected the configured credentials.",
             McpConnectionFailureReason.AuthenticationRequired => "The MCP server requires authentication, and no credential is configured. Add an Authorization header to the registration.",
@@ -1197,12 +1201,15 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         {
             var connected = Primary is not null && LastError is null;
             IReadOnlyList<McpServerToolInfo> tools = connected
-                ? [.. Tools.Select(static tool => new McpServerToolInfo
-                {
-                    Name = tool.Name,
-                    Description = tool.Descriptor.Description,
-                    RequiresApproval = tool.Descriptor.RequiresApproval
-                })]
+                ?
+                [
+                    .. Tools.Select(static tool => new McpServerToolInfo
+                    {
+                        Name = tool.Name,
+                        Description = tool.Descriptor.Description,
+                        RequiresApproval = tool.Descriptor.RequiresApproval
+                    })
+                ]
                 : [];
 
             return new McpServerConnectionStatus

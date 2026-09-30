@@ -153,7 +153,11 @@ public sealed class SpawnReceiptReapLinuxTests : IDisposable
     }
 
     private static string SleepPath() =>
-        new[] { "/usr/bin/sleep", "/bin/sleep" }.First(File.Exists);
+        new[]
+        {
+            "/usr/bin/sleep",
+            "/bin/sleep"
+        }.First(File.Exists);
 
     private static string? ReadProc(int pid, string entry)
     {

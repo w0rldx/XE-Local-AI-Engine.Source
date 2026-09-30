@@ -351,10 +351,17 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         });
         var handler = CreateHandler(capturing, runtimeSettings);
 
-        await handler.ExecuteAsync(JsonSerializer.Serialize(new { query = "tides", limit = 10 }));
+        await handler.ExecuteAsync(JsonSerializer.Serialize(new
+        {
+            query = "tides",
+            limit = 10
+        }));
         AssertEx.Equal(expected: 3, AssertEx.NotNull(capturing.LastRequest).Limit, "a requested limit above the node ceiling is clamped to it.");
 
-        await handler.ExecuteAsync(JsonSerializer.Serialize(new { query = "tides" }));
+        await handler.ExecuteAsync(JsonSerializer.Serialize(new
+        {
+            query = "tides"
+        }));
         AssertEx.Equal(expected: 2, AssertEx.NotNull(capturing.LastRequest).Limit, "an omitted limit reads the node default.");
     }
 

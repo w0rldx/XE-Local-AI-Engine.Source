@@ -2316,18 +2316,58 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var messageId = Guid.NewGuid();
         var mutations = new (string Name, Func<Task> Call)[]
         {
-            ("SetSelectedPath", () => service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = remoteId, SelectedPath = null, UpdatedAtUtc = 520 })),
+            ("SetSelectedPath", () => service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+            {
+                ConversationId = remoteId,
+                SelectedPath = null,
+                UpdatedAtUtc = 520
+            })),
             ("CancelMessage", () => service.CancelMessageAsync(new NodeChatCancelRequest
             {
-                Correlation = new NodeChatMessageCorrelation { ConversationId = remoteId, MessageId = messageId, RequestId = Guid.NewGuid() },
+                Correlation = new NodeChatMessageCorrelation
+                {
+                    ConversationId = remoteId,
+                    MessageId = messageId,
+                    RequestId = Guid.NewGuid()
+                },
                 CancelledAtUtc = 520
             })),
-            ("DeleteConversation", () => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = remoteId, DeletedAtUtc = 520, PurgeImmediately = true })),
-            ("RenameConversation", () => service.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = remoteId, Title = "renamed", UpdatedAtUtc = 520 })),
-            ("SetConversationPinned", () => service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = remoteId, IsPinned = true, UpdatedAtUtc = 520 })),
-            ("SetConversationArchived", () => service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = remoteId, Archived = true, UpdatedAtUtc = 520 })),
-            ("SetConversationMemoryExcluded", () => service.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest { ConversationId = remoteId, MemoryExcluded = true, UpdatedAtUtc = 520 })),
-            ("BranchConversation", () => service.BranchConversationAsync(new NodeChatBranchConversationRequest { ConversationId = remoteId, MessageId = messageId, CreatedAtUtc = 520 })),
+            ("DeleteConversation", () => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+            {
+                ConversationId = remoteId,
+                DeletedAtUtc = 520,
+                PurgeImmediately = true
+            })),
+            ("RenameConversation", () => service.RenameConversationAsync(new NodeChatRenameConversationRequest
+            {
+                ConversationId = remoteId,
+                Title = "renamed",
+                UpdatedAtUtc = 520
+            })),
+            ("SetConversationPinned", () => service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest
+            {
+                ConversationId = remoteId,
+                IsPinned = true,
+                UpdatedAtUtc = 520
+            })),
+            ("SetConversationArchived", () => service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+            {
+                ConversationId = remoteId,
+                Archived = true,
+                UpdatedAtUtc = 520
+            })),
+            ("SetConversationMemoryExcluded", () => service.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest
+            {
+                ConversationId = remoteId,
+                MemoryExcluded = true,
+                UpdatedAtUtc = 520
+            })),
+            ("BranchConversation", () => service.BranchConversationAsync(new NodeChatBranchConversationRequest
+            {
+                ConversationId = remoteId,
+                MessageId = messageId,
+                CreatedAtUtc = 520
+            })),
             ("CreateMessageVariant", () => service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
             {
                 ConversationId = remoteId,
@@ -2336,7 +2376,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                 RequestId = Guid.NewGuid(),
                 CreatedAtUtc = 520
             })),
-            ("SetMessageFeedback", () => service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest { ConversationId = remoteId, MessageId = messageId, Rating = "up", Comment = null, UpdatedAtUtc = 520 }))
+            ("SetMessageFeedback", () => service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest
+            {
+                ConversationId = remoteId,
+                MessageId = messageId,
+                Rating = "up",
+                Comment = null,
+                UpdatedAtUtc = 520
+            }))
         };
 
         foreach (var (name, call) in mutations)
@@ -2350,7 +2397,12 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.False(untouched.IsPinned);
 
         // A Local conversation passes the same service-side guard.
-        var renamed = await service.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = local.ConversationId, Title = "renamed", UpdatedAtUtc = 520 });
+        var renamed = await service.RenameConversationAsync(new NodeChatRenameConversationRequest
+        {
+            ConversationId = local.ConversationId,
+            Title = "renamed",
+            UpdatedAtUtc = 520
+        });
         AssertEx.Equal("renamed", AssertEx.NotNull(renamed).Title);
     }
 

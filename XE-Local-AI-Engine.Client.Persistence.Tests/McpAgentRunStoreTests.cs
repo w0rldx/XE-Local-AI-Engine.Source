@@ -193,8 +193,14 @@ public sealed class McpAgentRunStoreTests : IDisposable
         await using var fixture = CreateFixture(databasePath);
         var older = Guid.NewGuid();
         var newer = Guid.NewGuid();
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, older, "older task") with { CreatedAtUtc = 1 });
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, newer, "newer task") with { CreatedAtUtc = 2 });
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, older, "older task") with
+        {
+            CreatedAtUtc = 1
+        });
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, newer, "newer task") with
+        {
+            CreatedAtUtc = 2
+        });
 
         var queued = await fixture.Store.ListAsync(limit: 10, McpAgentRunStatus.Queued);
         var all = await fixture.Store.ListAsync(limit: 10);

@@ -219,7 +219,6 @@ public sealed class WhisperModelDownloadCoordinatorTests
                 // Best-effort temp cleanup.
             }
         }
-
     }
 
     private sealed class FakeWhisperWeightFileStore : IWhisperWeightFileStore

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
-
 /// <summary>Durable store for a knowledge-base document's source-of-truth row plus its encrypted raw bytes.</summary>
 /// <remarks>
 ///     The bytes live encrypted on disk under <c>INodeDataDirectory.Root/knowledge-base/documents/</c>; the metadata,

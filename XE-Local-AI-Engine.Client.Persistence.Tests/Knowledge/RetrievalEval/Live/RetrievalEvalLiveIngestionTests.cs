@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval.Live;
 
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -98,7 +98,13 @@ public sealed class RetrievalEvalLiveIngestionTests : IDisposable
 
         using var fixture = await RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, "live-degrade.sqlite"),
             _keyHolder,
-            [new RetrievalEvalCorpus.FixtureDocument { Key = "en/quasar-notes.md", Body = "# Quasar notes\n\nThe quasar widget spins twice per turn.\n" }],
+            [
+                new RetrievalEvalCorpus.FixtureDocument
+                {
+                    Key = "en/quasar-notes.md",
+                    Body = "# Quasar notes\n\nThe quasar widget spins twice per turn.\n"
+                }
+            ],
             provider,
             options,
             LiveCorpusView.SourcePathOf,
@@ -109,7 +115,11 @@ public sealed class RetrievalEvalLiveIngestionTests : IDisposable
         logger.LogWarning("Unrelated warning. Exception type: {ExceptionType}.", nameof(IOException));
 
         var result = await fixture.CreateSearchService(options, Substitute.For<IRerankerClient>(), logger)
-                                  .SearchAsync(new KnowledgeSearchRequest { Query = "quasar widget", Limit = 5 }, CancellationToken.None);
+                                  .SearchAsync(new KnowledgeSearchRequest
+                                  {
+                                      Query = "quasar widget",
+                                      Limit = 5
+                                  }, CancellationToken.None);
 
         AssertEx.True(result.Results.Count > 0, "the search must still answer, lexical-only.");
         AssertEx.True(logger.ExceptionTypes.SequenceEqual([nameof(HttpRequestException)]), string.Join(", ", logger.ExceptionTypes));

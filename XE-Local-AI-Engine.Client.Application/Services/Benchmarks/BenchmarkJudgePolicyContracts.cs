@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-using System.Buffers;
 using System.Text.Json.Serialization;
 
 /// <summary>

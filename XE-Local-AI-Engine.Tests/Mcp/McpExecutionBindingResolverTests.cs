@@ -111,7 +111,10 @@ public sealed class McpExecutionBindingResolverTests
         var described = new Harness();
         described.Register(definition, Tool("read_file", ToolCategory.ReadLocal, description: "Read a UTF-8 text file."));
         var bare = new Harness();
-        bare.Register(definition, Tool("read_file", ToolCategory.ReadLocal) with { Description = null });
+        bare.Register(definition, Tool("read_file", ToolCategory.ReadLocal) with
+        {
+            Description = null
+        });
         var request = new McpExecutionBindingRequest
         {
             AgentKey = definition.Id.ToString(),

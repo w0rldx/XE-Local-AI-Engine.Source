@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-
 /// <summary>
 ///     Decrypted, typed projection of a persisted <c>McpServerRegistration</c>.
 /// </summary>

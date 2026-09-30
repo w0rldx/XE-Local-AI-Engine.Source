@@ -281,7 +281,11 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
         var cells = await store.ListCellsAsync(project.Id);
 
-        foreach (var items in new[] { ranked.Items, page.Items })
+        foreach (var items in new[]
+                 {
+                     ranked.Items,
+                     page.Items
+                 })
         {
             AssertEx.Equal<int?>(70, items.Single(run => run.Id == runs[0]).QualityScore, "The first entry for a run named twice wins.");
             AssertEx.Equal<int?>(30, items.Single(run => run.Id == runs[1]).QualityScore);

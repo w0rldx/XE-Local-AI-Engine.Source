@@ -194,7 +194,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             created.Add(record);
         }
 
-        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), rejected (secret or over-length) {Rejected}.",
+        _logger.LogInformation(
+            "Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), rejected (secret or over-length) {Rejected}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
         return new MemoryExtractionOutcome

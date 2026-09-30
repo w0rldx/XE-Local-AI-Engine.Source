@@ -36,9 +36,17 @@ public sealed class NodeChatPartAccumulatorTests
     public void AccumulateToolPart_WithAnImageResult_PersistsTheImageAsItsOwnPartAfterTheCard()
     {
         var acc = new NodeChatPartAccumulator();
-        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+        var image = new DataContent(new byte[]
+        {
+            1,
+            2,
+            3
+        }, "image/png");
         var oversized = new DataContent(new byte[(1024 * 1024) + 1], "image/png");
-        var audio = new DataContent(new byte[] { 4 }, "audio/wav");
+        var audio = new DataContent(new byte[]
+        {
+            4
+        }, "audio/wav");
         ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Requested, []), sequence: 1);
 
         ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Completed, [image, oversized, audio]), sequence: 2);
@@ -78,15 +86,16 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.True(persistedBytes > 0, "the first images still persist");
     }
 
-    private static ToolCallLifecyclePayload Lifecycle(ToolCallLifecyclePhase phase, IReadOnlyList<DataContent> media) => new()
-    {
-        InvocationId = Guid.NewGuid(),
-        ToolCallId = "call-1",
-        ToolName = "mcp__srv__shot",
-        Phase = phase,
-        Result = phase == ToolCallLifecyclePhase.Completed ? "[image image/png, 1 KB]" : null,
-        Media = media
-    };
+    private static ToolCallLifecyclePayload Lifecycle(ToolCallLifecyclePhase phase, IReadOnlyList<DataContent> media) =>
+        new()
+        {
+            InvocationId = Guid.NewGuid(),
+            ToolCallId = "call-1",
+            ToolName = "mcp__srv__shot",
+            Phase = phase,
+            Result = phase == ToolCallLifecyclePhase.Completed ? "[image image/png, 1 KB]" : null,
+            Media = media
+        };
 
     [Test]
     public void AppendReasoning_MultipleDeltas_BeforeAnyTool_ExtendsTheSameSegment()

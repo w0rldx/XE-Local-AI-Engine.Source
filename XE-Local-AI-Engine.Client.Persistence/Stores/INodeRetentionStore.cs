@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-
 /// <summary>
 ///     Persistence boundary for node retention data.
 /// </summary>

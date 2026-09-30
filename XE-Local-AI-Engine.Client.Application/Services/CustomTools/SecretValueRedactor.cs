@@ -37,7 +37,10 @@ internal sealed partial class SecretValueRedactor
         return values.SelectMany(static value => value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Prepend(value))
                      .SelectMany(static part => part.IndexOf('=', StringComparison.Ordinal) is > 0 and var at && at < part.Length - 1
                          ? [part, part[(at + 1)..]]
-                         : new[] { part })
+                         : new[]
+                         {
+                             part
+                         })
                      .Where(value => value.Length >= minLength);
     }
 
@@ -45,7 +48,8 @@ internal sealed partial class SecretValueRedactor
     ///     Whether an environment key names the executable search path, which locates programs and is never a secret: redacting
     ///     it would blank the jail PATH out of the hint that tells an operator where a missing command was looked for.
     /// </summary>
-    public static bool IsSearchPathKey(string key) => string.Equals(key, "PATH", StringComparison.OrdinalIgnoreCase);
+    public static bool IsSearchPathKey(string key) =>
+        string.Equals(key, "PATH", StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(@"(?<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://)[^/@\s]+@", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex UserInfoRegex();

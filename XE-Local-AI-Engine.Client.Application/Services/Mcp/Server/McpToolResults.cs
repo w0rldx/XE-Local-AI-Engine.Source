@@ -38,7 +38,16 @@ internal static class McpToolResults
     public static CallToolResult Text(string text) =>
         new()
         {
-            Content = [new TextContentBlock { Text = text }],
-            Meta = new JsonObject { [FreeTextMetaKey] = true }
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = text
+                }
+            ],
+            Meta = new JsonObject
+            {
+                [FreeTextMetaKey] = true
+            }
         };
 }

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -167,9 +168,9 @@ public sealed class SupervisorPooledAdmissionTests
 
         public int Calls => Volatile.Read(ref _calls);
 
-        public System.Collections.Concurrent.ConcurrentQueue<ModelRole> Roles { get; } = new();
+        public ConcurrentQueue<ModelRole> Roles { get; } = new();
 
-        public System.Collections.Concurrent.ConcurrentQueue<Reservation> Reservations { get; } = new();
+        public ConcurrentQueue<Reservation> Reservations { get; } = new();
 
         public Task<IDisposable?> AdmitAsync(string modelName, ModelRole role, CancellationToken ct)
         {

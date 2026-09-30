@@ -576,7 +576,10 @@ public sealed class FilePlacementConventionTests
                     if (TypeKeywords.Contains(word) && ReadDeclaration(text, word, after, out var next) is { } found)
                     {
                         declarations.Add(next < text.Length && text[next] == '{'
-                            ? found with { Body = text[(next + 1)..(SkipBalanced(text, next, '{', '}') - 1)] }
+                            ? found with
+                            {
+                                Body = text[(next + 1)..(SkipBalanced(text, next, '{', '}') - 1)]
+                            }
                             : found);
                         index = next;
                     }

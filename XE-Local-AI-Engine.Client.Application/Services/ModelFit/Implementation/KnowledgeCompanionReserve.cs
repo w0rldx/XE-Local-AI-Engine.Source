@@ -61,7 +61,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
         {
             var resident = _supervisor.ListRunningProcesses();
             companions.RemoveAll(companion => resident.Any(process => process.Role == companion.Role
-                                                                     && string.Equals(process.ModelName, companion.ModelName, StringComparison.OrdinalIgnoreCase)));
+                                                                      && string.Equals(process.ModelName, companion.ModelName, StringComparison.OrdinalIgnoreCase)));
         }
 
         if (companions.Count == 0)

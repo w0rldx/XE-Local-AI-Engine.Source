@@ -59,6 +59,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-retrieval-eval-" + Guid.NewGuid().ToString("N"));
     private readonly DegradeCapturingLogger _degrades = new();
     private readonly QueryEmbeddingDegradeLogger _queryEmbeddingDegrades = new();
+
     private readonly HttpClient _http = new()
     {
         Timeout = TimeSpan.FromMinutes(10)

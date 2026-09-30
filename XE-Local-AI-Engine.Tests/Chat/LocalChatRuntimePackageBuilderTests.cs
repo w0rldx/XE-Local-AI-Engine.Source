@@ -172,18 +172,23 @@ public sealed class LocalChatRuntimePackageBuilderTests
             Location = ToolLocation.ClientLocal,
             ParameterSchema = "{\"type\":\"object\"}"
         };
-        static LocalChatRuntimePackageRequest Request(AllowedToolDto tool) => new()
-        {
-            InvocationId = Guid.NewGuid(),
-            ConversationId = Guid.NewGuid(),
-            ResolvedSystemPrompt = "You are helpful.",
-            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            ModelProfile = "qwen3.5:0.8b",
-            AgentDefinitionVersion = 1,
-            AllowedTools = [tool]
-        };
 
-        var described = builder.Build(Request(bare with { Description = "Read a UTF-8 text file." }));
+        static LocalChatRuntimePackageRequest Request(AllowedToolDto tool) =>
+            new()
+            {
+                InvocationId = Guid.NewGuid(),
+                ConversationId = Guid.NewGuid(),
+                ResolvedSystemPrompt = "You are helpful.",
+                ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+                ModelProfile = "qwen3.5:0.8b",
+                AgentDefinitionVersion = 1,
+                AllowedTools = [tool]
+            };
+
+        var described = builder.Build(Request(bare with
+        {
+            Description = "Read a UTF-8 text file."
+        }));
 
         AssertEx.Equal(builder.Build(Request(bare)).ConfigHash, described.ConfigHash);
         AssertEx.Equal("Read a UTF-8 text file.", described.AllowedTools[0].Description, "the package still carries it for the budget");

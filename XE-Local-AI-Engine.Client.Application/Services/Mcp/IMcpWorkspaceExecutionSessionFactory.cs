@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
-
 /// <summary>Authorizes one opaque workspace id under the shared owner-node lease and opens its AgentHome session.</summary>
 internal interface IMcpWorkspaceExecutionSessionFactory
 {

@@ -3342,7 +3342,12 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenAToolReturnsAnImage_ReportsTheImageBesideThePlaceholderText()
     {
-        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+        var image = new DataContent(new byte[]
+        {
+            1,
+            2,
+            3
+        }, "image/png");
         var projected = AssertEx.NotNull(McpToolResultProjectionAIFunction.Project(image) as string);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundUpdates(projected, finalText: "done"));

@@ -57,7 +57,10 @@ public sealed class KnowledgeCompanionReserveTests
         var harness = new Harness
         {
             Resident = [ResidentReranker],
-            Profile = MeasuredProfile with { AvailableVramBytes = null }
+            Profile = MeasuredProfile with
+            {
+                AvailableVramBytes = null
+            }
         };
 
         var reserve = await harness.ResolveAsync();
@@ -207,6 +210,7 @@ public sealed class KnowledgeCompanionReserveTests
                 NullLogger<KnowledgeCompanionReserve>.Instance);
         }
 
-        public Task<long> ResolveAsync() => Build().ResolveGpuBytesAsync(Profile, CancellationToken.None);
+        public Task<long> ResolveAsync() =>
+            Build().ResolveGpuBytesAsync(Profile, CancellationToken.None);
     }
 }

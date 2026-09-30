@@ -383,4 +383,3 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
                        });
     }
 }
-

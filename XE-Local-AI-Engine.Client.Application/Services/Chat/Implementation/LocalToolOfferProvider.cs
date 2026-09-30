@@ -124,7 +124,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // spawn_subagent is offered ONLY to an agent profile that opts in via AllowedToolNames, so it is held out of the
         // whole offer and added back by GetOfferedToolsForProfile alone: an unattended chat turn loads no other model.
-        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.Description, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
+        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.Description, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false,
+            ToolCategory.Orchestration);
 
         // run_python takes the same profile-opt-in treatment for a sharper reason: it executes model-authored code on
         // the node. WriteExecute plus RequiresApproval is also what makes the unattended paths strip it for free.
@@ -132,7 +133,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // run_in_agent_home is profile-opt-in like run_python, which also keeps the deepest schema out of the GBNF grammar
         // llama.cpp compiles per turn. AgentHome:Enabled is enforced at EXECUTION, so the offer stays a static projection.
-        _agentHomeOfferDto = ToOfferDto(AgentHomeToolDefinition.ToolName, AgentHomeToolDefinition.Description, AgentHomeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+        _agentHomeOfferDto = ToOfferDto(AgentHomeToolDefinition.ToolName, AgentHomeToolDefinition.Description, AgentHomeToolDefinition.ParameterSchema, requiresApproval: true,
+            ToolCategory.WriteExecute);
 
         // emit_output is held out of EVERY projection, so only the integration coordinator can union it in and only it
         // can recompose the raw approval flag through IToolApprovalPolicy: a property of the RUN, not of an agent.
@@ -145,10 +147,16 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // WriteExecute is the honest category: every one of these writes durable session rows, and hiding that from a
         // category-based operator policy would blind the layer whose job is to see it.
         _workSessionOfferDtos =
-            [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+        [
+            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor =>
+                ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+        ];
 
         _webAccessOfferDtos =
-            [.. WebAccessToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+        [
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor =>
+                ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
+        ];
 
         // The capability-gated variant, precomputed once: the built-ins minus the coder and knowledge tools and
         // ask_user, returned when the active model is not tool-capable.

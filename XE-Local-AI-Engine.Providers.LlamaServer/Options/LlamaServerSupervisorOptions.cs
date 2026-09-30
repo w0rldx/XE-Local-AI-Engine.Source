@@ -21,8 +21,7 @@ public sealed class LlamaServerSupervisorOptions
     public TimeSpan TransientIdleTimeToLive { get; init; } = TimeSpan.FromMinutes(2);
 
     /// <summary><see cref="TransientIdleTimeToLive" /> clamped to at most <see cref="IdleTimeToLive" />.</summary>
-    public TimeSpan EffectiveTransientIdleTimeToLive =>
-        TransientIdleTimeToLive < IdleTimeToLive ? TransientIdleTimeToLive : IdleTimeToLive;
+    public TimeSpan EffectiveTransientIdleTimeToLive => TransientIdleTimeToLive < IdleTimeToLive ? TransientIdleTimeToLive : IdleTimeToLive;
 
     /// <summary>Inclusive lower bound of the localhost port range the supervisor allocates from.</summary>
     public int PortRangeStart { get; init; } = 18100;

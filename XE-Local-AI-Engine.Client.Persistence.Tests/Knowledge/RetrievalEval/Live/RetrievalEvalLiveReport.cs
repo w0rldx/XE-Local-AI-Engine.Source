@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval.Live;
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -77,8 +78,20 @@ internal sealed record LiveLatency
     {
         var ordered = milliseconds.Order().ToArray();
         return ordered.Length == 0
-            ? new LiveLatency { Count = 0, P50 = 0d, P95 = 0d, Max = 0d }
-            : new LiveLatency { Count = ordered.Length, P50 = Rank(ordered, 0.50d), P95 = Rank(ordered, 0.95d), Max = ordered[^1] };
+            ? new LiveLatency
+            {
+                Count = 0,
+                P50 = 0d,
+                P95 = 0d,
+                Max = 0d
+            }
+            : new LiveLatency
+            {
+                Count = ordered.Length,
+                P50 = Rank(ordered, 0.50d),
+                P95 = Rank(ordered, 0.95d),
+                Max = ordered[^1]
+            };
     }
 
     private static double Rank(double[] ordered, double percentile) =>
@@ -479,7 +492,8 @@ internal static class RetrievalEvalLiveReportWriter
                  + "as the pre-warmer would (cold ready = that spawn→ready); PROD-fresh = the first queries right after that warm-up completes; PROD-warm = the same server afterwards. "
                  + "cold/busy = client fallbacks because the reranker was not running / an abandoned call for it was still outstanding.");
         Line(md, string.Empty);
-        Line(md, "| id | valid | R@K | P@K | MRR | nDCG@K | cite | anchor | noAns | e2e p50/p95/max ms | rerank p50/p95/max ms | scored/calls | max pool | gate skips | degrades | cold/busy | budget-cancel | query-embed degrades | cold ready/first ms |");
+        Line(md,
+            "| id | valid | R@K | P@K | MRR | nDCG@K | cite | anchor | noAns | e2e p50/p95/max ms | rerank p50/p95/max ms | scored/calls | max pool | gate skips | degrades | cold/busy | budget-cancel | query-embed degrades | cold ready/first ms |");
         Line(md, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var config in report.Configs)
         {
@@ -488,7 +502,8 @@ internal static class RetrievalEvalLiveReportWriter
             var cold = config.ColdSpawnToReadyMilliseconds is null && config.ColdFirstQueryMilliseconds is null
                 ? "-"
                 : $"{F1(config.ColdSpawnToReadyMilliseconds)}/{F1(config.ColdFirstQueryMilliseconds)} ({config.ColdFirstQueryRerankOutcome ?? "-"})";
-            Line(md, $"| {config.Id} | {(config.Valid ? "yes" : "INVALID: " + config.InvalidReason)} | {F3(o.RecallAtK)} | {F3(o.PrecisionAtK)} | {F3(o.MeanReciprocalRank)} | {F3(o.NdcgAtK)} | {F3(o.CitationCoverage)} | {F3(o.SourceAnchorCoverage)} | {F3(o.NoAnswerAccuracy)} | {Lat(config.EndToEnd)} | {Lat(config.RerankStage)} | {F0(config.RerankScored)}/{F0(config.RerankCalls)} | {F0(config.MaxRerankPool)} | {(config.GateSkips is { } skips ? F0(skips) : "-")} | {degrades} | {F0(config.ColdFallbacks)}/{F0(config.BusyFallbacks)} | {F0(config.BudgetCancelled)} | {F0(config.QueryEmbeddingDegrades)} | {cold} |");
+            Line(md,
+                $"| {config.Id} | {(config.Valid ? "yes" : "INVALID: " + config.InvalidReason)} | {F3(o.RecallAtK)} | {F3(o.PrecisionAtK)} | {F3(o.MeanReciprocalRank)} | {F3(o.NdcgAtK)} | {F3(o.CitationCoverage)} | {F3(o.SourceAnchorCoverage)} | {F3(o.NoAnswerAccuracy)} | {Lat(config.EndToEnd)} | {Lat(config.RerankStage)} | {F0(config.RerankScored)}/{F0(config.RerankCalls)} | {F0(config.MaxRerankPool)} | {(config.GateSkips is { } skips ? F0(skips) : "-")} | {degrades} | {F0(config.ColdFallbacks)}/{F0(config.BusyFallbacks)} | {F0(config.BudgetCancelled)} | {F0(config.QueryEmbeddingDegrades)} | {cold} |");
         }
 
         var drained = report.Configs.Where(static config => config.BacklogDrainMilliseconds is not null).ToList();
@@ -520,7 +535,8 @@ internal static class RetrievalEvalLiveReportWriter
         foreach (var config in report.Configs)
         {
             var en = config.EnglishOnly;
-            Line(md, $"| {config.Id} | {F0(en.QueryCount)} | {F3(en.RecallAtK)} | {F3(en.PrecisionAtK)} | {F3(en.MeanReciprocalRank)} | {F3(en.NdcgAtK)} | {F3(en.CitationCoverage)} | {F3(en.SourceAnchorCoverage)} |");
+            Line(md,
+                $"| {config.Id} | {F0(en.QueryCount)} | {F3(en.RecallAtK)} | {F3(en.PrecisionAtK)} | {F3(en.MeanReciprocalRank)} | {F3(en.NdcgAtK)} | {F3(en.CitationCoverage)} | {F3(en.SourceAnchorCoverage)} |");
         }
 
         Line(md, string.Empty);
@@ -551,7 +567,8 @@ internal static class RetrievalEvalLiveReportWriter
             else
             {
                 Line(md, $"- Chat model: `{contention.ChatModel}`, ready in {F1(contention.ChatSpawnToReadyMilliseconds)} ms");
-                Line(md, $"- Chat tokens/s: baseline {F1(contention.ChatTokensPerSecondBaseline)}, under retrieval {F1(contention.ChatTokensPerSecondUnderRetrieval)} ({F0(contention.ChatRequestsUnderRetrieval)} requests)");
+                Line(md,
+                    $"- Chat tokens/s: baseline {F1(contention.ChatTokensPerSecondBaseline)}, under retrieval {F1(contention.ChatTokensPerSecondUnderRetrieval)} ({F0(contention.ChatRequestsUnderRetrieval)} requests)");
                 if (contention.LoadEndedEarly is not null)
                 {
                     Line(md, $"- INVALID: {contention.LoadEndedEarly}");
@@ -605,7 +622,9 @@ internal static class RetrievalEvalLiveReportWriter
             Gpu = await RunToolAsync("nvidia-smi", ["--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"], cancellationToken),
             Cpu = ReadProcField("/proc/cpuinfo", "model name") ?? "unknown",
             RamTotal = ReadProcField("/proc/meminfo", "MemTotal") ?? "unknown",
-            LlamaServerVersion = string.Join(" ", version.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(static line => line.StartsWith("version", StringComparison.Ordinal))),
+            LlamaServerVersion =
+                string.Join(" ",
+                    version.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(static line => line.StartsWith("version", StringComparison.Ordinal))),
             LlamaServerPath = settings.ServerPath,
             GpuLayers = settings.GpuLayers,
             Models = models,
@@ -663,7 +682,7 @@ internal static class RetrievalEvalLiveReportWriter
 
             return ((await stdout) + (await stderr)).Trim();
         }
-        catch (System.ComponentModel.Win32Exception exception)
+        catch (Win32Exception exception)
         {
             return "unavailable (" + exception.Message + ")";
         }
@@ -780,11 +799,11 @@ internal static class RetrievalEvalLiveReportWriter
                         continue;
                     }
 
-                    Line(md, $"| {config.Id} | {kind} | {group} | {F0(queries.Count)} | {Spread(queries.Select(static query => query.Top1Score!.Value))} | {Spread(queries.Select(static query => query.Margin).OfType<double>())} |");
+                    Line(md,
+                        $"| {config.Id} | {kind} | {group} | {F0(queries.Count)} | {Spread(queries.Select(static query => query.Top1Score!.Value))} | {Spread(queries.Select(static query => query.Margin).OfType<double>())} |");
                 }
 
-                var best = LiveAbstainThreshold.Find(
-                    [.. ofKind.Where(static query => !query.Answerable).Select(static query => query.Top1Score!.Value)],
+                var best = LiveAbstainThreshold.Find([.. ofKind.Where(static query => !query.Answerable).Select(static query => query.Top1Score!.Value)],
                     [.. ofKind.Where(static query => query.Answerable && query.Top1Relevant).Select(static query => query.Top1Score!.Value)]);
                 thresholds.Add(best is null
                     ? $"| {config.Id} | {kind} | n/a (needs no-answer and relevant-top-1 answerable queries) | - | - | - |"

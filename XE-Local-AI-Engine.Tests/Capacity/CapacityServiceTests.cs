@@ -1139,12 +1139,13 @@ public sealed class CapacityServiceTests
         decision.Reservation!.Dispose();
     }
 
-    private static CapacityRequest EmbedderRequest() => new()
-    {
-        ModelName = Embedder,
-        Role = ModelRole.Embedding,
-        NeverRejectOnBudget = true
-    };
+    private static CapacityRequest EmbedderRequest() =>
+        new()
+        {
+            ModelName = Embedder,
+            Role = ModelRole.Embedding,
+            NeverRejectOnBudget = true
+        };
 
     private static void AssertRejectionLogged(Harness harness, string kind, string resident)
     {

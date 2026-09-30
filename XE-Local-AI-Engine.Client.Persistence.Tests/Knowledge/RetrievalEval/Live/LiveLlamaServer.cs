@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval.Live;
 
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
@@ -96,11 +97,16 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
         var projection = ProductProjection(role, gpuLayers, contextTokens);
         var args = new List<string>
         {
-            "-m", modelPath,
-            "--alias", alias,
-            "--host", "127.0.0.1",
-            "--port", port.ToString(CultureInfo.InvariantCulture),
-            "--parallel", projection.Parallel.ToString(CultureInfo.InvariantCulture),
+            "-m",
+            modelPath,
+            "--alias",
+            alias,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            port.ToString(CultureInfo.InvariantCulture),
+            "--parallel",
+            projection.Parallel.ToString(CultureInfo.InvariantCulture),
             "--no-warmup"
         };
 
@@ -215,7 +221,7 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
         {
             process = Process.Start(startInfo) ?? throw new LiveInfraException($"Could not start llama-server at '{serverPath}'.");
         }
-        catch (System.ComponentModel.Win32Exception exception)
+        catch (Win32Exception exception)
         {
             throw new LiveInfraException($"Could not start llama-server at '{serverPath}': {exception.Message}", exception);
         }
@@ -349,16 +355,14 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
         }
 
-        throw new LiveInfraException(
-            $"llama-server did not report healthy within {budget.TotalSeconds.ToString(CultureInfo.InvariantCulture)}s.\n{server.OutputTail}");
+        throw new LiveInfraException($"llama-server did not report healthy within {budget.TotalSeconds.ToString(CultureInfo.InvariantCulture)}s.\n{server.OutputTail}");
     }
 
     private void RequireAlive()
     {
         if (_process.HasExited)
         {
-            throw new LiveInfraException(
-                $"llama-server exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before or while becoming healthy.\n{OutputTail}");
+            throw new LiveInfraException($"llama-server exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before or while becoming healthy.\n{OutputTail}");
         }
     }
 

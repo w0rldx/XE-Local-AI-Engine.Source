@@ -59,5 +59,6 @@ public sealed class LlamaServerTokenizeResponse : IDisposable
         }
     }
 
-    public void Dispose() => _response.Dispose();
+    public void Dispose() =>
+        _response.Dispose();
 }

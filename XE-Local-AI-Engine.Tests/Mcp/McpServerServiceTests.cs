@@ -273,7 +273,10 @@ public sealed class McpServerServiceTests
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
-        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(existing with { Name = "Renamed" });
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(existing with
+        {
+            Name = "Renamed"
+        });
 
         _ = await service.UpdateAsync(id, CreateStdioInput("Renamed"));
 
@@ -529,13 +532,19 @@ public sealed class McpServerServiceTests
         // A NEW key carrying the mask was stored with the placeholder as its value, handing the server "***" as a credential.
         var service = CreateService(out var store, out _);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: false) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
 
         var exception = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.UpdateAsync(id, CreateStdioInput() with
         {
-            Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["ADDED"] = McpEnvironmentMask.Value }
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ADDED"] = McpEnvironmentMask.Value
+            }
         }));
 
         AssertEx.Contains(exception.Message, "ADDED");
@@ -575,7 +584,10 @@ public sealed class McpServerServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var input = CreateHttpInput("http://127.0.0.1:8931/mcp") with
         {
-            Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer x" }
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = "Bearer x"
+            }
         };
 
         var exception = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
@@ -602,7 +614,10 @@ public sealed class McpServerServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var input = CreateStdioInput() with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer x" }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = "Bearer x"
+            }
         };
 
         _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
@@ -620,7 +635,10 @@ public sealed class McpServerServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var input = CreateHttpInput("http://127.0.0.1:8931/mcp") with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { [name] = value }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [name] = value
+            }
         };
 
         _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
@@ -633,14 +651,20 @@ public sealed class McpServerServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var atLimit = CreateHttpInput("http://127.0.0.1:8931/mcp") with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = new string('a', 4096) }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = new string('a', 4096)
+            }
         };
         store.AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(CreateRecord(atLimit, enabled: false));
 
         _ = await service.CreateAsync(atLimit);
         _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(atLimit with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = new string('a', 4097) }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = new string('a', 4097)
+            }
         }));
     }
 
@@ -655,7 +679,10 @@ public sealed class McpServerServiceTests
         var existing = CreateRecord(CreateHttpInput(storedUrl), enabled: true) with
         {
             Id = id,
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer the-real-secret" }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = "Bearer the-real-secret"
+            }
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
@@ -668,7 +695,10 @@ public sealed class McpServerServiceTests
 
         var roundTripped = await service.UpdateAsync(id, CreateHttpInput(McpUrlMask.Mask(storedUrl)) with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = McpEnvironmentMask.Value }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = McpEnvironmentMask.Value
+            }
         });
 
         AssertEx.Equal("Bearer the-real-secret", roundTripped!.Headers["Authorization"]);
@@ -678,7 +708,10 @@ public sealed class McpServerServiceTests
 
         var edited = await service.UpdateAsync(id, CreateHttpInput("http://127.0.0.1:18912/mcp") with
         {
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer rotated" }
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = "Bearer rotated"
+            }
         });
 
         AssertEx.Equal("Bearer rotated", edited!.Headers["Authorization"]);

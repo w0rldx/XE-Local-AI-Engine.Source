@@ -42,6 +42,9 @@ public readonly record struct LlamaServerLeaseAcquisition(
     public static LlamaServerLeaseAcquisition Granted(ILlamaServerInferenceLease lease, LlamaServerEndpoint? endpoint = null)
     {
         ArgumentNullException.ThrowIfNull(lease);
-        return new LlamaServerLeaseAcquisition(lease, ProcessEvicting: false) { Endpoint = endpoint };
+        return new LlamaServerLeaseAcquisition(lease, ProcessEvicting: false)
+        {
+            Endpoint = endpoint
+        };
     }
 }

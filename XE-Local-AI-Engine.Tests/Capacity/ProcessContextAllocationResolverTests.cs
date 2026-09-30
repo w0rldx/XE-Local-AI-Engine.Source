@@ -854,26 +854,27 @@ public sealed class ProcessContextAllocationResolverTests
             $"{model} books {allocation.Footprint.GpuBytes / (1024 * 1024)} MiB, below the {measuredMib} MiB measured.");
     }
 
-    private static GgufModelFootprintFacts PooledReceiptFacts(string model) => model switch
-    {
-        "nomic-embed-text-v1.5 F16" => Facts(quant: "F16",
-            contextLength: 2048,
-            fileSizeBytes: 274_290_560,
-            paramCount: null,
-            blockCount: 12,
-            attentionHeadCount: 12,
-            attentionHeadCountKv: null,
-            embeddingLength: 768),
-        "bge-reranker-v2-m3 Q4_K_M" => Facts(quant: "Q4_K_M",
-            contextLength: 8192,
-            fileSizeBytes: 438_376_864,
-            paramCount: null,
-            blockCount: 24,
-            attentionHeadCount: 16,
-            attentionHeadCountKv: null,
-            embeddingLength: 1024),
-        _ => throw new ArgumentOutOfRangeException(nameof(model), model, "No receipt facts for this model.")
-    };
+    private static GgufModelFootprintFacts PooledReceiptFacts(string model) =>
+        model switch
+        {
+            "nomic-embed-text-v1.5 F16" => Facts(quant: "F16",
+                contextLength: 2048,
+                fileSizeBytes: 274_290_560,
+                paramCount: null,
+                blockCount: 12,
+                attentionHeadCount: 12,
+                attentionHeadCountKv: null,
+                embeddingLength: 768),
+            "bge-reranker-v2-m3 Q4_K_M" => Facts(quant: "Q4_K_M",
+                contextLength: 8192,
+                fileSizeBytes: 438_376_864,
+                paramCount: null,
+                blockCount: 24,
+                attentionHeadCount: 16,
+                attentionHeadCountKv: null,
+                embeddingLength: 1024),
+            _ => throw new ArgumentOutOfRangeException(nameof(model), model, "No receipt facts for this model.")
+        };
 
     private static ProcessContextAllocationResolver BuildResolver(HardwareProfile profile,
         long? processBudget = null,

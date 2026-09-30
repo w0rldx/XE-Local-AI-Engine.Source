@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.RateLimiting;
 
 using System.Collections;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Threading.RateLimiting;
@@ -187,7 +188,7 @@ public sealed class RateLimitPolicyTests
         }
 
         using var bearerRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/mcp/server");
-        bearerRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "xemcp_not-a-real-key");
+        bearerRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "xemcp_not-a-real-key");
         using var bearer = await client.SendAsync(bearerRequest);
 
         AssertEx.True(sawRejection, "the unauthenticated MCP bucket must reject past its window");

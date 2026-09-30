@@ -32,6 +32,7 @@ public sealed class RuntimeResidentsServiceTests
     private readonly ImageRuntimeActivityGate _imageGate = new();
     private readonly IImageServerSupervisor _imageSupervisor = Substitute.For<IImageServerSupervisor>();
     private readonly WhisperRuntimeActivityGate _whisperGate = new();
+
     private readonly FakeWhisperServerSupervisor _whisperSupervisor = new()
     {
         Status = WhisperStatus(WhisperRuntimeState.Stopped, modelId: null, backend: null)
@@ -48,8 +49,7 @@ public sealed class RuntimeResidentsServiceTests
     [Test]
     public void ImageRows_FollowTheProcessTable_ExitedThenLeasedThenIdle()
     {
-        _imageSupervisor.GetResidents().Returns(
-        [
+        _imageSupervisor.GetResidents().Returns([
             ImageProcess("idle-model", leased: false, exited: false),
             ImageProcess("busy-model", leased: true, exited: false),
             ImageProcess("dead-model", leased: true, exited: true)

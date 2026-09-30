@@ -207,7 +207,10 @@ public sealed class GgufVariantRecommenderTests
     [Test]
     public async Task Annotate_KnowledgeCompanionReserveLargerThanTheBudget_ClampsToWontFit_NotUnknown()
     {
-        var files = new[] { RepoFile("Q4_K_M", 4 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib)
+        };
 
         var result = await Build(freeVramBytes: 2 * Gib, companionReserveBytes: 64 * Gib).AnnotateAsync(files, CancellationToken.None);
 

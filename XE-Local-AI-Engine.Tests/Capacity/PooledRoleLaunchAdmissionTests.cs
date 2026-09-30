@@ -133,7 +133,8 @@ public sealed class PooledRoleLaunchAdmissionTests
             }), created);
         }
 
-        public ValueTask DisposeAsync() => _provider.DisposeAsync();
+        public ValueTask DisposeAsync() =>
+            _provider.DisposeAsync();
     }
 
     // A hand-written capacity service: the verdict is the input under test, and disposal proves the scope ended.
@@ -163,13 +164,15 @@ public sealed class PooledRoleLaunchAdmissionTests
             return Task.FromResult(_decision);
         }
 
-        public void Dispose() => Disposed = true;
+        public void Dispose() =>
+            Disposed = true;
     }
 
     private sealed class TrackingDisposable : IDisposable
     {
         public bool Disposed { get; private set; }
 
-        public void Dispose() => Disposed = true;
+        public void Dispose() =>
+            Disposed = true;
     }
 }

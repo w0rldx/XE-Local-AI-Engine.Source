@@ -37,7 +37,7 @@ internal sealed class SandboxStderrTail
     {
         ArgumentNullException.ThrowIfNull(request);
         var environment = (request.Environment ?? new Dictionary<string, string>(StringComparer.Ordinal)).Where(static pair => !SecretValueRedactor.IsSearchPathKey(pair.Key))
-                                                                                   .Select(static pair => pair.Value);
+                                                                                                         .Select(static pair => pair.Value);
         return new SandboxStderrTail(environment.Concat(request.Arguments));
     }
 

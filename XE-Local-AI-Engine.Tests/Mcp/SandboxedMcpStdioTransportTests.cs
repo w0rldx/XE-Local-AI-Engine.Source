@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.ComponentModel;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -22,7 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     without starting anything — the transport TYPE a record resolves to is the decision, and the fail-closed refusal
 ///     happens before a sandbox is created — so they hold identically on a host that can isolate and one that cannot.
 /// </summary>
-[Category(TestCategories.Unit)]
+[TUnit.Core.Category(TestCategories.Unit)]
 public sealed class SandboxedMcpStdioTransportTests
 {
     /// <summary>Stands in for the node data directory — the engine's database, keys and jails all live under it.</summary>
@@ -381,7 +382,7 @@ public sealed class SandboxedMcpStdioTransportTests
 
         var exception = await AssertEx.ThrowsAsync<IOException>(() => CreateFactory().CreateAsync(record, sessionKey: null, CancellationToken.None));
 
-        AssertEx.True(exception.InnerException is System.ComponentModel.Win32Exception, $"expected a Win32Exception inner exception, got {exception.InnerException?.GetType().Name ?? "none"}");
+        AssertEx.True(exception.InnerException is Win32Exception, $"expected a Win32Exception inner exception, got {exception.InnerException?.GetType().Name ?? "none"}");
     }
 
     [Test]

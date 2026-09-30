@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-
 /// <summary>
 ///     Worker-side projection of a persisted <c>ModelClassification</c> row, carrying the raw stored fields.
 /// </summary>

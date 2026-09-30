@@ -1155,7 +1155,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // The workflow seed is budgeted exactly the way the single-agent path budgets its initial assembly (see TurnPolicy), so a long
         // conversation cannot silently overrun the window any participant is launched with.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel, "orchestration-seed", turnPolicy, transport,
+            budgetGate);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken);
 

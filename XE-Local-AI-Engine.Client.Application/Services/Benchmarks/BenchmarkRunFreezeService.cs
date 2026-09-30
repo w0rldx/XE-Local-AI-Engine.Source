@@ -462,7 +462,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         }
 
         var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, _contextBudgetOptions);
-        _logger.LogInformation("Benchmark freeze refused project {ProjectId} item {ItemIndex}: estimated tokens {Estimated} over an effective budget of {Effective} (capacity {Capacity}, reserving {Reserved}, fixed overhead {FixedOverhead}).",
+        _logger.LogInformation(
+            "Benchmark freeze refused project {ProjectId} item {ItemIndex}: estimated tokens {Estimated} over an effective budget of {Effective} (capacity {Capacity}, reserving {Reserved}, fixed overhead {FixedOverhead}).",
             project.Id,
             itemIndex,
             budget.EstimatedTokensAfter,
@@ -472,10 +473,11 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             budget.FixedOverheadTokens);
         var needed = budget.FixedOverheadTokens + budget.EstimatedTokensAfter;
         // Items are numbered from 1 where the project editor shows them; the stored index is 0-based.
-        throw new BenchmarkValidationException(
-            string.Create(CultureInfo.InvariantCulture, $"Task item {itemIndex + 1}, the agent's system prompt and its {runtime.AllowedTools.Count} tool(s) need about {needed} tokens, ")
-            + string.Create(CultureInfo.InvariantCulture, $"which does not fit the project's {capacity}-token context window after reserving {reserved} output tokens and a safety margin. ")
-            + "Raise the context window, lower the output budget, or choose an agent with fewer tools.");
+        throw new BenchmarkValidationException(string.Create(CultureInfo.InvariantCulture,
+                                                   $"Task item {itemIndex + 1}, the agent's system prompt and its {runtime.AllowedTools.Count} tool(s) need about {needed} tokens, ")
+                                               + string.Create(CultureInfo.InvariantCulture,
+                                                   $"which does not fit the project's {capacity}-token context window after reserving {reserved} output tokens and a safety margin. ")
+                                               + "Raise the context window, lower the output budget, or choose an agent with fewer tools.");
     }
 
     /// <summary>

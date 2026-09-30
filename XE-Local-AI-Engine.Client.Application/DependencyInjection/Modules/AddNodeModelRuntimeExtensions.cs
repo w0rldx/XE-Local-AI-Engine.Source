@@ -428,7 +428,6 @@ internal static class AddNodeModelRuntimeExtensions
             SpeculativeDraftModelName = runtimeSettings.GetSpeculativeDraftModelName(),
             SpeculativeDraftMaxTokens = runtimeSettings.GetSpeculativeDraftMaxTokens(),
             SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers(),
-
             ReadinessTimeoutCap = runtimeSettings.GetLlamaReadinessTimeoutCap(),
             HttpNetworkTimeout = runtimeSettings.GetLlamaChatHttpTimeout(),
             EmbeddingHttpNetworkTimeout = runtimeSettings.GetLlamaEmbeddingHttpTimeout(),

@@ -211,7 +211,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var logger = new EventRecordingLogger();
         var result = await CreateLexicalSearchService(context, logger)
-            .SearchAsync(new KnowledgeSearchRequest { Query = "needle", Limit = 10, CollectionId = "project-a" }, CancellationToken.None);
+            .SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = "needle",
+                Limit = 10,
+                CollectionId = "project-a"
+            }, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.Results.Count, "the search must still answer, lexical-only.");
         var warnings = logger.Entries.Where(static entry => entry.Level >= LogLevel.Warning).ToList();

@@ -123,7 +123,12 @@ internal sealed partial record RetrievalEvalLiveSettings
                 throw new FormatException($"{RerankersVariable} names reranker id '{id}' twice.");
             }
 
-            result.Add(new LiveRerankerModel { Id = id, ModelPath = path, Languages = languages });
+            result.Add(new LiveRerankerModel
+            {
+                Id = id,
+                ModelPath = path,
+                Languages = languages
+            });
         }
 
         return result;

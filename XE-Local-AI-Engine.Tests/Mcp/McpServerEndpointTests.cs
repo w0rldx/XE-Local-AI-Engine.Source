@@ -145,7 +145,10 @@ public sealed class McpServerEndpointTests
             Command = null,
             Arguments = [],
             Url = "http://127.0.0.1:18912/mcp?token=query-secret&mode=full",
-            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer header-secret" },
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Authorization"] = "Bearer header-secret"
+            },
             SessionScope = McpSessionScope.PerConversation
         };
         service.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);

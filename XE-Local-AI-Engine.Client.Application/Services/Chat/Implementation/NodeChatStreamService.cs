@@ -247,7 +247,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         var attachmentsAllowed = AreAttachmentsAllowed(resolution);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
-        if (!attachmentsAllowed && conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
+        if (!attachmentsAllowed &&
+            conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
         {
             await ReportToolHistoryWithheldAsync(resolution.EffectiveModel, requestId, cancellationToken);
         }

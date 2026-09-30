@@ -44,10 +44,9 @@ public sealed class ApplicationHubWireTests
 
         await notifier.NotifyDocumentChangedAsync(FirstId, KnowledgeDocumentStatus.Indexed);
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"knowledge.documentChanged\",\"arguments\":[{\"eventType\":\"knowledge.documentChanged\","
-            + "\"documentId\":\"11111111-1111-4111-8111-111111111111\",\"status\":\"Indexed\",\"occurredAtUtc\":1758000000000}]}"
-            + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"knowledge.documentChanged\",\"arguments\":[{\"eventType\":\"knowledge.documentChanged\","
+                       + "\"documentId\":\"11111111-1111-4111-8111-111111111111\",\"status\":\"Indexed\",\"occurredAtUtc\":1758000000000}]}"
+                       + RecordSeparator,
             WriteFrame(sent.Single().Message));
     }
 
@@ -85,17 +84,15 @@ public sealed class ApplicationHubWireTests
             CurrentBuild = null
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"stableDiffusionCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"smokeTesting\","
-            + "\"appendedLogLines\":[\"cmake ..\",\"make\"],\"appendedLogStartSequence\":9,\"terminal\":false,\"sanitizedError\":null,"
-            + "\"currentBuild\":{\"buildId\":\"11111111-1111-4111-8111-111111111111\",\"backend\":\"vulkan\",\"source\":\"custom\","
-            + "\"repository\":\"https://github.com/example/fork\",\"revisionMode\":\"defaultBranch\",\"requestedCommit\":null,"
-            + "\"resolvedCommit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"stableDiffusionCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"smokeTesting\","
+                       + "\"appendedLogLines\":[\"cmake ..\",\"make\"],\"appendedLogStartSequence\":9,\"terminal\":false,\"sanitizedError\":null,"
+                       + "\"currentBuild\":{\"buildId\":\"11111111-1111-4111-8111-111111111111\",\"backend\":\"vulkan\",\"source\":\"custom\","
+                       + "\"repository\":\"https://github.com/example/fork\",\"revisionMode\":\"defaultBranch\",\"requestedCommit\":null,"
+                       + "\"resolvedCommit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}" + RecordSeparator,
             WriteFrame(sent[0].Message));
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"stableDiffusionCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"failed\","
-            + "\"appendedLogLines\":[],\"appendedLogStartSequence\":11,\"terminal\":true,\"sanitizedError\":\"Build failed.\","
-            + "\"currentBuild\":null}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"stableDiffusionCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"failed\","
+                       + "\"appendedLogLines\":[],\"appendedLogStartSequence\":11,\"terminal\":true,\"sanitizedError\":\"Build failed.\","
+                       + "\"currentBuild\":null}]}" + RecordSeparator,
             WriteFrame(sent[1].Message));
     }
 
@@ -132,17 +129,15 @@ public sealed class ApplicationHubWireTests
             UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(1758000000456)
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"unsloth/Qwen3-0.6B-GGUF\","
-            + "\"phase\":\"Downloading\",\"completedBytes\":1024,\"totalBytes\":4096,\"sanitizedError\":null,"
-            + "\"operationId\":\"11111111-1111-4111-8111-111111111111\",\"operationKind\":\"Download\",\"errorCode\":null,"
-            + "\"updatedAtUtc\":\"2025-09-16T05:20:00.123+00:00\"}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"unsloth/Qwen3-0.6B-GGUF\","
+                       + "\"phase\":\"Downloading\",\"completedBytes\":1024,\"totalBytes\":4096,\"sanitizedError\":null,"
+                       + "\"operationId\":\"11111111-1111-4111-8111-111111111111\",\"operationKind\":\"Download\",\"errorCode\":null,"
+                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.123+00:00\"}]}" + RecordSeparator,
             WriteFrame(sent[0].Message));
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"local/import.gguf\","
-            + "\"phase\":\"Failed\",\"completedBytes\":null,\"totalBytes\":null,\"sanitizedError\":\"Import failed.\","
-            + "\"operationId\":\"22222222-2222-4222-8222-222222222222\",\"operationKind\":\"Import\",\"errorCode\":\"import-failed\","
-            + "\"updatedAtUtc\":\"2025-09-16T05:20:00.456+00:00\"}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"local/import.gguf\","
+                       + "\"phase\":\"Failed\",\"completedBytes\":null,\"totalBytes\":null,\"sanitizedError\":\"Import failed.\","
+                       + "\"operationId\":\"22222222-2222-4222-8222-222222222222\",\"operationKind\":\"Import\",\"errorCode\":\"import-failed\","
+                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.456+00:00\"}]}" + RecordSeparator,
             WriteFrame(sent[1].Message));
     }
 
@@ -226,13 +221,12 @@ public sealed class ApplicationHubWireTests
 
         for (var index = 0; index < kinds.Length; index++)
         {
-            AssertEx.Equal(
-                "{\"type\":1,\"target\":\"" + kinds[index].Target + "\",\"arguments\":[{\"eventType\":\"" + kinds[index].Target
-                + "\",\"runId\":\"11111111-1111-4111-8111-111111111111\",\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\","
-                + "\"templateId\":\"model-fit-refresh\",\"status\":\"Succeeded\",\"triggeredBy\":\"Schedule\","
-                + "\"scheduledFireTimeUtc\":1758000000000,\"actualFireTimeUtc\":1758000000100,\"completedAtUtc\":1758000000900,"
-                + "\"durationMs\":800,\"summary\":\"Refreshed 3 models.\",\"errorMessage\":null,\"occurredAtUtc\":1758000001000}]}"
-                + RecordSeparator,
+            AssertEx.Equal("{\"type\":1,\"target\":\"" + kinds[index].Target + "\",\"arguments\":[{\"eventType\":\"" + kinds[index].Target
+                           + "\",\"runId\":\"11111111-1111-4111-8111-111111111111\",\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\","
+                           + "\"templateId\":\"model-fit-refresh\",\"status\":\"Succeeded\",\"triggeredBy\":\"Schedule\","
+                           + "\"scheduledFireTimeUtc\":1758000000000,\"actualFireTimeUtc\":1758000000100,\"completedAtUtc\":1758000000900,"
+                           + "\"durationMs\":800,\"summary\":\"Refreshed 3 models.\",\"errorMessage\":null,\"occurredAtUtc\":1758000001000}]}"
+                           + RecordSeparator,
                 WriteFrame(sent[index].Message));
         }
     }
@@ -258,15 +252,13 @@ public sealed class ApplicationHubWireTests
             OccurredAtUtc = 1758000000001
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"scheduler.runProgress\",\"arguments\":[{\"eventType\":\"scheduler.runProgress\","
-            + "\"runId\":\"11111111-1111-4111-8111-111111111111\",\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\","
-            + "\"message\":\"Scoring\",\"percent\":null,\"occurredAtUtc\":1758000000000}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"scheduler.runProgress\",\"arguments\":[{\"eventType\":\"scheduler.runProgress\","
+                       + "\"runId\":\"11111111-1111-4111-8111-111111111111\",\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\","
+                       + "\"message\":\"Scoring\",\"percent\":null,\"occurredAtUtc\":1758000000000}]}" + RecordSeparator,
             WriteFrame(sent[0].Message));
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"scheduler.jobDefinitionChanged\",\"arguments\":[{\"eventType\":\"scheduler.jobDefinitionChanged\","
-            + "\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\",\"action\":\"enabled\",\"occurredAtUtc\":1758000000001}]}"
-            + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"scheduler.jobDefinitionChanged\",\"arguments\":[{\"eventType\":\"scheduler.jobDefinitionChanged\","
+                       + "\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\",\"action\":\"enabled\",\"occurredAtUtc\":1758000000001}]}"
+                       + RecordSeparator,
             WriteFrame(sent[1].Message));
     }
 
@@ -327,7 +319,11 @@ public sealed class ApplicationHubWireTests
         var groups = new Dictionary<string, IClientProxy>(StringComparer.Ordinal);
         var clients = Substitute.For<IHubClients>();
         clients.All.Returns(all);
-        foreach (var jobId in new[] { FirstId, SecondId })
+        foreach (var jobId in new[]
+                 {
+                     FirstId,
+                     SecondId
+                 })
         {
             var group = ImageJobHub.JobGroup(jobId);
             groups[group] = CapturingProxy(group, sent);

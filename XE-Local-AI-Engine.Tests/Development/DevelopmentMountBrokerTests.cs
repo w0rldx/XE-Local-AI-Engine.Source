@@ -118,7 +118,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             Skip.Test("Windows named pipes are not filesystem sockets; there is no path limit to work around.");
         }
 
-        var sandbox = new MappingSandboxRuntimeProvider { IdentityMap = true };
+        var sandbox = new MappingSandboxRuntimeProvider
+        {
+            IdentityMap = true
+        };
         var (session, tools) = await PrepareAsync(sandbox);
         var hostTemporary = Path.Combine(session.RuntimePath, "tmp");
         AssertEx.True(Encoding.UTF8.GetByteCount(hostTemporary) + 33 > 103,

@@ -63,8 +63,7 @@ public sealed class ImageModelCatalogServiceTests
     {
         var registry = Substitute.For<IImageModelRegistry>();
         registry.ListAsync(Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<IReadOnlyList<ImageModelRegistryEntry>>(
-                [
+                .Returns(Task.FromResult<IReadOnlyList<ImageModelRegistryEntry>>([
                     .. installedNames.Select(static name => new ImageModelRegistryEntry
                     {
                         ModelName = name,

@@ -46,10 +46,9 @@ public sealed class ProviderStatusHubWireTests
             SanitizedError = null
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"runtimeAcquisition.statusChanged\",\"arguments\":[{\"sequence\":7,\"phase\":\"Downloading\","
-            + "\"variant\":\"Cuda\",\"tag\":\"b1234\",\"completedBytes\":1024,\"totalBytes\":null,\"stepIndex\":1,\"stepCount\":2,"
-            + "\"sanitizedError\":null}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"runtimeAcquisition.statusChanged\",\"arguments\":[{\"sequence\":7,\"phase\":\"Downloading\","
+                       + "\"variant\":\"Cuda\",\"tag\":\"b1234\",\"completedBytes\":1024,\"totalBytes\":null,\"stepIndex\":1,\"stepCount\":2,"
+                       + "\"sanitizedError\":null}]}" + RecordSeparator,
             WriteFrame(sent.Single()));
     }
 
@@ -87,17 +86,15 @@ public sealed class ProviderStatusHubWireTests
             CurrentBuild = null
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"llamaCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"Building\","
-            + "\"appendedLogLines\":[\"cmake ..\",\"make\"],\"appendedLogStartSequence\":41,\"terminal\":false,\"sanitizedError\":null,"
-            + "\"currentBuild\":{\"buildId\":\"11111111-1111-4111-8111-111111111111\",\"backend\":\"vulkan\",\"source\":\"custom\","
-            + "\"repository\":\"https://github.com/example/fork\",\"revisionMode\":\"explicitCommit\","
-            + "\"requestedCommit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"resolvedCommit\":null}}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"llamaCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"Building\","
+                       + "\"appendedLogLines\":[\"cmake ..\",\"make\"],\"appendedLogStartSequence\":41,\"terminal\":false,\"sanitizedError\":null,"
+                       + "\"currentBuild\":{\"buildId\":\"11111111-1111-4111-8111-111111111111\",\"backend\":\"vulkan\",\"source\":\"custom\","
+                       + "\"repository\":\"https://github.com/example/fork\",\"revisionMode\":\"explicitCommit\","
+                       + "\"requestedCommit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"resolvedCommit\":null}}]}" + RecordSeparator,
             WriteFrame(sent[0]));
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"llamaCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"Failed\","
-            + "\"appendedLogLines\":[],\"appendedLogStartSequence\":43,\"terminal\":true,\"sanitizedError\":\"Build failed.\","
-            + "\"currentBuild\":null}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"llamaCppSourceBuild.statusChanged\",\"arguments\":[{\"phase\":\"Failed\","
+                       + "\"appendedLogLines\":[],\"appendedLogStartSequence\":43,\"terminal\":true,\"sanitizedError\":\"Build failed.\","
+                       + "\"currentBuild\":null}]}" + RecordSeparator,
             WriteFrame(sent[1]));
     }
 
@@ -116,10 +113,9 @@ public sealed class ProviderStatusHubWireTests
             SanitizedError = null
         });
 
-        AssertEx.Equal(
-            "{\"type\":1,\"target\":\"trainingRuntime.statusChanged\",\"arguments\":[{\"phase\":\"InstallingPackages\","
-            + "\"appendedLogLines\":[\"Resolved 42 packages\"],\"appendedLogStartSequence\":3,\"terminal\":false,"
-            + "\"sanitizedError\":null}]}" + RecordSeparator,
+        AssertEx.Equal("{\"type\":1,\"target\":\"trainingRuntime.statusChanged\",\"arguments\":[{\"phase\":\"InstallingPackages\","
+                       + "\"appendedLogLines\":[\"Resolved 42 packages\"],\"appendedLogStartSequence\":3,\"terminal\":false,"
+                       + "\"sanitizedError\":null}]}" + RecordSeparator,
             WriteFrame(sent.Single()));
     }
 

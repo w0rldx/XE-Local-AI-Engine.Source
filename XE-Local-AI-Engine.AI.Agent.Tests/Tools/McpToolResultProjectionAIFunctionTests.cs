@@ -16,7 +16,11 @@ public sealed class McpToolResultProjectionAIFunctionTests
     [Test]
     public async Task Invoke_TextBlocks_ReachTheModelAsJoinedPlainText()
     {
-        var sut = new McpToolResultProjectionAIFunction(Returning(new AIContent[] { new TextContent("line one"), new TextContent("line two") }));
+        var sut = new McpToolResultProjectionAIFunction(Returning(new AIContent[]
+        {
+            new TextContent("line one"),
+            new TextContent("line two")
+        }));
 
         var result = await sut.InvokeAsync(new AIFunctionArguments());
 
@@ -89,7 +93,12 @@ public sealed class McpToolResultProjectionAIFunctionTests
     [Test]
     public void Project_PlainPathDataContent_IsAPlaceholderNotATypeName()
     {
-        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/jpeg");
+        var image = new DataContent(new byte[]
+        {
+            1,
+            2,
+            3
+        }, "image/jpeg");
 
         var result = McpToolResultProjectionAIFunction.Project(image) as string;
 
@@ -111,7 +120,8 @@ public sealed class McpToolResultProjectionAIFunctionTests
         return McpToolResultProjectionAIFunction.Project(document.RootElement.Clone()) as string;
     }
 
-    private static AIFunction Returning(object result) => new FixedResultFunction(result);
+    private static AIFunction Returning(object result) =>
+        new FixedResultFunction(result);
 
     // Returns its object as is: AIFunctionFactory would marshal it, which is exactly the step McpClientTool skips.
     private sealed class FixedResultFunction : AIFunction
@@ -125,6 +135,7 @@ public sealed class McpToolResultProjectionAIFunctionTests
 
         public override string Name => "mcp__srv__tool";
 
-        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(_result);
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+            new(_result);
     }
 }

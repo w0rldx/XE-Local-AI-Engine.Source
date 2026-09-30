@@ -670,7 +670,8 @@ public sealed class WhisperServerSupervisorTests
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
         harness.Launcher.Handles.Single().SimulateExit(exitCode: -1073741819,
-            stderrTail: "whisper_vad_segments_from_probs: Final speech segments after filtering: 0 | whisper_lang_auto_detect_with_state: offset 0ms is past the end of the audio (0ms) | whisper_lang_str_full: unknown language id -2");
+            stderrTail:
+            "whisper_vad_segments_from_probs: Final speech segments after filtering: 0 | whisper_lang_auto_detect_with_state: offset 0ms is past the end of the audio (0ms) | whisper_lang_str_full: unknown language id -2");
 
         var failure = await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
 

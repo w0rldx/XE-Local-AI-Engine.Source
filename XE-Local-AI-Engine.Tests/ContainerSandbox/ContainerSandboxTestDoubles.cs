@@ -53,4 +53,3 @@ internal sealed class TemporaryDirectory : IDisposable
         }
     }
 }
-

@@ -354,7 +354,8 @@ public static class TrainingLifecycleE2ETestDoubles
                 HasChatTemplate = true
             });
 
-        public Task<string> GetMetricsTextAsync(Uri baseAddress, CancellationToken ct) => throw new NotSupportedException();
+        public Task<string> GetMetricsTextAsync(Uri baseAddress, CancellationToken ct) =>
+            throw new NotSupportedException();
 
         public Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct) =>
             throw new NotSupportedException();

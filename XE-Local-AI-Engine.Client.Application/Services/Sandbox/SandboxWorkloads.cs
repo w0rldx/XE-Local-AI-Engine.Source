@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-
 /// <summary>Every substrate requirements declaration this engine owns, in one file.</summary>
 /// <remarks>
 ///     Gathered here because ADR 0007 Decision 4 makes an architecture test enumerating every constant the replacement for the compile-time

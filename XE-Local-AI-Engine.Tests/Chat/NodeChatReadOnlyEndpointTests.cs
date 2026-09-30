@@ -176,10 +176,10 @@ public sealed class NodeChatReadOnlyEndpointTests
         var localId = await SeedLocalConversationAsync(factory);
 
         using (var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{remoteId}"))
-        using (var response = await client.SendAsync(request))
-        {
-            await AssertReadOnlyConflictAsync(response);
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                await AssertReadOnlyConflictAsync(response);
+            }
 
         AssertEx.NotNull(await factory.Services.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(remoteId));
 
@@ -214,10 +214,10 @@ public sealed class NodeChatReadOnlyEndpointTests
         var localId = await SeedLocalConversationAsync(factory);
 
         using (var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{remoteId}/uploads/{Guid.NewGuid()}"))
-        using (var response = await client.SendAsync(request))
-        {
-            await AssertReadOnlyConflictAsync(response);
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                await AssertReadOnlyConflictAsync(response);
+            }
 
         using var upload = await UploadTextFileAsync(factory, client, localId);
         AssertEx.Equal(HttpStatusCode.OK, upload.StatusCode);

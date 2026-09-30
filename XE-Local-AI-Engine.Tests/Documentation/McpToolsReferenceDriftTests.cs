@@ -45,7 +45,11 @@ public sealed partial class McpToolsReferenceDriftTests
     [Test]
     public void EveryInboundTool_DeclaresReadOnlyDestructiveIdempotentAndOpenWorldHints()
     {
-        var tools = new[] { typeof(NodeAgentMcpTools), typeof(NodeAdminMcpTools) }
+        var tools = new[]
+                    {
+                        typeof(NodeAgentMcpTools),
+                        typeof(NodeAdminMcpTools)
+                    }
                     .SelectMany(static type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
                     .Where(static method => method.GetCustomAttribute<McpServerToolAttribute>() is not null)
                     .Select(static method => McpServerTool.Create(method, static _ => null!, new McpServerToolCreateOptions()).ProtocolTool)
@@ -70,7 +74,17 @@ public sealed partial class McpToolsReferenceDriftTests
         var startRun = typeof(NodeAgentMcpTools).GetMethod(nameof(NodeAgentMcpTools.StartAgentRunAsync))!.GetParameters().Select(static parameter => parameter.Name);
 
         AssertEx.True(runAgent.Contains("modelOverride") && startRun.Contains("model_override"), "The documented override spellings no longer match the tools.");
-        foreach (var fact in new[] { "`modelOverride`", "`model_override`", $"{new McpAgentRunOptions().MaxTaskUtf8Bytes / 1024} KiB", "`invalid_arguments`", "`task_too_large`", "`ambiguous_name`", "`no_answer`", "`approval_required`" })
+        foreach (var fact in new[]
+                 {
+                     "`modelOverride`",
+                     "`model_override`",
+                     $"{new McpAgentRunOptions().MaxTaskUtf8Bytes / 1024} KiB",
+                     "`invalid_arguments`",
+                     "`task_too_large`",
+                     "`ambiguous_name`",
+                     "`no_answer`",
+                     "`approval_required`"
+                 })
         {
             AssertEx.Contains(referenceText, fact);
         }

@@ -355,7 +355,8 @@ public sealed class NodeAgentMcpTools
         string? agent = null,
         [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")]
         string? model = null,
-        [Description("A local model id for an unbound saved agent such as Coder (read-only). Rejected for an agent that already pins a model. Spelled modelOverride here; start_agent_run spells it model_override.")]
+        [Description(
+            "A local model id for an unbound saved agent such as Coder (read-only). Rejected for an agent that already pins a model. Spelled modelOverride here; start_agent_run spells it model_override.")]
         string? modelOverride = null,
         [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")]
         string? instructions = null,

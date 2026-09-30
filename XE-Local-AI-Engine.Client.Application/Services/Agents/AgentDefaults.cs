@@ -27,7 +27,7 @@ public static class AgentDefaults
     {
         ArgumentNullException.ThrowIfNull(definition);
         return definition.Source == AgentDefinitionSource.Seeded
-            && string.Equals(definition.SeedSlug, DefaultAgentSeedSlug, StringComparison.Ordinal);
+               && string.Equals(definition.SeedSlug, DefaultAgentSeedSlug, StringComparison.Ordinal);
     }
 
     /// <summary>

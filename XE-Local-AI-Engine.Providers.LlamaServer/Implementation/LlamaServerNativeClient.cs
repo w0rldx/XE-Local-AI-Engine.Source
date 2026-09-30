@@ -59,15 +59,15 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
         // /tokenize is a sibling of /health at the server root, never under /v1.
         var tokenizeUri = new Uri($"{baseAddress.Scheme}://{baseAddress.Authority}/tokenize");
         var response = await _tokenizeClient.PostAsJsonAsync(tokenizeUri,
-                                                 new
-                                                 {
-                                                     content,
-                                                     add_special = false,
-                                                     parse_special = false,
-                                                     with_pieces = false
-                                                 },
-                                                 ct)
-                                             .ConfigureAwait(false);
+                                                new
+                                                {
+                                                    content,
+                                                    add_special = false,
+                                                    parse_special = false,
+                                                    with_pieces = false
+                                                },
+                                                ct)
+                                            .ConfigureAwait(false);
         return new LlamaServerTokenizeResponse(response);
     }
 

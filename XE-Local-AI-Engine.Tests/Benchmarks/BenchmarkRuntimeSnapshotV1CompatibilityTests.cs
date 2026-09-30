@@ -124,11 +124,21 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
             ParameterSchema = "{\"type\":\"object\"}",
             Category = ToolCategory.ReadLocal
         };
+
         byte[] Frozen(AllowedToolDto tool) =>
-            factory.Serialize(factory.Create(Input() with { ResolvedRuntime = Input().ResolvedRuntime with { AllowedTools = [tool] } }));
+            factory.Serialize(factory.Create(Input() with
+            {
+                ResolvedRuntime = Input().ResolvedRuntime with
+                {
+                    AllowedTools = [tool]
+                }
+            }));
 
         var legacy = Frozen(bare);
-        var described = Frozen(bare with { Description = "Read a UTF-8 text file." });
+        var described = Frozen(bare with
+        {
+            Description = "Read a UTF-8 text file."
+        });
 
         AssertEx.True(Encoding.UTF8.GetString(legacy).Contains("\"description\":null", StringComparison.Ordinal));
         AssertEx.True(legacy.AsSpan().SequenceEqual(factory.Serialize(factory.Deserialize(legacy))), "a pre-description run still replays");

@@ -57,7 +57,10 @@ public sealed class McpClientFactoryLoopbackTests
         var factory = CreateFactory();
         var withHeaders = HttpRecord("http://127.0.0.1:18912/mcp") with
         {
-            Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer abc123" }
+            Headers = new Dictionary<string, string>
+            {
+                ["Authorization"] = "Bearer abc123"
+            }
         };
 
         var options = factory.BuildHttpTransportOptions(withHeaders);

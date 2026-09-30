@@ -27,7 +27,8 @@ public sealed partial class NodeAdminMcpTools
         });
 
     [McpServerTool(Name = "get_runtime_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Get the installed and recommended llama.cpp runtime versions without refreshing the remote catalog. A non-null overrideVariant means an operator-supplied llama-server is active and no acquisition is needed.")]
+    [Description(
+        "Get the installed and recommended llama.cpp runtime versions without refreshing the remote catalog. A non-null overrideVariant means an operator-supplied llama-server is active and no acquisition is needed.")]
     public Task<McpRuntimeStatusResponse> GetRuntimeStatusAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_runtime_status", [], async () =>
         {

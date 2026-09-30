@@ -86,14 +86,27 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
                     Valid = false,
                     InvalidReason = "forced rerank degraded",
                     Overall = summary,
-                    ByCategory = new Dictionary<string, LiveMetricSummary> { ["en-prose"] = summary, ["chunk-boundary"] = summary, ["code-path"] = summary },
-                    ByLanguage = new Dictionary<string, LiveMetricSummary> { ["en"] = summary },
+                    ByCategory = new Dictionary<string, LiveMetricSummary>
+                    {
+                        ["en-prose"] = summary,
+                        ["chunk-boundary"] = summary,
+                        ["code-path"] = summary
+                    },
+                    ByLanguage = new Dictionary<string, LiveMetricSummary>
+                    {
+                        ["en"] = summary
+                    },
                     EnglishOnly = LiveMetricSummary.From([noAnswer]),
                     BoundaryBothHalves = 1,
                     BoundaryPairCount = 2,
                     EndToEnd = LiveLatency.From([12d, 30d]),
                     RerankStage = LiveLatency.From([]),
-                    Degrades = new Dictionary<string, int> { ["timeout"] = 1, ["cold"] = 4, ["busy"] = 2 },
+                    Degrades = new Dictionary<string, int>
+                    {
+                        ["timeout"] = 1,
+                        ["cold"] = 4,
+                        ["busy"] = 2
+                    },
                     BudgetCancelled = 3,
                     BacklogDrainMilliseconds = 10400,
                     PerQuery =
@@ -107,9 +120,28 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
                     ]
                 }
             ],
-            Sanity = [new LiveSanityResult { RerankerId = "bge", Passed = true, PairScores = ["pair"] }],
-            NegativeControls = [new LiveControlResult { Name = "shuffled scores below F0", Passed = true, Detail = "detail" }],
-            Contention = new LiveContentionResult { SkippedReason = "no headroom" }
+            Sanity =
+            [
+                new LiveSanityResult
+                {
+                    RerankerId = "bge",
+                    Passed = true,
+                    PairScores = ["pair"]
+                }
+            ],
+            NegativeControls =
+            [
+                new LiveControlResult
+                {
+                    Name = "shuffled scores below F0",
+                    Passed = true,
+                    Detail = "detail"
+                }
+            ],
+            Contention = new LiveContentionResult
+            {
+                SkippedReason = "no headroom"
+            }
         };
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(report));

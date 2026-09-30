@@ -77,7 +77,10 @@ public sealed class McpAgenticToolAdapterTests
                            .UseFunctionInvocation(NullLoggerFactory.Instance)
                            .Build();
 
-        var response = await client.GetResponseAsync("compute", new ChatOptions { Tools = [adapted] });
+        var response = await client.GetResponseAsync("compute", new ChatOptions
+        {
+            Tools = [adapted]
+        });
 
         AssertEx.Equal(1, invoked);
         AssertEx.Equal("answer", response.Text);

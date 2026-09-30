@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
+using System.ClientModel;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -925,7 +926,7 @@ public sealed class SubAgentSpawnServiceTests
         using var harness = new Harness();
         harness.AllowLocal();
         harness.ResolveMcpBinding(BareBinding());
-        harness.ChatClient.Failure = new System.ClientModel.ClientResultException("HTTP 400 (exceed_context_size_error: )");
+        harness.ChatClient.Failure = new ClientResultException("HTTP 400 (exceed_context_size_error: )");
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
         var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest

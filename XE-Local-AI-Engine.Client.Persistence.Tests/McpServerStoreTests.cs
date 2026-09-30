@@ -515,25 +515,37 @@ public sealed class McpServerStoreTests : IDisposable
             var store = new McpServerStore(context, TimeProvider.System);
             var added = await store.AddAsync(CreateHttpInput() with
             {
-                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader }
+                Headers = new Dictionary<string, string>
+                {
+                    ["Authorization"] = secretHeader
+                }
             });
             serverId = added.Id;
 
             var unchanged = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
             {
-                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader }
+                Headers = new Dictionary<string, string>
+                {
+                    ["Authorization"] = secretHeader
+                }
             }));
             AssertEx.Equal(expected: 1, unchanged.Version, "Re-saving the same headers is not a connection change.");
 
             var rotated = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
             {
-                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader + "-rotated" }
+                Headers = new Dictionary<string, string>
+                {
+                    ["Authorization"] = secretHeader + "-rotated"
+                }
             }));
             AssertEx.Equal(expected: 2, rotated.Version, "A new credential must reconnect the server.");
 
             var rescoped = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
             {
-                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader + "-rotated" },
+                Headers = new Dictionary<string, string>
+                {
+                    ["Authorization"] = secretHeader + "-rotated"
+                },
                 SessionScope = McpSessionScope.PerConversation
             }));
             AssertEx.Equal(expected: 3, rescoped.Version, "A session-scope change must reconnect the server.");
@@ -570,7 +582,10 @@ public sealed class McpServerStoreTests : IDisposable
         AssertEx.False(await store.AssignSlugAsync(added.Id, "other"), "A persisted slug is never recomputed.");
         AssertEx.False(await store.AssignSlugAsync(Guid.NewGuid(), "missing"));
 
-        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with { Name = "renamed" }));
+        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+        {
+            Name = "renamed"
+        }));
         AssertEx.Equal("filesystem", renamed.Slug, "A rename keeps the slug.");
         AssertEx.Equal(expected: 1, renamed.Version, "Neither the slug nor a rename is a connection change.");
     }

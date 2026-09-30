@@ -854,7 +854,15 @@ public sealed class InvocationAgentFactoryTests
             Tools = [InvocationToolBridge.CreateOfferPlaceholder(toolName)],
             ConversationContext = [new ChatMessage(ChatRole.User, "Perform the cleanup now.")],
             Skills = withSkills
-                ? [new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }]
+                ?
+                [
+                    new InvocationSkill
+                    {
+                        Name = "log-triage",
+                        Description = "Triage logs",
+                        Body = "## Logs"
+                    }
+                ]
                 : null
         };
 

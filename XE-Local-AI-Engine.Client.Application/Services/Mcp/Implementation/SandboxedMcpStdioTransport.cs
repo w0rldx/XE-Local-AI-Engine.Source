@@ -214,9 +214,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         var jailPath = JailSearchPath(_record);
         if (ResolveExecutablePath(_record.Command, jailPath) is null)
         {
-            throw new FileNotFoundException(
-                $"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
-                + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
+            throw new FileNotFoundException($"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
+                                            + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken);

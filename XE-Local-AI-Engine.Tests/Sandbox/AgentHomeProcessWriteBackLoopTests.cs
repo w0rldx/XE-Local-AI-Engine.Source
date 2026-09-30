@@ -348,7 +348,6 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             };
         }
     }
-
 }
 
 internal static class AgentHomeProcessPhaseTestAccess

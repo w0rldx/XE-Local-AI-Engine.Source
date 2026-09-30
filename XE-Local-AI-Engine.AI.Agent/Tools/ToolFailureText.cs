@@ -20,7 +20,8 @@ internal static class ToolFailureText
 
     private const string Prefix = "[tool error: ";
 
-    public static string Format(string code, string message) => $"{Prefix}{code}] {message}";
+    public static string Format(string code, string message) =>
+        $"{Prefix}{code}] {message}";
 
     /// <summary>The failure code of a result in this shape, or <see langword="null" /> for anything else.</summary>
     public static string? TryGetCode(object? result)

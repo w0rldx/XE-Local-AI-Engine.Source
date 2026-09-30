@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Tools;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -54,7 +55,7 @@ public sealed class ToolResultBudgetTests
 
         var truncated = ToolResultBudget.Truncate(text, maxCharacters: 400);
 
-        _ = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetByteCount(truncated);
+        _ = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetByteCount(truncated);
         AssertEx.True(truncated.EndsWith("\U0001F600b", StringComparison.Ordinal), "the tail keeps whole characters");
     }
 
@@ -62,7 +63,12 @@ public sealed class ToolResultBudgetTests
     public void Apply_TruncatedStringKeepsTheMediaOfTheOriginal()
     {
         var original = new string('i', 5_000) + "[image image/png, 1 KB]";
-        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+        var image = new DataContent(new byte[]
+        {
+            1,
+            2,
+            3
+        }, "image/png");
         ToolResultMedia.Attach(original, [image]);
 
         var result = ToolResultBudget.Apply(original, maxCharacters: 100);

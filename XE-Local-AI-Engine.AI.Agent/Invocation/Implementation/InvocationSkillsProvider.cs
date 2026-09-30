@@ -16,7 +16,8 @@ public static class InvocationSkillsProvider
 {
     /// <summary>Builds the skills context provider for an invocation; the caller's agent owns and disposes it.</summary>
     /// <param name="skills">The resolved skills; at least one.</param>
-    public static AIContextProvider Create(IReadOnlyList<InvocationSkill> skills) => Build(skills, waiveSkillReadApproval: false);
+    public static AIContextProvider Create(IReadOnlyList<InvocationSkill> skills) =>
+        Build(skills, waiveSkillReadApproval: false);
 
     /// <summary>Builds the skills context provider for a spawned sub-agent child; the child agent owns and disposes it.</summary>
     /// <remarks>

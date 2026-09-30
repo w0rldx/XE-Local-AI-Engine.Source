@@ -11,8 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
-using NSubstitute;
 using ModelContextProtocol.Client;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
@@ -239,14 +239,20 @@ public sealed class McpServerConnectionManagerTests
         const string token = "tok-abcdef0123456789";
         var hint = $"The MCP server 'x' command 'server' was not found on the sandbox PATH ({path}). Token {token} was not used.";
         var status = await RefreshWithFailureAsync(() => new FileNotFoundException(hint),
-            environment: new Dictionary<string, string> { ["PATH"] = path, ["AUTH"] = $"Bearer {token}" });
+            environment: new Dictionary<string, string>
+            {
+                ["PATH"] = path,
+                ["AUTH"] = $"Bearer {token}"
+            });
 
         AssertEx.Equal($"The MCP server 'x' command 'server' was not found on the sandbox PATH ({path}). Token [REDACTED] was not used.", status.LastError);
     }
 
-    private const string SandboxRefusedMessage = "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.";
+    private const string SandboxRefusedMessage =
+        "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.";
 
-    private const string SandboxUnavailableMessage = "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.";
+    private const string SandboxUnavailableMessage =
+        "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.";
 
     [Test]
     public async Task RefreshAsync_SandboxRefusalOnAnIsolationCapableNode_ReportsSandboxRefusedWithTheFixedMessage()
@@ -261,8 +267,9 @@ public sealed class McpServerConnectionManagerTests
     public async Task RefreshAsync_SandboxRefusalNamingAHostPath_NeverReportsThePath()
     {
         // The shape SandboxedMcpStdioTransport throws for a denied root: both paths stay in the server log, never in LastError.
-        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException(
-            "The MCP server 'x' is registered at the Sandboxed trust tier and would bind '/home/operator' into its sandbox, which contains the sensitive host path '/home/operator/.ssh'."),
+        var status = await RefreshWithFailureAsync(
+            static () => new SandboxCapabilityNotSupportedException(
+                "The MCP server 'x' is registered at the Sandboxed trust tier and would bind '/home/operator' into its sandbox, which contains the sensitive host path '/home/operator/.ssh'."),
             IsolationCapableProvider());
 
         AssertEx.Equal(SandboxRefusedMessage, status.LastError);
@@ -316,8 +323,12 @@ public sealed class McpServerConnectionManagerTests
     public async Task RefreshAsync_StartupExceptionFromTheTransport_ReportsServerStartupFailedWithTheScrubbedTail()
     {
         const string secret = "tok-4f9a8b7c6d5e";
-        var status = await RefreshWithFailureAsync(static () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.", $"Traceback\nKeyError: API_KEY={secret} rejected"),
-            environment: new Dictionary<string, string> { ["API_KEY"] = secret });
+        var status = await RefreshWithFailureAsync(
+            static () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.", $"Traceback\nKeyError: API_KEY={secret} rejected"),
+            environment: new Dictionary<string, string>
+            {
+                ["API_KEY"] = secret
+            });
 
         AssertEx.Equal(McpConnectionFailureReason.ServerStartupFailed, status.FailureReason);
         AssertEx.True(status.LastError!.StartsWith("The MCP server 'Broken' exited before completing the MCP handshake.\nstderr: Traceback\nKeyError", StringComparison.Ordinal), status.LastError);
@@ -333,7 +344,10 @@ public sealed class McpServerConnectionManagerTests
         var padding = new string('x', 1024 - 8);
         var tail = $"{padding}{secret} rejected\nmore";
         var status = await RefreshWithFailureAsync(() => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.", tail),
-            environment: new Dictionary<string, string> { ["API_KEY"] = secret });
+            environment: new Dictionary<string, string>
+            {
+                ["API_KEY"] = secret
+            });
 
         AssertEx.False(status.LastError!.Contains("8b7c6d5e-abcdef", StringComparison.Ordinal), status.LastError);
         AssertEx.True(status.LastError.Contains("[REDACTED] rejected", StringComparison.Ordinal), status.LastError);
@@ -343,7 +357,8 @@ public sealed class McpServerConnectionManagerTests
     public async Task RefreshAsync_StartupExceptionWhoseMessageAlreadyQuotesTheTail_DoesNotRepeatIt()
     {
         const string tail = "node: not found";
-        var status = await RefreshWithFailureAsync(static () => new McpServerStartupException($"The MCP server 'Broken' exited before completing the MCP handshake. Its stderr ended with:\n{tail}", tail));
+        var status = await RefreshWithFailureAsync(static () =>
+            new McpServerStartupException($"The MCP server 'Broken' exited before completing the MCP handshake. Its stderr ended with:\n{tail}", tail));
 
         AssertEx.Equal(McpConnectionFailureReason.ServerStartupFailed, status.FailureReason);
         AssertEx.Equal($"The MCP server 'Broken' exited before completing the MCP handshake. Its stderr ended with:\n{tail}", status.LastError);
@@ -396,7 +411,10 @@ public sealed class McpServerConnectionManagerTests
     private static async Task<McpServerConnectionStatus> RefreshWithFailureAsync(Func<Exception> failure, IAgentSandboxRuntimeProvider? sandboxProvider = null,
         Dictionary<string, string>? environment = null)
     {
-        var record = StdioRecord("Broken") with { Environment = environment ?? new Dictionary<string, string>() };
+        var record = StdioRecord("Broken") with
+        {
+            Environment = environment ?? new Dictionary<string, string>()
+        };
         var factory = new FakeMcpClientFactory();
         factory.FailFor(record.Id, failure);
         await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), sandboxProvider);
@@ -458,13 +476,22 @@ public sealed class McpServerConnectionManagerTests
         await manager.RefreshAsync();
         AssertEx.Equal("mcp__ticket-desk-2__lookup,mcp__ticket-desk__lookup", string.Join(",", registry.GetDescriptors().Select(static d => d.Name)));
 
-        store.Upsert(recordA with { Enabled = false });
+        store.Upsert(recordA with
+        {
+            Enabled = false
+        });
         await manager.RefreshAsync(recordA.Id);
         AssertEx.Equal("mcp__ticket-desk-2__lookup", string.Join(",", registry.GetDescriptors().Select(static d => d.Name)),
             "disabling the first server must not re-bind the second server's tool names");
 
-        store.Upsert(recordA with { Enabled = true });
-        store.Upsert(recordB with { Name = "Help Desk" });
+        store.Upsert(recordA with
+        {
+            Enabled = true
+        });
+        store.Upsert(recordB with
+        {
+            Name = "Help Desk"
+        });
         await manager.RefreshAsync();
         AssertEx.Equal("mcp__ticket-desk-2__lookup,mcp__ticket-desk__lookup", string.Join(",", registry.GetDescriptors().Select(static d => d.Name)),
             "re-enabling keeps the persisted slug and a rename never recomputes one");
@@ -478,7 +505,10 @@ public sealed class McpServerConnectionManagerTests
         // computation did over the ENABLED set in store order, so existing agent allow-lists keep resolving; a disabled row claims none.
         await using var first = await InProcMcpServer.StartAsync("first", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var second = await InProcMcpServer.StartAsync("second", AIFunctionFactory.Create(GetForecast, "get_forecast"));
-        var disabled = StdioRecord("Server") with { Enabled = false };
+        var disabled = StdioRecord("Server") with
+        {
+            Enabled = false
+        };
         var enabledFirst = StdioRecord("Server!");
         var enabledSecond = StdioRecord("Server?");
         var store = new FakeMcpServerStore(disabled, enabledFirst, enabledSecond);
@@ -509,7 +539,10 @@ public sealed class McpServerConnectionManagerTests
         await using var manager = CreateManager(registry, factory, store);
         await manager.RefreshAsync();
 
-        store.Upsert(recordA with { Version = 2 });
+        store.Upsert(recordA with
+        {
+            Version = 2
+        });
         await manager.RefreshAsync(recordA.Id);
 
         AssertEx.Equal(expected: 2, factory.CreateCount(recordA.Id));
@@ -540,7 +573,9 @@ public sealed class McpServerConnectionManagerTests
         var executable = Resolve(registry, "mcp__weather__get_forecast");
         var result = ResultText(await executable.InvokeAsync(Arguments()));
 
-        AssertEx.Equal("[tool error: server_unavailable] MCP server 'Weather' is not connected: The connection to the MCP server failed or closed. The next call retries; use Reconnect on the MCP page if it keeps failing.", result);
+        AssertEx.Equal(
+            "[tool error: server_unavailable] MCP server 'Weather' is not connected: The connection to the MCP server failed or closed. The next call retries; use Reconnect on the MCP page if it keeps failing.",
+            result);
         AssertEx.Equal(expected: 2, factory.CreateCount(record.Id), "the call reconnects exactly once before failing");
     }
 
@@ -595,7 +630,10 @@ public sealed class McpServerConnectionManagerTests
     {
         // O-D1: one shared session let a stateful server's per-session memory from conversation A block conversation B.
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -636,7 +674,10 @@ public sealed class McpServerConnectionManagerTests
         // in that window got a replacement under the SAME key (same jail and execution id), which the old kill then destroyed.
         var clock = new ManualTimeProvider();
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -697,7 +738,10 @@ public sealed class McpServerConnectionManagerTests
         var clock = new ManualTimeProvider();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync(gate));
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -728,7 +772,10 @@ public sealed class McpServerConnectionManagerTests
     {
         var clock = new ManualTimeProvider();
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -755,7 +802,10 @@ public sealed class McpServerConnectionManagerTests
     public async Task PerConversationScope_AStdioServerCapsConversationSessions_AndTheNextFailsTyped()
     {
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -876,7 +926,10 @@ public sealed class McpServerConnectionManagerTests
         // The UI's Reconnect went through RefreshAsync(id), which returns early for a live server, so a connected-but-stuck server
         // was never reconnected and its conversation sessions were never touched.
         await using var pool = new ServerPool();
-        var record = StdioRecord("Counter") with { SessionScope = McpSessionScope.PerConversation };
+        var record = StdioRecord("Counter") with
+        {
+            SessionScope = McpSessionScope.PerConversation
+        };
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -953,7 +1006,10 @@ public sealed class McpServerConnectionManagerTests
 
     private static AIFunctionArguments Arguments()
     {
-        return new AIFunctionArguments { ["city"] = "Paris" };
+        return new AIFunctionArguments
+        {
+            ["city"] = "Paris"
+        };
     }
 
     // A tool result is either the typed failure string or the SDK's AIContent projection; both read as text here.
@@ -1058,7 +1114,10 @@ public sealed class McpServerConnectionManagerTests
                     return Task.FromResult(false);
                 }
 
-                _records[index] = _records[index] with { Slug = slug };
+                _records[index] = _records[index] with
+                {
+                    Slug = slug
+                };
                 return Task.FromResult(true);
             }
         }
@@ -1104,7 +1163,10 @@ public sealed class McpServerConnectionManagerTests
                 }
                 else
                 {
-                    _records[index] = record with { Slug = _records[index].Slug };
+                    _records[index] = record with
+                    {
+                        Slug = _records[index].Slug
+                    };
                 }
             }
         }
@@ -1229,7 +1291,8 @@ public sealed class McpServerConnectionManagerTests
     {
         private readonly List<InProcMcpServer> _servers = [];
 
-        public Task<McpClient> StartCounterAsync() => StartCounterAsync(gate: null);
+        public Task<McpClient> StartCounterAsync() =>
+            StartCounterAsync(gate: null);
 
         /// <summary>A counter whose "next" tool, when a gate is given, waits on it before answering (an in-flight call).</summary>
         public async Task<McpClient> StartCounterAsync(TaskCompletionSource? gate)

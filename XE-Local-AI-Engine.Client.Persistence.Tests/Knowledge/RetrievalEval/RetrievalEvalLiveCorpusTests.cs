@@ -18,16 +18,62 @@ public sealed class RetrievalEvalLiveCorpusTests : IDisposable
         """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha beta"}]}""";
 
     // Cross-language queries that keep a lexical bridge on purpose; LiveCorpus/README.md names them.
-    private static readonly HashSet<string> DeliberateCrossLanguageBridges = new(StringComparer.Ordinal) { "cl-05" };
+    private static readonly HashSet<string> DeliberateCrossLanguageBridges = new(StringComparer.Ordinal)
+    {
+        "cl-05"
+    };
 
     // Function words long enough to pass the content-token length cut; everything else of four or more letters is a
     // content word for the lexical-overlap checks below.
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
     {
-        "what", "when", "which", "where", "does", "have", "with", "that", "this", "from", "into", "should", "would",
-        "much", "many", "long", "after", "before", "must", "each", "every", "then", "than", "until", "their", "there",
-        "welche", "welcher", "wann", "eine", "einer", "eines", "einem", "einen", "sich", "nach", "wird", "werden",
-        "sind", "oder", "auch", "wenn", "dass", "meines", "meiner", "meine", "während"
+        "what",
+        "when",
+        "which",
+        "where",
+        "does",
+        "have",
+        "with",
+        "that",
+        "this",
+        "from",
+        "into",
+        "should",
+        "would",
+        "much",
+        "many",
+        "long",
+        "after",
+        "before",
+        "must",
+        "each",
+        "every",
+        "then",
+        "than",
+        "until",
+        "their",
+        "there",
+        "welche",
+        "welcher",
+        "wann",
+        "eine",
+        "einer",
+        "eines",
+        "einem",
+        "einen",
+        "sich",
+        "nach",
+        "wird",
+        "werden",
+        "sind",
+        "oder",
+        "auch",
+        "wenn",
+        "dass",
+        "meines",
+        "meiner",
+        "meine",
+        "während"
     };
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "retrieval-eval-corpus-" + Guid.NewGuid().ToString("N"));
@@ -119,7 +165,9 @@ public sealed class RetrievalEvalLiveCorpusTests : IDisposable
             }
         }
 
-        AssertEx.True(crossLanguage.Any(static query => string.Equals(query.Language, "de", StringComparison.Ordinal)) && crossLanguage.Any(static query => string.Equals(query.Language, "en", StringComparison.Ordinal)),
+        AssertEx.True(
+            crossLanguage.Any(static query => string.Equals(query.Language, "de", StringComparison.Ordinal)) &&
+            crossLanguage.Any(static query => string.Equals(query.Language, "en", StringComparison.Ordinal)),
             "Cross-language queries must run in both directions.");
     }
 
@@ -172,7 +220,8 @@ public sealed class RetrievalEvalLiveCorpusTests : IDisposable
     [Test]
     public async Task VerifyBoundaryPhrases_BothHalvesInOneChunk_FailsNamingTheQuery()
     {
-        WriteCorpus("""{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"chunk-boundary","answerable":true,"relevant":["private/alpha.md"],"citation":"gamma","boundaryPhrases":["alpha","gamma"]}]}""");
+        WriteCorpus(
+            """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"chunk-boundary","answerable":true,"relevant":["private/alpha.md"],"citation":"gamma","boundaryPhrases":["alpha","gamma"]}]}""");
         var corpus = RetrievalEvalLiveCorpus.Load(_rootPath);
 
         var exception = await AssertEx.ThrowsAsync<InvalidDataException>(() => corpus.VerifyBoundaryPhrasesSpanChunksAsync(LiveCorpusView.SourcePathOf, CancellationToken.None));
@@ -222,14 +271,23 @@ public sealed class RetrievalEvalLiveCorpusTests : IDisposable
     }
 
     [Test]
-    [Arguments("missing-key", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/missing.md"],"citation":"alpha"}]}""", "unknown document 'private/missing.md'")]
-    [Arguments("duplicate-id", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"},{"id":"p-1","query":"beta","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"beta"}]}""", "query id 'p-1' is used more than once")]
-    [Arguments("unknown-category", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"poetry","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"}]}""", "unknown category 'poetry'")]
+    [Arguments("missing-key", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/missing.md"],"citation":"alpha"}]}""",
+        "unknown document 'private/missing.md'")]
+    [Arguments("duplicate-id",
+        """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"},{"id":"p-1","query":"beta","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"beta"}]}""",
+        "query id 'p-1' is used more than once")]
+    [Arguments("unknown-category", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"poetry","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"}]}""",
+        "unknown category 'poetry'")]
     [Arguments("empty", """{"queries":[]}""", "contains no queries")]
-    [Arguments("misspelled-field", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevent":["private/alpha.md"],"citation":"alpha"}]}""", "is malformed")]
-    [Arguments("no-answer-with-label", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"no-answer","answerable":false,"relevant":["private/alpha.md"]}]}""", "must not carry relevant documents")]
-    [Arguments("citation-not-in-answer", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"omega"}]}""", "citation 'omega' does not occur")]
-    [Arguments("boundary-without-phrases", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"chunk-boundary","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"}]}""", "carries a 'boundaryPhrases' pair")]
+    [Arguments("misspelled-field", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevent":["private/alpha.md"],"citation":"alpha"}]}""",
+        "is malformed")]
+    [Arguments("no-answer-with-label", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"no-answer","answerable":false,"relevant":["private/alpha.md"]}]}""",
+        "must not carry relevant documents")]
+    [Arguments("citation-not-in-answer", """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"en-prose","answerable":true,"relevant":["private/alpha.md"],"citation":"omega"}]}""",
+        "citation 'omega' does not occur")]
+    [Arguments("boundary-without-phrases",
+        """{"queries":[{"id":"p-1","query":"alpha","language":"en","category":"chunk-boundary","answerable":true,"relevant":["private/alpha.md"],"citation":"alpha"}]}""",
+        "carries a 'boundaryPhrases' pair")]
     public void Load_MalformedCorpus_FailsNamingTheProblem(string scenario, string queriesJson, string expectedMessage)
     {
         WriteCorpus(queriesJson);

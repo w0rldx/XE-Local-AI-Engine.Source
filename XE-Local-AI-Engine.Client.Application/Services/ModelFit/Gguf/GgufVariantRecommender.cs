@@ -97,7 +97,10 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
 
             // The probe's figure is a live free measurement (llama.cpp's own device query), so it stands in as the profile's measured free VRAM.
             var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
-            var reserve = await _companionReserve.ResolveGpuBytesAsync(profile with { AvailableVramBytes = budget }, ct);
+            var reserve = await _companionReserve.ResolveGpuBytesAsync(profile with
+            {
+                AvailableVramBytes = budget
+            }, ct);
             return Math.Max(1, budget.Value - reserve);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
