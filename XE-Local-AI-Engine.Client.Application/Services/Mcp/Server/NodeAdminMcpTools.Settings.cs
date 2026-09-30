@@ -10,13 +10,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
-    [McpServerTool(Name = "get_node_settings")]
+    [McpServerTool(Name = "get_node_settings", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get only the restricted core node settings available to agentic automation.")]
     public Task<NodeSettingsAgenticView> GetNodeSettingsAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_node_settings", [], () =>
             _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken));
 
-    [McpServerTool(Name = "update_node_settings")]
+    [McpServerTool(Name = "update_node_settings", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Apply a partial update to the exact restricted 18-field agentic node-settings whitelist.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,

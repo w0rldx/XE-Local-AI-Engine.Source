@@ -59,6 +59,8 @@ internal static class AddNodeMcpServerExtensions
                        transport.Stateless = true;
                    })
                    .AddAuthorizationFilters()
+                   // Argument validation + isError for every typed failure: see McpToolCallFilter.
+                   .WithRequestFilters(static filters => filters.AddCallToolFilter(McpToolCallFilter.Wrap))
                    // A per-host COPY of the SDK's default serializer options, not the shared static instance — see this method's
                    // remarks. Behavior-identical: same converters and type-info resolver as the default.
                    .WithTools<NodeAgentMcpTools>(toolJsonOptions)

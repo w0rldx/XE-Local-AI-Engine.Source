@@ -375,6 +375,7 @@ public static class ConfigureServices
         var isTestingEnvironment = builder.Environment.IsEnvironment("Testing");
         var authPermitLimit = isTestingEnvironment ? 10_000 : 10;
         var mcpPermitLimit = isTestingEnvironment ? 100_000 : 120;
+        var mcpAnonymousPermitLimit = isTestingEnvironment ? 100_000 : 20;
         var proxyPermitLimit = isTestingEnvironment ? 100_000 : 6_000;
 
         // The integration API's COARSE PER-IP ceiling, deliberately NOT IntegrationOptions.RateLimitPerMinute: that is the PER-PRINCIPAL budget,
@@ -403,14 +404,19 @@ public static class ConfigureServices
             // Inbound MCP. The 256-bit key is what makes guessing infeasible, not this: the cap bounds the attempt rate and turns a runaway client into a 429 rather than unbounded load.
             // Sized for real MCP traffic — a connect does tools/list, then a call per delegated task — which is why it is well above the auth endpoints'. Testing is relaxed like AuthPolicy.
             options.AddPolicy(NodeAuthRateLimits.McpPolicy, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+            {
+                // No bearer at all (an OAuth discovery probe) gets its own smaller bucket, so it cannot spend the key holder's (Q3, I-D7).
+                // This runs before authentication, so presenting a bearer, valid or not, is the split.
+                var presentsBearer = httpContext.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
+                return RateLimitPartition.GetFixedWindowLimiter((presentsBearer ? "bearer:" : "anonymous:") + GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions
                     {
                         AutoReplenishment = true,
-                        PermitLimit = mcpPermitLimit,
+                        PermitLimit = presentsBearer ? mcpPermitLimit : mcpAnonymousPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
-                    }));
+                    });
+            });
 
             // Inbound model proxy. NOT a key-guessing defense — a 256-bit key is uncrackable at any cap — so unlike a login throttle it must not shape legitimate inference traffic:
             // one client doing RAG indexing issues far more than the MCP surface does, so this bounds only a runaway client. Per-model compute is bounded by the loaded-cap and leases.

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using Microsoft.Extensions.AI;
+
 /// <summary>
 ///     A single tool-call lifecycle transition for an invocation. Carries the minimal shape the local chat stream
 ///     needs to surface <c>tool-call-requested</c> and <c>tool-call-completed</c> events: the requested phase fills
@@ -23,6 +25,12 @@ public sealed record ToolCallLifecyclePayload
     public string? Result { get; init; }
 
     public bool IsError { get; init; }
+
+    /// <summary>
+    ///     The binary blocks of a completed result (an MCP image, for instance), which <see cref="Result" /> names only by
+    ///     a placeholder. In-process only: never serialized onto the stream.
+    /// </summary>
+    public IReadOnlyList<DataContent> Media { get; init; } = [];
 }
 
 /// <summary>

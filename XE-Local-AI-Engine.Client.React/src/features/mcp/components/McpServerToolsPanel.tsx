@@ -1,4 +1,4 @@
-import { Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
+import { Badge, Code, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -63,7 +63,12 @@ export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {
 						}
 						data-testid="mcp-server-tools-connection-error"
 					>
-						{hasEngineDetail(toolsQuery.data.failureReason) ? <Text size="xs">{toolsQuery.data.error}</Text> : undefined}
+						{hasEngineDetail(toolsQuery.data.failureReason) ? (
+							// The engine's detail can carry a multi-line stderr tail; keep its line breaks and let it scroll.
+							<Code block={true} mah={240} style={{ overflow: "auto" }} data-testid="mcp-server-tools-connection-detail">
+								{toolsQuery.data.error}
+							</Code>
+						) : undefined}
 					</InlineErrorAlert>
 				) : null}
 

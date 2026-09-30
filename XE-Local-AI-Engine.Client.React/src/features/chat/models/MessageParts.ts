@@ -4,6 +4,7 @@ import type {
 	ChatNoticePart,
 	ChatReasoningPart,
 	ChatTextPart,
+	ChatToolImage,
 	ChatToolPart,
 	ToolCallState,
 } from "@/features/chat/models/ChatModels";
@@ -42,6 +43,7 @@ export interface ToolEntryInput {
 	// Set while an `ask_user` call waits on the operator's answer; the question payload the inline card renders and
 	// posts back. Cleared on the same terms as the approval prompt above.
 	pendingQuestion?: PendingUserQuestion;
+	images?: ChatToolImage[];
 }
 
 /** A mid-turn answer/narration run (rare for local models; here for forward-compat round-trips). */
@@ -78,6 +80,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		pendingApprovalSessionScopeEligible: entry.pendingApprovalSessionScopeEligible,
 		pendingWebReview: entry.pendingWebReview,
 		pendingQuestion: entry.pendingQuestion,
+		images: entry.images,
 	};
 }
 

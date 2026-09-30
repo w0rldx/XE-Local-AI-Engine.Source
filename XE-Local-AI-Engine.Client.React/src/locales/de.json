@@ -204,6 +204,7 @@
 			"resultLabel": "Ergebnis",
 			"errorLabel": "Fehler",
 			"noOutput": "(keine Ausgabe)",
+			"imageAlt": "Vom Tool {{tool}} zurückgegebenes Bild",
 			"approvalPrompt": "Dieses Tool benötigt deine Freigabe zur Ausführung.",
 			"approve": "Freigeben",
 			"deny": "Ablehnen",
@@ -261,7 +262,9 @@
 			"orchestrationDegraded": "Orchestrierung nicht verwendet",
 			"toolsFiltered": "Tools gefiltert",
 			"effortDispatched": "Reasoning-Aufwand aufgelöst",
-			"playbookWithheld": "Playbook zurückgehalten"
+			"playbookWithheld": "Playbook zurückgehalten",
+			"emptyAnswer": "Keine Antwort",
+			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"webReview": {
@@ -3591,10 +3594,12 @@
 					"trust": "Vertrauen",
 					"enabled": "Aktiviert",
 					"version": "Version",
-					"actions": "Aktionen"
+					"actions": "Aktionen",
+					"status": "Status"
 				},
 				"trustNotApplicable": "n. z.",
-				"title": "Registrierte Server"
+				"title": "Registrierte Server",
+				"reconnectAria": "{{name}} neu verbinden"
 			},
 			"editor": {
 				"createTitle": "MCP-Server registrieren",
@@ -3654,8 +3659,27 @@
 				},
 				"url": {
 					"label": "URL",
-					"description": "Nur Loopback (127.0.0.1 / localhost / ::1).",
-					"placeholder": "http://127.0.0.1:3001/sse"
+					"description": "Nur Loopback (127.0.0.1, localhost, ::1).",
+					"placeholder": "http://127.0.0.1:PORT/mcp"
+				},
+				"headers": {
+					"label": "Anfrage-Header",
+					"add": "Header hinzufügen",
+					"empty": "Keine Anfrage-Header.",
+					"keyPlaceholder": "Authorization",
+					"keyAria": "Name von Header {{index}}",
+					"valuePlaceholder": "Wert",
+					"valueAria": "Wert von Header {{index}}",
+					"remove": "Header {{index}} entfernen"
+				},
+				"sessionScope": {
+					"label": "Sitzung",
+					"sharedDescription": "Alle Unterhaltungen teilen sich eine Serversitzung.",
+					"perConversationDescription": "Jede Unterhaltung erhält eine eigene Serversitzung; Stdio-Server sind auf 4 begrenzt.",
+					"options": {
+						"Shared": "Gemeinsam",
+						"PerConversation": "Pro Unterhaltung"
+					}
 				},
 				"validation": {
 					"commandRequired": "Für den stdio-Transport ist ein Befehl erforderlich",
@@ -3686,7 +3710,13 @@
 					"Timeout": "Zeitüberschreitung beim Verbinden mit dem MCP-Server.",
 					"Transport": "Die Verbindung zum MCP-Server ist fehlgeschlagen oder wurde geschlossen.",
 					"Protocol": "Der MCP-Server hat den MCP-Handshake nicht abgeschlossen.",
-					"Authentication": "Der MCP-Server hat die Anmeldedaten abgelehnt, oder die TLS-Aushandlung ist fehlgeschlagen."
+					"Authentication": "Der MCP-Server hat die konfigurierten Anmeldedaten abgelehnt.",
+					"AuthenticationRequired": "Der MCP-Server verlangt eine Anmeldung, aber es sind keine Anmeldedaten konfiguriert. Füge der Registrierung einen Authorization-Header hinzu.",
+					"Forbidden": "Der MCP-Server hat den Zugriff mit den konfigurierten Anmeldedaten verweigert.",
+					"Tls": "Die TLS-Aushandlung mit dem MCP-Server ist fehlgeschlagen.",
+					"ServerExited": "Der MCP-Serverprozess wurde beendet.",
+					"SessionLost": "Der MCP-Server erkennt die Sitzung dieses Knotens nicht mehr; er wurde vermutlich neu gestartet.",
+					"ServerStartupFailed": "Der MCP-Server wurde beendet, bevor der MCP-Handshake abgeschlossen war."
 				}
 			},
 			"delete": {
@@ -3697,7 +3727,8 @@
 				"load": "MCP-Server konnten nicht geladen werden.",
 				"save": "Der MCP-Server konnte nicht gespeichert werden.",
 				"delete": "Der MCP-Server konnte nicht gelöscht werden.",
-				"enable": "Der Serverstatus konnte nicht geändert werden."
+				"enable": "Der Serverstatus konnte nicht geändert werden.",
+				"reconnect": "Der Server konnte nicht neu verbunden werden."
 			}
 		},
 		"scheduler": {

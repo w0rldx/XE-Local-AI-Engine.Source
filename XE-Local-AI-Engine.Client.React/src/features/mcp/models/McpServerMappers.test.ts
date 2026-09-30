@@ -29,6 +29,8 @@ function makeStdioResponse(
 		env: sampleEnvMap,
 		url: null,
 		trustTier: "Sandboxed",
+		headers: {},
+		sessionScope: "Shared",
 		enabled: false,
 		version: 1,
 		createdAtUtc: 1000,
@@ -49,7 +51,9 @@ const stdioForm: McpServerFormValues = {
 		{ key: "  ", value: "dropped-no-key" },
 	],
 	url: "http://127.0.0.1:3001/sse",
+	headers: [{ key: "Authorization", value: "dropped-for-stdio" }],
 	trustTier: "PrivilegedHost",
+	sessionScope: "PerConversation",
 };
 
 const httpForm: McpServerFormValues = {
@@ -61,8 +65,13 @@ const httpForm: McpServerFormValues = {
 	workingDirectory: "/leftover",
 	env: [{ key: "LEFT", value: "over" }],
 	url: "  http://localhost:4000/sse  ",
+	headers: [
+		{ key: "Authorization", value: "Bearer abc" },
+		{ key: " ", value: "dropped-no-name" },
+	],
 	// Deliberately privileged so the mapper's "inert for HTTP" normalization is asserted, not assumed.
 	trustTier: "PrivilegedHost",
+	sessionScope: "Shared",
 };
 
 describe("toMcpServerRegistration", () => {
@@ -100,6 +109,9 @@ describe("toSaveMcpServerRequest", () => {
 		expect(request.workingDirectory).toBe("/work");
 		expect(request.env).toEqual(tokenOnlyEnvMap);
 		expect(request.url).toBeNull();
+		// Headers only ever reach an HTTP server.
+		expect(request.headers).toEqual({});
+		expect(request.sessionScope).toBe("PerConversation");
 	});
 
 	it("builds an http save request: keeps loopback url, strips all stdio leftovers", () => {
@@ -111,6 +123,8 @@ describe("toSaveMcpServerRequest", () => {
 		expect(request.arguments).toEqual([]);
 		expect(request.workingDirectory).toBeNull();
 		expect(request.env).toEqual({});
+		expect(request.headers).toEqual({ Authorization: "Bearer abc" });
+		expect(request.sessionScope).toBe("Shared");
 	});
 });
 

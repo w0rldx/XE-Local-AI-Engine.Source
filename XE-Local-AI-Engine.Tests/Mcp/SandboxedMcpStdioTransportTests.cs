@@ -153,6 +153,223 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
+    public async Task ConnectAsync_BareCommandNotOnTheJailPath_ThrowsFileNotFoundNamingTheJailPath_BeforeAnySandboxExists()
+    {
+        // The live-round defect: a registration setting PATH skipped the pre-check entirely, and one without it was checked against
+        // THIS node's PATH, which the jail never sees, so an npm-installed server passed and then died silently inside the jail.
+        var provider = IsolatingProvider();
+        var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = $"xe-mcp-not-on-jail-path-{Guid.NewGuid():N}",
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PATH"] = Path.Combine(FixtureRoot, "no-such-dir")
+                }
+            },
+            provider);
+
+        var exception = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
+
+        AssertEx.Contains(exception.Message, Path.Combine(FixtureRoot, "no-such-dir"));
+        _ = await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ConnectAsync_BareCommandWithoutARegistrationPath_IsCheckedAgainstTheDefaultJailPath()
+    {
+        var provider = IsolatingProvider();
+        var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = $"xe-mcp-not-on-jail-path-{Guid.NewGuid():N}"
+            },
+            provider);
+
+        var exception = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
+
+        AssertEx.Contains(exception.Message, "/usr/bin:/bin");
+        _ = await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    [Test]
+    public void ResolveExecutablePath_LooksABareNameUpOnTheGivenSearchPath_NotOnTheEnginesPath()
+    {
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+
+            AssertEx.Equal(server, SandboxedMcpStdioTransport.ResolveExecutablePath("xe-server", directory.FullName));
+            AssertEx.Null(SandboxedMcpStdioTransport.ResolveExecutablePath("xe-server", Path.Combine(FixtureRoot, "no-such-dir")));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ConnectAsync_BareCommandOnTheRegistrationPath_ProceedsToTheSandbox()
+    {
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            _ = CreateExecutable(directory, "xe-server");
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null);
+            var provider = IsolatingProvider();
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = "xe-server",
+                    Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["PATH"] = directory.FullName
+                    }
+                },
+                provider);
+
+            await using var connected = await transport.ConnectAsync();
+
+            _ = await provider.ReceivedWithAnyArgs(1).CreateOrAttachAsync(default!, default);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ConnectAsync_AbsoluteCommand_IsNotAffectedByTheRegistrationPath()
+    {
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null);
+            var provider = IsolatingProvider();
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = server,
+                    Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["PATH"] = Path.Combine(FixtureRoot, "no-such-dir")
+                    }
+                },
+                provider);
+
+            await using var connected = await transport.ConnectAsync();
+
+            _ = await provider.ReceivedWithAnyArgs(1).CreateOrAttachAsync(default!, default);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ConnectAsync_TwoSessionsOfOneServer_RunInTheirOwnJails_AndClosingOneLeavesTheOtherAlive()
+    {
+        // The blocker: every session of a server derived the same attach key and execution id, so a per-conversation session attached
+        // the shared session's jail, the provider refused the duplicate execution id, and the failure path killed the shared jail.
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = CreateExecutable(directory, "xe-server")
+            };
+            var inFlight = new HashSet<(string SandboxId, string ExecutionId)>();
+            var killed = new List<string>();
+            var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+            provider.ProviderName.Returns("process");
+            provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+            // One jail per attach key, as the real provider attaches an existing jail by key.
+            provider.CreateOrAttachAsync(Arg.Any<SandboxCreateRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(call => Task.FromResult(new SandboxHandle
+                    {
+                        ProviderName = "process",
+                        SandboxId = call.Arg<SandboxCreateRequest>().AttachKey.RuntimeProfile,
+                        AttachKey = call.Arg<SandboxCreateRequest>().AttachKey,
+                        CreatedAt = DateTimeOffset.UnixEpoch,
+                        ManifestVersion = 1
+                    }));
+            // The real provider's rule: one in-flight execution per id per jail.
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(call => inFlight.Add((call.Arg<SandboxHandle>().SandboxId, call.Arg<SandboxCommandRequest>().ExecutionId))
+                        ? Task.FromResult<ISandboxInteractiveProcess>(new ScriptedInteractiveProcess(stderrTail: null))
+                        : throw new InvalidOperationException("Execution id already in flight for this sandbox."));
+            provider.KillAsync(Arg.Any<SandboxHandle>(), Arg.Any<CancellationToken>())
+                    .Returns(call =>
+                    {
+                        killed.Add(call.Arg<SandboxHandle>().SandboxId);
+                        return Task.CompletedTask;
+                    });
+
+            await using var shared = await CreateTransport(record, provider).ConnectAsync();
+            var conversation = await new SandboxedMcpStdioTransport(record,
+                provider,
+                IdentityProvider(),
+                NodeDataDirectory(),
+                Options.Create(new ComputeOptions()),
+                Options.Create(new LocalContainerOptions()),
+                NullLoggerFactory.Instance,
+                sessionKey: Guid.NewGuid().ToString("N")).ConnectAsync();
+
+            AssertEx.Equal(expected: 2, inFlight.Count);
+            AssertEx.Equal(expected: 2, inFlight.Select(static entry => entry.SandboxId).Distinct(StringComparer.Ordinal).Count());
+            AssertEx.Equal(expected: 2, inFlight.Select(static entry => entry.ExecutionId).Distinct(StringComparer.Ordinal).Count());
+            AssertEx.Equal(expected: 0, killed.Count, "starting the second session must not tear down the first");
+
+            await conversation.DisposeAsync();
+
+            var sharedPrefix = SandboxedMcpStdioTransport.RuntimeProfile + "-" + record.Id.ToString("N") + "-";
+            // The shared session carries no session key, so its identity is the shorter "<profile>-<record>-<instance>" form.
+            var sharedJail = inFlight.Select(static entry => entry.SandboxId).Where(id => id.StartsWith(sharedPrefix, StringComparison.Ordinal)).MinBy(static id => id.Length)!;
+            AssertEx.Equal(expected: 1, killed.Count);
+            AssertEx.False(killed.Contains(sharedJail, StringComparer.Ordinal), "closing a conversation session must leave the shared session's jail alive");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Handshake_WhenTheServerExitsBeforeSpeaking_ThrowsStartupExceptionCarryingTheStderrTail()
+    {
+        // The other half of the defect: stderr was discarded, so a server that died on startup surfaced as a generic Transport
+        // failure. The SDK fails the pending initialize with the transport channel's completion, which is where the tail goes.
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+            await using var process = new ScriptedInteractiveProcess("Error: Cannot find module 'server.js'");
+            var provider = IsolatingProvider();
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = server
+                },
+                provider);
+
+            using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var exception = await AssertEx.ThrowsAsync<McpServerStartupException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+
+            AssertEx.Equal("Error: Cannot find module 'server.js'", exception.StderrTail);
+            AssertEx.Contains(exception.Message, "Cannot find module");
+            await provider.ReceivedWithAnyArgs(1).KillAsync(default!, default);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     public async Task PrivilegedHostLaunch_OfAMissingCommand_FailsAsAnIOExceptionWrappingTheWin32Error()
     {
         // Pins the SDK shape McpServerConnectionManager classifies as ServerNotFound: StdioClientTransport wraps a failed
@@ -162,7 +379,7 @@ public sealed class SandboxedMcpStdioTransportTests
             Command = "/nonexistent/xe-mcp-missing-server"
         };
 
-        var exception = await AssertEx.ThrowsAsync<IOException>(() => CreateFactory().CreateAsync(record, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<IOException>(() => CreateFactory().CreateAsync(record, sessionKey: null, CancellationToken.None));
 
         AssertEx.True(exception.InnerException is System.ComponentModel.Win32Exception, $"expected a Win32Exception inner exception, got {exception.InnerException?.GetType().Name ?? "none"}");
     }
@@ -570,6 +787,66 @@ public sealed class SandboxedMcpStdioTransportTests
     {
         var path = Path.Combine(FixtureRoot, $"{prefix}{Guid.NewGuid():N}");
         return Directory.CreateDirectory(path);
+    }
+
+    private static IAgentSandboxRuntimeProvider IsolatingProvider()
+    {
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.ProviderName.Returns("process");
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+        provider.CreateOrAttachAsync(Arg.Any<SandboxCreateRequest>(), Arg.Any<CancellationToken>())
+                .Returns(call => Task.FromResult(new SandboxHandle
+                {
+                    ProviderName = "process",
+                    SandboxId = "sandbox",
+                    AttachKey = call.Arg<SandboxCreateRequest>().AttachKey,
+                    CreatedAt = DateTimeOffset.UnixEpoch,
+                    ManifestVersion = 1
+                }));
+        return provider;
+    }
+
+    private static SandboxedMcpStdioTransport CreateTransport(McpServerRecord record, IAgentSandboxRuntimeProvider provider)
+    {
+        return new SandboxedMcpStdioTransport(record,
+            provider,
+            IdentityProvider(),
+            NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLoggerFactory.Instance);
+    }
+
+    private static string CreateExecutable(DirectoryInfo directory, string name)
+    {
+        var path = Path.Combine(directory.FullName, name);
+        File.WriteAllText(path, "#!/bin/sh\n");
+        return path;
+    }
+
+    /// <summary>A server that has already exited: its stdout is at end of stream and its stderr tail is scripted.</summary>
+    private sealed class ScriptedInteractiveProcess : ISandboxInteractiveProcess
+    {
+        private readonly string? _stderrTail;
+
+        public ScriptedInteractiveProcess(string? stderrTail)
+        {
+            _stderrTail = stderrTail;
+        }
+
+        public Stream StandardInput { get; } = Stream.Null;
+
+        public Stream StandardOutput { get; } = new MemoryStream();
+
+        public Task<string?> GetStandardErrorTailAsync()
+        {
+            return Task.FromResult(_stderrTail);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 
     private static McpServerRecord StdioRecord(McpTrustTier tier)

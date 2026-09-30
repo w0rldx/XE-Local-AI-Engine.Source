@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -108,6 +109,49 @@ public sealed class McpAgentRunCoordinatorTests
 
         AssertEx.Equal(McpAgentRunStartKind.Existing, result.Kind);
         await harness.Resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
+        await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
+    }
+
+    // I-D11: an over-long task was a generic invalid_request that never named the bound.
+    [Test]
+    public async Task StartAsync_WhenTaskExceedsBound_RejectsTaskTooLargeNamingTheBound()
+    {
+        using var harness = new Harness();
+
+        var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest
+        {
+            RequestId = Guid.NewGuid(),
+            Task = new string('x', 32 * 1024 + 1),
+            Binding = new McpExecutionBindingRequest
+            {
+                ModelId = "model"
+            }
+        }, CancellationToken.None);
+
+        AssertEx.Equal(McpExecutionFailureCodes.TaskTooLarge, result.FailureCode!);
+        AssertEx.Contains(result.DisplayMessage, "32 KiB");
+        await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
+    }
+
+    // Q5 / I-D6: a durable run bound by a shared agent name is refused at admission.
+    [Test]
+    public async Task StartAsync_WhenAgentNameIsAmbiguous_RejectsAmbiguousName()
+    {
+        using var harness = new Harness();
+        harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
+               .Returns<McpExecutionBindingResolution>(_ => throw new AgentDefinitionAmbiguousNameException());
+
+        var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest
+        {
+            RequestId = Guid.NewGuid(),
+            Task = "inspect",
+            Binding = new McpExecutionBindingRequest
+            {
+                AgentKey = "Twin"
+            }
+        }, CancellationToken.None);
+
+        AssertEx.Equal(McpExecutionFailureCodes.AmbiguousName, result.FailureCode!);
         await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
     }
 

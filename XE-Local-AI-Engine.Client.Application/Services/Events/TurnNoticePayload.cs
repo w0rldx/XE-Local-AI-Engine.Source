@@ -98,5 +98,21 @@ public enum TurnNoticeKind
     ///     playbook is off or empty. <see cref="TurnNoticePayload.Detail" /> names the effective model, or for an
     ///     orchestration the affected participants' names — never memory content.
     /// </remarks>
-    PlaybookWithheld = 8
+    PlaybookWithheld = 8,
+
+    /// <summary>
+    ///     The model's last round produced neither text nor a tool call, so the turn ended without an answer.
+    /// </summary>
+    /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the provider's finish reason when it reported one.</remarks>
+    EmptyAnswer = 9,
+
+    /// <summary>
+    ///     Earlier tool calls and their results were not replayed to a CLOUD-hosted effective model.
+    /// </summary>
+    /// <remarks>
+    ///     Plain chat replays excerpts of earlier tool exchanges, which are node-local data, so they ride the same
+    ///     <c>KnowledgeBase:AllowCloudModelAccess</c> egress gate as attachments. <see cref="TurnNoticePayload.Detail" />
+    ///     names the model.
+    /// </remarks>
+    ToolHistoryWithheld = 10
 }

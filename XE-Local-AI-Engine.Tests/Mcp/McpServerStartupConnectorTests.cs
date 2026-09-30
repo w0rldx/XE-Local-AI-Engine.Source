@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Unit tests for the startup MCP connect. The connector exists to move the first
-///     <see cref="IMcpServerConnectionManager.RefreshAsync" /> off the hot path, and its contract is that a node still
+///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the hot path, and its contract is that a node still
 ///     starts when no MCP server can be reached — so the refresh-wide failure classes are swallowed and logged while
 ///     anything unexpected is left to escape rather than being silently absorbed.
 /// </summary>

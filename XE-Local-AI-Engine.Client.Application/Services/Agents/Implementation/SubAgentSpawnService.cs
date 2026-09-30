@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using System.ClientModel;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -222,7 +223,16 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonDepthExceeded);
         }
 
-        var resolution = await _mcpExecutionBindingResolver.ResolveAsync(request, ct);
+        McpExecutionBindingResolution resolution;
+        try
+        {
+            resolution = await _mcpExecutionBindingResolver.ResolveAsync(request, ct);
+        }
+        catch (AgentDefinitionAmbiguousNameException exception)
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.AmbiguousName, exception.Message);
+        }
+
         if (resolution.Binding is not { } mcpBinding)
         {
             return SpawnOutcome.Rejected(resolution.FailureCode ?? McpExecutionFailureCodes.InternalFailure, resolution.DisplayMessage);
@@ -287,8 +297,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
             using var session = workspace.Session;
             using var ambient = session?.EnterAmbientScope();
-            var content = await RunSubAgentAsync(binding, context, task, ct);
-            return SpawnOutcome.Success(content);
+            return await RunSubAgentForMcpAsync(binding, context, task, ct);
         }
         finally
         {
@@ -311,20 +320,19 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         using var session = workspace.Session;
         using var ambient = session?.EnterAmbientScope();
-        var timedOut = false;
-        var content = await _spawnSerializer.RunSerializedAsync(binding.ModelName,
+        // The serializer speaks strings; the typed outcome rides a local. It stays null only when the queue wait ran out.
+        SpawnOutcome? outcome = null;
+        _ = await _spawnSerializer.RunSerializedAsync(binding.ModelName,
             role,
             TimeSpan.FromSeconds(_options.QueueWaitSeconds),
-            innerCt => RunSubAgentAsync(binding, context, task, innerCt),
-            () =>
+            async innerCt =>
             {
-                timedOut = true;
+                outcome = await RunSubAgentForMcpAsync(binding, context, task, innerCt);
                 return string.Empty;
             },
+            static () => string.Empty,
             ct);
-        return timedOut
-            ? SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonQueueBusy)
-            : SpawnOutcome.Success(content);
+        return outcome ?? SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonQueueBusy);
     }
 
     private async Task<ResolvedBinding?> TryCreateResolvedMcpBindingAsync(McpExecutionBinding binding,
@@ -526,9 +534,67 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             ct);
     }
 
+    private Task<string> RunSubAgentAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
+    {
+        return RunSubAgentCoreAsync(binding,
+            context,
+            async (agent, innerCt) =>
+            {
+                // AsAIFunction forwards the outer ct into the inner run, so a cancelled parent cancels the child and an OCE propagates to the caller's loop: no
+                // swallow, no linked CTS (Spawn_PropagatesCancellationToInnerRun).
+                var arguments = new AIFunctionArguments(StringComparer.Ordinal)
+                {
+                    [InnerAgentInputKey] = task
+                };
+                var result = await agent.AsAIFunction().InvokeAsync(arguments, innerCt);
+                return result?.ToString() ?? string.Empty;
+            },
+            ct);
+    }
+
+    // The inbound MCP path runs the agent directly rather than as an AIFunction: only the full response shows an approval request the run stopped on,
+    // and an empty answer must not be reported as success (I-D12). A provider context-size 400 becomes a typed rejection (I-D16).
+    private async Task<SpawnOutcome> RunSubAgentForMcpAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
+    {
+        try
+        {
+            return await RunSubAgentCoreAsync(binding,
+                context,
+                async (agent, innerCt) => ToMcpOutcome(await agent.RunAsync(task, cancellationToken: innerCt)),
+                ct);
+        }
+        catch (ClientResultException exception) when (IsContextSizeExceeded(exception))
+        {
+            return SpawnOutcome.Rejected(McpExecutionFailureCodes.TaskTooLarge,
+                "Cannot run: the task does not fit the model's context window. Shorten the task and retry.");
+        }
+    }
+
+    private static SpawnOutcome ToMcpOutcome(AgentResponse response)
+    {
+        if (response.Messages.SelectMany(static message => message.Contents).Any(static content => content is ToolApprovalRequestContent))
+        {
+            return SpawnOutcome.Failed(McpExecutionFailureCodes.ApprovalRequired,
+                "The run stopped on a tool approval request that an inbound MCP run cannot answer.");
+        }
+
+        return string.IsNullOrWhiteSpace(response.Text)
+            ? SpawnOutcome.Failed(McpExecutionFailureCodes.NoAnswer, "The model finished without an answer.")
+            : SpawnOutcome.Success(response.Text);
+    }
+
+    // llama-server answers an over-long prompt with HTTP 400 "exceed_context_size_error"; its error type is specific enough on its own.
+    private static bool IsContextSizeExceeded(ClientResultException exception)
+    {
+        return exception.Message.Contains("exceed_context_size", StringComparison.Ordinal);
+    }
+
     // Builds the bound sub-agent (mirroring OrchestrationAgentFactory.BuildAgent's ChatClientAgent ctor) with the curated tool set the binding
-    // resolved — spawn_subagent already filtered out — then runs it as an AIFunction inside a child SpawnContext scope at Depth+1.
-    private async Task<string> RunSubAgentAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
+    // resolved — spawn_subagent already filtered out — then runs it inside a child SpawnContext scope at Depth+1.
+    private async Task<T> RunSubAgentCoreAsync<T>(ResolvedBinding binding,
+        SpawnContext context,
+        Func<ChatClientAgent, CancellationToken, Task<T>> run,
+        CancellationToken ct)
     {
         // Pin the child's OWN binding, as InvocationRunner pins the parent turn's, and scope it HERE, synchronously: an AsyncLocal seeded inside the async
         // helper would not survive its return, and pins stack. Why an unpinned child is wrong: docs/wiki/04-agent-mode.md ("What a profile-bound child inherits").
@@ -568,19 +634,10 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         var agent = new ChatClientAgent(_chatClient, agentOptions, _loggerFactory);
 
-        var function = agent.AsAIFunction();
-
-        // AsAIFunction forwards the outer ct into the inner run, so a cancelled parent cancels the child and an OCE propagates to the caller's loop: no
-        // swallow, no linked CTS (Spawn_PropagatesCancellationToInnerRun). BeginChildScope pushes Depth+1 WITHOUT re-seeding a root, then restores the parent.
-        var arguments = new AIFunctionArguments(StringComparer.Ordinal)
-        {
-            [InnerAgentInputKey] = task
-        };
-
+        // BeginChildScope pushes Depth+1 WITHOUT re-seeding a root, then restores the parent.
         using (context.BeginChildScope())
         {
-            var result = await function.InvokeAsync(arguments, ct);
-            return result?.ToString() ?? string.Empty;
+            return await run(agent, ct);
         }
     }
 }

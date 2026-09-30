@@ -31,6 +31,7 @@ public sealed class McpClientFactoryLoopbackTests
     [Arguments("http://localhost.evil.com/mcp")] // suffix-confusion
     [Arguments("http://127.0.0.1@evil.com/mcp")] // userinfo trick: host is evil.com
     [Arguments("http://localhost@evil.com/mcp")] // userinfo trick
+    [Arguments("http://user:secret@127.0.0.1/mcp")] // loopback, but userinfo would never authenticate and only leak
     [Arguments("http://127.0.0.2/mcp")] // rest of 127/8 is fail-closed (allowlist only has 127.0.0.1)
     [Arguments("http://localhost./mcp")] // trailing-dot host, fail-closed
     [Arguments("http://0.0.0.0/mcp")] // wildcard bind address is not a loopback host
@@ -45,7 +46,27 @@ public sealed class McpClientFactoryLoopbackTests
 
         // The non-loopback/host-confusion/malformed URL must be rejected synchronously (before McpClient.CreateAsync is
         // ever reached), so no outbound connection to a remote server can occur.
-        await AssertThrowsInvalidOperationAsync(() => factory.CreateAsync(record, CancellationToken.None));
+        await AssertThrowsInvalidOperationAsync(() => factory.CreateAsync(record, sessionKey: null, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task BuildHttpTransportOptions_CarriesTheConfiguredHeaders_AndNoneWhenUnset()
+    {
+        // O-D6: the only way to reach a protected server was a cleartext ?token= URL. The SDK copies AdditionalHeaders onto
+        // every POST, SSE GET and DELETE of the session, so the built options are the whole of what the credential rides on.
+        var factory = CreateFactory();
+        var withHeaders = HttpRecord("http://127.0.0.1:18912/mcp") with
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer abc123" }
+        };
+
+        var options = factory.BuildHttpTransportOptions(withHeaders);
+        var headers = AssertEx.NotNull(options.AdditionalHeaders);
+        AssertEx.Equal("Bearer abc123", headers["Authorization"]);
+        AssertEx.Equal(expected: 1, headers.Count);
+
+        AssertEx.Null(factory.BuildHttpTransportOptions(HttpRecord("http://127.0.0.1:18912/mcp")).AdditionalHeaders);
+        await Task.CompletedTask;
     }
 
     [Test]
@@ -63,7 +84,7 @@ public sealed class McpClientFactoryLoopbackTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
         {
-            await factory.CreateAsync(record, cts.Token);
+            await factory.CreateAsync(record, sessionKey: null, cts.Token);
         }
         catch (Exception ex)
         {
@@ -121,7 +142,8 @@ public sealed class McpClientFactoryLoopbackTests
         return ex is InvalidOperationException
                && (ex.Message.Contains("loopback host", StringComparison.Ordinal)
                    || ex.Message.Contains("http or https scheme", StringComparison.Ordinal)
-                   || ex.Message.Contains("absolute URL", StringComparison.Ordinal));
+                   || ex.Message.Contains("absolute URL", StringComparison.Ordinal)
+                   || ex.Message.Contains("must not carry userinfo", StringComparison.Ordinal));
     }
 
     private static McpClientFactory CreateFactory()

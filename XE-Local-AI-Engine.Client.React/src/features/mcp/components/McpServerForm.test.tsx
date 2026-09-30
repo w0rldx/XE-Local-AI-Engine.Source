@@ -57,7 +57,9 @@ function renderForm(onSubmit: (values: McpServerFormValues) => void) {
 			{ key: "REGION", value: "eu" },
 		],
 		url: "",
+		headers: [],
 		trustTier: "Sandboxed",
+		sessionScope: "Shared",
 	};
 
 	render(
@@ -134,9 +136,11 @@ describe("McpServerForm env row layout", () => {
 		renderForm(vi.fn());
 
 		expect(screen.getByRole("textbox", { name: "Variable 1 key" })).toBe(screen.getByTestId("mcp-form-env-key-0"));
-		expect(screen.getByRole("textbox", { name: "Variable 1 value" })).toBe(screen.getByTestId("mcp-form-env-value-0"));
+		// Values are password boxes (no textbox role), so they are reached by their label.
+		expect(screen.getByLabelText("Variable 1 value")).toBe(screen.getByTestId("mcp-form-env-value-0"));
 		expect(screen.getByRole("textbox", { name: "Variable 2 key" })).toBe(screen.getByTestId("mcp-form-env-key-1"));
-		expect(screen.getByRole("textbox", { name: "Variable 2 value" })).toBe(screen.getByTestId("mcp-form-env-value-1"));
+		expect(screen.getByLabelText("Variable 2 value")).toBe(screen.getByTestId("mcp-form-env-value-1"));
+		expect(screen.getByTestId("mcp-form-env-value-1").getAttribute("type")).toBe("password");
 		expect(screen.getByRole("button", { name: "Remove variable 2" })).toBeTruthy();
 	});
 });

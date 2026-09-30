@@ -127,6 +127,22 @@ describe("ToolCallCard", () => {
 		expect(screen.getByText("Result")).toBeTruthy();
 	});
 
+	it("renders an image the tool returned outside the collapsed body", () => {
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({
+					state: "received",
+					result: "[image image/png, 1 KB]",
+					images: [{ mediaType: "image/png", src: "data:image/png;base64,AQID" }],
+				})}
+			/>,
+		);
+
+		const image = screen.getByTestId("chat-tool-call-images-get_time").querySelector("img");
+		expect(image?.getAttribute("src")).toBe("data:image/png;base64,AQID");
+		expect(image?.getAttribute("alt")).toBe("Image returned by get_time");
+	});
+
 	it("pretty-prints JSON args and passes non-JSON through unchanged", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", args: '{"a":1}', result: "plain text" })} />);
 

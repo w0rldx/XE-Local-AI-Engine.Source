@@ -247,6 +247,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         var attachmentsAllowed = AreAttachmentsAllowed(resolution);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
+        if (!attachmentsAllowed && conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
+        {
+            await ReportToolHistoryWithheldAsync(resolution.EffectiveModel, requestId, cancellationToken);
+        }
 
         // Agent mode: when the offer includes the sandbox file tools, re-stage the sandbox with THIS conversation's
         // attachments BEFORE building the turn context, so the file tools see them under attachments/.
@@ -275,9 +279,17 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             runCancellation,
             cancellationToken);
 
+        // Earlier turns' tool calls are replayed (each result capped at the historical excerpt) so a follow-up can build on
+        // what the tools returned; they are node-local data, so a cloud model gets them only under the attachment gate.
         var package = await BuildRuntimePackageAsync(request,
             resolution,
-            ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
+            ConversationContextBuilder.Build(conversation,
+                userMessage,
+                selectedPath,
+                turnContext.Attachment,
+                turnContext.Image,
+                turnContext.Knowledge,
+                includeToolHistory: attachmentsAllowed),
             allowedTools,
             runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
             requestId);
@@ -491,6 +503,21 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             Kind = TurnNoticeKind.KnowledgeWithheld,
             Message =
                 "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+            Detail = effectiveModel
+        });
+    }
+
+    // Emits the ToolHistoryWithheld notice when earlier tool exchanges exist but a cloud model would receive them without
+    // the operator's opt-in. The turn still runs, just without that history.
+    private async Task ReportToolHistoryWithheldAsync(string? effectiveModel, Guid requestId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+        {
+            InvocationId = requestId,
+            Kind = TurnNoticeKind.ToolHistoryWithheld,
+            Message =
+                "Earlier tool results in this conversation were not sent because this message is handled by a cloud model. Enable cloud data access for this node to allow them to reach a cloud model.",
             Detail = effectiveModel
         });
     }

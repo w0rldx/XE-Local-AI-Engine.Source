@@ -1,9 +1,11 @@
-import { ActionIcon, Badge, Group, Switch, Table, Text } from "@mantine/core";
-import { IconPencil, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Loader, Stack, Switch, Table, Text } from "@mantine/core";
+import { IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { McpServerRegistration } from "@/features/mcp/models/McpServerModels";
+import { statusColor } from "@/features/mcp/models/McpStatusModel";
+import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
 
 interface McpServerListProps {
 	servers: readonly McpServerRegistration[];
@@ -11,12 +13,13 @@ interface McpServerListProps {
 	onEdit: (id: string) => void;
 	onDelete: (server: McpServerRegistration) => void;
 	onToggleEnabled: (server: McpServerRegistration, enabled: boolean) => void;
+	onReconnect: (server: McpServerRegistration) => void;
 }
 
 // Table of registered MCP servers with enable/disable, edit, and delete row actions. Pure presentation — the
 // parent owns the data and the action handlers. The enable switch is the strict-default gate surfaced per row:
 // a server is registered disabled and only connects once the user flips it on here.
-export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleEnabled }: McpServerListProps) {
+export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleEnabled, onReconnect }: McpServerListProps) {
 	const { t } = useTranslation();
 
 	if (servers.length === 0) {
@@ -38,6 +41,7 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 						<Table.Th>{t("pages.mcp.list.columns.target", "Target")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.trust", "Trust")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.enabled", "Enabled")}</Table.Th>
+						<Table.Th>{t("pages.mcp.list.columns.status", "Status")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.version", "Version")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.actions", "Actions")}</Table.Th>
 					</Table.Tr>
@@ -90,9 +94,23 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 									data-testid={`mcp-server-enabled-${server.id}`}
 								/>
 							</Table.Td>
+							<Table.Td>
+								<McpServerStatusCell server={server} />
+							</Table.Td>
 							<Table.Td>{server.version}</Table.Td>
 							<Table.Td>
-								<Group gap="xs">
+								<Group gap="xs" wrap="nowrap">
+									{server.enabled ? (
+										<ActionIcon
+											aria-label={t("pages.mcp.list.reconnectAria", "Reconnect {{name}}", { name: server.name })}
+											variant="subtle"
+											disabled={isMutating}
+											onClick={() => onReconnect(server)}
+											data-testid={`mcp-server-reconnect-${server.id}`}
+										>
+											<IconRefresh size={16} />
+										</ActionIcon>
+									) : null}
 									<ActionIcon
 										aria-label={t("pages.mcp.list.editAria", "Edit {{name}}", { name: server.name })}
 										variant="subtle"
@@ -119,5 +137,39 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 				</Table.Tbody>
 			</Table>
 		</Table.ScrollContainer>
+	);
+}
+
+// Live connection state for one row, read from the same tools query the Inspect panel uses (so the two never disagree and
+// share one cache entry). A disabled server is known to be disabled without asking the node.
+function McpServerStatusCell({ server }: { server: McpServerRegistration }) {
+	const { t } = useTranslation();
+	const toolsQuery = useMcpServerTools(server.enabled ? server.id : null);
+
+	if (!server.enabled) {
+		return (
+			<Badge size="sm" variant="light" color={statusColor("disabled")} data-testid={`mcp-server-status-${server.id}`}>
+				{t("pages.mcp.tools.status.disabled", "disabled")}
+			</Badge>
+		);
+	}
+
+	if (!toolsQuery.data) {
+		return toolsQuery.isLoading ? <Loader size="xs" /> : null;
+	}
+
+	const { status, failureReason } = toolsQuery.data;
+	return (
+		<Stack gap={2} maw={260}>
+			<Badge size="sm" variant="light" color={statusColor(status)} data-testid={`mcp-server-status-${server.id}`}>
+				{t(`pages.mcp.tools.status.${status}`, status)}
+			</Badge>
+			{status === "error" && failureReason ? (
+				// The short reason only; the full message and any stderr tail are in Inspect.
+				<Text size="xs" c="red" lineClamp={2} data-testid={`mcp-server-status-reason-${server.id}`}>
+					{t(`pages.mcp.tools.failure.${failureReason}`)}
+				</Text>
+			) : null}
+		</Stack>
 	);
 }

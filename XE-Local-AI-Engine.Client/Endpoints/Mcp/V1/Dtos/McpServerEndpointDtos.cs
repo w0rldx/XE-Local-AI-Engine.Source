@@ -35,6 +35,18 @@ public sealed class CreateMcpServerRequest
     ///     HTTP registration, which launches no process.
     /// </remarks>
     public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
+
+    /// <summary>
+    ///     HTTP request headers sent on every request of the session, for example <c>Authorization</c>. Encrypted at
+    ///     rest and returned masked. Rejected for a stdio registration.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>
+    ///     <c>Shared</c> (default): one session for every caller. <c>PerConversation</c>: each chat or agent
+    ///     conversation gets its own session, for a stateful server.
+    /// </summary>
+    public McpSessionScope SessionScope { get; init; } = McpSessionScope.Shared;
 }
 
 /// <summary>Update request for an MCP server. The id travels in the route; the body carries the new field values (no enabled).</summary>
@@ -67,6 +79,18 @@ public sealed class UpdateMcpServerRequest
     ///     HTTP registration, which launches no process.
     /// </remarks>
     public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
+
+    /// <summary>
+    ///     HTTP request headers sent on every request of the session, for example <c>Authorization</c>. Encrypted at
+    ///     rest and returned masked. Rejected for a stdio registration.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>
+    ///     <c>Shared</c> (default): one session for every caller. <c>PerConversation</c>: each chat or agent
+    ///     conversation gets its own session, for a stateful server.
+    /// </summary>
+    public McpSessionScope SessionScope { get; init; } = McpSessionScope.Shared;
 }
 
 public sealed class GetMcpServerRequest
@@ -96,11 +120,10 @@ public sealed class SetMcpServerEnabledRequest
 ///     Wire projection of a stored MCP server registration.
 /// </summary>
 /// <remarks>
-///     <see cref="TransportKind" /> and <see cref="TrustTier" /> serialize as their string names ("Stdio"/"Http",
-///     "Sandboxed"/"PrivilegedHost"/"BuiltInTrusted") via the globally registered <c>JsonStringEnumConverter</c>; the
-///     remaining fields serialize camelCase. Description and arguments are returned decrypted, being operator-authored
-///     text the settings form has to round-trip. <see cref="Env" /> is NOT: it is returned masked, because an
-///     environment map is where a stdio server's API keys live and there is no editing reason to read one back.
+///     Enums serialize as their string names via the global <c>JsonStringEnumConverter</c>, the rest camelCase.
+///     Description and arguments are returned decrypted for the settings form to round-trip. <see cref="Env" />,
+///     <see cref="Headers" /> and the credential-bearing parts of <see cref="Url" /> are returned masked: that is where a
+///     server's API keys live, and there is no editing reason to read one back.
 /// </remarks>
 public sealed class McpServerResponse
 {
@@ -134,10 +157,22 @@ public sealed class McpServerResponse
     /// </remarks>
     public required IReadOnlyDictionary<string, string> Env { get; init; }
 
+    /// <summary>
+    ///     The server URL with its userinfo and every query value masked (<c>?token=***</c>). Sending the masked form
+    ///     back on an update keeps the stored URL.
+    /// </summary>
     public string? Url { get; init; }
 
     /// <summary>How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>.</summary>
     public required McpTrustTier TrustTier { get; init; }
+
+    /// <summary>
+    ///     The configured HTTP header NAMES, each carrying <see cref="MaskedEnvironmentValue" /> in place of its value;
+    ///     a masked value sent back on an update keeps the stored one.
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> Headers { get; init; }
+
+    public required McpSessionScope SessionScope { get; init; }
 
     public required bool Enabled { get; init; }
 

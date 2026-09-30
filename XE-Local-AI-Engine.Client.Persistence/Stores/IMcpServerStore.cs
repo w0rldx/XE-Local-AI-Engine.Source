@@ -24,8 +24,8 @@ public interface IMcpServerStore
     /// </summary>
     /// <remarks>
     ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a connection-affecting field changed:
-    ///     transport, command, arguments, environment, url, or the enabled toggle — never Name/Description alone. A
-    ///     rejected save surfaces as <see cref="McpServerNameConflictException" />.
+    ///     transport, command, arguments, environment, url, headers, session scope, trust tier, or the enabled toggle —
+    ///     never Name/Description alone. A rejected save surfaces as <see cref="McpServerNameConflictException" />.
     /// </remarks>
     Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default);
 
@@ -39,6 +39,13 @@ public interface IMcpServerStore
     ///     enablement neither rewrites secret ciphertext nor double-bumps <c>Version</c> across an enable/disable cycle.
     /// </remarks>
     Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Persists <paramref name="slug" /> for the registration with <paramref name="id" /> when it has none yet.
+    ///     Returns <c>false</c> when no registration has that id or one is already assigned.
+    /// </summary>
+    /// <remarks>Touches neither <c>Version</c> nor the encrypted columns: a slug is naming, not connection config.</remarks>
+    Task<bool> AssignSlugAsync(Guid id, string slug, CancellationToken cancellationToken = default);
 
     /// <summary>Removes the registration with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
@@ -82,6 +89,11 @@ public sealed record McpServerInput
     public required McpTrustTier TrustTier { get; init; }
 
     public required bool Enabled { get; init; }
+
+    /// <summary>HTTP request headers, encrypted at rest; meaningless for a stdio server.</summary>
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    public McpSessionScope SessionScope { get; init; } = McpSessionScope.Shared;
 }
 
 /// <summary>

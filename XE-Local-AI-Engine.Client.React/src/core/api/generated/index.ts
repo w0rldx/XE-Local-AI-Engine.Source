@@ -3317,6 +3317,7 @@ export type {
 	XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel,
 	XeLocalAiEngineClientPersistenceEntitiesTrainingSampleProvenance,
 	XeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState,
+	XeLocalAiEngineClientPersistenceMcpSessionScope,
 	XeLocalAiEngineClientPersistenceMcpTransportKind,
 	XeLocalAiEngineClientPersistenceMcpTrustTier,
 	XeLocalAiEngineClientPersistenceMemoryScope,

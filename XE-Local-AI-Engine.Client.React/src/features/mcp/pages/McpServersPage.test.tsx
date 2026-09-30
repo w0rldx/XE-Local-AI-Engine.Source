@@ -30,6 +30,7 @@ const { hooksMock, confirmMock } = vi.hoisted(() => ({
 		useUpdateMcpServer: vi.fn(),
 		useDeleteMcpServer: vi.fn(),
 		useSetMcpServerEnabled: vi.fn(),
+		useReconnectMcpServer: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -59,7 +60,9 @@ const stdioServer: McpServerRegistration = {
 	workingDirectory: "/work",
 	env: [{ key: "TOKEN", value: "secret" }],
 	url: null,
+	headers: [],
 	trustTier: "Sandboxed",
+	sessionScope: "Shared",
 	enabled: false,
 	version: 1,
 	createdAtUtc: 1000,
@@ -118,6 +121,7 @@ describe("McpServersPage", () => {
 		hooksMock.useMcpServers.mockReturnValue({ data: [stdioServer], isLoading: false, error: null });
 		hooksMock.useMcpServerTools.mockReturnValue({ data: undefined, isLoading: false, error: null });
 		hooksMock.useCreateMcpServer.mockReturnValue(makeMutation());
+		hooksMock.useReconnectMcpServer.mockReturnValue(makeMutation());
 		hooksMock.useUpdateMcpServer.mockReturnValue(makeMutation());
 		hooksMock.useDeleteMcpServer.mockReturnValue(makeMutation());
 		hooksMock.useSetMcpServerEnabled.mockReturnValue(makeMutation());

@@ -29,12 +29,18 @@ export function useMcpServers() {
 	});
 }
 
-// Live discovered tools + connection status for one registered server. Disabled by default — the page enables
-// the query only when the per-server tools panel is expanded so it does not poke every server on list load.
+// Live discovered tools + connection status for one registered server; null disables the query. The endpoint reads the
+// connection manager's in-memory snapshot (it never connects), so the status column asks once per enabled row and
+// keeps the answer for a while; only a server still mid-connect is re-asked until it settles.
+const TOOLS_STALE_TIME_MS = 30_000;
+const CONNECTING_REFETCH_MS = 2_000;
+
 export function useMcpServerTools(id: string | null) {
 	return useQuery({
 		...withResponseValidation(getMcpServerToolsOptions({ path: { mcpServerId: id ?? "" } })),
 		enabled: id !== null,
+		staleTime: TOOLS_STALE_TIME_MS,
+		refetchInterval: (query) => (query.state.data?.status === "connecting" ? CONNECTING_REFETCH_MS : false),
 		select: toMcpServerToolsView,
 	});
 }
@@ -43,10 +49,16 @@ function invalidateServersList(queryClient: ReturnType<typeof useQueryClient>): 
 	return queryClient.invalidateQueries({ queryKey: listMcpServersQueryKey() });
 }
 
+// Every server's live status, whatever its id: the generated key is [{ _id, path }], so match on the discriminator.
+function isServerToolsQuery(query: { queryKey: readonly unknown[] }): boolean {
+	return (query.queryKey[0] as { _id?: unknown } | undefined)?._id === "getMcpServerTools";
+}
+
 async function invalidateServersAndCatalog(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	await Promise.all([
 		invalidateServersList(queryClient),
 		queryClient.invalidateQueries({ queryKey: toolCatalogQueryKeys.all() }),
+		queryClient.invalidateQueries({ predicate: isServerToolsQuery }),
 	]);
 }
 
@@ -98,6 +110,23 @@ export function useSetMcpServerEnabled() {
 		mutationFn: ({ id, enabled }: SetMcpServerEnabledVariables): Promise<SetMcpServerEnabledResponse> =>
 			options.mutationFn?.(
 				{ path: { mcpServerId: id }, body: { enabled } },
+				undefined as never,
+			) as Promise<SetMcpServerEnabledResponse>,
+		onSuccess: () => invalidateServersAndCatalog(queryClient),
+	});
+}
+
+// Reconnect = enable an already-enabled server: the backend treats that as "drop and re-open this server's session"
+// without a store write or Version bump.
+export function useReconnectMcpServer() {
+	const queryClient = useQueryClient();
+
+	const options = withResponseValidation(setMcpServerEnabledMutation());
+
+	return useMutation({
+		mutationFn: (id: string): Promise<SetMcpServerEnabledResponse> =>
+			options.mutationFn?.(
+				{ path: { mcpServerId: id }, body: { enabled: true } },
 				undefined as never,
 			) as Promise<SetMcpServerEnabledResponse>,
 		onSuccess: () => invalidateServersAndCatalog(queryClient),

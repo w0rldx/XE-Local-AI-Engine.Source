@@ -2,14 +2,18 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
+using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -160,9 +164,99 @@ public sealed class McpInboundProtocolTests
         AssertEx.Equal(requestId, admitted.Binding.ExecutionRequestId);
     }
 
+    // I-D1/I-D2: bad arguments were an opaque "An error occurred invoking" plus an ERR stack trace, and a wrong
+    // spelling (model_override on run_agent, modelOverride on start_agent_run) was silently dropped.
+    [Test]
+    public async Task StreamableHttpSdk_BadArguments_AreTypedInvalidArgumentsNamingTheParameter()
+    {
+        var coordinator = new FakeMcpAgentRunCoordinator();
+        await using var factory = CreateFactory(coordinator, new FakeSelectedFolderResolver());
+        await using var client = await CreateClientAsync(factory);
+
+        var unknown = await client.CallToolAsync("start_agent_run",
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = Guid.NewGuid().ToString("D"),
+                ["task"] = "inspect",
+                ["agent"] = "Coder",
+                ["modelOverride"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
+            });
+        var wrongType = await client.CallToolAsync("get_agent_run",
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = 5
+            });
+        var missing = await client.CallToolAsync("get_agent_run");
+
+        AssertEx.Contains(AssertTypedFailure(unknown, "invalid_arguments"), "Unknown argument 'modelOverride'");
+        AssertEx.Contains(AssertTypedFailure(wrongType, "invalid_arguments"), "Argument 'request_id' must be string");
+        AssertEx.Equal("Missing required argument 'request_id'.", AssertTypedFailure(missing, "invalid_arguments"));
+        AssertEx.Null(coordinator.LastStartRequest, "A rejected call must never reach the tool.");
+    }
+
+    // I-D3/I-D9: every failure is isError with snake_case failure_code; success stays isError false.
+    [Test]
+    public async Task StreamableHttpSdk_TypedFailures_SetIsErrorWithSnakeCaseFailureCode()
+    {
+        await using var factory = CreateFactory(new FakeMcpAgentRunCoordinator(), new FakeSelectedFolderResolver(), McpServerApiKeyScope.Agentic);
+        await using var client = await CreateClientAsync(factory);
+
+        var badId = await client.CallToolAsync("cancel_agent_run",
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = "bad"
+            });
+        var adminMissing = await client.CallToolAsync("get_agent",
+            new Dictionary<string, object?>
+            {
+                ["agent_id"] = Guid.NewGuid().ToString("D")
+            });
+        var ok = await client.CallToolAsync("list_workspaces");
+
+        _ = AssertTypedFailure(badId, "invalid_request");
+        AssertEx.Contains(GetText(badId), "\"status\":\"invalid_request\"");
+        _ = AssertTypedFailure(adminMissing, "agent_not_found");
+        AssertEx.False(GetText(adminMissing).Contains("failureCode", StringComparison.Ordinal), "Admin tools must use the snake_case failure shape.");
+        AssertEx.False(ok.IsError ?? false);
+    }
+
+    // Review 2026-09-30: the filter parsed run_agent's free model output, so an answer that was JSON with a top-level failure_code
+    // came back isError. Driven over the real client, so the wire shape (no internal _meta marker) is what is asserted.
+    [Test]
+    public async Task StreamableHttpSdk_RunAgentAnswerThatLooksLikeATypedFailure_IsNotFlaggedAsError()
+    {
+        const string answer = "{\"failure_code\":\"not_a_real_failure\",\"display_message\":\"the model wrote this\"}";
+        var execution = Substitute.For<IMcpAgentExecutionService>();
+        execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>(), Arg.Any<Guid?>())
+                 .Returns(SpawnOutcome.Success(answer));
+        await using var factory = CreateFactory(new FakeMcpAgentRunCoordinator(), new FakeSelectedFolderResolver(), execution: execution);
+        await using var client = await CreateClientAsync(factory);
+
+        var result = await client.CallToolAsync("run_agent",
+            new Dictionary<string, object?>
+            {
+                ["task"] = "answer in JSON",
+                ["model"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
+            });
+
+        AssertEx.False(result.IsError ?? false, $"free model output is a successful call: {GetText(result)}");
+        AssertEx.Equal(answer, GetText(result));
+        AssertEx.False(result.Meta?.ContainsKey(McpToolResults.FreeTextMetaKey) ?? false, $"the internal free-text marker must not reach the wire: {result.Meta?.ToJsonString()}");
+    }
+
+    // Returns the decoded display_message: the wire JSON escapes quotes (\u0027), so a raw substring check would test the encoder.
+    private static string AssertTypedFailure(CallToolResult result, string failureCode)
+    {
+        AssertEx.True(result.IsError ?? false, $"Expected isError for {GetText(result)}");
+        using var body = JsonDocument.Parse(GetText(result));
+        AssertEx.Equal(failureCode, body.RootElement.GetProperty("failure_code").GetString()!);
+        return body.RootElement.GetProperty("display_message").GetString()!;
+    }
+
     private static TestServerWebAppFactory CreateFactory(FakeMcpAgentRunCoordinator coordinator,
         FakeSelectedFolderResolver workspaces,
-        McpServerApiKeyScope scope = McpServerApiKeyScope.Delegate)
+        McpServerApiKeyScope scope = McpServerApiKeyScope.Delegate,
+        IMcpAgentExecutionService? execution = null)
     {
         return new TestServerWebAppFactory
         {
@@ -174,6 +268,11 @@ public sealed class McpInboundProtocolTests
                 services.AddSingleton<IMcpAgentRunCoordinator>(coordinator);
                 services.RemoveAll<ISelectedFolderResolver>();
                 services.AddSingleton<ISelectedFolderResolver>(workspaces);
+                if (execution is not null)
+                {
+                    services.RemoveAll<IMcpAgentExecutionService>();
+                    services.AddSingleton(execution);
+                }
             }
         };
     }

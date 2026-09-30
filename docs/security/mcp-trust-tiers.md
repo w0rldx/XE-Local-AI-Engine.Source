@@ -24,8 +24,8 @@ The workload is declared once, as an engine-owned constant, per ADR 0007 Decisio
 `SandboxWorkloads.McpStdio` — `Toolchain = HostToolchain`, `IsolationFloor = Filesystem`, `NetworkFloor = None`,
 `RequestsResourceLimits = false`, `Persistence = Disposable`.
 
-**Which backend it resolves to.** `HostToolchain` is what an MCP server needs — `npx`, `uvx`, a compiled binary the
-operator installed — so a container backend can never serve it (`SandboxProviderSelector.FindUnmetAxis` rejects on the
+**Which backend it resolves to.** `HostToolchain` is what an MCP server needs — a host-installed binary or script the
+operator put there — so a container backend can never serve it (`SandboxProviderSelector.FindUnmetAxis` rejects on the
 toolchain axis before anything else). Minimal-satisfying resolution therefore lands on the **process backend**, and
 `SandboxSubstrateSelectionArchitectureTests` asserts that as an enumeration rather than as a comment.
 
@@ -44,6 +44,15 @@ when one is set. Those two are where a stdio server's package files actually liv
 and both are already on the registration, so nothing new is asked of the operator and nothing is derived from a
 repository. The **working directory is the jail**, not the configured path: the configured path is bound read-only
 because a third-party server has no reason to write into the tree it was installed from.
+
+**Sandboxed is for self-contained servers.** Only those two trees are bound. The chain does **not** follow the command
+further: the target of a symlinked command (an npm `bin/` shim pointing into `../lib/node_modules`) is not bound, the
+interpreter a script's shebang names (`node`, a venv's `python`) is not bound unless it lives under `/usr`, and the
+jail's `PATH` is `/usr/bin:/bin` (`SandboxIsolatedChain.SandboxPath`), not this node's. A server works at this tier
+when its executable and everything it loads sit in the command's directory, the working directory, or `/usr`: a static
+or single-file binary, or a script run by a `/usr/bin` interpreter with its code in the working directory. **Servers
+installed through npm, npx, uv, uvx, mise, nvm or a venv generally need `PrivilegedHost`**; binding their link targets
+and interpreters is a deliberate non-goal of this tier.
 
 **Neither tree may cover a sensitive host root.** Both go through one gate
 (`SandboxedMcpStdioTransport.AddBindableTree`), and a tree that **equals or contains** any of the following is
@@ -88,8 +97,16 @@ Every failed status also carries `McpServerConnectionStatus.FailureReason` (`fai
 which the settings page words in the operator's language. A sandbox failure is `SandboxUnavailable` when this node
 cannot isolate at all and `SandboxRefused` when it can but refused this registration (a denied root) or could not
 establish the boundary or launch the chain. A command that does not exist is `ServerNotFound` on both tiers: the
-`PrivilegedHost` launch fails in `Process.Start`, and the `Sandboxed` transport checks the command against the `PATH`
-the jail inherits before any sandbox is created, since inside the jail it would only be an early exit. `Timeout`,
+`PrivilegedHost` launch fails in `Process.Start`, and the `Sandboxed` transport checks the command against the
+**jail's** `PATH` before any sandbox is created, since inside the jail it would only be an early exit. That `PATH` is
+`/usr/bin:/bin`, or the registration's own `PATH` variable when it sets one (the chain applies it last, so it replaces
+the default rather than extending it); this node's `PATH` never reaches the jail. A bare command not found there fails
+with a message naming the jail `PATH`; an absolute command is checked as-is.
+
+A server that starts and then exits before answering the handshake — the usual shape of a missing module or
+interpreter — raises `McpServerStartupException` from the transport. It carries the last 20 lines (at most 2 KB) the
+server wrote to `stderr`, with every configured environment value of 8 characters or more replaced by `[REDACTED]`;
+`ProcessSandboxRuntimeProvider` still drains `stderr` continuously so a chatty server cannot block on a full pipe. `Timeout`,
 `Transport`, `Protocol`, `Authentication` and `Unknown` cover the rest with one fixed wording each; on every reason
 the exception itself is logged at Warning and never reaches the UI.
 
@@ -145,4 +162,5 @@ column name `env`, and decrypted on materialization — the same pattern the cus
 Responses also **mask values on the way out**: the
 `McpServerResponse.Env` map returns each configured key with a fixed placeholder value instead of the secret, and an
 update that sends the placeholder back keeps the stored value. A secret that only ever travels inbound cannot be read
-back out of the node by anything holding a session.
+back out of the node by anything holding a session. An HTTP registration's `HeadersJson` follows the same pattern
+(AAD column name `headers`, masked in responses); see [Security & Privacy §7.2](../wiki/12-security-and-privacy.md#72-outbound-mcp-servers-run-under-a-declared-trust-tier).

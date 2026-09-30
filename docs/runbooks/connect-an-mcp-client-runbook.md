@@ -61,6 +61,31 @@ form. The exact route is **`mcp/server-key`**.
 
 Use `XE_MCP_URL` for the endpoint and load the key into the client-specific secret variable below.
 
+### Development host (Aspire)
+
+A source checkout started through the Aspire AppHost is not a local launch mode: it serves an **https**
+origin with the self-signed ASP.NET Core development certificate beside a plain-http origin, and both
+ports change on every restart. Take the MCP URL from the `endpointUrl` field that `mcp/server-key`
+returns (GET status or POST generate); it is built from the request that reached the endpoint and is
+the https origin. Do not use the http origin: it answers every request, MCP POSTs included, with a
+**307** to the https port. Clients mishandle that cross-port redirect — Claude Code follows it but
+drops the `Authorization` header and then reports the valid key as rejected (401); Codex and the
+Python SDK refuse a redirect to another origin. The `--mcp-only` launch serves plain http on loopback
+and is not affected.
+
+The development certificate is not trusted by default, and it is issued with `CA:FALSE`, which
+decides the client-side knobs (verified live):
+
+- **Claude Code:** `NODE_EXTRA_CA_CERTS` pointing at the exported certificate does **not** work
+  (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`). Start the client with `NODE_TLS_REJECT_UNAUTHORIZED=0` for
+  this development connection only; it disables certificate verification for the whole process. A
+  project `.mcp.json` shows "Pending approval" in `claude mcp list`/`claude mcp get` until it is
+  approved in an interactive session; for a non-interactive check use
+  `claude -p --mcp-config .mcp.json --strict-mcp-config`, which needs no approval.
+- **Codex CLI:** export the certificate the https origin serves as PEM (for example with
+  `openssl s_client`) and start Codex with `SSL_CERT_FILE=<that file>`. Codex refuses the http
+  origin's redirect ("redirect to a different origin is not allowed").
+
 ## 4. Configure Codex CLI
 
 Codex reads `~/.codex/config.toml` (or trusted-project `.codex/config.toml`). Load the key into
@@ -233,9 +258,21 @@ Source: [official Gemini CLI MCP documentation](https://geminicli.com/docs/tools
 4. Walk the core administration path: `get_runtime_status`; if needed
    `start_runtime_acquisition`/`get_runtime_acquisition`; then
    `start_model_pull`/`get_model_pull`; `set_default_model`; and finally `run_agent` or the durable
-   lifecycle.
+   lifecycle. A non-null `overrideVariant` means an operator-supplied llama-server override is the
+   runtime every launch uses: skip acquisition even when no installed tag is reported.
+   `installedIsSourceBuild` marks an installed runtime built from source on the node.
 5. For durable work, generate a canonical UUID, call `start_agent_run`, and poll `get_agent_run`.
    Reusing the same UUID with different scope or inputs is a conflict, not a second run.
+
+Failures come back as tool results with `isError: true` whose JSON carries snake_case
+`failure_code` and `display_message`, for agent and admin tools alike. Arguments are checked against
+each tool's input schema first: an unknown argument name, a wrong JSON type or a missing required
+argument is `invalid_arguments` naming the parameter, never silently dropped. The two run tools spell
+the override differently (`run_agent` takes `modelOverride`, `start_agent_run` takes
+`model_override`), `task` is bounded to 32 KiB of UTF-8 (`task_too_large`, also returned when a task
+overflows the model's context at run time), and an agent name shared by several agents is
+`ambiguous_name` (use the id). The [tool reference](../../skills/xe-local-ai-engine/references/mcp-tools.md)
+lists every code.
 
 A durable agentic run admitted before key rotation keeps the authority captured in its durable row.
 Cancel it explicitly if it should no longer execute.
@@ -261,8 +298,11 @@ or Tailscale path separately; the engine still authenticates the MCP bearer key.
 
 | symptom | meaning and action |
 |---|---|
-| `401` | Missing, malformed, rotated, or revoked key. Load the current key and reconnect. |
+| `401` | Missing, malformed, rotated, or revoked key: load the current key and reconnect. Also seen with a valid key when the client followed a redirect and dropped the header (the development host's http origin; use the https `endpointUrl`). A client configured without an `Authorization` header gets the bearer challenge and may start an OAuth discovery / dynamic client registration attempt, which this node does not offer; configure the header instead. |
 | `403` | Loopback peer/Host/Origin gate failed. Use the exact local or tunnel endpoint; do not widen the listener. |
+| `405` / `415` | The endpoint accepts only `POST` with `Content-Type: application/json`; another verb is 405 (`Allow: POST`), another body type 415. Both are answered before authentication. |
+| `429` | Rate limit: 120 requests per minute for requests that present a bearer header, and a separate 20 per minute for requests without one, so discovery probes cannot spend a key holder's budget. Wait for the window (`Retry-After`). |
+| `invalid_arguments` | An argument name, type or required argument does not match the tool's schema; the message names the parameter. Check the override spelling for the tool you called. |
 | Only 8 tools appear | The key is `delegate`, or the client cached the previous catalog. Mint `agentic`, update the secret, reconnect, and refresh tools. |
 | Agentic approval-required call fails before side effects | Strict metadata-only audit persistence failed. Repair node storage/logging health; the call is intentionally fail-closed. |
 | `run_agent` times out | Raise the client timeout or use `start_agent_run` and poll. |
@@ -271,5 +311,6 @@ or Tailscale path separately; the engine still authenticates the MCP bearer key.
 | `workspace_not_authorized` | Refresh `list_workspaces` and use an active opaque id only with the seeded Coder. Never send a host path. |
 | `--status --json` exits 1 | PID/readiness/auth-status evidence does not describe a live healthy process. Restart MCP-only mode and inspect `ready.json`. |
 
-Client syntax was rechecked against the linked official pages on 2026-08-22. Recheck after client
+Client syntax was rechecked against the linked official pages on 2026-08-22; the development-host
+knobs were verified live with Claude Code and Codex CLI on 2026-09-30. Recheck after client
 upgrades because these formats evolve independently of the engine.

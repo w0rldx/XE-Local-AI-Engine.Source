@@ -56,6 +56,10 @@ public sealed class AddMcpServersMigrationTests : IDisposable
             // Added by AddMcpServerTrustTier. Defaulted to 0 (Sandboxed), so every pre-existing registration
             // migrates INTO the sandbox boundary rather than being grandfathered outside it.
             "trust_tier",
+            // Added by AddMcpServerSlugSessionScopeHeaders: encrypted HTTP headers, the persisted tool-name slug and the session scope.
+            "headers",
+            "slug",
+            "session_scope",
             "enabled",
             "version",
             "created_at_utc",

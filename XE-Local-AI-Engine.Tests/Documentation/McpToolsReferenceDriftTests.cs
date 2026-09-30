@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Documentation;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
+using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -38,6 +39,41 @@ public sealed partial class McpToolsReferenceDriftTests
                                     .Order()
                                     .ToArray();
         AssertEx.Empty(wrongScopes, $"Documented MCP tool scopes are wrong: {string.Join("; ", wrongScopes)}");
+    }
+
+    // I-D10: no tool declared annotations, so clients could not tell a read from a delete. Every tool now states all four hints.
+    [Test]
+    public void EveryInboundTool_DeclaresReadOnlyDestructiveIdempotentAndOpenWorldHints()
+    {
+        var tools = new[] { typeof(NodeAgentMcpTools), typeof(NodeAdminMcpTools) }
+                    .SelectMany(static type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+                    .Where(static method => method.GetCustomAttribute<McpServerToolAttribute>() is not null)
+                    .Select(static method => McpServerTool.Create(method, static _ => null!, new McpServerToolCreateOptions()).ProtocolTool)
+                    .ToArray();
+        AssertEx.Equal(25, tools.Length, "Refusing a vacuous annotation pass.");
+
+        var undeclared = tools
+                         .Where(static tool => tool.Annotations is not { ReadOnlyHint: not null, DestructiveHint: not null, IdempotentHint: not null, OpenWorldHint: not null })
+                         .Select(static tool => tool.Name)
+                         .Order(StringComparer.Ordinal)
+                         .ToArray();
+
+        AssertEx.Empty(undeclared, $"Inbound MCP tools without all four annotations: {string.Join(", ", undeclared)}");
+    }
+
+    // The contract facts a client cannot discover from tools/list alone: both override spellings, the task bound and the typed codes.
+    [Test]
+    public void McpToolsReference_DocumentsSpellingsBoundsAndFailureCodes()
+    {
+        var referenceText = File.ReadAllText(RepositoryPaths.Combine("skills", "xe-local-ai-engine", "references", "mcp-tools.md"));
+        var runAgent = typeof(NodeAgentMcpTools).GetMethod(nameof(NodeAgentMcpTools.RunAgentAsync))!.GetParameters().Select(static parameter => parameter.Name);
+        var startRun = typeof(NodeAgentMcpTools).GetMethod(nameof(NodeAgentMcpTools.StartAgentRunAsync))!.GetParameters().Select(static parameter => parameter.Name);
+
+        AssertEx.True(runAgent.Contains("modelOverride") && startRun.Contains("model_override"), "The documented override spellings no longer match the tools.");
+        foreach (var fact in new[] { "`modelOverride`", "`model_override`", $"{new McpAgentRunOptions().MaxTaskUtf8Bytes / 1024} KiB", "`invalid_arguments`", "`task_too_large`", "`ambiguous_name`", "`no_answer`", "`approval_required`" })
+        {
+            AssertEx.Contains(referenceText, fact);
+        }
     }
 
     [Test]

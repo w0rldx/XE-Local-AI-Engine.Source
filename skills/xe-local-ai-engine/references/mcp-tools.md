@@ -10,13 +10,13 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 | `list_agents` | delegate | List saved agents by id, name, and description. | — |
 | `list_models` | delegate | List installed models with local identity, size, kind, and whether each is the current default. | — |
 | `list_workspaces` | delegate | List authorized read-only workspaces as opaque ids and aliases. | — |
-| `run_agent` | delegate | Run one bounded task synchronously. | `task`; exactly one of `agent`/`model`; optional model override, system prompt, workspace id. |
-| `start_agent_run` | delegate | Accept a durable background run and return immediately. | Caller-generated UUID `request_id`; `task`; exactly one of `agent`/`model`; optional overrides/workspace. |
+| `run_agent` | delegate | Run one bounded task synchronously; reports progress every 15 s while generating. | `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `modelOverride` (this spelling), `instructions`, `workspace_id`. |
+| `start_agent_run` | delegate | Accept a durable background run and return immediately. | Caller-generated UUID `request_id`; `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `model_override` (this spelling), `instructions`, `workspace_id`. |
 | `get_agent_run` | delegate | Poll a background run by `request_id`. | Durable across MCP disconnects and restarts. |
 | `cancel_agent_run` | delegate | Durably request cancellation by `request_id`. | Lifecycle races return structured results. |
 | `list_agent_runs` | delegate | List bounded, content-free lifecycle metadata. | Optional bounded `limit` and lifecycle `status`. |
 | `get_status` | agentic | Get version, uptime, default model, and loaded llama.cpp process count. | — |
-| `get_runtime_status` | agentic | Read installed/recommended runtime versions and update/offline state. | Cache-only; does not refresh the remote catalog. |
+| `get_runtime_status` | agentic | Read installed/recommended runtime versions, update/offline state, an active override (`overrideVariant`) and whether the install is a source build. | Cache-only; does not refresh the remote catalog. A non-null `overrideVariant` needs no acquisition. |
 | `start_runtime_acquisition` | agentic | Start managed llama.cpp runtime acquisition. | Optional `variant`: `cpu`, `cuda`, or `vulkan`. |
 | `get_runtime_acquisition` | agentic | Poll sanitized runtime acquisition progress. | — |
 | `start_model_pull` | agentic | Start or rejoin a background GGUF pull. | `repo_id`; optional `file_name`, `quant`, `revision`, `include_projector` (default `true`; `false` installs the weights only, which is what makes a vision-capable repo judge-eligible). |
@@ -33,6 +33,26 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 | `list_workflow_runs` | agentic | List development workflow runs, one row per work item's latest run, as bounded lifecycle metadata. | Optional bounded `limit` and run `status`. Read-only. |
 | `get_workflow_run` | agentic | Get one workflow run's status, node tallies, terminal reason, and per-node rows. | `run_id`. Read-only; no graph, artifacts, transcripts, or host paths. |
 
+## Errors and arguments
+
+- Every failure is a tool result with `isError: true` whose JSON carries snake_case `failure_code` and
+  `display_message`; agent and admin tools share this shape. A top-level `failure_code` always means the CALL
+  failed. A successful `get_agent_run` of a run that itself failed, or whose result expired, is not an error: the
+  run's own `failure_code` (`result_expired` for an expired payload) sits inside `run.metadata` and the top level
+  stays clear; `start_agent_run` on an existing expired run answers the same way. Success results never carry one.
+  `run_agent`'s answer is the model's own text and is never read as a typed failure, even when it is JSON.
+- Arguments are checked against the advertised input schema before the tool runs. An unknown argument name, a
+  wrong JSON type or a missing required argument returns `invalid_arguments` naming the parameter; nothing is
+  silently ignored. The two run tools spell the override differently on purpose (`run_agent` takes
+  `modelOverride`, `start_agent_run` takes `model_override`); the other spelling is rejected, not dropped.
+- `task` is bounded to 32 KiB and `instructions` to 16 KiB of UTF-8 on both run tools (`task_too_large`); a task that still overflows the
+  model's context window at run time is also `task_too_large`.
+- Agent names are not unique. `get_agent`, `update_agent`, `delete_agent` and a run's `agent` resolve an exact
+  name only when exactly one agent has it; otherwise `ambiguous_name` — use the id.
+- An agentic run that ends without text is `no_answer`; one that stops on an unanswerable approval request is
+  `approval_required`. Neither is reported as success.
+- Every tool declares `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` (always false).
+
 ## Lifecycle contract
 
 - `start_agent_run` requires a canonical hyphenated UUID `request_id` plus exactly one of `agent` or
@@ -40,6 +60,7 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
   `request_id_conflict`.
 - `get_agent_run` reports `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`,
   `result_expired`, `not_found`, or `invalid_request`.
+- Queued runs are dispatched oldest-first.
 - Results are capped at 24,000 characters and include `result_truncated` when clipped. Result
   payloads expire 24 hours after terminalization.
 - Delegate execution is unchanged: ordinary saved agents and bare models are tool-less; the seeded

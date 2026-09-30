@@ -21,6 +21,7 @@ import {
 	useCreateMcpServer,
 	useDeleteMcpServer,
 	useMcpServers,
+	useReconnectMcpServer,
 	useSetMcpServerEnabled,
 	useUpdateMcpServer,
 } from "@/features/mcp/queries/useMcpServers";
@@ -35,6 +36,8 @@ const emptyFormValues: McpServerFormValues = {
 	workingDirectory: "",
 	env: [],
 	url: "",
+	headers: [],
+	sessionScope: "Shared",
 	// The secure default. A new stdio server is sandboxed unless the operator deliberately says otherwise.
 	trustTier: "Sandboxed",
 };
@@ -49,7 +52,9 @@ function toFormValues(server: McpServerRegistration): McpServerFormValues {
 		workingDirectory: server.workingDirectory ?? "",
 		env: server.env.map((entry) => ({ ...entry })),
 		url: server.url ?? "",
+		headers: server.headers.map((entry) => ({ ...entry })),
 		trustTier: server.trustTier,
+		sessionScope: server.sessionScope,
 	};
 }
 
@@ -82,6 +87,7 @@ export function McpServersPage() {
 	const updateMutation = useUpdateMcpServer();
 	const deleteMutation = useDeleteMcpServer();
 	const enableMutation = useSetMcpServerEnabled();
+	const reconnectMutation = useReconnectMcpServer();
 
 	const servers = useMemo(() => serversQuery.data ?? [], [serversQuery.data]);
 
@@ -92,7 +98,12 @@ export function McpServersPage() {
 		return servers.find((server) => server.id === editorTarget.id);
 	}, [servers, editorTarget]);
 
-	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || enableMutation.isPending;
+	const isMutating =
+		createMutation.isPending ||
+		updateMutation.isPending ||
+		deleteMutation.isPending ||
+		enableMutation.isPending ||
+		reconnectMutation.isPending;
 
 	// Editor save in flight (create or update); drives the footer Save loading state and disables Cancel.
 	const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -186,6 +197,16 @@ export function McpServersPage() {
 		[enableMutation, t],
 	);
 
+	const handleReconnect = useCallback(
+		(server: McpServerRegistration) => {
+			reconnectMutation.mutate(server.id, {
+				onError: (error) =>
+					toast.error(apiErrorMessage(error, t("pages.mcp.errors.reconnect", "Could not reconnect the server."))),
+			});
+		},
+		[reconnectMutation, t],
+	);
+
 	const isEditorOpen = editorTarget !== null;
 	const formInitialValues = editingServer ? toFormValues(editingServer) : emptyFormValues;
 
@@ -226,6 +247,7 @@ export function McpServersPage() {
 							onEdit={openEdit}
 							onDelete={handleDelete}
 							onToggleEnabled={handleToggleEnabled}
+							onReconnect={handleReconnect}
 						/>
 						{servers.length > 0 ? (
 							<McpServerToolsSelector servers={servers} expandedToolsId={expandedToolsId} onSelect={setExpandedToolsId} />

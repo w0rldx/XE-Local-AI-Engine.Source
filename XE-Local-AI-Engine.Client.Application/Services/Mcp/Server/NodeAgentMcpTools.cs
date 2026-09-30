@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
 using System.ComponentModel;
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -39,6 +41,12 @@ public sealed class NodeAgentMcpTools
     /// </remarks>
     private const string TruncationMarker = "\n\n[output truncated by the XE Local AI Engine MCP server]";
 
+    /// <summary>
+    ///     How often a synchronous run reports that it is still generating. An MCP client aborts a call that produces neither a
+    ///     response nor a progress notification inside its idle window, and a long local generation used to report nothing (I-D15).
+    /// </summary>
+    internal static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
+
     private const string InvalidRequestCode = "invalid_request";
     private const string InvalidStatusCode = "invalid_status";
     private const string ResultExpiredCode = "result_expired";
@@ -52,6 +60,7 @@ public sealed class NodeAgentMcpTools
     private readonly McpAgentRunOptions _runOptions;
     private readonly ISelectedFolderResolver _selectedFolderResolver;
     private readonly SpawnOptions _spawnOptions;
+    private readonly TimeProvider _timeProvider;
     private readonly IMcpAgentExecutionService _mcpAgentExecutionService;
 
     public NodeAgentMcpTools(IMcpAgentExecutionService mcpAgentExecutionService,
@@ -62,8 +71,10 @@ public sealed class NodeAgentMcpTools
         IMcpAgentRunCoordinator runCoordinator,
         ISelectedFolderResolver selectedFolderResolver,
         IOptions<McpAgentRunOptions> runOptions,
+        TimeProvider timeProvider,
         ILogger<NodeAgentMcpTools> logger)
     {
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _mcpAgentExecutionService = mcpAgentExecutionService ?? throw new ArgumentNullException(nameof(mcpAgentExecutionService));
         _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -77,7 +88,7 @@ public sealed class NodeAgentMcpTools
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    [McpServerTool(Name = "list_agents")]
+    [McpServerTool(Name = "list_agents", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the saved agents (personas) on this node that can be given a task with run_agent or start_agent_run. Returns each agent's id, name and description.")]
     public async Task<IReadOnlyList<AgentSummary>> ListAgentsAsync(CancellationToken cancellationToken)
     {
@@ -93,7 +104,7 @@ public sealed class NodeAgentMcpTools
         ];
     }
 
-    [McpServerTool(Name = "list_models")]
+    [McpServerTool(Name = "list_models", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List the locally installed models on this node that run_agent or start_agent_run can bind directly when no saved agent is wanted.")]
     public async Task<IReadOnlyList<LocalModelSummary>> ListModelsAsync(CancellationToken cancellationToken)
     {
@@ -113,7 +124,7 @@ public sealed class NodeAgentMcpTools
         ];
     }
 
-    [McpServerTool(Name = "list_workspaces")]
+    [McpServerTool(Name = "list_workspaces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "List the operator-authorized read-only workspaces that may be used by the seeded Coder. Returns only bounded opaque ids, aliases, and the read-only mode; host paths are never exposed. A workspace id remains valid across MCP connections until the operator revokes it.")]
     public async Task<McpWorkspaceListResponse> ListWorkspacesAsync(CancellationToken cancellationToken)
@@ -136,7 +147,7 @@ public sealed class NodeAgentMcpTools
         };
     }
 
-    [McpServerTool(Name = "start_agent_run")]
+    [McpServerTool(Name = "start_agent_run", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "Accept a durable background agent run and return immediately. Supply a globally unique UUID request_id plus exactly one of agent or model. The run continues across MCP disconnects and can be polled from a later connection. Delegate callers remain tool-less except for the seeded read-only Coder; agentic callers may use the saved agent's full allowed-tool set with strict audited auto-approval.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
@@ -197,12 +208,14 @@ public sealed class NodeAgentMcpTools
         {
             Status = MapStartStatus(result.Kind),
             Run = result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
-            FailureCode = result.FailureCode,
+            // An existing run whose result expired is a successful answer about that run, as in get_agent_run: the status and
+            // run.metadata.failure_code carry result_expired, the top level stays clear.
+            FailureCode = result.Kind == McpAgentRunStartKind.ResultExpired ? null : result.FailureCode,
             DisplayMessage = result.DisplayMessage
         };
     }
 
-    [McpServerTool(Name = "get_agent_run")]
+    [McpServerTool(Name = "get_agent_run", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "Poll a durable background run by its globally unique request UUID, including from a later MCP connection. Returns bounded lifecycle metadata and at most 24,000 result characters with an explicit result_truncated flag. Expired or compacted payloads are reported truthfully; task, instructions, and host paths are never returned.")]
     public async Task<McpAgentRunGetResponse> GetAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
@@ -241,7 +254,8 @@ public sealed class NodeAgentMcpTools
         var responseStatus = run.PayloadExpired
             ? ResultExpiredCode
             : McpAgentToolResponseMapper.ToExternalValue(run.Status);
-        var failureCode = run.PayloadExpired ? ResultExpiredCode : run.FailureCode;
+        // The poll itself succeeded: a run that FAILED, or whose result expired, reports its code inside run.metadata, never at the
+        // top level, or the filter would mark a correct status answer isError and a client would retry the poll (review 2026-09-30).
         var displayMessage = run.PayloadExpired
             ? "The retained result for this request has expired."
             : run.DisplayMessage ?? "Run found.";
@@ -254,12 +268,12 @@ public sealed class NodeAgentMcpTools
                 Result = result,
                 ResultTruncated = resultTruncated
             },
-            FailureCode = failureCode,
+            FailureCode = null,
             DisplayMessage = displayMessage
         };
     }
 
-    [McpServerTool(Name = "cancel_agent_run")]
+    [McpServerTool(Name = "cancel_agent_run", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description(
         "Durably request cancellation of a background run by UUID. The cancellation marker survives MCP disconnects and process restart. Expected races such as an already-terminal or already-requested run are returned as structured results, and no write-capable workspace access is introduced.")]
     public async Task<McpAgentRunCancelResponse> CancelAgentRunAsync([Description("The canonical hyphenated UUID supplied to start_agent_run.")] string request_id,
@@ -267,9 +281,10 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
+            // Status and failure_code agree, as in get_agent_run: a malformed id is an invalid request, not a missing run (I-D9).
             return new McpAgentRunCancelResponse
             {
-                Status = "not_found",
+                Status = InvalidRequestCode,
                 Run = null,
                 FailureCode = InvalidRequestCode,
                 DisplayMessage = "Cannot cancel: provide a valid request UUID."
@@ -286,7 +301,7 @@ public sealed class NodeAgentMcpTools
         };
     }
 
-    [McpServerTool(Name = "list_agent_runs")]
+    [McpServerTool(Name = "list_agent_runs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "List bounded content-free lifecycle metadata for durable background runs, including runs started by earlier MCP connections. An optional case-insensitive status filter may be supplied. Results never contain task text, instructions, model output, or host paths, and all workspace execution remains read-only.")]
     public async Task<McpAgentRunListResponse> ListAgentRunsAsync(CancellationToken cancellationToken,
@@ -327,12 +342,12 @@ public sealed class NodeAgentMcpTools
         };
     }
 
-    [McpServerTool(Name = "run_agent")]
+    [McpServerTool(Name = "run_agent", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description(
         "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name) or model (a local model id) — exactly one. Delegate saved agents and bare models are tool-less; the seeded read-only Coder may use only its three workspace-read tools. Agentic saved-agent runs may use the definition's full allowed-tool set with strict audited auto-approval. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
     // Parameter order is dictated by C#: the SDK-injected `progress` and `cancellationToken` carry no default, so they precede the
     // optional arguments, whose defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability, so a defaultless parameter is advertised REQUIRED.
-    public async Task<string> RunAgentAsync([Description("The task for the local agent to carry out.")] string task,
+    public async Task<CallToolResult> RunAgentAsync([Description("The task for the local agent to carry out. Bounded to 32 KiB of UTF-8.")] string task,
         IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
         ClaimsPrincipal? user = null,
@@ -340,7 +355,7 @@ public sealed class NodeAgentMcpTools
         string? agent = null,
         [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")]
         string? model = null,
-        [Description("A local model id for an unbound saved agent such as Coder (read-only). Rejected for an agent that already pins a model.")]
+        [Description("A local model id for an unbound saved agent such as Coder (read-only). Rejected for an agent that already pins a model. Spelled modelOverride here; start_agent_run spells it model_override.")]
         string? modelOverride = null,
         [Description("Optional system-prompt override. Only applies when binding a bare model; ignored when a saved agent is named.")]
         string? instructions = null,
@@ -350,12 +365,24 @@ public sealed class NodeAgentMcpTools
         var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (string.IsNullOrWhiteSpace(task))
         {
-            return "Cannot run: provide a non-empty task.";
+            return McpToolResults.Failure(InvalidRequestCode, "Cannot run: provide a non-empty task.");
+        }
+
+        if (Encoding.UTF8.GetByteCount(task) > _runOptions.MaxTaskUtf8Bytes)
+        {
+            return McpToolResults.Failure(McpExecutionFailureCodes.TaskTooLarge, McpAgentRunText.TaskTooLargeMessage(_runOptions.MaxTaskUtf8Bytes));
+        }
+
+        // The same instructions bound start_agent_run applies, so the two run tools reject the same inputs (live re-run J7b).
+        if (Encoding.UTF8.GetByteCount(instructions ?? string.Empty) > _runOptions.MaxInstructionsUtf8Bytes)
+        {
+            return McpToolResults.Failure(McpExecutionFailureCodes.TaskTooLarge,
+                $"Cannot run: instructions exceed the {_runOptions.MaxInstructionsUtf8Bytes / 1024} KiB UTF-8 bound.");
         }
 
         if (string.IsNullOrWhiteSpace(agent) == string.IsNullOrWhiteSpace(model))
         {
-            return "Cannot run: provide exactly one of agent or model.";
+            return McpToolResults.Failure(InvalidRequestCode, "Cannot run: provide exactly one of agent or model.");
         }
 
         Guid? workspaceId = null;
@@ -363,7 +390,7 @@ public sealed class NodeAgentMcpTools
         {
             if (!Guid.TryParse(workspace_id, out var parsedWorkspaceId) || parsedWorkspaceId == Guid.Empty)
             {
-                return "Cannot run: the selected workspace is not authorized.";
+                return McpToolResults.Failure(McpExecutionFailureCodes.WorkspaceNotAuthorized, "Cannot run: the selected workspace is not authorized.");
             }
 
             workspaceId = parsedWorkspaceId;
@@ -398,30 +425,71 @@ public sealed class NodeAgentMcpTools
         });
 
         // The inbound execution service returns a typed, sanitized outcome for every EXPECTED rejection — over-cap, no fit, busy,
-        // unresolved agent or model — so those reach the caller as an ordinary tool result and only a real fault becomes a protocol error.
-        var outcome = await _mcpAgentExecutionService.SpawnForMcpAsync(request,
-            task,
-            expectedBindingFingerprint: null,
-            cancellationToken,
-            workspaceId);
-        var result = outcome.ToSynchronousResult();
+        // unresolved agent or model — so those reach the caller as an isError tool result and only a real fault becomes a protocol error.
+        SpawnOutcome outcome;
+        using (var heartbeatStop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            var heartbeat = ReportHeartbeatAsync(progress, heartbeatStop.Token);
+            try
+            {
+                outcome = await _mcpAgentExecutionService.SpawnForMcpAsync(request,
+                    task,
+                    expectedBindingFingerprint: null,
+                    cancellationToken,
+                    workspaceId);
+            }
+            finally
+            {
+                await heartbeatStop.CancelAsync();
+                await heartbeat;
+            }
+        }
 
+        // The final progress tells the truth: a declined or failed run never reports "Completed." (I-D14).
         progress.Report(new ProgressNotificationValue
         {
             Progress = 1f,
-            Message = "Completed."
+            Message = outcome.Kind == SpawnOutcomeKind.Success ? "Completed." : outcome.DisplayMessage
         });
 
-        if (result.Length <= _runOptions.MaxResultCharacters)
+        if (outcome.Kind != SpawnOutcomeKind.Success)
         {
-            return result;
+            return McpToolResults.Failure(outcome.FailureCode ?? McpExecutionFailureCodes.InternalFailure, outcome.DisplayMessage);
         }
 
-        _logger.LogInformation("An MCP run_agent result was truncated from {ActualLength} to {MaxLength} characters before returning it to the client.",
-            result.Length,
-            _runOptions.MaxResultCharacters);
+        var result = outcome.Content ?? string.Empty;
+        if (result.Length > _runOptions.MaxResultCharacters)
+        {
+            _logger.LogInformation("An MCP run_agent result was truncated from {ActualLength} to {MaxLength} characters before returning it to the client.",
+                result.Length,
+                _runOptions.MaxResultCharacters);
+            result = string.Concat(result.AsSpan(0, _runOptions.MaxResultCharacters), TruncationMarker);
+        }
 
-        return string.Concat(result.AsSpan(0, _runOptions.MaxResultCharacters), TruncationMarker);
+        return McpToolResults.Text(result);
+    }
+
+    // Progress must increase with every notification, so the heartbeat climbs towards, but never reaches, completion.
+    private async Task ReportHeartbeatAsync(IProgress<ProgressNotificationValue> progress, CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(HeartbeatInterval, _timeProvider);
+        var beats = 0;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                beats++;
+                progress.Report(new ProgressNotificationValue
+                {
+                    Progress = 0.1f + (0.8f * beats / (beats + 4)),
+                    Message = $"Still running on the local model ({beats * (int)HeartbeatInterval.TotalSeconds} s)…"
+                });
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The run finished (or the call was cancelled); the heartbeat simply stops.
+        }
     }
 
     private static bool TryParseRequestId(string value, out Guid requestId) =>

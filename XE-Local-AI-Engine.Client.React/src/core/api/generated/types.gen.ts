@@ -4017,6 +4017,10 @@ export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
 	} | null;
 	url?: string | null;
 	trustTier?: XeLocalAiEngineClientPersistenceMcpTrustTier;
+	headers?: {
+		[key: string]: string;
+	} | null;
+	sessionScope?: XeLocalAiEngineClientPersistenceMcpSessionScope;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
@@ -4078,6 +4082,10 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 	};
 	url?: string | null;
 	trustTier: XeLocalAiEngineClientPersistenceMcpTrustTier;
+	headers: {
+		[key: string]: string;
+	};
+	sessionScope: XeLocalAiEngineClientPersistenceMcpSessionScope;
 	enabled: boolean;
 	version: number;
 	createdAtUtc: number;
@@ -4122,6 +4130,10 @@ export type XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = {
 	} | null;
 	url?: string | null;
 	trustTier?: XeLocalAiEngineClientPersistenceMcpTrustTier;
+	headers?: {
+		[key: string]: string;
+	} | null;
+	sessionScope?: XeLocalAiEngineClientPersistenceMcpSessionScope;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
@@ -6392,6 +6404,8 @@ export type XeLocalAiEngineClientPersistenceEntitiesTrainingSampleProvenance = "
 
 export type XeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState = "Pending" | "Approved" | "Rejected";
 
+export type XeLocalAiEngineClientPersistenceMcpSessionScope = "Shared" | "PerConversation";
+
 export type XeLocalAiEngineClientPersistenceMcpTransportKind = "Stdio" | "Http";
 
 export type XeLocalAiEngineClientPersistenceMcpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
@@ -6534,7 +6548,13 @@ export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Timeout"
 	| "Transport"
 	| "Protocol"
-	| "Authentication";
+	| "Authentication"
+	| "AuthenticationRequired"
+	| "Forbidden"
+	| "Tls"
+	| "ServerExited"
+	| "SessionLost"
+	| "ServerStartupFailed";
 
 export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
 

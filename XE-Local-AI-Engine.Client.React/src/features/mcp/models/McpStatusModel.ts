@@ -16,7 +16,15 @@ export function statusColor(status: McpConnectionStatus): string {
 	return "gray";
 }
 
-// The sandbox reasons are the only ones whose server message is a fixed, path-free remedy worth showing verbatim.
+// Reasons whose server message is worth showing verbatim: the sandbox reasons carry a fixed, path-free remedy, a missing
+// command carries the jail-PATH hint, and the exit and startup reasons carry the exit code and the server's scrubbed
+// stderr tail, the only clue to why it died.
 export function hasEngineDetail(reason: McpConnectionFailureReason | null): boolean {
-	return reason === "SandboxUnavailable" || reason === "SandboxRefused";
+	return (
+		reason === "ServerNotFound" ||
+		reason === "SandboxUnavailable" ||
+		reason === "SandboxRefused" ||
+		reason === "ServerExited" ||
+		reason === "ServerStartupFailed"
+	);
 }

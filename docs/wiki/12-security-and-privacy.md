@@ -85,7 +85,7 @@ Several redactors enforce "secrets never surface":
 |---|---|---|
 | `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.cs` |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
-| `McpServerConnectionManager.SafeMessage` | clamps every MCP connection failure, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning | `McpServerConnectionManager.SafeMessage` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
+| `McpServerConnectionManager.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpServerConnectionManager.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
 | `InvocationRunner.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationRunner.RedactAgentRuntimeMessage` in `Services/Invocation/Implementation/InvocationRunner.FailureClassification.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
@@ -741,16 +741,21 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
 - **Neither bound tree may cover a sensitive host root.** A tree that equals or contains the home directory, a
   credential store under it (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`), the
   node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**; the server log
-  names the path and the tier, the MCP panel shows a fixed, path-free remedy. Subtrees of those roots stay bindable — `~/.nvm/…/bin` exposes a node install, `$HOME` exposes
-  the operator — which is what keeps `npx`- and `uvx`-based servers usable at the default tier. Comparison happens
-  on resolved paths at one gate both trees pass through, and the list is code-owned.
+  names the path and the tier, the MCP panel shows a fixed, path-free remedy. Subtrees of those roots stay bindable (a
+  command directory under `~/.nvm/…/bin`, say), but binding the directory is not enough for most package-manager
+  installs: the target of a symlinked command and the interpreter a script names are not bound, and the jail's
+  `PATH` is `/usr/bin:/bin` or the registration's own `PATH` (which replaces it, never extends it). **Sandboxed is
+  for self-contained servers; npm/npx/uv/uvx/mise/nvm/venv-installed servers generally need `PrivilegedHost`.**
+  Comparison happens on resolved paths at one gate both trees pass through, and the list is code-owned.
 - **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
   `SupportsFilesystemIsolation` — Windows, or a Linux host without bubblewrap — refuses the connection
   before a process exists, with a fixed, path-free message naming the remedy (install bubblewrap or move the server
   to `PrivilegedHost`); the exception with its detail stays in the server log. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
   connection attempt. Every failed connection also carries a failure reason (`SandboxUnavailable`, `SandboxRefused`,
-  `ServerNotFound`, `Timeout`, …) that the MCP panel words, so a missing command never reads like a sandbox refusal;
-  see `docs/security/mcp-trust-tiers.md`.
+  `ServerNotFound`, `ServerStartupFailed`, `ServerExited`, `SessionLost`, `AuthenticationRequired`, `Authentication`,
+  `Forbidden`, `Tls`, `Timeout`, …) that the MCP panel words, so a missing command never reads like a sandbox refusal
+  and a missing credential never reads like a wrong one; see `docs/security/mcp-trust-tiers.md` and §2.2 for which
+  reasons show a scrubbed `stderr` tail.
 - **`PrivilegedHost` is the old host launch, kept deliberately.** It is a per-server operator grant, never a fallback
   and never inferred, and its tools are offered as `ToolCategory.WriteExecute` rather than `Network` — because a
   server this node launched unconfined can write files and run commands here, and the class an operator sees and the
@@ -760,6 +765,13 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
 - **The stored environment does not come back out.** `EnvJson` was already AEAD-encrypted at rest; the response now
   returns the variable NAMES with a fixed mask in place of every value, and an update that sends the mask back keeps
   the stored secret (`McpEnvironmentMask`).
+- **An HTTP server's credential is a header, encrypted like the environment.** `HeadersJson` is AEAD-encrypted at rest
+  by both encryption interceptors with AAD column name `headers`, sent as the transport's `AdditionalHeaders`, and
+  returned as header NAMES with the same mask. The URL is masked on the way out too: userinfo and every query value
+  become `***` (`McpUrlMask`), and sending the masked URL back keeps the stored one. A URL that carries userinfo is
+  rejected (400), as are environment variables on an HTTP registration (the transport launches nothing, so they were
+  stored and never sent) and headers on a stdio one. A legacy `?token=` URL stays **cleartext at rest**; moving the
+  token into a header is a manual step.
 
 Unchanged: HTTP MCP registrations stay exact-match loopback (`McpOptions.HttpLoopbackHosts`, re-validated at connect
 time), the tier is inert for them, and every MCP tool of every tier remains approval-required, pre-wrapped in

@@ -569,12 +569,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
         }
 
-        // stderr is drained rather than captured. The child blocks on a full pipe if nobody reads it, and a stdio MCP
-        // server that logs to stderr would deadlock mid-protocol; the content is not this layer's to interpret.
-        process.ErrorDataReceived += static (_, _) => { };
+        // stderr is always drained, since a child blocks on a full pipe and a stdio MCP server that logs there would deadlock
+        // mid-protocol, and only its bounded tail is kept: it is the one place a server that dies on startup says why.
+        var stderrTail = SandboxStderrTail.For(request);
+        process.ErrorDataReceived += (_, args) => stderrTail.Append(args.Data);
         process.BeginErrorReadLine();
 
-        return Task.FromResult<ISandboxInteractiveProcess>(new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource));
+        return Task.FromResult<ISandboxInteractiveProcess>(new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource, stderrTail));
     }
 
     public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -1007,8 +1008,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         private readonly SandboxLaunchDescriptor _launch;
         private readonly string? _markerId;
         private readonly Process _process;
+        private static readonly TimeSpan StderrDrainWait = TimeSpan.FromSeconds(2);
+
         private readonly ProcessSandboxRuntimeProvider _provider;
         private readonly JailState _state;
+        private readonly SandboxStderrTail _stderrTail;
         private int _disposed;
 
         public InteractiveProcess(ProcessSandboxRuntimeProvider provider,
@@ -1017,7 +1021,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             Process process,
             SandboxLaunchDescriptor launch,
             string? markerId,
-            CancellationTokenSource cancelSource)
+            CancellationTokenSource cancelSource,
+            SandboxStderrTail stderrTail)
         {
             _provider = provider;
             _state = state;
@@ -1026,11 +1031,32 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             _launch = launch;
             _markerId = markerId;
             _cancelSource = cancelSource;
+            _stderrTail = stderrTail;
         }
 
         public Stream StandardInput => _process.StandardInput.BaseStream;
 
         public Stream StandardOutput => _process.StandardOutput.BaseStream;
+
+        public async Task<string?> GetStandardErrorTailAsync()
+        {
+            if (Volatile.Read(ref _disposed) == 0)
+            {
+                // WaitForExitAsync also waits for the async stderr reader to reach end of stream, which is what makes the last
+                // lines land before the snapshot. Bounded: a descendant holding stderr open must not stall the caller's failure.
+                using var drain = new CancellationTokenSource(StderrDrainWait, _provider._timeProvider);
+                try
+                {
+                    await _process.WaitForExitAsync(drain.Token);
+                }
+                catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
+                {
+                    // Still running, or torn down concurrently: the tail so far is the best answer there is.
+                }
+            }
+
+            return _stderrTail.Snapshot();
+        }
 
         public async ValueTask DisposeAsync()
         {

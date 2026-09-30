@@ -204,6 +204,7 @@
 			"resultLabel": "Result",
 			"errorLabel": "Error",
 			"noOutput": "(no output)",
+			"imageAlt": "Image returned by {{tool}}",
 			"approvalPrompt": "This tool needs your approval to run.",
 			"approve": "Approve",
 			"deny": "Deny",
@@ -261,7 +262,9 @@
 			"orchestrationDegraded": "Orchestration not used",
 			"toolsFiltered": "Tools filtered",
 			"effortDispatched": "Reasoning effort resolved",
-			"playbookWithheld": "Playbook withheld"
+			"playbookWithheld": "Playbook withheld",
+			"emptyAnswer": "No answer",
+			"toolHistoryWithheld": "Tool history withheld"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"webReview": {
@@ -3591,10 +3594,12 @@
 					"trust": "Trust",
 					"enabled": "Enabled",
 					"version": "Version",
-					"actions": "Actions"
+					"actions": "Actions",
+					"status": "Status"
 				},
 				"trustNotApplicable": "n/a",
-				"title": "Registered servers"
+				"title": "Registered servers",
+				"reconnectAria": "Reconnect {{name}}"
 			},
 			"editor": {
 				"createTitle": "Register MCP server",
@@ -3654,8 +3659,27 @@
 				},
 				"url": {
 					"label": "URL",
-					"description": "Loopback only (127.0.0.1 / localhost / ::1).",
-					"placeholder": "http://127.0.0.1:3001/sse"
+					"description": "Loopback only (127.0.0.1, localhost, ::1).",
+					"placeholder": "http://127.0.0.1:PORT/mcp"
+				},
+				"headers": {
+					"label": "Request headers",
+					"add": "Add header",
+					"empty": "No request headers.",
+					"keyPlaceholder": "Authorization",
+					"keyAria": "Header {{index}} name",
+					"valuePlaceholder": "value",
+					"valueAria": "Header {{index}} value",
+					"remove": "Remove header {{index}}"
+				},
+				"sessionScope": {
+					"label": "Session",
+					"sharedDescription": "Every conversation shares one server session.",
+					"perConversationDescription": "Each conversation gets its own server session; stdio servers cap at 4.",
+					"options": {
+						"Shared": "Shared",
+						"PerConversation": "Per conversation"
+					}
 				},
 				"validation": {
 					"commandRequired": "Command is required for stdio transport",
@@ -3686,7 +3710,13 @@
 					"Timeout": "Timed out connecting to the MCP server.",
 					"Transport": "The connection to the MCP server failed or closed.",
 					"Protocol": "The MCP server did not complete the MCP handshake.",
-					"Authentication": "The MCP server rejected the credentials, or the TLS negotiation failed."
+					"Authentication": "The MCP server rejected the configured credentials.",
+					"AuthenticationRequired": "The MCP server requires authentication, and no credential is configured. Add an Authorization header to the registration.",
+					"Forbidden": "The MCP server refused access with the configured credentials.",
+					"Tls": "The TLS negotiation with the MCP server failed.",
+					"ServerExited": "The MCP server process exited.",
+					"SessionLost": "The MCP server no longer recognises this node's session; it has probably restarted.",
+					"ServerStartupFailed": "The MCP server exited before completing the MCP handshake."
 				}
 			},
 			"delete": {
@@ -3697,7 +3727,8 @@
 				"load": "Could not load MCP servers.",
 				"save": "Could not save the MCP server.",
 				"delete": "Could not delete the MCP server.",
-				"enable": "Could not change the server state."
+				"enable": "Could not change the server state.",
+				"reconnect": "Could not reconnect the server."
 			}
 		},
 		"scheduler": {

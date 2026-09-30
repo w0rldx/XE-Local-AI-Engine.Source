@@ -114,19 +114,28 @@ describe("McpServerToolsPanel", () => {
 		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain("redacted reason");
 	});
 
-	it("words a missing server command by its reason instead of the server's generic text", () => {
-		mockTools({
-			status: "error",
-			error: "The MCP server's command was not found or could not be started.",
-			failureReason: "ServerNotFound",
-			tools: [],
-		});
+	it("words a missing server command by its reason and keeps the engine's jail-PATH hint beneath it", () => {
+		const hint = "The command 'codegraph' is not on the sandbox PATH (/usr/bin:/bin).";
+		mockTools({ status: "error", error: hint, failureReason: "ServerNotFound", tools: [] });
 
 		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
 
-		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toBe(
+		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain(
 			"The server's command was not found or could not be started. Check the command and that it is installed on this machine.",
 		);
+		expect(screen.getByTestId("mcp-server-tools-connection-detail").textContent).toBe(hint);
+	});
+
+	it("keeps a multi-line stderr tail intact in a monospace block", () => {
+		const detail = "The MCP server process exited. Exit code 1.\nstderr: Error: Cannot find module 'x'\n    at node:internal";
+		mockTools({ status: "error", error: detail, failureReason: "ServerExited", tools: [] });
+
+		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+
+		const block = screen.getByTestId("mcp-server-tools-connection-detail");
+		expect(block.tagName).toBe("PRE");
+		expect(block.textContent).toBe(detail);
+		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain("The MCP server process exited.");
 	});
 
 	it("shows a sandbox refusal with the engine's remedy beneath it, distinct from a missing command", () => {

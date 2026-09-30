@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Decrypted, typed projection of a persisted <c>McpServerRegistration</c>.
 /// </summary>
 /// <remarks>
-///     <see cref="Description" />, <see cref="Arguments" /> and <see cref="Environment" /> are returned in plaintext
+///     <see cref="Description" />, <see cref="Arguments" />, <see cref="Environment" /> and <see cref="Headers" /> are returned in plaintext
 ///     (decrypted on materialization) and the JSON columns are materialized into typed collections; the store
 ///     converts to and from this shape at the boundary so callers never touch the encrypted byte columns or the raw
 ///     JSON. <see cref="TrustTier" /> is structural and plaintext: it decides where a stdio server's process runs, so
@@ -32,6 +32,14 @@ public sealed record McpServerRecord
     public required string? Url { get; init; }
 
     public required McpTrustTier TrustTier { get; init; }
+
+    /// <summary>The HTTP request headers (decrypted); empty for a stdio server.</summary>
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The persisted tool-name slug, or <c>null</c> until the first connect assigns it.</summary>
+    public string? Slug { get; init; }
+
+    public McpSessionScope SessionScope { get; init; } = McpSessionScope.Shared;
 
     public required bool Enabled { get; init; }
 

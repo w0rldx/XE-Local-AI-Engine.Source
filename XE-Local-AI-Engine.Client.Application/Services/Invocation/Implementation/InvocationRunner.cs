@@ -45,6 +45,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // tier's own graded level, so the re-run keeps the tier the dispatcher chose and only gives up the model.
     private const string FallbackDispatchEffort = "low";
 
+    // The tool-result ceiling for the largest windows; smaller windows get about a quarter of their context, see ToolResultBudgetFor.
+    private const int MaxWindowToolResultCharacters = 65_536;
+
+    // The floor for an unknown (0) or tiny reported window, which would otherwise cut every tool result to a character or two.
+    private const int MinWindowToolResultCharacters = 8_192;
+
+    // The notice for a turn whose last round produced neither text nor a tool call.
+    private const string EmptyAnswerNoticeMessage = "The model stopped without an answer.";
+
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
     private const string AutoReasoningEffort = "auto";
 
@@ -390,6 +399,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
             await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
 
+            // Size every tool result to the window the model was launched with: a fixed 65,536-char ceiling let four results fill half a 64k-token window.
+            using var toolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(turnPolicy.ContextCapacityTokens));
+
             if (context.GenerationAdmissionPolicy is { } admissionPolicy)
             {
                 // The chat path lets generation retry a failed warm so the provider boundary surfaces its authoritative error. An admission-gated caller
@@ -460,6 +472,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     var retryContextTokens = retryRuntime.EffectiveContextTokens;
                     var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
                     await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, retryPolicy.ContextCapacityTokens, retryPolicy.ReservedOutputTokens);
+
+                    // The fast model's budget scope is closed and one sized to THIS model's window opened, so its results are not cut to the
+                    // swapped-out model's window. Closing twice is safe: the outer using re-restores the same prior value.
+                    toolResultBudget.Dispose();
+                    using var retryToolResultBudget = ToolResultBudgetScope.BeginTightenedScope(ToolResultBudgetFor(retryPolicy.ContextCapacityTokens));
 
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                         BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
@@ -756,6 +773,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // The reviewed web results of THIS agent stream, read by the web tool handlers when the framework executes the approved calls.
         using var webReviewScope = WebReviewResultScope.BeginScope();
 
+        // Whether the round after the last tool result produced text or a call. A turn that ends on a silent round would
+        // otherwise complete as an empty "answer" the user cannot tell from a slow one.
+        var finalRoundHasOutput = false;
+
         do
         {
             // Growth point (b): re-budget the approval-grown message list before each provider round — a cheap passthrough on the first iteration, and a bound on
@@ -794,6 +815,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 var textChunk = update.Text;
+                if (!string.IsNullOrEmpty(textChunk))
+                {
+                    finalRoundHasOutput = true;
+                }
 
                 // Last-wins across the whole turn, segments included: an intermediate tool-call segment must not be the
                 // reason the turn is recorded as having stopped.
@@ -883,6 +908,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 // The two are the same string whenever the provider gave a name at all.
                                 pendingLocalToolCalls[callId] = new RequestedToolCall(callName, functionCall.Arguments, serializedArguments);
                                 openToolCalls.Open(callId);
+                                finalRoundHasOutput = true;
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -918,6 +944,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     : resultCallId;
                                 var toolResultText = functionResult.Result?.ToString();
 
+                                // A result starts a new model round, which must produce its own text or call to count as an answer.
+                                finalRoundHasOutput = false;
+
+                                // Media rides beside the model's text (ToolResultMedia) so an image result persists as an image, never as a type name.
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
                                     InvocationId = package.InvocationId,
@@ -925,7 +955,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     ToolName = toolName,
                                     Phase = ToolCallLifecyclePhase.Completed,
                                     Result = toolResultText,
-                                    IsError = functionResult.Exception is not null
+                                    IsError = functionResult.Exception is not null || ToolFailureText.TryGetCode(functionResult.Result) is not null,
+                                    Media = ToolResultMedia.Get(functionResult.Result)
                                 });
 
                                 // ToolArgumentRepairAIFunction returns this structured result instead of throwing once repeated invalid-argument calls disable
@@ -1080,7 +1111,21 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
             }
         } while (pendingApprovals.Count > 0);
+
+        // Not for a cancelled turn: its stream can end normally, and the caller reports the cancellation instead.
+        if (!finalRoundHasOutput && !invocationToken.IsCancellationRequested)
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, EmptyAnswerNoticeMessage, stream.FinishReason);
+        }
     }
+
+    /// <summary>
+    ///     The per-result character budget for a model window: about a quarter of the window, between
+    ///     <see cref="MinWindowToolResultCharacters" /> and <see cref="MaxWindowToolResultCharacters" />.
+    /// </summary>
+    /// <remarks>A token is roughly four characters, so a quarter of the window in characters is the window's token count.</remarks>
+    internal static int ToolResultBudgetFor(int contextCapacityTokens) =>
+        Math.Clamp(contextCapacityTokens, MinWindowToolResultCharacters, MaxWindowToolResultCharacters);
 
     /// <summary>Runs the orchestration path: the package's spec becomes the definition a MAF handoff workflow drives.</summary>
     /// <remarks>

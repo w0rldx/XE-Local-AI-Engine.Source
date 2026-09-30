@@ -163,11 +163,12 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         }
 
         // MCP server registrations are node-scoped, so the AAD binds the empty conversation id to the registration's
-        // own id plus the column name. The secret-bearing columns (args, env, description) are all optional.
+        // own id plus the column name. The secret-bearing columns (args, env, headers, description) are all optional.
         foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerRegistration>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.ArgumentsJson), Guid.Empty, entry.Entity.Id, "arguments", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.EnvJson), Guid.Empty, entry.Entity.Id, "env", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.HeadersJson), Guid.Empty, entry.Entity.Id, "headers", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 

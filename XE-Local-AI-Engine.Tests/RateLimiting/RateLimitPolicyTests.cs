@@ -171,6 +171,29 @@ public sealed class RateLimitPolicyTests
             }), $"Endpoints reference rate-limiting policies [{string.Join(", ", referenced)}], which is not the registered set.");
     }
 
+    // Q3 / I-D7: unauthenticated probes shared the key holder's 120/min bucket. They now get their own 20/min one.
+    [Test]
+    public async Task McpPolicy_UnauthenticatedBucket_ExhaustsWithoutSpendingTheBearerBucket()
+    {
+        const int anonymousPermitLimit = 20;
+        using var client = Host.Factory.CreateClient();
+
+        // 2*Limit+1 for the same fixed-window-boundary reason as the AuthPolicy test.
+        var sawRejection = false;
+        for (var attempt = 0; attempt < (2 * anonymousPermitLimit) + 1 && !sawRejection; attempt++)
+        {
+            using var anonymous = await client.PostAsync(new Uri("/api/local/v1/mcp/server", UriKind.Relative), content: null);
+            sawRejection = anonymous.StatusCode == HttpStatusCode.TooManyRequests;
+        }
+
+        using var bearerRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/mcp/server");
+        bearerRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "xemcp_not-a-real-key");
+        using var bearer = await client.SendAsync(bearerRequest);
+
+        AssertEx.True(sawRejection, "the unauthenticated MCP bucket must reject past its window");
+        AssertEx.NotEqual(HttpStatusCode.TooManyRequests, bearer.StatusCode, "a bearer-presenting request must not share the exhausted bucket");
+    }
+
     [Test]
     public async Task McpAndProxyPolicies_ResolveAtRequestTime()
     {

@@ -138,6 +138,23 @@ Tools are offered to the turn only when **all three** hold (`NodeChatStreamServi
 
 A bound agent definition narrows this offer to its allowed set (`resolved?.AllowedTools`); an unbound conversation uses the full capability-gated offer. That unbound fallback is built by `NodeChatStreamService.ResolveToolOfferAsync` (and `NodeChatRegenerationService.ResolveAllowedToolsAsync`) and runs through the **same tighten-only node approval policy** a bound definition already passed — otherwise a plain unbound turn would bypass a node-wide policy. With no policy configured the Permissive floor is identity, so that fallback offer is byte-identical to the raw catalog offer. The chosen offer travels in the runtime package as the tool list; the invocation factory resolves matching executables from the registry by name. MCP registration and the tool registry live in [Agent Mode](04-agent-mode.md).
 
+### Tool history on follow-up turns
+
+A follow-up turn sees what earlier turns' tools returned. `NodeChatStreamService` builds the context with
+`ConversationContextBuilder.Build(includeToolHistory: true)`, so each earlier assistant turn carries its completed
+tool calls as `ToolExchanges`, each result cut to an excerpt of
+`ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars` (2,000 characters). Image parts are
+render-only and never replayed. The send reads the conversation through the turn-scoped read (below), which omits
+`metadata_json` for compaction-covered rows, so exchanges the synopsis covers are not replayed. Earlier tool results
+are node-local data, so they ride the same `KnowledgeBase:AllowCloudModelAccess` gate as attachments: when the turn
+reaches a cloud model without that opt-in, the history is withheld and a `ToolHistoryWithheld` turn notice says so;
+the turn still runs.
+
+When a turn's last model round (the one after its last tool result, or the only round) produces neither text nor a
+tool call, the runner ends the turn with an `EmptyAnswer` notice ("The model stopped without an answer.") carrying
+the provider's finish reason as detail, instead of completing as an empty answer. A cancelled turn gets no such
+notice. The "Invocation completed" log line carries `FinishReason`, so a silent stop is diagnosable.
+
 ### `ask_user` in the offer
 
 `ask_user` is a worker-owned `IClientLocalToolHandler`, so `LocalToolOfferProvider` merges it into the offer seam by hand exactly as it does the coder and knowledge tools (registering the handler surfaces a tool only in the *resolution* seam). It is capability-gated with them — a model that cannot call tools cannot call this one, and an offered schema is not free, because llama.cpp compiles the whole offered array into one GBNF grammar with a hard repetition ceiling and this is the most deeply nested schema in the catalog. It then differs from them in three deliberate ways:
@@ -609,7 +626,7 @@ The nesting order is always conversation lock first, then message lock, and the 
 
 `NodeChatReadModel.GetConversationForTurnAsync` is the read a *send* uses. It is identical to `GetConversationAsync` except that when the conversation carries a compaction synopsis, the content and `metadata_json` blobs of **non-user** messages at or below the covered sequence are not transferred, decrypted or parsed. Compaction shapes what a turn *sends*, not what it *loads*, so without the cap a long conversation paid a full AEAD decrypt plus JSON parse of its entire history before every first token — including the very messages the synopsis had already replaced.
 
-It is output-equivalent because only two consumers read a turn conversation's messages, and each provably ignores the omitted payloads: `ConversationContextBuilder.Build` drops every message at or below the covered sequence outright (that *is* the compaction filter), and `CollectUserTurns` keeps only `role == "user"` messages, which the cap never touches at any sequence. Message **structure** — id, sequence, role, variant group, timestamps — always loads in full, so `SelectedPathResolver` still sees every branch and resolves the identical selected path; a variant group whose siblings straddle the boundary is resolved from the complete sibling set and only then filtered by sequence. The cap fires only under the same condition the builder uses to drop those messages (a non-empty synopsis *and* a covered sequence), so a never-compacted conversation loads byte-for-byte what it always did.
+It is output-equivalent because only two consumers read a turn conversation's messages, and each provably ignores the omitted payloads: `ConversationContextBuilder.Build` drops every message at or below the covered sequence outright (that *is* the compaction filter) — except, with tool history on, a covered assistant row with completed tool parts, which the turn read hands it without those parts, so plain chat replays no compaction-covered exchange — and `CollectUserTurns` keeps only `role == "user"` messages, which the cap never touches at any sequence. Message **structure** — id, sequence, role, variant group, timestamps — always loads in full, so `SelectedPathResolver` still sees every branch and resolves the identical selected path; a variant group whose siblings straddle the boundary is resolved from the complete sibling set and only then filtered by sequence. The cap fires only under the same condition the builder uses to drop those messages (a non-empty synopsis *and* a covered sequence), so a never-compacted conversation loads byte-for-byte what it always did.
 
 Use `GetConversationAsync` for anything that renders or re-persists a conversation — the UI load, regeneration, branching, compaction itself. A caller-managed integration continuation uses it too, for the same reason: with tool history on, the builder *keeps* a covered assistant row for the tool parts persisted in its `metadata_json`, so the equivalence argument no longer holds for that caller.
 

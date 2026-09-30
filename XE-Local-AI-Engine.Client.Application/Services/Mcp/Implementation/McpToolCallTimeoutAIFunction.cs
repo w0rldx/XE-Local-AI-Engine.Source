@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
@@ -39,8 +40,8 @@ internal sealed class McpToolCallTimeoutAIFunction : DelegatingAIFunction
             // Only OUR deadline fired, not the run's cancellation: report a clean, model-actionable tool error and let the loop
             // continue. Never rethrow as cancel, which would surface as a run cancellation, and never retry a non-idempotent call.
             NodeMetrics.McpToolTimeoutTotal.Add(1);
-            return
-                $"The MCP tool '{Name}' did not respond within the configured {_timeout.TotalSeconds:0.##}s tool-call timeout and was cancelled. The server may be slow or unresponsive; do not retry the same call — continue without it or try a different approach.";
+            return ToolFailureText.Format(ToolFailureText.TimeoutCode,
+                $"The MCP tool '{Name}' did not respond within the configured {_timeout.TotalSeconds:0.##}s tool-call timeout and was cancelled. The server may be slow or unresponsive; do not retry the same call — continue without it or try a different approach.");
         }
     }
 }

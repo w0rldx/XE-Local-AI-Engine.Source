@@ -184,6 +184,26 @@ public sealed class McpAgentRunStoreTests : IDisposable
             "Metadata listing SQL must not select the encrypted display BLOB.");
     }
 
+    // I-D13: the dispatcher claims from the queued listing, which was newest-first and starved the oldest runs.
+    [Test]
+    public async Task ListAsync_Queued_IsOldestFirst_WhileOtherListingsStayNewestFirst()
+    {
+        var databasePath = GetDatabasePath("queued-order.sqlite");
+        await InitializeDatabaseAsync(databasePath);
+        await using var fixture = CreateFixture(databasePath);
+        var older = Guid.NewGuid();
+        var newer = Guid.NewGuid();
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, older, "older task") with { CreatedAtUtc = 1 });
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, newer, "newer task") with { CreatedAtUtc = 2 });
+
+        var queued = await fixture.Store.ListAsync(limit: 10, McpAgentRunStatus.Queued);
+        var all = await fixture.Store.ListAsync(limit: 10);
+
+        AssertEx.Equal(older, queued[0].RequestId);
+        AssertEx.Equal(newer, queued[1].RequestId);
+        AssertEx.Equal(newer, all[0].RequestId);
+    }
+
     [Test]
     public async Task Payloads_AreEncryptedWithFieldBinding_AndTamperFailsClosed()
     {

@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -29,6 +31,62 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal("after", parts[2].Text);
         AssertEx.Equal(expected: 2, parts[2].Sequence);
     }
+
+    [Test]
+    public void AccumulateToolPart_WithAnImageResult_PersistsTheImageAsItsOwnPartAfterTheCard()
+    {
+        var acc = new NodeChatPartAccumulator();
+        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+        var oversized = new DataContent(new byte[(1024 * 1024) + 1], "image/png");
+        var audio = new DataContent(new byte[] { 4 }, "audio/wav");
+        ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Requested, []), sequence: 1);
+
+        ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Completed, [image, oversized, audio]), sequence: 2);
+
+        var parts = acc.Snapshot();
+        AssertEx.Equal(expected: 2, parts.Count, "Only the image within the size cap is persisted; audio keeps its placeholder text only.");
+        AssertEx.Equal("[image image/png, 1 KB]", parts[0].Result, "The card keeps the model's text, never a type name.");
+        AssertEx.Equal(NodeChatMessagePartKinds.Image, parts[1].Kind);
+        AssertEx.Equal("call-1", parts[1].ToolCallId);
+        AssertEx.Equal("image/png", parts[1].Name);
+        AssertEx.Equal("data:image/png;base64,AQID", parts[1].Text);
+    }
+
+    [Test]
+    public void AccumulateToolPart_ManySmallImages_StopAtThePerMessageCeiling()
+    {
+        // Codex review 2026-09-30: the 1 MiB per-image cap alone let 100 images of 900 KiB grow one metadata row past 100 MiB.
+        var acc = new NodeChatPartAccumulator();
+        var images = Enumerable.Range(0, NodeChatPartAccumulator.MaxToolImagesPerMessage + 3)
+                               .Select(static _ => new DataContent(new byte[16], "image/png"))
+                               .ToList();
+        ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Requested, []), sequence: 1);
+
+        ChatStreamEventMapper.AccumulateToolPart(acc, Lifecycle(ToolCallLifecyclePhase.Completed, images), sequence: 2);
+
+        var imageParts = acc.Snapshot().Count(static part => part.Kind == NodeChatMessagePartKinds.Image);
+        AssertEx.Equal(NodeChatPartAccumulator.MaxToolImagesPerMessage, imageParts, "the count ceiling holds");
+
+        var bytesAcc = new NodeChatPartAccumulator();
+        var big = Enumerable.Range(0, 6).Select(static _ => new DataContent(new byte[900 * 1024], "image/png")).ToList();
+        ChatStreamEventMapper.AccumulateToolPart(bytesAcc, Lifecycle(ToolCallLifecyclePhase.Requested, []), sequence: 1);
+
+        ChatStreamEventMapper.AccumulateToolPart(bytesAcc, Lifecycle(ToolCallLifecyclePhase.Completed, big), sequence: 2);
+
+        var persistedBytes = bytesAcc.Snapshot().Where(static part => part.Kind == NodeChatMessagePartKinds.Image).Sum(static part => part.Text!.Length);
+        AssertEx.True(persistedBytes <= NodeChatPartAccumulator.MaxToolImageBytesPerMessage, $"the byte ceiling holds ({persistedBytes})");
+        AssertEx.True(persistedBytes > 0, "the first images still persist");
+    }
+
+    private static ToolCallLifecyclePayload Lifecycle(ToolCallLifecyclePhase phase, IReadOnlyList<DataContent> media) => new()
+    {
+        InvocationId = Guid.NewGuid(),
+        ToolCallId = "call-1",
+        ToolName = "mcp__srv__shot",
+        Phase = phase,
+        Result = phase == ToolCallLifecyclePhase.Completed ? "[image image/png, 1 KB]" : null,
+        Media = media
+    };
 
     [Test]
     public void AppendReasoning_MultipleDeltas_BeforeAnyTool_ExtendsTheSameSegment()

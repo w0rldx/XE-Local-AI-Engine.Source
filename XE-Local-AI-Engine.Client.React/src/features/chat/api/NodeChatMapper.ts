@@ -101,7 +101,26 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 		return accumulator;
 	}, []);
 
+	attachToolImages(mapped, parts);
 	return mapped.length > 0 ? mapped : undefined;
+}
+
+/**
+ * Folds `image` parts onto the tool card of the call that returned them. Only `data:image/` sources are accepted: the
+ * part's text is tool output, so anything else (a remote URL, another scheme) is dropped rather than rendered.
+ */
+function attachToolImages(mapped: ChatMessagePart[], parts: NodeChatMessagePartDto[]): void {
+	for (const part of parts) {
+		const src = part.text ?? "";
+		if (part.kind?.toLowerCase() !== "image" || !src.toLowerCase().startsWith("data:image/")) {
+			continue;
+		}
+
+		const tool = mapped.find((candidate) => candidate.kind === "tool" && candidate.id === part.toolCallId);
+		if (tool?.kind === "tool") {
+			tool.images = [...(tool.images ?? []), { mediaType: part.name ?? "image", src }];
+		}
+	}
 }
 
 /**

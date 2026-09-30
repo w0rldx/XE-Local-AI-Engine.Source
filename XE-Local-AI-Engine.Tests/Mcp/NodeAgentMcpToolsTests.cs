@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -235,7 +236,8 @@ public sealed class NodeAgentMcpToolsTests
 
         AssertEx.Equal(expectedStatus, response.Status);
         AssertEx.Equal("Stable response.", response.DisplayMessage);
-        if (kind is McpAgentRunStartKind.Accepted or McpAgentRunStartKind.Existing)
+        // An existing run whose result expired is a successful answer about that run: no top-level failure_code, as in get_agent_run.
+        if (kind is McpAgentRunStartKind.Accepted or McpAgentRunStartKind.Existing or McpAgentRunStartKind.ResultExpired)
         {
             AssertEx.Null(response.FailureCode);
         }
@@ -403,6 +405,25 @@ public sealed class NodeAgentMcpToolsTests
     }
 
     [Test]
+    public async Task GetAgentRunAsync_WhenTheRunFailed_ReportsTheRunsFailureInsideMetadataOnly()
+    {
+        // The poll succeeded; only the RUN failed. A top-level failure_code would make McpToolCallFilter mark the
+        // answer isError and a client would treat a correct status read as a failed call (review 2026-09-30).
+        var harness = new Harness();
+        harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Failed) with
+        {
+            FailureCode = "watchdog_expired",
+            DisplayMessage = "The run exceeded its watchdog."
+        };
+
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
+
+        AssertEx.Equal("failed", response.Status);
+        AssertEx.Null(response.FailureCode);
+        AssertEx.Equal("watchdog_expired", response.Run!.Metadata.FailureCode!);
+    }
+
+    [Test]
     [Arguments(McpAgentRunStatus.Queued, "queued")]
     [Arguments(McpAgentRunStatus.Running, "running")]
     [Arguments(McpAgentRunStatus.Succeeded, "succeeded")]
@@ -466,7 +487,9 @@ public sealed class NodeAgentMcpToolsTests
         AssertEx.True(response.Run!.Metadata.ResultExpired, "Expired result payloads must be reported truthfully.");
         AssertEx.True(response.Run.Metadata.Compacted, "Compacted payloads must be distinguishable from active empty results.");
         AssertEx.Equal("result_expired", response.Status);
-        AssertEx.Equal("result_expired", response.FailureCode!);
+        // A successful poll: the code sits in run.metadata, never at the top level, where the filter would flag the call isError.
+        AssertEx.Null(response.FailureCode);
+        AssertEx.Equal("result_expired", response.Run.Metadata.FailureCode!);
         AssertEx.Null(response.Run.Result);
     }
 
@@ -534,7 +557,7 @@ public sealed class NodeAgentMcpToolsTests
         var response = await harness.Tools.CancelAgentRunAsync("/private/repository", CancellationToken.None);
         var json = JsonSerializer.Serialize(response);
 
-        AssertEx.Equal("not_found", response.Status);
+        AssertEx.Equal("invalid_request", response.Status);
         AssertEx.Equal("invalid_request", response.FailureCode!);
         AssertEx.False(json.Contains("/private/repository", StringComparison.Ordinal), "Invalid request input must not be reflected.");
         AssertEx.Equal(0, harness.RunCoordinator.CancelCallCount);
@@ -618,7 +641,7 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("   ", harness.Progress, CancellationToken.None, model: Model);
 
-        AssertEx.Equal("Cannot run: provide a non-empty task.", result);
+        AssertRunFailure(result, "invalid_request", "Cannot run: provide a non-empty task.");
         await harness.McpService.DidNotReceive().SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
             Arg.Any<string>(),
             Arg.Any<string?>(),
@@ -632,7 +655,7 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, agent: Agent, model: Model);
 
-        AssertEx.Equal("Cannot run: provide exactly one of agent or model.", result);
+        AssertRunFailure(result, "invalid_request", "Cannot run: provide exactly one of agent or model.");
         await harness.McpService.DidNotReceive().SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
             Arg.Any<string>(),
             Arg.Any<string?>(),
@@ -646,7 +669,7 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None);
 
-        AssertEx.Equal("Cannot run: provide exactly one of agent or model.", result);
+        AssertRunFailure(result, "invalid_request", "Cannot run: provide exactly one of agent or model.");
         await harness.McpService.DidNotReceive().SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
             Arg.Any<string>(),
             Arg.Any<string?>(),
@@ -664,7 +687,7 @@ public sealed class NodeAgentMcpToolsTests
             model: Model,
             instructions: "Return concise evidence.");
 
-        AssertEx.Equal("model response", result);
+        AssertEx.Equal("model response", RunText(result));
         await harness.McpService.Received(1).SpawnForMcpAsync(Arg.Is<McpExecutionBindingRequest>(request =>
                 request.ModelId == Model
                 && request.AgentKey == null
@@ -682,7 +705,7 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("find the call site", harness.Progress, CancellationToken.None, agent: Agent);
 
-        AssertEx.Equal("agent response", result);
+        AssertEx.Equal("agent response", RunText(result));
         await harness.McpService.Received(1).SpawnForMcpAsync(Arg.Is<McpExecutionBindingRequest>(request =>
                 request.AgentKey == Agent
                 && request.ModelId == null
@@ -703,7 +726,7 @@ public sealed class NodeAgentMcpToolsTests
             agent: Agent,
             modelOverride: Model);
 
-        AssertEx.Equal("coder response", result);
+        AssertEx.Equal("coder response", RunText(result));
         await harness.McpService.Received(1).SpawnForMcpAsync(Arg.Is<McpExecutionBindingRequest>(request =>
                 request.AgentKey == Agent
                 && request.ModelId == null
@@ -726,7 +749,7 @@ public sealed class NodeAgentMcpToolsTests
             modelOverride: Model,
             workspace_id: workspaceId.ToString("D"));
 
-        AssertEx.Equal("coder response", result);
+        AssertEx.Equal("coder response", RunText(result));
         await harness.McpService.Received(1).SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
             "find the parser",
             expectedBindingFingerprint: null,
@@ -752,9 +775,7 @@ public sealed class NodeAgentMcpToolsTests
             agent: Agent,
             modelOverride: Model);
 
-        AssertEx.Equal("Cannot run: the selected workspace is not authorized.", result);
-        AssertEx.False(result.Contains("workspace_not_authorized", StringComparison.Ordinal),
-            "synchronous tool result must keep stable codes internal.");
+        AssertRunFailure(result, "workspace_not_authorized", "Cannot run: the selected workspace is not authorized.");
     }
 
     [Test]
@@ -769,8 +790,8 @@ public sealed class NodeAgentMcpToolsTests
             modelOverride: Model,
             workspace_id: "/private/repo");
 
-        AssertEx.Equal("Cannot run: the selected workspace is not authorized.", result);
-        AssertEx.False(result.Contains("/private/repo", StringComparison.Ordinal), "invalid workspace input must not be reflected.");
+        AssertRunFailure(result, "workspace_not_authorized", "Cannot run: the selected workspace is not authorized.");
+        AssertEx.False(RunText(result).Contains("/private/repo", StringComparison.Ordinal), "invalid workspace input must not be reflected.");
         await harness.McpService.DidNotReceiveWithAnyArgs().SpawnForMcpAsync(default!, default!, default, default);
     }
 
@@ -812,9 +833,8 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model);
 
-        AssertEx.Equal("Cannot run: the local model is busy.", result);
-        AssertEx.False(result.Contains("capacity_declined", StringComparison.Ordinal),
-            "the synchronous MCP tool result must not expose the stable failure code.");
+        AssertRunFailure(result, "capacity_declined", "Cannot run: the local model is busy.");
+        AssertEx.Equal("Cannot run: the local model is busy.", harness.Progress.Values[^1].Message);
     }
 
     [Test]
@@ -856,7 +876,7 @@ public sealed class NodeAgentMcpToolsTests
 
         var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model);
 
-        AssertEx.Equal(expected, result);
+        AssertEx.Equal(expected, RunText(result));
     }
 
     [Test]
@@ -866,13 +886,78 @@ public sealed class NodeAgentMcpToolsTests
         const string marker = "\n\n[output truncated by the XE Local AI Engine MCP server]";
         var harness = new Harness(new string('x', retainedCharacters + 1));
 
-        var result = await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model);
+        var result = RunText(await harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model));
 
         AssertEx.Equal(retainedCharacters + marker.Length, result.Length);
         AssertEx.True(result.AsSpan(0, retainedCharacters).IndexOfAnyExcept('x') < 0,
             "the adapter must retain the first 24,000 result characters unchanged.");
         AssertEx.True(result.EndsWith(marker, StringComparison.Ordinal),
             "the bounded result must explain that truncation happened at the MCP server.");
+    }
+
+    // I-D11: run_agent had no task bound while start_agent_run enforced 32 KiB without naming it.
+    [Test]
+    public async Task RunAgentAsync_WhenTaskExceedsBound_RejectsTaskTooLargeWithoutSpawning()
+    {
+        var harness = new Harness();
+
+        var result = await harness.Tools.RunAgentAsync(new string('x', 32 * 1024 + 1), harness.Progress, CancellationToken.None, model: Model);
+
+        AssertRunFailure(result, "task_too_large", "Cannot run: the task exceeds the 32 KiB UTF-8 bound.");
+        await harness.McpService.DidNotReceiveWithAnyArgs().SpawnForMcpAsync(default!, default!, default, default);
+    }
+
+    [Test]
+    public async Task RunAgentAsync_WhenInstructionsExceedBound_RejectsTaskTooLargeWithoutSpawning()
+    {
+        // Live re-run J7b: start_agent_run bounded instructions at 16 KiB while run_agent let them through to the context check.
+        var harness = new Harness();
+
+        var result = await harness.Tools.RunAgentAsync("say hi", harness.Progress, CancellationToken.None, model: Model, instructions: new string('x', 16 * 1024 + 1));
+
+        AssertRunFailure(result, "task_too_large", "Cannot run: instructions exceed the 16 KiB UTF-8 bound.");
+        await harness.McpService.DidNotReceiveWithAnyArgs().SpawnForMcpAsync(default!, default!, default, default);
+    }
+
+    // I-D15: a long generation reported only 0, 0.1 and 1.0, so a client's idle window could abort a healthy run.
+    [Test]
+    public async Task RunAgentAsync_WhileGenerating_ReportsIncreasingHeartbeatUntilTheRunEnds()
+    {
+        var harness = new Harness();
+        var running = new TaskCompletionSource<SpawnOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.McpService.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
+                   Arg.Any<string>(),
+                   Arg.Any<string?>(),
+                   Arg.Any<CancellationToken>(),
+                   Arg.Any<Guid?>())
+               .Returns(running.Task);
+
+        var call = harness.Tools.RunAgentAsync("inspect", harness.Progress, CancellationToken.None, model: Model);
+        await AssertEx.EventuallyAsync(() => harness.Progress.Values.Count == 2, TestBudgets.Contended, "the run must have started");
+        harness.Time.Advance(NodeAgentMcpTools.HeartbeatInterval);
+        await AssertEx.EventuallyAsync(() => harness.Progress.Values.Count == 3, TestBudgets.Contended, "one heartbeat per interval");
+        harness.Time.Advance(NodeAgentMcpTools.HeartbeatInterval);
+        await AssertEx.EventuallyAsync(() => harness.Progress.Values.Count == 4, TestBudgets.Contended, "one heartbeat per interval");
+        running.SetResult(SpawnOutcome.Success("done"));
+        _ = await call;
+
+        var values = harness.Progress.Values;
+        AssertEx.Equal(5, values.Count);
+        AssertEx.True(values.Zip(values.Skip(1)).All(static pair => pair.Second.Progress > pair.First.Progress),
+            "progress must increase with every notification");
+        AssertEx.Equal("Still running on the local model (30 s)…", values[3].Message);
+        AssertEx.Equal("Completed.", values[4].Message);
+    }
+
+    private static string RunText(CallToolResult result) =>
+        string.Join("\n", result.Content.OfType<TextContentBlock>().Select(static block => block.Text));
+
+    private static void AssertRunFailure(CallToolResult result, string failureCode, string displayMessage)
+    {
+        AssertEx.True(result.IsError ?? false, "a run_agent failure must be an isError result");
+        using var body = JsonDocument.Parse(RunText(result));
+        AssertEx.Equal(failureCode, body.RootElement.GetProperty("failure_code").GetString()!);
+        AssertEx.Equal(displayMessage, body.RootElement.GetProperty("display_message").GetString()!);
     }
 
     private static void AssertSchema(NodeAgentMcpTools tools,
@@ -976,6 +1061,7 @@ public sealed class NodeAgentMcpToolsTests
                     DefaultListLimit = defaultListLimit,
                     MaxListLimit = maxListLimit
                 }),
+                Time,
                 NullLogger<NodeAgentMcpTools>.Instance);
         }
 
@@ -986,6 +1072,8 @@ public sealed class NodeAgentMcpToolsTests
         public INodeSettingsAdministrationService NodeSettingsAdministration { get; } = Substitute.For<INodeSettingsAdministrationService>();
 
         public RecordingProgress Progress { get; } = new();
+
+        public ManualTimeProvider Time { get; } = new();
 
         public FakeMcpAgentRunCoordinator RunCoordinator { get; } = new();
 
@@ -1081,11 +1169,27 @@ public sealed class NodeAgentMcpToolsTests
 
     private sealed class RecordingProgress : IProgress<ProgressNotificationValue>
     {
-        public List<ProgressNotificationValue> Values { get; } = [];
+        private readonly Lock _gate = new();
+        private readonly List<ProgressNotificationValue> _values = [];
+
+        // A snapshot: the heartbeat reports from a timer callback while a test reads.
+        public IReadOnlyList<ProgressNotificationValue> Values
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _values];
+                }
+            }
+        }
 
         public void Report(ProgressNotificationValue value)
         {
-            Values.Add(value);
+            lock (_gate)
+            {
+                _values.Add(value);
+            }
         }
     }
 }

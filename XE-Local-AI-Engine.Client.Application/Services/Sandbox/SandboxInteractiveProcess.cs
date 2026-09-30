@@ -21,4 +21,17 @@ public interface ISandboxInteractiveProcess : IAsyncDisposable
 
     /// <summary>The command's standard output. Reads return what the command has written.</summary>
     Stream StandardOutput { get; }
+
+    /// <summary>
+    ///     Waits briefly for the command to exit and its <c>stderr</c> to drain, then returns the last lines it wrote there
+    ///     (bounded, configured environment values redacted), or <see langword="null" /> when it wrote none.
+    /// </summary>
+    /// <remarks>
+    ///     For diagnosing a command that died: a caller that sees the protocol stream end asks for this to say WHY. The
+    ///     default has no tail to offer, which is honest for a provider that does not capture one.
+    /// </remarks>
+    Task<string?> GetStandardErrorTailAsync()
+    {
+        return Task.FromResult<string?>(null);
+    }
 }

@@ -41,6 +41,26 @@ internal sealed record class McpServerRegistration
     public string? Url { get; set; }
 
     /// <summary>
+    ///     Http transport: JSON map of request headers as UTF-8 bytes (an Authorization header is a credential).
+    ///     Plaintext while tracked in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" />
+    ///     and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     <c>headers</c>.
+    /// </summary>
+    public byte[]? HeadersJson { get; set; }
+
+    /// <summary>
+    ///     The slug in this server's qualified tool names (<c>mcp__{slug}__{tool}</c>). Plaintext; unique index.
+    /// </summary>
+    /// <remarks>
+    ///     Null until the first connect assigns it, then never recomputed: a rename or another server's enable or
+    ///     disable must not re-bind tool names that agent allow-lists already reference.
+    /// </remarks>
+    public string? Slug { get; set; }
+
+    /// <summary>Backing int for <see cref="McpSessionScope" />. Plaintext (structural).</summary>
+    public int SessionScope { get; set; }
+
+    /// <summary>
     ///     Backing int for <see cref="McpTrustTier" />. Plaintext (structural): the sandbox backend selector reads it
     ///     before any key is available, and a tier is not a secret.
     /// </summary>

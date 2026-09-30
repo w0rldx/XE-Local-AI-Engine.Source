@@ -15,7 +15,13 @@ export type McpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
 // The two an operator may choose, in the order the selector shows them: the secure default first.
 export const selectableMcpTrustTiers: readonly McpTrustTier[] = ["Sandboxed", "PrivilegedHost"];
 
-// The placeholder the API returns in place of every stored environment VALUE, and the sentinel an update sends
+// Mirrors the backend McpSessionScope enum. Shared = one server session for every caller; PerConversation = each
+// chat/agent conversation gets its own session (stdio servers cap at 4 live per-conversation processes).
+export type McpSessionScope = "Shared" | "PerConversation";
+
+export const mcpSessionScopes: readonly McpSessionScope[] = ["Shared", "PerConversation"];
+
+// The placeholder the API returns in place of every stored environment and header VALUE, and the sentinel an update sends
 // back to mean "keep what is stored". Must match McpEnvironmentMask.Value on the backend.
 export const maskedEnvValue = "__XE_MCP_ENV_UNCHANGED__";
 
@@ -41,7 +47,9 @@ export interface McpServerRegistration {
 	readonly workingDirectory: string | null;
 	readonly env: readonly McpEnvEntry[];
 	readonly url: string | null;
+	readonly headers: readonly McpEnvEntry[];
 	readonly trustTier: McpTrustTier;
+	readonly sessionScope: McpSessionScope;
 	readonly enabled: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
@@ -60,7 +68,9 @@ export interface McpServerFormValues {
 	workingDirectory: string;
 	env: McpEnvEntry[];
 	url: string;
+	headers: McpEnvEntry[];
 	trustTier: McpTrustTier;
+	sessionScope: McpSessionScope;
 }
 
 const transportKindSchema = z.enum(["Stdio", "Http"]);
@@ -101,7 +111,9 @@ export const mcpServerFormSchema = z
 		workingDirectory: z.string(),
 		env: z.array(envEntrySchema),
 		url: z.string(),
+		headers: z.array(envEntrySchema),
 		trustTier: trustTierSchema,
+		sessionScope: z.enum(["Shared", "PerConversation"]),
 	})
 	// Custom issue messages are i18n keys; the form translates them.
 	.superRefine((value, ctx) => {
@@ -121,6 +133,11 @@ export const mcpServerFormSchema = z
 		for (const [index, entry] of value.env.entries()) {
 			if (entry.value.trim().length > 0 && entry.key.trim().length === 0) {
 				ctx.addIssue({ code: "custom", message: "pages.mcp.form.validation.envKeyRequired", path: ["env", index, "key"] });
+			}
+		}
+		for (const [index, entry] of value.headers.entries()) {
+			if (entry.value.trim().length > 0 && entry.key.trim().length === 0) {
+				ctx.addIssue({ code: "custom", message: "Header name is required", path: ["headers", index, "key"] });
 			}
 		}
 	});

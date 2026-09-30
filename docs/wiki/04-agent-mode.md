@@ -451,6 +451,56 @@ treat them uniformly.
 concrete tool list passed to each agent; `InvocationToolBridge` adapts metadata tool functions
 (`Tools/Implementation/MetadataToolFunction.cs`).
 
+#### Outbound MCP tools: sessions, failures and results
+
+`McpServerConnectionManager` (`Services/Mcp/Implementation/`) owns every outbound MCP client and publishes the
+tool snapshot the MCP registry serves. A registered tool is named `mcp__{slug}__{tool}`; the slug is assigned on
+the server's first connect (oldest registration first, collision suffix `-2`, `-3`, …), persisted on the
+registration and never recomputed, so disabling one server or renaming another never re-binds an agent's
+allow-list. Each tool's executable is wrapped, innermost first: the per-call timeout
+(`McpToolCallTimeoutAIFunction`), schema-driven argument repair (unknown properties allowed, since a server may
+under-declare its schema), the result projection, the shared result budget, and `ApprovalRequiredAIFunction`
+outermost.
+
+**Connection lifecycle.** The manager watches each client's `Completion`. When a connected session ends — a stdio
+process exits (`ServerExited`, with the exit code and a scrubbed stderr tail) or an HTTP server forgets the
+session (`SessionLost`, HTTP 404) — the server moves to the error state but its tools **stay offered**. Every call
+goes through one routing function (`InvokeRoutedAsync`): it uses the live session, or reconnects once (bounded by
+`ConnectTimeoutSeconds`) when the session has ended, or returns a typed failure result,
+`[tool error: server_unavailable] MCP server '<name>' is not connected: <reason> The next call retries; use Reconnect on the MCP page if it keeps failing.`,
+which the model can read and the audit records as an error. A call whose session is lost mid-flight (404) is
+retried once on a fresh session, because the server provably never ran it; any other transport fault is
+reported, never retried, because a tool call is not idempotent. A registration change through `McpServerService` refreshes only that
+registration (`RefreshAsync(id)`); the startup connector refreshes every enabled server, connecting them in
+parallel. Connect failures carry a reason
+(`McpConnectionFailureReason`: `AuthenticationRequired` for a 401 with no headers configured, `Authentication`
+for a 401 with headers, `Forbidden`, `Tls`, `ServerStartupFailed`, `ServerExited`, `SessionLost`, and the older
+ones); see [Security & Privacy](12-security-and-privacy.md) §7.2 for what the text may contain.
+
+**`tools/list_changed`.** A handler registered at connect re-lists and republishes the snapshot 500 ms after the
+last notification of a burst. It fires only for servers negotiating a protocol older than 2026-07-28: on
+2026-07-28 the notification arrives only on a `subscriptions/listen` stream the SDK client does not open, and that
+revision has no HTTP sessions, so the `SessionLost` retry is likewise an older-protocol path.
+
+**Session scope.** A registration's `SessionScope` is `Shared` (default: one session for every caller) or
+`PerConversation`, for a stateful server whose per-session memory must not leak between conversations. The router
+keys a per-conversation session by `AgentRunConversationContext.Current`, which only chat and agent runs set;
+inbound MCP runs and unattended paths always use the shared session. A per-conversation session idle for 15
+minutes is disposed (`TimeProvider`), and a stdio server runs at most 4 per-conversation processes: the fifth
+conversation's call fails typed rather than silently sharing a session.
+
+**Result projection.** `McpToolResultProjectionAIFunction` (`AI.Agent/Tools/Implementation/`) turns the raw
+`CallToolResult` into the text the model reads: text blocks joined, one `structuredContent` copy unless a text
+block already mirrors it, an `isError` result prefixed `[tool error: tool_reported]`, and an image or audio block
+replaced by a placeholder such as `[image image/png, 34 KB]`. The binary block rides beside that string
+(`ToolResultMedia`), so the chat persists it as an `image` part under the call's card; the model never receives
+the base64. The projection sits inside the result budget, so the budget measures what the model reads. The budget
+(`ToolResultBudget.Truncate`, shared by every registry) keeps three quarters head and one quarter tail with a
+`[truncated: N of M chars shown]` marker, and `InvocationRunner` tightens it per turn to about a quarter of the
+model's context window in characters (the window's token count), capped at 65,536 characters. A call that hits
+the per-call timeout is audited with outcome `timeout`; the SDK sends the server no `notifications/cancelled`, so
+the server-side work is not cancelled.
+
 #### Effective approval policy
 
 `IToolApprovalPolicy` applies a **node-level, tighten-only** approval layer after the tool offer is
@@ -1868,8 +1918,10 @@ in the same shape as `AgentRunConversationContext`: `ToolResultBudgetScope` (rea
 `BudgetedToolResultAIFunction` — the single wrapper every ClientLocal, Custom and MCP tool routes
 through, which is why one edit there bounds all three) and `ProviderCallBudget.BeginCallCapScope` (read
 when the runner builds its own budget scope, since that scope replaces any the caller seeded). Both are
-**tighten-only**: a value at or above the node ceiling has no effect, so no run can raise it, and an
-unseeded flow — every ordinary chat turn — is byte-identical.
+**tighten-only**: a value at or above the node ceiling has no effect, so no run can raise it. Every
+turn now also seeds a result budget sized to its model's window (`InvocationRunner`,
+`ToolResultBudgetScope.BeginTightenedScope`), which applies only where it is tighter than the step's
+seed, so a step's own bound is never loosened.
 
 **A spent call cap ends the STEP, not the session.** `ProviderCallBudgetExceededException` classifies as
 a failure, so the supervisor recognises the budget's own fixed terminal message

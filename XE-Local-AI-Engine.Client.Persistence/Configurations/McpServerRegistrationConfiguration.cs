@@ -11,7 +11,11 @@ internal sealed class McpServerRegistrationConfiguration : IEntityTypeConfigurat
         // The tier decides where a stdio server's process runs, so a value outside the enum is not a display bug — it is a row the backend selector cannot resolve.
         // Constrained in the schema for the same reason the api-key scope is.
         builder.ToTable("mcp_servers",
-            table => table.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)"));
+            table =>
+            {
+                table.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)");
+                table.HasCheckConstraint("CK_mcp_servers_session_scope", "session_scope IN (0, 1)");
+            });
         builder.HasKey(entity => entity.Id);
 
         builder.Property(entity => entity.Id)
@@ -44,6 +48,16 @@ internal sealed class McpServerRegistrationConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.Url)
                .HasColumnName("url");
 
+        builder.Property(entity => entity.HeadersJson)
+               .HasColumnName("headers");
+
+        builder.Property(entity => entity.Slug)
+               .HasColumnName("slug");
+
+        builder.Property(entity => entity.SessionScope)
+               .HasColumnName("session_scope")
+               .HasDefaultValue(0);
+
         builder.Property(entity => entity.TrustTier)
                .HasColumnName("trust_tier");
 
@@ -61,6 +75,11 @@ internal sealed class McpServerRegistrationConfiguration : IEntityTypeConfigurat
 
         // The server Name is the source of the qualified tool-name slug, so uniqueness keeps tool names collision-free.
         builder.HasIndex(entity => entity.Name)
+               .IsUnique();
+
+        // The persisted slug is the tool-name prefix, so two servers may never share one. SQLite treats NULLs as
+        // distinct, so rows not yet connected (slug unassigned) do not collide.
+        builder.HasIndex(entity => entity.Slug)
                .IsUnique();
     }
 }

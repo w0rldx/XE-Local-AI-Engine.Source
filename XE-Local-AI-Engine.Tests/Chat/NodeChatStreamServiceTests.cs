@@ -4818,6 +4818,66 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.False(contents.Contains("a-one"), "The deselected original sibling must stay out of context.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_FollowUpTurn_ReplaysTheEarlierToolExchangeAsACappedExcerpt()
+    {
+        var conversationId = Guid.NewGuid();
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: null,
+            conversationMessages: ToolInvestigationTurn(conversationId));
+
+        var assistant = runner.CapturedContext.Single(message => message.Role == MessageRole.Assistant);
+        var exchange = AssertEx.NotNull(assistant.ToolExchanges, "The follow-up must see what the earlier tool call returned.").Single();
+        AssertEx.Equal("call-1", exchange.CallId);
+        AssertEx.Equal("mcp__codegraph__explore", exchange.Name);
+        var result = AssertEx.NotNull(exchange.Result);
+        AssertEx.True(result.StartsWith("Classify maps HttpRequestException", StringComparison.Ordinal), "The excerpt keeps the head of the result.");
+        AssertEx.Contains(result, "[truncated:");
+        AssertEx.True(result.Length < 2_100, $"The replay is capped at the historical excerpt, got {result.Length} chars.");
+        AssertEx.False(runner.Events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolHistoryWithheld)));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_FollowUpTurnOnACloudModel_WithholdsTheToolHistoryAndNotifies()
+    {
+        var conversationId = Guid.NewGuid();
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: null,
+            conversationMessages: ToolInvestigationTurn(conversationId),
+            model: "gpt-5.5");
+
+        AssertEx.True(runner.CapturedContext.All(message => message.ToolExchanges is null), "Node-local tool output must not reach a cloud model without the opt-in.");
+        AssertEx.ContainsSingle(runner.Events, streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolHistoryWithheld));
+    }
+
+    private static IReadOnlyList<NodeChatPersistedMessageDto> ToolInvestigationTurn(Guid conversationId) =>
+    [
+        AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 1, "user", "How does Classify work?"),
+        AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 2, "assistant", "It maps exceptions to reasons.") with
+        {
+            Parts =
+            [
+                new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
+                    1,
+                    Text: null,
+                    ToolCallId: "call-1",
+                    Name: "mcp__codegraph__explore",
+                    State: NodeChatToolPartStates.Received,
+                    Args: "{\"query\":\"Classify\"}",
+                    Result: "Classify maps HttpRequestException " + new string('x', 20_000),
+                    RequiresApproval: true)
+            ]
+        }
+    ];
+
     private static NodeChatPersistedMessageDto AnchorScenarioMessage(Guid conversationId,
         Guid messageId,
         int sequence,
@@ -4852,7 +4912,8 @@ public sealed class NodeChatStreamServiceTests
         IReadOnlyDictionary<Guid, Guid>? requestSelection,
         string? compactionSummary = null,
         int? compactionCoversToSequence = null,
-        IReadOnlyList<NodeChatPersistedMessageDto>? conversationMessages = null)
+        IReadOnlyList<NodeChatPersistedMessageDto>? conversationMessages = null,
+        string? model = null)
     {
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -4895,17 +4956,17 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "follow up",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
+                           Model: model,
                            SelectedPath: requestSelection)))
         {
-            drained++;
+            runner.Events.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.Events.Count > 0, "Expected the send to stream events.");
         AssertEx.True(runner.CaptureObserved, "Expected the invocation runner to observe the runtime package.");
         runner.SelectionPersisted = persistence.ReceivedCalls()
                                                .Any(call => call.GetMethodInfo().Name == nameof(INodeChatPersistenceService.SetSelectedPathAsync));
@@ -5296,6 +5357,9 @@ public sealed class NodeChatStreamServiceTests
         // Set by RunWithVariantConversationAsync after the run, from a NSubstitute Received() check on the mock —
         // exposed here so the test reads one object.
         public bool SelectionPersisted { get; set; }
+
+        public List<ChatStreamEvent> Events { get; } = [];
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)

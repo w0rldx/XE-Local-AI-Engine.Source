@@ -22,6 +22,18 @@ public static class McpExecutionFailureCodes
     public const string WorkspaceNotAuthorized = "workspace_not_authorized";
     public const string WorkspaceBusy = "workspace_busy";
     public const string WorkspacePreparationFailed = "workspace_preparation_failed";
+
+    /// <summary>The run finished without any answer text.</summary>
+    public const string NoAnswer = "no_answer";
+
+    /// <summary>The run stopped on a tool approval request that nothing on the inbound path can answer.</summary>
+    public const string ApprovalRequired = "approval_required";
+
+    /// <summary>The task does not fit the bound (<c>MaxTaskUtf8Bytes</c>) or the model's context window.</summary>
+    public const string TaskTooLarge = "task_too_large";
+
+    /// <summary>Several agents share the requested name; name-keyed lookups refuse to pick one.</summary>
+    public const string AmbiguousName = "ambiguous_name";
 }
 
 /// <summary>

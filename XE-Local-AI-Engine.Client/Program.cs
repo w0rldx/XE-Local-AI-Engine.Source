@@ -758,6 +758,8 @@ namespace XE_Local_AI_Engine.Client
                 });
             }
 
+            // Wrong verbs and bodies on the MCP endpoint answer 405/415 here, before authentication, instead of the JWT fallback's 401.
+            app.UseMcpEndpointMethodGuard(new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}"));
             app.UseAuthentication();
             app.UseAuthorization();
 

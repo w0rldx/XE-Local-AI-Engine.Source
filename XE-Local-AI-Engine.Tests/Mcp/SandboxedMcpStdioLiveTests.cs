@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -192,6 +193,38 @@ public sealed class SandboxedMcpStdioLiveTests
         await AssertEx.EventuallyAsync(() => LoadedEngineScopeCount() == 0,
             TimeSpan.FromSeconds(20),
             "disposing the MCP connection must empty the transient scope, not only close the streams");
+    }
+
+    [Test]
+    public async Task SandboxedServer_ThatDiesOnStartup_SurfacesItsStderrTailOnTheHandshakeFailure()
+    {
+        // What an npm- or uv-installed server does in the jail: it starts, cannot find its interpreter or modules, says so on stderr
+        // and exits. That sentence is the whole diagnosis, and it has to reach the exception rather than being drained away.
+        RequireIsolationCapableHost();
+
+        using var fixture = new ShellMcpServerFixture();
+        using var provider = CreateProvider();
+        var record = fixture.ToRecord(McpTrustTier.Sandboxed) with
+        {
+            Arguments = ["-c", "echo 'fixture: starting' >&2; echo 'fixture: cannot find module server.js' >&2; exit 3"]
+        };
+        var transport = new SandboxedMcpStdioTransport(record,
+            provider,
+            new StubIdentityProvider(),
+            NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLoggerFactory.Instance);
+
+        using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        var exception = await AssertEx.ThrowsAsync<McpServerStartupException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+
+        AssertEx.Contains(exception.StderrTail ?? string.Empty, "fixture: starting");
+        AssertEx.Contains(exception.StderrTail ?? string.Empty, "fixture: cannot find module server.js");
+        await AssertEx.EventuallyAsync(() => LoadedEngineScopeCount() == 0,
+            TimeSpan.FromSeconds(20),
+            "a server that died on startup must leave no sandbox scope behind");
     }
 
     private static int LoadedEngineScopeCount()

@@ -121,7 +121,8 @@ internal static class SandboxIsolatedChain
         AppendReadOnlyPosture(chain);
         AppendEnvironment(chain, inputs);
 
-        chain.Add("--die-with-parent");
+        // No --die-with-parent: its PR_SET_PDEATHSIG binds to the forking THREAD, and a retiring .NET thread-pool worker
+        // SIGKILLed jails after 40-180 s (2026-09-30); the scope's KillMode/RuntimeMaxSec and the reaper bound the lifetime.
         chain.Add("--new-session");
         chain.Add("--");
         chain.Add(executable);

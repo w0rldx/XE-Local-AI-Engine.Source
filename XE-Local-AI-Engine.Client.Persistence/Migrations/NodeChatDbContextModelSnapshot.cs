@@ -5380,11 +5380,25 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("env");
 
+                    b.Property<byte[]>("HeadersJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("headers");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name")
                         .UseCollation("NOCASE");
+
+                    b.Property<int>("SessionScope")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("session_scope");
+
+                    b.Property<string>("Slug")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("slug");
 
                     b.Property<int>("TransportKind")
                         .HasColumnType("INTEGER")
@@ -5415,8 +5429,13 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("Name")
                         .IsUnique();
 
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
                     b.ToTable("mcp_servers", null, t =>
                         {
+                            t.HasCheckConstraint("CK_mcp_servers_session_scope", "session_scope IN (0, 1)");
+
                             t.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)");
                         });
                 });

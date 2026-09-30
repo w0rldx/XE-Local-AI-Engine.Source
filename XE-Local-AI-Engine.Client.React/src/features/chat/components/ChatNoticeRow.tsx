@@ -5,7 +5,9 @@ import {
 	IconBookOff,
 	IconFilter,
 	IconHistory,
+	IconHistoryOff,
 	IconInfoCircle,
+	IconMessageOff,
 	IconToolsOff,
 	IconUsersGroup,
 } from "@tabler/icons-react";
@@ -37,6 +39,10 @@ function noticeIcon(noticeKind: string) {
 			return IconBolt;
 		case "PlaybookWithheld":
 			return IconBookOff;
+		case "EmptyAnswer":
+			return IconMessageOff;
+		case "ToolHistoryWithheld":
+			return IconHistoryOff;
 		default:
 			return IconInfoCircle;
 	}
@@ -59,6 +65,10 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.effortDispatched";
 		case "PlaybookWithheld":
 			return "chat.notices.playbookWithheld";
+		case "EmptyAnswer":
+			return "chat.notices.emptyAnswer";
+		case "ToolHistoryWithheld":
+			return "chat.notices.toolHistoryWithheld";
 		default:
 			return undefined;
 	}

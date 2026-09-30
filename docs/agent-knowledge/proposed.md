@@ -27,3 +27,35 @@ Once the operator approves it, move the entry to its topic file and delete it he
 ### A UI that polls image or whisper residency reads `model-fit/runtime-residents`, never a runtime status route or `isBusy`
 
 **Rule:** poll `GET model-fit/runtime-residents` for image and whisper residents (llama.cpp stays on `model-fit/running`), never `GET transcription/runtime` or `GET images/runtime`, and never read an activity snapshot's `isBusy` as "work is running" or "eject allowed": it counts a resident daemon, while the row's `canEject` repeats the gate's eviction-reservation refusal. **Prevents:** a per-poll settings load, installed-runtime read and model recommendation from the transcription status route; an eject button disabled whenever anything is loaded. **Authority:** `RuntimeResidentsService`, `TranscriptionRuntimeService.GetRuntimeAsync`, `ImageRuntimeActivitySnapshot.IsBusy`, `TryAcquireEvictionReservation` on both activity gates; wiki 14 and 24, 2026-09-29. Target: frontend-and-api.md.
+
+### `DelegatingAIFunction` does not hide `ApprovalRequiredAIFunction` from MEAI
+
+**Rule:** a wrapper meant to run an approval-required function without a human (an auto-approval adapter) must override `GetService` to return null for `typeof(ApprovalRequiredAIFunction)`; unwrapping via `InnerFunction` works too. `FunctionInvokingChatClient` detects approval with `GetService<ApprovalRequiredAIFunction>()`, and `DelegatingAIFunction.GetService` forwards to the wrapped function, so a plain delegating wrapper stays approval-required. **Prevents:** every call becoming a `ToolApprovalRequestContent` nothing answers, the run ending as an empty "succeeded" with no invocation and no audit row (inbound agentic MCP runs, I-D12). **Authority:** `McpAgenticToolAdapter` (`GetService` override), `McpAgenticToolAdapterTests.FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval`; ADR 0006 amendment 2026-09-30. Target: agents-and-sandbox.md.
+
+### Sandboxed MCP = self-contained servers; the registration `PATH` replaces the jail `PATH`
+
+**Rule:** a `Sandboxed` stdio MCP server sees only its command's directory, its working directory and `/usr`, read-only: a symlinked command's target and a script's interpreter are not bound, so npm/npx/uv/uvx/mise/nvm/venv installs need `PrivilegedHost`. The jail `PATH` is `/usr/bin:/bin`; a registration `PATH` variable REPLACES it (the chain applies registration env last), it never extends it, and this node's `PATH` never reaches the jail. Only a server that dies before its first message gets a stderr tail. **Prevents:** debugging a sandboxed server by fixing the host `PATH`, or adding one directory to `PATH` and losing `/usr/bin`. **Authority:** `SandboxIsolatedChain.SandboxPath`, `SandboxedMcpStdioTransport.JailSearchPath`, `SandboxedMcpStdioTransportTests`; `docs/security/mcp-trust-tiers.md`. Target: sandbox-and-compute.md.
+
+### Development-host MCP clients need the https origin
+
+**Rule:** on an Aspire development host (not a local launch mode) point an MCP client at the https `endpointUrl` that `mcp/server-key` returns, never the http origin: `UseHttpsRedirection` answers the MCP POST with a cross-port 307. The development certificate is self-signed with `CA:FALSE`, so Claude Code needs `NODE_TLS_REJECT_UNAUTHORIZED=0` (`NODE_EXTRA_CA_CERTS` fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`) and Codex needs `SSL_CERT_FILE` with the exported certificate. **Prevents:** a valid key reported as rejected (Claude Code follows the 307 and drops `Authorization`), or a client refusing the cross-origin redirect. `--mcp-only` serves plain http and is unaffected. **Authority:** `Program.cs` (`UseHttpsRedirection` when not local mode), `McpServerApiKeyMapper.BuildEndpointUrl`; live round 2026-09-30; MCP client runbook "Development host (Aspire)". Target: agents-and-sandbox.md.
+
+### Rewrite: "Persisted chat parts are a render/reload record, not model context" (agents-and-sandbox.md)
+
+Two sentences of the current rule are false since the MCP hardening round: "requested only by the integration execution coordinator for a `CallerManaged` session, and only off the FULL read (`GetConversationAsync`)" and "Normal chat never replays parts." Proposed replacement:
+
+**Rule:** a `NodeChatMessagePart` reaches the model only via `ConversationContextBuilder.Build(includeToolHistory: true)` → `ToolExchanges` → `InvocationRunner.BuildChatMessages`. Plain chat (`NodeChatStreamService`) requests it every turn off `GetConversationForTurnAsync`, each result cut to a 2,000-char excerpt and withheld for a cloud model without `AllowCloudModelAccess` (`ToolHistoryWithheld` notice); that read blanks `metadata_json` of compaction-covered rows, so covered exchanges are not replayed. A `CallerManaged` integration continuation uses the full read and replays them. Image parts never replay. **Prevents:** assuming a turn sees tool calls because the SPA renders them. **Authority:** `NodeChatStreamServiceTests` (follow-up, cloud), `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, `NodeChatTurnReadCapTests`.
+
+### Note: ModelContextProtocol 2.2.0 does not send `notifications/cancelled` when a call's token fires
+
+**Rule:** do not rely on the MCP client to cancel server-side work: cancelling the token passed to `CallToolAsync`/`McpClientTool.InvokeAsync` sends no `notifications/cancelled` (observed on the wire against an in-process server on protocols 2025-11-25 and 2026-07-28; over HTTP the cancellation throws inside the send before the cancellation registration runs). `McpToolCallTimeoutAIFunction`'s timeout therefore abandons the call and audits `timeout` while the server keeps working. **Prevents:** trusting the SDK surface note that token cancellation notifies the server, and writing a test that waits for a notification that never comes. **Authority:** S4 wire observation, MCP hardening 2026-09-30 (PLAN §8); server-side cancel on timeout deferred. Target: agents-and-sandbox.md. Re-check on an SDK bump.
+
+### bwrap `--die-with-parent` under .NET kills the jail when a thread-pool thread retires
+
+**Rule:** never pass `--die-with-parent` to bubblewrap (or set `PR_SET_PDEATHSIG` on any child) from a .NET host: the
+kernel binds the death signal to the forking THREAD, and `Process.Start` runs on a thread-pool worker that the pool
+retires after idling, so the jail is SIGKILLed at a random moment. Bound a jail's lifetime with the systemd scope
+(`KillMode=control-group`, `RuntimeMaxSec`), stdin EOF and the startup reaper instead. **Prevents:** sandboxed MCP stdio
+servers dying after 40-180 s with no exit code, no stderr and nothing in the host log (live round 2026-09-30, two
+reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 10-100 ms sample). **Authority:**
+`SandboxIsolatedChainTests.Render_NeverAsksBwrapToDieWithItsParent`; `SandboxIsolatedChain.Render` comment.

@@ -4,11 +4,10 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp;
 ///     Owns the lifecycle of the node's MCP client connections.
 /// </summary>
 /// <remarks>
-///     <see cref="RefreshAsync" /> reconciles the live <c>McpClient</c>s against the enabled registrations, discovers
-///     each server's tools, renames them to collision-free qualified names, wraps them for approval and pushes the
-///     immutable snapshot into the MCP tool registry the invocation factory and loopback offer provider read. A failed
-///     server is isolated: it contributes zero tools and never aborts the others or the refresh. The CRUD service
-///     refreshes after any change to the enabled set; <see cref="GetStatuses" /> feeds the management UI.
+///     A refresh reconciles live <c>McpClient</c>s against the enabled registrations, discovers and qualifies each
+///     server's tools and pushes the snapshot into the MCP tool registry. A failed server contributes no tools; one that
+///     dies after connecting keeps its tools offered, and the next call reconnects once or fails typed. The CRUD service
+///     refreshes the one changed registration; <see cref="GetStatuses" /> feeds the management UI.
 /// </remarks>
 public interface IMcpServerConnectionManager
 {
@@ -22,9 +21,20 @@ public interface IMcpServerConnectionManager
     Task RefreshAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     A point-in-time snapshot of each registered server's connection state for the management UI. <c>LastError</c>
-    ///     is redacted (no host paths or secrets). Reflects the last <see cref="RefreshAsync" />; servers not seen by a
-    ///     refresh yet are absent.
+    ///     Reconciles one registration, (re)connecting it when enabled and not live or changed, or withdrawing its tools
+    ///     when disabled or deleted. Other servers are untouched.
+    /// </summary>
+    Task RefreshAsync(Guid serverId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The operator's Reconnect: closes every session of one server and reconnects it even when it looks live, since a
+    ///     connected server can still be stuck. A disabled or deleted server is withdrawn, as by a refresh.
+    /// </summary>
+    Task ReconnectAsync(Guid serverId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     A point-in-time snapshot of each server's connection state for the management UI. <c>LastError</c> is
+    ///     redacted (no host paths or secrets); servers no refresh has seen yet are absent.
     /// </summary>
     IReadOnlyList<McpServerConnectionStatus> GetStatuses();
 }

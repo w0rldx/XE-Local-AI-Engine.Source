@@ -93,7 +93,8 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
         }
 
         var definitions = await _store.ListAsync(cancellationToken);
-        return definitions.FirstOrDefault(definition => string.Equals(definition.Name, key, StringComparison.Ordinal));
+        var matches = definitions.Where(definition => string.Equals(definition.Name, key, StringComparison.Ordinal)).Take(2).ToArray();
+        return matches.Length > 1 ? throw new AgentDefinitionAmbiguousNameException() : matches.FirstOrDefault();
     }
 
     public Task<IReadOnlyList<AgentDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default)

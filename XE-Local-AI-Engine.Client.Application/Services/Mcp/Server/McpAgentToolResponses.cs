@@ -185,7 +185,8 @@ internal static class McpAgentToolResponseMapper
             ModelId = run.ModelId,
             AgentDefinitionId = run.AgentDefinitionId?.ToString("D"),
             WorkspaceId = run.WorkspaceId?.ToString("D"),
-            FailureCode = run.FailureCode,
+            // An expired payload is the run's own condition, so its code is reported here rather than as a failed call.
+            FailureCode = run.FailureCode ?? (run.PayloadExpired ? McpAgentRunText.ResultExpiredCode : null),
             DisplayMessage = run.DisplayMessage,
             CreatedAtUnixMilliseconds = run.CreatedAtUtc,
             ClaimedAtUnixMilliseconds = run.ClaimedAtUtc,

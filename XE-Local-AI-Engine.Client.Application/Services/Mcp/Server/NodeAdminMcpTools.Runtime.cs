@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
 /// <summary>
 ///     Runtime tools of <see cref="NodeAdminMcpTools" />: node status, the installed and recommended llama.cpp
@@ -9,7 +10,7 @@ using ModelContextProtocol.Server;
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
-    [McpServerTool(Name = "get_status")]
+    [McpServerTool(Name = "get_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get the node version, uptime, selected default model, and number of loaded llama.cpp processes.")]
     public Task<McpNodeStatusResponse> GetStatusAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_status", [], async () =>
@@ -25,8 +26,8 @@ public sealed partial class NodeAdminMcpTools
             };
         });
 
-    [McpServerTool(Name = "get_runtime_status")]
-    [Description("Get the installed and recommended llama.cpp runtime versions without refreshing the remote catalog.")]
+    [McpServerTool(Name = "get_runtime_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Get the installed and recommended llama.cpp runtime versions without refreshing the remote catalog. A non-null overrideVariant means an operator-supplied llama-server is active and no acquisition is needed.")]
     public Task<McpRuntimeStatusResponse> GetRuntimeStatusAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_runtime_status", [], async () =>
         {
@@ -38,11 +39,13 @@ public sealed partial class NodeAdminMcpTools
                 UpstreamLatestTag = status.UpstreamLatestTag,
                 UpdateAvailable = status.UpdateAvailable,
                 IsOffline = status.IsOffline,
-                LoadedProcessCount = status.RunningProcessCount
+                LoadedProcessCount = status.RunningProcessCount,
+                OverrideVariant = status.OverrideVariant is { } overrideVariant ? McpAgentRunText.ToLowercaseInvariant(overrideVariant) : null,
+                InstalledIsSourceBuild = status.Installed?.IsSourceBuild ?? false
             };
         });
 
-    [McpServerTool(Name = "start_runtime_acquisition")]
+    [McpServerTool(Name = "start_runtime_acquisition", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Start acquiring the managed llama.cpp runtime. Omit variant to select the best local backend automatically.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpRuntimeAcquisitionStartResponse> StartRuntimeAcquisitionAsync(CancellationToken cancellationToken,
@@ -79,7 +82,7 @@ public sealed partial class NodeAdminMcpTools
         }, static response => response.FailureCode is not null);
     }
 
-    [McpServerTool(Name = "get_runtime_acquisition")]
+    [McpServerTool(Name = "get_runtime_acquisition", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get the current or most recent sanitized llama.cpp runtime acquisition progress.")]
     public Task<McpRuntimeAcquisitionResponse> GetRuntimeAcquisition() =>
         InvokeAuditedAsync("get_runtime_acquisition", [], () =>

@@ -348,6 +348,30 @@ describe("node chat mapper", () => {
 		expect(message.parts?.[0]).toMatchObject({ kind: "notice", noticeKind: "EffortDispatched", detail: "fast-model-unset" });
 	});
 
+	it("folds a persisted image part onto the tool card that returned it and drops a non-data source", () => {
+		const message = mapSingleMessage({
+			parts: [
+				{
+					kind: "tool",
+					sequence: 1,
+					toolCallId: "call-1",
+					name: "mcp__srv__shot",
+					state: "received",
+					result: "[image image/png, 1 KB]",
+				},
+				{ kind: "image", sequence: 2, toolCallId: "call-1", name: "image/png", text: "data:image/png;base64,AQID" },
+				{ kind: "image", sequence: 3, toolCallId: "call-1", name: "image/png", text: "https://tracker.example/pixel.png" },
+			],
+		});
+
+		expect(message.parts).toHaveLength(1);
+		expect(message.parts?.[0]).toMatchObject({
+			kind: "tool",
+			result: "[image image/png, 1 KB]",
+			images: [{ mediaType: "image/png", src: "data:image/png;base64,AQID" }],
+		});
+	});
+
 	it("skips an unknown part kind so a forward-compat backend addition never breaks rendering", () => {
 		const message = mapSingleMessage({
 			parts: [

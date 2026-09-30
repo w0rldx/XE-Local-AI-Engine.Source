@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 /// <summary>
 ///     Connects the enabled MCP servers once at startup by calling
-///     <see cref="IMcpServerConnectionManager.RefreshAsync" /> off the hot path.
+///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the hot path.
 /// </summary>
 /// <remarks>
 ///     A connect failure at startup is logged and swallowed, never fatal, since the manager already isolates a single

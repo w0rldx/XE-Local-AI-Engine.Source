@@ -16,6 +16,10 @@ using System.Text;
 public sealed class NodeChatPartAccumulator
 {
     private readonly List<MutablePart> _parts = [];
+    internal const int MaxToolImagesPerMessage = 8;
+    internal const int MaxToolImageBytesPerMessage = 4 * 1024 * 1024;
+    private int _imageParts;
+    private int _imageBytes;
     private readonly Lock _syncRoot = new();
     private readonly Dictionary<string, MutablePart> _toolPartsByCallId = new(StringComparer.Ordinal);
 
@@ -117,6 +121,37 @@ public sealed class NodeChatPartAccumulator
             };
             _parts.Add(part);
             _toolPartsByCallId[toolCallId] = part;
+        }
+    }
+
+    /// <summary>
+    ///     Appends an image a tool call returned as its own part keyed to that call: media type in
+    ///     <see cref="NodeChatMessagePart.Name" />, <c>data:</c> URI in <see cref="NodeChatMessagePart.Text" />.
+    /// </summary>
+    /// <remarks>The same generic-member reuse as a notice, so the wire schema is unchanged. Never replayed to a model.</remarks>
+    public bool AppendToolImage(string toolCallId, string mediaType, string dataUri, long sequence)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toolCallId);
+
+        lock (_syncRoot)
+        {
+            // A per-message ceiling on top of the per-image cap: many small images must not grow one metadata row without
+            // bound (Codex review 2026-09-30). Beyond it the card keeps only the placeholder text.
+            if (_imageParts >= MaxToolImagesPerMessage || _imageBytes + dataUri.Length > MaxToolImageBytesPerMessage)
+            {
+                return false;
+            }
+
+            _imageParts++;
+            _imageBytes += dataUri.Length;
+            var part = new MutablePart(NodeChatMessagePartKinds.Image, sequence)
+            {
+                ToolCallId = toolCallId,
+                Name = mediaType
+            };
+            part.AppendText(dataUri);
+            _parts.Add(part);
+            return true;
         }
     }
 

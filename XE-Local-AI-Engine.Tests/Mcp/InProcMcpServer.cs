@@ -24,6 +24,8 @@ internal sealed class InProcMcpServer : IAsyncDisposable
     private readonly Task _serverLoop;
     private readonly Stream _serverOutput;
     private readonly StreamServerTransport _serverTransport;
+    private readonly McpServerPrimitiveCollection<McpServerTool> _tools;
+    private bool _serverStopped;
 
     private InProcMcpServer(McpServer server,
         StreamServerTransport serverTransport,
@@ -33,8 +35,10 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         Stream serverOutput,
         Stream clientInput,
         Stream clientOutput,
-        McpClient client)
+        McpClient client,
+        McpServerPrimitiveCollection<McpServerTool> tools)
     {
+        _tools = tools;
         _server = server;
         _serverTransport = serverTransport;
         _serverLoop = serverLoop;
@@ -60,6 +64,32 @@ internal sealed class InProcMcpServer : IAsyncDisposable
             // Ignore teardown races between client dispose and the server loop ending.
         }
 
+        await StopServerAsync();
+        await _clientInput.DisposeAsync();
+        await _clientOutput.DisposeAsync();
+        _serverCts.Dispose();
+    }
+
+    /// <summary>
+    ///     Adds a tool to the running server; the SDK server announces the change with <c>notifications/tools/list_changed</c>.
+    /// </summary>
+    public void AddTool(AIFunction tool)
+    {
+        _tools.Add(McpServerTool.Create(tool));
+    }
+
+    /// <summary>
+    ///     Kills the server side only, the in-process shape of a crashed server: the loop stops and its output stream
+    ///     closes, so the still-undisposed <see cref="Client" /> sees end-of-stream and its <c>Completion</c> fires.
+    /// </summary>
+    public async Task StopServerAsync()
+    {
+        if (_serverStopped)
+        {
+            return;
+        }
+
+        _serverStopped = true;
         await _serverCts.CancelAsync();
         try
         {
@@ -76,12 +106,21 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         await _serverTransport.DisposeAsync();
         await _serverInput.DisposeAsync();
         await _serverOutput.DisposeAsync();
-        await _clientInput.DisposeAsync();
-        await _clientOutput.DisposeAsync();
-        _serverCts.Dispose();
     }
 
-    public static async Task<InProcMcpServer> StartAsync(string serverName, params AIFunction[] tools)
+    public static Task<InProcMcpServer> StartAsync(string serverName, params AIFunction[] tools)
+    {
+        return StartAsync(serverName, protocolVersion: null, tools);
+    }
+
+    /// <summary>
+    ///     Starts a server whose client pins <paramref name="protocolVersion" />, such as <c>2025-11-25</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The 2026-07-28 revision delivers <c>*/list_changed</c> only on a <c>subscriptions/listen</c> stream, so a test
+    ///     of the unsolicited notification third-party servers send pins an initialize-era revision.
+    /// </remarks>
+    public static async Task<InProcMcpServer> StartAsync(string serverName, string? protocolVersion, params AIFunction[] tools)
     {
         // Give every instance a unique diagnostic name so concurrent in-proc servers can never collide on a fixed
         // transport/server name across the parallel suite. This is independent of the connection manager's slug (which
@@ -126,8 +165,14 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         // StreamClientTransport's first arg (serverInput) is the stream the client WRITES to reach the server, and the
         // second (serverOutput) is the stream the client READS the server's replies from (per the SDK ctor contract).
         var clientTransport = new StreamClientTransport(clientOutput, clientInput, NullLoggerFactory.Instance);
-        var client = await McpClient.CreateAsync(clientTransport, clientOptions: null, NullLoggerFactory.Instance, handshakeCts.Token);
+        var clientOptions = protocolVersion is null
+            ? null
+            : new McpClientOptions
+            {
+                ProtocolVersion = protocolVersion
+            };
+        var client = await McpClient.CreateAsync(clientTransport, clientOptions, NullLoggerFactory.Instance, handshakeCts.Token);
 
-        return new InProcMcpServer(server, serverTransport, serverLoop, serverCts, serverInput, serverOutput, clientInput, clientOutput, client);
+        return new InProcMcpServer(server, serverTransport, serverLoop, serverCts, serverInput, serverOutput, clientInput, clientOutput, client, toolCollection);
     }
 }

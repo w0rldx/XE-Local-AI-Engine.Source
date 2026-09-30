@@ -32,6 +32,7 @@ public interface IAgentDefinitionService
     /// <summary>
     ///     Resolves a definition key as either its id or an exact, ordinal name. Blank keys never match.
     /// </summary>
+    /// <exception cref="AgentDefinitionAmbiguousNameException">Several definitions share the name; the key picks none of them.</exception>
     Task<AgentDefinitionRecord?> GetByKeyAsync(string key, CancellationToken cancellationToken = default);
 
     /// <summary>Returns every registered definition, oldest first.</summary>
@@ -49,6 +50,26 @@ public sealed class AgentDefinitionValidationException : Exception
     }
 
     public AgentDefinitionValidationException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+}
+
+/// <summary>
+///     Thrown when a name key matches more than one definition. Names are not unique (existing databases already hold
+///     duplicates), so a name-keyed lookup refuses to pick one rather than acting on whichever row came first (I-D6).
+/// </summary>
+public sealed class AgentDefinitionAmbiguousNameException : Exception
+{
+    public AgentDefinitionAmbiguousNameException()
+        : base("Several saved agents share this name. Use the agent id instead.")
+    {
+    }
+
+    public AgentDefinitionAmbiguousNameException(string message) : base(message)
+    {
+    }
+
+    public AgentDefinitionAmbiguousNameException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

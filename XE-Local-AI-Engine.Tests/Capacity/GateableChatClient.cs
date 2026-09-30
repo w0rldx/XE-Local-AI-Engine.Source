@@ -25,6 +25,12 @@ internal sealed class GateableChatClient : IChatClient
 
     public int CallCount { get; private set; }
 
+    /// <summary>When set, every run answers with this message instead of the fixed response text.</summary>
+    public ChatMessage? ResponseMessage { get; set; }
+
+    /// <summary>When set, every run throws this instead of answering (a provider failure).</summary>
+    public Exception? Failure { get; set; }
+
     public bool InnerObservedCancellation { get; private set; }
 
     /// <summary>Holds every run open until <paramref name="gate" /> completes (used to keep a spawn live during a fan-out test).</summary>
@@ -64,7 +70,7 @@ internal sealed class GateableChatClient : IChatClient
         CallCount++;
         CaptureTools(options);
         await RunBodyAsync(cancellationToken);
-        return new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseText));
+        return new ChatResponse(ResponseMessage ?? new ChatMessage(ChatRole.Assistant, _responseText));
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -130,5 +136,9 @@ internal sealed class GateableChatClient : IChatClient
 
         InnerObservedCancellation = cancellationToken.IsCancellationRequested;
         cancellationToken.ThrowIfCancellationRequested();
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
     }
 }

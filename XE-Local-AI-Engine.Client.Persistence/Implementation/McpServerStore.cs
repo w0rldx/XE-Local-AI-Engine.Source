@@ -40,6 +40,8 @@ public sealed class McpServerStore : IMcpServerStore
             WorkingDirectory = input.WorkingDirectory,
             EnvJson = EncodeEnvironment(input.Environment),
             Url = input.Url,
+            HeadersJson = EncodeEnvironment(input.Headers),
+            SessionScope = (int)input.SessionScope,
             TrustTier = (int)input.TrustTier,
             // A registration is always persisted disabled — enabling is a deliberate second action.
             Enabled = false,
@@ -70,6 +72,7 @@ public sealed class McpServerStore : IMcpServerStore
 
         var argumentsJson = EncodeArguments(input.Arguments);
         var environmentJson = EncodeEnvironment(input.Environment);
+        var headersJson = EncodeEnvironment(input.Headers);
 
         // A change to anything that affects how the connection manager connects or launches the server bumps Version (transport, command, args, env, url), plus the
         // enable/disable toggle, which changes the connected set. A pure Name/Description edit does not. Compare decoded plaintext on both sides.
@@ -79,6 +82,9 @@ public sealed class McpServerStore : IMcpServerStore
                             || !string.Equals(entity.WorkingDirectory, input.WorkingDirectory, StringComparison.Ordinal)
                             || !EnvironmentEqual(DecodeEnvironment(entity.EnvJson), input.Environment)
                             || !string.Equals(entity.Url, input.Url, StringComparison.Ordinal)
+                            // Headers carry the credential and the scope decides which sessions exist, so both reconnect.
+                            || !EnvironmentEqual(DecodeEnvironment(entity.HeadersJson), input.Headers)
+                            || entity.SessionScope != (int)input.SessionScope
                             // The tier decides WHERE the process is launched, so changing it has to relaunch the
                             // server rather than leave the previous tier's live connection in place.
                             || entity.TrustTier != (int)input.TrustTier
@@ -92,6 +98,8 @@ public sealed class McpServerStore : IMcpServerStore
         entity.WorkingDirectory = input.WorkingDirectory;
         entity.EnvJson = environmentJson;
         entity.Url = input.Url;
+        entity.HeadersJson = headersJson;
+        entity.SessionScope = (int)input.SessionScope;
         entity.TrustTier = (int)input.TrustTier;
         entity.Enabled = input.Enabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -130,6 +138,25 @@ public sealed class McpServerStore : IMcpServerStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
+    }
+
+    public async Task<bool> AssignSlugAsync(Guid id, string slug, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
+
+        var entity = await _dbContext.McpServers
+                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken);
+
+        if (entity is null || entity.Slug is not null)
+        {
+            return false;
+        }
+
+        // Only the slug is modified, so the encryption interceptor leaves the secret columns' ciphertext alone.
+        entity.Slug = slug;
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -204,6 +231,9 @@ public sealed class McpServerStore : IMcpServerStore
             WorkingDirectory = entity.WorkingDirectory,
             Environment = DecodeEnvironment(entity.EnvJson),
             Url = entity.Url,
+            Headers = DecodeEnvironment(entity.HeadersJson),
+            Slug = entity.Slug,
+            SessionScope = (McpSessionScope)entity.SessionScope,
             TrustTier = (McpTrustTier)entity.TrustTier,
             Enabled = entity.Enabled,
             Version = entity.Version,

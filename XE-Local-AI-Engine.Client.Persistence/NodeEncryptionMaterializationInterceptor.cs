@@ -74,6 +74,7 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case McpServerRegistration registration:
                 registration.ArgumentsJson = DecryptIfPresent(registration.ArgumentsJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "arguments");
                 registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
+                registration.HeadersJson = DecryptIfPresent(registration.HeadersJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "headers");
                 registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
                 break;
             case SlashCommand command:

@@ -71,6 +71,41 @@ public sealed class McpServerInboundAuthTests
     }
 
     [Test]
+    [Arguments("GET")]
+    [Arguments("DELETE")]
+    [Arguments("PUT")]
+    public async Task McpEndpoint_WithAValidKeyButAnUnmappedVerb_IsMethodNotAllowed(string method)
+    {
+        // Stateless Streamable HTTP maps only POST; before the guard an unmapped verb fell through to the JWT fallback
+        // policy and answered 401 "invalid_token" for a perfectly valid key (live round 2026-09-30, I-D5).
+        var factory = Host.Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), McpEndpointRoute);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        AssertEx.Equal("POST", string.Join(",", response.Content.Headers.Allow));
+    }
+
+    [Test]
+    public async Task McpEndpoint_WithAValidKeyButATextBody_IsUnsupportedMediaType()
+    {
+        var factory = Host.Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "text/plain")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    [Test]
     public async Task McpEndpoint_WithAWrongKey_IsUnauthorized()
     {
         var factory = Host.Factory;
@@ -263,6 +298,22 @@ public sealed class McpServerInboundAuthTests
                       || delegateObserveBody.Contains("-32600", StringComparison.Ordinal)
                       || delegateObserveBody.Contains("InvalidRequest", StringComparison.OrdinalIgnoreCase),
             $"A delegate call to a workflow observe tool must be a protocol authorization failure; body: {delegateObserveBody}");
+    }
+
+    [Test]
+    public async Task McpEndpoint_DelegateAdminCallWithBadArguments_GetsTheAuthorizationRejection_NotTheArgumentNames()
+    {
+        // Filter order: were argument validation outermost, a delegate key could read an admin tool's argument names out of
+        // invalid_arguments. Authorization must refuse the call before the schema is consulted.
+        const string call = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_agent\",\"arguments\":{\"bogus\":1}}}";
+        await using var delegateFactory = CreateFactory(ValidKey, McpServerApiKeyScope.Delegate);
+
+        var body = await SendRpcAsync(delegateFactory, ValidKey, call);
+
+        AssertEx.True(body.Contains("forbidden", StringComparison.OrdinalIgnoreCase) || body.Contains("-32600", StringComparison.Ordinal),
+            $"A delegate admin call must be refused by authorization; body: {body}");
+        AssertEx.False(body.Contains("invalid_arguments", StringComparison.Ordinal), $"argument validation must not run first; body: {body}");
+        AssertEx.False(body.Contains("agent_id", StringComparison.Ordinal), $"the admin tool's argument names must not leak; body: {body}");
     }
 
     [Test]

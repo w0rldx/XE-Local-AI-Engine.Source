@@ -145,6 +145,16 @@ public sealed class AgentDefinitionServiceTests
             "agent names must resolve by exact ordinal match.");
     }
 
+    // Q5 / I-D6: names are not unique, and the first match used to win silently.
+    [Test]
+    public async Task GetByKeyAsync_WithSharedName_ThrowsAmbiguousName()
+    {
+        var service = CreateService(out var store);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord(CreateInput("Twin")), CreateRecord(CreateInput("Twin"))]);
+
+        _ = await Assert.ThrowsAsync<AgentDefinitionAmbiguousNameException>(() => service.GetByKeyAsync("Twin"));
+    }
+
     [Test]
     public async Task GetByKeyAsync_WithBlankKey_ReturnsNullWithoutStoreRead()
     {

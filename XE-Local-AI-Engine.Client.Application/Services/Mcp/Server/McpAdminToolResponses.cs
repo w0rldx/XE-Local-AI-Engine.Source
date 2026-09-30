@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Drafting;
@@ -53,6 +54,15 @@ public sealed class McpRuntimeStatusResponse
     public required bool IsOffline { get; init; }
 
     public required int LoadedProcessCount { get; init; }
+
+    /// <summary>
+    ///     The operator-supplied llama-server override's backend when one is active (cpu, cuda, vulkan), else null. An active override is the
+    ///     runtime every launch uses, so a missing installed tag does not mean "acquire one" (I-D8).
+    /// </summary>
+    public required string? OverrideVariant { get; init; }
+
+    /// <summary>Whether the installed runtime was built from source on this node rather than downloaded as a release asset.</summary>
+    public required bool InstalledIsSourceBuild { get; init; }
 }
 
 public sealed class McpRuntimeAcquisitionStartResponse
@@ -61,8 +71,10 @@ public sealed class McpRuntimeAcquisitionStartResponse
 
     public required string? Variant { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -95,8 +107,10 @@ public sealed class McpModelPullStartResponse
 
     public required string? OperationId { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -116,8 +130,10 @@ public sealed class McpModelPullResponse
 
     public required string? OperationId { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -132,8 +148,10 @@ public sealed class McpModelDeleteResponse
 
     public required string? ModelName { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -145,8 +163,10 @@ public sealed class McpDefaultModelResponse
 
     public required string? PreviousDefault { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -156,8 +176,10 @@ public sealed class McpNodeSettingsUpdateResponse
 
     public required IReadOnlyList<string> RejectedFields { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -167,8 +189,10 @@ public sealed class McpAgentResponse
 
     public required McpAgentDefinition? Agent { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -176,8 +200,10 @@ public sealed class McpAgentDeleteResponse
 {
     public required bool Deleted { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -210,8 +236,10 @@ public sealed class McpWorkflowRunListResponse
 
     public required int Limit { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 
@@ -267,8 +295,10 @@ public sealed class McpWorkflowRunGetResponse
 
     public required McpWorkflowRunDetail? Run { get; init; }
 
+    [JsonPropertyName("failure_code")]
     public string? FailureCode { get; init; }
 
+    [JsonPropertyName("display_message")]
     public string? DisplayMessage { get; init; }
 }
 

@@ -27,7 +27,7 @@ public sealed class McpServerServiceTests
         AssertEx.False(result.Enabled, "A new registration is persisted disabled.");
         await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
         // Create persists disabled, so the enabled set is unchanged — no refresh.
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -151,12 +151,32 @@ public sealed class McpServerServiceTests
         // The toggle goes through the dedicated store method, not a full UpdateAsync rebuild (no secret-column re-encrypt).
         await store.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>());
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
-        await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task SetEnabledAsync_WhenAlreadyInThatState_IsNoOpAndDoesNotRefresh()
+    public async Task SetEnabledAsync_WhenAlreadyDisabled_IsNoOpAndDoesNotRefresh()
     {
+        var service = CreateService(out var store, out var manager);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+
+        var result = await service.SetEnabledAsync(id, enabled: false);
+
+        AssertEx.False(result!.Enabled);
+        await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SetEnabledAsync_WhenAlreadyEnabled_ForcesAReconnectOfThatServerWithoutAStoreWrite()
+    {
+        // The UI's Reconnect: a plain refresh returned early for a live-looking but stuck server, so the service must force it.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
         var existing = CreateRecord(CreateStdioInput(), enabled: true) with
@@ -168,9 +188,11 @@ public sealed class McpServerServiceTests
         var result = await service.SetEnabledAsync(id, enabled: true);
 
         AssertEx.True(result!.Enabled);
+        AssertEx.Equal(existing.Version, result.Version);
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.Received(1).ReconnectAsync(id, Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -183,7 +205,7 @@ public sealed class McpServerServiceTests
         var result = await service.SetEnabledAsync(id, enabled: true);
 
         AssertEx.Null(result);
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -201,7 +223,8 @@ public sealed class McpServerServiceTests
              .Returns(callInfo => existing with
              {
                  Command = ((McpServerInput)callInfo[1]!).Command,
-                 Enabled = ((McpServerInput)callInfo[1]!).Enabled
+                 Enabled = ((McpServerInput)callInfo[1]!).Enabled,
+                 Version = existing.Version + 1
              });
 
         // The request body carries Enabled = false, but the service must preserve the current enabled (true).
@@ -214,7 +237,48 @@ public sealed class McpServerServiceTests
         AssertEx.True(result!.Enabled, "Update must preserve the current enabled state, not take it from the request body.");
         await store.Received(1).UpdateAsync(id, Arg.Is<McpServerInput>(input => input.Enabled), Arg.Any<CancellationToken>());
         // The server is enabled, so a config change refreshes the live snapshot.
-        await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenEnabledAndTheStoreKeptTheVersion_DoesNotReconnect()
+    {
+        var service = CreateService(out var store, out var manager);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
+        {
+            Id = id
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+        // The store bumps Version only when a connection-relevant field changed; a save of the same values keeps it.
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(existing);
+
+        var result = await service.UpdateAsync(id, CreateStdioInput());
+
+        AssertEx.NotNull(result);
+        await store.Received(1).UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenEnabledAndOnlyRenamed_RefreshesSoStatusTextsCarryTheNewName()
+    {
+        // A rename keeps Version, and status and failure texts kept naming the old server until an unrelated reconnect.
+        var service = CreateService(out var store, out var manager);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
+        {
+            Id = id
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(existing with { Name = "Renamed" });
+
+        _ = await service.UpdateAsync(id, CreateStdioInput("Renamed"));
+
+        await manager.Received(1).RefreshAsync(id, Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().ReconnectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -237,7 +301,7 @@ public sealed class McpServerServiceTests
         var result = await service.UpdateAsync(id, CreateStdioInput("Filesystem", "npx-new"));
 
         AssertEx.NotNull(result);
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -270,12 +334,12 @@ public sealed class McpServerServiceTests
         {
             Enabled = true
         });
-        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new InvalidOperationException("connect failed"));
+        manager.RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => throw new InvalidOperationException("connect failed"));
 
         var result = await service.SetEnabledAsync(id, enabled: true);
 
         AssertEx.True(result!.Enabled, "The toggle is committed even though the post-change refresh faulted.");
-        await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -293,7 +357,7 @@ public sealed class McpServerServiceTests
         {
             Enabled = true
         });
-        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new OperationCanceledException());
+        manager.RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => throw new OperationCanceledException());
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, enabled: true));
     }
@@ -312,7 +376,7 @@ public sealed class McpServerServiceTests
         var deleted = await service.DeleteAsync(id);
 
         AssertEx.True(deleted);
-        await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -329,7 +393,7 @@ public sealed class McpServerServiceTests
         var deleted = await service.DeleteAsync(id);
 
         AssertEx.True(deleted);
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -343,7 +407,7 @@ public sealed class McpServerServiceTests
 
         AssertEx.False(deleted);
         await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     private static McpServerService CreateService(out IMcpServerStore store, out IMcpServerConnectionManager manager)
@@ -449,8 +513,7 @@ public sealed class McpServerServiceTests
             Environment = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["API_TOKEN"] = McpEnvironmentMask.Value,
-                ["ROTATED"] = "new",
-                ["ADDED"] = McpEnvironmentMask.Value
+                ["ROTATED"] = "new"
             }
         };
 
@@ -458,9 +521,25 @@ public sealed class McpServerServiceTests
 
         AssertEx.Equal("the-real-secret", result!.Environment["API_TOKEN"]);
         AssertEx.Equal("new", result.Environment["ROTATED"]);
-        // A masked value under a key with nothing stored is a NEW key whose value the caller typed. Inventing an
-        // empty string for it would be a guess, so it is kept verbatim.
-        AssertEx.Equal(McpEnvironmentMask.Value, result.Environment["ADDED"]);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WithAMaskedValueUnderANewKey_IsRefused()
+    {
+        // A NEW key carrying the mask was stored with the placeholder as its value, handing the server "***" as a credential.
+        var service = CreateService(out var store, out _);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with { Id = id };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+
+        var exception = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.UpdateAsync(id, CreateStdioInput() with
+        {
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["ADDED"] = McpEnvironmentMask.Value }
+        }));
+
+        AssertEx.Contains(exception.Message, "ADDED");
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -486,6 +565,124 @@ public sealed class McpServerServiceTests
         });
 
         AssertEx.Equal(McpTrustTier.PrivilegedHost, result!.TrustTier);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithEnvironmentOnAnHttpServer_ThrowsValidation()
+    {
+        // O-D6 (e2): the HTTP transport launches nothing, so an environment was accepted, masked and silently never sent.
+        var service = CreateService(out var store, out _);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        var input = CreateHttpInput("http://127.0.0.1:8931/mcp") with
+        {
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer x" }
+        };
+
+        var exception = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
+
+        AssertEx.True(exception.Message.Contains("headers", StringComparison.Ordinal), exception.Message);
+        await store.DidNotReceive().AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CreateAsync_WithUserInfoInTheUrl_ThrowsValidation()
+    {
+        // O-D6 (e3): user:token@ was stored and shown in cleartext and never sent.
+        var service = CreateService(out var store, out _);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+
+        _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(CreateHttpInput("http://user:token@127.0.0.1:8931/mcp")));
+        await store.DidNotReceive().AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CreateAsync_WithHeadersOnAStdioServer_ThrowsValidation()
+    {
+        var service = CreateService(out var store, out _);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        var input = CreateStdioInput() with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer x" }
+        };
+
+        _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
+    }
+
+    [Test]
+    [Arguments("Bad Name", "v")]
+    [Arguments("", "v")]
+    [Arguments("Host", "example")]
+    [Arguments("content-length", "1")]
+    [Arguments("X-Api-Key", "line\r\nInjected: yes")]
+    public async Task CreateAsync_WithAnInvalidHeader_ThrowsValidation(string name, string value)
+    {
+        var service = CreateService(out var store, out _);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        var input = CreateHttpInput("http://127.0.0.1:8931/mcp") with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { [name] = value }
+        };
+
+        _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input));
+    }
+
+    [Test]
+    public async Task CreateAsync_WithAHeaderValueOver4KB_ThrowsValidation_AndAt4KBPersists()
+    {
+        var service = CreateService(out var store, out _);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        var atLimit = CreateHttpInput("http://127.0.0.1:8931/mcp") with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = new string('a', 4096) }
+        };
+        store.AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(CreateRecord(atLimit, enabled: false));
+
+        _ = await service.CreateAsync(atLimit);
+        _ = await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(atLimit with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = new string('a', 4097) }
+        }));
+    }
+
+    [Test]
+    public async Task UpdateAsync_WithMaskedHeaderAndMaskedUrl_KeepsTheStoredCredentialAndUrl()
+    {
+        // The API returns header values masked and query values as ***, so a form round-tripping what it was shown must
+        // keep the stored credential and the stored ?token= URL (existing rows stay PUT-able), while a real edit replaces them.
+        var service = CreateService(out var store, out var manager);
+        var id = Guid.NewGuid();
+        const string storedUrl = "http://127.0.0.1:18912/mcp?token=s3cr3t&mode=a";
+        var existing = CreateRecord(CreateHttpInput(storedUrl), enabled: true) with
+        {
+            Id = id,
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer the-real-secret" }
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
+             .Returns(callInfo => existing with
+             {
+                 Headers = ((McpServerInput)callInfo[1]!).Headers,
+                 Url = ((McpServerInput)callInfo[1]!).Url
+             });
+
+        var roundTripped = await service.UpdateAsync(id, CreateHttpInput(McpUrlMask.Mask(storedUrl)) with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = McpEnvironmentMask.Value }
+        });
+
+        AssertEx.Equal("Bearer the-real-secret", roundTripped!.Headers["Authorization"]);
+        AssertEx.Equal(storedUrl, roundTripped.Url);
+        // The restored values equal the stored ones, so the store keeps Version and the live session is not reconnected.
+        await manager.DidNotReceive().RefreshAsync(id, Arg.Any<CancellationToken>());
+
+        var edited = await service.UpdateAsync(id, CreateHttpInput("http://127.0.0.1:18912/mcp") with
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer rotated" }
+        });
+
+        AssertEx.Equal("Bearer rotated", edited!.Headers["Authorization"]);
+        AssertEx.Equal("http://127.0.0.1:18912/mcp", edited.Url);
     }
 
     private static McpServerInput CreateStdioInput(string name = "Filesystem",

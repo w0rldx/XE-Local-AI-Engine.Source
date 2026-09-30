@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
+using System.Globalization;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -76,13 +77,18 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly McpServerRecord _record;
 
+    // Names this session's jail and execution: per SERVER for the shared session, per server AND session key for a
+    // per-conversation one, so two sessions of one server never share a jail and disposing one cannot kill the other.
+    private readonly string _sessionIdentity;
+
     public SandboxedMcpStdioTransport(McpServerRecord record,
         IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         INodeDataDirectory nodeDataDirectory,
         IOptions<ComputeOptions> ceilingDefaults,
         IOptions<LocalContainerOptions> nodeOptions,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        string? sessionKey = null)
     {
         _record = record ?? throw new ArgumentNullException(nameof(record));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -91,7 +97,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
         _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        // Every transport instance owns a jail nobody else can attach to: the shared session's replacement used to reuse the
+        // retiring jail's identity while teardown was still running, and the old kill then hit the replacement (Codex 2026-09-30).
+        _sessionIdentity = RuntimeProfile + "-" + record.Id.ToString("N") + (string.IsNullOrEmpty(sessionKey) ? string.Empty : "-" + sessionKey)
+                           + "-" + Interlocked.Increment(ref _instanceCounter).ToString(CultureInfo.InvariantCulture);
     }
+
+    private static long _instanceCounter;
 
     public string Name => _record.Name;
 
@@ -197,11 +209,14 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or change this server to the Privileged host tier if it genuinely needs access to this machine.");
         }
 
-        // In the jail a missing command is just an early exit. The jail inherits this PATH and sees only host trees, so a command
-        // absent here is absent there; a registration setting its own PATH is left to the launch.
-        if (!_record.Environment.ContainsKey("PATH") && ResolveExecutablePath(_record.Command) is null)
+        // In the jail a missing command is just an early exit, so it is checked here against the JAIL's PATH (see JailSearchPath):
+        // this node's PATH never reaches the jail, so a command found only there would pass and still not start.
+        var jailPath = JailSearchPath(_record);
+        if (ResolveExecutablePath(_record.Command, jailPath) is null)
         {
-            throw new FileNotFoundException($"The MCP server '{_record.Name}' command was not found on this node's PATH.");
+            throw new FileNotFoundException(
+                $"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
+                + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken);
@@ -216,7 +231,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // second is the one it READS the server's replies from — so they are the child's stdin and stdout.
             var streamTransport = new StreamClientTransport(process.StandardInput, process.StandardOutput, _loggerFactory);
             var inner = await streamTransport.ConnectAsync(cancellationToken);
-            return new SandboxedTransport(inner, process, _provider, handle);
+            return new SandboxedTransport(_record.Name, inner, process, _provider, handle);
         }
         catch
         {
@@ -415,15 +430,17 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 OwnerUserId = identity.OwnerUserId,
                 NodeId = identity.NodeId,
                 ProviderName = _provider.ProviderName,
-                // Per SERVER, so two registrations never share a jail and disabling one cannot tear down the other's.
-                RuntimeProfile = RuntimeProfile + "-" + _record.Id.ToString("N"),
+                // Per SESSION, so two registrations — or two sessions of one — never share a jail and closing one cannot tear down another.
+                RuntimeProfile = _sessionIdentity,
                 ManifestVersion = SandboxGeneration
             },
             RuntimeProfile = RuntimeProfile,
             // Unconditional: ConnectAsync already refused the connection if this provider cannot honour it. Unlike a
             // resource ceiling this is not a preference a provider may quietly drop.
             Isolation = SandboxIsolationMode.Filesystem,
-            ReadOnlyTrees = ResolveReadOnlyTrees(_record, ResolveExecutablePath, BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
+            ReadOnlyTrees = ResolveReadOnlyTrees(_record,
+                command => ResolveExecutablePath(command, JailSearchPath(_record)),
+                BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
             // Stated though the isolated chain's --unshare-net is what enforces it, so the intent is legible at the
             // one place a reader looks for it.
             NetworkPolicy = SandboxNetworkPolicy.None,
@@ -438,14 +455,26 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
+    ///     The <c>PATH</c> the child resolves a bare command against inside the jail: the registration's own when it sets
+    ///     one (the chain applies it last, so it REPLACES the default), otherwise <see cref="SandboxIsolatedChain.SandboxPath" />.
+    /// </summary>
+    internal static string JailSearchPath(McpServerRecord record)
+    {
+        return record.Environment.TryGetValue("PATH", out var path) && !string.IsNullOrWhiteSpace(path)
+            ? path
+            : SandboxIsolatedChain.SandboxPath;
+    }
+
+    /// <summary>
     ///     Finds the HOST path of a configured command so its directory can be bound read-only, a bare name being
-    ///     looked up on the engine's own <c>PATH</c>.
+    ///     looked up on <paramref name="searchPath" />, the jail's <c>PATH</c> (see <see cref="JailSearchPath" />).
     /// </summary>
     /// <remarks>
     ///     It chooses a mount and never composes the launch: the child resolves its own executable against the
-    ///     sandbox's <c>PATH</c>.
+    ///     sandbox's <c>PATH</c>. Only the executable's directory is bound, never a symlink target elsewhere or a shebang's
+    ///     interpreter, which is why the Sandboxed tier runs self-contained servers only.
     /// </remarks>
-    private static string? ResolveExecutablePath(string command)
+    internal static string? ResolveExecutablePath(string command, string searchPath)
     {
         if (command.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || command.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
@@ -453,7 +482,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             return File.Exists(command) ? Path.GetFullPath(command) : null;
         }
 
-        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var directory in searchPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             var candidate = Path.Combine(directory, command);
             if (File.Exists(candidate))
@@ -469,7 +498,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         return new SandboxCommandRequest
         {
-            ExecutionId = RuntimeProfile + "-" + _record.Id.ToString("N"),
+            ExecutionId = _sessionIdentity,
             Executable = _record.Command!,
             Arguments = [.. _record.Arguments],
             // No working directory: the jail IS the working directory, and the configured one is bound READ-ONLY instead (see
@@ -488,37 +517,120 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </remarks>
     private sealed class SandboxedTransport : ITransport
     {
+        /// <summary>How long a failed send waits for the relay to learn whether the server died on startup.</summary>
+        private static readonly TimeSpan RelaySettleWait = TimeSpan.FromSeconds(5);
+
+        private readonly Channel<JsonRpcMessage> _messages = Channel.CreateUnbounded<JsonRpcMessage>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true
+        });
+
         private readonly SandboxHandle _handle;
         private readonly ITransport _inner;
         private readonly ISandboxInteractiveProcess _process;
         private readonly IAgentSandboxRuntimeProvider _provider;
+        private readonly Task _relay;
+        private readonly string _serverName;
+        private int _disposing;
 
-        public SandboxedTransport(ITransport inner,
+        public SandboxedTransport(string serverName,
+            ITransport inner,
             ISandboxInteractiveProcess process,
             IAgentSandboxRuntimeProvider provider,
             SandboxHandle handle)
         {
+            _serverName = serverName;
             _inner = inner;
             _process = process;
             _provider = provider;
             _handle = handle;
+            _relay = RelayAsync();
         }
 
         public string? SessionId => _inner.SessionId;
 
-        public ChannelReader<JsonRpcMessage> MessageReader => _inner.MessageReader;
+        public ChannelReader<JsonRpcMessage> MessageReader => _messages.Reader;
 
-        public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
+        public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
         {
-            return _inner.SendMessageAsync(message, cancellationToken);
+            // A server that died before the SDK registered its initialize request would leave that request pending forever: the
+            // SDK fails only requests pending when the channel completes. Refusing the send delivers the startup failure instead.
+            ThrowIfStartupFailed();
+            try
+            {
+                await _inner.SendMessageAsync(message, cancellationToken);
+            }
+            catch (IOException)
+            {
+                // A write into a dead server's stdin (broken pipe) says nothing useful; its stderr tail does. The relay settles as
+                // soon as stdout closes, bounded here in case a descendant keeps it open.
+                try
+                {
+                    await _relay.WaitAsync(RelaySettleWait, cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    // Not settled: the original failure is all there is to report.
+                }
+
+                ThrowIfStartupFailed();
+                throw;
+            }
         }
 
         public async ValueTask DisposeAsync()
         {
+            _ = Interlocked.Exchange(ref _disposing, value: 1);
+
             // Innermost first: stop reading the streams, then kill the process that owns them, then delete the jail.
             await _inner.DisposeAsync();
+            await _relay;
             await _process.DisposeAsync();
             await KillQuietlyAsync(_provider, _handle);
+        }
+
+        // Messages go through a channel of this transport's own: a server that closes stdout before any message died on startup, and
+        // the SDK fails the pending initialize with the channel's completion, so McpServerStartupException carrying the tail goes there.
+        private async Task RelayAsync()
+        {
+            var received = false;
+            Exception? error = null;
+            try
+            {
+                await foreach (var message in _inner.MessageReader.ReadAllAsync(CancellationToken.None))
+                {
+                    received = true;
+                    await _messages.Writer.WriteAsync(message, CancellationToken.None);
+                }
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                // Relayed as the channel's completion, where the SDK looks for it, rather than lost on a background task.
+                error = exception;
+            }
+
+            // Only a server that never spoke is a startup failure; a later exit is the session ending, reported as-is. A close
+            // this side initiated is not a failure at all, and the process is being torn down, so its tail is not asked for.
+            if (!received && Volatile.Read(ref _disposing) == 0)
+            {
+                var tail = await _process.GetStandardErrorTailAsync();
+                error = new McpServerStartupException(tail is null
+                        ? $"The MCP server '{_serverName}' exited before completing the MCP handshake and wrote nothing to stderr."
+                        : $"The MCP server '{_serverName}' exited before completing the MCP handshake. Its stderr ended with:\n{tail}",
+                    tail);
+            }
+
+            _ = _messages.Writer.TryComplete(error);
+        }
+
+        private void ThrowIfStartupFailed()
+        {
+            if (_messages.Reader.Completion is { IsFaulted: true } completion
+                && completion.Exception?.InnerException is McpServerStartupException startup)
+            {
+                throw startup;
+            }
         }
     }
 }

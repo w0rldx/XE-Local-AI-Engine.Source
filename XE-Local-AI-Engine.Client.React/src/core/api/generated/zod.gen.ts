@@ -6525,6 +6525,8 @@ export const zXeLocalAiEngineClientPersistenceEntitiesTrainingSampleProvenance =
 
 export const zXeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState = z.enum(["Pending", "Approved", "Rejected"]);
 
+export const zXeLocalAiEngineClientPersistenceMcpSessionScope = z.enum(["Shared", "PerConversation"]);
+
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
 
 export const zXeLocalAiEngineClientPersistenceMcpTrustTier = z.enum(["Sandboxed", "PrivilegedHost", "BuiltInTrusted"]);
@@ -6539,6 +6541,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.obje
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
 	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
+	headers: z.record(z.string(), z.string()).nullish(),
+	sessionScope: zXeLocalAiEngineClientPersistenceMcpSessionScope.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
@@ -6552,6 +6556,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	env: z.record(z.string(), z.string()),
 	url: z.string().nullish(),
 	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier,
+	headers: z.record(z.string(), z.string()),
+	sessionScope: zXeLocalAiEngineClientPersistenceMcpSessionScope,
 	enabled: z.boolean(),
 	version: z
 		.int()
@@ -6575,6 +6581,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.obje
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
 	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
+	headers: z.record(z.string(), z.string()).nullish(),
+	sessionScope: zXeLocalAiEngineClientPersistenceMcpSessionScope.optional(),
 });
 
 export const zXeLocalAiEngineClientPersistenceMemoryScope = z.enum(["Procedural", "Failure", "UserPreference", "Project"]);
@@ -7166,6 +7174,12 @@ export const zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason = z.enu
 	"Transport",
 	"Protocol",
 	"Authentication",
+	"AuthenticationRequired",
+	"Forbidden",
+	"Tls",
+	"ServerExited",
+	"SessionLost",
+	"ServerStartupFailed",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({

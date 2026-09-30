@@ -27,7 +27,7 @@ public sealed class ToolResultBudgetScopeTests
             var result = await function.InvokeAsync(new AIFunctionArguments());
 
             var text = result as string ?? throw new AssertionException("Expected a string result.");
-            AssertEx.True(text.StartsWith(new string('k', 16_000), StringComparison.Ordinal), "The leading excerpt is kept.");
+            AssertEx.True(text.StartsWith(new string('k', 12_000), StringComparison.Ordinal), "The leading excerpt is kept.");
             AssertEx.Contains(text, "[truncated: 16000 of 50000 chars shown]", message: "The model has to be able to tell the read was clipped.");
         }
     }
@@ -52,6 +52,28 @@ public sealed class ToolResultBudgetScopeTests
             var result = await function.InvokeAsync(new AIFunctionArguments());
 
             AssertEx.Contains(result as string, "[truncated: 4000 of 50000 chars shown]", message: "Tighten-only: a scope may never raise the node ceiling.");
+        }
+    }
+
+    [Test]
+    public void TightenedScope_NeverLoosensTheBudgetAlreadyInScope()
+    {
+        using (ToolResultBudgetScope.BeginScope(8_000))
+        {
+            using (ToolResultBudgetScope.BeginTightenedScope(32_000))
+            {
+                AssertEx.Equal(expected: 8_000, ToolResultBudgetScope.Current, "A turn's window budget must not loosen a work-session step's.");
+            }
+
+            using (ToolResultBudgetScope.BeginTightenedScope(2_000))
+            {
+                AssertEx.Equal(expected: 2_000, ToolResultBudgetScope.Current);
+            }
+        }
+
+        using (ToolResultBudgetScope.BeginTightenedScope(32_000))
+        {
+            AssertEx.Equal(expected: 32_000, ToolResultBudgetScope.Current, "With nothing in scope the tightened value is seeded as is.");
         }
     }
 

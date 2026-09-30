@@ -26,6 +26,18 @@ public sealed class SandboxIsolatedChainTests
     }
 
     [Test]
+    public async Task Render_NeverAsksBwrapToDieWithItsParent()
+    {
+        // PR_SET_PDEATHSIG fires when the forking THREAD exits; a .NET thread-pool worker retiring idle SIGKILLed live
+        // sandboxed MCP servers after 40-180 s (live round 2026-09-30). The scope and the startup reaper own the lifetime.
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs(), "/usr/bin/python3", ["-I", "-"]);
+
+        AssertEx.False(chain.Contains("--die-with-parent"), "bwrap must not carry --die-with-parent");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task Render_EmitsAReadOnlyBind_ForEachNamedTree_BeforeTheWritableJail()
     {
         var inputs = UsrMergedInputs() with
@@ -333,7 +345,7 @@ public sealed class SandboxIsolatedChainTests
             "--setenv", "OMP_NUM_THREADS", "2",
             "--setenv", "MKL_NUM_THREADS", "2",
             "--setenv", "NUMEXPR_NUM_THREADS", "2",
-            "--die-with-parent", "--new-session", "--",
+            "--new-session", "--",
             "/usr/bin/python3", "-I", "-"
         ];
     }

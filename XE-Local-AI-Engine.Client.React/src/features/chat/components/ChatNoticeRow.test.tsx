@@ -139,6 +139,18 @@ describe("ChatNoticeRow", () => {
 		expect(container.querySelector(".tabler-icon-book-off")).toBeTruthy();
 	});
 
+	it.each([
+		["EmptyAnswer", "No answer", ".tabler-icon-message-off"],
+		["ToolHistoryWithheld", "Tool history withheld", ".tabler-icon-history-off"],
+	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
+		const { container } = renderWithProviders(
+			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,
+		);
+
+		expect(screen.getByLabelText(label)).toBeTruthy();
+		expect(container.querySelector(iconClass)).toBeTruthy();
+	});
+
 	it("renders the notice detail beside the sentence when the server sent one", () => {
 		// The dispatch reason code is the only record of WHICH rule decided the turn. It was computed and then dropped
 		// on the wire, so nothing showed it; it now rides beside the sentence as the stable code it is.

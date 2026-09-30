@@ -62,3 +62,24 @@ unchanged.
 - **Relaying approval back to the MCP client:** deferred; it adds a new correlation protocol and does not satisfy the
   unattended setup decision.
 - **Giving the MCP identity the Operator role:** rejected; the browser/JWT administration boundary remains separate.
+
+## Amendment 2026-09-30: the auto-approval wrapper must hide the approval marker
+
+Decision item 6 was not in effect for any tool that needed it. MEAI's `FunctionInvokingChatClient` detects an
+approval-required function with `GetService<ApprovalRequiredAIFunction>()`, and `DelegatingAIFunction` forwards
+`GetService` to the function it wraps, so the adapter's `DelegatingAIFunction` over an `ApprovalRequiredAIFunction` was
+still treated as approval-required. Each call became an approval request nothing answers, and the run ended as an empty
+"succeeded" with no invocation and no audit row. `McpAgenticToolAdapter`'s wrapper now overrides `GetService` to return
+null for `ApprovalRequiredAIFunction`, so the strict recorder runs and the inner function is invoked.
+`SubAgentSpawnService` reports an empty answer (`no_answer`) or a leftover approval request (`approval_required`) as a
+typed failure instead of success. Authority: `McpAgenticToolAdapterTests.FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval`.
+
+## Amendment 2026-09-30: outbound MCP session scope
+
+Outbound MCP registrations gain an opt-in `SessionScope`. `Shared`, the default and the behaviour every existing row
+keeps, is one client session for every caller. `PerConversation` gives each chat or agent conversation its own
+session, keyed by `AgentRunConversationContext.Current`, so a stateful server's per-session memory does not leak from
+one conversation into the next. Inbound MCP runs, agentic ones included, never set a conversation id and always use the
+shared session; this amendment grants them nothing. A per-conversation session idle for 15 minutes is disposed, and a
+stdio server runs at most 4 per-conversation processes; the fifth conversation's call fails typed rather than falling
+back to the shared session. Approval, trust tiers and the tool offer are unchanged.

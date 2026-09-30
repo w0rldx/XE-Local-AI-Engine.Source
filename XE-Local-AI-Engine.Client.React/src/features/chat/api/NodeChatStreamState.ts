@@ -160,6 +160,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				pendingApprovalSessionScopeEligible: part.pendingApprovalSessionScopeEligible,
 				pendingWebReview: part.pendingWebReview,
 				pendingQuestion: part.pendingQuestion,
+				images: part.images,
 			});
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });

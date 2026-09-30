@@ -39244,6 +39244,16 @@
           },
           "trustTier": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
+          },
+          "headers": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sessionScope": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpSessionScope"
           }
         }
       },
@@ -39391,6 +39401,8 @@
           "arguments",
           "env",
           "trustTier",
+          "headers",
+          "sessionScope",
           "enabled",
           "version",
           "createdAtUtc",
@@ -39437,6 +39449,15 @@
           },
           "trustTier": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sessionScope": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpSessionScope"
           },
           "enabled": {
             "type": "boolean"
@@ -39591,6 +39612,16 @@
           },
           "trustTier": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
+          },
+          "headers": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sessionScope": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpSessionScope"
           }
         }
       },
@@ -47920,6 +47951,18 @@
           "Rejected"
         ]
       },
+      "XE_Local_AI_EngineClientPersistenceMcpSessionScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Shared",
+          "PerConversation"
+        ],
+        "enum": [
+          "Shared",
+          "PerConversation"
+        ]
+      },
       "XE_Local_AI_EngineClientPersistenceMcpTransportKind": {
         "type": "string",
         "description": "",
@@ -48465,7 +48508,13 @@
           "Timeout",
           "Transport",
           "Protocol",
-          "Authentication"
+          "Authentication",
+          "AuthenticationRequired",
+          "Forbidden",
+          "Tls",
+          "ServerExited",
+          "SessionLost",
+          "ServerStartupFailed"
         ],
         "enum": [
           "Unknown",
@@ -48475,7 +48524,13 @@
           "Timeout",
           "Transport",
           "Protocol",
-          "Authentication"
+          "Authentication",
+          "AuthenticationRequired",
+          "Forbidden",
+          "Tls",
+          "ServerExited",
+          "SessionLost",
+          "ServerStartupFailed"
         ]
       },
       "XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope": {

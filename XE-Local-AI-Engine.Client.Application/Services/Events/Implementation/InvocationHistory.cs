@@ -70,7 +70,7 @@ internal sealed class InvocationHistory : IInvocationHistory
         }
 
         _logger.LogInformation(
-            "Invocation completed. InvocationId={InvocationId} ConversationId={ConversationId} Status={Status} Model={Model} DurationMs={DurationMs} Chunks={Chunks} ThinkingChunks={ThinkingChunks} FailureCategory={FailureCategory} Error={Error}",
+            "Invocation completed. InvocationId={InvocationId} ConversationId={ConversationId} Status={Status} Model={Model} DurationMs={DurationMs} Chunks={Chunks} ThinkingChunks={ThinkingChunks} FinishReason={FinishReason} FailureCategory={FailureCategory} Error={Error}",
             entry.InvocationId,
             entry.ConversationId,
             entry.Status,
@@ -78,6 +78,7 @@ internal sealed class InvocationHistory : IInvocationHistory
             (long)entry.Duration.TotalMilliseconds,
             entry.StreamedChunkCount,
             entry.StreamedThinkingChunkCount,
+            state.FinishReason,
             entry.FailureCategory,
             entry.Error);
 

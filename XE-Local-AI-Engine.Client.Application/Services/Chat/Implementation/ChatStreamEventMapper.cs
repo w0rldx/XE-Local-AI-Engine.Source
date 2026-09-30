@@ -15,6 +15,9 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </remarks>
 internal static class ChatStreamEventMapper
 {
+    // The largest tool-result image persisted into the turn's parts.
+    private const int MaxPersistedToolImageBytes = 1024 * 1024;
+
     // Web defaults => camelCase property names, matching every other JSON payload the chat stream carries (tool
     // Arguments, the persisted parts[]), so the client parses one convention.
     private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
@@ -217,6 +220,16 @@ internal static class ChatStreamEventMapper
         }
 
         parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
+
+        // Only images render; other binary blocks keep just their placeholder in Result. ponytail: inline data URIs under a
+        // fixed 1 MiB cap keep the metadata row bounded; store media as files if tools start returning larger ones.
+        foreach (var image in payload.Media)
+        {
+            if (image.HasTopLevelMediaType("image") && image.Data.Length <= MaxPersistedToolImageBytes)
+            {
+                parts.AppendToolImage(payload.ToolCallId, image.MediaType, image.Uri, sequence);
+            }
+        }
     }
 
     /// <summary>

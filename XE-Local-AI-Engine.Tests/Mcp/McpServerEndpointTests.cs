@@ -135,6 +135,37 @@ public sealed class McpServerEndpointTests
     }
 
     [Test]
+    public async Task ListServers_MasksHeaderValuesAndUrlQueryValues_AndCarriesTheSessionScope()
+    {
+        // O-D6 (e1): a ?token= URL came back unmasked and was shown in cleartext; header values are credentials too.
+        var service = Substitute.For<IMcpServerService>();
+        var record = CreateRecord("Tickets", enabled: true) with
+        {
+            TransportKind = McpTransportKind.Http,
+            Command = null,
+            Arguments = [],
+            Url = "http://127.0.0.1:18912/mcp?token=query-secret&mode=full",
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Authorization"] = "Bearer header-secret" },
+            SessionScope = McpSessionScope.PerConversation
+        };
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ServersRoute);
+        using var response = await client.SendAsync(request);
+        var raw = await response.Content.ReadAsStringAsync();
+        var item = AssertEx.NotNull(JsonSerializer.Deserialize<ListMcpServersResponse>(raw, JsonOptions)).Items.Single();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("http://127.0.0.1:18912/mcp?token=***&mode=***", item.Url);
+        AssertEx.Equal(McpServerResponse.MaskedEnvironmentValue, item.Headers["Authorization"]);
+        AssertEx.Equal(McpSessionScope.PerConversation, item.SessionScope);
+        AssertEx.False(raw.Contains("query-secret", StringComparison.Ordinal) || raw.Contains("header-secret", StringComparison.Ordinal),
+            "no stored credential may appear anywhere in the response body");
+    }
+
+    [Test]
     public async Task GetServer_WhenMissing_ReturnsNotFound()
     {
         var service = Substitute.For<IMcpServerService>();

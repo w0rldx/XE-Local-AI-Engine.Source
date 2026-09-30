@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
@@ -55,11 +56,20 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
 
         if (request.RequestId == Guid.Empty
             || string.IsNullOrWhiteSpace(request.Task)
-            || request.Binding is null
-            || Encoding.UTF8.GetByteCount(request.Task) > _options.MaxTaskUtf8Bytes
-            || Encoding.UTF8.GetByteCount(request.Binding.Instructions ?? string.Empty) > _options.MaxInstructionsUtf8Bytes)
+            || request.Binding is null)
         {
             return Reject(InvalidRequestCode, "Cannot start: the request identifier or bounded input is invalid.");
+        }
+
+        if (Encoding.UTF8.GetByteCount(request.Task) > _options.MaxTaskUtf8Bytes)
+        {
+            return Reject(McpExecutionFailureCodes.TaskTooLarge, McpAgentRunText.TaskTooLargeMessage(_options.MaxTaskUtf8Bytes));
+        }
+
+        if (Encoding.UTF8.GetByteCount(request.Binding.Instructions ?? string.Empty) > _options.MaxInstructionsUtf8Bytes)
+        {
+            return Reject(InvalidRequestCode,
+                $"Cannot start: instructions exceed the {_options.MaxInstructionsUtf8Bytes / 1024} KiB UTF-8 bound.");
         }
 
         var requestFingerprint = _fingerprint.Compute(request);
@@ -71,7 +81,16 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                 return MapExisting(existing, requestFingerprint);
             }
 
-            var resolution = await _resolver.ResolveAsync(request.Binding, cancellationToken);
+            McpExecutionBindingResolution resolution;
+            try
+            {
+                resolution = await _resolver.ResolveAsync(request.Binding, cancellationToken);
+            }
+            catch (AgentDefinitionAmbiguousNameException exception)
+            {
+                return Reject(McpExecutionFailureCodes.AmbiguousName, exception.Message);
+            }
+
             if (resolution.Binding is not { } binding)
             {
                 return Reject(resolution.FailureCode ?? McpExecutionFailureCodes.InternalFailure, resolution.DisplayMessage);

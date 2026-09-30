@@ -27,6 +27,7 @@ public sealed class McpServerConnectionManagerDiTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<McpOptions>();
+        services.AddSingleton(TimeProvider.System);
 
         // The store is Scoped (DbContext-backed in production). A singleton that captured it would fail validation.
         services.AddScoped<IMcpServerStore, StubMcpServerStore>();
@@ -65,6 +66,11 @@ public sealed class McpServerConnectionManagerDiTests
         }
 
         public Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<bool> AssignSlugAsync(Guid id, string slug, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

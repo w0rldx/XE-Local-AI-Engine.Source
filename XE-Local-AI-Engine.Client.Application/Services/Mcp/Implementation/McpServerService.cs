@@ -1,11 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
+using System.Collections.Frozen;
+using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed class McpServerService : IMcpServerService
 {
+    private const int MaxHeaderValueBytes = 4096;
+
+    private static readonly FrozenSet<string> ReservedHeaderNames = FrozenSet.ToFrozenSet(["Host", "Content-Length"], StringComparer.OrdinalIgnoreCase);
+
     private readonly IMcpServerConnectionManager _connectionManager;
     private readonly ILogger<McpServerService> _logger;
     private readonly IOptions<McpOptions> _mcpOptions;
@@ -65,7 +71,9 @@ internal sealed class McpServerService : IMcpServerService
         // claims. Masked environment values are restored from the record, so a form round-tripping what it was shown cannot erase a secret.
         var edit = input with
         {
-            Environment = RestoreMaskedEnvironment(input.Environment, existing.Environment),
+            Environment = RestoreMasked(input.Environment, existing.Environment),
+            Headers = RestoreMasked(input.Headers, existing.Headers),
+            Url = McpUrlMask.Restore(input.Url, existing.Url),
             Enabled = existing.Enabled
         };
 
@@ -85,11 +93,11 @@ internal sealed class McpServerService : IMcpServerService
             return null;
         }
 
-        // Only an enabled server has a live connection that a config change can affect; a disabled server contributes no
-        // tools either way, so editing it never needs a snapshot refresh.
-        if (updated.Enabled)
+        // Only an enabled server has a live connection to refresh, and the store bumps Version only for a change that affects
+        // how it connects. A rename keeps the live session but still refreshes, so status and failure texts carry the new name.
+        if (updated.Enabled && (updated.Version != existing.Version || !string.Equals(updated.Name, existing.Name, StringComparison.Ordinal)))
         {
-            await RefreshConnectionsAsync(cancellationToken);
+            await RefreshConnectionsAsync(id, cancellationToken);
         }
 
         return updated;
@@ -105,7 +113,13 @@ internal sealed class McpServerService : IMcpServerService
 
         if (existing.Enabled == enabled)
         {
-            // No change to the enabled set, so no refresh — return the unchanged record.
+            // Enabling an already-enabled server is the UI's Reconnect: close and re-open every session of that one server, even a
+            // live-looking one, without a store write or Version bump. Disabling a disabled server has nothing to tear down.
+            if (enabled)
+            {
+                await RefreshConnectionsAsync(id, cancellationToken, reconnect: true);
+            }
+
             return existing;
         }
 
@@ -118,7 +132,7 @@ internal sealed class McpServerService : IMcpServerService
         }
 
         // The enabled set changed (a server was connected or disconnected), so re-publish the live tool snapshot.
-        await RefreshConnectionsAsync(cancellationToken);
+        await RefreshConnectionsAsync(id, cancellationToken);
 
         return updated;
     }
@@ -140,7 +154,7 @@ internal sealed class McpServerService : IMcpServerService
         // Removing an enabled server shrinks the connected set; a disabled server had no live connection to tear down.
         if (existing.Enabled)
         {
-            await RefreshConnectionsAsync(cancellationToken);
+            await RefreshConnectionsAsync(id, cancellationToken);
         }
 
         return true;
@@ -216,6 +230,11 @@ internal sealed class McpServerService : IMcpServerService
             throw new McpServerValidationException($"Transport '{input.TransportKind}' is not a valid MCP transport.");
         }
 
+        if (!Enum.IsDefined(input.SessionScope))
+        {
+            throw new McpServerValidationException($"Session scope '{input.SessionScope}' is not a valid MCP session scope.");
+        }
+
         if (!Enum.IsDefined(input.TrustTier))
         {
             throw new McpServerValidationException($"Trust tier '{input.TrustTier}' is not a valid MCP trust tier.");
@@ -236,10 +255,22 @@ internal sealed class McpServerService : IMcpServerService
                     throw new McpServerValidationException("Command is required for a stdio MCP server.");
                 }
 
+                if (input.Headers.Count > 0)
+                {
+                    throw new McpServerValidationException("Headers apply only to an HTTP MCP server; pass a stdio server's credentials as environment variables.");
+                }
+
                 break;
 
             case McpTransportKind.Http:
                 ValidateHttpUrl(input.Url);
+                if (input.Environment.Count > 0)
+                {
+                    // The HTTP transport launches nothing, so an environment would be stored and silently never sent.
+                    throw new McpServerValidationException("Environment variables apply only to a stdio MCP server; send an HTTP server's credentials as headers.");
+                }
+
+                ValidateHeaders(input.Headers);
                 break;
 
             default:
@@ -248,23 +279,28 @@ internal sealed class McpServerService : IMcpServerService
     }
 
     /// <summary>
-    ///     Replaces every environment value the caller sent as <see cref="McpEnvironmentMask.Value" /> with the value
-    ///     already stored under that key.
+    ///     Replaces every environment or header value the caller sent as <see cref="McpEnvironmentMask.Value" /> with
+    ///     the value already stored under that key.
     /// </summary>
     /// <remarks>
-    ///     A key that carries the mask with no stored value keeps the mask verbatim: it is a new key whose value the
-    ///     caller genuinely typed, and inventing an empty string for it would be a guess.
+    ///     A key that carries the mask with no stored value is refused: there is nothing to restore, and storing the mask
+    ///     as the value would hand the server a placeholder instead of the credential the operator meant to type.
     /// </remarks>
-    private static IReadOnlyDictionary<string, string> RestoreMaskedEnvironment(IReadOnlyDictionary<string, string> incoming,
+    private static IReadOnlyDictionary<string, string> RestoreMasked(IReadOnlyDictionary<string, string> incoming,
         IReadOnlyDictionary<string, string> stored)
     {
         var restored = new Dictionary<string, string>(incoming.Count, StringComparer.Ordinal);
         foreach (var (key, value) in incoming)
         {
-            restored[key] = string.Equals(value, McpEnvironmentMask.Value, StringComparison.Ordinal)
-                            && stored.TryGetValue(key, out var storedValue)
+            if (!string.Equals(value, McpEnvironmentMask.Value, StringComparison.Ordinal))
+            {
+                restored[key] = value;
+                continue;
+            }
+
+            restored[key] = stored.TryGetValue(key, out var storedValue)
                 ? storedValue
-                : value;
+                : throw new McpServerValidationException($"'{key}' is new and carries the masked placeholder; enter its value.");
         }
 
         return restored;
@@ -301,6 +337,12 @@ internal sealed class McpServerService : IMcpServerService
             throw new McpServerValidationException("Url must be an absolute http or https URL.");
         }
 
+        if (uri.UserInfo.Length > 0)
+        {
+            // Userinfo is never sent as a credential by the transport and would be stored in plaintext: headers carry credentials.
+            throw new McpServerValidationException("Url must not carry credentials (user:password@); configure an Authorization header instead.");
+        }
+
         // The HTTP transport is loopback-only by default, the connection manager re-checking at connect time. The allow-list matches the
         // URL host case-insensitively, brackets stripped from an IPv6 literal as the factory does, so both sides accept the bare address.
         var host = uri.Host.Trim('[', ']');
@@ -310,6 +352,45 @@ internal sealed class McpServerService : IMcpServerService
         {
             throw new McpServerValidationException($"Url host '{host}' is not in the allowed loopback set ({string.Join(", ", loopbackHosts)}).");
         }
+    }
+
+    /// <summary>
+    ///     Header names must be HTTP tokens and not ones the transport owns; values are single-line and bounded.
+    /// </summary>
+    /// <remarks>
+    ///     A masked value (<see cref="McpEnvironmentMask.Value" />) passes: it is restored from the stored header
+    ///     before anything is saved.
+    /// </remarks>
+    private static void ValidateHeaders(IReadOnlyDictionary<string, string> headers)
+    {
+        foreach (var (name, value) in headers)
+        {
+            if (name.Length == 0 || !name.All(IsHeaderTokenChar))
+            {
+                throw new McpServerValidationException($"Header name '{name}' is not a valid HTTP header name.");
+            }
+
+            if (ReservedHeaderNames.Contains(name))
+            {
+                throw new McpServerValidationException($"Header '{name}' is set by the transport and cannot be configured.");
+            }
+
+            if (Encoding.UTF8.GetByteCount(value) > MaxHeaderValueBytes)
+            {
+                throw new McpServerValidationException($"The value of header '{name}' exceeds {MaxHeaderValueBytes} bytes.");
+            }
+
+            if (value.Any(static ch => char.IsControl(ch) && ch != '\t'))
+            {
+                throw new McpServerValidationException($"The value of header '{name}' must be a single line without control characters.");
+            }
+        }
+    }
+
+    private static bool IsHeaderTokenChar(char ch)
+    {
+        // RFC 9110 token: visible ASCII letters and digits plus the listed punctuation.
+        return char.IsAsciiLetterOrDigit(ch) || "!#$%&'*+-.^_`|~".Contains(ch, StringComparison.Ordinal);
     }
 
     private async Task EnsureNameAvailableAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
@@ -325,11 +406,19 @@ internal sealed class McpServerService : IMcpServerService
         }
     }
 
-    private async Task RefreshConnectionsAsync(CancellationToken cancellationToken)
+    private async Task RefreshConnectionsAsync(Guid id, CancellationToken cancellationToken, bool reconnect = false)
     {
         try
         {
-            await _connectionManager.RefreshAsync(cancellationToken);
+            // Only the changed registration reconnects; every other server keeps its live session.
+            if (reconnect)
+            {
+                await _connectionManager.ReconnectAsync(id, cancellationToken);
+            }
+            else
+            {
+                await _connectionManager.RefreshAsync(id, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {

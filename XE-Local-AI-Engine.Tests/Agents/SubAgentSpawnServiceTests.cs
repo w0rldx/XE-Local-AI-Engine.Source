@@ -868,6 +868,75 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal(0, harness.ChatClient.CallCount);
     }
 
+    // I-D12: an empty final answer or an approval request left in the response was reported as Success("").
+    [Test]
+    public async Task SpawnForMcp_WhenRunEndsWithoutAnswerOrOnApprovalRequest_FailsTyped()
+    {
+        (ChatMessage Message, string Code)[] cases =
+        [
+            (new ChatMessage(ChatRole.Assistant, string.Empty), McpExecutionFailureCodes.NoAnswer),
+            (new ChatMessage(ChatRole.Assistant,
+                [
+                    new ToolApprovalRequestContent("approval-1", new FunctionCallContent("call-1", "run_python"))
+                ]),
+                McpExecutionFailureCodes.ApprovalRequired)
+        ];
+        foreach (var (message, code) in cases)
+        {
+            using var harness = new Harness();
+            harness.AllowLocal();
+            harness.ResolveMcpBinding(BareBinding());
+            harness.ChatClient.ResponseMessage = message;
+
+            using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+            var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                ModelId = Model
+            }, "compute", expectedBindingFingerprint: null, CancellationToken.None);
+
+            AssertEx.Equal(SpawnOutcomeKind.Failed, outcome.Kind);
+            AssertEx.Equal(code, outcome.FailureCode!);
+        }
+    }
+
+    // Q5 / I-D6: a run bound by a name several agents share is refused instead of running whichever row came first.
+    [Test]
+    public async Task SpawnForMcp_WhenAgentNameIsAmbiguous_RejectsAmbiguousName()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBindingThrows(new AgentDefinitionAmbiguousNameException());
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "Twin"
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+        AssertEx.Equal(McpExecutionFailureCodes.AmbiguousName, outcome.FailureCode!);
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    // I-D16: llama-server's context-size 400 escaped as an unhandled exception and an opaque MCP error.
+    [Test]
+    public async Task SpawnForMcp_WhenProviderRejectsContextSize_RejectsTaskTooLarge()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+        harness.ChatClient.Failure = new System.ClientModel.ClientResultException("HTTP 400 (exceed_context_size_error: )");
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model
+        }, "huge", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+        AssertEx.Equal(McpExecutionFailureCodes.TaskTooLarge, outcome.FailureCode!);
+    }
+
     [Test]
     public async Task SpawnForMcp_WhenCapacityRejectsWorkspace_DoesNotResolveOrLeaseWorkspace()
     {
@@ -1781,6 +1850,12 @@ public sealed class SubAgentSpawnServiceTests
         {
             _mcpExecutionBindingResolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
                                         .Returns(McpExecutionBindingResolution.Success(binding));
+        }
+
+        public void ResolveMcpBindingThrows(Exception exception)
+        {
+            _mcpExecutionBindingResolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
+                                        .Returns<McpExecutionBindingResolution>(_ => throw exception);
         }
 
         public void UseAgenticToolAdapter(IMcpAgenticToolAdapter adapter)

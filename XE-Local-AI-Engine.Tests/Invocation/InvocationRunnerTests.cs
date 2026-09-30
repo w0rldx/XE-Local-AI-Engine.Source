@@ -3340,6 +3340,120 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenAToolReturnsAnImage_ReportsTheImageBesideThePlaceholderText()
+    {
+        var image = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+        var projected = AssertEx.NotNull(McpToolResultProjectionAIFunction.Project(image) as string);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundUpdates(projected, finalText: "done"));
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed
+            && payload.Result == "[image image/png, 1 KB]"
+            && !payload.IsError
+            && payload.Media.Count == 1
+            && ReferenceEquals(payload.Media[0], image)));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAToolReturnsATypedFailure_ReportsTheCallAsFailed()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: ToolRoundUpdates("[tool error: timeout] The MCP tool 'test-tool' did not respond.", finalText: "done"));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed && payload.IsError));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheRoundAfterAToolResultIsSilent_EndsWithAnEmptyAnswerNotice()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundUpdates("ok", finalText: null));
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.EmptyAnswer
+            && payload.Message == "The model stopped without an answer."));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheLastRoundAnswers_EmitsNoEmptyAnswerNotice()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundUpdates("ok", finalText: "done"));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
+    }
+
+    [Test]
+    public async Task RunAsync_SeedsTheToolResultBudgetFromTheModelWindow()
+    {
+        int? budgetDuringTheRun = null;
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CapturingBudget(value => budgetDuringTheRun = value));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        var window = (int)dispatcher.ReceivedCalls()
+                                    .Single(call => call.GetMethodInfo().Name == nameof(IWorkerEventDispatcher.ReportTurnContextWindowAsync))
+                                    .GetArguments()[1]!;
+        AssertEx.Equal(Math.Clamp(window, 8_192, 65_536), budgetDuringTheRun, "Tool results are sized to the window the model was launched with.");
+        AssertEx.Null(ToolResultBudgetScope.Current, "The scope ends with the turn.");
+    }
+
+    [Test]
+    [Arguments(0, 8_192)]
+    [Arguments(1_000, 8_192)]
+    [Arguments(32_768, 32_768)]
+    [Arguments(262_144, 65_536)]
+    public async Task ToolResultBudgetFor_FloorsAnUnknownOrTinyWindow_AndCapsALargeOne(int windowTokens, int expected)
+    {
+        // An unknown window reported as 0 clamped to a one-character budget, so every tool result arrived as a marker.
+        AssertEx.Equal(expected, InvocationRunner.ToolResultBudgetFor(windowTokens));
+        await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> CapturingBudget(Action<int?> capture)
+    {
+        capture(ToolResultBudgetScope.Current);
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "ok");
+    }
+
+    // One tool call and its result, then either a final answer or a silent round (null).
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundUpdates(string result, string? finalText)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1", "test-tool")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-1", result)
+        });
+        await Task.Yield();
+
+        if (finalText is not null)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, finalText);
+        }
+    }
+
+    [Test]
     public async Task RunAsync_WithTheNodeSettingUnset_LeavesTheRelevanceScopeInactiveAndNeverReadsTheCoreSet()
     {
         // The byte-identical pin for the shipped default. The settings read itself is unconditional (it is the LEFT

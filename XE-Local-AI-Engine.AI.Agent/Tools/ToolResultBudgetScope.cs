@@ -38,6 +38,13 @@ public static class ToolResultBudgetScope
     }
 
     /// <summary>
+    ///     Seeds <paramref name="maxResultCharacters" /> only when it is tighter than the budget already in scope, so an
+    ///     inner seed (a turn sized to its model's window) never loosens an outer one (a work-session step).
+    /// </summary>
+    public static IDisposable BeginTightenedScope(int maxResultCharacters) =>
+        BeginScope(Current is { } current && current < maxResultCharacters ? current : maxResultCharacters);
+
+    /// <summary>
     ///     The budget to actually apply: the ambient value when one is seeded AND it is tighter than
     ///     <paramref name="configuredMaxResultCharacters" />, otherwise the configured value unchanged.
     /// </summary>

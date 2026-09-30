@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
-///     Why the last connect or list attempt for an MCP server failed, derived from the exception that reached the
-///     connection manager.
+///     Why the last connect or list attempt for an MCP server failed, or why a connected server was lost, derived from
+///     the exception or the client completion that reached the connection manager.
 /// </summary>
 public enum McpConnectionFailureReason
 {
@@ -27,6 +27,24 @@ public enum McpConnectionFailureReason
     /// <summary>The server answered, but not with a valid MCP handshake or tool list.</summary>
     Protocol = 6,
 
-    /// <summary>The server rejected the connection's credentials or TLS negotiation failed.</summary>
-    Authentication = 7
+    /// <summary>The server rejected the configured credentials (HTTP 401 with headers configured).</summary>
+    Authentication = 7,
+
+    /// <summary>The server demands a credential and the registration has none configured (HTTP 401, no headers).</summary>
+    AuthenticationRequired = 8,
+
+    /// <summary>The server refused access for the credentials it was given (HTTP 403).</summary>
+    Forbidden = 9,
+
+    /// <summary>TLS negotiation with an https server failed.</summary>
+    Tls = 10,
+
+    /// <summary>A connected server's process or stream ended after the handshake.</summary>
+    ServerExited = 11,
+
+    /// <summary>An HTTP server no longer recognises the session (HTTP 404), typically because it restarted.</summary>
+    SessionLost = 12,
+
+    /// <summary>The server's process exited during startup, before the MCP handshake completed.</summary>
+    ServerStartupFailed = 13
 }

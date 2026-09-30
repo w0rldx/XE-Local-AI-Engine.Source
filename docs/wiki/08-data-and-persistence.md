@@ -79,7 +79,7 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 | `CustomTool` | `description`, secret-bearing `config_json` | (`Guid.Empty`, Id, `description` / `custom_tool_config_json`) |
 | `PlaybookAction` | behavior (required), trigger condition (optional) | (`Guid.Empty`, Id, …) — node-scoped |
 | `GoldenConversation` | input turns, assertion, rubric | (`Guid.Empty`, Id, …) — node-scoped |
-| `McpServerRegistration` | arguments, environment, description | (`Guid.Empty`, Id, …) — node-scoped |
+| `McpServerRegistration` | arguments, environment, HTTP headers, description | (`Guid.Empty`, Id, …) — node-scoped |
 | `SlashCommand` | description, action configuration | (`Guid.Empty`, Id, name-derived column) |
 | `McpServerApiKey` | one-way key hash | (`Guid.Empty`, singleton Id, `mcp_api_key_hash`) |
 | `IntegrationExecutionEvent` | `detail_json` (optional) | (ExecutionId, Id, `integration_execution_event_detail_json`) — the owning execution fills the conversation slot, so a re-parented event fails its tag check |

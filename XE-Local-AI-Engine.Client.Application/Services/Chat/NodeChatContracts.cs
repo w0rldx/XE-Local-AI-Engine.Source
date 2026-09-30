@@ -76,6 +76,13 @@ public static class NodeChatMessagePartKinds
     ///     for the <c>TurnNoticeKind</c> enum name, rather than adding dedicated fields.
     /// </summary>
     public const string Notice = "notice";
+
+    /// <summary>
+    ///     An image a tool call returned, rendered under that call's card. <see cref="NodeChatMessagePart.ToolCallId" />
+    ///     names the call, <see cref="NodeChatMessagePart.Name" /> the media type and <see cref="NodeChatMessagePart.Text" />
+    ///     the <c>data:</c> URI. Render-only: never replayed to a model.
+    /// </summary>
+    public const string Image = "image";
 }
 
 /// <summary>

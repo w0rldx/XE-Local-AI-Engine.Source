@@ -12,7 +12,9 @@ function baseForm(overrides: Partial<McpServerFormValues> = {}): McpServerFormVa
 		workingDirectory: "",
 		env: [],
 		url: "",
+		headers: [],
 		trustTier: "Sandboxed",
+		sessionScope: "Shared",
 		...overrides,
 	};
 }

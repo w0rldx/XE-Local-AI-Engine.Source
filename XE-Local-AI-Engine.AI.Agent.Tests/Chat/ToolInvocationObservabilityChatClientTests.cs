@@ -346,6 +346,25 @@ public sealed class ToolInvocationObservabilityChatClientTests
     }
 
     [Test]
+    [Arguments("[tool error: timeout] The MCP tool 'slow' did not respond.", "timeout")]
+    [Arguments("[tool error: tool_reported] ticket 9 does not exist", "error")]
+    public async Task GetStreamingResponseAsync_WhenAWrapperReturnsItsFailure_LogsThatOutcomeNotSuccess(string result, string expectedOutcome)
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new CallThenResultChatClient(callId, "mcp__srv__slow", result, exception: null);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolCompleted", StringComparison.Ordinal)
+                                                            && message.Contains($"Outcome={expectedOutcome} ", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task GetStreamingResponseAsync_WhenResultFollowsCall_RecordsLogicalToolCostOnce()
     {
         var callId = $"call-{Guid.NewGuid():N}";

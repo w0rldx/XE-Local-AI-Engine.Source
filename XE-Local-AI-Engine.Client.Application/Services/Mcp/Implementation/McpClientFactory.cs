@@ -48,21 +48,21 @@ internal sealed class McpClientFactory : IMcpClientFactory
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
-    public Task<McpClient> CreateAsync(McpServerRecord record, CancellationToken cancellationToken)
+    public Task<McpClient> CreateAsync(McpServerRecord record, string? sessionKey, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        var transport = BuildTransport(record);
+        var transport = BuildTransport(record, sessionKey);
         return McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
     }
 
     // Internal for the tier-routing test: which TRANSPORT TYPE a record resolves to is the whole of the "where does
     // this process run" decision, and asserting it needs no process, no sandbox and no host capability.
-    internal IClientTransport BuildTransport(McpServerRecord record)
+    internal IClientTransport BuildTransport(McpServerRecord record, string? sessionKey = null)
     {
         return record.TransportKind switch
         {
-            McpTransportKind.Stdio => BuildStdioTransport(record),
+            McpTransportKind.Stdio => BuildStdioTransport(record, sessionKey),
             McpTransportKind.Http => BuildHttpTransport(record),
             _ => throw new InvalidOperationException($"Unsupported MCP transport kind '{record.TransportKind}'.")
         };
@@ -76,11 +76,11 @@ internal sealed class McpClientFactory : IMcpClientFactory
     ///     resolve to the privileged branch by accident, and the schema check constraint means reaching it at all is a
     ///     code-versus-database mismatch worth surfacing.
     /// </remarks>
-    private IClientTransport BuildStdioTransport(McpServerRecord record)
+    private IClientTransport BuildStdioTransport(McpServerRecord record, string? sessionKey)
     {
         return record.TrustTier switch
         {
-            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory),
+            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory, sessionKey),
             McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
             // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one: a row carrying it passed both
             // the CRUD refusal and the schema check, so serving it as either other tier would pick a privilege level on its behalf.
@@ -119,6 +119,12 @@ internal sealed class McpClientFactory : IMcpClientFactory
 
     private IClientTransport BuildHttpTransport(McpServerRecord record)
     {
+        return new HttpClientTransport(BuildHttpTransportOptions(record), _loggerFactory);
+    }
+
+    // Internal for the header test: the built options are the whole of what the transport sends, and asserting them needs no server.
+    internal HttpClientTransportOptions BuildHttpTransportOptions(McpServerRecord record)
+    {
         if (string.IsNullOrWhiteSpace(record.Url) || !Uri.TryCreate(record.Url, UriKind.Absolute, out var endpoint))
         {
             throw new InvalidOperationException("An HTTP MCP server requires an absolute URL.");
@@ -136,13 +142,20 @@ internal sealed class McpClientFactory : IMcpClientFactory
             throw new InvalidOperationException("An HTTP MCP server URL must target a loopback host.");
         }
 
-        var transportOptions = new HttpClientTransportOptions
+        if (endpoint.UserInfo.Length > 0)
+        {
+            // Userinfo is refused on write; a row written before that rule would only leak it into logs, never authenticate.
+            throw new InvalidOperationException("An HTTP MCP server URL must not carry userinfo; configure an Authorization header instead.");
+        }
+
+        return new HttpClientTransportOptions
         {
             Name = record.Name,
-            Endpoint = endpoint
+            Endpoint = endpoint,
+            // The SDK copies these onto every POST, the SSE GET (and its resumes) and the DELETE, so a bearer credential rides
+            // every request of the session. Null when none are configured, the SDK default.
+            AdditionalHeaders = record.Headers.Count == 0 ? null : new Dictionary<string, string>(record.Headers, StringComparer.OrdinalIgnoreCase)
         };
-
-        return new HttpClientTransport(transportOptions, _loggerFactory);
     }
 
     private bool IsLoopbackHost(string host)

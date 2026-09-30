@@ -501,6 +501,81 @@ public sealed class McpServerStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Headers_AreEncryptedAtRest_RoundTrip_AndAnEditBumpsVersion()
+    {
+        var databasePath = GetDatabasePath("headers.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var secretHeader = "Bearer SECRET-HEADER-" + Guid.NewGuid().ToString("N");
+
+        Guid serverId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new McpServerStore(context, TimeProvider.System);
+            var added = await store.AddAsync(CreateHttpInput() with
+            {
+                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader }
+            });
+            serverId = added.Id;
+
+            var unchanged = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
+            {
+                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader }
+            }));
+            AssertEx.Equal(expected: 1, unchanged.Version, "Re-saving the same headers is not a connection change.");
+
+            var rotated = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
+            {
+                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader + "-rotated" }
+            }));
+            AssertEx.Equal(expected: 2, rotated.Version, "A new credential must reconnect the server.");
+
+            var rescoped = AssertEx.NotNull(await store.UpdateAsync(serverId, CreateHttpInput() with
+            {
+                Headers = new Dictionary<string, string> { ["Authorization"] = secretHeader + "-rotated" },
+                SessionScope = McpSessionScope.PerConversation
+            }));
+            AssertEx.Equal(expected: 3, rescoped.Version, "A session-scope change must reconnect the server.");
+        }
+
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes("SECRET-HEADER-")),
+            "The SQLite file should not contain the plaintext header value.");
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var reread = AssertEx.NotNull(await new McpServerStore(readContext, TimeProvider.System).GetByIdAsync(serverId));
+        AssertEx.Equal(secretHeader + "-rotated", reread.Headers["Authorization"]);
+        AssertEx.Equal(McpSessionScope.PerConversation, reread.SessionScope);
+    }
+
+    [Test]
+    public async Task AssignSlugAsync_PersistsOnce_WithoutBumpingVersionOrRewritingSecrets()
+    {
+        var databasePath = GetDatabasePath("slug.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new McpServerStore(context, TimeProvider.System);
+        var added = await store.AddAsync(CreateStdioInput());
+        AssertEx.Null(added.Slug, "A new registration has no slug until its first connect.");
+        var envBefore = await ReadRawBlobAsync(databasePath, "env");
+
+        AssertEx.True(await store.AssignSlugAsync(added.Id, "filesystem"));
+        var envAfter = await ReadRawBlobAsync(databasePath, "env");
+        AssertEx.True(envBefore.AsSpan().SequenceEqual(envAfter),
+            "Assigning a slug must not rewrite the env ciphertext.");
+        AssertEx.False(await store.AssignSlugAsync(added.Id, "other"), "A persisted slug is never recomputed.");
+        AssertEx.False(await store.AssignSlugAsync(Guid.NewGuid(), "missing"));
+
+        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with { Name = "renamed" }));
+        AssertEx.Equal("filesystem", renamed.Slug, "A rename keeps the slug.");
+        AssertEx.Equal(expected: 1, renamed.Version, "Neither the slug nor a rename is a connection change.");
+    }
+
+    [Test]
     public async Task SetEnabledAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("set-enabled-missing.sqlite");

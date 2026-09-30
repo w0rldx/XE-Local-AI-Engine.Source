@@ -20,6 +20,23 @@ public sealed class SecretValueRedactorTests
     }
 
     [Test]
+    public async Task WithParts_AddsTheValueOfAnAssignmentStyleArgument()
+    {
+        // Codex review 2026-09-30: "--api-key=secretvalue" registered only the whole argument, so a diagnostic echoing the
+        // parsed value alone survived every scrub.
+        var parts = SecretValueRedactor.WithParts(["--api-key=secretvalue", "Bearer tok-abcdef0123", "PATH=/usr/bin:/bin"], minLength: 8).ToList();
+
+        AssertEx.Contains(parts, "secretvalue");
+        AssertEx.Contains(parts, "tok-abcdef0123");
+        AssertEx.Contains(parts, "/usr/bin:/bin");
+        AssertEx.False(parts.Contains("--api-key="), "the empty-value prefix is not a secret");
+
+        var redacted = new SecretValueRedactor(parts).Redact("server rejected key secretvalue");
+        AssertEx.False(redacted.Contains("secretvalue", StringComparison.Ordinal), "the bare value must be redacted");
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task Redact_StripsUrlUserInfo()
     {
         var redactor = new SecretValueRedactor([]);

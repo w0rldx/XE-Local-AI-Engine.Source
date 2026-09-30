@@ -14,5 +14,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 internal interface IMcpClientFactory
 {
-    Task<McpClient> CreateAsync(McpServerRecord record, CancellationToken cancellationToken);
+    /// <param name="record">The registration to connect.</param>
+    /// <param name="sessionKey">Null for the shared session; else the per-conversation session's key, giving it its own sandbox jail.</param>
+    /// <param name="cancellationToken">Cancels the connect.</param>
+    Task<McpClient> CreateAsync(McpServerRecord record, string? sessionKey, CancellationToken cancellationToken);
 }

@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
-    [McpServerTool(Name = "list_workflow_runs")]
+    [McpServerTool(Name = "list_workflow_runs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "List development workflow runs as bounded lifecycle metadata — one row per work item's LATEST run, matching the operator's own list. Each row carries the run status, node tallies and pending-decision count. An optional case-insensitive run status filter may be supplied. Graphs, artifact contents, work-session transcripts and host paths are never returned, and nothing here starts, cancels or otherwise moves a run.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
@@ -84,7 +84,7 @@ public sealed partial class NodeAdminMcpTools
                 };
             }, static response => response.FailureCode is not null);
 
-    [McpServerTool(Name = "get_workflow_run")]
+    [McpServerTool(Name = "get_workflow_run", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "Get one development workflow run by id: its status, node tallies, pending-decision count, failure class, sanitized terminal reason, start and end timestamps, and one bounded row per node run (key, type, status, attempt, max attempts). The pinned graph, artifact contents, work-session transcripts and host paths are never returned, and nothing here moves the run.")]
     public Task<McpWorkflowRunGetResponse> GetWorkflowRunAsync([Description("The canonical hyphenated UUID of the run, as returned by list_workflow_runs.")] string run_id,

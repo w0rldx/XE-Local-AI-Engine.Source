@@ -12,6 +12,7 @@ import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchAp
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
+import { SafeMarkdownImage } from "@/features/chat/components/SafeMarkdownImage";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
 import { WebRequestConsentCard, WebReviewCard } from "@/features/chat/components/WebReviewCard";
 import { agentHomeRunIdWithPatch } from "@/features/chat/models/AgentHomePatchToolResult";
@@ -369,6 +370,19 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 						) : null}
 					</Stack>
 				</Collapse>
+				{/* Outside the collapse: an image is the result the operator came for, not a detail behind a disclosure. */}
+				{part.images?.length ? (
+					<Stack gap={6} className={classes["tool-body"]} data-testid={`chat-tool-call-images-${part.name}`}>
+						{part.images.map((image, index) => (
+							<SafeMarkdownImage
+								// biome-ignore lint/suspicious/noArrayIndexKey: a persisted part's images never reorder.
+								key={index}
+								src={image.src}
+								alt={t("chat.toolCall.imageAlt", { defaultValue: "Image returned by {{tool}}", tool: toolName })}
+							/>
+						))}
+					</Stack>
+				) : null}
 			</div>
 		</div>
 	);

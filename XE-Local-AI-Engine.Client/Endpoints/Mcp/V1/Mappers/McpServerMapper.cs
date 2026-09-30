@@ -24,11 +24,12 @@ internal static class McpServerMapper
             WorkingDirectory = record.WorkingDirectory,
             // Keys only. The form renders one row per key and submits the mask back for any value it did not change,
             // so the secret never leaves the node and the round-trip still works.
-            Env = record.Environment.ToDictionary(static pair => pair.Key,
-                static _ => McpEnvironmentMask.Value,
-                StringComparer.Ordinal),
-            Url = record.Url,
+            Env = Mask(record.Environment),
+            // A pre-headers row may carry ?token= in its URL: masked on the wire, restored on update when sent back unchanged.
+            Url = McpUrlMask.Mask(record.Url),
             TrustTier = record.TrustTier,
+            Headers = Mask(record.Headers),
+            SessionScope = record.SessionScope,
             Enabled = record.Enabled,
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
@@ -53,6 +54,8 @@ internal static class McpServerMapper
             Environment = request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             Url = request.Url,
             TrustTier = request.TrustTier,
+            Headers = request.Headers ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            SessionScope = request.SessionScope,
             Enabled = false
         };
     }
@@ -74,6 +77,8 @@ internal static class McpServerMapper
             Environment = request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             Url = request.Url,
             TrustTier = request.TrustTier,
+            Headers = request.Headers ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            SessionScope = request.SessionScope,
             Enabled = false
         };
     }
@@ -138,5 +143,10 @@ internal static class McpServerMapper
                 })
             ]
         };
+    }
+
+    private static Dictionary<string, string> Mask(IReadOnlyDictionary<string, string> values)
+    {
+        return values.ToDictionary(static pair => pair.Key, static _ => McpEnvironmentMask.Value, StringComparer.Ordinal);
     }
 }

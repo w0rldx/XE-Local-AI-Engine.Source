@@ -23,11 +23,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Drafting;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using ApplicationGenerationProvenance = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance;
 using DevWorkflowNodeRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRunStatus;
@@ -165,7 +167,8 @@ public sealed class NodeAdminMcpToolsTests
             UpdateAvailable = true,
             IsOffline = false,
             RunningProcessCount = 2,
-            CheckedAtUtc = null
+            CheckedAtUtc = null,
+            OverrideVariant = GpuVariant.Cuda
         });
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus
         {
@@ -193,6 +196,9 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal("model-a", node.DefaultModelName!);
         AssertEx.Equal(2, node.LoadedProcessCount);
         AssertEx.Equal("b7000", runtime.InstalledTag!);
+        // I-D8: the override and source-build runtime were invisible, so an agent would acquire a runtime it did not need.
+        AssertEx.Equal("cuda", runtime.OverrideVariant!);
+        AssertEx.True(runtime.InstalledIsSourceBuild);
         AssertEx.Equal("sanitized failure", acquisition.SanitizedError!);
         AssertEx.False(json.Contains("/private/runtime", StringComparison.Ordinal));
         AssertEx.False(json.Contains("secret-commit", StringComparison.Ordinal));
@@ -653,6 +659,25 @@ public sealed class NodeAdminMcpToolsTests
         });
         var updated = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
         AssertEx.Equal(7, AssertEx.NotNull(updated.Agent).Version);
+    }
+
+    // Q5 / I-D6: a name shared by several agents is refused by every name-keyed tool; nothing is updated or deleted.
+    [Test]
+    public async Task AgentLookupsByName_WhenNameIsShared_ReturnAmbiguousNameAndTouchNothing()
+    {
+        var harness = new Harness();
+        harness.Agents.GetByKeyAsync("Twin", Arg.Any<CancellationToken>()).Returns<AgentDefinitionRecord?>(_ => throw new AgentDefinitionAmbiguousNameException());
+
+        var get = await harness.Tools.GetAgentAsync("Twin", CancellationToken.None);
+        var update = await harness.Tools.UpdateAgentAsync("Twin", "Twin", "Instructions", CancellationToken.None);
+        var delete = await harness.Tools.DeleteAgentAsync("Twin", CancellationToken.None);
+
+        AssertEx.Equal(McpExecutionFailureCodes.AmbiguousName, get.FailureCode!);
+        AssertEx.Equal(McpExecutionFailureCodes.AmbiguousName, update.FailureCode!);
+        AssertEx.Equal(McpExecutionFailureCodes.AmbiguousName, delete.FailureCode!);
+        AssertEx.False(delete.Deleted);
+        await harness.Agents.DidNotReceiveWithAnyArgs().UpdateAsync(Guid.Empty, default!, default);
+        await harness.Agents.DidNotReceiveWithAnyArgs().DeleteAsync(Guid.Empty, default);
     }
 
     [Test]

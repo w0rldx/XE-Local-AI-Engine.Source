@@ -1250,7 +1250,7 @@ XE-Local-AI-Engine.Tests/Mcp/McpServerApiKeyServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerApiKeyServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerDiTests.cs|run|2
 XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerDiTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerTests.cs|run|4
+XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerTests.cs|run|3
 XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerEndpointTests.cs|run|3
 XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|summary|2

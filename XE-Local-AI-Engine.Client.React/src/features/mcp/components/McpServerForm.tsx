@@ -10,9 +10,11 @@ import { useMcpEnvRows } from "@/features/mcp/hooks/useMcpEnvRows";
 import {
 	type McpEnvEntry,
 	type McpServerFormValues,
+	type McpSessionScope,
 	type McpTransportKind,
 	type McpTrustTier,
 	mcpServerFormSchema,
+	mcpSessionScopes,
 	mcpTransportKinds,
 	selectableMcpTrustTiers,
 } from "@/features/mcp/models/McpServerModels";
@@ -54,14 +56,15 @@ export function McpServerForm({
 	const { t } = useTranslation();
 	const [values, setValues] = useState<McpServerFormValues>(initialValues);
 	const env = useMcpEnvRows(initialValues.env);
+	const headers = useMcpEnvRows(initialValues.headers);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
 	// Compute and report the host's dirty state. Dirty = current values (with env projected back) differ from the
 	// initial snapshot; a JSON compare gives shallow/structural detection. Called from an effect (below), never during
 	// render, so the parent setter is only ever invoked after commit.
 	const reportDirty = useCallback(
-		(nextValues: McpServerFormValues, nextEnv: McpEnvEntry[]) => {
-			const candidate: McpServerFormValues = { ...nextValues, env: nextEnv };
+		(nextValues: McpServerFormValues, nextEnv: McpEnvEntry[], nextHeaders: McpEnvEntry[]) => {
+			const candidate: McpServerFormValues = { ...nextValues, env: nextEnv, headers: nextHeaders };
 			onDirtyChange?.(JSON.stringify(candidate) !== JSON.stringify(initialValues));
 		},
 		[initialValues, onDirtyChange],
@@ -74,8 +77,8 @@ export function McpServerForm({
 	// Report dirty state to the host from an effect, so the parent setter is only ever called after commit — never
 	// during render. Fires on mount (a fresh mount is clean) and whenever the values or env rows change.
 	useEffect(() => {
-		reportDirty(values, env.entries);
-	}, [values, env.entries, reportDirty]);
+		reportDirty(values, env.entries, headers.entries);
+	}, [values, env.entries, headers.entries, reportDirty]);
 
 	const transportData = useMemo(
 		() =>
@@ -91,6 +94,15 @@ export function McpServerForm({
 			selectableMcpTrustTiers.map((tier) => ({
 				value: tier,
 				label: t(`pages.mcp.form.trustTier.options.${tier}`, tier),
+			})),
+		[t],
+	);
+
+	const sessionScopeData = useMemo(
+		() =>
+			mcpSessionScopes.map((scope) => ({
+				value: scope,
+				label: t(`pages.mcp.form.sessionScope.options.${scope}`),
 			})),
 		[t],
 	);
@@ -117,6 +129,16 @@ export function McpServerForm({
 		[updateValues],
 	);
 
+	const handleSessionScopeChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, sessionScope: value as McpSessionScope }));
+		},
+		[updateValues],
+	);
+
 	const handleArgumentsChange = useCallback(
 		(raw: string) => {
 			// Arguments are edited one-per-line; blank lines are dropped at submit (see toSaveMcpServerRequest).
@@ -126,7 +148,7 @@ export function McpServerForm({
 	);
 
 	const handleSubmit = useCallback(() => {
-		const candidate: McpServerFormValues = { ...values, env: env.entries };
+		const candidate: McpServerFormValues = { ...values, env: env.entries, headers: headers.entries };
 		const result = mcpServerFormSchema.safeParse(candidate);
 		if (!result.success) {
 			const nextErrors: Record<string, string> = {};
@@ -140,7 +162,7 @@ export function McpServerForm({
 
 		setErrors({});
 		onSubmit(candidate);
-	}, [env.entries, onSubmit, t, values]);
+	}, [env.entries, headers.entries, onSubmit, t, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -242,6 +264,7 @@ export function McpServerForm({
 						</Alert>
 					) : null}
 					<McpEnvEditor
+						kind="env"
 						rows={env.rows}
 						errors={errors}
 						onKeyChange={env.onKeyChange}
@@ -251,20 +274,48 @@ export function McpServerForm({
 					/>
 				</Stack>
 			) : (
-				<TextInput
-					label={t("pages.mcp.form.url.label", "URL")}
-					description={t("pages.mcp.form.url.description", "Loopback only (127.0.0.1 / localhost / ::1).")}
-					placeholder={t("pages.mcp.form.url.placeholder", "http://127.0.0.1:3001/sse")}
-					value={values.url}
-					required={true}
-					error={fieldError(errors, "url")}
-					onChange={(event) => {
-						const value = event.currentTarget.value;
-						updateValues((current) => ({ ...current, url: value }));
-					}}
-					data-testid="mcp-form-url"
-				/>
+				<Stack gap="md" data-testid="mcp-form-http-fields">
+					<TextInput
+						label={t("pages.mcp.form.url.label", "URL")}
+						description={t("pages.mcp.form.url.description", "Loopback only (127.0.0.1, localhost, ::1).")}
+						placeholder={t("pages.mcp.form.url.placeholder", "http://127.0.0.1:PORT/mcp")}
+						value={values.url}
+						required={true}
+						error={fieldError(errors, "url")}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							updateValues((current) => ({ ...current, url: value }));
+						}}
+						data-testid="mcp-form-url"
+					/>
+					<McpEnvEditor
+						kind="headers"
+						rows={headers.rows}
+						errors={errors}
+						onKeyChange={headers.onKeyChange}
+						onValueChange={headers.onValueChange}
+						onAdd={headers.onAdd}
+						onRemove={headers.onRemove}
+					/>
+				</Stack>
 			)}
+
+			<Select
+				label={t("pages.mcp.form.sessionScope.label", "Session")}
+				description={
+					values.sessionScope === "PerConversation"
+						? t(
+								"pages.mcp.form.sessionScope.perConversationDescription",
+								"Each conversation gets its own server session; stdio servers cap at 4.",
+							)
+						: t("pages.mcp.form.sessionScope.sharedDescription", "Every conversation shares one server session.")
+				}
+				data={sessionScopeData}
+				value={values.sessionScope}
+				allowDeselect={false}
+				onChange={handleSessionScopeChange}
+				data-testid="mcp-form-session-scope"
+			/>
 
 			{submitError ? <InlineErrorAlert message={submitError} data-testid="mcp-form-submit-error" /> : null}
 			{hideActions ? null : (

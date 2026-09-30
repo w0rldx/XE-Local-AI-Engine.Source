@@ -61,6 +61,15 @@ export interface ChatToolPart {
 	// card renders. Transient and live-only on exactly the same terms as `pendingApprovalRequestId` — cleared when
 	// the tool call completes/fails or the turn terminalizes, and never present on a reloaded/persisted turn.
 	pendingQuestion?: PendingUserQuestion;
+	// Images the tool returned (an MCP image block), persisted as `image` parts keyed to this call. Present only on a
+	// reloaded turn: the live stream carries the result text, which names each image by a placeholder.
+	images?: ChatToolImage[];
+}
+
+/** One image a tool call returned. `src` is always a `data:image/` URI. */
+export interface ChatToolImage {
+	mediaType: string;
+	src: string;
 }
 
 /**

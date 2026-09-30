@@ -54,7 +54,9 @@ export function toMcpServerRegistration(dto: XeLocalAiEngineClientEndpointsMcpV1
 		workingDirectory: dto.workingDirectory ?? null,
 		env: envMapToEntries(dto.env),
 		url: dto.url ?? null,
+		headers: envMapToEntries(dto.headers),
 		trustTier: dto.trustTier ?? DEFAULT_TRUST_TIER,
+		sessionScope: dto.sessionScope ?? "Shared",
 		enabled: dto.enabled ?? false,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
@@ -79,6 +81,9 @@ export function toSaveMcpServerRequest(form: McpServerFormValues): XeLocalAiEngi
 		workingDirectory: isStdio && form.workingDirectory.trim().length > 0 ? form.workingDirectory.trim() : null,
 		env: isStdio ? envEntriesToMap(form.env) : {},
 		url: !isStdio && form.url.trim().length > 0 ? form.url.trim() : null,
+		// Headers only reach an HTTP server and env only a launched process; the backend rejects env on HTTP.
+		headers: isStdio ? {} : envEntriesToMap(form.headers),
+		sessionScope: form.sessionScope,
 		// The tier is inert for HTTP (this node launches nothing), and the backend normalizes it away; send the
 		// secure default rather than whatever the form happened to be carrying when the transport was switched.
 		trustTier: isStdio ? form.trustTier : "Sandboxed",

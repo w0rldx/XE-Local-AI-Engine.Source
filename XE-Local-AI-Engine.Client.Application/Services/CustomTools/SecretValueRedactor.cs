@@ -26,6 +26,27 @@ internal sealed partial class SecretValueRedactor
                    .ToList();
     }
 
+    /// <summary>
+    ///     The values of at least <paramref name="minLength" /> characters, plus every whitespace-separated part of one that is
+    ///     itself that long, so a <c>Bearer &lt;token&gt;</c> value also redacts the bare token wherever it appears alone.
+    /// </summary>
+    public static IEnumerable<string> WithParts(IEnumerable<string> values, int minLength)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        // Whitespace parts catch "Bearer <token>"; the part after the first '=' catches "--api-key=<token>" (Codex review 2026-09-30).
+        return values.SelectMany(static value => value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Prepend(value))
+                     .SelectMany(static part => part.IndexOf('=', StringComparison.Ordinal) is > 0 and var at && at < part.Length - 1
+                         ? [part, part[(at + 1)..]]
+                         : new[] { part })
+                     .Where(value => value.Length >= minLength);
+    }
+
+    /// <summary>
+    ///     Whether an environment key names the executable search path, which locates programs and is never a secret: redacting
+    ///     it would blank the jail PATH out of the hint that tells an operator where a missing command was looked for.
+    /// </summary>
+    public static bool IsSearchPathKey(string key) => string.Equals(key, "PATH", StringComparison.OrdinalIgnoreCase);
+
     [GeneratedRegex(@"(?<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://)[^/@\s]+@", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex UserInfoRegex();
 

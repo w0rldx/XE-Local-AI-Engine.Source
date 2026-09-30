@@ -9,6 +9,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Sessions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
 ///     Outermost agent-pipeline hop: pairs each <c>FunctionCallContent</c> with its <c>FunctionResultContent</c> and
@@ -133,7 +134,16 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
         var duration = Stopwatch.GetElapsedTime(requested.StartTimestamp);
         var durationMs = duration.TotalMilliseconds;
-        var outcome = functionResult.Exception is not null ? "error" : "success";
+        // A wrapper that RETURNS its failure (the MCP timeout, an isError result) leaves no exception, so its text prefix
+        // is the evidence: "timeout" for a fired deadline, "error" for any other returned failure.
+        var outcome = functionResult.Exception is not null
+            ? "error"
+            : ToolFailureText.TryGetCode(functionResult.Result) switch
+            {
+                null => "success",
+                ToolFailureText.TimeoutCode => "timeout",
+                _ => "error"
+            };
         var (resultLength, resultHash) = SummarizePayload(functionResult.Result);
         ProviderCallBudget.Current?.RecordToolCallCompleted(duration, resultLength, functionResult.Exception is not null);
 

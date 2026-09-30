@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
-    [McpServerTool(Name = "start_model_pull")]
+    [McpServerTool(Name = "start_model_pull", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Start or rejoin a background GGUF model pull from Hugging Face.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpModelPullStartResponse> StartModelPullAsync([Description("Hugging Face repository id.")] string repo_id,
@@ -89,7 +89,7 @@ public sealed partial class NodeAdminMcpTools
             static response => response.FailureCode is not null);
     }
 
-    [McpServerTool(Name = "get_model_pull")]
+    [McpServerTool(Name = "get_model_pull", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Poll a background GGUF model pull by canonical model name.")]
     public Task<McpModelPullResponse> GetModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name)
     {
@@ -144,7 +144,7 @@ public sealed partial class NodeAdminMcpTools
         }, static response => response.FailureCode is not null);
     }
 
-    [McpServerTool(Name = "cancel_model_pull")]
+    [McpServerTool(Name = "cancel_model_pull", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Request cooperative cancellation of a background GGUF model pull.")]
     public Task<McpModelPullCancelResponse> CancelModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name) =>
         InvokeAuditedAsync("cancel_model_pull", AuditArguments(("model_name", model_name)), () =>
@@ -155,7 +155,7 @@ public sealed partial class NodeAdminMcpTools
                 }),
             static response => !response.Cancelled);
 
-    [McpServerTool(Name = "delete_model")]
+    [McpServerTool(Name = "delete_model", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Delete a locally installed model through the node's coordinated deletion service.")]
     public async Task<McpModelDeleteResponse> DeleteModelAsync(string model_name, CancellationToken cancellationToken)
     {
@@ -172,7 +172,7 @@ public sealed partial class NodeAdminMcpTools
         }, static response => !response.Deleted);
     }
 
-    [McpServerTool(Name = "set_default_model")]
+    [McpServerTool(Name = "set_default_model", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Select an installed local model as the node default.")]
     public async Task<McpDefaultModelResponse> SetDefaultModelAsync(string model_name, CancellationToken cancellationToken)
     {
