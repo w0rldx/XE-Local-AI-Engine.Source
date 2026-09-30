@@ -1,14 +1,39 @@
 import "fake-indexeddb/auto";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { recordError, SCHEMA_VERSION } from "@/core/diagnostics/Diagnostics";
 import { REDACTED } from "@/core/diagnostics/Redact";
+import { startRrwebRecording, stopRrwebRecording } from "@/core/diagnostics/RrwebRecorder";
 import { captureSnapshot, installAutoCapture, registerSnapshotStateProvider } from "@/features/diagnostics/BuildSnapshot";
 import { clearSnapshots, getSnapshot, listSnapshots, subscribeSnapshots } from "@/features/diagnostics/SnapshotStore";
 
-beforeEach(() => clearSnapshots());
-afterEach(() => clearSnapshots());
+// Capture the options rrweb's `record` is called with, without loading the real library (hermetic).
+const { recordMock } = vi.hoisted(() => ({ recordMock: vi.fn() }));
+vi.mock("rrweb", () => ({
+	record: (options: unknown) => {
+		recordMock(options);
+		return () => undefined;
+	},
+}));
+
+interface CapturedRecordOptions {
+	emit: (event: unknown, isCheckout?: boolean) => void;
+	packFn: (event: { type: number; data: unknown; timestamp: number }) => string;
+}
+
+beforeEach(() => {
+	recordMock.mockClear();
+	stopRrwebRecording();
+	useDeveloperModeStore.setState({ developerMode: false });
+	return clearSnapshots();
+});
+afterEach(() => {
+	stopRrwebRecording();
+	useDeveloperModeStore.setState({ developerMode: false });
+	return clearSnapshots();
+});
 
 describe("captureSnapshot", () => {
 	it("builds a valid persisted snapshot with redacted opted-in state", async () => {
@@ -30,6 +55,24 @@ describe("captureSnapshot", () => {
 		expect(await getSnapshot(snapshot.id)).toEqual(snapshot);
 
 		unregister();
+	});
+
+	it("attaches the recorder's rrweb segment while Developer Mode is recording, and nothing otherwise", async () => {
+		const withoutRecording = await captureSnapshot("manual");
+		expect(withoutRecording.rrweb).toBeUndefined();
+
+		useDeveloperModeStore.setState({ developerMode: true });
+		await startRrwebRecording();
+		const options = recordMock.mock.calls.at(-1)?.[0] as CapturedRecordOptions | undefined;
+		if (!options) {
+			throw new Error("record was not called");
+		}
+		options.emit(options.packFn({ type: 2, data: { node: {} }, timestamp: Date.now() }), true);
+
+		const snapshot = await captureSnapshot("manual");
+
+		expect(snapshot.rrweb).toHaveLength(1);
+		expect(await getSnapshot(snapshot.id)).toEqual(snapshot);
 	});
 
 	it("includes the supplied error on an error capture", async () => {

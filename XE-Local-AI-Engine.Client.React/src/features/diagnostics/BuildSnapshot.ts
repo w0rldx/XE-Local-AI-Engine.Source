@@ -1,15 +1,15 @@
 // Snapshot bundler.
 //
 // `captureSnapshot` combines the buffer-derived `SnapshotInput` (from src/core/diagnostics) with a
-// redacted, opted-in store-state map and an optional rrweb segment, stamps `id`/`createdAt`/`schemaVersion`,
-// persists via the SnapshotStore, and returns the full Snapshot. All redaction reuses the core diagnostics
-// module's pure helpers so no secret/PII ever reaches IndexedDB.
+// redacted, opted-in store-state map and the recorder's current rrweb segment (empty unless Developer Mode
+// is recording), stamps `id`/`createdAt`/`schemaVersion`, persists via the SnapshotStore, and returns the
+// full Snapshot. All redaction reuses the core diagnostics module's pure helpers so no secret/PII ever
+// reaches IndexedDB.
 
 import {
 	buildSnapshotInput,
 	generateId,
 	onErrorRecorded,
-	type RrwebPackedEvent,
 	SCHEMA_VERSION,
 	type Snapshot,
 	type SnapshotError,
@@ -17,6 +17,7 @@ import {
 	type SnapshotState,
 } from "@/core/diagnostics/Diagnostics";
 import { redactValue } from "@/core/diagnostics/Redact";
+import { getRrwebSegment } from "@/core/diagnostics/RrwebRecorder";
 import { saveSnapshot } from "@/features/diagnostics/SnapshotStore";
 
 /** Reads a store's current state for inclusion in a snapshot. The result is redacted before persist. */
@@ -49,37 +50,17 @@ function collectState(): SnapshotState {
 }
 
 /**
- * Hook for the rrweb replay module: supplies the latest packed rrweb segment (Developer Mode only).
- * Left undefined here; the rrweb module registers a provider so this stays free of any rrweb import.
- */
-type RrwebProvider = () => readonly RrwebPackedEvent[] | undefined;
-let rrwebProvider: RrwebProvider | undefined;
-
-/** Register the rrweb segment provider. Returns an unregister function. */
-export function registerRrwebProvider(provider: RrwebProvider): () => void {
-	rrwebProvider = provider;
-	return () => {
-		rrwebProvider = undefined;
-	};
-}
-
-export interface CaptureOptions {
-	/** Inject a packed rrweb segment directly (overrides any registered provider). */
-	readonly rrweb?: readonly RrwebPackedEvent[];
-}
-
-/**
  * Assemble, persist, and return a snapshot. `kind` is `error` for auto-capture and `manual` for the
- * "Report a problem" button. An optional rrweb segment comes from `options` or the registered rrweb provider.
+ * "Report a problem" button. The rrweb segment is attached only while Developer Mode is recording.
  */
-export async function captureSnapshot(kind: SnapshotKind, error?: SnapshotError, options?: CaptureOptions): Promise<Snapshot> {
+export async function captureSnapshot(kind: SnapshotKind, error?: SnapshotError): Promise<Snapshot> {
 	const input = buildSnapshotInput(kind, error);
-	const rrweb = options?.rrweb ?? rrwebProvider?.();
+	const rrweb = getRrwebSegment();
 
 	const snapshot: Snapshot = {
 		...input,
 		state: collectState(),
-		...(rrweb && rrweb.length > 0 ? { rrweb } : {}),
+		...(rrweb.length > 0 ? { rrweb } : {}),
 		id: generateId(),
 		createdAt: Date.now(),
 		schemaVersion: SCHEMA_VERSION,
