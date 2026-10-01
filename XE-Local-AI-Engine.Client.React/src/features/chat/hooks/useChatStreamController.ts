@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -40,6 +40,26 @@ import { isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoA
 
 function createId(): string {
 	return crypto.randomUUID();
+}
+
+// The live turn Stop targets when no local stream owns it: the active streaming bubble's message, else the conversation's
+// persisted in-flight assistant row. Undefined when there is none, or when the row carries no request id to cancel by.
+function orphanedLiveTurn(
+	queryClient: QueryClient,
+	streamingMessage: ChatStreamingState | undefined,
+	selectedConversationId: string,
+): { conversationId: string; messageId: string; requestId: string } | undefined {
+	const conversationId = streamingMessage?.isActive ? streamingMessage.conversationId : selectedConversationId;
+	if (!conversationId) {
+		return undefined;
+	}
+	const conversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversationId));
+	if (!conversation) {
+		return undefined;
+	}
+	const messageId = streamingMessage?.isActive ? streamingMessage.messageId : inFlightAssistantMessageId(conversation);
+	const requestId = conversation.messages.find((message) => message.id === messageId)?.requestId;
+	return messageId && requestId ? { conversationId, messageId, requestId } : undefined;
 }
 
 export interface ChatStreamControllerInput {
@@ -712,22 +732,27 @@ export function useChatStreamController({
 	}, [loadedSelectedConversationId, resumeNonce]);
 
 	const handleCancel = useCallback(async (): Promise<void> => {
+		// No local stream handle is not "nothing running": the SignalR stream can end, error or be lost to a remount
+		// while the server keeps the turn alive, and Stop must still reach it. Fall back to the turn still shown as live
+		// (the streaming bubble, else the persisted in-flight row) and its persisted request id, which is what the
+		// server's cancel registry is keyed by.
 		const active = activeStream.current;
-		if (!active) {
+		const target = active ?? orphanedLiveTurn(queryClient, streamingMessage, selectedConversationId);
+		if (!target) {
 			return;
 		}
 
 		// Abort and dispose the local stream FIRST so the UI stops immediately and the SignalR subscription is torn down
 		// before we round-trip to the server. The awaited server cancel must never gate the local stop: if it is slow or
 		// fails, the user's stop has still taken effect.
-		active.abortController.abort();
+		active?.abortController.abort();
 		// Barge-in: cancelling generation halts voice playback immediately (acceptance: stop = halt playback).
 		onVoiceTurnStart();
 		const currentConversation = queryClient.getQueryData<ChatConversationModel>(
-			nodeChatQueryKeys.conversation(active.conversationId),
+			nodeChatQueryKeys.conversation(target.conversationId),
 		);
 		if (currentConversation) {
-			const cancelled = markNodeChatStreamTerminated(currentConversation, active.messageId, "cancelled");
+			const cancelled = markNodeChatStreamTerminated(currentConversation, target.messageId, "cancelled");
 			cacheConversation(cancelled.conversation);
 			setStreamingMessage(cancelled.streamingMessage);
 		}
@@ -736,17 +761,25 @@ export function useChatStreamController({
 			// Best-effort server cancel: the local stream is already stopped, so a failure here only affects server-side
 			// reconciliation, surfaced as a non-blocking error.
 			await nodeChatAdapter.cancelMessage({
-				conversationId: active.conversationId,
-				messageId: active.messageId,
-				requestId: active.requestId,
+				conversationId: target.conversationId,
+				messageId: target.messageId,
+				requestId: target.requestId,
 			});
 		} catch (error) {
 			setStreamError(errorMessage(error));
 		} finally {
 			// Reconcile from the server's authoritative terminal state.
-			await refreshConversation(active.conversationId);
+			await refreshConversation(target.conversationId);
 		}
-	}, [cacheConversation, queryClient, refreshConversation, setStreamError, onVoiceTurnStart]);
+	}, [
+		cacheConversation,
+		queryClient,
+		refreshConversation,
+		setStreamError,
+		onVoiceTurnStart,
+		streamingMessage,
+		selectedConversationId,
+	]);
 
 	const markConversationDeleted = useCallback((conversationId: string): void => {
 		// Abort an in-flight stream for this thread before deleting, and flag it so the streaming loop stops

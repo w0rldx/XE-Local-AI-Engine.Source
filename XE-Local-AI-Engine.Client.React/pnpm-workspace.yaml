@@ -8,7 +8,10 @@ overrides:
   'nanoid@<3.3.18': '^3.3.18'
   # Security patches for vulnerable transitive copies pulled by Hey API and Monaco Editor.
   'js-yaml@<4.3.2': '4.3.2'
-  'dompurify@<3.4.13': '3.4.13'
+  # dompurify advisory covers >=3.4.13 <=3.4.15; 3.4.16 is the fixed patch.
+  'dompurify@<3.4.16': '3.4.16'
+  # brace-expansion (via minimatch@10) advisory covers >=4.0.0 <5.0.12; 5.0.12 is the fixed patch.
+  'brace-expansion@>=4.0.0 <5.0.12': '5.0.12'
   # Dev-only ajv copy under stylelint and react-doctor; GHSA-5jgf-p345-68v8 and siblings.
   'fast-uri@<3.1.7': '3.1.7'
   # vitest 5 needs why-is-node-running ^3.2.1; 3.2.2 dropped npm provenance, which trustPolicy no-downgrade refuses.

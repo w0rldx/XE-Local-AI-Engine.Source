@@ -98,6 +98,7 @@ public sealed class ProviderCallBudget
     private int _providerRetries;
     private int _toolArgumentRepairs;
     private int _agentHandoffs;
+    private int _trimLogged;
 
     private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
@@ -289,6 +290,10 @@ public sealed class ProviderCallBudget
     {
         Interlocked.Increment(ref _agentHandoffs);
     }
+
+    /// <summary>True exactly once per invocation: the first context trim is logged at Information, later ones at Debug.</summary>
+    internal bool TryClaimTrimLog() =>
+        Interlocked.Exchange(ref _trimLogged, 1) == 0;
 
     internal ProviderCallEfficiencySnapshot CaptureEfficiencySnapshot()
     {

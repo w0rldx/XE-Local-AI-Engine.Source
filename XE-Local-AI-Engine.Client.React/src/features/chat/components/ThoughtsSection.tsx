@@ -51,6 +51,8 @@ export function ThoughtsSection({
 	const finalReasoning = hasText(reasoning) ? reasoning : undefined;
 	const liveReasoning = hasText(streamingContent) ? streamingContent : undefined;
 	const finalWordCount = useMemo(() => words(finalReasoning ?? ""), [finalReasoning]);
+	// A running size next to the timer, so a long reasoning phase reads as progress rather than a hang.
+	const liveWordCount = useMemo(() => words(liveReasoning ?? ""), [liveReasoning]);
 	const showsStreaming = isStreaming && liveReasoning !== undefined;
 	const [elapsed, setElapsed] = useState(0);
 	const [expanded, setExpanded] = useState(false);
@@ -103,6 +105,9 @@ export function ThoughtsSection({
 								· {elapsed}s
 							</Text>
 						)}
+						<Text size="xs" c="dimmed" ff="monospace" data-testid="chat-live-reasoning-size">
+							· {liveWordCount} {t("chat.words", "words")}
+						</Text>
 					</Group>
 					<Text ref={streamingBodyRef} component="div" size="sm" className={classes["streaming-body"]}>
 						{liveReasoning}

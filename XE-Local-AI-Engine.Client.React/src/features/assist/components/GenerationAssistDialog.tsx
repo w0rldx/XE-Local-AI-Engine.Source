@@ -216,6 +216,10 @@ export function GenerationAssistDialog({
 					onChange={setPickedModel}
 					disabled={mutation.isPending}
 					searchable={true}
+					allowDeselect={false}
+					// The dialog sits at zIndex 350; Mantine's portalled dropdown defaults to 300 and would open behind it.
+					// 360 keeps it above the dialog and below the 400 unsaved-changes confirm.
+					comboboxProps={{ zIndex: 360 }}
 					data-testid="assist-model"
 				/>
 				{modelName.length > 0 && !isModelLoaded ? (

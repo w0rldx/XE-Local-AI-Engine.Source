@@ -227,7 +227,10 @@ public sealed class StableDiffusionCppRuntimeTests
             _ => Json(HttpStatusCode.OK, """{"status":"failed","error":{"code":"oom","message":"internal-cuda-oom-at-0xdeadbeef\nforged line"}}""")
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var lease = new FakeJobLease();
+        var lease = new FakeJobLease
+        {
+            Tail = "sampler: unsupported scheduler for this model"
+        };
         var supervisor = new FakeImageServerSupervisor(BaseAddress, lease);
         var logger = new RecordingLogger<StableDiffusionCppRuntime>();
         var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), new ImageServerProgressBroker(), logger);
@@ -235,10 +238,42 @@ public sealed class StableDiffusionCppRuntimeTests
         var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains("0xdeadbeef", StringComparison.Ordinal), "The failure message must be sanitized (no internal detail).");
+        AssertEx.False(exception.OutOfMemory, "A tail without an out-of-memory line keeps the generic failure.");
+        AssertEx.Equal("The image runtime failed to generate the image.", exception.Message);
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "(oom): internal-cuda-oom-at-0xdeadbeef forged line"), "The daemon's own reason must reach the log on one line.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "Last stderr: sampler: unsupported scheduler for this model."), "The daemon's stderr tail must reach the log.");
         AssertEx.Equal(expected: 1, supervisor.EvictCount);
         AssertEx.True(lease.DisposedBeforeEvict, "The job lease must be released before the daemon is evicted.");
         AssertEx.Equal(expected: 0, supervisor.RestartCount);
+    }
+
+    [Test]
+    public async Task Generate_JobFailedWithAGpuOutOfMemoryOnStderr_LogsTheTailAndFailsWithTheOutOfMemoryMessage()
+    {
+        // Tester round 5: sd-server reported only "generate_image returned no results"; the CUDA out-of-memory line was in
+        // its stderr tail, which the eviction discarded before anyone read it.
+        const string tail = "ggml_backend_cuda_buffer_type_alloc_buffer: allocating 9216.00 MiB on device 0: cudaMalloc failed: out of memory";
+        using var handler = new RuntimeHandler((_, route) => route switch
+        {
+            "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
+            _ => Json(HttpStatusCode.OK, """{"status":"failed","error":{"code":"generation_failed","message":"generate_image returned no results"}}""")
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var lease = new FakeJobLease
+        {
+            Tail = tail
+        };
+        var supervisor = new FakeImageServerSupervisor(BaseAddress, lease);
+        var logger = new RecordingLogger<StableDiffusionCppRuntime>();
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), new ImageServerProgressBroker(), logger);
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+
+        AssertEx.True(exception.OutOfMemory);
+        AssertEx.Equal("The GPU ran out of memory while loading the image model. Unload other models and retry.", exception.Message);
+        AssertEx.False(exception.Message.Contains("cudaMalloc", StringComparison.Ordinal), "Raw stderr must stay out of the user-facing message.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, tail), "The tail must be read before the eviction discards it, and logged.");
+        AssertEx.Equal(expected: 1, supervisor.EvictCount);
     }
 
     [Test]
@@ -368,9 +403,10 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task EvictAsync(string modelName, CancellationToken ct)
         {
             EvictCount++;
-            if (_lease is FakeJobLease { Disposed: true } fake)
+            if (_lease is FakeJobLease fake)
             {
-                fake.DisposedBeforeEvict = true;
+                fake.DisposedBeforeEvict = fake.Disposed;
+                fake.Evicted = true;
             }
 
             return Task.CompletedTask;
@@ -414,6 +450,13 @@ public sealed class StableDiffusionCppRuntimeTests
         public bool Disposed { get; private set; }
 
         public bool DisposedBeforeEvict { get; set; }
+
+        public bool Evicted { get; set; }
+
+        public string? Tail { get; init; }
+
+        // Eviction tree-kills the daemon and discards its handle, so the tail is only readable before it.
+        public string? StderrTail => Evicted ? null : Tail;
 
         public void Touch()
         {

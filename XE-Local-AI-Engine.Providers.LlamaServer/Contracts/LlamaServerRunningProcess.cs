@@ -11,4 +11,7 @@ public sealed class LlamaServerRunningProcess
 
     /// <summary>When the process was last ensured or reused, stamped per request rather than per token.</summary>
     public required DateTimeOffset LastUsedUtc { get; init; }
+
+    /// <summary>In-flight inference requests holding a lease on the process when the table was read; zero means idle.</summary>
+    public int ActiveLeases { get; init; }
 }

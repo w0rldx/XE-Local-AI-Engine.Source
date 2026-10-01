@@ -118,6 +118,72 @@ public sealed class InvocationLifecycleTrackerTests
         AssertEx.True(await drainTask);
     }
 
+    [Test]
+    public async Task SetInvocationDeadline_ParkThenRelease_DoesNotExtendTheTurnBeyondItsRemainingBudget()
+    {
+        // A tool-heavy turn parks once per approval. Each release used to re-arm the FULL InvocationTimeout, so a turn
+        // with many approvals ran far past its budget; the model must get back only what it had when the park began.
+        var time = new ManualTimeProvider();
+        var tracker = CreateTracker(time);
+        tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromSeconds(600), CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(400));
+
+        tracker.SetInvocationDeadline(parkedOnHuman: true);
+        time.Advance(TimeSpan.FromSeconds(250));
+        tracker.SetInvocationDeadline(parkedOnHuman: false);
+
+        time.Advance(TimeSpan.FromSeconds(199));
+        AssertEx.Equal(expected: 1, time.ArmedTimerCount, "the human's 250 s must not be charged to the model's remaining 200 s");
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        AssertEx.Equal(expected: 0, time.ArmedTimerCount, "the deadline must fire once the remaining 200 s are spent, not a fresh 600 s later");
+        await AssertEx.EventuallyAsync(() => tracker.ResolveCancellationOrigin() == InvocationLifecycleTracker.CancellationOrigin.Watchdog,
+            TimeSpan.FromSeconds(5),
+            "The resumed budget running out must be attributed to the turn watchdog.");
+    }
+
+    [Test]
+    public void SetInvocationDeadline_ReleaseWithAlmostNoBudgetLeft_ReArmsAtLeastOneStreamIdleWindow()
+    {
+        // An approval granted when the model had ~2 s left must not be answered by an immediate Timeout: the release
+        // re-arms at least one stream-idle window (60 s here) so the tool result and one model round can land.
+        var time = new ManualTimeProvider();
+        var tracker = CreateTracker(time);
+        tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(60), CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(598));
+
+        tracker.SetInvocationDeadline(parkedOnHuman: true);
+        time.Advance(TimeSpan.FromSeconds(30));
+        tracker.SetInvocationDeadline(parkedOnHuman: false);
+
+        time.Advance(TimeSpan.FromSeconds(59));
+        AssertEx.Equal(expected: 1, time.ArmedTimerCount, "the release must re-arm the 60 s floor, not the 2 s the model had left");
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        AssertEx.Equal(expected: 0, time.ArmedTimerCount, "the floor is a floor, not a fresh turn budget: it fires after one idle window");
+    }
+
+    [Test]
+    public async Task SetInvocationDeadline_WhileParked_TheParkedBackstopStillApplies()
+    {
+        // The park pushes the deadline to MaxPendingToolCallAge + InvocationTimeout (5 min + 600 s here), never further:
+        // a wait whose own cap was somehow missed still ends the turn.
+        var time = new ManualTimeProvider();
+        var tracker = CreateTracker(time);
+        tracker.RegisterActiveInvocation(Guid.NewGuid(), TimeSpan.FromSeconds(600), CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(100));
+
+        tracker.SetInvocationDeadline(parkedOnHuman: true);
+        time.Advance(TimeSpan.FromSeconds(899));
+        AssertEx.Equal(expected: 1, time.ArmedTimerCount, "an attached park must outlive the model budget it paused");
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        AssertEx.Equal(expected: 0, time.ArmedTimerCount, "the parked backstop must fire at MaxPendingToolCallAge + InvocationTimeout");
+        await AssertEx.EventuallyAsync(() => tracker.ResolveCancellationOrigin() == InvocationLifecycleTracker.CancellationOrigin.Watchdog,
+            TimeSpan.FromSeconds(5),
+            "The parked backstop firing must be attributed to the turn watchdog.");
+    }
+
     private static InvocationLifecycleTracker CreateTracker(TimeProvider timeProvider)
     {
         return new InvocationLifecycleTracker(Substitute.For<IInvocationAttachmentTracker>(),

@@ -42,7 +42,8 @@ public sealed partial class LlamaServerProcessSupervisor
                {
                    ModelName = entry.Key.ModelName,
                    Role = entry.Key.Role,
-                   LastUsedUtc = entry.Value.LastUsedUtc
+                   LastUsedUtc = entry.Value.LastUsedUtc,
+                   ActiveLeases = entry.Value.ActiveLeases
                })
                .ToArray();
     }

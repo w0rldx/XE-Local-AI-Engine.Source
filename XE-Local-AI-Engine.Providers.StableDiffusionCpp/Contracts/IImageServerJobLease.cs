@@ -21,4 +21,7 @@ public interface IImageServerJobLease : IDisposable
     ///     logs such an exit once, whichever of this call, a respawn or the reaper notices it first.
     /// </summary>
     bool HasDaemonExited(out int? exitCode);
+
+    /// <summary>The leased daemon's last stderr lines, path-sanitized and bounded, or <see langword="null" /> when it wrote none.</summary>
+    string? StderrTail { get; }
 }

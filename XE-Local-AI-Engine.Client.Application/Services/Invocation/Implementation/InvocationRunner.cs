@@ -210,7 +210,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // single-agent and orchestration paths so the two enforce identical policy. TurnPolicy's XML doc holds the composite budget (which timeout fires when).
         var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
 
-        _lifecycleTracker.RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
+        _lifecycleTracker.RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, turnPolicy.StreamIdleTimeout, cancellationToken);
         var activeInvocationCompletion = _lifecycleTracker.RegisterActiveInvocationCompletion(package.InvocationId);
         if (activeInvocationCompletion is null)
         {

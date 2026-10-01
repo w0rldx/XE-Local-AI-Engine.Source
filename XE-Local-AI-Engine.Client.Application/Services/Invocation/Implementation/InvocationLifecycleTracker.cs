@@ -54,6 +54,13 @@ public sealed class InvocationLifecycleTracker
 
     private TimeSpan _modelBudgetAtToolStart;
 
+    // What the model had left when the active human park began, re-armed on release so approvals pause the turn budget rather than refill it.
+    private TimeSpan _modelBudgetAtPark;
+
+    // The least a release from a park re-arms: one stream-idle window, so the tool result and one model round can land even when the model had all but spent
+    // its budget when the park began. Zero (no floor) for a caller that registers without one.
+    private TimeSpan _releaseBudgetFloor;
+
     // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
     // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
     private TimeSpan _invocationTimeout;
@@ -169,24 +176,37 @@ public sealed class InvocationLifecycleTracker
     }
 
     /// <summary>
-    ///     Re-points the whole-turn watchdog at a deadline measured from NOW, so a human round-trip is not charged to
-    ///     the model's turn budget.
+    ///     Pauses the model's turn budget for a human round-trip and resumes it with what was left once the human answers.
     /// </summary>
     /// <remarks>
-    ///     Before a park the deadline is pushed past the longest permitted wait and re-armed to a fresh <c>InvocationTimeout</c> once answered. No wait becomes
-    ///     unbounded — each keeps its own linked <c>CancelAfter(_maxPendingToolCallAge)</c> — so that value, not whatever the model left over, caps operator
-    ///     thinking time. The extension applies only while a client is ATTACHED: a park whose watcher left awaits an answer that cannot arrive and falls back
-    ///     to a plain backstop the reaper usually ends first, while a run that never attached keeps the full budget. Re-arming under the lock is teardown-safe.
+    ///     A park pushes the deadline past the longest permitted wait, only while a client is attached; a detached park gets a plain backstop.
+    ///     Release re-arms the budget left when the park began, floored at one stream-idle window, so approvals cannot extend the turn.
+    ///     Each wait keeps its own <c>CancelAfter(_maxPendingToolCallAge)</c>. A park during a tool keeps the tool's pause.
     /// </remarks>
     public void SetInvocationDeadline(bool parkedOnHuman)
     {
         lock (_syncRoot)
         {
-            _parkedOnHuman = parkedOnHuman;
+            var releasing = _parkedOnHuman && !parkedOnHuman;
+            if (parkedOnHuman && !_parkedOnHuman && !_toolExecuting)
+            {
+                var left = _deadlineDueAt - _timeProvider.GetUtcNow();
+                _modelBudgetAtPark = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+            }
 
-            // A park re-arms the whole deadline, so any paused tool budget is superseded rather than restored later.
-            _toolExecuting = false;
-            ApplyInvocationDeadline();
+            _parkedOnHuman = parkedOnHuman;
+            if (!releasing)
+            {
+                ApplyInvocationDeadline();
+            }
+            else if (_invocationCancellationTokenSource is not null && _toolExecuting)
+            {
+                ArmDeadline(_invocationTimeout);
+            }
+            else if (_invocationCancellationTokenSource is not null)
+            {
+                ArmDeadline(_modelBudgetAtPark > _releaseBudgetFloor ? _modelBudgetAtPark : _releaseBudgetFloor);
+            }
         }
     }
 
@@ -198,8 +218,8 @@ public sealed class InvocationLifecycleTracker
             return;
         }
 
-        // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
-        // re-arm on release were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
+        // The parked deadline keeps a full model budget on top of the human cap purely as a backstop: if the
+        // re-arm on release were ever skipped, the turn still ends rather than running unbounded.
         var extendPark = _parkedOnHuman
                          && _currentInvocationId is { } invocationId
                          && !_attachmentTracker.IsDetached(invocationId);
@@ -384,7 +404,11 @@ public sealed class InvocationLifecycleTracker
         }
     }
 
-    public void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, CancellationToken cancellationToken)
+    public void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, CancellationToken cancellationToken) =>
+        RegisterActiveInvocation(invocationId, invocationTimeout, TimeSpan.Zero, cancellationToken);
+
+    /// <param name="streamIdleTimeout">The turn's stream-idle window, the floor a release from a human park re-arms (see SetInvocationDeadline).</param>
+    public void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, TimeSpan streamIdleTimeout, CancellationToken cancellationToken)
     {
         CancellationTokenSource? invocationCancellationTokenSource = null;
 
@@ -406,6 +430,7 @@ public sealed class InvocationLifecycleTracker
 
                 // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
                 _invocationTimeout = invocationTimeout;
+                _releaseBudgetFloor = streamIdleTimeout;
                 _deadlineTimer = _timeProvider.CreateTimer(FireDeadline, invocationCancellationTokenSource, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 ArmDeadline(invocationTimeout);
                 invocationCancellationTokenSource = null;
@@ -457,6 +482,7 @@ public sealed class InvocationLifecycleTracker
             _deadlineTimer = null;
             _toolExecuting = false;
             _invocationTimeout = TimeSpan.Zero;
+            _releaseBudgetFloor = TimeSpan.Zero;
             _parkedOnHuman = false;
             _currentInvocationId = null;
             _requestedCancellationOrigin = CancellationOrigin.Unknown;

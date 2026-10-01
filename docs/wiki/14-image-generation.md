@@ -58,6 +58,8 @@ Which pushes go out, and which are buffered, follows one rule. A **milestone** �
 
 On success the image is persisted encrypted-at-rest **before** the job is marked `Succeeded`.
 
+**Freeing VRAM for the job.** sd-server loads its weights inside the first job (`eager_load` is off, so readiness proves only the HTTP bind), which is where an idle chat model's VRAM turns into an out-of-memory. After the GPU gate admits the job and before the runtime is called, the coordinator reads `ILlamaServerProcessSupervisor.ListRunningProcesses` and ejects every idle llama-server process, any role, through the graceful operator `EjectAsync` the top-bar eject uses, logging each at Information. If any process is serving a request, nothing is ejected and the job fails with "A chat model is still generating; wait for it to finish, then retry the image." Ollama residents are not touched.
+
 ## The runtime (stable-diffusion.cpp)
 
 `StableDiffusionCppRuntime` (`IImageRuntime`) is the orchestration boundary: it ensures a resident `sd-server` via the supervisor, submits the job and polls it over `SdServerJobClient`, maps coarse status transitions to `ImageGenProgress`, and decodes the base64 image inline on completion. **No sd-server flag, route, or HTTP shape escapes this project** (architecture invariant §3).
@@ -359,7 +361,7 @@ Anything that outlives that drain — a hard crash, a kill, a drain timeout — 
 
 An sd-server that dies during a job is named, not hidden: the supervisor logs one Warning with the model, pid and exit code (a deliberate teardown never reads as a crash), and the job fails with "The image server stopped unexpectedly (exit code N). It restarts with the next generation." A death while a status poll is already in flight still waits out that poll's retry window first.
 
-A job the daemon itself reports as `failed` (for example CUDA out of memory after a chat model took the VRAM) is recycled, not reused: `StableDiffusionCppRuntime` logs one Warning with the daemon's error code and message (control characters stripped, bounded length), releases its job lease and evicts the daemon, so the next generation spawns a fresh process instead of failing against the same broken one. The operator still sees the generic "Image generation failed."; the daemon's text is foreign and never shown.
+A job the daemon itself reports as `failed` (for example CUDA out of memory after a chat model took the VRAM) is recycled, not reused: `StableDiffusionCppRuntime` logs one Warning with the daemon's error code and message (control characters stripped, bounded length), releases its job lease and evicts the daemon, so the next generation spawns a fresh process instead of failing against the same broken one. The same Warning carries the daemon's stderr tail, read from the job lease before the eviction discards it; the HTTP error alone ("generate_image returned no results") never names the cause. When that tail shows `out of memory`, `CUDA error` or `cudaMalloc`, the job fails with the fixed "The GPU ran out of memory while loading the image model. Unload other models and retry." Otherwise the operator sees the generic "Image generation failed."; the daemon's text is foreign and never shown.
 
 **Interrupted jobs are never auto-retried.** Image generation is expensive and nondeterministic, so the operator resubmits explicitly. This mirrors the scheduler's stale-run reconciliation in `Program`.
 

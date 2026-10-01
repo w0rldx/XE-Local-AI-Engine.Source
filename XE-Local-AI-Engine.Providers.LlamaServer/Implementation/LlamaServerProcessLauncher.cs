@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -19,8 +21,11 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 ///     is reached only under its own OS guard. Its stdout and stderr are redirected and forwarded line by line to the
 ///     app logger, which is what makes GPU-offload behaviour diagnosable, and draining them cannot stall the child.
 /// </remarks>
-internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
+internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 {
+    // At most one demoted serving-time slot line per process is promoted back to Information in this window.
+    internal const long PromotedLineIntervalMilliseconds = 5000;
+
     private readonly ILogger<LlamaServerProcessLauncher> _logger;
 
     public LlamaServerProcessLauncher(ILogger<LlamaServerProcessLauncher> logger)
@@ -117,10 +122,12 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
             StartInfo = startInfo
         };
 
+        var lastPromoted = new StrongBox<long>(-PromotedLineIntervalMilliseconds);
+
         // Forward both streams to the app log and, for profiling spawns, the optional capture sink. Attached before Start, as the Process API requires, and pumped
         // through the async begin-read APIs, so the pipes are drained continuously and never stall the child.
-        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
-        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
+        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote, lastPromoted);
+        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote, lastPromoted);
 
         try
         {
@@ -148,15 +155,42 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 
     // A line is logged at Information, the level the desktop console surfaces, so the llama.cpp backend banner and model-load summary reach the default app log. The
     // final end-of-stream callback carries null Data, and a capture sink is invoked AFTER logging, both pipes calling this concurrently so the sink must be thread-safe.
-    private void ForwardLine(string label, string? line, Action<string>? capture, Func<bool>? demote)
+    private void ForwardLine(string label, string? line, Action<string>? capture, Func<bool>? demote, StrongBox<long> lastPromoted)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
 
-        var level = demote is not null && demote() ? LogLevel.Debug : LogLevel.Information;
+        var level = demote is not null && demote() && !TryPromoteServingLine(line, Environment.TickCount64, ref lastPromoted.Value)
+            ? LogLevel.Debug
+            : LogLevel.Information;
         _logger.Log(level, "llama-server[{Label}] {Line}", label, line);
         capture?.Invoke(line);
     }
+
+    /// <summary>
+    ///     Whether a demoted serving-time line is kept at Information: only <c>slot</c>-module lines (prompt progress, timings, release), at most one per
+    ///     <see cref="PromotedLineIntervalMilliseconds" /> per process.
+    /// </summary>
+    /// <remarks>
+    ///     Demoting every serving-time line hid a long turn's progress from the default log, so a server busy on a long prompt looked hung. The
+    ///     request/queue chatter the raised verbosity adds stays at Debug. Thread-safe: both pipes race on <paramref name="lastPromotedMilliseconds" />.
+    /// </remarks>
+    internal static bool TryPromoteServingLine(string line, long nowMilliseconds, ref long lastPromotedMilliseconds)
+    {
+        if (!SlotLineRegex().IsMatch(line))
+        {
+            return false;
+        }
+
+        var last = Volatile.Read(ref lastPromotedMilliseconds);
+        return nowMilliseconds - last >= PromotedLineIntervalMilliseconds
+               && Interlocked.CompareExchange(ref lastPromotedMilliseconds, nowMilliseconds, last) == last;
+    }
+
+    // The module token is the first word of a bare line, or follows llama.cpp's "<elapsed> <level>" prefix that -lv adds
+    // ("0.06.876.442 I slot   load_model: ..."). Anchored, so "srv  update_slots" or a path containing "slot" never matches.
+    [GeneratedRegex(@"^\s*(?:\S+\s+[A-Z]\s+)?slot\s", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SlotLineRegex();
 }

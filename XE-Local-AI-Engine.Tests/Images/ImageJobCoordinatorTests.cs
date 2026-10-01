@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -60,6 +62,74 @@ public sealed class ImageJobCoordinatorTests
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a run holds the GPU.");
+    }
+
+    [Test]
+    public async Task RunJob_WithIdleLlamaServerResidents_EjectsEveryRoleGracefullyBeforeGenerating()
+    {
+        // Tester round 5: an idle 27B chat model held the VRAM sd-server needed to load its weights inside the job.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.ListRunningProcesses().Returns([Resident("chat-27b", ModelRole.Chat), Resident("embedder", ModelRole.Embedding)]);
+        using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
+        var callsBeforeEject = new ConcurrentBag<int>();
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                callsBeforeEject.Add(harness.Runtime.CallCount);
+                return LlamaServerEjectOutcome.Ejected;
+            });
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("free the vram"), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        await supervisor.Received(1).EjectAsync("chat-27b", ModelRole.Chat, false, Arg.Any<CancellationToken>());
+        await supervisor.Received(1).EjectAsync("embedder", ModelRole.Embedding, false, Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 2, callsBeforeEject.Count);
+        AssertEx.True(callsBeforeEject.All(static calls => calls == 0), "Both residents must be ejected before the runtime is called.");
+    }
+
+    [Test]
+    public async Task RunJob_WhileALlamaServerRequestIsInFlight_FailsWithTheBusyMessageAndEjectsNothing()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.ListRunningProcesses().Returns([Resident("chat-27b", ModelRole.Chat, activeLeases: 1), Resident("embedder", ModelRole.Embedding)]);
+        using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while chatting"), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+        AssertEx.Equal("A chat model is still generating; wait for it to finish, then retry the image.",
+            AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+        AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a chat request holds the GPU.");
+        await supervisor.DidNotReceiveWithAnyArgs().EjectAsync(default!, default, default, default);
+    }
+
+    [Test]
+    public async Task RunJob_WithNoLlamaServerResident_GeneratesWithoutEjecting()
+    {
+        var supervisor = NoLlamaServerResidents();
+        using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("nothing resident"), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        AssertEx.Equal(expected: 1, harness.Runtime.CallCount);
+        await supervisor.DidNotReceiveWithAnyArgs().EjectAsync(default!, default, default, default);
+    }
+
+    [Test]
+    public async Task RunJob_GpuOutOfMemory_FailsWithTheRuntimesInstruction()
+    {
+        const string instruction = "The GPU ran out of memory while loading the image model. Unload other models and retry.";
+        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(instruction)
+        {
+            OutOfMemory = true
+        });
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("oom"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+
+        AssertEx.Equal(instruction, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
     }
 
     [Test]
@@ -336,7 +406,8 @@ public sealed class ImageJobCoordinatorTests
             timeProvider,
             NullLogger<ImageJobCoordinator>.Instance,
             new FakeImageRuntimeActivityGate(),
-            new GpuWorkGate());
+            new GpuWorkGate(),
+            NoLlamaServerResidents());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None);
@@ -464,6 +535,24 @@ public sealed class ImageJobCoordinatorTests
         });
     }
 
+    private static ILlamaServerProcessSupervisor NoLlamaServerResidents()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.ListRunningProcesses().Returns([]);
+        return supervisor;
+    }
+
+    private static LlamaServerRunningProcess Resident(string modelName, ModelRole role, int activeLeases = 0)
+    {
+        return new LlamaServerRunningProcess
+        {
+            ModelName = modelName,
+            Role = role,
+            LastUsedUtc = DateTimeOffset.UnixEpoch,
+            ActiveLeases = activeLeases
+        };
+    }
+
     private static CreateImageJobInput NewInput(string prompt)
     {
         return new CreateImageJobInput
@@ -507,7 +596,8 @@ public sealed class ImageJobCoordinatorTests
             (int Width, int Height)? producedSize = null,
             IGpuWorkGate? gpuWorkGate = null,
             ImageGenPhase[]? reportedPhases = null,
-            Exception? runtimeFailure = null)
+            Exception? runtimeFailure = null,
+            ILlamaServerProcessSupervisor? llamaSupervisor = null)
         {
             var runtime = new FakeImageRuntime(blockRuntime, producedSize, reportedPhases, runtimeFailure);
             var store = new FakeImageJobStore();
@@ -527,7 +617,8 @@ public sealed class ImageJobCoordinatorTests
                 TimeProvider.System,
                 NullLogger<ImageJobCoordinator>.Instance,
                 activityGate,
-                gpuWorkGate ?? new GpuWorkGate());
+                gpuWorkGate ?? new GpuWorkGate(),
+                llamaSupervisor ?? NoLlamaServerResidents());
 #pragma warning restore CA2000
 
             return new Harness

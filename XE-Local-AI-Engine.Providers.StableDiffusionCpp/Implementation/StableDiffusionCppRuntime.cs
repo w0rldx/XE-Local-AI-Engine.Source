@@ -24,6 +24,11 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     // Bounds the daemon's own error text in the log: it is foreign input of unknown size.
     private const int MaxLoggedErrorLength = 300;
 
+    // The stderr tail is already capped at 4096 characters by ProcessStderrTail; the out-of-memory line sits at its end.
+    private const int MaxLoggedStderrLength = 4096;
+
+    private const string OutOfMemoryMessage = "The GPU ran out of memory while loading the image model. Unload other models and retry.";
+
     private readonly SdServerJobClient _jobClient;
     private readonly IImageServerSupervisor _supervisor;
     private readonly IImageServerProgressBroker _progressBroker;
@@ -89,8 +94,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
                     case SdJobStatus.Failed:
                         tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
-                        await RecycleAfterFailedJobAsync(request.ModelName, state, jobLease).ConfigureAwait(false);
-                        throw new StableDiffusionRuntimeException("The image runtime failed to generate the image.");
+                        var outOfMemory = await RecycleAfterFailedJobAsync(request.ModelName, state, jobLease).ConfigureAwait(false);
+                        throw outOfMemory
+                            ? new StableDiffusionRuntimeException(OutOfMemoryMessage)
+                            {
+                                OutOfMemory = true
+                            }
+                            : new StableDiffusionRuntimeException("The image runtime failed to generate the image.");
 
                     case SdJobStatus.Expired:
                         tracker.ReportCoarse(ImageGenPhase.Failed, queuePosition: null);
@@ -168,34 +178,43 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     }
 
     /// <summary>
-    ///     Logs the daemon's own reason for a failed job and evicts that daemon, so the next generation spawns a fresh
+    ///     Logs the daemon's own reason and stderr tail for a failed job and evicts that daemon, so the next generation spawns a fresh
     ///     process instead of reusing one left in a broken state (a CUDA out-of-memory failure keeps failing every job).
     /// </summary>
+    /// <returns>Whether the tail shows a GPU out-of-memory; it is read before the eviction, which discards it.</returns>
     /// <remarks>
     ///     The lease is released first: eviction is only safe once no job holds the daemon, and generations are
     ///     serialized by <c>ImageJobCoordinator</c>'s single generation slot, which this call still holds.
     /// </remarks>
-    private async Task RecycleAfterFailedJobAsync(string modelName, SdJobState state, IImageServerJobLease? jobLease)
+    private async Task<bool> RecycleAfterFailedJobAsync(string modelName, SdJobState state, IImageServerJobLease? jobLease)
     {
-        _logger.LogWarning("sd-server job for model {ModelName} failed ({ErrorCode}): {ErrorMessage}. Evicting the daemon; the next generation starts a fresh one.",
-            modelName, Bound(state.ErrorCode) ?? "(none)", Bound(state.ErrorMessage) ?? "(none)");
+        var stderrTail = Bound(jobLease?.StderrTail, MaxLoggedStderrLength);
+        _logger.LogWarning("sd-server job for model {ModelName} failed ({ErrorCode}): {ErrorMessage}. Last stderr: {StderrTail}. Evicting the daemon; the next generation starts a fresh one.",
+            modelName, Bound(state.ErrorCode) ?? "(none)", Bound(state.ErrorMessage) ?? "(none)", stderrTail ?? "(none)");
 
         jobLease?.Dispose();
         await _supervisor.EvictAsync(modelName, CancellationToken.None).ConfigureAwait(false);
+        return stderrTail is not null && IsOutOfMemory(stderrTail);
     }
 
+    // ggml reports an allocation failure as "cudaMalloc failed: out of memory" / "CUDA error: out of memory"; a bare "CUDA error" is any
+    // other device fault and must not be relabelled as memory pressure.
+    private static bool IsOutOfMemory(string stderrTail) =>
+        stderrTail.Contains("out of memory", StringComparison.OrdinalIgnoreCase)
+        || stderrTail.Contains("cudaMalloc failed", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Strips control characters (no log forging) and truncates foreign error text to a bounded length.</summary>
-    internal static string? Bound(string? text)
+    internal static string? Bound(string? text, int maxLength = MaxLoggedErrorLength)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
 
-        var builder = new StringBuilder(Math.Min(text.Length, MaxLoggedErrorLength + 1));
+        var builder = new StringBuilder(Math.Min(text.Length, maxLength + 1));
         foreach (var ch in text)
         {
-            if (builder.Length == MaxLoggedErrorLength)
+            if (builder.Length == maxLength)
             {
                 return builder.Append('\u2026').ToString();
             }

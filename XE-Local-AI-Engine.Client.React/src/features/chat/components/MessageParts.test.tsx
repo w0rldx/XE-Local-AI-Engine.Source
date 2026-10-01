@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type { ChatMessagePart } from "@/features/chat/models/ChatModels";
 import { jsonRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 setupMswServer();
@@ -144,5 +144,18 @@ describe("MessageParts", () => {
 		renderWithProviders(<MessageParts parts={parts} isStreaming={true} streamingReasoningOverflowBytes={2048} />);
 
 		expect(screen.getByTestId("chat-live-reasoning-stream").textContent).toContain("+2 KB");
+	});
+
+	// A long reasoning phase must read as progress: the live header carries a running word count that grows with it.
+	it("updates the live reasoning word count as the reasoning grows", () => {
+		// render + wrapper rather than renderWithProviders, whose rerender would drop the provider stack.
+		const { wrapper } = createProvidersWrapper();
+		const { rerender } = render(<MessageParts parts={[reasoning("m6:0", 0, "Weighing two")]} isStreaming={true} />, { wrapper });
+
+		expect(screen.getByTestId("chat-live-reasoning-size").textContent).toBe("· 2 words");
+
+		rerender(<MessageParts parts={[reasoning("m6:0", 0, "Weighing two options before calling the tool")]} isStreaming={true} />);
+
+		expect(screen.getByTestId("chat-live-reasoning-size").textContent).toBe("· 7 words");
 	});
 });

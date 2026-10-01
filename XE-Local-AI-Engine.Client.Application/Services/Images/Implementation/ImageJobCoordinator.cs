@@ -4,6 +4,8 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -43,6 +45,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly ILogger<ImageJobCoordinator> _logger;
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly ILlamaServerProcessSupervisor _llamaSupervisor;
 
     // Serializes generation to one running job; extra jobs wait here (still Queued) until the slot frees.
     private readonly SemaphoreSlim _generationSlot = new(initialCount: 1, maxCount: 1);
@@ -76,8 +79,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         TimeProvider timeProvider,
         ILogger<ImageJobCoordinator> logger,
         IImageRuntimeActivityGate runtimeActivityGate,
-        IGpuWorkGate gpuWorkGate)
+        IGpuWorkGate gpuWorkGate,
+        ILlamaServerProcessSupervisor llamaSupervisor)
     {
+        _llamaSupervisor = llamaSupervisor ?? throw new ArgumentNullException(nameof(llamaSupervisor));
         _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
@@ -333,6 +338,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 return;
             }
 
+            if (!await FreeLlamaServerVramAsync(jobId, token))
+            {
+                const string chatBusy = "A chat model is still generating; wait for it to finish, then retry the image.";
+                await RunStoreAsync(store => store.MarkFailedAsync(jobId, chatBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
+                PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, chatBusy, ImageJobProgressDetail.None, isMilestone: true);
+                return;
+            }
+
             var startedAt = NowUnixMs();
             await RunStoreAsync(store => store.MarkGeneratingAsync(jobId, startedAt, CancellationToken.None), jobId, "mark generating");
             PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs: 0, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
@@ -371,8 +384,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         catch (Exception exception)
         {
             // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
-            // death is the one runtime text passed through: it is fixed, display-safe and tells the operator what happened.
-            var sanitizedError = exception is StableDiffusionRuntimeException { ProcessExited: true } ? exception.Message : "Image generation failed.";
+            // death and a GPU out-of-memory are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
+            var sanitizedError = exception is StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true }
+                ? exception.Message
+                : "Image generation failed.";
             await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
             PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: sanitizedError, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogWarning(exception, "Image job {JobId} failed during generation.", jobId);
@@ -394,6 +409,41 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             Cleanup(jobId);
         }
+    }
+
+    /// <summary>
+    ///     Ejects every idle llama-server process, any role, so its VRAM is free before sd-server loads its weights inside the job.
+    ///     <see langword="false" /> when one is serving a request: the job is refused rather than launched into an out-of-memory.
+    /// </summary>
+    /// <remarks>
+    ///     Uses the operator eject (graceful, never forced), the path the top-bar eject takes. Busy is read first so a busy process is
+    ///     never marked evicting, which would refuse new chat requests for the whole drain window.
+    /// </remarks>
+    private async Task<bool> FreeLlamaServerVramAsync(Guid jobId, CancellationToken token)
+    {
+        var residents = _llamaSupervisor.ListRunningProcesses();
+        if (residents.Any(static process => process.ActiveLeases > 0))
+        {
+            _logger.LogInformation("Image job {JobId} refused: a llama-server request is still in flight on the GPU.", jobId);
+            return false;
+        }
+
+        foreach (var process in residents)
+        {
+            // ponytail: a request starting between the list and this eject is drained for EjectDrainTimeout, then refuses the job; a non-draining try-evict on the supervisor if that bites.
+            var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token);
+            if (outcome == LlamaServerEjectOutcome.TimedOutStillBusy)
+            {
+                return false;
+            }
+
+            if (outcome == LlamaServerEjectOutcome.Ejected)
+            {
+                _logger.LogInformation("Evicted idle llama-server for model {ModelName} role {Role}: freeing VRAM for image job {JobId}.", process.ModelName, process.Role, jobId);
+            }
+        }
+
+        return true;
     }
 
     private void OnRuntimeProgress(Guid jobId, ImageGenProgress update)

@@ -77,7 +77,7 @@ const draftResponse = {
 	},
 };
 
-function renderDialog(surface: AssistSurface = "skill") {
+function renderDialog(surface: AssistSurface = "skill", installedModels = models) {
 	const onApply = vi.fn<(draft: AssistDraft) => void>();
 	const onDiscard = vi.fn<() => void>();
 	const onClose = vi.fn<() => void>();
@@ -91,7 +91,7 @@ function renderDialog(surface: AssistSurface = "skill") {
 					surface={surface}
 					mode="Create"
 					existing={{ name: "", description: "", content: "" }}
-					models={models}
+					models={installedModels}
 					loadedModelNames={["qwen3-4b"]}
 					onApply={onApply}
 					onDiscard={onDiscard}
@@ -128,6 +128,8 @@ beforeEach(() => {
 		writable: true,
 		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
 	});
+	// jsdom does not implement scrollIntoView; Mantine's Combobox calls it on a timer when the model dropdown opens.
+	Element.prototype.scrollIntoView = vi.fn();
 	Object.defineProperty(window, "ResizeObserver", {
 		writable: true,
 		value: class ResizeObserverMock {
@@ -255,6 +257,38 @@ describe("GenerationAssistDialog", () => {
 		expect(onDiscard).toHaveBeenCalled();
 		expect(onClose).toHaveBeenCalled();
 		expect(onApply).not.toHaveBeenCalled();
+	});
+
+	// jsdom has no stacking context, so the dropdown-behind-the-dialog z-index regression is only visible in a browser;
+	// this pins the selection itself: the picked model reaches the request and re-clicking it does not deselect it.
+	it("sends the model the operator picked, not the default", async () => {
+		draftSkillSpy.mockResolvedValue(draftResponse);
+		const secondModel: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
+			modelName: "llama-3-8b",
+			kind: "Chat",
+			detectedKind: "Chat",
+			provider: "llamacpp",
+			capabilities: [],
+			isSelected: false,
+			isReasoningCapable: false,
+			isToolCapable: false,
+			isOverridden: false,
+		};
+		renderDialog("skill", [...models, secondModel]);
+
+		const pickSecond = () => {
+			fireEvent.click(screen.getByTestId("assist-model"));
+			fireEvent.click(screen.getByRole("option", { name: "llama-3-8b" }));
+		};
+		pickSecond();
+		pickSecond();
+		expect((screen.getByTestId("assist-model") as HTMLInputElement).value).toBe("llama-3-8b");
+
+		generate();
+		await waitFor(() => expect(draftSkillSpy).toHaveBeenCalled());
+
+		const options = draftSkillSpy.mock.calls[0]?.[0] as { body: XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest };
+		expect(options.body.modelName).toBe("llama-3-8b");
 	});
 
 	// The image form has nothing to save: applying fills the prompt, so its intro must not tell the operator to save.

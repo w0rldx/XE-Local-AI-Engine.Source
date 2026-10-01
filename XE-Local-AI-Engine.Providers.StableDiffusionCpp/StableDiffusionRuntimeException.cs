@@ -26,4 +26,7 @@ public sealed class StableDiffusionRuntimeException : Exception
     ///     generation respawns the daemon.
     /// </summary>
     public bool ProcessExited { get; init; }
+
+    /// <summary>Whether the daemon's stderr showed a GPU out-of-memory. The message is then a fixed, display-safe instruction.</summary>
+    public bool OutOfMemory { get; init; }
 }

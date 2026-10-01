@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
 
-import type { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { QueryClient } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
+import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
 // is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
@@ -177,5 +178,66 @@ describe("Chat cancel ordering", () => {
 		// Let the aborted iterator unwind so the streaming loop's finally block runs.
 		releaseStream?.();
 		await waitFor(() => expect(adapter.getConversation).toHaveBeenCalled());
+	});
+
+	it("still cancels the run server-side when the local stream handle is lost", async () => {
+		// The SignalR stream ended (or the view remounted) while the server kept the turn running: no local stream owns
+		// it, but the persisted row is still live. Stop must reach the server with the row's persisted request id.
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+		queryClient.setQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"), {
+			...conversation(),
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: "conversation-1",
+					requestId: "request-1",
+					role: "assistant",
+					content: "partial",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:00.000Z",
+					sortOrder: 1,
+				},
+			],
+		});
+		const refreshConversation = vi.fn(async () => undefined);
+		const { wrapper } = createProvidersWrapper({ queryClient });
+		const { result } = renderHook(
+			() =>
+				useChatStreamController({
+					setStreamError: vi.fn(),
+					cacheConversation: (updated) => queryClient.setQueryData(nodeChatQueryKeys.conversation(updated.id), updated),
+					cacheConversationDetail: vi.fn(),
+					refreshConversation,
+					resolveSendConversation: vi.fn(),
+					selectedConversationId: "conversation-1",
+					displayConversations: [],
+					modelOptions: [],
+					cloudModelOptions: [],
+					agentModeEnabled: false,
+					selectedAgentId: "",
+					agentOptions: [],
+					activeRevisionByGroup: {},
+					attachmentFileIds: [],
+					toolsEnabled: false,
+					knowledgeBaseEnabled: false,
+					reasoningEffort: "medium",
+					onVoiceTurnStart: vi.fn(),
+					onVoiceAnswerProgress: vi.fn(),
+					loadedSelectedConversationId: "",
+				}),
+			{ wrapper },
+		);
+
+		await act(() => result.current.handleCancel());
+
+		expect(adapter.cancelMessage).toHaveBeenCalledWith({
+			conversationId: "conversation-1",
+			messageId: "assistant-1",
+			requestId: "request-1",
+		});
+		expect(refreshConversation).toHaveBeenCalledWith("conversation-1");
+		expect(
+			queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"))?.messages[0]?.status,
+		).toBe("cancelled");
 	});
 });

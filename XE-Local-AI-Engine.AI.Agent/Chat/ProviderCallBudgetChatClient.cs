@@ -184,7 +184,9 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         {
             MessagesDroppedCounter.Add(result.MessagesDropped);
             ToolResultsTruncatedCounter.Add(result.ToolResultsTruncated);
-            _logger.LogDebug(
+            // The first trim of an invocation at Information (a long turn whose context is being cut is otherwise invisible at the default level),
+            // every later one at Debug so a tool-heavy turn does not log one line per round.
+            _logger.Log(budget.TryClaimTrimLog() ? LogLevel.Information : LogLevel.Debug,
                 "Provider-round context budgeted: dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), estimated tokens {Before} -> {After}, window {Window} reserving {Reserved} (still over window: {Overflow}).",
                 result.MessagesDropped,
                 result.ToolResultsTruncated,

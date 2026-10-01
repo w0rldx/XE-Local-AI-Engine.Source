@@ -587,6 +587,13 @@ public sealed class ToolApprovalCoordinator
             using var approvalTimeoutCancellationTokenSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, approvalAgeCancellationTokenSource.Token);
 
+            // One line per park, so a turn that looks frozen in the logs shows it is waiting on the operator. Ids and the tool name only, never arguments.
+            _logger.LogInformation("Invocation {InvocationId} is waiting on operator decision {RequestId} ({DecisionKind}) for tool {ToolName}",
+                package.InvocationId,
+                requestId,
+                webReview is null ? "approval" : "web-" + webReview.Stage,
+                toolName);
+
             setInvocationDeadline(true);
             try
             {

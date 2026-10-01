@@ -416,8 +416,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             _logger.LogInformation("sd-server spawned for model {ModelName} (pid {ProcessId}, port {Port}).",
                 modelName, handle.ProcessId, port);
 
-            // The readiness wait IS the model-load wait (sd-server binds only once loading completes), so the budget is
-            // sized against the file-set rather than being flat — see ImageServerReadinessBudget.
+            // With eager_load=false the HTTP bind is all readiness proves: the weights load inside the first job, so its VRAM need shows there.
+            // The budget is still sized against the file-set (see ImageServerReadinessBudget); gating admission on the load is deferred.
             var readinessBudget = ImageServerReadinessBudget.For(parts, _options);
             var readyStartedUtc = _timeProvider.GetUtcNow();
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessBudget, spawnCt).ConfigureAwait(false);
@@ -1047,6 +1047,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             _server.MarkUsed(_timeProvider.GetUtcNow());
         }
+
+        public string? StderrTail => _server.Handle.StderrTail;
 
         public bool HasDaemonExited(out int? exitCode)
         {
