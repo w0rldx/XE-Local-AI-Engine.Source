@@ -61,6 +61,12 @@ public sealed record StoredExternalProviderConnection
     /// <summary>Per-connection network timeout in seconds, or <see langword="null" /> for the transport default.</summary>
     public int? TimeoutSeconds { get; init; }
 
+    /// <summary>
+    ///     The operator's explicit opt-in to a plain-http, non-loopback address (<see cref="ExternalProviderTransportPolicy" />).
+    ///     Absent in a file written before the rule, so it reads <see langword="false" />.
+    /// </summary>
+    public bool AllowInsecureHttp { get; init; }
+
     /// <summary>The models the operator registered on this connection.</summary>
     public IReadOnlyList<StoredExternalProviderModel> Models { get; init; } = [];
 }
@@ -83,17 +89,25 @@ public sealed record StoredExternalProviderModel
     /// <summary>The declared context window in tokens, or <see langword="null" /> when the operator declared none.</summary>
     public int? ContextLength { get; init; }
 
-    /// <summary>Whether the model may be offered tools.</summary>
-    public bool SupportsTools { get; init; }
+    /// <summary>
+    ///     Whether the model may be offered tools: <see langword="true" /> supported, <see langword="false" /> unsupported,
+    ///     <see langword="null" /> unknown. The same tri-state holds for the three flags below.
+    /// </summary>
+    /// <remarks>
+    ///     Collapsed to a plain <see langword="bool" /> (<c>== true</c>) at the registry projection, so Unknown fails closed
+    ///     exactly like Unsupported everywhere past the store. A schema-1 file never told the two apart, so its
+    ///     <see langword="false" /> reads back as <see langword="null" />.
+    /// </remarks>
+    public bool? SupportsTools { get; init; }
 
     /// <summary>Whether the model accepts image input.</summary>
-    public bool SupportsVision { get; init; }
+    public bool? SupportsVision { get; init; }
 
     /// <summary>Whether the model produces a reasoning channel.</summary>
-    public bool SupportsReasoning { get; init; }
+    public bool? SupportsReasoning { get; init; }
 
     /// <summary>Whether the endpoint honours a top-level <c>reasoning_effort</c> body field.</summary>
-    public bool SupportsReasoningEffort { get; init; }
+    public bool? SupportsReasoningEffort { get; init; }
 
     /// <summary>The effort applied when the turn selects none, in the canonical lowercase vocabulary.</summary>
     public string? DefaultReasoningEffort { get; init; }
@@ -102,8 +116,11 @@ public sealed record StoredExternalProviderModel
 /// <summary>Schema constants for the encrypted external-provider store.</summary>
 public static class ExternalProviderStoreSchema
 {
-    /// <summary>The schema version this build writes.</summary>
-    public const int CurrentVersion = 1;
+    /// <summary>
+    ///     The schema version this build writes. Version 2 made the model capability flags tri-state; a version-1 file is
+    ///     lifted on read and written back as version 2 on the next save.
+    /// </summary>
+    public const int CurrentVersion = 2;
 
     /// <summary>Upper bound on configured connections — a guard against a hand-edited or corrupted payload, not a product limit.</summary>
     public const int MaxConnections = 32;

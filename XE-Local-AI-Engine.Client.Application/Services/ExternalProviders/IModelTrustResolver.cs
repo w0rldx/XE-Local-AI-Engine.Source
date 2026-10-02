@@ -22,12 +22,12 @@ public enum ModelTrustLocality
     Cloud = 1,
 
     /// <summary>
-    ///     An <c>ext:</c> id that could not be resolved: a malformed id, a connection deleted mid-turn, a store that
-    ///     will not decrypt, or a lookup that threw.
+    ///     An id that could not be resolved: a malformed <c>ext:</c> id, a connection deleted mid-turn, a store that
+    ///     will not decrypt, or a lookup (external registry or cloud routing snapshot) that threw.
     /// </summary>
     /// <remarks>
     ///     Treated EXACTLY as <see cref="Cloud" /> by every gate and as not-routable by the send path — the fail-closed
-    ///     posture the cloud routing classifier already sets the precedent for. Kept distinct from
+    ///     posture. Kept distinct from
     ///     <see cref="Cloud" /> only so a caller can log or message it honestly.
     /// </remarks>
     Unresolved = 2
@@ -38,18 +38,16 @@ public enum ModelTrustLocality
 ///     ones alike.
 /// </summary>
 /// <remarks>
-///     It is the single spelling of an answer the cloud checks cannot give on their own: <c>IsCloudProviderSelected</c>,
-///     <c>IsCodexModel</c> and <c>ResolveActiveCloudProviderName</c> see no <c>ext:</c> id at all, because an unrecognized id
-///     falls through the cloud selection by design — so a declared-cloud external model reads as node-local to every one of
-///     them. The policy formula every gate applies: an id is cloud when the existing cloud checks say so OR its external
-///     trust is anything other than <see cref="ModelTrustLocality.Local" />.
+///     The TRUST authority: policy gates ask it, never <c>IsCodexModel</c> or <c>IsCloudProviderSelected</c>, which see no
+///     <c>ext:</c> id and need a live Codex session. A Codex id is cloud; another non-external id is cloud when the routing
+///     snapshot selects a provider; an external id is cloud unless declared local; a lookup failure is Unresolved. ROUTING
+///     questions (which provider gets this send) stay on the cloud factory.
 /// </remarks>
 public interface IModelTrustResolver
 {
     /// <summary>
-    ///     Classifies <paramref name="modelId" />. A non-external id delegates to the existing cloud checks and can
-    ///     never come back <see cref="ModelTrustLocality.Unresolved" />; an <c>ext:</c> id is resolved through the
-    ///     registry and fails closed.
+    ///     Classifies <paramref name="modelId" />, resolving an <c>ext:</c> id through the registry. Fails closed to
+    ///     <see cref="ModelTrustLocality.Unresolved" />; a blank id is <see cref="ModelTrustLocality.Local" />.
     /// </summary>
     Task<ModelTrustLocality> ResolveAsync(string? modelId, CancellationToken cancellationToken = default);
 
@@ -61,8 +59,14 @@ public interface IModelTrustResolver
     Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The synchronous classification for the send-path gates that have no async boundary — the tool offer and the
-    ///     dev-mode egress backstop.
+    ///     The same rule as <see cref="ResolveAsync" />, synchronously, for the gates that have no async boundary (the
+    ///     tool offer): an <c>ext:</c> id answers from the registry's cached generation
+    ///     (<see cref="ClassifyExternalCached" />), so a cold cache is <see cref="ModelTrustLocality.Unresolved" />.
+    /// </summary>
+    ModelTrustLocality Classify(string? modelId);
+
+    /// <summary>
+    ///     The synchronous external-only classification for the dev-mode egress backstop.
     /// </summary>
     /// <remarks>
     ///     Answers ONLY about external ids, from the registry's cached generation. A non-external id returns

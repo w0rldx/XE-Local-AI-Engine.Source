@@ -29,7 +29,8 @@ public interface IExternalProviderProbeService
 /// <param name="ConnectionId">The stored connection to resolve the base URL and, when <paramref name="ApiKey" /> is absent, the API key from.</param>
 /// <param name="BaseUrl">A raw, operator-entered endpoint, not yet saved. Takes precedence over the stored address and is normalized here by the save path's normalizer.</param>
 /// <param name="ApiKey">An explicitly supplied key. Takes precedence over the stored one; blank means "use the stored key, if any".</param>
-public readonly record struct ExternalProviderProbeQuery(string? ConnectionId, string? BaseUrl, string? ApiKey);
+/// <param name="AllowInsecureHttp">The editor's opt-in to a plain-http, non-loopback address; without it such an address is refused before any request.</param>
+public readonly record struct ExternalProviderProbeQuery(string? ConnectionId, string? BaseUrl, string? ApiKey, bool AllowInsecureHttp = false);
 
 /// <summary>Why a probe could not even be attempted, or how the endpoint answered.</summary>
 public enum ExternalProviderProbeOutcome
@@ -43,7 +44,7 @@ public enum ExternalProviderProbeOutcome
     /// <summary>The request named a connection id that is not stored. Nothing was sent.</summary>
     UnknownConnection = 2,
 
-    /// <summary>The supplied base URL is not an acceptable OpenAI-compatible endpoint. Nothing was sent.</summary>
+    /// <summary>The supplied base URL is not an acceptable OpenAI-compatible endpoint, or is insecure without the opt-in. Nothing was sent.</summary>
     InvalidBaseUrl = 3
 }
 

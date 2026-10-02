@@ -264,7 +264,8 @@
 			"effortDispatched": "Reasoning effort resolved",
 			"playbookWithheld": "Playbook withheld",
 			"emptyAnswer": "No answer",
-			"toolHistoryWithheld": "Tool history withheld"
+			"toolHistoryWithheld": "Tool history withheld",
+			"toolsWithheld": "Tools not offered"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"webReview": {
@@ -2919,6 +2920,7 @@
 				"edit": "Edit",
 				"empty": "No external providers are registered on this node yet.",
 				"keyStored": "Key stored",
+				"insecureTransport": "Unencrypted HTTP",
 				"modelCount_one": "{{count}} registered model",
 				"modelCount_other": "{{count}} registered models"
 			},
@@ -2952,6 +2954,8 @@
 				"keepApiKey": "Keep stored key",
 				"timeoutLabel": "Timeout (seconds)",
 				"timeoutHint": "Blank uses the node default. Between 5 and 3600 seconds.",
+				"allowInsecureHttpLabel": "Allow insecure HTTP",
+				"allowInsecureHttpHint": "Sends the API key and prompts unencrypted. Needed for http to another machine; prefer https.",
 				"save": "Save connection",
 				"delete": "Delete connection",
 				"cancel": "Cancel"
@@ -2971,6 +2975,9 @@
 				"supportsVision": "Vision",
 				"supportsReasoning": "Reasoning",
 				"supportsReasoningEffort": "Reasoning effort",
+				"answerYes": "Yes",
+				"answerNo": "No",
+				"answerUnknown": "Unknown",
 				"defaultEffortLabel": "Default reasoning effort",
 				"effortUnset": "Server default",
 				"effortOptions": {
@@ -2982,7 +2989,7 @@
 					"high": "High",
 					"xhigh": "Extra high"
 				},
-				"toolsHelp": "Declaring tool support makes the model tool-capable node-wide: it joins the node's tool-capable model list, which the Agents page reads too."
+				"toolsHelp": "Only Yes counts as support; Unknown is treated like No. Declaring tool support makes the model tool-capable node-wide: it joins the node's tool-capable model list, which the Agents page reads too."
 			},
 			"probe": {
 				"test": "Test connection",
@@ -6771,6 +6778,7 @@
 				"responseJsonSchema": "Response JSON schema",
 				"includeUpstreamOutputs": "Include upstream outputs",
 				"includeUpstreamOutputsHelp": "Hands this agent what the nodes before it produced, on top of the run input.",
+				"toolsUnavailableWarning": "This agent uses tools, but the selected model cannot call them. The node will be refused when the workflow runs. Pick a tool-capable model.",
 				"tool": "Tool",
 				"allowedUrls": "Allowed links",
 				"allowedUrlsHelp": "web_fetch reads only pages under these links: same scheme, host and port, and a path at or below the link's path. Private and local addresses stay blocked even when listed.",

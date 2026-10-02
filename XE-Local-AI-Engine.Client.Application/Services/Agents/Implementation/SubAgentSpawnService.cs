@@ -14,7 +14,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -133,9 +132,9 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return ReasonDepthExceeded;
         }
 
-        // Trust guard at the SERVICE seam, behind the offer gate: an AllowedToolNames list, a definition pinned to another model, or a direct caller would all bypass it.
-        // Delegation is egress — a child reads the workspace and knowledge base into the parent's transcript, so a parent that may not read that data may not obtain it via a child.
-        if (await IsOutsideTrustBoundaryAsync(context?.RootModelId, ct))
+        // Trust guard at the SERVICE seam (an AllowedToolNames list, a pinned definition or a direct caller bypass the offer gate): delegation is egress, so a parent
+        // that may not read node-local data may not obtain it via a child. A null root model is not a remote parent (inbound MCP resolves downstream) and reads Local.
+        if (await _modelTrustResolver.ResolveAsync(context?.RootModelId, ct) != ModelTrustLocality.Local)
         {
             return ReasonParentOutsideTrustBoundary;
         }
@@ -473,26 +472,6 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
 
         return (true, adapted);
-    }
-
-    /// <summary>
-    ///     Whether prompts for <paramref name="modelId" /> leave the node, by the same formula
-    ///     <c>LocalToolOfferProvider.IsOutsideTrustBoundary</c> applies.
-    /// </summary>
-    /// <remarks>
-    ///     Spelled asynchronously because this seam has an async boundary and can therefore resolve the registry rather than settle for its
-    ///     cached generation. A <see langword="null" /> id means the seeding caller named no model — an inbound MCP run resolves its own
-    ///     binding downstream — which is not a claim that the parent is remote, so it does not refuse.
-    /// </remarks>
-    private async Task<bool> IsOutsideTrustBoundaryAsync(string? modelId, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(modelId))
-        {
-            return false;
-        }
-
-        return CodexModelCatalog.IsCodexModel(modelId)
-               || await _modelTrustResolver.ResolveAsync(modelId, ct) != ModelTrustLocality.Local;
     }
 
     // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation

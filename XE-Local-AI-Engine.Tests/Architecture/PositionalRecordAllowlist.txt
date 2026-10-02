@@ -215,7 +215,7 @@ XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointT
 XE-Local-AI-Engine.Tests/Integrations/IntegrationSseRoutesTests.cs|LinksBody
 XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|KeyMetadataBody
 
-# --- deconstruction (46) ----------------------------------------------------------
+# --- deconstruction (45) ----------------------------------------------------------
 # Production or test code deconstructs the type positionally (var (a, b) = x, or a positional pattern).
 # A class has no Deconstruct, so converting one of these is a compile error at every such site.
 XE-Local-AI-Engine.Client.Application/Common/Telemetry/NodeMetrics.cs|GpuAdmissionGauges
@@ -224,7 +224,6 @@ XE-Local-AI-Engine.Client.Application/Services/AgentHome/Implementation/NodePatc
 XE-Local-AI-Engine.Client.Application/Services/Auth/AccessTokenResult.cs|AccessTokenResult
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/KvCacheResolution.cs|KvCacheResolution
 XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/RuntimeDeviceAuditService.cs|DeviceAuditComputation
-XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/CloudRoutingClassification.cs|CloudRoutingClassification
 XE-Local-AI-Engine.Client.Application/Services/Chat/ModelIdentity.cs|ModelIdentity
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/EntraDeviceCodeSignInCoordinator.cs|DeviceCodeFlowHandle
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkceGenerator.cs|PkcePair

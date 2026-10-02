@@ -168,6 +168,26 @@ published.
 
 ### Changed
 
+- **An unattended agent that needs tools no longer runs on a model that cannot call them.** A saved agent that lists
+  tools, or is an orchestrator, is now refused before it starts when a scheduled run, a graph workflow Agent node or an
+  inbound MCP run that carries tools (an agentic caller, or the seeded Coder) would put it on a model not known to
+  support tool calling. An external integration run needs a tool-capable model in every case, because its output
+  arrives through a tool call. Such runs used to report success having called no tool. The remedy is to pick a
+  tool-capable model or remove the agent's tools; for an integration, only the model change helps. Interactive chat
+  is unchanged apart from the "tools withheld" notice, and the graph editor warns in advance.
+- **A chat turn whose model cannot call tools now says so.** When an agent's tools are withheld because the model is
+  not known to support tool calling, the turn carries a "tools withheld" notice instead of silently answering
+  without them.
+- **New or edited external connections to a non-loopback `http://` address need an explicit opt-in.** HTTPS is the
+  default; plain HTTP to a remote address is refused unless the connection allows insecure HTTP, and "Test
+  connection" follows the same rule. Existing plain-HTTP connections keep working but show a warning, and their next
+  save needs the opt-in.
+- **Azure deployment names may no longer shadow another model.** A deployment name that collides, ignoring case, with
+  an `ext:` external model id, a Codex model id or an installed GGUF name is rejected on every cloud-settings save,
+  including a save that only edits headers, until it is renamed.
+- **The external-providers store moves to schema 2 (tri-state model capabilities).** An older build cannot read a
+  file saved by this version: its external models disappear, fail closed, and writes are refused until this
+  version or later is running again.
 - **Launching the packaged app with no arguments opens the native desktop window instead of a browser.** That is
   double-clicking `XE-Local-AI-Engine.WindowsLauncher.exe` on Windows, and running the AppImage — whose main
   executable is `XE-Local-AI-Engine.Desktop` — on Ubuntu. `--browser` and `--headless` restore the previous

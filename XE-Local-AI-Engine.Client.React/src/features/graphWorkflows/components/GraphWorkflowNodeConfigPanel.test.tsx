@@ -55,8 +55,14 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				onRename={handlers.onRename ?? (() => "ok")}
 				onRemove={handlers.onRemove ?? vi.fn()}
 				tools={tools}
-				agentOptions={[{ value: "agent-id", label: "Reviewer" }]}
-				modelOptions={[{ value: "qwen3-8b", label: "Qwen3 8B" }]}
+				agentOptions={[
+					{ value: "agent-id", label: "Reviewer", requiresTools: true },
+					{ value: "plain-id", label: "Plain", requiresTools: false },
+				]}
+				modelOptions={[
+					{ value: "qwen3-8b", label: "Qwen3 8B", isToolCapable: true },
+					{ value: "tiny", label: "Tiny", isToolCapable: false },
+				]}
 				graphSettings={handlers.graphSettings}
 			/>
 		</ConfirmProvider>,
@@ -104,6 +110,23 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect((screen.getByTestId("gw-node-config-key") as HTMLInputElement).value).toBe(`${kind.toLowerCase()}-1`);
 		expect(screen.getByTestId("gw-node-config-join")).toBeTruthy();
 		expect(screen.getByTestId(bodyTestIdByKind[kind])).toBeTruthy();
+	});
+
+	it.each([
+		["a tool-using agent on a model override without tools", "agent-id", "tiny", true],
+		["a tool-using agent on a tool-capable override", "agent-id", "qwen3-8b", false],
+		["an agent that lists no tools", "plain-id", "tiny", false],
+		["no model override, so the server decides", "agent-id", null, false],
+		["the default persona, which needs no tools", null, "tiny", false],
+	])("warns about tools only for %s", (_case, agentDefinitionId, model, warns) => {
+		const node = { ...defaultNodeData("Agent", "agent-1"), agentDefinitionId, model } as GraphWorkflowCanvasNodeData;
+		renderPanel(node);
+
+		const warning = screen.queryByTestId("gw-node-config-tools-warning");
+		expect(warning !== null).toBe(warns);
+		if (warns) {
+			expect(warning?.textContent).toBe(en.pages.graphWorkflows.config.toolsUnavailableWarning);
+		}
 	});
 
 	it("reports invalid JSON in responseJsonSchema as a field message instead of throwing", () => {

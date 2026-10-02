@@ -222,7 +222,7 @@ describe("graph workflow read hooks", () => {
 					isAvailable: true,
 					items: [
 						localModel({ modelName: "qwen3", displayLabel: "Qwen 3", kind: "Chat", provider: "llamacpp" }),
-						localModel({ modelName: "ollama-chat", kind: "Chat", provider: "ollama" }),
+						localModel({ modelName: "ollama-chat", kind: "Chat", provider: "ollama", isToolCapable: false }),
 						localModel({ modelName: "external-chat", kind: "Chat", provider: "external" }),
 						localModel({ modelName: "nomic-embed", kind: "Embedding", detectedKind: "Embedding", provider: "llamacpp" }),
 					],
@@ -236,16 +236,33 @@ describe("graph workflow read hooks", () => {
 
 		await waitFor(() => expect(agent.result.current.data).toHaveLength(3));
 		expect(agent.result.current.data?.map((option) => option.value)).toEqual(["qwen3", "ollama-chat", "external-chat"]);
+		expect(agent.result.current.data?.find((option) => option.value === "ollama-chat")?.isToolCapable).toBe(false);
 		expect(llm.result.current.data).toEqual([{ value: "qwen3", label: "Qwen 3" }]);
 	});
 
-	it("projects the agent definitions to picker options", async () => {
-		server.use(http.get(localApiPath("agents"), () => HttpResponse.json({ items: [agentDefinition(definitionId, "Reviewer")] })));
+	it("projects the agent definitions to picker options, deriving whether each needs tool calling", async () => {
+		server.use(
+			http.get(localApiPath("agents"), () =>
+				HttpResponse.json({
+					items: [
+						agentDefinition(definitionId, "Reviewer"),
+						{ ...agentDefinition("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Searcher"), allowedToolNames: ["read_file"] },
+						{ ...agentDefinition("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "Triage"), kind: "Orchestrator" },
+					],
+				}),
+			),
+		);
 		const { wrapper } = harness();
 
 		const { result } = renderHook(() => useGraphWorkflowAgentOptions(), { wrapper });
 
-		await waitFor(() => expect(result.current.data).toEqual([{ value: definitionId, label: "Reviewer" }]));
+		await waitFor(() =>
+			expect(result.current.data).toEqual([
+				{ value: definitionId, label: "Reviewer", requiresTools: false },
+				{ value: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", label: "Searcher", requiresTools: true },
+				{ value: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", label: "Triage", requiresTools: true },
+			]),
+		);
 	});
 
 	it("stays idle until it has the id it reads by", () => {

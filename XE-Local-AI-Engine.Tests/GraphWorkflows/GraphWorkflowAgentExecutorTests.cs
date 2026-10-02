@@ -359,6 +359,42 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Empty(Capacity(harness).ReservationsFor(model), "and before capacity is asked, so there is nothing to leak.");
     }
 
+    /// <summary>A bound agent that lists tools, on a model that cannot call them, is refused before capacity and before any invocation.</summary>
+    [Test]
+    public async Task AToolRequiringAgentOnANonToolModel_IsRefusedBeforeCapacityAndBeforeAnyInvocation()
+    {
+        const string instructions = "tools-refused";
+        const string model = "graph-notools-refused";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var agentDefinitionId = await SeedAgentAsync(harness, model, ["read_file"]);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "agentDefinitionId": "{{agentDefinitionId}}"
+                                                                              """));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a missing capability is a configuration refusal.");
+        AssertEx.Contains(analyze.Error, "needs tool calling");
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)));
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model));
+    }
+
+    /// <summary>The twin: a bound agent that lists no tools still runs on the same kind of model.</summary>
+    [Test]
+    public async Task ANoToolsAgentOnANonToolModel_StillRuns()
+    {
+        const string instructions = "no-tools-runs";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-notools-plain");
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "agentDefinitionId": "{{agentDefinitionId}}"
+                                                                              """));
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId)).Status);
+        AssertEx.Equal("graph-notools-plain", harness.Invocations.PackageFor(instructions).ModelProfile);
+    }
+
     /// <summary>
     ///     <c>honorModelProfile</c> is <see langword="false" /> exactly when the node names its own model. With a bare
     ///     <see langword="true" /> a node overriding a cloud-pinned agent to a local one would pass the locality gate on
@@ -1171,7 +1207,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");
     }
 
-    private static async Task<Guid> SeedAgentAsync(GraphWorkflowHarness harness, string modelProfile)
+    private static async Task<Guid> SeedAgentAsync(GraphWorkflowHarness harness, string modelProfile, IReadOnlyList<string>? allowedToolNames = null)
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var definition = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
@@ -1183,7 +1219,7 @@ public sealed class GraphWorkflowAgentExecutorTests
                                         ModelProfile = modelProfile,
                                         ReasoningEffort = null,
                                         Kind = AgentDefinitionKind.Single,
-                                        AllowedToolNames = [],
+                                        AllowedToolNames = allowedToolNames ?? [],
                                         ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
                                         OrchestrationTopologyJson = null
                                     });

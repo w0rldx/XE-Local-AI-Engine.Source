@@ -103,7 +103,7 @@ public sealed class ExternalProviderEndpointTests
                 && saved.Locality == ExternalProviderLocality.Local
                 && saved.ExpectedRevision == "rev-0"
                 && saved.Models.Single().WireId == "qwen3-27b"
-                && saved.Models.Single().SupportsTools),
+                && saved.Models.Single().SupportsTools == true),
             Arg.Any<CancellationToken>());
     }
 
@@ -209,6 +209,120 @@ public sealed class ExternalProviderEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("rev-1", current.Revision);
+    }
+
+    [Test]
+    public async Task ListConnections_ComputesInsecureTransportAndEchoesTheOptIn()
+    {
+        var loopback = CreateConfig().Connections.Single();
+        var store = Substitute.For<IExternalProviderStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig() with
+        {
+            Connections =
+            [
+                loopback,
+                loopback with
+                {
+                    Id = "legacy-lan",
+                    BaseUrl = "http://192.168.1.40:8080/v1/"
+                },
+                loopback with
+                {
+                    Id = "opted-in-lan",
+                    BaseUrl = "http://192.168.1.41:8080/v1/",
+                    AllowInsecureHttp = true
+                }
+            ]
+        });
+        await using var factory = CreateFactory(store);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ConnectionsRoute);
+        using var response = await client.SendAsync(request);
+        var connections = (await ReadJsonAsync<ExternalProviderConnectionsResponse>(response)).Connections.ToDictionary(connection => connection.Id, StringComparer.Ordinal);
+
+        // A row saved over plain http before HTTPS became the default keeps working; the list flags it for the editor.
+        AssertEx.False(connections["unsloth-box"].InsecureTransport);
+        AssertEx.True(connections["legacy-lan"].InsecureTransport);
+        AssertEx.False(connections["legacy-lan"].AllowInsecureHttp);
+        AssertEx.True(connections["opted-in-lan"].InsecureTransport);
+        AssertEx.True(connections["opted-in-lan"].AllowInsecureHttp);
+    }
+
+    [Test]
+    public async Task SaveConnection_PassesTheInsecureHttpOptInThrough()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(CreateConfig(), Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            BaseUrl = "http://192.168.1.40:8080",
+            AllowInsecureHttp = true
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved => saved.AllowInsecureHttp),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveConnection_CarriesTriStateCapabilitiesBothWays()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        var stored = CreateConfig();
+        var storedConnection = stored.Connections.Single();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(stored with
+                             {
+                                 Connections =
+                                 [
+                                     storedConnection with
+                                     {
+                                         Models =
+                                         [
+                                             storedConnection.Models.Single() with
+                                             {
+                                                 SupportsVision = false,
+                                                 SupportsReasoning = null
+                                             }
+                                         ]
+                                     }
+                                 ]
+                             }, Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Models =
+            [
+                new SaveExternalProviderModelRequest
+                {
+                    WireId = "qwen3-27b",
+                    SupportsTools = true,
+                    SupportsVision = false,
+                    SupportsReasoning = null
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+        var model = (await ReadJsonAsync<ExternalProviderConnectionsResponse>(response)).Connections.Single().Models.Single();
+
+        // Unknown (null) is a third answer, not an omitted false: it survives the request and the response alike.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved =>
+                saved.Models.Single().SupportsTools == true && saved.Models.Single().SupportsVision == false && saved.Models.Single().SupportsReasoning == null),
+            Arg.Any<CancellationToken>());
+        AssertEx.True(model.SupportsTools == true);
+        AssertEx.True(model.SupportsVision == false);
+        AssertEx.Null(model.SupportsReasoning);
     }
 
     private static SaveExternalProviderConnectionRequest ValidSaveRequest()

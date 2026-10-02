@@ -244,7 +244,12 @@ export function useGraphWorkflowAgentOptions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listAgentDefinitionsOptions()),
 		enabled: options.enabled ?? true,
-		select: (data) => (data.items ?? []).map((agent) => ({ value: agent.id, label: agent.name })),
+		select: (data) =>
+			(data.items ?? []).map((agent) => ({
+				value: agent.id,
+				label: agent.name,
+				requiresTools: agent.allowedToolNames.length > 0 || agent.kind === "Orchestrator",
+			})),
 	});
 }
 
@@ -259,7 +264,11 @@ export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
 		select: (data) =>
 			(data.items ?? [])
 				.filter((model) => model.kind === "Chat")
-				.map((model) => ({ value: model.modelName ?? "", label: model.displayLabel ?? model.modelName ?? "" })),
+				.map((model) => ({
+					value: model.modelName ?? "",
+					label: model.displayLabel ?? model.modelName ?? "",
+					isToolCapable: model.isToolCapable,
+				})),
 	});
 }
 

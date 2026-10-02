@@ -55,6 +55,7 @@ export function ExternalProviderProbePanel({
 					...(isStored && hasStoredApiKey && !values.clearApiKey ? { connectionId: values.connectionId.trim() } : {}),
 					baseUrl,
 					...(typedKey.length > 0 ? { apiKey: values.apiKey } : {}),
+					...(values.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
 				},
 			},
 			{

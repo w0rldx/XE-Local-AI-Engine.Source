@@ -183,10 +183,11 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             WireId = model.WireId,
             DisplayName = model.DisplayName,
             ContextLength = model.ContextLength,
-            SupportsTools = model.SupportsTools,
-            SupportsVision = model.SupportsVision,
-            SupportsReasoning = model.SupportsReasoning,
-            SupportsReasoningEffort = model.SupportsReasoningEffort,
+            // Unknown collapses to false here: everything past the store reads a declared capability or its absence.
+            SupportsTools = model.SupportsTools == true,
+            SupportsVision = model.SupportsVision == true,
+            SupportsReasoning = model.SupportsReasoning == true,
+            SupportsReasoningEffort = model.SupportsReasoningEffort == true,
             DefaultReasoningEffort = model.DefaultReasoningEffort
         };
     }
@@ -306,6 +307,11 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             throw new ExternalProviderValidationException("An external connection base URL must be an absolute http(s) address without credentials, query, or fragment.");
         }
 
+        if (ExternalProviderTransportPolicy.IsInsecureRemote(baseUrl) && !request.AllowInsecureHttp)
+        {
+            throw new ExternalProviderValidationException(ExternalProviderTransportPolicy.InsecureRemoteError);
+        }
+
         if (!Enum.IsDefined(request.Locality))
         {
             throw new ExternalProviderValidationException("An external connection declares an unsupported locality.");
@@ -325,6 +331,9 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             BaseUrl = baseUrl.AbsoluteUri,
             Locality = request.Locality,
             TimeoutSeconds = request.TimeoutSeconds,
+            // Kept only where it means something: a stale tick carried onto an https or loopback address would otherwise
+            // pre-approve plain http the next time the address changes back.
+            AllowInsecureHttp = request.AllowInsecureHttp && ExternalProviderTransportPolicy.IsInsecureRemote(baseUrl),
             Models = ValidateModels(request.Models)
         };
     }
@@ -373,12 +382,12 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
 
             // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server no probe can interrogate:
             // accepting this would put reasoning_effort on the wire for a model the catalog reports as non-reasoning, and dropping it would hide a form filled in wrong.
-            if (!model.SupportsReasoning && (model.SupportsReasoningEffort || !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort)))
+            if (model.SupportsReasoning != true && (model.SupportsReasoningEffort == true || !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort)))
             {
                 throw new ExternalProviderValidationException($"The external model '{wireId}' declares a reasoning effort but not reasoning support. Enable reasoning, or remove the effort settings.");
             }
 
-            if (!model.SupportsReasoningEffort && !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort))
+            if (model.SupportsReasoningEffort != true && !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort))
             {
                 throw new ExternalProviderValidationException(
                     $"The external model '{wireId}' declares a default reasoning effort but not graded effort support. Enable effort support, or remove the default.");
@@ -450,7 +459,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 return new ExternalProviderLoadResult.UnsupportedSchema(config.SchemaVersion);
             }
 
-            return new ExternalProviderLoadResult.Loaded(config);
+            return new ExternalProviderLoadResult.Loaded(config.SchemaVersion < 2 ? LiftSchema1(config) : config);
         }
         catch (JsonException exception)
         {
@@ -458,6 +467,36 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             ClearStoreFileBestEffort();
             return new ExternalProviderLoadResult.Missing();
         }
+    }
+
+    /// <summary>
+    ///     Lifts a schema-1 config in memory: schema 1 stored an unchecked capability as <see langword="false" />, which
+    ///     never meant "unsupported", so every <see langword="false" /> reads Unknown. The file is rewritten as the
+    ///     current schema on the next save.
+    /// </summary>
+    private static StoredExternalProviderConfig LiftSchema1(StoredExternalProviderConfig config)
+    {
+        static bool? Lift(bool? value) => value == true ? true : null;
+
+        return config with
+        {
+            Connections =
+            [
+                .. config.Connections.Select(connection => connection with
+                {
+                    Models =
+                    [
+                        .. connection.Models.Select(model => model with
+                        {
+                            SupportsTools = Lift(model.SupportsTools),
+                            SupportsVision = Lift(model.SupportsVision),
+                            SupportsReasoning = Lift(model.SupportsReasoning),
+                            SupportsReasoningEffort = Lift(model.SupportsReasoningEffort)
+                        })
+                    ]
+                })
+            ]
+        };
     }
 
     /// <summary>

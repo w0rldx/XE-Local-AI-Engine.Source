@@ -242,7 +242,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
 
         var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
-        await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
+        await ReportPreRunNoticesAsync(request, resolution, toolOffer, attachmentsAllowed, requestId, cancellationToken);
         if (!attachmentsAllowed &&
             conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
         {
@@ -618,11 +618,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
-    // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, then the
-    // cloud-egress withhold notices. Both ride the same turn-notice fan-out as the runner's own notices.
+    // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, the playbook
+    // and tools withhold notices, then the cloud-egress withhold notices. All ride the runner's turn-notice fan-out.
     private async Task ReportPreRunNoticesAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
-        bool offerTools,
+        ChatToolOffer toolOffer,
         bool attachmentsAllowed,
         Guid requestId,
         CancellationToken cancellationToken)
@@ -645,6 +645,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
         }
 
+        if (toolOffer.WithheldForCapability)
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
+        }
+
         if (attachmentsAllowed)
         {
             return;
@@ -659,7 +664,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         // KB grounding rides the SAME cloud-egress gate as attachments. Plain chat only — agent mode reaches the data
         // through the gated search_knowledge_base tool, withheld by the offer provider, so the notice is not duplicated.
-        if (request.UseKnowledgeBase && !offerTools)
+        if (request.UseKnowledgeBase && !toolOffer.OfferTools)
         {
             await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);
         }

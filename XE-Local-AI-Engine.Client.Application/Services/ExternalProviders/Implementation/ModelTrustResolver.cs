@@ -2,14 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
-///     Default <see cref="IModelTrustResolver" />: external ids resolve through the registry, everything else through
-///     the cloud factory's own routing snapshot — the same source the send path routes from, so classification and
-///     routing cannot diverge.
+///     Default <see cref="IModelTrustResolver" />: external ids resolve through the registry, a Codex id is cloud, and
+///     everything else asks the cloud factory's routing snapshot, the source the send path routes from.
 /// </summary>
 /// <remarks>
-///     Every failure mode of the external lookup collapses to <see cref="ModelTrustLocality.Unresolved" />, which the
+///     Every failure mode of either lookup collapses to <see cref="ModelTrustLocality.Unresolved" />, which the
 ///     gates treat as cloud. That is the point: a corrupt store, a connection deleted between the gate and the send, or
 ///     an id someone hand-edited into a saved agent must all withhold node-local data rather than assume the benign
 ///     case.
@@ -44,7 +44,7 @@ public sealed class ModelTrustResolver : IModelTrustResolver
 
         if (!ExternalModelId.HasExternalScheme(modelId))
         {
-            return _cloudFactory.IsCloudProviderSelected(modelId) ? ModelTrustLocality.Cloud : ModelTrustLocality.Local;
+            return ClassifyNonExternal(modelId);
         }
 
         var registration = await TryResolveExternalCoreAsync(modelId, cancellationToken);
@@ -60,6 +60,17 @@ public sealed class ModelTrustResolver : IModelTrustResolver
     }
 
     /// <inheritdoc />
+    public ModelTrustLocality Classify(string? modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return ModelTrustLocality.Local;
+        }
+
+        return ClassifyExternalCached(modelId) ?? ClassifyNonExternal(modelId);
+    }
+
+    /// <inheritdoc />
     public ModelTrustLocality? ClassifyExternalCached(string? modelId)
     {
         if (!ExternalModelId.HasExternalScheme(modelId))
@@ -72,6 +83,32 @@ public sealed class ModelTrustResolver : IModelTrustResolver
         return _registryCache.TryClassifyCached(modelId, out var registration)
             ? ToLocality(registration)
             : ModelTrustLocality.Unresolved;
+    }
+
+    // A Codex catalog id is cloud with or without a session: without one it has no local runtime either, so "local"
+    // would hand it node-local privileges on a send that can only fail. A routing-snapshot read failure fails closed.
+    private ModelTrustLocality ClassifyNonExternal(string modelId)
+    {
+        // A case variant such as `EXT:` is no registered id, and cloud routing matches names ignoring case: never call it local.
+        if (modelId.StartsWith(ExternalModelId.Scheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return ModelTrustLocality.Unresolved;
+        }
+
+        if (CodexModelCatalog.IsCodexModel(modelId))
+        {
+            return ModelTrustLocality.Cloud;
+        }
+
+        try
+        {
+            return _cloudFactory.IsCloudProviderSelected(modelId) ? ModelTrustLocality.Cloud : ModelTrustLocality.Local;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Cloud routing for '{ModelId}' could not be resolved; failing closed to cloud locality.", modelId);
+            return ModelTrustLocality.Unresolved;
+        }
     }
 
     private static ModelTrustLocality ToLocality(ExternalProviderModelRegistration? registration)

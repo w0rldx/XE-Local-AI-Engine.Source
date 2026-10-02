@@ -103,6 +103,63 @@ public sealed class McpExecutionBindingResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenAgenticCallerBindsAToolRequiringAgentOnANonToolModel_RejectsModelNotAvailable()
+    {
+        var harness = new Harness();
+        harness.Capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+        var definition = Definition("Agentic", AgentDefinitionSource.Manual, seedSlug: null, allowedToolNames: ["read_file"]);
+        harness.Register(definition, Tool("read_file", ToolCategory.ReadLocal));
+
+        var result = await harness.Resolver.ResolveAsync(AgenticRequest(definition), CancellationToken.None);
+
+        AssertEx.Null(result.Binding);
+        AssertEx.Equal(McpExecutionFailureCodes.ModelNotAvailable, result.FailureCode);
+        AssertEx.True(result.DisplayMessage.StartsWith("Cannot run:", StringComparison.Ordinal), "Every resolver refusal shares the prefix.");
+        AssertEx.Contains(result.DisplayMessage, "needs tool calling");
+        await harness.AgentResolver.DidNotReceive()
+                     .ResolveAsync(Arg.Any<Guid?>(),
+                         Arg.Any<string>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAgenticCallerBindsANoToolsAgentOnANonToolModel_StillBinds()
+    {
+        var harness = new Harness();
+        harness.Capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+        var definition = Definition("Plain", AgentDefinitionSource.Manual, seedSlug: null);
+        harness.Register(definition);
+
+        var result = await harness.Resolver.ResolveAsync(AgenticRequest(definition), CancellationToken.None);
+
+        AssertEx.NotNull(result.Binding);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenANonAgenticCallerBindsAToolListingAgentOnANonToolModel_StillBindsToolLess()
+    {
+        // A non-agentic binding carries no tools by design, so the agent's list sets no requirement there.
+        var harness = new Harness();
+        harness.Capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+        var definition = Definition("General", AgentDefinitionSource.Manual, seedSlug: null, allowedToolNames: ["read_file"]);
+        harness.Register(definition, Tool("read_file", ToolCategory.ReadLocal));
+
+        var result = await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString()
+        }, CancellationToken.None);
+
+        AssertEx.Empty(AssertEx.NotNull(result.Binding).AllowedTools);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAgenticOfferToolsGainDescriptions_KeepsTheStoredFingerprintByteIdentical()
     {
         // Offer tools once carried no description, so every stored agentic binding_fingerprint was computed over null. The offer now
@@ -410,6 +467,17 @@ public sealed class McpExecutionBindingResolverTests
         AssertEx.Equal(canonical.ParameterSchema, listFiles.ParameterSchema);
     }
 
+    private static McpExecutionBindingRequest AgenticRequest(AgentDefinitionRecord definition) =>
+        new()
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext
+            {
+                Scope = McpServerApiKeyScope.Agentic,
+                KeyPrefix = "xemcp_abc123"
+            }
+        };
+
     private static Task<McpExecutionBindingResolution> ResolveCoderAsync(Harness harness, AgentDefinitionRecord definition)
     {
         return harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
@@ -430,7 +498,8 @@ public sealed class McpExecutionBindingResolverTests
     private static AgentDefinitionRecord Definition(string name,
         AgentDefinitionSource source,
         string? seedSlug,
-        string? modelProfile = Model)
+        string? modelProfile = Model,
+        IReadOnlyList<string>? allowedToolNames = null)
     {
         return new AgentDefinitionRecord
         {
@@ -441,7 +510,7 @@ public sealed class McpExecutionBindingResolverTests
             ModelProfile = modelProfile,
             ReasoningEffort = null,
             Kind = AgentDefinitionKind.Single,
-            AllowedToolNames = [],
+            AllowedToolNames = allowedToolNames ?? [],
             ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
             OrchestrationTopologyJson = null,
             Version = 7,
@@ -473,7 +542,6 @@ public sealed class McpExecutionBindingResolverTests
 
     private sealed class Harness
     {
-        private readonly IAgentDefinitionResolver _agentResolver = Substitute.For<IAgentDefinitionResolver>();
         private readonly IAgentDefinitionService _definitions = Substitute.For<IAgentDefinitionService>();
         private readonly IGgufModelStore _models = Substitute.For<IGgufModelStore>();
 
@@ -481,12 +549,15 @@ public sealed class McpExecutionBindingResolverTests
         {
             _models.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
             IAgentInstructionProvider instructions = new FakeAgentInstructionProvider();
-            var capabilities = Substitute.For<IModelCapabilityResolver>();
-            capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
+            Capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             var nodeKey = Substitute.For<INodeSqliteKeyHolder>();
             nodeKey.Key.Returns(new ReadOnlyMemory<byte>(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray()));
-            Resolver = new McpExecutionBindingResolver(_definitions, _agentResolver, _models, instructions, capabilities, nodeKey);
+            Resolver = new McpExecutionBindingResolver(_definitions, AgentResolver, _models, instructions, Capabilities, nodeKey);
         }
+
+        public IAgentDefinitionResolver AgentResolver { get; } = Substitute.For<IAgentDefinitionResolver>();
+
+        public IModelCapabilityResolver Capabilities { get; } = Substitute.For<IModelCapabilityResolver>();
 
         public McpExecutionBindingResolver Resolver { get; }
 
@@ -497,7 +568,7 @@ public sealed class McpExecutionBindingResolverTests
                             Arg.Any<CancellationToken>())
                         .Returns(definition);
             var effectiveModel = definition.ModelProfile ?? Model;
-            _agentResolver.ResolveAsync(definition.Id,
+            AgentResolver.ResolveAsync(definition.Id,
                               effectiveModel,
                               Arg.Any<string?>(),
                               Arg.Any<bool>(),

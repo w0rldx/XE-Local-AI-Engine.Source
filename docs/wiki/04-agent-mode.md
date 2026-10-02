@@ -902,12 +902,33 @@ capability-gated offer. **Every other definition is intersected** down to its `A
 selected agent's offer is never widened beyond its allowed set, except by `ask_user` on an interactive turn
 and by the four work-session state tools inside a work-session step (§5.4). `spawn_subagent`, `run_python` and
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
-non-tool-capable model gets an **empty** offer before per-name gating. `web_search` and `web_fetch` join the
+non-tool-capable model gets an **empty** offer before per-name gating. In chat that empty offer is not silent: a turn
+that asked for tools gets one `ToolsWithheld` notice naming the model ([Chat](05-chat.md)). `web_search` and `web_fetch` join the
 *default* offer only while the node's Web access setting is on, never for a model outside the trust boundary; a
 bound agent gets them only through `AllowedToolNames`. Both are approval-flagged like `ask_user`: the flag is the
 pause the request consent and result review use, so unattended paths strip them, and orchestration participants and agentic MCP scope
 are never offered them ([Security and privacy](12-security-and-privacy.md), ADR 0017). See [Chat](05-chat.md) for how
 the selected agent surfaces as per-message attribution.
+
+**Derived model requirements and the unattended refusal** (`AgentModelRequirements`). A saved agent requires tool
+calling when its `AllowedToolNames` is non-empty or its `Kind` is `Orchestrator` (handoffs are tool calls); nothing is
+declared on the definition, so the requirement cannot drift from the tool list. Image input needs no requirement: chat
+withholds attachments and a graph node refuses them. When the effective model cannot call tools, each surface answers
+with the same sentence from `AgentModelRequirements.ToolRefusal`, before capacity or any invocation:
+
+| Surface | Outcome |
+|---|---|
+| Interactive chat (with or without a saved agent) | the turn runs, with one `ToolsWithheld` notice |
+| Scheduler `run-agent` | `ScheduledJobExecutionException` ([Scheduler](06-scheduler.md)) |
+| Graph Agent node bound to an agent | node run `ValidationFailed` ([Graph Workflows](21-graph-workflows.md)) |
+| Integration invoke | `trigger-unavailable` (ADR 0008's closed vocabulary); EVERY integration run requires tools, because its output arrives through `emit_output` |
+| Inbound MCP saved-agent run | `model_not_available`, only when the binding carries tools (an agentic caller or the seeded Coder); a non-agentic binding is tool-less by design |
+| Work sessions | unchanged: `WorkSessionToolGate` already refuses |
+
+Not checked: Dev Workflows' agent executor, and a graph Agent node with no bound agent (the default persona requires
+nothing). The graph editor warns when a node's model override cannot call tools for a tool-using agent; the agent
+editor's existing tool-capability and orchestration warnings cover its side. The "node default" choice is judged only
+by the server.
 
 #### The resolved runtime projection
 

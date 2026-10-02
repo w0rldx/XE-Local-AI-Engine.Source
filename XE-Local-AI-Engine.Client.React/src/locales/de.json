@@ -264,7 +264,8 @@
 			"effortDispatched": "Reasoning-Aufwand aufgelöst",
 			"playbookWithheld": "Playbook zurückgehalten",
 			"emptyAnswer": "Keine Antwort",
-			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten"
+			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten",
+			"toolsWithheld": "Keine Tools angeboten"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"webReview": {
@@ -2919,6 +2920,7 @@
 				"edit": "Bearbeiten",
 				"empty": "Auf diesem Knoten ist noch kein externer Anbieter registriert.",
 				"keyStored": "Schlüssel gespeichert",
+				"insecureTransport": "Unverschlüsseltes HTTP",
 				"modelCount_one": "{{count}} registriertes Modell",
 				"modelCount_other": "{{count}} registrierte Modelle"
 			},
@@ -2952,6 +2954,8 @@
 				"keepApiKey": "Gespeicherten Schlüssel behalten",
 				"timeoutLabel": "Zeitlimit (Sekunden)",
 				"timeoutHint": "Leer nutzt den Standard des Knotens. Zwischen 5 und 3600 Sekunden.",
+				"allowInsecureHttpLabel": "Unsicheres HTTP erlauben",
+				"allowInsecureHttpHint": "Sendet API-Schlüssel und Prompts unverschlüsselt. Nötig für http zu einem anderen Rechner; besser https.",
 				"save": "Verbindung speichern",
 				"delete": "Verbindung löschen",
 				"cancel": "Abbrechen"
@@ -2971,6 +2975,9 @@
 				"supportsVision": "Bilder",
 				"supportsReasoning": "Reasoning",
 				"supportsReasoningEffort": "Reasoning-Aufwand",
+				"answerYes": "Ja",
+				"answerNo": "Nein",
+				"answerUnknown": "Unbekannt",
 				"defaultEffortLabel": "Standard-Reasoning-Aufwand",
 				"effortUnset": "Server-Standard",
 				"effortOptions": {
@@ -2982,7 +2989,7 @@
 					"high": "Hoch",
 					"xhigh": "Sehr hoch"
 				},
-				"toolsHelp": "Mit dieser Angabe gilt das Modell knotenweit als tool-fähig: Es kommt in die Liste tool-fähiger Modelle des Knotens, die auch die Agenten-Seite liest."
+				"toolsHelp": "Nur Ja gilt als Unterstützung; Unbekannt wird wie Nein behandelt. Mit Ja bei Tools gilt das Modell knotenweit als tool-fähig: Es kommt in die Liste tool-fähiger Modelle des Knotens, die auch die Agenten-Seite liest."
 			},
 			"probe": {
 				"test": "Verbindung testen",
@@ -6771,6 +6778,7 @@
 				"responseJsonSchema": "JSON-Schema der Antwort",
 				"includeUpstreamOutputs": "Ausgaben vorgelagerter Knoten mitgeben",
 				"includeUpstreamOutputsHelp": "Übergibt diesem Agenten zusätzlich zur Laufeingabe, was die Knoten davor erzeugt haben.",
+				"toolsUnavailableWarning": "Dieser Agent nutzt Tools, aber das ausgewählte Modell ist nicht tool-fähig. Der Knoten wird beim Ausführen des Workflows abgelehnt. Wähle ein tool-fähiges Modell.",
 				"tool": "Werkzeug",
 				"allowedUrls": "Erlaubte Links",
 				"allowedUrlsHelp": "web_fetch liest nur Seiten unter diesen Links: gleiches Schema, gleicher Host und Port und ein Pfad auf oder unter dem Pfad des Links. Private und lokale Adressen bleiben gesperrt, auch wenn sie aufgeführt sind.",

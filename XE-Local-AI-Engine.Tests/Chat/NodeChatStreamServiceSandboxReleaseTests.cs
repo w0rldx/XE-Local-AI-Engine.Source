@@ -200,9 +200,7 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
         return new ModelCapabilityResolver(classification,
             providerResolver,
             gguf,
-            Substitute.For<IActiveCloudChatClientFactory>(),
-            new FakeModelTrustResolver(),
-            NullLogger<ModelCapabilityResolver>.Instance);
+            new FakeModelTrustResolver());
     }
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId, Guid assistantMessageId, Guid requestId)

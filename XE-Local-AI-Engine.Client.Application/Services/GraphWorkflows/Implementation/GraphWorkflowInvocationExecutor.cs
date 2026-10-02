@@ -335,9 +335,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // 1. The node's agent. A node naming one that has since been deleted is a configuration error, not a run
             //    that should be re-attempted; a node naming none takes the DEFAULT persona (step 5).
             string? pinnedModel = null;
+            AgentDefinitionRecord? definition = null;
             if (agentConfig.AgentDefinitionId is { } agentDefinitionId)
             {
-                var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, cancellationToken);
+                definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, cancellationToken);
                 if (definition is null)
                 {
                     return Invalid("The agent this node runs could not be found. It may have been deleted.");
@@ -366,6 +367,16 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     runId,
                     node.NodeKey);
                 return Invalid("Graph workflow agent nodes are restricted to node-local models. This node's effective model is a cloud model, so it will not run unattended.");
+            }
+
+            // The capability gate, for a bound agent only: the default persona lists no tools and requires none.
+            if (definition is not null
+                && AgentModelRequirements.ToolRefusal(definition.Name,
+                       effectiveModel,
+                       capabilities.SupportsTools,
+                       AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind)) is { } toolRefusal)
+            {
+                return Invalid(toolRefusal);
             }
 
             var attachments = await AttachmentsAsync(services, runId, node, agentConfig.IncludeAttachments, inputJson, effectiveModel, capabilities.SupportsVision, cancellationToken);

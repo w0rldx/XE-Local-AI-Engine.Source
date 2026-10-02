@@ -35138,7 +35138,9 @@
           "displayName",
           "baseUrl",
           "locality",
-          "hasApiKey"
+          "hasApiKey",
+          "allowInsecureHttp",
+          "insecureTransport"
         ],
         "properties": {
           "id": {
@@ -35160,6 +35162,12 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "allowInsecureHttp": {
+            "type": "boolean"
+          },
+          "insecureTransport": {
+            "type": "boolean"
           },
           "models": {
             "type": "array",
@@ -35215,16 +35223,20 @@
             "nullable": true
           },
           "supportsTools": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsVision": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsReasoning": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsReasoningEffort": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "defaultReasoningEffort": {
             "type": "string",
@@ -35264,6 +35276,9 @@
           "apiKey": {
             "type": "string",
             "nullable": true
+          },
+          "allowInsecureHttp": {
+            "type": "boolean"
           }
         }
       },
@@ -35328,6 +35343,9 @@
             "format": "int32",
             "nullable": true
           },
+          "allowInsecureHttp": {
+            "type": "boolean"
+          },
           "models": {
             "type": "array",
             "nullable": false,
@@ -35359,16 +35377,20 @@
             "nullable": true
           },
           "supportsTools": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsVision": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsReasoning": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "supportsReasoningEffort": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "defaultReasoningEffort": {
             "type": "string",

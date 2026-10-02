@@ -28,7 +28,8 @@ internal static class ChatToolOfferResolver
             return new ChatToolOffer
             {
                 OfferTools = false,
-                AllowedTools = null
+                AllowedTools = null,
+                WithheldForCapability = useLocalTools && enableTools && !resolution.SupportsTools
             };
         }
 

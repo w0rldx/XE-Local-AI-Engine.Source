@@ -57,6 +57,11 @@ export function ExternalProviderConnectionList({ connections, disabled, onEdit, 
 												? t("pages.externalProviders.locality.localBadge", "Declared local")
 												: t("pages.externalProviders.locality.cloudBadge", "Declared cloud")}
 										</Badge>
+										{connection.insecureTransport && !connection.allowInsecureHttp ? (
+											<Badge size="sm" variant="light" color="red" data-testid={`external-provider-insecure-${connection.id}`}>
+												{t("pages.externalProviders.list.insecureTransport", "Unencrypted HTTP")}
+											</Badge>
+										) : null}
 										{connection.hasApiKey ? (
 											<Badge size="sm" variant="light" color="blue">
 												{t("pages.externalProviders.list.keyStored", "Key stored")}

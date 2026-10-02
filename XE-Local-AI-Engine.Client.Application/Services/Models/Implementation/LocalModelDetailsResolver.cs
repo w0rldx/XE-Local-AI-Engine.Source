@@ -4,7 +4,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
@@ -47,15 +46,8 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
 
     public async Task<LocalModelDetailsResolution> ResolveAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        // A Codex cloud model id (e.g. gpt-5.5) is NOT a local Ollama model: probing the local runtime's /api/show for it 500s. Model details
-        // (context window, template, license) are a local-runtime concept, so a cloud id has no local details — a clean 404, not a 500.
-        if (CodexModelCatalog.IsCodexModel(modelName))
-        {
-            return new LocalModelDetailsResolution.NoLocalDetails();
-        }
-
-        // An external OpenAI-compatible model has no local runtime to probe either, but unlike the cloud ids above it has ONE detail the chat
-        // context meter needs: the operator-declared context window. Template, system prompt and license stay null; a gone registration 404s.
+        // An external OpenAI-compatible model has no local runtime to probe, but it has ONE detail the chat context meter needs: the
+        // operator-declared context window. Template, system prompt and license stay null; a gone registration 404s.
         if (ExternalModelId.HasExternalScheme(modelName))
         {
             var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, cancellationToken);
@@ -64,9 +56,9 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
                 : new LocalModelDetailsResolution.External(registration);
         }
 
-        // An Azure Foundry deployment id is likewise NOT a local Ollama model: context window, template and license are local-runtime
-        // concepts an Azure deployment has no equivalent of, and probing /api/show would 500. No local details, matching the Codex branch.
-        if (await _cloudModelResolver.IsAzureFoundryDeploymentAsync(modelName, cancellationToken))
+        // A cloud id (Codex, an Azure Foundry deployment) is NOT a local model: context window, template and license are local-runtime
+        // concepts, and probing /api/show for it 500s. A clean 404, not a 500.
+        if (await _cloudModelResolver.IsCloudModelAsync(modelName, cancellationToken))
         {
             return new LocalModelDetailsResolution.NoLocalDetails();
         }

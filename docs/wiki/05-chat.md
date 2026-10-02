@@ -57,7 +57,7 @@ orchestrates, and each step has one owner:
 |---|---|
 | Per-turn capabilities, effective agent, orchestration spec (shared with regenerate) | `ChatTurnResolver` |
 | Thinking/tools/locality per model (shared with orchestration participants) | `IModelCapabilityResolver` → `ModelCapabilityResolver` |
-| Cloud-vs-local routing decision | `CloudRoutingClassifier` |
+| Does this model leave the node (trust, not routing) | `IModelTrustResolver` → `ModelTrustResolver` |
 | Which tools the turn offers | `ChatToolOfferResolver` |
 | Synthetic attachment, image, knowledge and agent-hint messages | `IChatTurnContextBuilder` → `ChatTurnContextBuilder` |
 | The ordered history the turn sends (selected path, compaction, tool history) | `ConversationContextBuilder.Build` |
@@ -127,7 +127,7 @@ Design note (`LocalDefaultChatModelResolver.cs`): this reads **only** `IModelCla
 - A non-Ollama local model (a GGUF) → capabilities detected **offline from the chat template** via `IGgufModelCapabilityResolver` (no Ollama probe, no network — critical in desktop mode where there is no Ollama daemon).
 - An Ollama-routed model → `IModelClassificationService.ClassifyAsync` (cache-first).
 - An external OpenAI-compatible model (`ext:` id) → the operator's declared capabilities and locality, never a probe; an unresolved one is cloud and not capable.
-- A model the active cloud provider routes (`CloudRoutingClassifier`, e.g. Azure Foundry) → the declared matrix; a routing read failure fails closed to cloud and not capable.
+- A model the trust resolver classifies cloud past the Codex branch (an Azure Foundry deployment the routing snapshot selects) → the declared matrix; an `Unresolved` answer (a routing read failure) fails closed to cloud and not capable.
 - Any miss → NOT-capable for both: omits `think` (avoids the Ollama HTTP 400 on a non-thinking model) and withholds tools, while still allowing a plain chat.
 
 ## Per-message agent attribution
@@ -172,6 +172,12 @@ render-only and never replayed. The send reads the conversation through the turn
 are node-local data, so they ride the same `KnowledgeBase:AllowCloudModelAccess` gate as attachments: when the turn
 reaches a cloud model without that opt-in, the history is withheld and a `ToolHistoryWithheld` turn notice says so;
 the turn still runs.
+
+When the client asks for tools and the node tool engine is on, but the effective model does not declare tool support,
+the turn runs without tools and a `ToolsWithheld` turn notice names the model, on send and on regenerate alike
+(`ChatToolOffer.WithheldForCapability`, `ChatTurnResolution.ToolsWithheldNotice`). An external model whose tool
+support is Unknown reads as unsupported here. Unlike `ToolsFiltered`, nothing is callable through `list_tools`. The
+notice stays silent when the client did not ask or node tools are off.
 
 When a turn's last model round (the one after its last tool result, or the only round) produces neither text nor a
 tool call, the runner ends the turn with an `EmptyAnswer` notice ("The model stopped without an answer.") carrying

@@ -79,6 +79,17 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             };
         }
 
+        // The save path's HTTPS rule, before any request: a probe must not send the key over a channel the save would refuse.
+        // Only the request's own opt-in counts: the editor sends its current choice, and a stored consent must not revive a withdrawn one.
+        if (ExternalProviderTransportPolicy.IsInsecureRemote(baseAddress) && !query.AllowInsecureHttp)
+        {
+            return new ExternalProviderProbeResult
+            {
+                Outcome = ExternalProviderProbeOutcome.InvalidBaseUrl,
+                Error = ExternalProviderTransportPolicy.InsecureRemoteError
+            };
+        }
+
         // Blank means "use what is stored" (see ExternalProviderProbeQuery), but ONLY for the origin the stored key belongs to: forwarding it
         // to whatever address the caller typed would make "Test connection" a key-exfiltration primitive. A moved endpoint probes keyless.
         var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;

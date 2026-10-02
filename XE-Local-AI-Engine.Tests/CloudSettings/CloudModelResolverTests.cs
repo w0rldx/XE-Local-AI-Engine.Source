@@ -5,12 +5,15 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The single "is this a cloud model?" authority the local-model list/details/select endpoints share. Every read is
-///     best-effort — a failing credential store must degrade to "not cloud" / "no connection" so local routing still
-///     runs — but a genuine cancellation must still propagate.
+///     The "is this a cloud model?" answer the local-model list/details/select endpoints share. Cloud-ness delegates to
+///     the trust resolver and fails CLOSED; the Azure deployment match and connection reads stay best-effort ("no
+///     deployment" / "no connection"), but a genuine cancellation must still propagate.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CloudModelResolverTests
@@ -18,7 +21,9 @@ public sealed class CloudModelResolverTests
     [Test]
     public async Task StoredDeploymentName_MatchesCaseInsensitively()
     {
-        var resolver = CreateResolver(WithDeployments("Azure-GPT"));
+        var routing = Substitute.For<IActiveCloudChatClientFactory>();
+        _ = routing.IsCloudProviderSelected("azure-gpt").Returns(true);
+        var resolver = CreateResolver(WithDeployments("Azure-GPT"), routing);
 
         AssertEx.True(await resolver.IsAzureFoundryDeploymentAsync("azure-gpt"));
         AssertEx.True(await resolver.IsCloudModelAsync("azure-gpt"));
@@ -47,15 +52,25 @@ public sealed class CloudModelResolverTests
     }
 
     [Test]
-    public async Task FailingCredentialStore_DegradesToNotCloudAndNoConnection()
+    public async Task FailingCredentialStore_DegradesToNoDeploymentAndNoConnection()
     {
         var store = Substitute.For<ICloudCredentialStore>();
         store.LoadConfigAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("decrypt failed"));
         var resolver = CreateResolver(store);
 
         AssertEx.False(await resolver.IsAzureFoundryDeploymentAsync("azure-gpt"));
-        AssertEx.False(await resolver.IsCloudModelAsync("azure-gpt"));
         AssertEx.Null(await resolver.ResolveAzureFoundryConnectionAsync());
+    }
+
+    [Test]
+    public async Task FailingRoutingSnapshot_FailsClosedToCloud()
+    {
+        // This answer feeds egress cues and gates; before the trust resolver owned it, a throwing store read "not cloud".
+        var routing = Substitute.For<IActiveCloudChatClientFactory>();
+        _ = routing.IsCloudProviderSelected("azure-gpt").Returns(_ => throw new InvalidOperationException("decrypt failed"));
+        var resolver = CreateResolver(Substitute.For<ICloudCredentialStore>(), routing);
+
+        AssertEx.True(await resolver.IsCloudModelAsync("azure-gpt"));
     }
 
     [Test]
@@ -101,8 +116,12 @@ public sealed class CloudModelResolverTests
         return store;
     }
 
-    private static CloudModelResolver CreateResolver(ICloudCredentialStore store)
+    private static CloudModelResolver CreateResolver(ICloudCredentialStore store, IActiveCloudChatClientFactory? routing = null)
     {
-        return new CloudModelResolver(store, new FakeModelTrustResolver(), NullLogger<CloudModelResolver>.Instance);
+        var trust = new ModelTrustResolver(new FakeExternalProviderRegistry(),
+            Substitute.For<IExternalProviderRegistryCache>(),
+            routing ?? Substitute.For<IActiveCloudChatClientFactory>(),
+            NullLogger<ModelTrustResolver>.Instance);
+        return new CloudModelResolver(store, trust, NullLogger<CloudModelResolver>.Instance);
     }
 }

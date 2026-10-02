@@ -11,4 +11,10 @@ internal sealed record ChatToolOffer
     public required bool OfferTools { get; init; }
 
     public required IReadOnlyList<AllowedToolDto>? AllowedTools { get; init; }
+
+    /// <summary>
+    ///     The client asked for tools and the node tool engine is on, but the model does not declare tool support: the
+    ///     one case that earns a <c>ToolsWithheld</c> notice rather than a silent tool-less turn.
+    /// </summary>
+    public bool WithheldForCapability { get; init; }
 }

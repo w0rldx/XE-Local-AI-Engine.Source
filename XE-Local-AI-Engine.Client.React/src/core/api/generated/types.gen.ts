@@ -2748,6 +2748,8 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCon
 	locality: string;
 	hasApiKey: boolean;
 	timeoutSeconds?: number | null;
+	allowInsecureHttp: boolean;
+	insecureTransport: boolean;
 	models?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse>;
 };
 
@@ -2761,10 +2763,10 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderMod
 	modelId: string;
 	displayName?: string | null;
 	contextLength?: number | null;
-	supportsTools: boolean;
-	supportsVision: boolean;
-	supportsReasoning: boolean;
-	supportsReasoningEffort: boolean;
+	supportsTools: boolean | null;
+	supportsVision: boolean | null;
+	supportsReasoning: boolean | null;
+	supportsReasoningEffort: boolean | null;
 	defaultReasoningEffort?: string | null;
 };
 
@@ -2777,6 +2779,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderPro
 	connectionId?: string | null;
 	baseUrl?: string | null;
 	apiKey?: string | null;
+	allowInsecureHttp?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = {
@@ -2796,6 +2799,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	apiKey?: string | null;
 	clearApiKey?: boolean;
 	timeoutSeconds?: number | null;
+	allowInsecureHttp?: boolean;
 	models: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest>;
 	expectedRevision?: string | null;
 };
@@ -2804,10 +2808,10 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	wireId?: string | null;
 	displayName?: string | null;
 	contextLength?: number | null;
-	supportsTools?: boolean;
-	supportsVision?: boolean;
-	supportsReasoning?: boolean;
-	supportsReasoningEffort?: boolean;
+	supportsTools?: boolean | null;
+	supportsVision?: boolean | null;
+	supportsReasoning?: boolean | null;
+	supportsReasoningEffort?: boolean | null;
 	defaultReasoningEffort?: string | null;
 };
 

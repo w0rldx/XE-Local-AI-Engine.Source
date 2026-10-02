@@ -1,7 +1,8 @@
 // The Agent node's body. Split out of `GraphWorkflowNodeConfigPanel` for size only: it owns no state, and the panel
 // still holds the touched-field bookkeeping that decides when a Zod message is shown.
 
-import { Group, Select, Switch, Textarea } from "@mantine/core";
+import { Alert, Group, Select, Switch, Textarea } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
@@ -9,6 +10,19 @@ import { withCurrentValue } from "@/features/graphWorkflows/components/config/Gr
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 
 type AgentNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Agent" }>;
+
+/** `requiresTools` mirrors the server's `AgentModelRequirements.RequiresTools`: the agent lists tools, or orchestrates. */
+export interface GraphWorkflowAgentOption {
+	readonly value: string;
+	readonly label: string;
+	readonly requiresTools?: boolean;
+}
+
+export interface GraphWorkflowModelOption {
+	readonly value: string;
+	readonly label: string;
+	readonly isToolCapable?: boolean;
+}
 
 /**
  * `GraphWorkflowGraph.cs`'s `ReasoningEfforts`, verbatim. The graph parser refuses anything outside the set at save
@@ -22,8 +36,8 @@ export interface GraphWorkflowAgentConfigFormProps {
 	readonly onChange: (patch: Partial<AgentNodeData>) => void;
 	readonly errorFor: (field: string) => string | undefined;
 	readonly onTouch: (field: string) => void;
-	readonly agentOptions: readonly { readonly value: string; readonly label: string }[];
-	readonly modelOptions: readonly { readonly value: string; readonly label: string }[];
+	readonly agentOptions: readonly GraphWorkflowAgentOption[];
+	readonly modelOptions: readonly GraphWorkflowModelOption[];
 	readonly readOnly?: boolean;
 }
 
@@ -37,6 +51,11 @@ export function GraphWorkflowAgentConfigForm({
 	readOnly = false,
 }: GraphWorkflowAgentConfigFormProps) {
 	const { t } = useTranslation();
+	// Only a node model override is judged here: "the agent's own model" is resolved server-side, which refuses the run anyway.
+	const toolsUnavailable =
+		node.model !== null &&
+		agentOptions.find((option) => option.value === node.agentDefinitionId)?.requiresTools === true &&
+		modelOptions.find((option) => option.value === node.model)?.isToolCapable === false;
 
 	return (
 		<>
@@ -89,6 +108,14 @@ export function GraphWorkflowAgentConfigForm({
 					data-testid="gw-node-config-effort"
 				/>
 			</Group>
+			{toolsUnavailable ? (
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="gw-node-config-tools-warning">
+					{t(
+						"pages.graphWorkflows.config.toolsUnavailableWarning",
+						"This agent uses tools, but the selected model cannot call them. The node will be refused when the workflow runs. Pick a tool-capable model.",
+					)}
+				</Alert>
+			) : null}
 			<GraphWorkflowJsonField
 				label={t("pages.graphWorkflows.config.responseJsonSchema", "Response JSON schema")}
 				value={node.responseJsonSchema}

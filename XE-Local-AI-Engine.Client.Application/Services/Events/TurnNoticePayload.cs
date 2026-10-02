@@ -114,5 +114,16 @@ public enum TurnNoticeKind
     ///     <c>AllowCloudModelAccess</c> egress gate as attachments. <see cref="TurnNoticePayload.Detail" />
     ///     names the model.
     /// </remarks>
-    ToolHistoryWithheld = 10
+    ToolHistoryWithheld = 10,
+
+    /// <summary>
+    ///     The client asked for tools and the node tool engine is on, but the effective model does not declare tool
+    ///     support, so the turn runs without tools.
+    /// </summary>
+    /// <remarks>
+    ///     Unlike <see cref="ToolsFiltered" /> nothing is callable through <c>list_tools</c>: no tool is offered at all.
+    ///     An external model whose tool support is Unknown reads as unsupported here. <see cref="TurnNoticePayload.Detail" />
+    ///     names the effective model.
+    /// </remarks>
+    ToolsWithheld = 11
 }

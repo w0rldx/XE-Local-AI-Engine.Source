@@ -249,7 +249,7 @@ public sealed class LocalModelEndpointTests
         // routing reaches the Ollama /api/show probe, which 500s for an id the daemon has never heard of.
         var modelService = Substitute.For<IOllamaModelService>();
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
-        cloudModelResolver.IsAzureFoundryDeploymentAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(true);
+        cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
         await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
         using var client = context.Factory.CreateClient();
 

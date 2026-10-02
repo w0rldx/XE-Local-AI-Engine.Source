@@ -100,6 +100,30 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
+    public async Task Run_WhenTheEffectiveModelCannotCallTools_RefusesBeforeTheLeaseAndCapacity()
+    {
+        // Every integration run needs tool calling, even for an agent that lists none: its output arrives through emit_output.
+        using var harness = new Harness();
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
+        AssertEx.Equal(IntegrationFailureCategories.TriggerUnavailable, row.FailureCategory, "ADR 0008's vocabulary is closed; a capability mismatch is a configuration refusal.");
+        AssertEx.Equal("The trigger's agent runs on a model that is not known to support tool calling, which every integration run needs; pick a tool-capable model.",
+            row.FailureSummary,
+            "The summary reaches the API-key caller, so it is a fixed sentence.");
+        AssertEx.False(row.FailureSummary?.Contains("Sensor agent", StringComparison.Ordinal) == true, "The agent name is operator config.");
+        AssertEx.False(harness.LeaseAcquired, "The refusal must come before the lease.");
+        AssertEx.Equal(expected: 0, harness.RunCount);
+        await harness.Dispatcher.DidNotReceive().ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>());
+        await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Run_WhenTheTriggerIsDisabled_RecordsTriggerUnavailable()
     {
         using var harness = new Harness();

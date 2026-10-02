@@ -51,6 +51,16 @@ public sealed class ExternalProviderRegistryTests
     }
 
     [Test]
+    public async Task TryResolveAsync_AnUnknownCapability_ReadsAsUnsupported()
+    {
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"], supportsTools: null)));
+
+        // Unknown fails closed exactly like No: past the store, a capability is declared or it is absent.
+        var resolved = AssertEx.NotNull(await registry.TryResolveAsync("ext:box-a/qwen3", CancellationToken.None));
+        AssertEx.False(resolved.Model.SupportsTools);
+    }
+
+    [Test]
     public async Task TryResolveAsync_WithAMalformedId_ReturnsNull()
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"])));
@@ -183,7 +193,7 @@ public sealed class ExternalProviderRegistryTests
         IReadOnlyList<string>? models = null,
         string? apiKey = null,
         ExternalProviderLocality locality = ExternalProviderLocality.Local,
-        bool supportsTools = false,
+        bool? supportsTools = false,
         int? contextLength = null,
         string baseUrl = "http://127.0.0.1:18099/v1/")
     {

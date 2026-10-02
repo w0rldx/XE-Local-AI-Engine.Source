@@ -17,7 +17,11 @@ import type { ZodType } from "zod";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { GraphWorkflowAgentConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
+import {
+	GraphWorkflowAgentConfigForm,
+	type GraphWorkflowAgentOption,
+	type GraphWorkflowModelOption,
+} from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
 import { GraphWorkflowDecisionModelConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowDecisionModelConfigForm";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
 import { GraphWorkflowLlmCallConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowLlmCallConfigForm";
@@ -62,8 +66,8 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly onRename: (to: string) => "ok" | "collision" | "invalid";
 	readonly onRemove: () => void;
 	readonly tools: readonly GraphWorkflowToolResponse[];
-	readonly agentOptions: readonly { readonly value: string; readonly label: string }[];
-	readonly modelOptions: readonly { readonly value: string; readonly label: string }[];
+	readonly agentOptions: readonly GraphWorkflowAgentOption[];
+	readonly modelOptions: readonly GraphWorkflowModelOption[];
 	readonly llmModelOptions?: readonly { readonly value: string; readonly label: string }[];
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;

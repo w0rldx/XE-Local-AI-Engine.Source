@@ -142,6 +142,7 @@ describe("ChatNoticeRow", () => {
 	it.each([
 		["EmptyAnswer", "No answer", ".tabler-icon-message-off"],
 		["ToolHistoryWithheld", "Tool history withheld", ".tabler-icon-history-off"],
+		["ToolsWithheld", "Tools not offered", ".tabler-icon-tools-off"],
 	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
 		const { container } = renderWithProviders(
 			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,

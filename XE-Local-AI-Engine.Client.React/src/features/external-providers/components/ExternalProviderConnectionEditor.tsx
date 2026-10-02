@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Group, PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Group, PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconArrowBackUp, IconDeviceFloppy, IconTrash, IconX } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,10 +10,11 @@ import type {
 	ExternalProviderFormAction,
 	ExternalProviderProbeState,
 } from "@/features/external-providers/models/ExternalProviderFormState";
-import type {
-	ExternalProviderFormErrors,
-	ExternalProviderFormValues,
-	ExternalProviderLocality,
+import {
+	type ExternalProviderFormErrors,
+	type ExternalProviderFormValues,
+	type ExternalProviderLocality,
+	isPlainHttpUrl,
 } from "@/features/external-providers/models/ExternalProviderModel";
 
 interface ExternalProviderConnectionEditorProps {
@@ -103,6 +104,19 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 				onBlur={() => dispatch({ type: "touchField", field: "baseUrl" })}
 				error={visibleErrors.baseUrl}
 			/>
+
+			{isPlainHttpUrl(values.baseUrl) ? (
+				<Checkbox
+					label={t("pages.externalProviders.editor.allowInsecureHttpLabel", "Allow insecure HTTP")}
+					description={t("pages.externalProviders.editor.allowInsecureHttpHint")}
+					checked={values.allowInsecureHttp}
+					data-testid="external-provider-allow-insecure-http"
+					onChange={(event) => {
+						const value = event.currentTarget.checked;
+						dispatch({ type: "setAllowInsecureHttp", value });
+					}}
+				/>
+			) : null}
 
 			<Stack gap={4}>
 				<Text size="sm" fw={500}>

@@ -1207,6 +1207,96 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    [Arguments(true, true, true)]
+    [Arguments(false, true, false)]
+    [Arguments(true, false, false)]
+    public async Task RegenerateAsync_OnANonToolModel_SaysToolsWereWithheldOnlyWhenToolsWereAsked(bool useLocalTools, bool nodeToolsEnabled, bool expectNotice)
+    {
+        // Send/regenerate parity for ToolsWithheld: the notice fires only when the client asked AND the node engine is on.
+        await using var provider = await BuildProviderAsync($"regeneration-tools-withheld-{useLocalTools}-{nodeToolsEnabled}.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Tools withheld regen",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 11
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llamacpp");
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(providerResolver: providerResolver,
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(nodeToolsEnabled).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}")),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: useLocalTools))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.Empty(runner.LastAllowedTools);
+        AssertEx.Equal(expectNotice ? 1 : 0,
+            events.Count(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolsWithheld)));
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenToolLifecycleReported_StreamsToolCallEvents()
     {
         await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite");
@@ -3163,9 +3253,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
-            Substitute.For<IActiveCloudChatClientFactory>(),
-            new FakeModelTrustResolver(),
-            NullLogger<ModelCapabilityResolver>.Instance);
+            new FakeModelTrustResolver());
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their

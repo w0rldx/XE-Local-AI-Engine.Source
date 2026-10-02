@@ -81,4 +81,19 @@ internal sealed class ChatTurnResolution
             }
             : null;
     }
+
+    /// <summary>
+    ///     The ToolsWithheld notice for a turn whose client asked for tools on a model that does not declare tool
+    ///     support. Shared by the send and regenerate paths so the two cannot drift; each decides WHETHER to emit it.
+    /// </summary>
+    public TurnNoticePayload ToolsWithheldNotice(Guid invocationId)
+    {
+        return new TurnNoticePayload
+        {
+            InvocationId = invocationId,
+            Kind = TurnNoticeKind.ToolsWithheld,
+            Message = "Tools were not offered because this model does not declare tool support. Pick a tool-capable model to use tools.",
+            Detail = EffectiveModel
+        };
+    }
 }

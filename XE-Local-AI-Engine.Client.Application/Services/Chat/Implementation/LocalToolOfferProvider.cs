@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -314,7 +313,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // Provider-locality gate: node-local-data tools are withheld from a cloud model unless opted in; the trust checks catch
         // a pinned cloud id on a locally-routed turn. Both node switches are read per offer, so a save applies to the next turn.
         var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
-        if (!_runtimeSettings.GetAllowCloudModelAccess() && IsOutsideTrustBoundary(activeModelId, isCloudModel))
+        if (!_runtimeSettings.GetAllowCloudModelAccess() && LeavesNode(activeModelId, isCloudModel))
         {
             baseOffer = _builtinAllToolsNoLocalData;
         }
@@ -340,7 +339,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // Custom tools merge ONLY in the tool-capable branch and ONLY for a node-local model: a custom command or fetch
         // tool reaches local data and the host, so a cloud model never gets one, whatever the knowledge opt-in says.
-        if (!IsToolCapable(activeModelId) || IsOutsideTrustBoundary(activeModelId, isCloudModel))
+        if (!IsToolCapable(activeModelId) || LeavesNode(activeModelId, isCloudModel))
         {
             return baseOffer;
         }
@@ -434,7 +433,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel)
     {
-        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_spawnOfferDto];
+        return LeavesNode(activeModelId, isCloudModel) ? [] : [_spawnOfferDto];
     }
 
     /// <summary>
@@ -448,7 +447,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> ComputeOffer(string? activeModelId, bool isCloudModel)
     {
-        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
+        return LeavesNode(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
     }
 
     /// <summary>
@@ -462,27 +461,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> AgentHomeOffer(string? activeModelId, bool isCloudModel)
     {
-        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_agentHomeOfferDto];
+        return LeavesNode(activeModelId, isCloudModel) ? [] : [_agentHomeOfferDto];
     }
 
     /// <summary>
     ///     Whether prompts for <paramref name="activeModelId" /> leave the node, for the profile-pool tool gates above.
     /// </summary>
     /// <remarks>
-    ///     The formula is the turn's own cloud flag, OR a Codex-pinned id, OR an external id whose declared locality is
-    ///     anything other than Local. That last clause is deliberately not "is declared Cloud": an unreadable
-    ///     registration resolves UNRESOLVED, and only a positively resolved local declaration earns local privileges.
-    ///     It is synchronous by necessity — the offer seam has no async boundary — and answers from the registry's
-    ///     cached generation, whose only unprimed window is before the node has finished booting.
+    ///     The turn's own cloud flag, OR anything but a positive Local from <see cref="IModelTrustResolver.Classify" />,
+    ///     so an unresolved id earns no local privileges. Synchronous by necessity: the offer seam has no async boundary.
     /// </remarks>
-    private bool IsOutsideTrustBoundary(string? activeModelId, bool isCloudModel)
+    private bool LeavesNode(string? activeModelId, bool isCloudModel)
     {
-        if (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId))
-        {
-            return true;
-        }
-
-        return _modelTrustResolver.ClassifyExternalCached(activeModelId) is { } trust && trust != ModelTrustLocality.Local;
+        return isCloudModel || _modelTrustResolver.Classify(activeModelId) != ModelTrustLocality.Local;
     }
 
     public IReadOnlyList<string> GetKnownToolNames()

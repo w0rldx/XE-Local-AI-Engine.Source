@@ -56,10 +56,10 @@ export const emptyModelDraft: ExternalProviderModelDraft = {
 	wireId: "",
 	displayName: "",
 	contextLength: "",
-	supportsTools: false,
-	supportsVision: false,
-	supportsReasoning: false,
-	supportsReasoningEffort: false,
+	supportsTools: null,
+	supportsVision: null,
+	supportsReasoning: null,
+	supportsReasoningEffort: null,
 	defaultReasoningEffort: "",
 };
 
@@ -73,6 +73,7 @@ export const emptyFormValues: ExternalProviderFormValues = {
 	apiKey: "",
 	clearApiKey: false,
 	timeoutSeconds: "",
+	allowInsecureHttp: false,
 	models: [emptyModelDraft],
 };
 
@@ -83,16 +84,16 @@ function numberToField(value: number | null | undefined): string {
 /**
  * Drops effort declarations a model cannot hold.
  *
- * A model that does not reason has no effort vocabulary to support, and one that does not support graded effort has no
- * default effort to carry — the backend rejects (or canonicalizes away) both contradictions, so unticking a box clears
- * what it made meaningless here too. Doing it in form state rather than only in the save mapper is what makes the
- * DISABLED select stop showing a stale level the operator can no longer reach.
+ * A model not declared to reason has no effort vocabulary to support, so its effort answer follows the reasoning answer
+ * (No or Unknown); and one without declared graded effort has no default effort to carry. The backend rejects both
+ * contradictions, so changing an answer clears what it made meaningless here too. Doing it in form state rather than
+ * only in the save mapper is what makes the DISABLED controls stop showing a stale value the operator cannot reach.
  */
 function withCoherentReasoning(model: ExternalProviderModelDraft): ExternalProviderModelDraft {
-	if (!model.supportsReasoning) {
-		return { ...model, supportsReasoningEffort: false, defaultReasoningEffort: "" };
+	if (model.supportsReasoning !== true) {
+		return { ...model, supportsReasoningEffort: model.supportsReasoning, defaultReasoningEffort: "" };
 	}
-	return model.supportsReasoningEffort ? model : { ...model, defaultReasoningEffort: "" };
+	return model.supportsReasoningEffort === true ? model : { ...model, defaultReasoningEffort: "" };
 }
 
 // Loads a stored connection into the editor. The API key is never returned by the backend, so it always loads blank
@@ -105,10 +106,10 @@ export function connectionToFormValues(connection: ExternalProviderConnectionDto
 			wireId: model.wireId,
 			displayName: model.displayName ?? "",
 			contextLength: numberToField(model.contextLength),
-			supportsTools: model.supportsTools,
-			supportsVision: model.supportsVision,
-			supportsReasoning: model.supportsReasoning,
-			supportsReasoningEffort: model.supportsReasoningEffort,
+			supportsTools: model.supportsTools ?? null,
+			supportsVision: model.supportsVision ?? null,
+			supportsReasoning: model.supportsReasoning ?? null,
+			supportsReasoningEffort: model.supportsReasoningEffort ?? null,
 			defaultReasoningEffort: (model.defaultReasoningEffort ?? "") as ReasoningEffort | "",
 		}),
 	);
@@ -121,6 +122,7 @@ export function connectionToFormValues(connection: ExternalProviderConnectionDto
 		apiKey: "",
 		clearApiKey: false,
 		timeoutSeconds: numberToField(connection.timeoutSeconds),
+		allowInsecureHttp: connection.allowInsecureHttp,
 		// Always leave one row to type into, the same affordance the Azure deployment list gives.
 		models: models.length > 0 ? models : [emptyModelDraft],
 	};
@@ -139,7 +141,8 @@ function fieldToNumber(value: string): number | undefined {
  * - `clearApiKey: true` is the only route back to a keyless connection, and it is set only by the explicit
  *   "Remove key" action.
  * - A model's default reasoning effort is dropped unless the model declares BOTH reasoning and effort support, so
- *   unchecking either box cannot leave a stale effort behind in the store.
+ *   changing either answer cannot leave a stale effort behind in the store.
+ * - An Unknown capability is sent as `null`, never omitted, so the store records the operator's answer explicitly.
  */
 export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRevision: string | undefined): SaveConnectionBody {
 	const apiKey = values.apiKey.trim();
@@ -150,11 +153,12 @@ export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRe
 		...(apiKey.length > 0 ? { apiKey: values.apiKey } : {}),
 		...(values.clearApiKey ? { clearApiKey: true } : {}),
 		timeoutSeconds: fieldToNumber(values.timeoutSeconds),
+		...(values.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
 		models: values.models
 			.filter((model) => model.wireId.trim().length > 0)
 			.map((model) => {
 				const displayName = model.displayName.trim();
-				const effortDeclared = model.supportsReasoning && model.supportsReasoningEffort;
+				const effortDeclared = model.supportsReasoning === true && model.supportsReasoningEffort === true;
 				return {
 					wireId: model.wireId.trim(),
 					displayName: displayName.length > 0 ? displayName : undefined,
@@ -162,7 +166,7 @@ export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRe
 					supportsTools: model.supportsTools,
 					supportsVision: model.supportsVision,
 					supportsReasoning: model.supportsReasoning,
-					supportsReasoningEffort: effortDeclared,
+					supportsReasoningEffort: model.supportsReasoning === true ? model.supportsReasoningEffort : model.supportsReasoning,
 					defaultReasoningEffort:
 						effortDeclared && model.defaultReasoningEffort.length > 0 ? model.defaultReasoningEffort : undefined,
 				};
@@ -192,7 +196,7 @@ export function createModelRowIds(values: ExternalProviderFormValues): string[] 
 export function probeInputFingerprint(values: ExternalProviderFormValues): string {
 	const typedKey = values.apiKey.trim();
 	const keyState = values.clearApiKey ? "cleared" : typedKey.length > 0 ? `typed:${typedKey}` : "stored";
-	return [values.connectionId.trim(), values.baseUrl.trim(), keyState].join("\n");
+	return [values.connectionId.trim(), values.baseUrl.trim(), keyState, String(values.allowInsecureHttp)].join("\n");
 }
 
 // The outcome of the last probe, together with the fingerprint of the inputs it was run against. Held in form state
@@ -214,20 +218,20 @@ export interface ExternalProviderFormState {
 	probe: ExternalProviderProbeState | null;
 }
 
-// The boolean capability flags a model row carries, named as one type so the toggle action cannot address a
-// non-boolean field.
+// The tri-state capability answers a model row carries, named as one type so the set action cannot address another field.
 export type ExternalProviderModelFlag = "supportsTools" | "supportsVision" | "supportsReasoning" | "supportsReasoningEffort";
 
 export type ExternalProviderFormAction =
 	| { type: "reset"; values: ExternalProviderFormValues; rowIds: string[] }
 	| { type: "setField"; field: "connectionId" | "displayName" | "baseUrl" | "apiKey" | "timeoutSeconds"; value: string }
 	| { type: "setLocality"; value: ExternalProviderLocality }
+	| { type: "setAllowInsecureHttp"; value: boolean }
 	| { type: "removeApiKey" }
 	| { type: "keepApiKey" }
 	| { type: "addModel"; rowId: string }
 	| { type: "removeModel"; index: number; replacementRowId: string }
 	| { type: "setModelField"; index: number; field: "wireId" | "displayName" | "contextLength"; value: string }
-	| { type: "toggleModelFlag"; index: number; flag: ExternalProviderModelFlag }
+	| { type: "setModelFlag"; index: number; flag: ExternalProviderModelFlag; value: boolean | null }
 	| { type: "setModelEffort"; index: number; value: ReasoningEffort | "" }
 	| { type: "addProbedModel"; wireId: string; contextLength: number | null | undefined; rowId: string }
 	// The fingerprint is the one taken when the request was SENT, not when it answered: a probe that lands after the
@@ -262,6 +266,8 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 			return { ...state, values: { ...state.values, [action.field]: action.value } };
 		case "setLocality":
 			return { ...state, values: { ...state.values, locality: action.value } };
+		case "setAllowInsecureHttp":
+			return { ...state, values: { ...state.values, allowInsecureHttp: action.value } };
 		// Asking for removal also empties the field: a typed key and a removal request are contradictory instructions,
 		// and the request can only carry one of them.
 		case "removeApiKey":
@@ -286,8 +292,8 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 		}
 		case "setModelField":
 			return mapModel(state, action.index, (model) => ({ ...model, [action.field]: action.value }));
-		case "toggleModelFlag":
-			return mapModel(state, action.index, (model) => withCoherentReasoning({ ...model, [action.flag]: !model[action.flag] }));
+		case "setModelFlag":
+			return mapModel(state, action.index, (model) => withCoherentReasoning({ ...model, [action.flag]: action.value }));
 		case "setModelEffort":
 			return mapModel(state, action.index, (model) => ({ ...model, defaultReasoningEffort: action.value }));
 		case "addProbedModel": {

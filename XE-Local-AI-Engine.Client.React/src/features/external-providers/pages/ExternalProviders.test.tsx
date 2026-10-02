@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -49,6 +49,8 @@ function connection(overrides: Partial<ExternalProviderConnectionDto> = {}): Ext
 		locality: "Local",
 		hasApiKey: true,
 		timeoutSeconds: 120,
+		allowInsecureHttp: false,
+		insecureTransport: false,
 		models: [
 			{
 				wireId: "qwen3-27b",
@@ -123,6 +125,24 @@ describe("ExternalProviders page", () => {
 		expect(call.body["expectedRevision"]).toBe("rev-1");
 	});
 
+	it("answers each capability Yes, No or Unknown, and sends Unknown as null", async () => {
+		await openStoredEditor();
+
+		const tools = within(screen.getByTestId("external-provider-model-tools-0"));
+		expect((tools.getByLabelText("Yes") as HTMLInputElement).checked).toBe(true);
+		// Reasoning is No, so the effort answer and the default effort cannot be set.
+		const effort = within(screen.getByTestId("external-provider-model-effort-0"));
+		expect((effort.getByLabelText("Yes") as HTMLInputElement).disabled).toBe(true);
+		expect((screen.getByTestId("external-provider-model-default-effort-0") as HTMLInputElement).disabled).toBe(true);
+
+		fireEvent.click(tools.getByLabelText("Unknown"));
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.saveFn.mock.calls[0] as [{ body: { models: Record<string, unknown>[] } }];
+		expect(call.body.models[0]).toMatchObject({ supportsTools: null, supportsVision: false, supportsReasoning: false });
+	});
+
 	it("sends clearApiKey only after the explicit Remove key action", async () => {
 		await openStoredEditor();
 
@@ -157,6 +177,50 @@ describe("ExternalProviders page", () => {
 		});
 
 		expect(screen.getByTestId("external-provider-locality-warning")).toBeTruthy();
+	});
+
+	it("offers the insecure-HTTP opt-in only for an http address, and sends it on save and probe once ticked", async () => {
+		generatedMock.listFn.mockResolvedValue({
+			revision: "rev-1",
+			connections: [connection({ baseUrl: "http://192.168.1.40:8080/v1/", hasApiKey: false, insecureTransport: true })],
+		});
+		await openStoredEditor();
+
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), { target: { value: "https://box.example.com/v1" } });
+		expect(screen.queryByTestId("external-provider-allow-insecure-http")).toBeNull();
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), { target: { value: "http://192.168.1.40:8080/v1/" } });
+		expect(screen.getByText("Allow insecure HTTP")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("external-provider-allow-insecure-http"));
+		fireEvent.click(screen.getByTestId("external-provider-probe"));
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
+		const [save] = generatedMock.saveFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(save.body["allowInsecureHttp"]).toBe(true);
+		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
+		const [probe] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(probe.body["allowInsecureHttp"]).toBe(true);
+	});
+
+	it("flags a plain-http remote row saved before HTTPS became the default, and not one that opted in", async () => {
+		generatedMock.listFn.mockResolvedValue({
+			revision: "rev-1",
+			connections: [
+				connection({ id: "legacy-lan", baseUrl: "http://192.168.1.40:8080/v1/", insecureTransport: true }),
+				connection({
+					id: "opted-in-lan",
+					baseUrl: "http://192.168.1.41:8080/v1/",
+					insecureTransport: true,
+					allowInsecureHttp: true,
+				}),
+			],
+		});
+		renderPage();
+
+		await waitFor(() => expect(screen.getByTestId("external-provider-insecure-legacy-lan")).toBeTruthy());
+		expect(screen.getByText("Unencrypted HTTP")).toBeTruthy();
+		expect(screen.queryByTestId("external-provider-insecure-opted-in-lan")).toBeNull();
 	});
 
 	it("renders the configuration a 409 returns instead of refetching, with a conflict notice", async () => {

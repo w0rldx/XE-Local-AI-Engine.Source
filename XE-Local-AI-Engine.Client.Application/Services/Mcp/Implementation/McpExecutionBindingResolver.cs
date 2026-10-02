@@ -119,6 +119,16 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
         var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken);
         var (supportsThinking, supportsTools, _) = capabilities;
+        // Only a binding that carries tools has a requirement: a non-agentic caller's binding is tool-less by design, the seeded Coder aside.
+        var isSeededCoder = definition.Source == AgentDefinitionSource.Seeded
+                            && string.Equals(definition.SeedSlug, AgentDefaults.CoderAgentSeedSlug, StringComparison.Ordinal);
+        var bindsTools = request.InboundContext.IsAgentic || isSeededCoder;
+        if (!supportsTools && bindsTools && AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind))
+        {
+            return Reject(McpExecutionFailureCodes.ModelNotAvailable,
+                "Cannot run: the agent needs tool calling, which its local model is not known to support; pick a tool-capable model or remove the agent's tools.");
+        }
+
         var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
             modelId,
             supportsTools: supportsTools,
@@ -137,8 +147,6 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         }
         else
         {
-            var isSeededCoder = definition.Source == AgentDefinitionSource.Seeded
-                                && string.Equals(definition.SeedSlug, AgentDefaults.CoderAgentSeedSlug, StringComparison.Ordinal);
             allowedTools = [];
             if (isSeededCoder && !TryProjectExactCoderTools(resolved.AllowedTools, out allowedTools))
             {

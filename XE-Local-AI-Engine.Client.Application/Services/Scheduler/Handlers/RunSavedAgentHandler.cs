@@ -139,6 +139,16 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended.");
         }
 
+        // 3b. CAPABILITY GATE: a tool-requiring agent on a model without tool calling would "succeed" having called nothing.
+        var toolRefusal = AgentModelRequirements.ToolRefusal(definition.Name,
+            effectiveModel,
+            supportsTools,
+            AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind));
+        if (toolRefusal is not null)
+        {
+            throw new ScheduledJobExecutionException(toolRefusal);
+        }
+
         // 4. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the active model
         //    keeps the resolver's model identical to the gated one, and the resolved prompt is threaded verbatim, never raw Instructions.
         var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,

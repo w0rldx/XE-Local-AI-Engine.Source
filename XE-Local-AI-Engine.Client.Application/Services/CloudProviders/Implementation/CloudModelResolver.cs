@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
 ///     Reads the stored cloud configuration to classify model ids.
@@ -38,15 +36,9 @@ public sealed class CloudModelResolver : ICloudModelResolver
             return false;
         }
 
-        // An external model is cloud unless POSITIVELY declared local, and unresolved counts as cloud as it does everywhere
-        // else: this answer feeds egress cues and gates, and "we could not tell" must never render as "it stays on the machine".
-        if (ExternalModelId.HasExternalScheme(modelName))
-        {
-            return await _modelTrustResolver.ResolveAsync(modelName, cancellationToken) != ModelTrustLocality.Local;
-        }
-
-        return CodexModelCatalog.IsCodexModel(modelName)
-               || await IsAzureFoundryDeploymentAsync(modelName, cancellationToken);
+        // Anything but a positive Local is cloud: this answer feeds egress cues and gates, and "we could not tell" must
+        // never render as "it stays on the machine".
+        return await _modelTrustResolver.ResolveAsync(modelName, cancellationToken) != ModelTrustLocality.Local;
     }
 
     public async Task<bool> IsAzureFoundryDeploymentAsync(string? modelName, CancellationToken cancellationToken = default)

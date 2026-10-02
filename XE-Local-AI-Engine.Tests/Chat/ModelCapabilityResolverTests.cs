@@ -5,14 +5,17 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Blocker 2: the Azure/cloud LOCALITY bit that gates node-local private data must come from the SAME routing
-///     snapshot the send path routes from (<see cref="IActiveCloudChatClientFactory.IsCloudProviderSelected" />), never
-///     an independent credential-store read that could classify a request local while the factory routes it to Azure
-///     from its cached snapshot. A snapshot read failure FAILS CLOSED to cloud so the private-data gate withholds.
+///     Blocker 2: the Azure/cloud LOCALITY bit that gates node-local private data must come from the trust resolver,
+///     which asks the SAME routing snapshot the send path routes from
+///     (<see cref="IActiveCloudChatClientFactory.IsCloudProviderSelected" />), never an independent credential-store read.
+///     A snapshot read failure is Unresolved and FAILS CLOSED to cloud so the private-data gate withholds.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelCapabilityResolverTests
@@ -143,8 +146,9 @@ public sealed class ModelCapabilityResolverTests
         return new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
             providerResolver,
             ggufResolver,
-            factory,
-            new FakeModelTrustResolver(),
-            NullLogger<ModelCapabilityResolver>.Instance);
+            new ModelTrustResolver(new FakeExternalProviderRegistry(),
+                Substitute.For<IExternalProviderRegistryCache>(),
+                factory,
+                NullLogger<ModelTrustResolver>.Instance));
     }
 }

@@ -43,6 +43,8 @@ function noticeIcon(noticeKind: string) {
 			return IconMessageOff;
 		case "ToolHistoryWithheld":
 			return IconHistoryOff;
+		case "ToolsWithheld":
+			return IconToolsOff;
 		default:
 			return IconInfoCircle;
 	}
@@ -69,6 +71,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.emptyAnswer";
 		case "ToolHistoryWithheld":
 			return "chat.notices.toolHistoryWithheld";
+		case "ToolsWithheld":
+			return "chat.notices.toolsWithheld";
 		default:
 			return undefined;
 	}

@@ -4,7 +4,9 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -69,6 +71,47 @@ public sealed class ExternalModelDetailsEndpointTests
         using var response = await client.SendAsync(request);
 
         // A stale selection is a clean 404, exactly like a GGUF whose map row outlived its file.
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments("gpt-5.5")]
+    [Arguments("azure-gpt")]
+    public async Task GetLocalModelDetails_ForACloudModel_Returns404(string modelName)
+    {
+        // Through the REAL trust resolver: a Codex id is cloud with no session signed in, and a stored Azure deployment
+        // is cloud through the routing snapshot. Neither has local details; LocalModelEndpointTests pins "never probes".
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        _ = cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig
+        {
+            ProviderName = "AzureFoundry",
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.ApiKey,
+                ApiKey = "test-api-key",
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "azure-gpt"
+                    }
+                ]
+            }
+        });
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ICloudCredentialStore>();
+                services.AddSingleton(cloudCredentialStore);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, $"/api/local/v1/models/{modelName}/details");
+        using var response = await client.SendAsync(request);
+
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

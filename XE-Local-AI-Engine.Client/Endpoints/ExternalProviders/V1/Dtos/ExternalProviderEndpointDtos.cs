@@ -53,6 +53,15 @@ public sealed record ExternalProviderConnectionResponse
     /// <summary>The per-connection network timeout in seconds, or null for the transport default.</summary>
     public int? TimeoutSeconds { get; init; }
 
+    /// <summary>The operator's stored opt-in to a plain-http address that is not loopback.</summary>
+    public required bool AllowInsecureHttp { get; init; }
+
+    /// <summary>
+    ///     Server-computed: the stored address is plain http and not loopback. With <see cref="AllowInsecureHttp" /> false
+    ///     this is a connection saved before HTTPS became the default; it still works, and its next save needs the opt-in.
+    /// </summary>
+    public required bool InsecureTransport { get; init; }
+
     /// <summary>The models registered on this connection.</summary>
     public IReadOnlyList<ExternalProviderModelResponse> Models { get; init; } = [];
 }
@@ -76,16 +85,16 @@ public sealed record ExternalProviderModelResponse
     public int? ContextLength { get; init; }
 
     /// <summary>Whether the model may be offered tools.</summary>
-    public required bool SupportsTools { get; init; }
+    public required bool? SupportsTools { get; init; }
 
     /// <summary>Whether the model accepts image input.</summary>
-    public required bool SupportsVision { get; init; }
+    public required bool? SupportsVision { get; init; }
 
     /// <summary>Whether the model produces a reasoning channel.</summary>
-    public required bool SupportsReasoning { get; init; }
+    public required bool? SupportsReasoning { get; init; }
 
     /// <summary>Whether the endpoint honours a top-level <c>reasoning_effort</c> body field.</summary>
-    public required bool SupportsReasoningEffort { get; init; }
+    public required bool? SupportsReasoningEffort { get; init; }
 
     /// <summary>The effort applied when the turn selects none, in the canonical lowercase vocabulary.</summary>
     public string? DefaultReasoningEffort { get; init; }
@@ -147,6 +156,9 @@ public sealed record SaveExternalProviderConnectionRequest
     /// <summary>The per-connection network timeout in seconds, or null for the transport default.</summary>
     public int? TimeoutSeconds { get; init; }
 
+    /// <summary>Opts a plain-http address that is not loopback in; without it such an address is refused with a 400.</summary>
+    public bool AllowInsecureHttp { get; init; }
+
     /// <summary>The models to register. May be empty: a probe-then-pick flow saves the connection first.</summary>
     public IReadOnlyList<SaveExternalProviderModelRequest> Models { get; init; } = [];
 
@@ -165,13 +177,13 @@ public sealed record SaveExternalProviderModelRequest
     /// <summary>The declared context window in tokens.</summary>
     public int? ContextLength { get; init; }
 
-    public bool SupportsTools { get; init; }
+    public bool? SupportsTools { get; init; }
 
-    public bool SupportsVision { get; init; }
+    public bool? SupportsVision { get; init; }
 
-    public bool SupportsReasoning { get; init; }
+    public bool? SupportsReasoning { get; init; }
 
-    public bool SupportsReasoningEffort { get; init; }
+    public bool? SupportsReasoningEffort { get; init; }
 
     /// <summary>The effort applied when the turn selects none; validated against the chat reasoning vocabulary on save.</summary>
     public string? DefaultReasoningEffort { get; init; }
@@ -195,6 +207,9 @@ public sealed record ExternalProviderProbeRequest
 
     /// <summary>An explicit key. Blank means "use the stored key, if any". Never echoed back in the response.</summary>
     public string? ApiKey { get; init; }
+
+    /// <summary>Opts a plain-http address that is not loopback in; without it such an address is refused before any request.</summary>
+    public bool AllowInsecureHttp { get; init; }
 }
 
 /// <summary>What the probe found. Never carries the API key or a raw response body.</summary>

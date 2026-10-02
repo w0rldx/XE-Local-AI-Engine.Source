@@ -29,10 +29,16 @@ internal sealed partial class SubAgentSpawnService
             return null;
         }
 
+        // The child model's OWN capabilities: tools gate the offer below (withheld, not refused, as chat does); thinking gates the reasoning field,
+        // as the direct and orchestration-participant paths do (a non-thinking Ollama model 400s on think). Cache-first.
+        var childCapabilities = await _modelCapabilityResolver
+            .ResolveAsync(definition.ModelProfile, ct);
+        var (supportsThinking, supportsTools, _) = childCapabilities;
+
         // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send consumes — so it inherits the
         // resolved prompt, reasoning and skills as one unit. Hand over the snapshot already read, not the id: a second read could assemble one child from two versions.
         var resolved = await _agentDefinitionResolver
-            .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct);
+            .ResolveAsync(definition, definition.ModelProfile, supportsTools: supportsTools, cancellationToken: ct);
         if (resolved is null)
         {
             // The resolver seam is nullable for every caller, so guard it here too: reject with the sanitized
@@ -43,12 +49,6 @@ internal sealed partial class SubAgentSpawnService
         // The profile's OWN curated tool set: offer ∩ AllowedToolNames (already capability-gated by the resolver), bridged to executables, then
         // UNCONDITIONALLY strip spawn_subagent so the child can never spawn — the structural depth cap, whatever its AllowedToolNames lists.
         var tools = CurateChildTools(resolved.AllowedTools);
-
-        // The child model's OWN thinking capability gates the reasoning field, as the direct (resolution.SupportsThinking) and orchestration-participant
-        // paths do: a non-thinking Ollama model 400s on think, so ParticipantReasoningOptions omits it. Cache-first. Locality was gated by the resolver above.
-        var childCapabilities = await _modelCapabilityResolver
-            .ResolveAsync(definition.ModelProfile, ct);
-        var (supportsThinking, _, _) = childCapabilities;
 
         return new ResolvedBinding
         {

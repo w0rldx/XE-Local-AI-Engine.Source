@@ -50,11 +50,95 @@ public sealed class ExternalProviderStoreTests : IDisposable
     {
         using var store = CreateStore();
 
-        var committed = await SaveAsync(store, Request(baseUrl: "http://192.168.1.40:8080"));
+        var committed = await SaveAsync(store, Request(baseUrl: "http://192.168.1.40:8080") with
+        {
+            AllowInsecureHttp = true
+        });
 
         // The outbound guard pins every request to this stored value, so the canonical /v1/ form has to be what lands
         // on disk — not what the operator happened to type.
         AssertEx.Equal("http://192.168.1.40:8080/v1/", committed.Config.Connections.Single().BaseUrl);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_APlainHttpRemoteAddress_NeedsTheOptIn()
+    {
+        using var store = CreateStore();
+
+        // HTTPS by default: a LAN or VPN segment is exactly where a plaintext Bearer key is sniffable.
+        var exception = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(baseUrl: "http://192.168.1.40:8080/v1", apiKey: "sk-lan")));
+        AssertEx.Equal(ExternalProviderTransportPolicy.InsecureRemoteError, exception.Message);
+        AssertEx.Empty((await store.LoadAsync()).Connections);
+
+        var committed = await SaveAsync(store, Request(baseUrl: "http://192.168.1.40:8080/v1", apiKey: "sk-lan") with
+        {
+            AllowInsecureHttp = true
+        });
+
+        AssertEx.True(committed.Config.Connections.Single().AllowInsecureHttp);
+        AssertEx.True((await store.LoadAsync()).Connections.Single().AllowInsecureHttp);
+    }
+
+    [Test]
+    [Arguments("http://localhost:18099/v1")]
+    [Arguments("http://127.0.0.1:18099/v1")]
+    [Arguments("http://127.4.5.6:18099/v1")]
+    [Arguments("http://[::1]:18099/v1")]
+    [Arguments("https://inference.example.com/v1")]
+    public async Task SaveConnectionAsync_LoopbackOrHttps_NeedsNoOptIn(string baseUrl)
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request(baseUrl: baseUrl));
+
+        AssertEx.False(committed.Config.Connections.Single().AllowInsecureHttp);
+    }
+
+    [Test]
+    [Arguments("https://inference.example.com/v1")]
+    [Arguments("http://127.0.0.1:18099/v1")]
+    public async Task SaveConnectionAsync_DropsTheOptInWhereTheAddressNeedsNone(string baseUrl)
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request(baseUrl: baseUrl) with
+        {
+            AllowInsecureHttp = true
+        });
+
+        // A stale tick must not pre-approve plain http the next time the address changes back.
+        AssertEx.False(committed.Config.Connections.Single().AllowInsecureHttp);
+    }
+
+    [Test]
+    public async Task LoadAsync_ALegacyPlainHttpRemoteRow_StillLoadsAndResolves()
+    {
+        using var store = CreateStore();
+        var legacy = JsonSerializer.SerializeToNode(new StoredExternalProviderConfig
+        {
+            // A real pre-upgrade file: schema 1 AND no allowInsecureHttp, so the lift and the missing field meet.
+            SchemaVersion = 1,
+            Revision = "r",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "lan-box",
+                    DisplayName = "LAN box",
+                    BaseUrl = "http://192.168.1.40:8080/v1/",
+                    Locality = ExternalProviderLocality.Local,
+                    Models = [new StoredExternalProviderModel { WireId = "qwen3" }]
+                }
+            ]
+        }, RawSerializerOptions)!;
+        AssertEx.True(legacy["connections"]![0]!.AsObject().Remove("allowInsecureHttp"), "the fixture must predate the field");
+        await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(legacy.ToJsonString())));
+
+        // The runtime is untouched: only a save is refused, so an upgrade never breaks a working connection.
+        var connection = (await store.LoadAsync()).Connections.Single();
+        AssertEx.False(connection.AllowInsecureHttp);
+        AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:lan-box/qwen3", CancellationToken.None));
     }
 
     [Test]
@@ -177,7 +261,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         // listener they control and saves with no key, after which the node presents the stored secret as a bearer
         // token on the next request. Moving the endpoint has to be an explicit decision about the credential too.
         var exception = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
-            await SaveAsync(store, Request(baseUrl: "http://attacker.example.com/v1", apiKey: null)));
+            await SaveAsync(store, Request(baseUrl: "http://attacker.example.com/v1", apiKey: null) with
+            {
+                AllowInsecureHttp = true
+            }));
 
         AssertEx.Contains(exception.Message, "Enter the key again");
 
@@ -486,6 +573,129 @@ public sealed class ExternalProviderStoreTests : IDisposable
         ]));
 
         AssertEx.Equal("medium", committed.Config.Connections.Single().Models.Single().DefaultReasoningEffort);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithEffortOnAnUnknownReasoningModel_IsRefused()
+    {
+        using var store = CreateStore();
+
+        // Unknown is not "supported": an effort needs reasoning declared Yes, exactly as before the tri-state.
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    SupportsReasoning = null,
+                    SupportsReasoningEffort = true
+                }
+            ])));
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    SupportsReasoning = true,
+                    SupportsReasoningEffort = null,
+                    DefaultReasoningEffort = "medium"
+                }
+            ])));
+    }
+
+    [Test]
+    public async Task LoadAsync_ASchema1File_ReadsFalseAsUnknownAndKeepsTrue()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = 1,
+            Revision = "r",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "unsloth-box",
+                    DisplayName = "Unsloth box",
+                    BaseUrl = "http://127.0.0.1:18099/v1/",
+                    Locality = ExternalProviderLocality.Local,
+                    Models =
+                    [
+                        new StoredExternalProviderModel
+                        {
+                            WireId = "qwen3",
+                            SupportsTools = true,
+                            SupportsVision = false,
+                            SupportsReasoning = false,
+                            SupportsReasoningEffort = false
+                        }
+                    ]
+                }
+            ]
+        });
+
+        var model = (await store.LoadAsync()).Connections.Single().Models.Single();
+
+        // Schema 1 stored an unchecked box as false, which never meant "unsupported".
+        AssertEx.True(model.SupportsTools == true);
+        AssertEx.Null(model.SupportsVision);
+        AssertEx.Null(model.SupportsReasoning);
+        AssertEx.Null(model.SupportsReasoningEffort);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_OverASchema1File_WritesSchema2AndKeepsTheTriState()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = 1,
+            Revision = "r",
+            Connections = []
+        });
+
+        // The revision read off the schema-1 file is what the CAS compares against across the lift.
+        _ = await SaveAsync(store, Request(models:
+        [
+            Model("qwen3") with
+            {
+                SupportsTools = false,
+                SupportsVision = null,
+                SupportsReasoning = true
+            }
+        ]) with
+        {
+            ExpectedRevision = "r"
+        });
+
+        var onDisk = JsonSerializer.Deserialize<StoredExternalProviderConfig>(new MockDataProtector().Unprotect(await File.ReadAllBytesAsync(StorePath)),
+            RawSerializerOptions)!;
+        AssertEx.Equal(2, onDisk.SchemaVersion);
+        var model = (await store.LoadAsync()).Connections.Single().Models.Single();
+        AssertEx.True(model.SupportsTools == false, "an explicit No survives a schema-2 round-trip");
+        AssertEx.Null(model.SupportsVision);
+        AssertEx.True(model.SupportsReasoning == true);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_OverASchema1File_WithAStaleRevision_IsSupersededAndLeavesTheFileAtSchema1()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = 1,
+            Revision = "r",
+            Connections = []
+        });
+
+        var result = await store.SaveConnectionAsync(Request() with
+        {
+            ExpectedRevision = "stale"
+        });
+
+        AssertEx.True(result is ExternalProviderWriteResult.Superseded);
+        var onDisk = JsonSerializer.Deserialize<StoredExternalProviderConfig>(new MockDataProtector().Unprotect(await File.ReadAllBytesAsync(StorePath)),
+            RawSerializerOptions)!;
+        AssertEx.Equal(1, onDisk.SchemaVersion, "a refused write persists nothing, the lift included.");
     }
 
     [Test]

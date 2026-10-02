@@ -286,9 +286,7 @@ public sealed class ExternalModelPolicyGateTests
         return new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
             providerResolver,
             Substitute.For<IGgufModelCapabilityResolver>(),
-            NonCloudFactory(),
-            Trust(),
-            NullLogger<ModelCapabilityResolver>.Instance);
+            Trust());
     }
 
     private static ILocalToolOfferProvider CreateOfferProvider(FakeModelTrustResolver? trust = null)

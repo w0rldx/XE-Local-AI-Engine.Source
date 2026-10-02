@@ -482,6 +482,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
+        // 3a. The capability gate. Every integration run requires tool calling whatever the agent lists: its output arrives through emit_output
+        //     (unioned into the offer at step 5), so a model without tools could only end with no output. trigger-unavailable carries it (ADR 0008).
+        if (!supportsTools)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's agent runs on a model that is not known to support tool calling, which every integration run needs; pick a tool-capable model.");
+            return;
+        }
+
         // 3b. The compaction bound, BEFORE the conversation read so the read sees the folded transcript; every no-op outcome is non-fatal by design. The keep
         //     window and the excerpt cap come from the CHAT options, and the projection counts replayed tool exchanges: ADR 0008 ("Invariants the coordinator enforces").
         var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;

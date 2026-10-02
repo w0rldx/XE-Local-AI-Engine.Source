@@ -2067,10 +2067,15 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenGgufModelIsNotToolCapable_OffersNoTools()
+    [Arguments(true, true, true)]
+    [Arguments(false, true, false)]
+    [Arguments(true, false, false)]
+    public async Task SendMessageAsync_WhenGgufModelIsNotToolCapable_OffersNoToolsAndSaysSoOnlyWhenToolsWereAsked(bool useLocalTools,
+        bool nodeToolsEnabled,
+        bool expectNotice)
     {
         // A llama.cpp model whose template carries no tool support stays the safe default — no tools offered — even with
-        // local tools enabled on the request.
+        // local tools enabled on the request. The ToolsWithheld notice fires only when the client asked AND the node engine is on.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -2095,7 +2100,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
-            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            StubNodeRuntimeSettings.Create().WithEnableTools(nodeToolsEnabled).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateDefaultAgentProvider(),
@@ -2111,18 +2116,20 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)))
+                           UseLocalTools: useLocalTools)))
         {
-            drained++;
+            events.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.NotEmpty(events);
         AssertEx.Empty(runner.LastAllowedTools);
+        AssertEx.Equal(expectNotice ? 1 : 0,
+            events.Count(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolsWithheld)));
     }
 
     [Test]
@@ -4364,9 +4371,7 @@ public sealed class NodeChatStreamServiceTests
         return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
-            Substitute.For<IActiveCloudChatClientFactory>(),
-            new FakeModelTrustResolver(),
-            NullLogger<ModelCapabilityResolver>.Instance);
+            new FakeModelTrustResolver());
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so the existing Ollama-routed tests keep their

@@ -83,6 +83,9 @@ Security and runtime invariants:
 
 - **Node-local only.** The handler resolves the effective model after the agent's model pin and rejects
   a cloud model before capacity admission or invocation.
+- **Tool-capable when the agent needs tools.** An agent that lists tools, or orchestrates, on a model that cannot call
+  them is refused right after the locality gate with one operator-safe sentence naming the agent, the model and the
+  remedy, instead of "succeeding" having called nothing ([Agent Mode](04-agent-mode.md), `AgentModelRequirements`).
 - **Same runtime, no chat transcript.** It resolves the complete saved-agent runtime and uses the same
   `IInvocationRunner` as chat, but without a conversation or chat-persistence pump.
 - **No unattended approval wait.** Approval-required tools are removed before execution because no

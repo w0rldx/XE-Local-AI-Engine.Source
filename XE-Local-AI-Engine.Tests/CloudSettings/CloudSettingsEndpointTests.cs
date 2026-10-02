@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -76,6 +78,35 @@ public sealed class CloudSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveCloudSettings_WhenSaved_InvalidatesTheRoutingSnapshot()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var cloudChatClientFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        await using var factory = CreateFactory(cloudCredentialStore, cloudChatClientFactory);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "ApiKey",
+            ApiKey = "secret",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        cloudChatClientFactory.Received(1).InvalidateSelectionCache();
+    }
+
+    [Test]
     public async Task SaveCloudSettings_WhenEndpointIsNotHttps_ReturnsValidationProblem()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
@@ -118,6 +149,21 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal("None", settings.ProviderName);
         AssertEx.False(settings.AzureFoundry?.HasStoredApiKey == true);
         await cloudCredentialStore.Received(1).ClearAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ClearCloudSettings_WhenCleared_InvalidatesTheRoutingSnapshot()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var cloudChatClientFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        await using var factory = CreateFactory(cloudCredentialStore, cloudChatClientFactory);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/cloud-settings");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        cloudChatClientFactory.Received(1).InvalidateSelectionCache();
     }
 
     [Test]
@@ -615,6 +661,48 @@ public sealed class CloudSettingsEndpointTests
         });
     }
 
+    [Test]
+    [Arguments("gpt-4o")]
+    [Arguments("GPT-4O")]
+    public async Task SaveCloudSettings_WhenADeploymentNameShadowsAnInstalledGguf_ReturnsValidationProblem(string installedName)
+    {
+        // A deployment name wins routing, so one spelled like an installed local model would hijack every send to it.
+        // Azure routing matches deployment names ignoring case, so a case variant shadows just the same.
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        _ = ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new LocalModelDescriptor
+            {
+                ModelName = installedName,
+                ProviderName = "llamacpp",
+                IsAvailable = true,
+                SizeBytes = null,
+                ModifiedAt = null,
+                MaxContextTokens = null
+            }
+        ]);
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ICloudCredentialStore>();
+                services.AddSingleton(cloudCredentialStore);
+                services.RemoveAll<IGgufModelStore>();
+                services.AddSingleton(ggufModelStore);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(CreateSaveRequest([]));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "is an installed local model and would shadow it.");
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
     private static async Task AssertSaveRejectedAsync(params SaveAzureFoundryHeaderRequest[] headers)
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
@@ -685,7 +773,7 @@ public sealed class CloudSettingsEndpointTests
         };
     }
 
-    private static TestServerWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore)
+    private static TestServerWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore, IActiveCloudChatClientFactory? cloudChatClientFactory = null)
     {
         return new TestServerWebAppFactory
         {
@@ -693,6 +781,11 @@ public sealed class CloudSettingsEndpointTests
             {
                 services.RemoveAll<ICloudCredentialStore>();
                 services.AddSingleton(cloudCredentialStore);
+                if (cloudChatClientFactory is not null)
+                {
+                    services.RemoveAll<IActiveCloudChatClientFactory>();
+                    services.AddSingleton(cloudChatClientFactory);
+                }
             }
         };
     }

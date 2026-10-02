@@ -3073,10 +3073,10 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderM
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	supportsTools: z.boolean(),
-	supportsVision: z.boolean(),
-	supportsReasoning: z.boolean(),
-	supportsReasoningEffort: z.boolean(),
+	supportsTools: z.boolean().nullable(),
+	supportsVision: z.boolean().nullable(),
+	supportsReasoning: z.boolean().nullable(),
+	supportsReasoningEffort: z.boolean().nullable(),
 	defaultReasoningEffort: z.string().nullish(),
 });
 
@@ -3091,6 +3091,8 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderC
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	allowInsecureHttp: z.boolean(),
+	insecureTransport: z.boolean(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse).optional(),
 });
 
@@ -3112,6 +3114,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderP
 	connectionId: z.string().nullish(),
 	baseUrl: z.string().nullish(),
 	apiKey: z.string().nullish(),
+	allowInsecureHttp: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = z.object({
@@ -3133,10 +3136,10 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	supportsTools: z.boolean().optional(),
-	supportsVision: z.boolean().optional(),
-	supportsReasoning: z.boolean().optional(),
-	supportsReasoningEffort: z.boolean().optional(),
+	supportsTools: z.boolean().nullish(),
+	supportsVision: z.boolean().nullish(),
+	supportsReasoning: z.boolean().nullish(),
+	supportsReasoningEffort: z.boolean().nullish(),
 	defaultReasoningEffort: z.string().nullish(),
 });
 
@@ -3151,6 +3154,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	allowInsecureHttp: z.boolean().optional(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest),
 	expectedRevision: z.string().nullish(),
 });

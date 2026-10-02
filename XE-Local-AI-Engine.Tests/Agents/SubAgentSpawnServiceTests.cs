@@ -204,6 +204,34 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task Spawn_WhenBoundChildModelCannotCallTools_OffersTheChildNoTools()
+    {
+        // The child's OWN model gates its offer: withheld, not refused, as a chat turn on a non-tool model is.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithoutToolCapability();
+        var id = harness.RegisterProfilePinnedTo("plain-child", "no-tools-model", "read_file", "list_files");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("no-tools-model", harness.ChatClient.LastModelId, "the child must still run");
+        AssertEx.Empty(harness.ChatClient.LastToolNames);
+        await harness.Resolver.Received(1).ResolveAsync(Arg.Is<AgentDefinitionRecord>(record => record.Id == id),
+            "no-tools-model",
+            Arg.Any<string?>(),
+            false,
+            Arg.Any<bool>(),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Spawn_WhenTheStoreReturnsTwoVersions_AssemblesTheChildFromOneSnapshot()
     {
         // A profile-bound child must be assembled from exactly ONE definition snapshot. The store here hands out a
@@ -1550,6 +1578,13 @@ public sealed class SubAgentSpawnServiceTests
                                     .Returns(new ModelCapabilitySnapshot(SupportsThinking: supportsThinking, SupportsTools: true, IsCloud: false));
         }
 
+        // The child model advertises no tool calling; the substitute resolver then withholds the offer, as the real one does.
+        public void WithoutToolCapability()
+        {
+            _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                                    .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: false, IsCloud: false));
+        }
+
         public GateableChatClient ChatClient => _chatClient;
 
         /// <summary>The registry the child's own binding pin is read from — seed it to make a child model external.</summary>
@@ -1615,7 +1650,7 @@ public sealed class SubAgentSpawnServiceTests
                          Arg.Any<bool>(),
                          Arg.Any<bool>(),
                          Arg.Any<CancellationToken>())
-                     .Returns(new ResolvedAgentRuntime("child instructions", offered, modelProfile, null, 1, id, name, []));
+                     .Returns(call => new ResolvedAgentRuntime("child instructions", call.ArgAt<bool>(3) ? offered : [], modelProfile, null, 1, id, name, []));
             return id;
         }
 

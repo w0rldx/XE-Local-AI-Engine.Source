@@ -38,6 +38,8 @@ internal static class ExternalProviderEndpointDtoMapper
             Locality = connection.Locality.ToString(),
             HasApiKey = !string.IsNullOrEmpty(connection.ApiKey),
             TimeoutSeconds = connection.TimeoutSeconds,
+            AllowInsecureHttp = connection.AllowInsecureHttp,
+            InsecureTransport = ExternalProviderTransportPolicy.IsInsecureRemote(connection.BaseUrl),
             Models = [.. connection.Models.Select(model => ToResponse(model, connection.Id))]
         };
     }
@@ -62,6 +64,7 @@ internal static class ExternalProviderEndpointDtoMapper
             ApiKey = request.ApiKey,
             ClearApiKey = request.ClearApiKey,
             TimeoutSeconds = request.TimeoutSeconds,
+            AllowInsecureHttp = request.AllowInsecureHttp,
             Models = [.. request.Models.Select(ToSaveRequest)],
             ExpectedRevision = request.ExpectedRevision
         };

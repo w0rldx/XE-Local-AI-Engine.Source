@@ -129,6 +129,32 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenAToolRequiringAgentMeetsANonToolModel_RefusesBeforeCapacity()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: null, allowedToolNames: ["read_file"]));
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "needs tool calling");
+        AssertEx.Equal(expected: 0, harness.RunCount);
+        await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+        await harness.Dispatcher.DidNotReceive().ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenANoToolsAgentMeetsANonToolModel_StillRuns()
+    {
+        using var harness = new Harness();
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.RunCount);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenAgentMissing_ThrowsSanitizedExecutionExceptionWithoutRunning()
     {
         using var harness = new Harness();
@@ -424,7 +450,7 @@ public sealed class RunSavedAgentHandlerTests
         };
     }
 
-    private static AgentDefinitionRecord BuildDefinition(string? modelProfile)
+    private static AgentDefinitionRecord BuildDefinition(string? modelProfile, IReadOnlyList<string>? allowedToolNames = null)
     {
         return new AgentDefinitionRecord
         {
@@ -435,7 +461,7 @@ public sealed class RunSavedAgentHandlerTests
             ModelProfile = modelProfile,
             ReasoningEffort = null,
             Kind = AgentDefinitionKind.Single,
-            AllowedToolNames = [],
+            AllowedToolNames = allowedToolNames ?? [],
             ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
             OrchestrationTopologyJson = null,
             Version = 7,

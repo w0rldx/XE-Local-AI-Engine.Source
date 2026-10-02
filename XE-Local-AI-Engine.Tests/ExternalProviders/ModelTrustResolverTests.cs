@@ -71,6 +71,16 @@ public sealed class ModelTrustResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ForACaseVariantOfTheExternalScheme_IsUnresolvedRatherThanLocal()
+    {
+        var resolver = Build(out var cloudFactory, ExternalProviderLocality.Local);
+        _ = cloudFactory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+
+        AssertEx.Equal(ModelTrustLocality.Unresolved, await resolver.ResolveAsync("EXT:lan-box/qwen3"));
+        AssertEx.Equal(ModelTrustLocality.Unresolved, resolver.Classify("Ext:lan-box/qwen3"));
+    }
+
+    [Test]
     public async Task ResolveAsync_ForANonExternalId_DelegatesToTheCloudSelection()
     {
         var resolver = Build(out var cloudFactory, ExternalProviderLocality.Local);
@@ -79,6 +89,58 @@ public sealed class ModelTrustResolverTests
 
         AssertEx.Equal(ModelTrustLocality.Cloud, await resolver.ResolveAsync("gpt-5.6-terra"));
         AssertEx.Equal(ModelTrustLocality.Local, await resolver.ResolveAsync("qwen3-27b.gguf"));
+    }
+
+    [Test]
+    public async Task ResolveAsync_ForACodexIdWithNoSession_IsCloud()
+    {
+        var resolver = Build(out var cloudFactory, ExternalProviderLocality.Local);
+        _ = cloudFactory.IsCloudProviderSelected("gpt-5.5").Returns(false);
+
+        // No session means the factory would route it local, to a runtime that does not have it. Trust is not routing:
+        // the id names a cloud model, so every gate treats it as one.
+        AssertEx.Equal(ModelTrustLocality.Cloud, await resolver.ResolveAsync("gpt-5.5"));
+        AssertEx.Equal(ModelTrustLocality.Cloud, resolver.Classify("gpt-5.5"));
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheRoutingSnapshotThrows_IsUnresolved()
+    {
+        var resolver = Build(out var cloudFactory, ExternalProviderLocality.Local);
+        _ = cloudFactory.IsCloudProviderSelected("azure-gpt").Returns(_ => throw new InvalidOperationException("credential store unavailable"));
+
+        AssertEx.Equal(ModelTrustLocality.Unresolved, await resolver.ResolveAsync("azure-gpt"));
+        AssertEx.Equal(ModelTrustLocality.Unresolved, resolver.Classify("azure-gpt"));
+    }
+
+    [Test]
+    public async Task Classify_AgreesWithResolveAsync_ForEveryKindOfId()
+    {
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]),
+            ExternalProviderRegistryTests.Connection("cloud-box", ["qwen3"], locality: ExternalProviderLocality.Cloud)));
+        await registry.PrimeAsync();
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        _ = cloudFactory.IsCloudProviderSelected("azure-gpt").Returns(true);
+        var resolver = new ModelTrustResolver(registry, registry, cloudFactory, NullLogger<ModelTrustResolver>.Instance);
+
+        // One gates the send, the other the tools offered to that same send: they must never disagree.
+        foreach (var modelId in new[] { "qwen3-27b.gguf", "azure-gpt", "gpt-5.5", "ext:local-box/qwen3", "ext:cloud-box/qwen3", "ext:gone/qwen3", null })
+        {
+            AssertEx.Equal(await resolver.ResolveAsync(modelId), resolver.Classify(modelId), $"'{modelId}'");
+        }
+    }
+
+    [Test]
+    public void Classify_WithAColdCache_IsUnresolvedForAnExternalId()
+    {
+        var registryCache = Substitute.For<IExternalProviderRegistryCache>();
+        _ = registryCache.TryClassifyCached(Arg.Any<string>(), out Arg.Any<ExternalProviderModelRegistration?>()).Returns(false);
+        var resolver = new ModelTrustResolver(new FakeExternalProviderRegistry(),
+            registryCache,
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            NullLogger<ModelTrustResolver>.Instance);
+
+        AssertEx.Equal(ModelTrustLocality.Unresolved, resolver.Classify(ExternalProviderTestData.ModelId));
     }
 
     [Test]

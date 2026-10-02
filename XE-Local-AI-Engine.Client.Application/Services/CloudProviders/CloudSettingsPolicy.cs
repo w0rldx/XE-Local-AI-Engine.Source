@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+
 /// <summary>
-///     Cross-field save policy for an Azure Foundry connection's custom headers and operator-added allowed host
-///     suffixes.
+///     Cross-field save policy for an Azure Foundry connection's deployment names, custom headers and operator-added
+///     allowed host suffixes.
 /// </summary>
 /// <remarks>
 ///     It lives here rather than in the boundary validator because it needs the previously stored headers to tell a
@@ -98,6 +101,36 @@ public static class CloudSettingsPolicy
             if (trimmed.Length > 0 && !AzureFoundryEndpoints.ValidateHostSuffix(trimmed))
             {
                 errors.Add($"Allowed host suffix '{trimmed}' is not a valid domain suffix.");
+            }
+        }
+
+        return errors;
+    }
+
+    /// <summary>
+    ///     Rejects deployment names that would shadow another provider's model id: an <c>ext:</c> id or a Codex catalog id.
+    ///     A bare deployment name wins routing (Azure is matched first), so such a name would hijack every send to that model.
+    /// </summary>
+    /// <remarks>
+    ///     The installed-GGUF collision needs a store read and is checked by the save endpoint. Ceiling: an Ollama tag, or a
+    ///     GGUF installed after the save, can still collide; a reserved provider prefix is the upgrade path.
+    /// </remarks>
+    public static IReadOnlyList<string> ValidateDeploymentNames(IEnumerable<string?> deploymentNames)
+    {
+        ArgumentNullException.ThrowIfNull(deploymentNames);
+
+        var errors = new List<string>();
+        foreach (var name in deploymentNames.Select(static name => name?.Trim()).Where(static name => !string.IsNullOrEmpty(name)))
+        {
+            // Ignoring case like Azure routing does: `EXT:box/m` would otherwise route `ext:box/m` to Azure while the trust
+            // resolver still answers that connection's declared locality.
+            if (name!.StartsWith(ExternalModelId.Scheme, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"Deployment name '{name}' uses the reserved '{ExternalModelId.Scheme}' prefix of external connections.");
+            }
+            else if (CodexModelCatalog.IsCodexModel(name))
+            {
+                errors.Add($"Deployment name '{name}' is a Codex model id and would shadow it.");
             }
         }
 

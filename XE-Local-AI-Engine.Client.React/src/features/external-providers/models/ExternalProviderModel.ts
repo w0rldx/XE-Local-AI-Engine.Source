@@ -28,12 +28,13 @@ export interface ExternalProviderModelDraft {
 	wireId: string;
 	displayName: string;
 	contextLength: string;
-	supportsTools: boolean;
-	supportsVision: boolean;
-	supportsReasoning: boolean;
-	supportsReasoningEffort: boolean;
-	// "" = unspecified. Only meaningful with supportsReasoning AND supportsReasoningEffort; the editor disables the
-	// select otherwise and the save mapper drops the value, so a stale effort cannot survive unchecking the box.
+	// Tri-state capability answers: true = Yes, false = No, null = Unknown. The backend treats Unknown exactly like No.
+	supportsTools: boolean | null;
+	supportsVision: boolean | null;
+	supportsReasoning: boolean | null;
+	supportsReasoningEffort: boolean | null;
+	// "" = unspecified. Only meaningful with supportsReasoning AND supportsReasoningEffort both Yes; the editor disables
+	// the select otherwise and the save mapper drops the value, so a stale effort cannot survive changing either answer.
 	defaultReasoningEffort: ReasoningEffort | "";
 }
 
@@ -50,6 +51,8 @@ export interface ExternalProviderFormValues {
 	// The ONLY way back to a keyless connection: it maps to `clearApiKey: true` on the save request.
 	clearApiKey: boolean;
 	timeoutSeconds: string;
+	// The opt-in the node requires before it saves or probes a plain-http address that is not loopback.
+	allowInsecureHttp: boolean;
 	models: ExternalProviderModelDraft[];
 }
 
@@ -199,6 +202,12 @@ export function requiresApiKeyReentry(
 	const draftOrigin = baseUrlOrigin(values.baseUrl);
 	// An unparseable draft address is the base-URL error's story, not this one.
 	return storedOrigin !== null && draftOrigin !== null && draftOrigin !== storedOrigin;
+}
+
+// Whether the address is plain http, which is when the insecure-HTTP opt-in is offered. Loopback needs no opt-in, but
+// the node owns that rule; the editor only decides when the checkbox is worth showing.
+export function isPlainHttpUrl(baseUrl: string): boolean {
+	return /^\s*http:/i.test(baseUrl);
 }
 
 // Drives the D1 warning: the operator declared full local trust for an address this node cannot reach privately.

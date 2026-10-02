@@ -2,10 +2,11 @@ namespace XE_Local_AI_Engine.Tests.Testing;
 
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
 ///     An <see cref="IModelTrustResolver" /> over an in-memory set of registrations, with the production fail-closed
-///     answers built in: a non-external id is node-local, and an <c>ext:</c> id that was not registered here resolves
+///     answers built in: a Codex catalog id is cloud, any other non-external id is node-local, and an <c>ext:</c> id that was not registered here resolves
 ///     <see cref="ModelTrustLocality.Unresolved" />.
 /// </summary>
 /// <remarks>
@@ -59,7 +60,12 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
 
     public Task<ModelTrustLocality> ResolveAsync(string? modelId, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(ExternalModelId.HasExternalScheme(modelId) ? ClassifyRegistered(modelId) : ModelTrustLocality.Local);
+        return Task.FromResult(ExternalModelId.HasExternalScheme(modelId) ? ClassifyRegistered(modelId) : ClassifyNonExternal(modelId));
+    }
+
+    public ModelTrustLocality Classify(string? modelId)
+    {
+        return ClassifyExternalCached(modelId) ?? ClassifyNonExternal(modelId);
     }
 
     public Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default)
@@ -75,6 +81,11 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
         }
 
         return CacheIsCold ? ModelTrustLocality.Unresolved : ClassifyRegistered(modelId);
+    }
+
+    private static ModelTrustLocality ClassifyNonExternal(string? modelId)
+    {
+        return CodexModelCatalog.IsCodexModel(modelId) ? ModelTrustLocality.Cloud : ModelTrustLocality.Local;
     }
 
     private ModelTrustLocality ClassifyRegistered(string? modelId)

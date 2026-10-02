@@ -117,6 +117,17 @@ public sealed class ExternalProviderReconcilerTests
     }
 
     [Test]
+    public async Task ReconcileAsync_DoesNotAddAModelWhoseToolSupportIsUnknown()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered(supportsTools: null));
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(0, report.AllowListAdded);
+    }
+
+    [Test]
     public async Task ReconcileAsync_RemovesOnlyExternalAllowListEntriesOnUnregister()
     {
         var fixture = new Fixture(existingAllowList: ["qwen3:8b", "ext:deleted-box/qwen3", "some/Local-GGUF:Q4_K_M"]);
@@ -251,7 +262,7 @@ public sealed class ExternalProviderReconcilerTests
     ///     The registered connection the pass must see, spelled as it is STORED. Defaults to the single model
     ///     <see cref="ExternalProviderTestData.ModelId" /> names.
     /// </summary>
-    private static StoredExternalProviderConnection Registered(bool supportsTools = false, params string[] wireIds)
+    private static StoredExternalProviderConnection Registered(bool? supportsTools = false, params string[] wireIds)
     {
         return ExternalProviderRegistryTests.Connection(ExternalProviderTestData.ConnectionId,
             models: wireIds.Length == 0 ? [ExternalProviderTestData.WireId] : wireIds,

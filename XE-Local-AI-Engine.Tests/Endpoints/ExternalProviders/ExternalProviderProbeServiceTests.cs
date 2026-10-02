@@ -135,6 +135,54 @@ public sealed class ExternalProviderProbeServiceTests
     }
 
     [Test]
+    public async Task Probe_ForAPlainHttpRemoteAddressWithoutTheOptIn_RefusesBeforeSendingAnything()
+    {
+        // "Test connection" must not send the key over the channel the save would refuse.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://192.168.1.20:8000/v1", "sk-lan"));
+
+        AssertEx.Equal(ExternalProviderProbeOutcome.InvalidBaseUrl, result.Outcome);
+        AssertEx.Equal(ExternalProviderTransportPolicy.InsecureRemoteError, result.Error);
+        AssertEx.Equal(expected: 0, transport.RequestCount);
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://192.168.1.20:8000/v1", "sk-lan", AllowInsecureHttp: true));
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+    }
+
+    [Test]
+    public async Task Probe_ForAStoredInsecureRemoteConnection_IgnoresTheStoredOptIn_AndHonoursOnlyTheRequests()
+    {
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, new StoredExternalProviderConfig
+        {
+            Revision = "rev-1",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "unsloth-box",
+                    DisplayName = "Unsloth box",
+                    BaseUrl = "http://192.168.1.20:8000/v1/",
+                    ApiKey = StoredKey,
+                    Locality = ExternalProviderLocality.Local,
+                    AllowInsecureHttp = true
+                }
+            ]
+        });
+
+        var withdrawn = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
+        AssertEx.Equal(ExternalProviderTransportPolicy.InsecureRemoteError, withdrawn.Error, "An unticked editor sends no flag; the stored consent must not revive it.");
+        AssertEx.Equal(expected: 0, transport.RequestCount, "Refused before any request carried the stored key over plain http.");
+
+        var consented = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null, AllowInsecureHttp: true));
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, consented.Outcome, "The request's own opt-in is what counts.");
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+    }
+
+    [Test]
     public async Task Probe_WhenTheConnectionIdIsNotStored_RefusesBeforeSendingAnything()
     {
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
@@ -184,7 +232,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null));
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null, AllowInsecureHttp: true));
 
         AssertEx.Equal("http://attacker.example.com/v1/models", transport.LastRequestUri?.ToString());
         AssertEx.False(transport.LastRequestHadAuthorization);

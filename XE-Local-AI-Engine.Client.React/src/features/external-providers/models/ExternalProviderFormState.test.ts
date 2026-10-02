@@ -25,6 +25,8 @@ function storedConnection(overrides: Partial<ExternalProviderConnectionDto> = {}
 		locality: "Local",
 		hasApiKey: true,
 		timeoutSeconds: 120,
+		allowInsecureHttp: false,
+		insecureTransport: false,
 		models: [
 			{
 				wireId: "qwen3-27b",
@@ -145,6 +147,37 @@ describe("toSaveRequestBody — model rows", () => {
 		expect(model?.defaultReasoningEffort).toBeUndefined();
 	});
 
+	it("sends an Unknown answer as an explicit null rather than omitting it", () => {
+		const loaded = connectionToFormValues(storedConnection());
+		const unknown = { ...loaded, models: [{ ...firstModel(loaded), supportsTools: null, supportsVision: null }] };
+		const [model] = toSaveRequestBody(unknown, "rev-1").models;
+
+		expect(model).toHaveProperty("supportsTools", null);
+		expect(model).toHaveProperty("supportsVision", null);
+		expect(model?.supportsReasoning).toBe(true);
+	});
+
+	it("loads a stored Unknown answer as Unknown, not as No", () => {
+		const connection = storedConnection();
+		const [stored] = connection.models ?? [];
+		const [model] = connectionToFormValues({
+			...connection,
+			models: stored ? [{ ...stored, supportsTools: null, supportsReasoning: null }] : [],
+		}).models;
+
+		expect(model).toMatchObject({ supportsTools: null, supportsReasoning: null, supportsReasoningEffort: null });
+	});
+
+	it("loads the stored insecure-HTTP opt-in and sends it only when it is on", () => {
+		const optedIn = connectionToFormValues(
+			storedConnection({ baseUrl: "http://192.168.1.40:8080/v1/", allowInsecureHttp: true }),
+		);
+
+		expect(optedIn.allowInsecureHttp).toBe(true);
+		expect(toSaveRequestBody(optedIn, "rev-1").allowInsecureHttp).toBe(true);
+		expect("allowInsecureHttp" in toSaveRequestBody(connectionToFormValues(storedConnection()), "rev-1")).toBe(false);
+	});
+
 	it("sends a blank optional display name, context length and timeout as undefined", () => {
 		const loaded = connectionToFormValues(storedConnection());
 		const blanked = {
@@ -193,6 +226,20 @@ describe("formReducer", () => {
 
 		expect(removed.values.apiKey).toBe("");
 		expect(removed.values.clearApiKey).toBe(true);
+	});
+
+	it("drops a probe result when the insecure-HTTP opt-in changes, since the probe's outcome depends on it", () => {
+		const values = { ...emptyFormValues, baseUrl: "http://192.168.1.40:8080/v1" };
+		const probed = formReducer(
+			{ ...initialFormState, values },
+			{ type: "probeSucceeded", fingerprint: probeInputFingerprint(values), result: { reachable: true, models: [] } },
+		);
+		expect(probed.probe).not.toBeNull();
+
+		const toggled = formReducer(probed, { type: "setAllowInsecureHttp", value: true });
+
+		expect(toggled.values.allowInsecureHttp).toBe(true);
+		expect(toggled.probe).toBeNull();
 	});
 
 	it("lets the operator take back a removal", () => {
@@ -253,12 +300,12 @@ describe("formReducer", () => {
 		expect(state.values.models[0]?.contextLength).toBe("");
 	});
 
-	it("toggles one model's capability flag without touching its neighbours", () => {
+	it("sets one model's capability answer without touching its neighbours, which start Unknown", () => {
 		const added = formReducer(initialFormState, { type: "addModel", rowId: "row-2" });
-		const toggled = formReducer(added, { type: "toggleModelFlag", index: 1, flag: "supportsTools" });
+		const answered = formReducer(added, { type: "setModelFlag", index: 1, flag: "supportsTools", value: true });
 
-		expect(toggled.values.models[0]?.supportsTools).toBe(false);
-		expect(toggled.values.models[1]?.supportsTools).toBe(true);
+		expect(answered.values.models[0]?.supportsTools).toBeNull();
+		expect(answered.values.models[1]?.supportsTools).toBe(true);
 	});
 
 	it("clears the touched and submitted flags on reset", () => {
@@ -279,7 +326,7 @@ describe("formReducer — contradictory reasoning declarations", () => {
 	}
 
 	it("clears the effort support flag and the default effort when reasoning is unchecked", () => {
-		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+		const off = formReducer(reasoningModel(), { type: "setModelFlag", index: 0, flag: "supportsReasoning", value: false });
 
 		expect(off.values.models[0]).toMatchObject({
 			supportsReasoning: false,
@@ -289,7 +336,7 @@ describe("formReducer — contradictory reasoning declarations", () => {
 	});
 
 	it("clears only the default effort when effort support alone is unchecked", () => {
-		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoningEffort" });
+		const off = formReducer(reasoningModel(), { type: "setModelFlag", index: 0, flag: "supportsReasoningEffort", value: false });
 
 		expect(off.values.models[0]).toMatchObject({
 			supportsReasoning: true,
@@ -299,8 +346,8 @@ describe("formReducer — contradictory reasoning declarations", () => {
 	});
 
 	it("does not restore a cleared effort when reasoning is switched back on", () => {
-		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
-		const on = formReducer(off, { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+		const off = formReducer(reasoningModel(), { type: "setModelFlag", index: 0, flag: "supportsReasoning", value: false });
+		const on = formReducer(off, { type: "setModelFlag", index: 0, flag: "supportsReasoning", value: true });
 
 		expect(on.values.models[0]).toMatchObject({ supportsReasoningEffort: false, defaultReasoningEffort: "" });
 	});
@@ -327,8 +374,18 @@ describe("formReducer — contradictory reasoning declarations", () => {
 		expect(contradictory.models[0]).toMatchObject({ supportsReasoningEffort: false, defaultReasoningEffort: "" });
 	});
 
+	it("makes the effort answer Unknown too when reasoning becomes Unknown", () => {
+		const unknown = formReducer(reasoningModel(), { type: "setModelFlag", index: 0, flag: "supportsReasoning", value: null });
+
+		expect(unknown.values.models[0]).toMatchObject({
+			supportsReasoning: null,
+			supportsReasoningEffort: null,
+			defaultReasoningEffort: "",
+		});
+	});
+
 	it("never lets an effort field reach the save payload with reasoning off", () => {
-		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+		const off = formReducer(reasoningModel(), { type: "setModelFlag", index: 0, flag: "supportsReasoning", value: false });
 		const [model] = toSaveRequestBody(off.values, "rev-1").models;
 
 		expect(model?.supportsReasoning).toBe(false);

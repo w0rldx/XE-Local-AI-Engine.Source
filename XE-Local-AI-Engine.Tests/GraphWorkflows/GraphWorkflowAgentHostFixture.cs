@@ -149,6 +149,9 @@ internal static class GraphWorkflowModels
 
     /// <summary>A name carrying this reads images.</summary>
     public const string VisionMarker = "vision";
+
+    /// <summary>A name carrying this cannot call tools.</summary>
+    public const string NoToolsMarker = "notools";
 }
 
 /// <summary>The node's local default, which a unit-test host has no installed GGUF to resolve.</summary>
@@ -181,7 +184,7 @@ internal sealed class FakeGraphWorkflowModelCapabilities : IModelCapabilityResol
         }
 
         var thinking = name.Contains(GraphWorkflowModels.ThinkingMarker, StringComparison.Ordinal);
-        return new ModelCapabilitySnapshot(thinking, SupportsTools: true, name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
+        return new ModelCapabilitySnapshot(thinking, !name.Contains(GraphWorkflowModels.NoToolsMarker, StringComparison.Ordinal), name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
         {
             ReasoningBudgetEnforceable = thinking,
             SupportsVision = name.Contains(GraphWorkflowModels.VisionMarker, StringComparison.Ordinal)

@@ -677,7 +677,10 @@ for what a response schema costs at the llama.cpp grammar layer.
 **An Agent node is node-local only.** If the node's effective model resolves to a cloud model the node run is
 refused `ValidationFailed` before any capacity is reserved: an unattended run must never hand the operator's
 content to a cloud provider. Approval-required tools are likewise stripped from the offer, and the turn runs
-with `IsUnattended` set — the same posture a scheduled saved-agent run holds.
+with `IsUnattended` set — the same posture a scheduled saved-agent run holds. A node bound to an agent that requires
+tools (it lists some, or orchestrates) is refused `ValidationFailed` the same way when its effective model cannot call
+them; the reason is `AgentModelRequirements.ToolRefusal`'s sentence. The editor's Agent form shows a yellow warning when
+the node's model override is such a model; with no override the server decides.
 
 The runner's own watchdog reports a timeout as a failed terminal, which is why the executor classes it `Timeout`
 rather than `NodeFailed` — a node that ran out of time deserves a different answer from one whose provider said no.

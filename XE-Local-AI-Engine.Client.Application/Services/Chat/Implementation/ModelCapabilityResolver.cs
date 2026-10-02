@@ -20,9 +20,9 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 /// </remarks>
 public sealed class ModelCapabilityResolver : IModelCapabilityResolver
 {
-    // What an ext: id resolves to when its registration is gone: not capable, and cloud, so the private-data gates
-    // withhold. Reached for a deleted connection, a corrupt store, or a hand-edited id in a saved agent.
-    private static readonly ModelCapabilitySnapshot UnresolvedExternal = new(SupportsThinking: false, SupportsTools: false, IsCloud: true)
+    // What an Unresolved id gets: not capable, and cloud, so the private-data gates withhold. Reached for a deleted
+    // connection, a corrupt store, a hand-edited id in a saved agent, or a cloud routing read that threw.
+    private static readonly ModelCapabilitySnapshot Unresolved = new(SupportsThinking: false, SupportsTools: false, IsCloud: true)
     {
         ReasoningBudgetEnforceable = true
     };
@@ -32,23 +32,17 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
     private readonly IModelClassificationService _modelClassificationService;
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
     private readonly IGgufModelCapabilityResolver _ggufModelCapabilityResolver;
-    private readonly IActiveCloudChatClientFactory _activeCloudChatClientFactory;
     private readonly IModelTrustResolver _modelTrustResolver;
-    private readonly ILogger<ModelCapabilityResolver> _logger;
 
     public ModelCapabilityResolver(IModelClassificationService modelClassificationService,
         ILocalModelProviderResolver localModelProviderResolver,
         IGgufModelCapabilityResolver ggufModelCapabilityResolver,
-        IActiveCloudChatClientFactory activeCloudChatClientFactory,
-        IModelTrustResolver modelTrustResolver,
-        ILogger<ModelCapabilityResolver> logger)
+        IModelTrustResolver modelTrustResolver)
     {
         _modelClassificationService = modelClassificationService;
         _localModelProviderResolver = localModelProviderResolver;
         _ggufModelCapabilityResolver = ggufModelCapabilityResolver;
-        _activeCloudChatClientFactory = activeCloudChatClientFactory;
         _modelTrustResolver = modelTrustResolver;
-        _logger = logger;
     }
 
     public async Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken)
@@ -76,7 +70,7 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
         {
             if (await _modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
             {
-                return UnresolvedExternal;
+                return Unresolved;
             }
 
             return new ModelCapabilitySnapshot(registration.Model.SupportsReasoning,
@@ -90,14 +84,17 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
             };
         }
 
-        // Cloud LOCALITY comes from the SAME routing snapshot the factory routes from, never an independent credential
-        // read that could fail and classify an egressing participant as local; a read failure FAILS CLOSED to cloud.
-        var (routesToCloud, routingFaulted) = CloudRoutingClassifier.Classify(_activeCloudChatClientFactory, _logger, model);
-        if (routesToCloud)
+        // Cloud LOCALITY comes from the trust resolver (the factory's own routing snapshot past the Codex branch above, so
+        // Cloud here is an Azure deployment). A routing read failure is Unresolved and FAILS CLOSED: cloud, no tools.
+        var locality = await _modelTrustResolver.ResolveAsync(model, cancellationToken);
+        if (locality == ModelTrustLocality.Unresolved)
         {
-            return routingFaulted
-                ? new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: true)
-                : new ModelCapabilitySnapshot(SupportsThinking: false, AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
+            return Unresolved;
+        }
+
+        if (locality == ModelTrustLocality.Cloud)
+        {
+            return new ModelCapabilitySnapshot(SupportsThinking: false, AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // /api/show only makes sense for an Ollama-routed model: a GGUF has no entry and desktop mode has no daemon, so

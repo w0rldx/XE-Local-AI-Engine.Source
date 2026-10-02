@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Checkbox, Flex, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Flex, Group, SegmentedControl, Select, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useMemo } from "react";
@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
 	type ExternalProviderFormAction,
+	type ExternalProviderModelFlag,
 	nextExternalRowId,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import {
@@ -14,6 +15,16 @@ import {
 	type ExternalProviderFormValues,
 	externalReasoningEfforts,
 } from "@/features/external-providers/models/ExternalProviderModel";
+
+type CapabilityAnswer = "yes" | "no" | "unknown";
+
+function toAnswer(value: boolean | null): CapabilityAnswer {
+	return value === null ? "unknown" : value ? "yes" : "no";
+}
+
+function fromAnswer(answer: string): boolean | null {
+	return answer === "yes" ? true : answer === "no" ? false : null;
+}
 
 interface ExternalProviderModelFieldsProps {
 	readonly values: ExternalProviderFormValues;
@@ -36,6 +47,15 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 		[t],
 	);
 
+	const answerData = useMemo(
+		() => [
+			{ value: "yes", label: t("pages.externalProviders.models.answerYes", "Yes") },
+			{ value: "no", label: t("pages.externalProviders.models.answerNo", "No") },
+			{ value: "unknown", label: t("pages.externalProviders.models.answerUnknown", "Unknown") },
+		],
+		[t],
+	);
+
 	return (
 		<Stack gap={6}>
 			<Text size="sm" fw={500}>
@@ -46,7 +66,23 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 			</Text>
 
 			{values.models.map((model, index) => {
-				const effortEnabled = model.supportsReasoning && model.supportsReasoningEffort;
+				const effortEnabled = model.supportsReasoning === true && model.supportsReasoningEffort === true;
+				const capability = (flag: ExternalProviderModelFlag, testId: string, label: string, disabled = false) => (
+					<Stack gap={2}>
+						<Text size="xs" id={`external-provider-model-${testId}-${index}-label`}>
+							{label}
+						</Text>
+						<SegmentedControl
+							size="xs"
+							disabled={disabled}
+							data-testid={`external-provider-model-${testId}-${index}`}
+							aria-labelledby={`external-provider-model-${testId}-${index}-label`}
+							data={answerData}
+							value={toAnswer(model[flag])}
+							onChange={(answer) => dispatch({ type: "setModelFlag", index, flag, value: fromAnswer(answer) })}
+						/>
+					</Stack>
+				);
 				return (
 					<Stack key={modelRowIds[index]} gap={6} data-testid={`external-provider-model-${index}`}>
 						<Group align="flex-end" gap="xs" wrap="nowrap">
@@ -107,36 +143,16 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 							</ActionIcon>
 						</Group>
 
-						<Group gap="md" wrap="wrap">
-							<Checkbox
-								size="xs"
-								data-testid={`external-provider-model-tools-${index}`}
-								label={t("pages.externalProviders.models.supportsTools", "Tools")}
-								checked={model.supportsTools}
-								onChange={() => dispatch({ type: "toggleModelFlag", index, flag: "supportsTools" })}
-							/>
-							<Checkbox
-								size="xs"
-								data-testid={`external-provider-model-vision-${index}`}
-								label={t("pages.externalProviders.models.supportsVision", "Vision")}
-								checked={model.supportsVision}
-								onChange={() => dispatch({ type: "toggleModelFlag", index, flag: "supportsVision" })}
-							/>
-							<Checkbox
-								size="xs"
-								data-testid={`external-provider-model-reasoning-${index}`}
-								label={t("pages.externalProviders.models.supportsReasoning", "Reasoning")}
-								checked={model.supportsReasoning}
-								onChange={() => dispatch({ type: "toggleModelFlag", index, flag: "supportsReasoning" })}
-							/>
-							<Checkbox
-								size="xs"
-								disabled={!model.supportsReasoning}
-								data-testid={`external-provider-model-effort-${index}`}
-								label={t("pages.externalProviders.models.supportsReasoningEffort", "Reasoning effort")}
-								checked={model.supportsReasoningEffort}
-								onChange={() => dispatch({ type: "toggleModelFlag", index, flag: "supportsReasoningEffort" })}
-							/>
+						<Group gap="md" wrap="wrap" align="flex-end">
+							{capability("supportsTools", "tools", t("pages.externalProviders.models.supportsTools", "Tools"))}
+							{capability("supportsVision", "vision", t("pages.externalProviders.models.supportsVision", "Vision"))}
+							{capability("supportsReasoning", "reasoning", t("pages.externalProviders.models.supportsReasoning", "Reasoning"))}
+							{capability(
+								"supportsReasoningEffort",
+								"effort",
+								t("pages.externalProviders.models.supportsReasoningEffort", "Reasoning effort"),
+								model.supportsReasoning !== true,
+							)}
 							<Select
 								size="xs"
 								style={{ width: "12rem" }}
