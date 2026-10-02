@@ -206,6 +206,7 @@ export default defineConfig(({ command, mode }) => {
 			// `setupMswServer()` (src/test/UseMswServer.ts), so the rest no longer pay for it.
 			// Cleanup.ts unmounts every React tree a test mounted; without globals RTL never registers its own
 			// afterEach(cleanup), so mounted components used to survive into the next test — see src/test/Cleanup.ts.
+			// JsdomBlobStream.ts adds the `stream()` jsdom's Blob lacks; Node 22's Response throws on it — see that file.
 			//
 			// src/i18n.ts is FIRST: importing it initialises the app's own i18next instance and registers it as
 			// react-i18next's default, so every test file — not just the ones that render through
@@ -218,7 +219,13 @@ export default defineConfig(({ command, mode }) => {
 			// localStorage during `init()`. Production DEPENDS on that cache (UserLanguageStore seeds itself from
 			// `i18nextLng`), so it is not disabled here; the one test that asserts an empty localStorage clears it
 			// in its own `beforeEach` — see src/core/ui/stores/PendingComposerTextStore.test.ts.
-			setupFiles: ["src/i18n.ts", "src/test/PinLocale.ts", "src/test/Cleanup.ts", "src/test/NoNetwork.ts"],
+			setupFiles: [
+				"src/i18n.ts",
+				"src/test/PinLocale.ts",
+				"src/test/Cleanup.ts",
+				"src/test/NoNetwork.ts",
+				"src/test/JsdomBlobStream.ts",
+			],
 			// Undoes `vi.spyOn` before each test, so a spy a test forgot to restore (console, Date, a module export)
 			// cannot silently stay installed for the rest of the file.
 			restoreMocks: true,
